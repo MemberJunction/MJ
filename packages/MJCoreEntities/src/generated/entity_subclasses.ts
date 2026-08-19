@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -202,22 +202,6 @@ export const MJActionCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJActionCategoryEntityType = z.infer<typeof MJActionCategorySchema>;
@@ -837,22 +821,6 @@ export const MJActionSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJActionEntityType = z.infer<typeof MJActionSchema>;
@@ -1130,22 +1098,6 @@ export const MJAIAgentCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentCategoryEntityType = z.infer<typeof MJAIAgentCategorySchema>;
@@ -2407,22 +2359,6 @@ export const MJAIAgentNoteSchema = z.object({
         * * Field Name: RootConsolidatedIntoNoteID
         * * Display Name: Root Consolidated Note
         * * SQL Data Type: uniqueidentifier`),
-    ConsolidatedIntoNoteIDDepth: z.number().nullable().describe(`
-        * * Field Name: ConsolidatedIntoNoteIDDepth
-        * * Display Name: Consolidation Depth
-        * * SQL Data Type: int`),
-    ConsolidatedIntoNoteIDPath: z.string().nullable().describe(`
-        * * Field Name: ConsolidatedIntoNoteIDPath
-        * * Display Name: Consolidation Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ConsolidatedIntoNoteIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ConsolidatedIntoNoteIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ConsolidatedIntoNoteIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ConsolidatedIntoNoteIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentNoteEntityType = z.infer<typeof MJAIAgentNoteSchema>;
@@ -3203,22 +3139,6 @@ detailed information about what validation rules failed.`),
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentRunStepEntityType = z.infer<typeof MJAIAgentRunStepSchema>;
@@ -3591,42 +3511,10 @@ each time the agent processes a prompt step.`),
         * * Field Name: RootParentRunID
         * * Display Name: Root Parent Run
         * * SQL Data Type: uniqueidentifier`),
-    ParentRunIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentRunIDDepth
-        * * Display Name: Parent Run Depth
-        * * SQL Data Type: int`),
-    ParentRunIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentRunIDPath
-        * * Display Name: Parent Run Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentRunIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentRunIDIsLeaf
-        * * Display Name: Is Leaf Run
-        * * SQL Data Type: bit`),
-    ParentRunIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentRunIDChildCount
-        * * Display Name: Child Run Count
-        * * SQL Data Type: int`),
     RootLastRunID: z.string().nullable().describe(`
         * * Field Name: RootLastRunID
         * * Display Name: Root Last Run
         * * SQL Data Type: uniqueidentifier`),
-    LastRunIDDepth: z.number().nullable().describe(`
-        * * Field Name: LastRunIDDepth
-        * * Display Name: Last Run Depth
-        * * SQL Data Type: int`),
-    LastRunIDPath: z.string().nullable().describe(`
-        * * Field Name: LastRunIDPath
-        * * Display Name: Last Run Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    LastRunIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: LastRunIDIsLeaf
-        * * Display Name: Is Last Run Leaf
-        * * SQL Data Type: bit`),
-    LastRunIDChildCount: z.number().nullable().describe(`
-        * * Field Name: LastRunIDChildCount
-        * * Display Name: Last Run Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentRunEntityType = z.infer<typeof MJAIAgentRunSchema>;
@@ -4166,22 +4054,6 @@ export const MJAIAgentSessionSchema = z.object({
         * * Field Name: RootLastSessionID
         * * Display Name: Root Session
         * * SQL Data Type: uniqueidentifier`),
-    LastSessionIDDepth: z.number().nullable().describe(`
-        * * Field Name: LastSessionIDDepth
-        * * Display Name: Session Depth
-        * * SQL Data Type: int`),
-    LastSessionIDPath: z.string().nullable().describe(`
-        * * Field Name: LastSessionIDPath
-        * * Display Name: Session Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    LastSessionIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: LastSessionIDIsLeaf
-        * * Display Name: Is Leaf Session
-        * * SQL Data Type: bit`),
-    LastSessionIDChildCount: z.number().nullable().describe(`
-        * * Field Name: LastSessionIDChildCount
-        * * Display Name: Child Session Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentSessionEntityType = z.infer<typeof MJAIAgentSessionSchema>;
@@ -5195,42 +5067,10 @@ if this limit is exceeded.`),
         * * Field Name: RootParentID
         * * Display Name: Root Parent Agent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Parent Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Parent Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Parent
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Parent Child Count
-        * * SQL Data Type: int`),
     RootDefaultCoAgentID: z.string().nullable().describe(`
         * * Field Name: RootDefaultCoAgentID
         * * Display Name: Root Default Co-Agent
         * * SQL Data Type: uniqueidentifier`),
-    DefaultCoAgentIDDepth: z.number().nullable().describe(`
-        * * Field Name: DefaultCoAgentIDDepth
-        * * Display Name: Co-Agent Depth
-        * * SQL Data Type: int`),
-    DefaultCoAgentIDPath: z.string().nullable().describe(`
-        * * Field Name: DefaultCoAgentIDPath
-        * * Display Name: Co-Agent Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    DefaultCoAgentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: DefaultCoAgentIDIsLeaf
-        * * Display Name: Is Leaf Co-Agent
-        * * SQL Data Type: bit`),
-    DefaultCoAgentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: DefaultCoAgentIDChildCount
-        * * Display Name: Co-Agent Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentEntityType = z.infer<typeof MJAIAgentSchema>;
@@ -5298,22 +5138,6 @@ export const MJAIArchitectureSchema = z.object({
         * * Field Name: RootParentArchitectureID
         * * Display Name: Root Parent Architecture
         * * SQL Data Type: uniqueidentifier`),
-    ParentArchitectureIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentArchitectureIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentArchitectureIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentArchitectureIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentArchitectureIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentArchitectureIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentArchitectureIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentArchitectureIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIArchitectureEntityType = z.infer<typeof MJAIArchitectureSchema>;
@@ -5737,22 +5561,6 @@ export const MJAIConfigurationSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Parent Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Parent Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIConfigurationEntityType = z.infer<typeof MJAIConfigurationSchema>;
@@ -6663,22 +6471,6 @@ export const MJAIPromptCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIPromptCategoryEntityType = z.infer<typeof MJAIPromptCategorySchema>;
@@ -7428,42 +7220,10 @@ export const MJAIPromptRunSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent Run
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Parent Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Parent Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
         * * Display Name: Root Rerun Run
         * * SQL Data Type: uniqueidentifier`),
-    RerunFromPromptRunIDDepth: z.number().nullable().describe(`
-        * * Field Name: RerunFromPromptRunIDDepth
-        * * Display Name: Rerun Depth
-        * * SQL Data Type: int`),
-    RerunFromPromptRunIDPath: z.string().nullable().describe(`
-        * * Field Name: RerunFromPromptRunIDPath
-        * * Display Name: Rerun Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    RerunFromPromptRunIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: RerunFromPromptRunIDIsLeaf
-        * * Display Name: Is Rerun Leaf
-        * * SQL Data Type: bit`),
-    RerunFromPromptRunIDChildCount: z.number().nullable().describe(`
-        * * Field Name: RerunFromPromptRunIDChildCount
-        * * Display Name: Rerun Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIPromptRunEntityType = z.infer<typeof MJAIPromptRunSchema>;
@@ -7917,22 +7677,6 @@ export const MJAIPromptSchema = z.object({
         * * Field Name: RootResultSelectorPromptID
         * * Display Name: Root Result Selector Prompt
         * * SQL Data Type: uniqueidentifier`),
-    ResultSelectorPromptIDDepth: z.number().nullable().describe(`
-        * * Field Name: ResultSelectorPromptIDDepth
-        * * Display Name: Selector Depth
-        * * SQL Data Type: int`),
-    ResultSelectorPromptIDPath: z.string().nullable().describe(`
-        * * Field Name: ResultSelectorPromptIDPath
-        * * Display Name: Selector Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ResultSelectorPromptIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ResultSelectorPromptIDIsLeaf
-        * * Display Name: Is Leaf Selector
-        * * SQL Data Type: bit`),
-    ResultSelectorPromptIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ResultSelectorPromptIDChildCount
-        * * Display Name: Selector Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAIPromptEntityType = z.infer<typeof MJAIPromptSchema>;
@@ -9102,22 +8846,6 @@ export const MJAPIScopeSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAPIScopeEntityType = z.infer<typeof MJAPIScopeSchema>;
@@ -9999,22 +9727,6 @@ export const MJArtifactTypeSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJArtifactTypeEntityType = z.infer<typeof MJArtifactTypeSchema>;
@@ -10380,22 +10092,6 @@ export const MJAuditLogTypeSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAuditLogTypeEntityType = z.infer<typeof MJAuditLogTypeSchema>;
@@ -10710,22 +10406,6 @@ export const MJAuthorizationSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
@@ -11096,22 +10776,6 @@ export const MJCollectionSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJCollectionEntityType = z.infer<typeof MJCollectionSchema>;
@@ -12986,22 +12650,6 @@ export const MJContentItemChunkSchema = z.object({
         * * Field Name: RootParentChunkID
         * * Display Name: Root Parent Chunk
         * * SQL Data Type: uniqueidentifier`),
-    ParentChunkIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentChunkIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentChunkIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentChunkIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentChunkIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentChunkIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentChunkIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentChunkIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJContentItemChunkEntityType = z.infer<typeof MJContentItemChunkSchema>;
@@ -13326,22 +12974,6 @@ export const MJContentItemSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJContentItemEntityType = z.infer<typeof MJContentItemSchema>;
@@ -14649,22 +14281,6 @@ export const MJConversationDetailSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Parent Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Parent Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJConversationDetailEntityType = z.infer<typeof MJConversationDetailSchema>;
@@ -14999,22 +14615,6 @@ export const MJConversationSchema = z.object({
         * * Field Name: RootLastConversationID
         * * Display Name: Root Last Conversation ID
         * * SQL Data Type: uniqueidentifier`),
-    LastConversationIDDepth: z.number().nullable().describe(`
-        * * Field Name: LastConversationIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    LastConversationIDPath: z.string().nullable().describe(`
-        * * Field Name: LastConversationIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    LastConversationIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: LastConversationIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    LastConversationIDChildCount: z.number().nullable().describe(`
-        * * Field Name: LastConversationIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
@@ -15130,22 +14730,6 @@ export const MJCredentialCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJCredentialCategoryEntityType = z.infer<typeof MJCredentialCategorySchema>;
@@ -15350,22 +14934,6 @@ export const MJDashboardCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJDashboardCategoryEntityType = z.infer<typeof MJDashboardCategorySchema>;
@@ -18680,6 +18248,12 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJEntityFieldEntity_IEmbeddedRecordConfig
         * * Description: Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJEntityFieldEntity_IEntityFieldConfiguration
+        * * Description: Optional JSON configuration bag defining field-level policies and capabilities (shape = IEntityFieldConfiguration). Includes Hierarchy options (IsHierarchy, MaxDepth) to explicitly declare recursive tree hierarchies.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Code Name
@@ -20173,22 +19747,6 @@ export const MJFileCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJFileCategoryEntityType = z.infer<typeof MJFileCategorySchema>;
@@ -20634,22 +20192,6 @@ export const MJGeneratedCodeCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJGeneratedCodeCategoryEntityType = z.infer<typeof MJGeneratedCodeCategorySchema>;
@@ -21674,22 +21216,6 @@ export const MJListCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJListCategoryEntityType = z.infer<typeof MJListCategorySchema>;
@@ -25024,22 +24550,6 @@ export const MJProjectSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJProjectEntityType = z.infer<typeof MJProjectSchema>;
@@ -25360,22 +24870,6 @@ export const MJQueryCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJQueryCategoryEntityType = z.infer<typeof MJQueryCategorySchema>;
@@ -26413,22 +25907,6 @@ export const MJRecordChangeSchema = z.object({
         * * Field Name: RootRestoredFromID
         * * Display Name: Root Restored From ID
         * * SQL Data Type: uniqueidentifier`),
-    RestoredFromIDDepth: z.number().nullable().describe(`
-        * * Field Name: RestoredFromIDDepth
-        * * Display Name: Restored From ID Depth
-        * * SQL Data Type: int`),
-    RestoredFromIDPath: z.string().nullable().describe(`
-        * * Field Name: RestoredFromIDPath
-        * * Display Name: Restored From ID Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    RestoredFromIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: RestoredFromIDIsLeaf
-        * * Display Name: Restored From ID Is Leaf
-        * * SQL Data Type: bit`),
-    RestoredFromIDChildCount: z.number().nullable().describe(`
-        * * Field Name: RestoredFromIDChildCount
-        * * Display Name: Restored From ID Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
@@ -26825,22 +26303,6 @@ export const MJRecordProcessCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJRecordProcessCategoryEntityType = z.infer<typeof MJRecordProcessCategorySchema>;
@@ -27176,22 +26638,6 @@ export const MJRemoteOperationCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJRemoteOperationCategoryEntityType = z.infer<typeof MJRemoteOperationCategorySchema>;
@@ -29602,22 +29048,6 @@ export const MJSkillSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJSkillEntityType = z.infer<typeof MJSkillSchema>;
@@ -30287,42 +29717,10 @@ export const MJTagSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
     RootMergedIntoTagID: z.string().nullable().describe(`
         * * Field Name: RootMergedIntoTagID
         * * Display Name: Root Merged Into
         * * SQL Data Type: uniqueidentifier`),
-    MergedIntoTagIDDepth: z.number().nullable().describe(`
-        * * Field Name: MergedIntoTagIDDepth
-        * * Display Name: Merged Depth
-        * * SQL Data Type: int`),
-    MergedIntoTagIDPath: z.string().nullable().describe(`
-        * * Field Name: MergedIntoTagIDPath
-        * * Display Name: Merged Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    MergedIntoTagIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: MergedIntoTagIDIsLeaf
-        * * Display Name: Merged Is Leaf
-        * * SQL Data Type: bit`),
-    MergedIntoTagIDChildCount: z.number().nullable().describe(`
-        * * Field Name: MergedIntoTagIDChildCount
-        * * Display Name: Merged Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJTagEntityType = z.infer<typeof MJTagSchema>;
@@ -30642,22 +30040,6 @@ export const MJTaskSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Task
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJTaskEntityType = z.infer<typeof MJTaskSchema>;
@@ -30713,22 +30095,6 @@ export const MJTemplateCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJTemplateCategoryEntityType = z.infer<typeof MJTemplateCategorySchema>;
@@ -31799,22 +31165,6 @@ export const MJTestSuiteSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJTestSuiteEntityType = z.infer<typeof MJTestSuiteSchema>;
@@ -33033,22 +32383,6 @@ export const MJUserViewCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJUserViewCategoryEntityType = z.infer<typeof MJUserViewCategorySchema>;
@@ -33887,22 +33221,6 @@ export const MJVersionLabelSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    ParentIDDepth: z.number().nullable().describe(`
-        * * Field Name: ParentIDDepth
-        * * Display Name: Hierarchy Depth
-        * * SQL Data Type: int`),
-    ParentIDPath: z.string().nullable().describe(`
-        * * Field Name: ParentIDPath
-        * * Display Name: Hierarchy Path
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentIDIsLeaf: z.boolean().nullable().describe(`
-        * * Field Name: ParentIDIsLeaf
-        * * Display Name: Is Leaf Node
-        * * SQL Data Type: bit`),
-    ParentIDChildCount: z.number().nullable().describe(`
-        * * Field Name: ParentIDChildCount
-        * * Display Name: Child Count
-        * * SQL Data Type: int`),
 });
 
 export type MJVersionLabelEntityType = z.infer<typeof MJVersionLabelSchema>;
@@ -34583,42 +33901,6 @@ export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityTyp
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -35870,86 +35152,6 @@ export interface MJActionEntity_IRuntimeLibraryReference {
  */
 @RegisterClass(BaseEntity, 'MJ: Actions')
 export class MJActionEntity extends BaseEntity<MJActionEntityType> {
-
-  /**
-  * Related records: MJ: Action Params
-  *
-  * Loads, validates and persists as one unit with this MJ: Actions record — see
-  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
-  * the 'MJ: Actions → MJ: Action Params' relationship; edit that row, not this file.
-  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
-  * 'MJ: Action Params', discovered via BaseEngineRegistry — zero queries. Falls back to a
-  * database load when no loaded engine offers it.
-  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
-  * mutating shared cached state that other holders can see.
-  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
-  * and it never reports Dirty.
-  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
-  * loaded engine caches 'MJ: Action Params', reading it THROWS rather than returning an
-  * empty array — a lazy declaration asserts that such an engine exists.
-  */
-  public readonly Params = this.DeclareRelatedRecords<MJActionParamEntity>({
-      Name: 'Params',
-        RelatedEntity: 'MJ: Action Params',
-        RelatedEntityJoinField: 'ActionID',
-        OrderBy: 'Name ASC',
-        Load: 'lazy',
-        Source: 'cache',
-  });
-
-
-  /**
-  * Related records: MJ: Action Libraries
-  *
-  * Loads, validates and persists as one unit with this MJ: Actions record — see
-  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
-  * the 'MJ: Actions → MJ: Action Libraries' relationship; edit that row, not this file.
-  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
-  * 'MJ: Action Libraries', discovered via BaseEngineRegistry — zero queries. Falls back to a
-  * database load when no loaded engine offers it.
-  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
-  * mutating shared cached state that other holders can see.
-  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
-  * and it never reports Dirty.
-  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
-  * loaded engine caches 'MJ: Action Libraries', reading it THROWS rather than returning an
-  * empty array — a lazy declaration asserts that such an engine exists.
-  */
-  public readonly Libraries = this.DeclareRelatedRecords<MJActionLibraryEntity>({
-      Name: 'Libraries',
-        RelatedEntity: 'MJ: Action Libraries',
-        RelatedEntityJoinField: 'ActionID',
-        Load: 'lazy',
-        Source: 'cache',
-  });
-
-
-  /**
-  * Related records: MJ: Action Result Codes
-  *
-  * Loads, validates and persists as one unit with this MJ: Actions record — see
-  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
-  * the 'MJ: Actions → MJ: Action Result Codes' relationship; edit that row, not this file.
-  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
-  * 'MJ: Action Result Codes', discovered via BaseEngineRegistry — zero queries. Falls back to a
-  * database load when no loaded engine offers it.
-  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
-  * mutating shared cached state that other holders can see.
-  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
-  * and it never reports Dirty.
-  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
-  * loaded engine caches 'MJ: Action Result Codes', reading it THROWS rather than returning an
-  * empty array — a lazy declaration asserts that such an engine exists.
-  */
-  public readonly ResultCodes = this.DeclareRelatedRecords<MJActionResultCodeEntity>({
-      Name: 'ResultCodes',
-        RelatedEntity: 'MJ: Action Result Codes',
-        RelatedEntityJoinField: 'ActionID',
-        OrderBy: 'ResultCode ASC',
-        Load: 'lazy',
-        Source: 'cache',
-  });
-
     /**
     * Loads the MJ: Actions record from the database
     * @param ID: string - primary key value to load the MJ: Actions record.
@@ -36444,42 +35646,6 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -37311,42 +36477,6 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -37949,6 +37079,9 @@ export class MJAIAgentCoAgentEntity extends BaseEntity<MJAIAgentCoAgentEntityTyp
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
     }
+
+    
+
 
     /**
     * * Field Name: __mj_CreatedAt
@@ -40730,42 +39863,6 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     get RootConsolidatedIntoNoteID(): string | null {
         return this.Get('RootConsolidatedIntoNoteID');
     }
-
-    /**
-    * * Field Name: ConsolidatedIntoNoteIDDepth
-    * * Display Name: Consolidation Depth
-    * * SQL Data Type: int
-    */
-    get ConsolidatedIntoNoteIDDepth(): number | null {
-        return this.Get('ConsolidatedIntoNoteIDDepth');
-    }
-
-    /**
-    * * Field Name: ConsolidatedIntoNoteIDPath
-    * * Display Name: Consolidation Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConsolidatedIntoNoteIDPath(): string | null {
-        return this.Get('ConsolidatedIntoNoteIDPath');
-    }
-
-    /**
-    * * Field Name: ConsolidatedIntoNoteIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ConsolidatedIntoNoteIDIsLeaf(): boolean | null {
-        return this.Get('ConsolidatedIntoNoteIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ConsolidatedIntoNoteIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ConsolidatedIntoNoteIDChildCount(): number | null {
-        return this.Get('ConsolidatedIntoNoteIDChildCount');
-    }
 }
 
 
@@ -42910,42 +42007,6 @@ detailed information about what validation rules failed.
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -43991,84 +43052,12 @@ each time the agent processes a prompt step.
     }
 
     /**
-    * * Field Name: ParentRunIDDepth
-    * * Display Name: Parent Run Depth
-    * * SQL Data Type: int
-    */
-    get ParentRunIDDepth(): number | null {
-        return this.Get('ParentRunIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentRunIDPath
-    * * Display Name: Parent Run Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentRunIDPath(): string | null {
-        return this.Get('ParentRunIDPath');
-    }
-
-    /**
-    * * Field Name: ParentRunIDIsLeaf
-    * * Display Name: Is Leaf Run
-    * * SQL Data Type: bit
-    */
-    get ParentRunIDIsLeaf(): boolean | null {
-        return this.Get('ParentRunIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentRunIDChildCount
-    * * Display Name: Child Run Count
-    * * SQL Data Type: int
-    */
-    get ParentRunIDChildCount(): number | null {
-        return this.Get('ParentRunIDChildCount');
-    }
-
-    /**
     * * Field Name: RootLastRunID
     * * Display Name: Root Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootLastRunID(): string | null {
         return this.Get('RootLastRunID');
-    }
-
-    /**
-    * * Field Name: LastRunIDDepth
-    * * Display Name: Last Run Depth
-    * * SQL Data Type: int
-    */
-    get LastRunIDDepth(): number | null {
-        return this.Get('LastRunIDDepth');
-    }
-
-    /**
-    * * Field Name: LastRunIDPath
-    * * Display Name: Last Run Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get LastRunIDPath(): string | null {
-        return this.Get('LastRunIDPath');
-    }
-
-    /**
-    * * Field Name: LastRunIDIsLeaf
-    * * Display Name: Is Last Run Leaf
-    * * SQL Data Type: bit
-    */
-    get LastRunIDIsLeaf(): boolean | null {
-        return this.Get('LastRunIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: LastRunIDChildCount
-    * * Display Name: Last Run Child Count
-    * * SQL Data Type: int
-    */
-    get LastRunIDChildCount(): number | null {
-        return this.Get('LastRunIDChildCount');
     }
 }
 
@@ -45374,42 +44363,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     get RootLastSessionID(): string | null {
         return this.Get('RootLastSessionID');
     }
-
-    /**
-    * * Field Name: LastSessionIDDepth
-    * * Display Name: Session Depth
-    * * SQL Data Type: int
-    */
-    get LastSessionIDDepth(): number | null {
-        return this.Get('LastSessionIDDepth');
-    }
-
-    /**
-    * * Field Name: LastSessionIDPath
-    * * Display Name: Session Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get LastSessionIDPath(): string | null {
-        return this.Get('LastSessionIDPath');
-    }
-
-    /**
-    * * Field Name: LastSessionIDIsLeaf
-    * * Display Name: Is Leaf Session
-    * * SQL Data Type: bit
-    */
-    get LastSessionIDIsLeaf(): boolean | null {
-        return this.Get('LastSessionIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: LastSessionIDChildCount
-    * * Display Name: Child Session Count
-    * * SQL Data Type: int
-    */
-    get LastSessionIDChildCount(): number | null {
-        return this.Get('LastSessionIDChildCount');
-    }
 }
 
 
@@ -46676,80 +45629,6 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agents')
 export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
-
-  /**
-  * Related records: MJ: AI Agent Actions
-  *
-  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
-  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
-  * the 'MJ: AI Agents → MJ: AI Agent Actions' relationship; edit that row, not this file.
-  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
-  * 'MJ: AI Agent Actions', discovered via BaseEngineRegistry — zero queries. Falls back to a
-  * database load when no loaded engine offers it.
-  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
-  * mutating shared cached state that other holders can see.
-  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
-  * and it never reports Dirty.
-  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
-  * loaded engine caches 'MJ: AI Agent Actions', reading it THROWS rather than returning an
-  * empty array — a lazy declaration asserts that such an engine exists.
-  */
-  public readonly Actions = this.DeclareRelatedRecords<MJAIAgentActionEntity>({
-      Name: 'Actions',
-        RelatedEntity: 'MJ: AI Agent Actions',
-        RelatedEntityJoinField: 'AgentID',
-        Load: 'lazy',
-        Source: 'cache',
-  });
-
-
-  /**
-  * Related records: MJ: AI Agent Prompts
-  *
-  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
-  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
-  * the 'MJ: AI Agents → MJ: AI Agent Prompts' relationship; edit that row, not this file.
-  *
-  */
-  public readonly Prompts = this.DeclareRelatedRecords<MJAIAgentPromptEntity>({
-      Name: 'Prompts',
-        RelatedEntity: 'MJ: AI Agent Prompts',
-        RelatedEntityJoinField: 'AgentID',
-        OrderBy: 'ExecutionOrder ASC',
-        Load: 'explicit',
-        OnRemove: 'delete',
-        Source: 'database',
-        ReadOnly: false,
-        Sequence: { Field: 'ExecutionOrder', From: 0 },
-  });
-
-
-  /**
-  * Related records: MJ: AI Agents
-  *
-  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
-  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
-  * the 'MJ: AI Agents → MJ: AI Agents' relationship; edit that row, not this file.
-  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
-  * 'MJ: AI Agents', discovered via BaseEngineRegistry — zero queries. Falls back to a
-  * database load when no loaded engine offers it.
-  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
-  * mutating shared cached state that other holders can see.
-  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
-  * and it never reports Dirty.
-  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
-  * loaded engine caches 'MJ: AI Agents', reading it THROWS rather than returning an
-  * empty array — a lazy declaration asserts that such an engine exists.
-  */
-  public readonly SubAgents = this.DeclareRelatedRecords<MJAIAgentEntity>({
-      Name: 'SubAgents',
-        RelatedEntity: 'MJ: AI Agents',
-        RelatedEntityJoinField: 'ParentID',
-        OrderBy: 'ExecutionOrder ASC',
-        Load: 'lazy',
-        Source: 'cache',
-  });
-
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -48257,84 +47136,12 @@ if this limit is exceeded.
     }
 
     /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Parent Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Parent Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Parent
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Parent Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
-
-    /**
     * * Field Name: RootDefaultCoAgentID
     * * Display Name: Root Default Co-Agent
     * * SQL Data Type: uniqueidentifier
     */
     get RootDefaultCoAgentID(): string | null {
         return this.Get('RootDefaultCoAgentID');
-    }
-
-    /**
-    * * Field Name: DefaultCoAgentIDDepth
-    * * Display Name: Co-Agent Depth
-    * * SQL Data Type: int
-    */
-    get DefaultCoAgentIDDepth(): number | null {
-        return this.Get('DefaultCoAgentIDDepth');
-    }
-
-    /**
-    * * Field Name: DefaultCoAgentIDPath
-    * * Display Name: Co-Agent Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get DefaultCoAgentIDPath(): string | null {
-        return this.Get('DefaultCoAgentIDPath');
-    }
-
-    /**
-    * * Field Name: DefaultCoAgentIDIsLeaf
-    * * Display Name: Is Leaf Co-Agent
-    * * SQL Data Type: bit
-    */
-    get DefaultCoAgentIDIsLeaf(): boolean | null {
-        return this.Get('DefaultCoAgentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: DefaultCoAgentIDChildCount
-    * * Display Name: Co-Agent Child Count
-    * * SQL Data Type: int
-    */
-    get DefaultCoAgentIDChildCount(): number | null {
-        return this.Get('DefaultCoAgentIDChildCount');
     }
 }
 
@@ -48510,42 +47317,6 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
     */
     get RootParentArchitectureID(): string | null {
         return this.Get('RootParentArchitectureID');
-    }
-
-    /**
-    * * Field Name: ParentArchitectureIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentArchitectureIDDepth(): number | null {
-        return this.Get('ParentArchitectureIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentArchitectureIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentArchitectureIDPath(): string | null {
-        return this.Get('ParentArchitectureIDPath');
-    }
-
-    /**
-    * * Field Name: ParentArchitectureIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentArchitectureIDIsLeaf(): boolean | null {
-        return this.Get('ParentArchitectureIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentArchitectureIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentArchitectureIDChildCount(): number | null {
-        return this.Get('ParentArchitectureIDChildCount');
     }
 }
 
@@ -49713,42 +48484,6 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Parent Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Parent Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -52748,42 +51483,6 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -54832,84 +53531,12 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Parent Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Parent Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
-
-    /**
     * * Field Name: RootRerunFromPromptRunID
     * * Display Name: Root Rerun Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
         return this.Get('RootRerunFromPromptRunID');
-    }
-
-    /**
-    * * Field Name: RerunFromPromptRunIDDepth
-    * * Display Name: Rerun Depth
-    * * SQL Data Type: int
-    */
-    get RerunFromPromptRunIDDepth(): number | null {
-        return this.Get('RerunFromPromptRunIDDepth');
-    }
-
-    /**
-    * * Field Name: RerunFromPromptRunIDPath
-    * * Display Name: Rerun Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get RerunFromPromptRunIDPath(): string | null {
-        return this.Get('RerunFromPromptRunIDPath');
-    }
-
-    /**
-    * * Field Name: RerunFromPromptRunIDIsLeaf
-    * * Display Name: Is Rerun Leaf
-    * * SQL Data Type: bit
-    */
-    get RerunFromPromptRunIDIsLeaf(): boolean | null {
-        return this.Get('RerunFromPromptRunIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: RerunFromPromptRunIDChildCount
-    * * Display Name: Rerun Child Count
-    * * SQL Data Type: int
-    */
-    get RerunFromPromptRunIDChildCount(): number | null {
-        return this.Get('RerunFromPromptRunIDChildCount');
     }
 }
 
@@ -55016,33 +53643,6 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompts')
 export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
-
-  /**
-  * Related records: MJ: AI Prompt Models
-  *
-  * Loads, validates and persists as one unit with this MJ: AI Prompts record — see
-  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
-  * the 'MJ: AI Prompts → MJ: AI Prompt Models' relationship; edit that row, not this file.
-  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
-  * 'MJ: AI Prompt Models', discovered via BaseEngineRegistry — zero queries. Falls back to a
-  * database load when no loaded engine offers it.
-  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
-  * mutating shared cached state that other holders can see.
-  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
-  * and it never reports Dirty.
-  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
-  * loaded engine caches 'MJ: AI Prompt Models', reading it THROWS rather than returning an
-  * empty array — a lazy declaration asserts that such an engine exists.
-  */
-  public readonly Models = this.DeclareRelatedRecords<MJAIPromptModelEntity>({
-      Name: 'Models',
-        RelatedEntity: 'MJ: AI Prompt Models',
-        RelatedEntityJoinField: 'PromptID',
-        OrderBy: 'Priority ASC',
-        Load: 'lazy',
-        Source: 'cache',
-  });
-
     /**
     * Loads the MJ: AI Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompts record.
@@ -56088,42 +54688,6 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     */
     get RootResultSelectorPromptID(): string | null {
         return this.Get('RootResultSelectorPromptID');
-    }
-
-    /**
-    * * Field Name: ResultSelectorPromptIDDepth
-    * * Display Name: Selector Depth
-    * * SQL Data Type: int
-    */
-    get ResultSelectorPromptIDDepth(): number | null {
-        return this.Get('ResultSelectorPromptIDDepth');
-    }
-
-    /**
-    * * Field Name: ResultSelectorPromptIDPath
-    * * Display Name: Selector Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ResultSelectorPromptIDPath(): string | null {
-        return this.Get('ResultSelectorPromptIDPath');
-    }
-
-    /**
-    * * Field Name: ResultSelectorPromptIDIsLeaf
-    * * Display Name: Is Leaf Selector
-    * * SQL Data Type: bit
-    */
-    get ResultSelectorPromptIDIsLeaf(): boolean | null {
-        return this.Get('ResultSelectorPromptIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ResultSelectorPromptIDChildCount
-    * * Display Name: Selector Child Count
-    * * SQL Data Type: int
-    */
-    get ResultSelectorPromptIDChildCount(): number | null {
-        return this.Get('ResultSelectorPromptIDChildCount');
     }
 }
 
@@ -58782,33 +57346,6 @@ export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: API Keys')
 export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
-
-  /**
-  * Related records: MJ: API Key Scopes
-  *
-  * Loads, validates and persists as one unit with this MJ: API Keys record — see
-  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
-  * the 'MJ: API Keys → MJ: API Key Scopes' relationship; edit that row, not this file.
-  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
-  * 'MJ: API Key Scopes', discovered via BaseEngineRegistry — zero queries. Falls back to a
-  * database load when no loaded engine offers it.
-  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
-  * mutating shared cached state that other holders can see.
-  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
-  * and it never reports Dirty.
-  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
-  * loaded engine caches 'MJ: API Key Scopes', reading it THROWS rather than returning an
-  * empty array — a lazy declaration asserts that such an engine exists.
-  */
-  public readonly Scopes = this.DeclareRelatedRecords<MJAPIKeyScopeEntity>({
-      Name: 'Scopes',
-        RelatedEntity: 'MJ: API Key Scopes',
-        RelatedEntityJoinField: 'APIKeyID',
-        OrderBy: 'Priority ASC',
-        Load: 'lazy',
-        Source: 'cache',
-  });
-
     /**
     * Loads the MJ: API Keys record from the database
     * @param ID: string - primary key value to load the MJ: API Keys record.
@@ -59186,42 +57723,6 @@ export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -61548,42 +60049,6 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -62499,42 +60964,6 @@ export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -63333,42 +61762,6 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -64297,42 +62690,6 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -68966,42 +67323,6 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     get RootParentChunkID(): string | null {
         return this.Get('RootParentChunkID');
     }
-
-    /**
-    * * Field Name: ParentChunkIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentChunkIDDepth(): number | null {
-        return this.Get('ParentChunkIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentChunkIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentChunkIDPath(): string | null {
-        return this.Get('ParentChunkIDPath');
-    }
-
-    /**
-    * * Field Name: ParentChunkIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentChunkIDIsLeaf(): boolean | null {
-        return this.Get('ParentChunkIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentChunkIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentChunkIDChildCount(): number | null {
-        return this.Get('ParentChunkIDChildCount');
-    }
 }
 
 
@@ -69777,42 +68098,6 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -73991,42 +72276,6 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Parent Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Parent Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -74987,42 +73236,6 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     get RootLastConversationID(): string | null {
         return this.Get('RootLastConversationID');
     }
-
-    /**
-    * * Field Name: LastConversationIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get LastConversationIDDepth(): number | null {
-        return this.Get('LastConversationIDDepth');
-    }
-
-    /**
-    * * Field Name: LastConversationIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get LastConversationIDPath(): string | null {
-        return this.Get('LastConversationIDPath');
-    }
-
-    /**
-    * * Field Name: LastConversationIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get LastConversationIDIsLeaf(): boolean | null {
-        return this.Get('LastConversationIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: LastConversationIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get LastConversationIDChildCount(): number | null {
-        return this.Get('LastConversationIDChildCount');
-    }
 }
 
 
@@ -75327,42 +73540,6 @@ export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryE
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -75886,42 +74063,6 @@ export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEnt
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -83526,6 +81667,15 @@ export interface MJEntityFieldEntity_IEmbeddedRecordConfig {
  * @class
  * @public
  */
+export interface MJEntityFieldEntity_IEntityFieldHierarchyConfig {
+    IsHierarchy?: boolean;
+    MaxDepth?: number;
+}
+
+export interface MJEntityFieldEntity_IEntityFieldConfiguration {
+    Hierarchy?: MJEntityFieldEntity_IEntityFieldHierarchyConfig;
+}
+
 @RegisterClass(BaseEntity, 'MJ: Entity Fields')
 export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     /**
@@ -84468,6 +82618,41 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
         this.EmbeddedRecord = raw;
         this._EmbeddedRecordObject_cached = value;
         this._EmbeddedRecordObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJEntityFieldEntity_IEntityFieldConfiguration
+    * * Description: Optional JSON configuration bag defining field-level policies and capabilities (shape = IEntityFieldConfiguration). Includes Hierarchy options (IsHierarchy, MaxDepth) to explicitly declare recursive tree hierarchies.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJEntityFieldEntity_IEntityFieldConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJEntityFieldEntity_IEntityFieldConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJEntityFieldEntity_IEntityFieldConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJEntityFieldEntity_IEntityFieldConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -88517,42 +86702,6 @@ export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -89059,6 +87208,11 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
  * @class
  * @public
  */
+export interface MJFileStorageProviderEntity_IFileStorageProviderConfiguration {
+    IconClass?: string;
+    BrandColor?: string;
+}
+
 @RegisterClass(BaseEntity, 'MJ: File Storage Providers')
 export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProviderEntityType> {
     /**
@@ -89214,6 +87368,27 @@ export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProvide
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJFileStorageProviderEntity_IFileStorageProviderConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -89771,42 +87946,6 @@ export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCat
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -92312,42 +90451,6 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -100822,42 +98925,6 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -101698,42 +99765,6 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -104390,42 +102421,6 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     get RootRestoredFromID(): string | null {
         return this.Get('RootRestoredFromID');
     }
-
-    /**
-    * * Field Name: RestoredFromIDDepth
-    * * Display Name: Restored From ID Depth
-    * * SQL Data Type: int
-    */
-    get RestoredFromIDDepth(): number | null {
-        return this.Get('RestoredFromIDDepth');
-    }
-
-    /**
-    * * Field Name: RestoredFromIDPath
-    * * Display Name: Restored From ID Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get RestoredFromIDPath(): string | null {
-        return this.Get('RestoredFromIDPath');
-    }
-
-    /**
-    * * Field Name: RestoredFromIDIsLeaf
-    * * Display Name: Restored From ID Is Leaf
-    * * SQL Data Type: bit
-    */
-    get RestoredFromIDIsLeaf(): boolean | null {
-        return this.Get('RestoredFromIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: RestoredFromIDChildCount
-    * * Display Name: Restored From ID Child Count
-    * * SQL Data Type: int
-    */
-    get RestoredFromIDChildCount(): number | null {
-        return this.Get('RestoredFromIDChildCount');
-    }
 }
 
 
@@ -105391,42 +103386,6 @@ export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCat
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -106222,42 +104181,6 @@ export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperatio
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -112608,42 +110531,6 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -114309,84 +112196,12 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
     }
 
     /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
-
-    /**
     * * Field Name: RootMergedIntoTagID
     * * Display Name: Root Merged Into
     * * SQL Data Type: uniqueidentifier
     */
     get RootMergedIntoTagID(): string | null {
         return this.Get('RootMergedIntoTagID');
-    }
-
-    /**
-    * * Field Name: MergedIntoTagIDDepth
-    * * Display Name: Merged Depth
-    * * SQL Data Type: int
-    */
-    get MergedIntoTagIDDepth(): number | null {
-        return this.Get('MergedIntoTagIDDepth');
-    }
-
-    /**
-    * * Field Name: MergedIntoTagIDPath
-    * * Display Name: Merged Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get MergedIntoTagIDPath(): string | null {
-        return this.Get('MergedIntoTagIDPath');
-    }
-
-    /**
-    * * Field Name: MergedIntoTagIDIsLeaf
-    * * Display Name: Merged Is Leaf
-    * * SQL Data Type: bit
-    */
-    get MergedIntoTagIDIsLeaf(): boolean | null {
-        return this.Get('MergedIntoTagIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: MergedIntoTagIDChildCount
-    * * Display Name: Merged Child Count
-    * * SQL Data Type: int
-    */
-    get MergedIntoTagIDChildCount(): number | null {
-        return this.Get('MergedIntoTagIDChildCount');
     }
 }
 
@@ -115666,42 +113481,6 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -115845,42 +113624,6 @@ export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntit
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -118603,42 +116346,6 @@ export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -121774,42 +119481,6 @@ export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntit
     get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
-    }
 }
 
 
@@ -124470,42 +122141,6 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: ParentIDDepth
-    * * Display Name: Hierarchy Depth
-    * * SQL Data Type: int
-    */
-    get ParentIDDepth(): number | null {
-        return this.Get('ParentIDDepth');
-    }
-
-    /**
-    * * Field Name: ParentIDPath
-    * * Display Name: Hierarchy Path
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ParentIDPath(): string | null {
-        return this.Get('ParentIDPath');
-    }
-
-    /**
-    * * Field Name: ParentIDIsLeaf
-    * * Display Name: Is Leaf Node
-    * * SQL Data Type: bit
-    */
-    get ParentIDIsLeaf(): boolean | null {
-        return this.Get('ParentIDIsLeaf');
-    }
-
-    /**
-    * * Field Name: ParentIDChildCount
-    * * Display Name: Child Count
-    * * SQL Data Type: int
-    */
-    get ParentIDChildCount(): number | null {
-        return this.Get('ParentIDChildCount');
     }
 }
 

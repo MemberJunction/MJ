@@ -67,7 +67,13 @@ export class MediaAccessKeyManager extends BaseSingleton<MediaAccessKeyManager> 
 
   /** Resolves the signing secret once, preferring the deployment's symmetric key. */
   private ensureSecret(): void {
-    if (this._initialized) {
+    if (this._initialized && this.secret) {
+      return;
+    }
+    const store = this.GetGlobalObjectStore();
+    if (store && typeof store['___MEDIA_ACCESS_SECRET___'] === 'string') {
+      this.secret = store['___MEDIA_ACCESS_SECRET___'];
+      this._initialized = true;
       return;
     }
     const configured = process.env.MJ_BASE_ENCRYPTION_KEY?.trim();
@@ -80,6 +86,9 @@ export class MediaAccessKeyManager extends BaseSingleton<MediaAccessKeyManager> 
         'media-access tokens. Outstanding media URLs will be invalidated on restart. Set ' +
         'MJ_BASE_ENCRYPTION_KEY for stable signing.',
       );
+    }
+    if (store) {
+      store['___MEDIA_ACCESS_SECRET___'] = this.secret;
     }
     this._initialized = true;
   }
@@ -113,7 +122,7 @@ export class MediaAccessKeyManager extends BaseSingleton<MediaAccessKeyManager> 
   /**
    * Verifies an upload staging token.
    */
-  public VerifyUpload(token: string): { Valid: boolean; UserId?: string } {
+  public VerifyUpload(token: string): { Valid: boolean; UserId?: string; Error?: string } {
     this.ensureSecret();
     try {
       const decoded = jwt.verify(token, this.secret, { algorithms: ['HS256'] });
@@ -124,9 +133,10 @@ export class MediaAccessKeyManager extends BaseSingleton<MediaAccessKeyManager> 
       ) {
         return { Valid: true, UserId: (decoded as { userId: string }).userId };
       }
-      return { Valid: false };
-    } catch {
-      return { Valid: false };
+      return { Valid: false, Error: 'Invalid token payload format or claim mismatch' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { Valid: false, Error: msg };
     }
   }
 

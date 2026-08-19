@@ -10,6 +10,7 @@ import {
   inject,
   ViewChild,
   ElementRef,
+  HostListener,
 } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -329,6 +330,9 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   public EditMetadataName: string = '';
   public EditMetadataDescription: string = '';
 
+  /** Active Overflow Menu */
+  public ActiveMenuLinkID: string | null = null;
+
   // ────────────────────────────────────────────────────────────────────
   // Lifecycle
   // ────────────────────────────────────────────────────────────────────
@@ -562,6 +566,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
       // Map to RecordAttachmentItem
       this.Attachments = linksResult.Results.map((link) => {
         const file = link.FileID ? filesMap.get(NormalizeUUID(link.FileID)) : undefined;
+        const provider = file?.ProviderID ? this.ActiveProviders.find(p => UUIDsEqual(p.ID, file.ProviderID)) : undefined;
+        const config = provider?.ConfigurationObject;
         return {
           LinkID: link.ID,
           FileID: link.FileID,
@@ -571,6 +577,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
           Status: file?.Status,
           ProviderName: file?.Provider,
           ProviderID: file?.ProviderID,
+          ProviderIconClass: config?.IconClass || this.GetFallbackProviderIcon(file?.Provider),
+          ProviderBrandColor: config?.BrandColor || undefined,
           CategoryID: file?.CategoryID,
           CategoryName: file?.Category,
           CreatedAt: file?.__mj_CreatedAt ? new Date(file.__mj_CreatedAt) : link.__mj_CreatedAt ? new Date(link.__mj_CreatedAt) : null,
@@ -888,6 +896,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Record link saved (success: ${linkSuccess}, LinkID: ${linkEntity.ID})`);
 
         if (linkSuccess && fileEntity) {
+          const provider = fileEntity.ProviderID ? this.ActiveProviders.find(p => UUIDsEqual(p.ID, fileEntity.ProviderID)) : undefined;
+          const config = provider?.ConfigurationObject;
           const newItem: RecordAttachmentItem = {
             LinkID: linkEntity.ID,
             FileID: fileEntity.ID,
@@ -897,6 +907,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
             Status: fileEntity.Status,
             ProviderName: fileEntity.Provider,
             ProviderID: fileEntity.ProviderID,
+            ProviderIconClass: config?.IconClass || this.GetFallbackProviderIcon(fileEntity.Provider),
+            ProviderBrandColor: config?.BrandColor || undefined,
             CategoryID: fileEntity.CategoryID,
             CategoryName: fileEntity.Category,
             CreatedAt: new Date(),
@@ -1342,6 +1354,62 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     return `mj-attachment-thumb--${mediaType}`;
   }
 
+  @HostListener('document:click')
+  public OnDocumentClick(): void {
+    this.CloseItemMenu();
+  }
+
+  @HostListener('document:keydown.escape')
+  public OnEscapePress(): void {
+    this.CloseItemMenu();
+  }
+
+  public ToggleItemMenu(event: MouseEvent, item: RecordAttachmentItem): void {
+    event.stopPropagation();
+    this.ActiveMenuLinkID = this.ActiveMenuLinkID === item.LinkID ? null : item.LinkID;
+    this.cdr.markForCheck();
+  }
+
+  public CloseItemMenu(): void {
+    if (this.ActiveMenuLinkID !== null) {
+      this.ActiveMenuLinkID = null;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public GetProviderIcon(item: RecordAttachmentItem): string {
+    if (item.ProviderIconClass) {
+      return item.ProviderIconClass;
+    }
+    const provider = item.ProviderID ? this.ActiveProviders.find(p => UUIDsEqual(p.ID, item.ProviderID)) : null;
+    const config = provider?.ConfigurationObject;
+    if (config?.IconClass) {
+      return config.IconClass;
+    }
+    return this.GetFallbackProviderIcon(item.ProviderName);
+  }
+
+  public GetProviderBrandColor(item: RecordAttachmentItem): string | undefined {
+    if (item.ProviderBrandColor) {
+      return item.ProviderBrandColor;
+    }
+    const provider = item.ProviderID ? this.ActiveProviders.find(p => UUIDsEqual(p.ID, item.ProviderID)) : null;
+    const config = provider?.ConfigurationObject;
+    return config?.BrandColor || undefined;
+  }
+
+  public GetFallbackProviderIcon(providerName?: string | null): string {
+    const name = (providerName || '').toLowerCase();
+    if (name.includes('box')) return 'fa-solid fa-box';
+    if (name.includes('aws') || name.includes('s3')) return 'fa-brands fa-aws';
+    if (name.includes('azure')) return 'fa-brands fa-microsoft';
+    if (name.includes('google drive')) return 'fa-brands fa-google-drive';
+    if (name.includes('google cloud') || name.includes('gcs') || name.includes('google')) return 'fa-brands fa-google';
+    if (name.includes('dropbox')) return 'fa-brands fa-dropbox';
+    if (name.includes('sharepoint') || name.includes('onedrive')) return 'fa-brands fa-microsoft';
+    return 'fa-solid fa-cloud';
+  }
+
   private TriggerBrowserDownload(url: string, fileName: string): void {
     const link = document.createElement('a');
     link.href = url;
@@ -1414,7 +1482,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
       let uploadUrl = '/media/upload-stage';
       const gqlUrl = GraphQLDataProvider.Instance?.ConfigData?.URL;
       if (gqlUrl && gqlUrl.startsWith('http')) {
-        uploadUrl = gqlUrl.replace(/\/graphql\/?$/i, '') + '/media/upload-stage';
+        uploadUrl = gqlUrl.replace(/\/graphql\/?$/i, '').replace(/\/+$/, '') + '/media/upload-stage';
       }
 
       const xhr = new XMLHttpRequest();
@@ -1448,7 +1516,16 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
             reject(new Error('Failed to parse upload staging response JSON'));
           }
         } else {
-          reject(new Error(`Upload staging failed with HTTP status ${xhr.status}: ${xhr.statusText}`));
+          let errorDetail = xhr.statusText;
+          try {
+            const errRes = JSON.parse(xhr.responseText) as { ErrorMessage?: string };
+            if (errRes.ErrorMessage) {
+              errorDetail = errRes.ErrorMessage;
+            }
+          } catch {
+            // keep statusText
+          }
+          reject(new Error(`Upload staging failed with HTTP status ${xhr.status}: ${errorDetail}`));
         }
       };
 

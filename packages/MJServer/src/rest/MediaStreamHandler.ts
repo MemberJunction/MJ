@@ -80,6 +80,7 @@ async function handleUploadStageRequest(req: Request, res: Response): Promise<vo
   const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim();
 
   if (!token) {
+    console.warn('[MediaStreamHandler] POST /media/upload-stage: Missing or empty Authorization header');
     res.status(401).json({ Success: false, ErrorMessage: 'Authorization header with Bearer token required.' });
     return;
   }
@@ -87,7 +88,8 @@ async function handleUploadStageRequest(req: Request, res: Response): Promise<vo
   // Cryptographically verify token signature, expiry, and 'media-upload' typ claim
   const uploadVerify = MediaAccessKeyManager.Instance.VerifyUpload(token);
   if (!uploadVerify.Valid || !uploadVerify.UserId) {
-    res.status(401).json({ Success: false, ErrorMessage: 'Invalid or expired upload token.' });
+    console.warn(`[MediaStreamHandler] POST /media/upload-stage: Token verification failed: ${uploadVerify.Error || 'invalid or expired'}`);
+    res.status(401).json({ Success: false, ErrorMessage: `Invalid or expired upload token: ${uploadVerify.Error || 'unauthorized'}` });
     return;
   }
 

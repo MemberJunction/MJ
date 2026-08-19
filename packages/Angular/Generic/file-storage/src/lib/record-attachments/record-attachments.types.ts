@@ -28,6 +28,10 @@ export interface RecordAttachmentItem {
   ProviderName?: string | null;
   /** Storage Provider ID */
   ProviderID?: string | null;
+  /** Storage Provider Icon CSS class (e.g. 'fa-solid fa-box', 'fa-brands fa-aws') */
+  ProviderIconClass?: string | null;
+  /** Storage Provider Brand Color (e.g. '#0061D5') */
+  ProviderBrandColor?: string | null;
   /** Storage Account ID */
   StorageAccountID?: string | null;
   /** File Category ID */

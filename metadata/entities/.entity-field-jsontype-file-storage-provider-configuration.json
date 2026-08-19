@@ -1,0 +1,36 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: File Storage Providers.Configuration so CodeGen emits",
+      "a typed ConfigurationObject accessor returning MJFileStorageProviderEntity_IFileStorageProviderConfiguration.",
+      "Source: metadata/entities/JSONType-interfaces/IFileStorageProviderConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: File Storage Providers"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IFileStorageProviderConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IFileStorageProviderConfiguration.ts"
+          },
+          "_comments": [
+            "FileStorageProvider.Configuration — optional provider config bag (IconClass, BrandColor)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: File Storage Providers&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T12:00:00.000Z",
+            "checksum": "a1b2c3d4e5f6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: File Storage Providers"
+    }
+  }
+]

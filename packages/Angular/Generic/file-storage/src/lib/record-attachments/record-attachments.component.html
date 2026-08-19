@@ -140,12 +140,12 @@
         <div class="mj-attachments-container" [class.mj-attachments-grid-mode]="ViewMode === 'grid'">
           @for (item of FilteredAttachments; track item.LinkID) {
             <div class="mj-attachment-card" [class.mj-attachment-card--list]="ViewMode === 'list'">
-              <div class="mj-attachment-card-top">
-                <div class="mj-attachment-thumb" [ngClass]="GetFileColorClass(item)" (click)="OpenAttachmentRecord(item)" title="Open file record">
+              <div class="mj-attachment-card-top" (click)="AllowPreview ? PreviewAttachment(item) : OpenAttachmentRecord(item)">
+                <div class="mj-attachment-thumb" [ngClass]="GetFileColorClass(item)" [title]="'Preview ' + item.Name">
                   <i [class]="GetFileIcon(item)"></i>
                 </div>
                 <div class="mj-attachment-info">
-                  <div class="mj-attachment-name" (click)="OpenAttachmentRecord(item)" [title]="item.Name">
+                  <div class="mj-attachment-name" [title]="item.Name">
                     {{ item.Name }}
                   </div>
                   <div class="mj-attachment-meta">
@@ -160,8 +160,8 @@
                     <span>{{ item.ContentType || 'File' }}</span>
                   </div>
                   @if (item.ProviderName) {
-                    <div class="mj-attachment-provider-tag">
-                      <i class="fa-solid fa-server"></i>
+                    <div class="mj-attachment-provider-tag" [style.--provider-color]="GetProviderBrandColor(item)">
+                      <i [class]="GetProviderIcon(item)"></i>
                       <span>{{ item.ProviderName }}</span>
                     </div>
                   }
@@ -173,11 +173,8 @@
                 </div>
               </div>
 
-              <!-- Action Toolbar -->
-              <div class="mj-attachment-actions">
-                <button type="button" class="mj-attachment-action-btn" (click)="OpenAttachmentRecord(item)" title="Open file in workspace tab">
-                  <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                </button>
+              <!-- Streamlined Action Toolbar (Preview + Download + Overflow Menu) -->
+              <div class="mj-attachment-actions" (click)="$event.stopPropagation()">
                 @if (AllowPreview) {
                   <button type="button" class="mj-attachment-action-btn" (click)="PreviewAttachment(item)" title="Quick preview">
                     <i class="fa-solid fa-eye"></i>
@@ -188,26 +185,57 @@
                     <i class="fa-solid fa-download"></i>
                   </button>
                 }
-                @if (AllowReplace && EffectiveAllowUpload) {
-                  <button type="button" class="mj-attachment-action-btn" (click)="RequestReplace(item)" title="Replace with new file">
-                    <i class="fa-solid fa-arrow-right-arrow-left"></i>
+
+                <!-- Overflow Menu Trigger -->
+                <div class="mj-attachment-menu-container">
+                  <button
+                    type="button"
+                    class="mj-attachment-action-btn mj-attachment-action-btn--more"
+                    [class.mj-attachment-action-btn--active]="ActiveMenuLinkID === item.LinkID"
+                    (click)="ToggleItemMenu($event, item)"
+                    title="More actions"
+                    [attr.aria-expanded]="ActiveMenuLinkID === item.LinkID"
+                  >
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
                   </button>
-                }
-                @if (AllowEditMetadata && UserCanUpdateFile) {
-                  <button type="button" class="mj-attachment-action-btn" (click)="OpenEditMetadata(item)" title="Edit details">
-                    <i class="fa-solid fa-pen"></i>
-                  </button>
-                }
-                @if (EffectiveAllowUnlink) {
-                  <button type="button" class="mj-attachment-action-btn mj-attachment-action-btn--danger" (click)="UnlinkAttachment(item)" title="Unlink from record">
-                    <i class="fa-solid fa-link-slash"></i>
-                  </button>
-                }
-                @if (EffectiveAllowDelete) {
-                  <button type="button" class="mj-attachment-action-btn mj-attachment-action-btn--danger" (click)="DeleteAttachment(item, true)" title="Delete completely">
-                    <i class="fa-regular fa-trash-can"></i>
-                  </button>
-                }
+
+                  <!-- Dropdown Menu -->
+                  @if (ActiveMenuLinkID === item.LinkID) {
+                    <div class="mj-attachment-dropdown" (click)="$event.stopPropagation()">
+                      <button type="button" class="mj-attachment-dropdown-item" (click)="OpenAttachmentRecord(item); CloseItemMenu()">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                        <span>Open in Workspace</span>
+                      </button>
+                      @if (AllowEditMetadata && UserCanUpdateFile) {
+                        <button type="button" class="mj-attachment-dropdown-item" (click)="OpenEditMetadata(item); CloseItemMenu()">
+                          <i class="fa-solid fa-pen"></i>
+                          <span>Edit Details</span>
+                        </button>
+                      }
+                      @if (AllowReplace && EffectiveAllowUpload) {
+                        <button type="button" class="mj-attachment-dropdown-item" (click)="RequestReplace(item); CloseItemMenu()">
+                          <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                          <span>Replace File</span>
+                        </button>
+                      }
+                      @if (EffectiveAllowUnlink || EffectiveAllowDelete) {
+                        <div class="mj-attachment-dropdown-divider"></div>
+                      }
+                      @if (EffectiveAllowUnlink) {
+                        <button type="button" class="mj-attachment-dropdown-item mj-attachment-dropdown-item--warning" (click)="UnlinkAttachment(item); CloseItemMenu()">
+                          <i class="fa-solid fa-link-slash"></i>
+                          <span>Unlink from Record</span>
+                        </button>
+                      }
+                      @if (EffectiveAllowDelete) {
+                        <button type="button" class="mj-attachment-dropdown-item mj-attachment-dropdown-item--danger" (click)="DeleteAttachment(item, true); CloseItemMenu()">
+                          <i class="fa-regular fa-trash-can"></i>
+                          <span>Delete Completely</span>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
               </div>
             </div>
           }
