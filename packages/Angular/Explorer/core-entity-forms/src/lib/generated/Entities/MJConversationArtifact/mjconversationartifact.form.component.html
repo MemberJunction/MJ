@@ -126,9 +126,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Permissions','ConversationArtifactID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Permissions','ConversationArtifactID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifactPermissions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifactPermissions', $event.totalRowCount)"
                 >
@@ -151,9 +151,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifact Versions','ConversationArtifactID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Versions','ConversationArtifactID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifact Versions')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifactVersions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifactVersions', $event.totalRowCount)"
                 >
@@ -176,9 +176,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Details','ArtifactID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Details','ArtifactID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Details')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetails')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetails', $event.totalRowCount)"
                 >

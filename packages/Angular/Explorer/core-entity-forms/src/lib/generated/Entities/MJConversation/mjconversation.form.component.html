@@ -271,38 +271,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="LastConversationIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="LastConversationIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="LastConversationIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="LastConversationIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -352,9 +320,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Details','ConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Details','ConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Details')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetails')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetails', $event.totalRowCount)"
                 >
@@ -377,9 +345,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifacts','ConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts','ConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifacts')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifacts', $event.totalRowCount)"
                 >
@@ -402,9 +370,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Notes','SourceConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes','SourceConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentNotes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotes', $event.totalRowCount)"
                 >
@@ -427,9 +395,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','ConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs','ConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
@@ -452,9 +420,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','SourceConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples','SourceConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
                 >
@@ -477,9 +445,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Sessions','ConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Sessions','ConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Sessions')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSessions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessions', $event.totalRowCount)"
                 >
@@ -502,9 +470,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','LastConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversations','LastConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversations')"
                 [AllowLoad]="IsSectionExpanded('mJConversations')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversations', $event.totalRowCount)"
                 >
@@ -527,9 +495,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routines','ConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Routines','ConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routines')"
                 [AllowLoad]="IsSectionExpanded('mJUserRoutines')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserRoutines', $event.totalRowCount)"
                 >

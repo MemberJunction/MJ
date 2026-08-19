@@ -60,38 +60,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -141,9 +109,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Remote Operation Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Remote Operation Categories','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Remote Operation Categories')"
                 [AllowLoad]="IsSectionExpanded('mJRemoteOperationCategories')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRemoteOperationCategories', $event.totalRowCount)"
                 >
@@ -166,9 +134,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Remote Operations','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Remote Operations','CategoryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Remote Operations')"
                 [AllowLoad]="IsSectionExpanded('mJRemoteOperations')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRemoteOperations', $event.totalRowCount)"
                 >

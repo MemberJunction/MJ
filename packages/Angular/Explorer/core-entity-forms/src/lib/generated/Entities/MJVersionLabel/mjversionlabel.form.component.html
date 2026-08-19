@@ -139,48 +139,6 @@
 
     </mj-collapsible-panel>
 
-    <!-- Hierarchy Metrics Section -->
-    <mj-collapsible-panel
-        SectionKey="hierarchyMetrics"
-        SectionName="Hierarchy Metrics"
-        Icon="fa fa-sitemap"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
@@ -227,9 +185,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Restores','VersionLabelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Restores','VersionLabelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelRestoresVersionLabelID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestoresVersionLabelID', $event.totalRowCount)"
                 >
@@ -252,9 +210,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Items','VersionLabelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Items','VersionLabelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
                 >
@@ -277,9 +235,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Restores','PreRestoreLabelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Restores','PreRestoreLabelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelRestoresPreRestoreLabelID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestoresPreRestoreLabelID', $event.totalRowCount)"
                 >
@@ -302,9 +260,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Labels','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Labels','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
                 >

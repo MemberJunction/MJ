@@ -169,9 +169,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Duplicate Run Detail Matches','RecordMergeLogID')"
-                [NewRecordValues]="NewRecordValues('MJ: Duplicate Run Detail Matches','RecordMergeLogID')"
+                [NewRecordValues]="NewRecordValues('MJ: Duplicate Run Detail Matches')"
                 [AllowLoad]="IsSectionExpanded('mJDuplicateRunDetailMatches')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDuplicateRunDetailMatches', $event.totalRowCount)"
                 >
@@ -194,9 +194,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Merge Deletion Logs','RecordMergeLogID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Merge Deletion Logs','RecordMergeLogID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Merge Deletion Logs')"
                 [AllowLoad]="IsSectionExpanded('mJRecordMergeDeletionLogs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordMergeDeletionLogs', $event.totalRowCount)"
                 >

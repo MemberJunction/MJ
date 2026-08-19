@@ -790,70 +790,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RerunFromPromptRunIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RerunFromPromptRunIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RerunFromPromptRunIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RerunFromPromptRunIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -877,9 +813,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Run Prompt Runs','AIPromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Prompt Runs','AIPromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJContentProcessRunPromptRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentProcessRunPromptRuns', $event.totalRowCount)"
                 >
@@ -902,9 +838,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','PromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias','PromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
                 >
@@ -927,9 +863,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','RerunFromPromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs','RerunFromPromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRunsRerunFromPromptRunID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunsRerunFromPromptRunID', $event.totalRowCount)"
                 >
@@ -952,9 +888,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Result Cache','PromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Result Cache','PromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Result Cache')"
                 [AllowLoad]="IsSectionExpanded('mJAIResultCache')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIResultCache', $event.totalRowCount)"
                 >
@@ -977,9 +913,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Tags','AIPromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Tags','AIPromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Tags')"
                 [AllowLoad]="IsSectionExpanded('mJContentItemTags')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemTags', $event.totalRowCount)"
                 >
@@ -1002,9 +938,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRunsParentID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunsParentID', $event.totalRowCount)"
                 >
@@ -1027,9 +963,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Duplicate Run Detail Matches','AIPromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Duplicate Run Detail Matches','AIPromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Duplicate Run Detail Matches')"
                 [AllowLoad]="IsSectionExpanded('mJDuplicateRunDetailMatches')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDuplicateRunDetailMatches', $event.totalRowCount)"
                 >
@@ -1052,9 +988,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routine Runs','PromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Routine Runs','PromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routine Runs')"
                 [AllowLoad]="IsSectionExpanded('mJUserRoutineRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserRoutineRuns', $event.totalRowCount)"
                 >
@@ -1077,9 +1013,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Compaction Runs','PromptRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Compaction Runs','PromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Compaction Runs')"
                 [AllowLoad]="IsSectionExpanded('mJConversationCompactionRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationCompactionRuns', $event.totalRowCount)"
                 >

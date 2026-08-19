@@ -34,38 +34,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -191,9 +159,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suites','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Suites','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Suites')"
                 [AllowLoad]="IsSectionExpanded('mJTestSuites')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestSuites', $event.totalRowCount)"
                 >
@@ -216,9 +184,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Runs','SuiteID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Suite Runs','SuiteID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Suite Runs')"
                 [AllowLoad]="IsSectionExpanded('mJTestSuiteRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestSuiteRuns', $event.totalRowCount)"
                 >
@@ -241,9 +209,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Tests','SuiteID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Suite Tests','SuiteID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Suite Tests')"
                 [AllowLoad]="IsSectionExpanded('mJTestSuiteTests')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestSuiteTests', $event.totalRowCount)"
                 >

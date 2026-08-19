@@ -192,9 +192,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','LibraryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Component Library Links','LibraryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
                 [AllowLoad]="IsSectionExpanded('mJComponentLibraryLinks')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentLibraryLinks', $event.totalRowCount)"
                 >

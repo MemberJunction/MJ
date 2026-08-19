@@ -209,9 +209,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','ContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Items','ContentSourceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Items')"
                 [AllowLoad]="IsSectionExpanded('mJContentItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
                 >
@@ -234,9 +234,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Runs','SourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Process Runs','SourceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Runs')"
                 [AllowLoad]="IsSectionExpanded('mJContentProcessRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentProcessRuns', $event.totalRowCount)"
                 >
@@ -259,9 +259,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Source Params','ContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Source Params','ContentSourceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Source Params')"
                 [AllowLoad]="IsSectionExpanded('mJContentSourceParams')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentSourceParams', $event.totalRowCount)"
                 >
@@ -284,9 +284,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Run Details','ContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details','ContentSourceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details')"
                 [AllowLoad]="IsSectionExpanded('mJContentProcessRunDetails')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentProcessRunDetails', $event.totalRowCount)"
                 >
@@ -309,9 +309,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','SourceContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions','SourceContentSourceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
                 [AllowLoad]="IsSectionExpanded('mJTagSuggestions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagSuggestions', $event.totalRowCount)"
                 >

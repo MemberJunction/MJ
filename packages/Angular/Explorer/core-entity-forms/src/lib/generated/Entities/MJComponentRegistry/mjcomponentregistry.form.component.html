@@ -124,9 +124,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Components','SourceRegistryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Components','SourceRegistryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Components')"
                 [AllowLoad]="IsSectionExpanded('mJComponents')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponents', $event.totalRowCount)"
                 >

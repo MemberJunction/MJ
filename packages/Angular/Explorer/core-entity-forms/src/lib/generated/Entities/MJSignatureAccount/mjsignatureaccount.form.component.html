@@ -172,9 +172,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Requests','SignatureAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: Signature Requests','SignatureAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Requests')"
                 [AllowLoad]="IsSectionExpanded('mJSignatureRequests')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSignatureRequests', $event.totalRowCount)"
                 >

@@ -72,9 +72,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Sources','ContentFileTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Sources','ContentFileTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Sources')"
                 [AllowLoad]="IsSectionExpanded('mJContentSources')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentSources', $event.totalRowCount)"
                 >
@@ -97,9 +97,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','ContentFileTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Items','ContentFileTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Items')"
                 [AllowLoad]="IsSectionExpanded('mJContentItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
                 >

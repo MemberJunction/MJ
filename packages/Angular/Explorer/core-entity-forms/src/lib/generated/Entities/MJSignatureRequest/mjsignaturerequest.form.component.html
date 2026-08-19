@@ -178,9 +178,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Request Logs','SignatureRequestID')"
-                [NewRecordValues]="NewRecordValues('MJ: Signature Request Logs','SignatureRequestID')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Request Logs')"
                 [AllowLoad]="IsSectionExpanded('mJSignatureRequestLogs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSignatureRequestLogs', $event.totalRowCount)"
                 >
@@ -203,9 +203,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Request Recipients','SignatureRequestID')"
-                [NewRecordValues]="NewRecordValues('MJ: Signature Request Recipients','SignatureRequestID')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Request Recipients')"
                 [AllowLoad]="IsSectionExpanded('mJSignatureRequestRecipients')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSignatureRequestRecipients', $event.totalRowCount)"
                 >
@@ -228,9 +228,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Request Documents','SignatureRequestID')"
-                [NewRecordValues]="NewRecordValues('MJ: Signature Request Documents','SignatureRequestID')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Request Documents')"
                 [AllowLoad]="IsSectionExpanded('mJSignatureRequestDocuments')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSignatureRequestDocuments', $event.totalRowCount)"
                 >

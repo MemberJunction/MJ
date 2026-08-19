@@ -19988,10 +19988,11 @@ export const MJFileStorageProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJFileStorageProviderEntity_IFileStorageProviderConfiguration
         * * Description: Optional JSON configuration for providers that don't use Credential Engine. Used as fallback when CredentialID is not set on FileStorageAccount.`),
     RequiresOAuth: z.boolean().describe(`
         * * Field Name: RequiresOAuth
@@ -37079,9 +37080,6 @@ export class MJAIAgentCoAgentEntity extends BaseEntity<MJAIAgentCoAgentEntityTyp
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
     }
-
-    
-
 
     /**
     * * Field Name: __mj_CreatedAt
@@ -78097,6 +78095,45 @@ export interface MJEntityEntity_IEntityConfiguration {
      * `RelatedRolePolicy: smart`).
      */
     UI?: MJEntityEntity_IEntityUIConfiguration;
+
+    /**
+     * Optional file attachment configuration for this entity.
+     * Controls whether attachments are permitted and sets entity-level upload policies.
+     */
+    Attachments?: MJEntityEntity_IEntityAttachmentsConfiguration;
+}
+
+/**
+ * Configuration for entity-level file attachments.
+ */
+export interface MJEntityEntity_IEntityAttachmentsConfiguration {
+    /**
+     * Whether file attachments/linking are enabled for this entity.
+     * Default: true when storage providers are active. Set to false to explicitly disallow attachments.
+     */
+    Enabled?: boolean;
+
+    /**
+     * Maximum allowed size per attachment in bytes (e.g. 52428800 for 50MB).
+     * When omitted, uses global storage provider default.
+     */
+    MaxFileSizeBytes?: number;
+
+    /**
+     * Allowed MIME types or file extensions (e.g. ['image/*', 'application/pdf', '.docx']).
+     * When omitted, all file types supported by the storage provider are allowed.
+     */
+    AllowedContentTypes?: string[];
+
+    /**
+     * Optional default Storage Account ID to route uploads for this entity.
+     */
+    DefaultStorageAccountID?: string;
+
+    /**
+     * Optional default File Category ID for attachments on this entity.
+     */
+    DefaultCategoryID?: string;
 }
 
 /**
@@ -81657,6 +81694,35 @@ export interface MJEntityFieldEntity_IEmbeddedRecordConfig {
 }
 
 /**
+ * Optional per-field configuration bag.
+ *
+ * Stored as JSON in `MJ: Entity Fields.Configuration`. CodeGen emits a
+ * typed `ConfigurationObject` accessor on `MJEntityFieldEntity` that
+ * returns `MJEntityFieldEntity_IEntityFieldConfiguration | null`.
+ */
+export interface MJEntityFieldEntity_IEntityFieldConfiguration {
+    /**
+     * Hierarchy and tree structure configuration for self-referencing foreign keys.
+     */
+    Hierarchy?: MJEntityFieldEntity_IEntityFieldHierarchyConfig;
+}
+
+/**
+ * Hierarchy options to explicitly declare recursive tree hierarchies.
+ */
+export interface MJEntityFieldEntity_IEntityFieldHierarchyConfig {
+    /**
+     * When true, declares this self-referencing foreign key as an intentional tree hierarchy.
+     */
+    IsHierarchy?: boolean;
+
+    /**
+     * Optional custom maximum recursion depth guard (defaults to 100).
+     */
+    MaxDepth?: number;
+}
+
+/**
  * MJ: Entity Fields - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityField
@@ -81667,15 +81733,6 @@ export interface MJEntityFieldEntity_IEmbeddedRecordConfig {
  * @class
  * @public
  */
-export interface MJEntityFieldEntity_IEntityFieldHierarchyConfig {
-    IsHierarchy?: boolean;
-    MaxDepth?: number;
-}
-
-export interface MJEntityFieldEntity_IEntityFieldConfiguration {
-    Hierarchy?: MJEntityFieldEntity_IEntityFieldHierarchyConfig;
-}
-
 @RegisterClass(BaseEntity, 'MJ: Entity Fields')
 export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     /**
@@ -87198,6 +87255,22 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
 
 
 /**
+ * Optional per-storage-provider configuration bag.
+ * Stored as JSON in `MJ: File Storage Providers.Configuration`.
+ */
+export interface MJFileStorageProviderEntity_IFileStorageProviderConfiguration {
+    /**
+     * FontAwesome icon class for displaying the storage provider in UI components (e.g. 'fa-solid fa-box', 'fa-brands fa-aws').
+     */
+    IconClass?: string;
+
+    /**
+     * Optional brand color for badges and accents (e.g. '#0061D5').
+     */
+    BrandColor?: string;
+}
+
+/**
  * MJ: File Storage Providers - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: FileStorageProvider
@@ -87208,11 +87281,6 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
  * @class
  * @public
  */
-export interface MJFileStorageProviderEntity_IFileStorageProviderConfiguration {
-    IconClass?: string;
-    BrandColor?: string;
-}
-
 @RegisterClass(BaseEntity, 'MJ: File Storage Providers')
 export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProviderEntityType> {
     /**
@@ -87361,6 +87429,7 @@ export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProvide
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJFileStorageProviderEntity_IFileStorageProviderConfiguration
     * * Description: Optional JSON configuration for providers that don't use Credential Engine. Used as fallback when CredentialID is not set on FileStorageAccount.
     */
     get Configuration(): string | null {

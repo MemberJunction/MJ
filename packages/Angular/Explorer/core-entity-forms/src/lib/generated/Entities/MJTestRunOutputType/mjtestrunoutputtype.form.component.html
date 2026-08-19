@@ -82,9 +82,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Run Outputs','OutputTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Run Outputs','OutputTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Run Outputs')"
                 [AllowLoad]="IsSectionExpanded('mJTestRunOutputs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRunOutputs', $event.totalRowCount)"
                 >

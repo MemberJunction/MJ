@@ -294,9 +294,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Data Context Items','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Data Context Items','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Data Context Items')"
                 [AllowLoad]="IsSectionExpanded('mJDataContextItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDataContextItems', $event.totalRowCount)"
                 >
@@ -319,9 +319,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Fields','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query Fields','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query Fields')"
                 [AllowLoad]="IsSectionExpanded('mJQueryFields')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueryFields', $event.totalRowCount)"
                 >
@@ -344,9 +344,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Permissions','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query Permissions','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query Permissions')"
                 [AllowLoad]="IsSectionExpanded('mJQueryPermissions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueryPermissions', $event.totalRowCount)"
                 >
@@ -369,9 +369,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Dependencies','DependsOnQueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query Dependencies','DependsOnQueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJQueryDependenciesDependsOnQueryID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueryDependenciesDependsOnQueryID', $event.totalRowCount)"
                 >
@@ -394,9 +394,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Parameters','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query Parameters','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query Parameters')"
                 [AllowLoad]="IsSectionExpanded('mJQueryParameters')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueryParameters', $event.totalRowCount)"
                 >
@@ -419,9 +419,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Dependencies','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query Dependencies','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJQueryDependenciesQueryID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueryDependenciesQueryID', $event.totalRowCount)"
                 >
@@ -444,9 +444,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query Entities','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query Entities','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query Entities')"
                 [AllowLoad]="IsSectionExpanded('mJQueryEntities')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueryEntities', $event.totalRowCount)"
                 >
@@ -469,9 +469,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Query SQLs','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Query SQLs','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Query SQLs')"
                 [AllowLoad]="IsSectionExpanded('mJQuerySQLs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQuerySQLs', $event.totalRowCount)"
                 >
@@ -494,9 +494,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Result Queries','QueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Materialized Result Queries','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Materialized Result Queries')"
                 [AllowLoad]="IsSectionExpanded('mJMaterializedResultQueries')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultQueries', $event.totalRowCount)"
                 >

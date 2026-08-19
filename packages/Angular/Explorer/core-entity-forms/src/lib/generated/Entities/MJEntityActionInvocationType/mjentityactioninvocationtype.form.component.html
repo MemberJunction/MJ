@@ -90,9 +90,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Action Invocations','InvocationTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Action Invocations','InvocationTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Action Invocations')"
                 [AllowLoad]="IsSectionExpanded('mJEntityActionInvocations')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityActionInvocations', $event.totalRowCount)"
                 >
@@ -115,9 +115,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Execution Logs','EntityActionInvocationTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Execution Logs','EntityActionInvocationTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Execution Logs')"
                 [AllowLoad]="IsSectionExpanded('mJActionExecutionLogs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionExecutionLogs', $event.totalRowCount)"
                 >

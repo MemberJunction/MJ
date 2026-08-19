@@ -285,9 +285,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Client Registrations','MCPServerID')"
-                [NewRecordValues]="NewRecordValues('MJ: O Auth Client Registrations','MCPServerID')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Client Registrations')"
                 [AllowLoad]="IsSectionExpanded('mJOAuthClientRegistrations')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOAuthClientRegistrations', $event.totalRowCount)"
                 >
@@ -310,9 +310,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connections','MCPServerID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connections','MCPServerID')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connections')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnections')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnections', $event.totalRowCount)"
                 >
@@ -335,9 +335,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Tools','MCPServerID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools','MCPServerID')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerTools')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerTools', $event.totalRowCount)"
                 >

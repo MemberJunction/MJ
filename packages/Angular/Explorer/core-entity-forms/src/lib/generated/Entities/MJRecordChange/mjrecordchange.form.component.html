@@ -188,38 +188,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RestoredFromIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RestoredFromIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RestoredFromIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RestoredFromIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -269,9 +237,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Changes','RestoredFromID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Changes','RestoredFromID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Changes')"
                 [AllowLoad]="IsSectionExpanded('mJRecordChanges')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordChanges', $event.totalRowCount)"
                 >
@@ -294,9 +262,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Items','RecordChangeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Items','RecordChangeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
                 >

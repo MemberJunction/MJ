@@ -145,9 +145,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: External Data Sources','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: External Data Sources','TypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: External Data Sources')"
                 [AllowLoad]="IsSectionExpanded('mJExternalDataSources')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJExternalDataSources', $event.totalRowCount)"
                 >

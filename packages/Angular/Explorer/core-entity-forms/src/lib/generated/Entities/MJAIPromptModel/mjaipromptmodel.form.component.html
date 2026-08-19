@@ -196,9 +196,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Credential Bindings','AIPromptModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Credential Bindings','AIPromptModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Credential Bindings')"
                 [AllowLoad]="IsSectionExpanded('mJAICredentialBindings')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAICredentialBindings', $event.totalRowCount)"
                 >

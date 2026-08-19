@@ -68,38 +68,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -149,9 +117,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Categories','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Categories')"
                 [AllowLoad]="IsSectionExpanded('mJActionCategories')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionCategories', $event.totalRowCount)"
                 >
@@ -174,9 +142,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Actions','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Actions','CategoryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Actions')"
                 [AllowLoad]="IsSectionExpanded('mJActions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActions', $event.totalRowCount)"
                 >
@@ -199,9 +167,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Tools','GeneratedActionCategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools','GeneratedActionCategoryID')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerTools')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerTools', $event.totalRowCount)"
                 >

@@ -160,9 +160,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Runs','ScheduledJobRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Process Runs','ScheduledJobRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Process Runs')"
                 [AllowLoad]="IsSectionExpanded('mJProcessRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJProcessRuns', $event.totalRowCount)"
                 >
@@ -185,9 +185,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','ScheduledJobRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs','ScheduledJobRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
@@ -210,9 +210,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Runs','ScheduledJobRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Runs','ScheduledJobRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Runs')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRuns', $event.totalRowCount)"
                 >

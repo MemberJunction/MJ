@@ -284,9 +284,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Run Details','ProcessRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Process Run Details','ProcessRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Process Run Details')"
                 [AllowLoad]="IsSectionExpanded('mJProcessRunDetails')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJProcessRunDetails', $event.totalRowCount)"
                 >

@@ -170,9 +170,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Applications','APIKeyID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Key Applications','APIKeyID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Applications')"
                 [AllowLoad]="IsSectionExpanded('mJAPIKeyApplications')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyApplications', $event.totalRowCount)"
                 >
@@ -195,9 +195,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Scopes','APIKeyID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Key Scopes','APIKeyID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Scopes')"
                 [AllowLoad]="IsSectionExpanded('mJAPIKeyScopes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyScopes', $event.totalRowCount)"
                 >
@@ -220,9 +220,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Usage Logs','APIKeyID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Key Usage Logs','APIKeyID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Usage Logs')"
                 [AllowLoad]="IsSectionExpanded('mJAPIKeyUsageLogs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyUsageLogs', $event.totalRowCount)"
                 >

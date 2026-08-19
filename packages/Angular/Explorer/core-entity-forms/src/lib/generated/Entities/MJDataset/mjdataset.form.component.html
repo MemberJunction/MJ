@@ -82,9 +82,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dataset Items','DatasetID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dataset Items','DatasetID')"
+                [NewRecordValues]="NewRecordValues('MJ: Dataset Items')"
                 [AllowLoad]="IsSectionExpanded('mJDatasetItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDatasetItems', $event.totalRowCount)"
                 >

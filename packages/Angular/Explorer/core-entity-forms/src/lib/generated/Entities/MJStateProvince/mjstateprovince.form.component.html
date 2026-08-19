@@ -141,9 +141,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Geo Codes','StateProvinceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Geo Codes','StateProvinceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Geo Codes')"
                 [AllowLoad]="IsSectionExpanded('mJRecordGeoCodes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordGeoCodes', $event.totalRowCount)"
                 >

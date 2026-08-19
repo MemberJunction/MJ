@@ -248,9 +248,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Actions','DefaultModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Actions','DefaultModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Actions')"
                 [AllowLoad]="IsSectionExpanded('mJAIActions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIActions', $event.totalRowCount)"
                 >
@@ -273,9 +273,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Actions','AIModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Model Actions','AIModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Actions')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelActions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelActions', $event.totalRowCount)"
                 >
@@ -298,9 +298,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','AIModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Documents','AIModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
                 [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
                 >
@@ -323,9 +323,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Vector Indexes','EmbeddingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Vector Indexes','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Vector Indexes')"
                 [AllowLoad]="IsSectionExpanded('mJVectorIndexes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVectorIndexes', $event.totalRowCount)"
                 >
@@ -348,9 +348,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','EmbeddingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
                 >
@@ -373,9 +373,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Notes','EmbeddingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentNotes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotes', $event.totalRowCount)"
                 >
@@ -398,9 +398,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Architectures','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Model Architectures','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Architectures')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelArchitectures')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelArchitectures', $event.totalRowCount)"
                 >
@@ -423,9 +423,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Modalities','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Model Modalities','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Modalities')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelModalities')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelModalities', $event.totalRowCount)"
                 >
@@ -448,9 +448,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Result Cache','AIModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Result Cache','AIModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Result Cache')"
                 [AllowLoad]="IsSectionExpanded('mJAIResultCache')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIResultCache', $event.totalRowCount)"
                 >
@@ -473,9 +473,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Types','AIModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Types','AIModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Types')"
                 [AllowLoad]="IsSectionExpanded('mJContentTypesAIModelID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentTypesAIModelID', $event.totalRowCount)"
                 >
@@ -498,9 +498,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity AI Actions','AIModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity AI Actions','AIModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity AI Actions')"
                 [AllowLoad]="IsSectionExpanded('mJEntityAIActions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityAIActions', $event.totalRowCount)"
                 >
@@ -523,9 +523,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Models','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Models','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Models')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentModels')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentModels', $event.totalRowCount)"
                 >
@@ -548,9 +548,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Vendors','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelVendors')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelVendors', $event.totalRowCount)"
                 >
@@ -573,9 +573,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Costs','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Model Costs','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Costs')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelCosts')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelCosts', $event.totalRowCount)"
                 >
@@ -598,9 +598,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','EmbeddingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Items','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Items')"
                 [AllowLoad]="IsSectionExpanded('mJContentItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
                 >
@@ -623,9 +623,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Types','EmbeddingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Types','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Types')"
                 [AllowLoad]="IsSectionExpanded('mJContentTypesEmbeddingModelID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentTypesEmbeddingModelID', $event.totalRowCount)"
                 >
@@ -648,9 +648,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Generated Codes','GeneratedByModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Generated Codes','GeneratedByModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Generated Codes')"
                 [AllowLoad]="IsSectionExpanded('mJGeneratedCodes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJGeneratedCodes', $event.totalRowCount)"
                 >
@@ -673,9 +673,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Models','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Models','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Models')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptModels')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptModels', $event.totalRowCount)"
                 >
@@ -698,9 +698,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Sources','EmbeddingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Sources','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Sources')"
                 [AllowLoad]="IsSectionExpanded('mJContentSources')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentSources', $event.totalRowCount)"
                 >
@@ -723,9 +723,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','OriginalModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs','OriginalModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRunsOriginalModelID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunsOriginalModelID', $event.totalRowCount)"
                 >
@@ -748,9 +748,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','OverrideModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs','OverrideModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRuns')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRuns', $event.totalRowCount)"
                 >
@@ -773,9 +773,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptRunsModelID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunsModelID', $event.totalRowCount)"
                 >
@@ -798,9 +798,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Queries','EmbeddingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Queries','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Queries')"
                 [AllowLoad]="IsSectionExpanded('mJQueries')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueries', $event.totalRowCount)"
                 >
@@ -823,9 +823,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tags','EmbeddingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tags','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tags')"
                 [AllowLoad]="IsSectionExpanded('mJTags')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTags', $event.totalRowCount)"
                 >
@@ -848,9 +848,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Models','PriorVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Models','PriorVersionID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Models')"
                 [AllowLoad]="IsSectionExpanded('mJAIModels')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModels', $event.totalRowCount)"
                 >
@@ -873,9 +873,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Prompt Configs','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Configs','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Configs')"
                 [AllowLoad]="IsSectionExpanded('mJScopedPromptConfigs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJScopedPromptConfigs', $event.totalRowCount)"
                 >
@@ -898,9 +898,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Harnesses','AIModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Harnesses','AIModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Harnesses')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentHarnesses')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentHarnesses', $event.totalRowCount)"
                 >

@@ -118,9 +118,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integrations','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integrations')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrations')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrations', $event.totalRowCount)"
                 >
@@ -143,9 +143,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Employees','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ: Employees','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: Employees')"
                 [AllowLoad]="IsSectionExpanded('mJEmployees')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEmployees', $event.totalRowCount)"
                 >
@@ -168,9 +168,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connections','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connections','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connections')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnections')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnections', $event.totalRowCount)"
                 >
@@ -193,9 +193,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Notes','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Notes')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentNotes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotes', $event.totalRowCount)"
                 >
@@ -218,9 +218,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentExamples')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentExamples', $event.totalRowCount)"
                 >
@@ -243,9 +243,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Accounts','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ: Signature Accounts','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Accounts')"
                 [AllowLoad]="IsSectionExpanded('mJSignatureAccounts')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSignatureAccounts', $event.totalRowCount)"
                 >
@@ -268,9 +268,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Tax Liabilities','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Tax Liabilities','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Tax Liabilities')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingTaxLiabilities')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingTaxLiabilities', $event.totalRowCount)"
                 >
@@ -293,9 +293,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: GL Accounts','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: GL Accounts','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: GL Accounts')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingGLAccounts')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingGLAccounts', $event.totalRowCount)"
                 >
@@ -318,9 +318,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Intercompany Account Matches','TargetCompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Intercompany Account Matches','TargetCompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Intercompany Account Matches')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingIntercompanyAccountMatchesTargetCompanyID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingIntercompanyAccountMatchesTargetCompanyID', $event.totalRowCount)"
                 >
@@ -343,9 +343,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Intercompany Account Matches','SourceCompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Intercompany Account Matches','SourceCompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Intercompany Account Matches')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingIntercompanyAccountMatchesSourceCompanyID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingIntercompanyAccountMatchesSourceCompanyID', $event.totalRowCount)"
                 >
@@ -368,9 +368,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Journal Entry Sequences','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entry Sequences','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entry Sequences')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingJournalEntrySequences')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingJournalEntrySequences', $event.totalRowCount)"
                 >
@@ -393,9 +393,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Journal Entries','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entries','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entries')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingJournalEntries')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingJournalEntries', $event.totalRowCount)"
                 >
@@ -418,9 +418,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Company Tax Nexus','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Company Tax Nexus','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Company Tax Nexus')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingCompanyTaxNexus')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingCompanyTaxNexus', $event.totalRowCount)"
                 >
@@ -443,9 +443,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Journal Entry Batches','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entry Batches','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entry Batches')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingJournalEntryBatches')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingJournalEntryBatches', $event.totalRowCount)"
                 >
@@ -468,9 +468,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Payment Providers','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Payment Providers','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Payment Providers')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersPaymentProviders')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersPaymentProviders', $event.totalRowCount)"
                 >
@@ -493,9 +493,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Products','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Products','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Products')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersProducts')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersProducts', $event.totalRowCount)"
                 >
@@ -518,9 +518,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Promotions','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Promotions','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Promotions')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersPromotions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersPromotions', $event.totalRowCount)"
                 >
@@ -543,9 +543,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Order Company Policies','ID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Company Policies','ID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Company Policies')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersOrderCompanyPolicies')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersOrderCompanyPolicies', $event.totalRowCount)"
                 >
@@ -568,9 +568,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Order Lines','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Lines','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Lines')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersOrderLines')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersOrderLines', $event.totalRowCount)"
                 >
@@ -593,9 +593,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Product Categories','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Product Categories','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Product Categories')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersProductCategories')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersProductCategories', $event.totalRowCount)"
                 >
@@ -618,9 +618,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Stored Value Accounts','IssuingCompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Stored Value Accounts','IssuingCompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Stored Value Accounts')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersStoredValueAccounts')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersStoredValueAccounts', $event.totalRowCount)"
                 >
@@ -643,9 +643,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Payment Details','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Payment Details','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Payment Details')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersPaymentDetails')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersPaymentDetails', $event.totalRowCount)"
                 >
@@ -668,9 +668,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Order Headers','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Headers','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Headers')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersOrderHeaders')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersOrderHeaders', $event.totalRowCount)"
                 >
@@ -693,9 +693,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Subscriptions','CompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Subscriptions','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Subscriptions')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersSubscriptions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersSubscriptions', $event.totalRowCount)"
                 >
@@ -718,9 +718,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Payment Headers','ReceivingCompanyID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Payment Headers','ReceivingCompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Payment Headers')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersPaymentHeaders')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersPaymentHeaders', $event.totalRowCount)"
                 >

@@ -280,9 +280,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','DependsOnAppID')"
-                [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies','DependsOnAppID')"
+                [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJOpenAppDependenciesDependsOnAppID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependenciesDependsOnAppID', $event.totalRowCount)"
                 >
@@ -305,9 +305,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Dependencies','OpenAppID')"
-                [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies','OpenAppID')"
+                [NewRecordValues]="NewRecordValues('MJ: Open App Dependencies')"
                 [AllowLoad]="IsSectionExpanded('mJOpenAppDependenciesOpenAppID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOpenAppDependenciesOpenAppID', $event.totalRowCount)"
                 >
@@ -330,9 +330,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open App Install Histories','OpenAppID')"
-                [NewRecordValues]="NewRecordValues('MJ: Open App Install Histories','OpenAppID')"
+                [NewRecordValues]="NewRecordValues('MJ: Open App Install Histories')"
                 [AllowLoad]="IsSectionExpanded('mJOpenAppInstallHistories')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOpenAppInstallHistories', $event.totalRowCount)"
                 >

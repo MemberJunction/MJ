@@ -3743,7 +3743,9 @@ export abstract class BaseEntity<T = unknown> {
 
         // Cache it via this entity's provider so the cache lives on the right connection.
         const md = this.ProviderToUse as unknown as IMetadataProvider;
-        md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        if (typeof md?.SetCachedRecordName === 'function') {
+            md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        }
     }
 
     /**

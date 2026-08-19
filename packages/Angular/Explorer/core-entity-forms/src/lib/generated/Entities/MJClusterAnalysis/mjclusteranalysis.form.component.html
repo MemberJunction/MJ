@@ -138,9 +138,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Cluster Analysis Clusters','ClusterAnalysisID')"
-                [NewRecordValues]="NewRecordValues('MJ: Cluster Analysis Clusters','ClusterAnalysisID')"
+                [NewRecordValues]="NewRecordValues('MJ: Cluster Analysis Clusters')"
                 [AllowLoad]="IsSectionExpanded('mJClusterAnalysisClusters')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJClusterAnalysisClusters', $event.totalRowCount)"
                 >

@@ -142,9 +142,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Experiment Session Iterations','ExperimentSessionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Experiment Session Iterations','ExperimentSessionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Experiment Session Iterations')"
                 [AllowLoad]="IsSectionExpanded('mJExperimentSessionIterations')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJExperimentSessionIterations', $event.totalRowCount)"
                 >

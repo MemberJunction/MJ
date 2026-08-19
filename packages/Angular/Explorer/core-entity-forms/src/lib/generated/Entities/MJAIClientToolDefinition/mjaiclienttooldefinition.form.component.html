@@ -132,9 +132,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Client Tools','ClientToolDefinitionID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Client Tools','ClientToolDefinitionID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Client Tools')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentClientTools')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentClientTools', $event.totalRowCount)"
                 >

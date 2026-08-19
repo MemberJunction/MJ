@@ -119,9 +119,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Workspace Items','WorkspaceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Workspace Items','WorkspaceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Workspace Items')"
                 [AllowLoad]="IsSectionExpanded('mJWorkspaceItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJWorkspaceItems', $event.totalRowCount)"
                 >

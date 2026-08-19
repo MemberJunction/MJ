@@ -140,38 +140,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -221,9 +189,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types','ArtifactTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentArtifactTypes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentArtifactTypes', $event.totalRowCount)"
                 >
@@ -246,9 +214,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Artifacts','ArtifactTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts','ArtifactTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJConversationArtifacts')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationArtifacts', $event.totalRowCount)"
                 >
@@ -271,9 +239,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Types','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
                 [AllowLoad]="IsSectionExpanded('mJArtifactTypes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifactTypes', $event.totalRowCount)"
                 >
@@ -296,9 +264,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifacts','TypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
                 [AllowLoad]="IsSectionExpanded('mJArtifacts')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
                 >
@@ -321,9 +289,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','DefaultArtifactTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agents','DefaultArtifactTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgents')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgents', $event.totalRowCount)"
                 >

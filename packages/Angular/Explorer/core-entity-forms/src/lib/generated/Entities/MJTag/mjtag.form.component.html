@@ -68,38 +68,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -131,38 +99,6 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="RootMergedIntoTagID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MergedIntoTagIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MergedIntoTagIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MergedIntoTagIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MergedIntoTagIDChildCount"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -309,9 +245,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tagged Items','TagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tagged Items','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tagged Items')"
                 [AllowLoad]="IsSectionExpanded('mJTaggedItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTaggedItems', $event.totalRowCount)"
                 >
@@ -334,9 +270,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tags','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tags','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tags')"
                 [AllowLoad]="IsSectionExpanded('mJTagsParentID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagsParentID', $event.totalRowCount)"
                 >
@@ -359,9 +295,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Tags','TagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Tags','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Tags')"
                 [AllowLoad]="IsSectionExpanded('mJContentItemTags')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemTags', $event.totalRowCount)"
                 >
@@ -384,9 +320,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Co Occurrences','TagBID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences','TagBID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences')"
                 [AllowLoad]="IsSectionExpanded('mJTagCoOccurrencesTagBID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagCoOccurrencesTagBID', $event.totalRowCount)"
                 >
@@ -409,9 +345,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Synonyms','TagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Synonyms','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Synonyms')"
                 [AllowLoad]="IsSectionExpanded('mJTagSynonyms')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagSynonyms', $event.totalRowCount)"
                 >
@@ -434,9 +370,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','RelatedTagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs','RelatedTagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('mJTagAuditLogsRelatedTagID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogsRelatedTagID', $event.totalRowCount)"
                 >
@@ -459,9 +395,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Co Occurrences','TagAID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences','TagAID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences')"
                 [AllowLoad]="IsSectionExpanded('mJTagCoOccurrencesTagAID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagCoOccurrencesTagAID', $event.totalRowCount)"
                 >
@@ -484,9 +420,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Scopes','TagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Scopes','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Scopes')"
                 [AllowLoad]="IsSectionExpanded('mJTagScopes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagScopes', $event.totalRowCount)"
                 >
@@ -509,9 +445,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','ProposedParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions','ProposedParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
                 [AllowLoad]="IsSectionExpanded('mJTagSuggestionsProposedParentID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagSuggestionsProposedParentID', $event.totalRowCount)"
                 >
@@ -534,9 +470,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','TagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('mJTagAuditLogsTagID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogsTagID', $event.totalRowCount)"
                 >
@@ -559,9 +495,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','BestMatchTagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions','BestMatchTagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
                 [AllowLoad]="IsSectionExpanded('mJTagSuggestionsBestMatchTagID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagSuggestionsBestMatchTagID', $event.totalRowCount)"
                 >
@@ -584,9 +520,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tags','MergedIntoTagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tags','MergedIntoTagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tags')"
                 [AllowLoad]="IsSectionExpanded('mJTagsMergedIntoTagID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagsMergedIntoTagID', $event.totalRowCount)"
                 >
@@ -609,9 +545,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','ResolvedTagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions','ResolvedTagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
                 [AllowLoad]="IsSectionExpanded('mJTagSuggestionsResolvedTagID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagSuggestionsResolvedTagID', $event.totalRowCount)"
                 >

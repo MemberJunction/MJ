@@ -116,9 +116,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Libraries','LibraryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Libraries','LibraryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Libraries')"
                 [AllowLoad]="IsSectionExpanded('mJActionLibraries')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionLibraries', $event.totalRowCount)"
                 >
@@ -141,9 +141,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Library Items','LibraryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Library Items','LibraryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Library Items')"
                 [AllowLoad]="IsSectionExpanded('mJLibraryItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJLibraryItems', $event.totalRowCount)"
                 >

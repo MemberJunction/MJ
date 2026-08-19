@@ -186,9 +186,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Run Details','ArchiveRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Archive Run Details','ArchiveRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Archive Run Details')"
                 [AllowLoad]="IsSectionExpanded('mJArchiveRunDetails')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArchiveRunDetails', $event.totalRowCount)"
                 >

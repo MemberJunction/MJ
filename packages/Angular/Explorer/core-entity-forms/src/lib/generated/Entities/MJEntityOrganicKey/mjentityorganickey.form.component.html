@@ -159,9 +159,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Organic Key Related Entities','EntityOrganicKeyID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Organic Key Related Entities','EntityOrganicKeyID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Organic Key Related Entities')"
                 [AllowLoad]="IsSectionExpanded('mJEntityOrganicKeyRelatedEntities')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityOrganicKeyRelatedEntities', $event.totalRowCount)"
                 >

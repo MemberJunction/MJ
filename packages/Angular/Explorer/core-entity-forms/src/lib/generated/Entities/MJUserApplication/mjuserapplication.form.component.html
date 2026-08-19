@@ -110,9 +110,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Application Entities','UserApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Application Entities','UserApplicationID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Application Entities')"
                 [AllowLoad]="IsSectionExpanded('mJUserApplicationEntities')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserApplicationEntities', $event.totalRowCount)"
                 >

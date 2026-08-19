@@ -201,9 +201,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','SourcePromptRunMediaID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias','SourcePromptRunMediaID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
                 >

@@ -124,9 +124,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','JobTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs','JobTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
                 [AllowLoad]="IsSectionExpanded('mJScheduledJobs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJScheduledJobs', $event.totalRowCount)"
                 >

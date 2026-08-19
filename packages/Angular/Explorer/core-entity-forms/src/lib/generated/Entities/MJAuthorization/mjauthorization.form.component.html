@@ -34,38 +34,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -157,9 +125,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Authorizations','AuthorizationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Authorizations','AuthorizationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Authorizations')"
                 [AllowLoad]="IsSectionExpanded('mJActionAuthorizations')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionAuthorizations', $event.totalRowCount)"
                 >
@@ -182,9 +150,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Log Types','AuthorizationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Audit Log Types','AuthorizationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Audit Log Types')"
                 [AllowLoad]="IsSectionExpanded('mJAuditLogTypes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAuditLogTypes', $event.totalRowCount)"
                 >
@@ -207,9 +175,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuthorizationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Audit Logs','AuthorizationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('mJAuditLogs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAuditLogs', $event.totalRowCount)"
                 >
@@ -232,9 +200,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Authorization Roles','AuthorizationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Authorization Roles','AuthorizationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Authorization Roles')"
                 [AllowLoad]="IsSectionExpanded('mJAuthorizationRoles')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAuthorizationRoles', $event.totalRowCount)"
                 >
@@ -257,9 +225,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Authorizations','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Authorizations','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Authorizations')"
                 [AllowLoad]="IsSectionExpanded('mJAuthorizations')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAuthorizations', $event.totalRowCount)"
                 >

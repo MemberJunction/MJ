@@ -208,38 +208,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -289,9 +257,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Attributes','ContentItemID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Attributes','ContentItemID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Attributes')"
                 [AllowLoad]="IsSectionExpanded('mJContentItemAttributes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemAttributes', $event.totalRowCount)"
                 >
@@ -314,9 +282,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Tags','ItemID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Tags','ItemID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Tags')"
                 [AllowLoad]="IsSectionExpanded('mJContentItemTags')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemTags', $event.totalRowCount)"
                 >
@@ -339,9 +307,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Duplicates','ContentItemAID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Duplicates','ContentItemAID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Duplicates')"
                 [AllowLoad]="IsSectionExpanded('mJContentItemDuplicatesContentItemAID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemDuplicatesContentItemAID', $event.totalRowCount)"
                 >
@@ -364,9 +332,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Duplicates','ContentItemBID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Duplicates','ContentItemBID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Duplicates')"
                 [AllowLoad]="IsSectionExpanded('mJContentItemDuplicatesContentItemBID')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemDuplicatesContentItemBID', $event.totalRowCount)"
                 >
@@ -389,9 +357,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Items','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Items')"
                 [AllowLoad]="IsSectionExpanded('mJContentItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
                 >
@@ -414,9 +382,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','SourceContentItemID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions','SourceContentItemID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
                 [AllowLoad]="IsSectionExpanded('mJTagSuggestions')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagSuggestions', $event.totalRowCount)"
                 >
@@ -439,9 +407,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Chunks','ContentItemID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Chunks','ContentItemID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Chunks')"
                 [AllowLoad]="IsSectionExpanded('mJContentItemChunks')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemChunks', $event.totalRowCount)"
                 >

@@ -243,9 +243,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Run API Logs','CompanyIntegrationRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Run API Logs','CompanyIntegrationRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Run API Logs')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRunAPILogs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRunAPILogs', $event.totalRowCount)"
                 >
@@ -268,9 +268,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Run Details','CompanyIntegrationRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Run Details','CompanyIntegrationRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Run Details')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRunDetails')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRunDetails', $event.totalRowCount)"
                 >
@@ -293,9 +293,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Error Logs','CompanyIntegrationRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Error Logs','CompanyIntegrationRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Error Logs')"
                 [AllowLoad]="IsSectionExpanded('mJErrorLogs')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJErrorLogs', $event.totalRowCount)"
                 >

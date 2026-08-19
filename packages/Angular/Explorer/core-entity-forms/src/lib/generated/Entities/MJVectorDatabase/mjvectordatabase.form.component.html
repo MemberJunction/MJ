@@ -126,9 +126,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','VectorDatabaseID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Documents','VectorDatabaseID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
                 [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
                 >
@@ -151,9 +151,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Vector Indexes','VectorDatabaseID')"
-                [NewRecordValues]="NewRecordValues('MJ: Vector Indexes','VectorDatabaseID')"
+                [NewRecordValues]="NewRecordValues('MJ: Vector Indexes')"
                 [AllowLoad]="IsSectionExpanded('mJVectorIndexes')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVectorIndexes', $event.totalRowCount)"
                 >
