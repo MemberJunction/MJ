@@ -27,7 +27,7 @@ import { getApiIntegrationsConfig } from "../../config";
  *     Value: 'climate change research papers 2024'
  *   }, {
  *     Name: 'Model',
- *     Value: 'llama-3.1-sonar-large-128k-online'
+ *     Value: 'sonar-pro'
  *   }, {
  *     Name: 'ReturnRelatedQuestions',
  *     Value: true
@@ -58,9 +58,10 @@ export class PerplexitySearchAction extends BaseAction {
      *
      * @param params - The action parameters containing:
      *   - Query: Search query text (required)
-     *   - Model: Perplexity model to use (default: 'llama-3.1-sonar-small-128k-online')
-     *     Options: llama-3.1-sonar-small-128k-online, llama-3.1-sonar-large-128k-online,
-     *              llama-3.1-sonar-huge-128k-online
+     *   - Model: Perplexity model to use (default: 'sonar')
+     *     Options: sonar, sonar-pro, sonar-reasoning-pro, sonar-deep-research
+     *     Note: the legacy llama-3.1-sonar-* identifiers were retired by Perplexity in
+     *     February 2025 and now fail with an invalid-model error.
      *   - MaxTokens: Maximum tokens in response (default: 1000)
      *   - Temperature: Sampling temperature 0-2 (default: 0.2)
      *   - TopP: Nucleus sampling threshold (default: 0.9)
@@ -90,7 +91,7 @@ export class PerplexitySearchAction extends BaseAction {
             }
 
             // Get optional parameters
-            const model = this.getStringParam(params, 'model') || 'llama-3.1-sonar-small-128k-online';
+            const model = this.getStringParam(params, 'model') || 'sonar';
             const maxTokens = this.getNumericParam(params, 'maxtokens', 1000);
             const temperature = this.getNumericParam(params, 'temperature', 0.2);
             const topP = this.getNumericParam(params, 'topp', 0.9);

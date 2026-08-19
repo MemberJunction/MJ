@@ -120,9 +120,12 @@ export interface RelatedFormRoleCandidate {
     Type?: string | null;
     Sequence?: number | null;
     /**
-     * Raw JSON string or the parsed bag. `EntityRelationshipInfo.Configuration` now returns
-     * the parsed object, while metadata rows still supply the string; both readers below
-     * accept either.
+     * The relationship's configuration bag, either raw JSON or already parsed.
+     * `EntityRelationshipInfo.Configuration` parses lazily and hands back
+     * {@link IEntityRelationshipConfiguration}, while callers reading straight
+     * from a row still supply the raw string — so both are accepted, matching
+     * what {@link ReadRelationshipInclusion}, {@link ReadRelationshipSortKey}
+     * and {@link ReadRelationshipJoinFields} already take.
      */
     Configuration?: string | IEntityRelationshipConfiguration | null;
     /**
