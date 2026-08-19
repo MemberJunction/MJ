@@ -49,6 +49,9 @@ export type {
 
 // Error classification helpers
 export { IsRetryableError, ClassifyError } from './types.js';
+// Standard Retry-After extraction — exported so a connector overriding ExtractRetryAfterMs for a
+// non-standard vendor signal can still fall back to the header when the vendor sends one.
+export { ExtractRetryAfterFromError, ParseRetryAfterValue, MAX_HONORED_RETRY_AFTER_MS } from './RetryAfter.js';
 
 // Transforms
 export type {
