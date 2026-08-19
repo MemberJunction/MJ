@@ -32,6 +32,14 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     private _watermarks: MJCompanyIntegrationSyncWatermarkEntity[] = [];
     private _integrationObjects: MJIntegrationObjectEntity[] = [];
     private _integrationObjectFields: MJIntegrationObjectFieldEntity[] = [];
+    /**
+     * Lazily-built objectID → fields index backing {@link GetIntegrationObjectFields}, together
+     * with the array it was built from. Identity comparison is the invalidation: the load
+     * machinery and `SeedForTesting` both REPLACE `_integrationObjectFields` rather than mutating
+     * it, so a different array means a stale index and it is rebuilt on the next read.
+     */
+    private _fieldsByObjectID: Map<string, MJIntegrationObjectFieldEntity[]> = new Map();
+    private _fieldsByObjectIDSource: MJIntegrationObjectFieldEntity[] | null = null;
 
     // ── BaseEngine Config ─────────────────────────────────────────────
 
@@ -243,9 +251,46 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         return this._integrationObjects.find(o => UUIDsEqual(o.ID, objectID));
     }
 
-    /** Get all fields for a given IntegrationObject ID. */
+    /**
+     * Get all fields for a given IntegrationObject ID.
+     *
+     * Backed by a lazily-built index. The unindexed form was a full scan of EVERY
+     * IntegrationObjectField in the process, and this is called on per-record paths — a connector's
+     * `RawToExternalRecord`/`TransformRecord` resolves an object's fields for every record it
+     * transforms. On a catalog of 364 objects that scan, plus the generated `IntegrationObjectID`
+     * getter it invokes per element, measured ~46% of process CPU in a live profile.
+     *
+     * The index is keyed on the identity of `_integrationObjectFields`, which the engine replaces
+     * wholesale on load/refresh (and `SeedForTesting` replaces directly) — so a new array is a new
+     * index automatically, with no invalidation hook to forget.
+     *
+     * Still returns a fresh array per call, so callers may sort or splice the result exactly as
+     * before.
+     */
     public GetIntegrationObjectFields(objectID: string): MJIntegrationObjectFieldEntity[] {
-        return this._integrationObjectFields.filter(f => UUIDsEqual(f.IntegrationObjectID, objectID));
+        // Preserve the null/undefined semantics of the original UUIDsEqual comparison (both-null
+        // matches) without giving the index a magic key — this path is vanishingly rare.
+        if (objectID == null) {
+            return this._integrationObjectFields.filter(f => UUIDsEqual(f.IntegrationObjectID, objectID));
+        }
+
+        if (this._fieldsByObjectIDSource !== this._integrationObjectFields) {
+            const index = new Map<string, MJIntegrationObjectFieldEntity[]>();
+            for (const field of this._integrationObjectFields) {
+                const id = field.IntegrationObjectID;
+                if (id == null) continue;
+                // Normalised the same way UUIDsEqual compares, so SQL Server's uppercase and
+                // PostgreSQL's lowercase land on the same bucket.
+                const key = id.trim().toLowerCase();
+                const bucket = index.get(key);
+                if (bucket) bucket.push(field);
+                else index.set(key, [field]);
+            }
+            this._fieldsByObjectID = index;
+            this._fieldsByObjectIDSource = this._integrationObjectFields;
+        }
+
+        return this._fieldsByObjectID.get(objectID.trim().toLowerCase())?.slice() ?? [];
     }
 
     /** Get active IntegrationObjects for an integration, sorted by Sequence. */
