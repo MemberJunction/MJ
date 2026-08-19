@@ -108,6 +108,10 @@
           },
           "primaryKey": {
             "ID": "86C17097-6AE5-49AA-85BD-219475209C5F"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:12:35.222Z",
+            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
           }
         }
       ]
@@ -244,6 +248,10 @@
           },
           "primaryKey": {
             "ID": "EE1105BD-90BC-4809-9835-1FA7A09F3CFA"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:12:35.250Z",
+            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
           }
         }
       ]
@@ -546,6 +554,10 @@
           },
           "primaryKey": {
             "ID": "990A4AE4-68EC-4512-ADE8-5870D24ABB03"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:12:35.286Z",
+            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
           }
         }
       ]
@@ -554,7 +566,7 @@
       "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
     },
     "sync": {
-      "lastModified": "2026-08-13T14:54:19.816Z",
+      "lastModified": "2026-08-19T19:12:35.179Z",
       "checksum": "2a0b3ea8e311a9d4c5eedbf0fb1c406f5d9302d5459ff52d380f1845abed8d65"
     }
   },
@@ -667,6 +679,10 @@
                 },
                 "primaryKey": {
                   "ID": "67C18238-9098-4739-B876-66752DC62A91"
+                },
+                "sync": {
+                  "lastModified": "2026-08-19T19:12:35.318Z",
+                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
@@ -834,6 +850,10 @@
                 },
                 "primaryKey": {
                   "ID": "4C091053-1930-4699-84DF-05EAFD4A1611"
+                },
+                "sync": {
+                  "lastModified": "2026-08-19T19:12:35.342Z",
+                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
@@ -959,6 +979,10 @@
                 },
                 "primaryKey": {
                   "ID": "778700FB-C6C6-44FA-B078-7ABB876DBEBE"
+                },
+                "sync": {
+                  "lastModified": "2026-08-19T19:12:35.368Z",
+                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {

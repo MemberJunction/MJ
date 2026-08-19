@@ -3,12 +3,26 @@
  * DO NOT EDIT DIRECTLY. Run `pnpm run build` in MJCore to refresh.
  */
 
+/**
+ * Optional per-field configuration bag.
+ *
+ * Stored as JSON in `MJ: Entity Fields.Configuration`. CodeGen emits a
+ * typed `ConfigurationObject` accessor on `MJEntityFieldEntity` that
+ * returns `IEntityFieldConfiguration | null`.
+ */
+export interface IEntityFieldConfiguration {
+    /**
+     * Hierarchy and tree structure configuration for self-referencing foreign keys.
+     */
+    Hierarchy?: IEntityFieldHierarchyConfig;
+}
+
+/**
+ * Hierarchy options to explicitly declare recursive tree hierarchies.
+ */
 export interface IEntityFieldHierarchyConfig {
     /**
      * When true, declares this self-referencing foreign key as an intentional tree hierarchy.
-     * CodeGen will emit the 4-part Table-Valued Function (TVF) suite (RootID, Descendants, Ancestors, HierarchyMeta),
-     * project Root/Depth/Path/IsLeaf/ChildCount columns into the base view, and generate typed GetDescendants(),
-     * GetAncestors(), and GetChildren() methods on the entity subclass.
      */
     IsHierarchy?: boolean;
 
@@ -16,12 +30,4 @@ export interface IEntityFieldHierarchyConfig {
      * Optional custom maximum recursion depth guard (defaults to 100).
      */
     MaxDepth?: number;
-}
-
-export interface IEntityFieldConfiguration {
-    /** Hierarchy and tree structure configuration for self-referencing foreign keys */
-    Hierarchy?: IEntityFieldHierarchyConfig;
-
-    /** Future extensible field-level configuration bags */
-    [key: string]: unknown;
 }

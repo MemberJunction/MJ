@@ -20,10 +20,11 @@ import { MjRecordFormContainerComponent } from './record-form-container.componen
 class ToolbarStub {
   @Input() Record: unknown; @Input() EditMode = false; @Input() UserCanEdit = false; @Input() UserCanDelete = false;
   @Input() IsFavorite = false; @Input() FavoriteInitDone = false; @Input() IsDirty = false; @Input() DirtyFieldNames: unknown;
-  @Input() ListCount = 0; @Input() TagCount = 0; @Input() VersionCount = 0; @Input() EntityInfo: unknown; @Input() Config: unknown;
+  @Input() ListCount = 0; @Input() TagCount = 0; @Input() AttachmentCount = 0; @Input() AttachmentsAvailable = false; @Input() IsAttachmentsPanelOpen = false; @Input() VersionCount = 0; @Input() EntityInfo: unknown; @Input() Config: unknown;
   @Input() IsSaving = false; @Input() VisibleSectionCount = 0; @Input() TotalSectionCount = 0; @Input() ExpandedSectionCount = 0;
   @Input() SearchFilter = ''; @Input() ShowEmptyFields = false; @Input() WidthMode = ''; @Input() HasCustomSectionOrder = false;
   @Input() Variants: unknown; @Input() CurrentVariantID: unknown;
+  @Input() RegisteredItems: unknown; @Input() ItemOverrides: unknown; @Input() FormComponent: unknown;
   @Input() ChromeLayout = 'accordion';
   @Output() Navigate = new EventEmitter<unknown>();
   @Output() EditModeChange = new EventEmitter<boolean>();
@@ -31,6 +32,7 @@ class ToolbarStub {
   @Output() SaveRequested = new EventEmitter<void>();
   @Output() CancelRequested = new EventEmitter<void>();
   @Output() DeleteRequested = new EventEmitter<void>();
+  @Output() ToolbarItemClick = new EventEmitter<unknown>();
 }
 @Component({ standalone: true, selector: 'mj-section-manager', template: '' })
 class SectionManagerStub {
@@ -50,10 +52,12 @@ class IsaPanelStub { @Input() Record: unknown; @Input() EditMode = false; @Input
 class RecordChangesStub { @Input() record: unknown; @Input() AllowRestore = false; }
 @Component({ standalone: true, selector: 'mj-record-tags', template: '' })
 class RecordTagsStub { @Input() Record: unknown; @Input() WidthPx = 0; }
+@Component({ standalone: true, selector: 'mj-record-attachments', template: '' })
+class RecordAttachmentsStub { @Input() Record: unknown; @Input() Visible = false; }
 @Component({ standalone: true, selector: 'mj-list-management-dialog', template: '' })
 class ListMgmtStub { @Input() visible = false; @Input() config: unknown; }
 
-const CHILD_STUBS = [ToolbarStub, SectionManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, ListMgmtStub];
+const CHILD_STUBS = [ToolbarStub, SectionManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordAttachmentsStub, ListMgmtStub];
 
 const RECORD = { EntityInfo: { Name: 'Accounts' } } as unknown as BaseEntity;
 

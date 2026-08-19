@@ -18,7 +18,7 @@ import { CompositeKey, KeyValuePair } from './compositeKey';
 import { EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
-import type { EntitySaveOptions } from './interfaces';
+import type { EntitySaveOptions, IMetadataProvider } from './interfaces';
 
 /** What clearing the relationship does to the embedded row. */
 export type EmbeddedRecordClearMode = 'delete' | 'orphan' | 'refuse';
@@ -49,6 +49,11 @@ export type EmbeddedRecordOptions = {
 
 /** Wire shape. Nested companions travel so a browser save does not drop the peer's graph. */
 export type EmbeddedRecordWire = {
+    /**
+     * Entity name in metadata for polymorphic IS-A subtypes.
+     * If omitted, defaults to the embedded record's declared RelatedEntityName.
+     */
+    EntityName?: string | null;
     Fields: Record<string, unknown>;
     IsNew: boolean;
     Cleared: boolean;
@@ -335,6 +340,7 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         }
         const companions = await this.instance.SerializeCompanions(mode);
         return {
+            EntityName: this.instance.EntityInfo?.Name ?? this.RelatedEntityName,
             Fields: this.instance.GetAll(),
             IsNew: !this.instance.IsSaved,
             Cleared: false,
@@ -356,12 +362,21 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
             this.Owner.Set(this.ForeignKeyField, null);
             return;
         }
+        if (data.EntityName && data.EntityName !== this.RelatedEntityName && (!this.instance || this.instance.EntityInfo?.Name !== data.EntityName)) {
+            const provider = this.Owner.ProviderToUse as unknown as IMetadataProvider;
+            if (provider) {
+                this.instance = (await provider.GetEntityObject<T>(
+                    data.EntityName,
+                    this.Owner.ContextCurrentUser,
+                )) as T;
+            }
+        }
         if (!this.instance) {
             await this.InitializeInstance(new Set<string>());
         }
         if (!this.instance) {
             throw new Error(
-                `EmbeddedRecord '${this.Name}': cannot deserialize — no instance of ${this.RelatedEntityName}.`,
+                `EmbeddedRecord '${this.Name}': cannot deserialize — no instance of ${data.EntityName ?? this.RelatedEntityName}.`,
             );
         }
         await this.applyWire(data, mode);

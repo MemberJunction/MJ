@@ -39,6 +39,9 @@ export interface FormToolbarConfig {
   /** Show the Tags button for viewing/managing tags on this record. Default: true */
   ShowTagsButton: boolean;
 
+  /** Show the Attachments button for viewing/managing linked file attachments. Default: true */
+  ShowAttachmentsButton: boolean;
+
   /**
    * Show the **form-variant picker** button — a right-side toolbar button
    * (form icon) that opens a dropdown of available `EntityFormOverride`
@@ -125,6 +128,7 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
@@ -152,6 +156,7 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
@@ -183,6 +188,7 @@ export const CUSTOM_LAYOUT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: false,            // ← hides the whole right group

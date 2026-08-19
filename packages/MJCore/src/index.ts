@@ -62,6 +62,7 @@ export * from "./generic/column-descriptors";
 export * from "./generic/data-table";
 export * from "./generic/data-snapshot";
 export * from "./generic/permissionInterfaces";
+export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter

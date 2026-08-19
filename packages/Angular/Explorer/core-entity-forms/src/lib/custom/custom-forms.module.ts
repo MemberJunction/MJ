@@ -11,6 +11,7 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponentExtended } from "./Entities/entity-form.component";
+import { MJFileFormComponentExtended } from "./Files/file-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { MJEntityActionFormComponentExtended } from "./EntityActions/entityaction.form.component";
 import { MJTemplateFormComponentExtended } from "./Templates/templates-form.component";
@@ -164,6 +165,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         RecordProcessFormComponentExtended,
         EntityFormChromeEditorComponent,
         EntityRelationshipFormRolePanel,
+        MJFileFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -216,6 +218,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
     exports: [
         ...HIERARCHY_FORM_PANELS,
         MJEntityFormComponentExtended,
+        MJFileFormComponentExtended,
         MJEntityActionFormComponentExtended,
         MJTemplateFormComponentExtended,
         TemplateEditorComponent,
