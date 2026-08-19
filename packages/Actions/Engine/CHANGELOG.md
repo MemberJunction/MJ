@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/actions
 
+## 5.51.1
+
+### Patch Changes
+
+- c0c3a0d: Implement Action Filter evaluation — `ActionEngineServer.RunSingleFilter` was a `return true` stub, making every Action Filter a no-op. Filters now resolve via a registered `BaseActionFilter` subclass (ClassFactory, keyed by filter ID) or by evaluating the filter's `Code` column with an `ActionFilterContext`, cached per row version. Failure semantics are fail-closed: a filter that throws, yields a non-boolean, or has no evaluable logic prevents the action and logs the reason. No shipped metadata contains ActionFilter rows, so no existing behavior changes.
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/ai@5.51.1
+  - @memberjunction/actions-base@5.51.1
+  - @memberjunction/code-execution@5.51.1
+  - @memberjunction/action-runtime@5.51.1
+  - @memberjunction/doc-utils@5.51.1
+  - @memberjunction/core-entities@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes

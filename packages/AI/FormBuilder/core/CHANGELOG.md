@@ -1,5 +1,23 @@
 # @memberjunction/ai-form-builder
 
+## 5.51.1
+
+### Patch Changes
+
+- Updated dependencies [c0c3a0d]
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/actions@5.51.1
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/ai-agents@5.51.1
+  - @memberjunction/ai-engine-base@5.51.1
+  - @memberjunction/ai-core-plus@5.51.1
+  - @memberjunction/aiengine@5.51.1
+  - @memberjunction/ai-prompts@5.51.1
+  - @memberjunction/core-entities@5.51.1
+  - @memberjunction/interactive-component-types@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes

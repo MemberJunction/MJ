@@ -1,5 +1,25 @@
 # @memberjunction/ng-user-routines
 
+## 5.51.1
+
+### Patch Changes
+
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/ai-engine-base@5.51.1
+  - @memberjunction/actions-base@5.51.1
+  - @memberjunction/ng-base-types@5.51.1
+  - @memberjunction/ng-code-editor@5.51.1
+  - @memberjunction/ng-composer@5.51.1
+  - @memberjunction/ng-container-directives@5.51.1
+  - @memberjunction/ng-notifications@5.51.1
+  - @memberjunction/ng-shared-generic@5.51.1
+  - @memberjunction/ng-trees@5.51.1
+  - @memberjunction/core-entities@5.51.1
+  - @memberjunction/ng-ui-components@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes

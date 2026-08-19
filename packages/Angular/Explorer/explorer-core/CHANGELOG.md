@@ -1,5 +1,61 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.51.1
+
+### Patch Changes
+
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/ai-engine-base@5.51.1
+  - @memberjunction/ai-core-plus@5.51.1
+  - @memberjunction/ng-auth-services@5.51.1
+  - @memberjunction/ng-base-application@5.51.1
+  - @memberjunction/ng-dashboards@5.51.1
+  - @memberjunction/ng-entity-form-dialog@5.51.1
+  - @memberjunction/ng-entity-permissions@5.51.1
+  - @memberjunction/ng-explorer-settings@5.51.1
+  - @memberjunction/ng-list-detail-grid@5.51.1
+  - @memberjunction/ng-shared@5.51.1
+  - @memberjunction/ng-ai-test-harness@5.51.1
+  - @memberjunction/ng-artifacts@5.51.1
+  - @memberjunction/ng-base-forms@5.51.1
+  - @memberjunction/ng-base-types@5.51.1
+  - @memberjunction/ng-composer@5.51.1
+  - @memberjunction/ng-container-directives@5.51.1
+  - @memberjunction/ng-conversations@5.51.1
+  - @memberjunction/ng-dashboard-viewer@5.51.1
+  - @memberjunction/ng-entity-viewer@5.51.1
+  - @memberjunction/ng-file-storage@5.51.1
+  - @memberjunction/ng-list-management@5.51.1
+  - @memberjunction/ng-mj-livekit-room@5.51.1
+  - @memberjunction/ng-notifications@5.51.1
+  - @memberjunction/ng-query-viewer@5.51.1
+  - @memberjunction/ng-record-changes@5.51.1
+  - @memberjunction/ng-record-selector@5.51.1
+  - @memberjunction/ng-record-tags@5.51.1
+  - @memberjunction/ng-resource-permissions@5.51.1
+  - @memberjunction/ng-search@5.51.1
+  - @memberjunction/ng-shared-generic@5.51.1
+  - @memberjunction/ng-user-avatar@5.51.1
+  - @memberjunction/communication-types@5.51.1
+  - @memberjunction/entity-communications-client@5.51.1
+  - @memberjunction/graphql-dataprovider@5.51.1
+  - @memberjunction/core-entities@5.51.1
+  - @memberjunction/templates-base-types@5.51.1
+  - @memberjunction/ng-feedback@5.51.1
+  - @memberjunction/interactive-component-types@5.51.1
+  - @memberjunction/ng-export-service@5.51.1
+  - @memberjunction/ng-generic-dialog@5.51.1
+  - @memberjunction/ng-markdown@5.51.1
+  - @memberjunction/ng-pagination@5.51.1
+  - @memberjunction/ng-ui-components@5.51.1
+  - @memberjunction/ng-word-cloud@5.51.1
+  - @memberjunction/lists-base@5.51.1
+  - @memberjunction/export-engine@5.51.1
+  - @memberjunction/theme-engine@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes

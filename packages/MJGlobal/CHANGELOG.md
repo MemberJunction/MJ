@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/global
 
+## 5.51.1
+
+### Patch Changes
+
+- cc6f321: security: validate and escape user-supplied values in SQL text-building paths, pin JWT algorithms, and compare the system API key in constant time
+
+  Two upstream security commits landed without changesets; this records them for the release notes. All changes are additive/defensive and preserve existing behavior for legitimate inputs.
+
+  **SQL filter validation (`@memberjunction/global`, `@memberjunction/core`, `@memberjunction/generic-database-provider`).**
+  - `RunView`'s `ExcludeUserViewRunID` — a GraphQL string input — was interpolated raw into the view `WHERE` clause with no validation, unlike every sibling clause (`ExtraFilter`, `UserSearchString`, `OverrideExcludeFilter` all pass through `ValidateUserProvidedSQLClause`). The value is only ever a `UserViewRun` GUID, so it is now rejected unless it is a well-formed GUID, closing an authenticated injection sink that bypassed entity permissions and row-level security.
+  - `DatabaseProviderBase.ValidateUserProvidedSQLClause` now denies `WAITFOR`, the time-based blind-injection vector. No legitimate filter or order-by clause uses it, and the intended subquery capability of `ExtraFilter` is unaffected.
+  - `SQLExpressionValidator` now denies references to database system catalogs and metadata objects (`sys.*`, `INFORMATION_SCHEMA`, `syslogins`, `pg_catalog.*`, `pg_authid`/`pg_shadow`/`pg_user`/`pg_roles`) in **all** validation contexts, including `full_query`. These objects sit outside MemberJunction's entity-permission model, so permitting them turned a validated `SELECT` into a schema-enumeration and credential-exfiltration primitive. String literals are stripped before the check runs, so a literal value such as `'sys.x'` is still allowed.
+
+  **Value escaping and parameterization (`@memberjunction/server`, `@memberjunction/core`, `@memberjunction/generic-database-provider`).**
+  - `ReportResolver.CreateReportFromConversationDetailID` now binds `ConversationDetailID` through a parameterized `mssql` request as a `UniqueIdentifier` instead of interpolating it into the query string.
+  - `GenericDatabaseProvider.CheckRecordRLS` now escapes embedded single quotes in primary-key values before building its `WHERE` clause, mirroring the escaping already present in the `Load()` path.
+  - `RowLevelSecurityFilterInfo.MarkupFilterText` now escapes embedded single quotes in substituted user-property values, and treats `undefined` the same as `null`/object — leaving the token unresolved instead of substituting the literal string `"undefined"`.
+
+  **Authentication hardening (`@memberjunction/server`, `@memberjunction/ai-mcp-server`).**
+  - The superadmin `MJ_API_KEY` comparison in `getUserPayload` was a plain `===`, which short-circuits on the first differing byte and leaks a timing side channel. Both sides are now hashed to fixed-length SHA-256 digests and compared with `timingSafeEqual`.
+  - JWT verification now explicitly pins the accepted signature algorithms to the asymmetric family (`RS256`/`RS384`/`RS512`, `ES256`/`ES384`/`ES512`, `PS256`) on both MJServer's issuer path and MCPServer's JWKS path — defense in depth against `alg=none` and RS256-to-HS256 confusion.
+
+  Regression suites in each affected package pin the new behavior.
+
+- e10a71f: security: harden SQL-filter validation, the OAuth callback handler, API-key lookup, and the new-user domain gate
+
+  **SQL literal stripping (`@memberjunction/global`, `@memberjunction/core`).** Both of MJ's SQL screens — `DatabaseProviderBase.ValidateUserProvidedSQLClause` (which guards `ExtraFilter`, `OrderBy` and `UserSearchString`) and `SQLExpressionValidator` (which guards `Aggregates` and ad-hoc queries) — stripped string literals with a regex that honored **backslash escaping**. SQL Server and PostgreSQL do not treat `\` as an escape, so a payload such as `x = 'a\') ; DROP TABLE Users; --'` was swallowed whole as one "literal" and stripped away before the keyword denylist ran, while the database closed the literal at the real quote and executed the stacked statement. Both screens now share a single `StripSQLStringLiterals` helper that matches SQL-standard doubled-quote (`''`) semantics, and a regression suite in each package pins the behavior.
+
+  **OAuth callback handler (`@memberjunction/server`).** Caller-supplied `connectionId` was interpolated into a raw `ExtraFilter` without escaping; it is now validated as a UUID at the request boundary and escaped at the SQL sink. `frontendReturnUrl` was redirected to after only a URL-parse check, making the callback an open redirect from the trusted MJAPI origin; its origin is now validated against `cors.allowedOrigins` (plus the built-in redirect origins) both when the flow is initiated and when the redirect is issued.
+
+  If you run frontends other than MJExplorer against MJAPI, note that the return-URL allowlist is derived from `cors.allowedOrigins`. Deployments on the default `['*']` are unaffected — every return URL is still allowed. Deployments that have narrowed `cors.allowedOrigins` are mostly self-protecting, since a browser frontend must already be on that list to call `/oauth/initiate` at all, but three cases can now fall back to MJAPI's built-in page instead of returning to the app: a return URL on a _different_ origin than the caller, a server-to-server initiate whose return origin was never CORS-listed, and any proxy setup where the browser-visible origin differs from the configured one (matching is exact on scheme + host + port). Each rejection is logged with the offending URL.
+
+  **API-key lookup (`@memberjunction/api-keys`).** `ValidateKeyByHash` now asserts its argument is a SHA-256 hex digest before building the SQL filter, enforcing the injection-safety invariant at the sink for all present and future callers.
+
+  **⚠️ Behavior change — `userHandling.newUserAuthorizedDomains`.** The new-user domain gate previously authorized against the hostname parsed from the request's `Origin` header, which is trivially spoofable on non-browser requests: a holder of any valid IdP token could auto-provision an account under an authorized domain by forging `Origin`. It now authorizes against the **email domain of the verified identity token**.
+
+  If `newUserLimitedToAuthorizedDomains` is enabled, review `newUserAuthorizedDomains` before upgrading:
+  - Entries that are **frontend hostnames** (`app.example.com`, `localhost`) must be replaced with the **email domains** your users sign in with (`example.com`). Deployments where the two happened to coincide are unaffected.
+  - Wildcards match in full, so `*.example.com` matches `mail.example.com` but **not** `example.com` — list both if you need both.
+  - Identity providers that issue a bare username with no `email` claim can no longer auto-provision; the denial is logged explicitly. Configure the provider to emit an `email` claim, or set `newUserLimitedToAuthorizedDomains: false`.
+
+  The gate is off by default (`newUserLimitedToAuthorizedDomains: false`, `newUserAuthorizedDomains: []`), so deployments that never enabled it are unaffected.
+
+  **⚠️ Related expansion — MCP OAuth auto-provisioning.** Auto-provisioning previously also required a non-empty request `Origin` as a precondition for entering the check at all. `MCPServer`'s `resolveOAuthUser` passes no request domain, so with the domain gate enabled, MCP OAuth users could never be auto-created regardless of their email domain. Now that the spoofable precondition is gone, an MCP OAuth user whose **JWKS-verified** token carries an authorized email domain plus given/family name claims **will** be auto-provisioned, consistent with the browser path. If you run MCP with `newUserLimitedToAuthorizedDomains` enabled and were relying on that side effect to keep MJ user records from being created, add the restriction explicitly (narrow `newUserAuthorizedDomains`, or set `autoCreateNewUsers: false`).
+
 ## 5.51.0
 
 ## 5.50.0

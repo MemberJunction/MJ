@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.51.1
+
+### Patch Changes
+
+- Updated dependencies [c0c3a0d]
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/actions@5.51.1
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/generic-database-provider@5.51.1
+  - @memberjunction/sqlserver-dataprovider@5.51.1
+  - @memberjunction/server-bootstrap-lite@5.51.1
+  - @memberjunction/ai@5.51.1
+  - @memberjunction/ai-core-plus@5.51.1
+  - @memberjunction/aiengine@5.51.1
+  - @memberjunction/ai-prompts@5.51.1
+  - @memberjunction/actions-base@5.51.1
+  - @memberjunction/cli-core@5.51.1
+  - @memberjunction/external-data-sources@5.51.1
+  - @memberjunction/external-data-source-mongodb@5.51.1
+  - @memberjunction/external-data-source-mysql@5.51.1
+  - @memberjunction/external-data-source-oracle@5.51.1
+  - @memberjunction/external-data-source-postgres@5.51.1
+  - @memberjunction/external-data-source-sqlserver@5.51.1
+  - @memberjunction/external-data-source-snowflake@5.51.1
+  - @memberjunction/core-entities@5.51.1
+  - @memberjunction/core-entities-server@5.51.1
+  - @memberjunction/postgresql-dataprovider@5.51.1
+  - @memberjunction/ai-provider-bundle@5.51.1
+  - @memberjunction/config@5.51.1
+  - @memberjunction/sql-dialect@5.51.1
+  - @memberjunction/sql-parser@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes

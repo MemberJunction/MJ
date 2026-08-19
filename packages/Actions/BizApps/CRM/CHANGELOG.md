@@ -1,5 +1,18 @@
 # @memberjunction/actions-bizapps-crm
 
+## 5.51.1
+
+### Patch Changes
+
+- Updated dependencies [c0c3a0d]
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/actions@5.51.1
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/actions-base@5.51.1
+  - @memberjunction/core-entities@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes

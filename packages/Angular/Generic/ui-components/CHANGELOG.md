@@ -1,5 +1,7 @@
 # @memberjunction/ng-ui-components
 
+## 5.51.1
+
 ## 5.51.0
 
 ## 5.50.0

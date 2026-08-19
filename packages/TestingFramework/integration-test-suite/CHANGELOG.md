@@ -1,5 +1,52 @@
 # @memberjunction/integration-test-suite
 
+## 5.51.1
+
+### Patch Changes
+
+- Updated dependencies [c0c3a0d]
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/actions@5.51.1
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/api-keys@5.51.1
+  - @memberjunction/ai-agents@5.51.1
+  - @memberjunction/predictive-studio@5.51.1
+  - @memberjunction/codegen-lib@5.51.1
+  - @memberjunction/record-set-processor@5.51.1
+  - @memberjunction/sqlserver-dataprovider@5.51.1
+  - @memberjunction/scheduling-engine@5.51.1
+  - @memberjunction/ai-engine-base@5.51.1
+  - @memberjunction/ai@5.51.1
+  - @memberjunction/ai-core-plus@5.51.1
+  - @memberjunction/aiengine@5.51.1
+  - @memberjunction/ai-prompts@5.51.1
+  - @memberjunction/ai-bridge-base@5.51.1
+  - @memberjunction/ai-bridge-server@5.51.1
+  - @memberjunction/actions-base@5.51.1
+  - @memberjunction/communication-types@5.51.1
+  - @memberjunction/communication-engine@5.51.1
+  - @memberjunction/notifications@5.51.1
+  - @memberjunction/communication-ms-graph@5.51.1
+  - @memberjunction/communication-expo-push@5.51.1
+  - @memberjunction/communication-gmail@5.51.1
+  - @memberjunction/communication-sendgrid@5.51.1
+  - @memberjunction/communication-twilio@5.51.1
+  - @memberjunction/content-autotagging@5.51.1
+  - @memberjunction/conversations-runtime@5.51.1
+  - @memberjunction/graphql-dataprovider@5.51.1
+  - @memberjunction/core-entities@5.51.1
+  - @memberjunction/metadata-sync@5.51.1
+  - @memberjunction/open-app-engine@5.51.1
+  - @memberjunction/query-processor@5.51.1
+  - @memberjunction/record-set-processor-base@5.51.1
+  - @memberjunction/search-engine@5.51.1
+  - @memberjunction/templates-base-types@5.51.1
+  - @memberjunction/templates@5.51.1
+  - @memberjunction/testing-integration@5.51.1
+  - @memberjunction/predictive-studio-core@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes

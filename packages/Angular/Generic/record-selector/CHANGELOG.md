@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-record-selector
 
+## 5.51.1
+
+### Patch Changes
+
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/ng-shared@5.51.1
+  - @memberjunction/ng-container-directives@5.51.1
+  - @memberjunction/core-entities@5.51.1
+  - @memberjunction/ng-ui-components@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes

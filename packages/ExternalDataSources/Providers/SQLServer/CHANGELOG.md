@@ -1,5 +1,16 @@
 # @memberjunction/external-data-source-sqlserver
 
+## 5.51.1
+
+### Patch Changes
+
+- Updated dependencies [cc6f321]
+- Updated dependencies [e10a71f]
+  - @memberjunction/global@5.51.1
+  - @memberjunction/core@5.51.1
+  - @memberjunction/external-data-sources@5.51.1
+  - @memberjunction/core-entities@5.51.1
+
 ## 5.51.0
 
 ### Patch Changes
