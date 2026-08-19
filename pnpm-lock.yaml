@@ -6069,6 +6069,9 @@ importers:
       '@memberjunction/ng-entity-viewer':
         specifier: 6.1.0-edge.2
         version: link:../entity-viewer
+      '@memberjunction/ng-file-storage':
+        specifier: 6.1.0-edge.2
+        version: link:../file-storage
       '@memberjunction/ng-list-management':
         specifier: 6.1.0-edge.2
         version: link:../list-management
@@ -7162,6 +7165,9 @@ importers:
       '@memberjunction/ng-container-directives':
         specifier: 6.1.0-edge.2
         version: link:../container-directives
+      '@memberjunction/ng-credentials':
+        specifier: 6.1.0-edge.2
+        version: link:../credentials
       '@memberjunction/ng-notifications':
         specifier: 6.1.0-edge.2
         version: link:../notifications

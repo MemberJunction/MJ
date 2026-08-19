@@ -20,12 +20,9 @@
 
 import express, { type Router, type Request, type Response } from 'express';
 import { LogError, Metadata, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
-import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import type { FileStorageBase, ByteRange } from '@memberjunction/storage';
-import jwt from 'jsonwebtoken';
 import { getSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
 import { UploadTokenManager } from './UploadTokenManager.js';
@@ -78,13 +75,12 @@ async function handleUploadStageRequest(req: Request, res: Response): Promise<vo
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
 
-  // 1. Resolve signed upload token from Authorization header or ?token=
+  // 1. Resolve signed upload token strictly from Authorization header (avoids bearer token in URL logs)
   const authHeader = req.headers.authorization || '';
-  const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : (authHeader || queryToken);
+  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim();
 
   if (!token) {
-    res.status(401).json({ Success: false, ErrorMessage: 'Authentication token required.' });
+    res.status(401).json({ Success: false, ErrorMessage: 'Authorization header with Bearer token required.' });
     return;
   }
 

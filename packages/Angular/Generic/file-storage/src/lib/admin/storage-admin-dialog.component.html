@@ -49,7 +49,7 @@
 
           <button
             type="button"
-            class="mj-btn mj-btn-primary"
+            class="mj-admin-btn mj-admin-btn-primary"
             (click)="StartCreateAccount()">
             <i class="fa-solid fa-plus"></i>
             <span>Add Storage Account</span>
@@ -69,7 +69,7 @@
             @if (!SearchTerm) {
               <button
                 type="button"
-                class="mj-btn mj-btn-primary mj-empty-cta"
+                class="mj-admin-btn mj-admin-btn-primary mj-empty-cta"
                 (click)="StartCreateAccount()">
                 <i class="fa-solid fa-plus"></i>
                 <span>Configure First Account</span>
@@ -241,7 +241,7 @@
   </div>
 
   <mj-dialog-actions>
-    <button type="button" class="mj-btn mj-btn-secondary" (click)="OnDialogClose()">
+    <button type="button" class="mj-admin-btn mj-admin-btn-secondary" (click)="OnDialogClose()">
       Close
     </button>
   </mj-dialog-actions>
@@ -296,7 +296,7 @@
           <label class="mj-form-label">Storage Credentials</label>
           <button
             type="button"
-            class="mj-btn-link"
+            class="mj-admin-btn-link"
             (click)="OpenCreateCredentialDialog()">
             <i class="fa-solid fa-plus"></i>
             <span>New Credential</span>
@@ -351,14 +351,14 @@
     <mj-dialog-actions>
       <button
         type="button"
-        class="mj-btn mj-btn-secondary"
+        class="mj-admin-btn mj-admin-btn-secondary"
         [disabled]="IsSaving"
         (click)="CancelEditAccount()">
         Cancel
       </button>
       <button
         type="button"
-        class="mj-btn mj-btn-primary"
+        class="mj-admin-btn mj-admin-btn-primary"
         [disabled]="IsSaving || !EditingAccountName.trim() || !EditingAccountProviderID"
         (click)="SaveAccount()">
         @if (IsSaving) {
@@ -398,14 +398,14 @@
     <mj-dialog-actions>
       <button
         type="button"
-        class="mj-btn mj-btn-secondary"
+        class="mj-admin-btn mj-admin-btn-secondary"
         [disabled]="IsDeleting"
         (click)="CancelDeleteAccount()">
         Cancel
       </button>
       <button
         type="button"
-        class="mj-btn mj-btn-danger"
+        class="mj-admin-btn mj-admin-btn-danger"
         [disabled]="IsDeleting"
         (click)="ExecuteDeleteAccount()">
         @if (IsDeleting) {

@@ -124,4 +124,36 @@ describe('UploadTokenManager', () => {
     expect(consumed).not.toBeNull();
     expect(consumed?.buffer.toString('utf-8')).toBe('uuid test data');
   });
+
+  it('enforces per-user memory quota independently of pool memory', () => {
+    UploadTokenManager.Instance.maxPoolMemoryBytes = 500;
+    UploadTokenManager.Instance.maxUserMemoryBytes = 40;
+
+    // User A stages 30 bytes (OK)
+    UploadTokenManager.Instance.Stage({
+      buffer: Buffer.alloc(30),
+      fileName: 'userA_1.dat',
+      mimeType: 'application/octet-stream',
+      userId: 'user-A',
+    });
+
+    // User A tries to stage another 20 bytes (exceeds 40 byte user quota)
+    expect(() => {
+      UploadTokenManager.Instance.Stage({
+        buffer: Buffer.alloc(20),
+        fileName: 'userA_2.dat',
+        mimeType: 'application/octet-stream',
+        userId: 'user-A',
+      });
+    }).toThrow(/Per-user upload memory quota reached/);
+
+    // User B can still stage 30 bytes because User B has their own quota
+    const tokenB = UploadTokenManager.Instance.Stage({
+      buffer: Buffer.alloc(30),
+      fileName: 'userB_1.dat',
+      mimeType: 'application/octet-stream',
+      userId: 'user-B',
+    });
+    expect(tokenB).toBeDefined();
+  });
 });

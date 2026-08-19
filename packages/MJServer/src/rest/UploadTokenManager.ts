@@ -49,6 +49,7 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
 
   public defaultTtlSeconds = 300; // 5 minutes
   public maxFileSizeBytes = 100 * 1024 * 1024; // 100 MB
+  public maxUserMemoryBytes = 150 * 1024 * 1024; // 150 MB per user
   public maxPoolMemoryBytes = 500 * 1024 * 1024; // 500 MB
 
   // Public constructor required by BaseSingleton
@@ -61,9 +62,22 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
   }
 
   /**
+   * Calculates total active staged bytes currently held for a given user.
+   */
+  public GetUserMemoryBytes(userId: string): number {
+    let total = 0;
+    for (const entry of this._staged.values()) {
+      if (UUIDsEqual(entry.userId, userId)) {
+        total += entry.contentLength;
+      }
+    }
+    return total;
+  }
+
+  /**
    * Stages a raw binary buffer in RAM, returning a single-use cryptographic token.
    *
-   * @throws Error if buffer exceeds single file limit or global pool memory capacity.
+   * @throws Error if buffer exceeds single file limit, per-user quota, or global pool memory capacity.
    */
   public Stage(params: {
     buffer: Buffer;
@@ -77,6 +91,13 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
     if (size > this.maxFileSizeBytes) {
       throw new Error(
         `Staged upload exceeds maximum allowed file size of ${Math.round(this.maxFileSizeBytes / (1024 * 1024))}MB (received ${Math.round(size / (1024 * 1024))}MB).`
+      );
+    }
+
+    const userCurrentBytes = this.GetUserMemoryBytes(params.userId);
+    if (userCurrentBytes + size > this.maxUserMemoryBytes) {
+      throw new Error(
+        `Per-user upload memory quota reached (${Math.round(userCurrentBytes / (1024 * 1024))}MB / ${Math.round(this.maxUserMemoryBytes / (1024 * 1024))}MB used). Please wait for active uploads to finalize.`
       );
     }
 

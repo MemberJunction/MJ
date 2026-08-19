@@ -956,7 +956,7 @@ export class FileResolver extends FileResolverBase {
       return {
         Success: true,
         Token: mint.Token,
-        Url: `/media/upload-stage?token=${mint.Token}`,
+        Url: '/media/upload-stage',
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

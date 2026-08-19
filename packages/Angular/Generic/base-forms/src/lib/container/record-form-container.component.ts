@@ -11,6 +11,7 @@ import { UserInfoEngine, FileStorageEngineBase } from '@memberjunction/core-enti
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
+import { FormToolbarItemConfig, FormToolbarItemClickEventArgs } from '../types/form-toolbar-item';
 import { ResolveFormShowToolbar, ResolveFormToolbarConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormWidthMode } from '../types/form-types';
@@ -195,6 +196,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   @Input() ListCount = 0;
   @Input() IsSaving = false;
   @Input() ToolbarConfig: FormToolbarConfig = DEFAULT_TOOLBAR_CONFIG;
+  @Input() RegisteredToolbarItems: FormToolbarItemConfig[] = [];
+  @Input() ToolbarItemOverrides: ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null = null;
   @Input() WidthMode: FormWidthMode = 'centered';
 
   /**
@@ -264,6 +267,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Emitted when a custom toolbar button is clicked */
   @Output() CustomButtonClick = new EventEmitter<CustomToolbarButtonClickEventArgs>();
 
+  /** Emitted when any toolbar item (standard or custom) is clicked */
+  @Output() ToolbarItemClick = new EventEmitter<FormToolbarItemClickEventArgs>();
+
   /**
    * Emitted when the user chooses a different form variant from the picker.
    * Carries the selected variant's override ID, or null when the user picks
@@ -286,7 +292,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- FormComponent accessor ----
 
   /** Typed accessor for the form component reference */
-  private get fc(): BaseFormComponent | null {
+  public get fc(): BaseFormComponent | null {
     return this.FormComponent;
   }
 
@@ -366,6 +372,20 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   get EffectiveToolbarConfig(): FormToolbarConfig {
     return ResolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.fc?.Config);
+  }
+
+  get EffectiveRegisteredToolbarItems(): FormToolbarItemConfig[] {
+    if (this.fc?.RegisteredToolbarItems && this.fc.RegisteredToolbarItems.length > 0) {
+      return this.fc.RegisteredToolbarItems;
+    }
+    return this.RegisteredToolbarItems;
+  }
+
+  get EffectiveToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null {
+    if (this.fc?.ToolbarItemOverrides && this.fc.ToolbarItemOverrides.size > 0) {
+      return this.fc.ToolbarItemOverrides;
+    }
+    return this.ToolbarItemOverrides;
   }
 
   get EffectiveSearchFilter(): string {

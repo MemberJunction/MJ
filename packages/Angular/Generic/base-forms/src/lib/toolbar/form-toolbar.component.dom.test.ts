@@ -199,4 +199,135 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(out).toEqual(['']);
     });
   });
+
+  describe('dynamic toolbar customization & items', () => {
+    it('renders registered custom action buttons with text, icon, and primary styling', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Icon: 'fa-solid fa-check-double',
+          Variant: 'primary' as const,
+          Order: 5,
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const confirmBtn = btn(f, '.mj-forms-btn--primary');
+      expect(confirmBtn).not.toBeNull();
+      expect(confirmBtn?.textContent?.trim()).toContain('Confirm Order');
+      expect(confirmBtn?.querySelector('.fa-check-double')).not.toBeNull();
+    });
+
+    it('orders custom items before standard items when Order is lower', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Icon: 'fa-solid fa-check-double',
+          Variant: 'primary' as const,
+          Order: 5, // before Edit (Order 10)
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const buttons = queryAll(f, '.mj-forms-toolbar-group > button');
+      expect(buttons.length).toBeGreaterThan(1);
+      expect(buttons[0].textContent?.trim()).toContain('Confirm Order');
+      expect(buttons[1].getAttribute('title')).toBe('Edit this Record');
+    });
+
+    it('evaluates dynamic Visible predicate function to hide items', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Visible: () => false,
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      expect(btn(f, 'button:has(.mj-forms-btn-text)')).toBeNull();
+    });
+
+    it('evaluates dynamic Visible predicate function to show items', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Visible: () => true,
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      expect(btn(f, 'button:has(.mj-forms-btn-text)')).not.toBeNull();
+    });
+
+    it('evaluates dynamic Disabled reason string predicate and sets tooltip', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Disabled: () => 'Order must have at least one line',
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const confirmBtn = btn(f, 'button:has(.mj-forms-btn-text)');
+      expect(confirmBtn).not.toBeNull();
+      expect(confirmBtn?.hasAttribute('disabled')).toBe(true);
+      expect(confirmBtn?.getAttribute('title')).toBe('Order must have at least one line');
+    });
+
+    it('renders loading spinner and disables button when IsLoading is true', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          IsLoading: true,
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const confirmBtn = btn(f, 'button:has(.mj-forms-btn-text)');
+      expect(confirmBtn?.hasAttribute('disabled')).toBe(true);
+      expect(confirmBtn?.querySelector('.fa-spinner.fa-spin')).not.toBeNull();
+    });
+
+    it('applies dynamic item overrides to hide delete and disable edit', () => {
+      const overrides = new Map([
+        ['delete', { Visible: false }],
+        ['edit', { Disabled: 'Cannot edit posted record' }],
+      ]);
+
+      const f = render({ ItemOverrides: overrides });
+      expect(btn(f, 'button[title="Delete this Record"]')).toBeNull();
+
+      const editBtn = btn(f, 'button[title="Cannot edit posted record"]');
+      expect(editBtn).not.toBeNull();
+      expect(editBtn?.hasAttribute('disabled')).toBe(true);
+    });
+
+    it('triggers ToolbarItemClick and OnClick handler when custom button is clicked', async () => {
+      let clicked = false;
+      const registeredItems = [
+        {
+          Key: 'custom-action',
+          Text: 'Custom Action',
+          OnClick: () => {
+            clicked = true;
+          },
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const out = capture(f.componentInstance.ToolbarItemClick);
+      const customBtn = btn(f, 'button:has(.mj-forms-btn-text)');
+      customBtn?.click();
+
+      expect(clicked).toBe(true);
+      expect(out.length).toBe(1);
+      expect(out[0].ItemKey).toBe('custom-action');
+    });
+  });
 });

@@ -360,12 +360,12 @@
   flex-shrink: 0;
 }
 
-.mj-attachment-thumb--pdf { background: color-mix(in srgb, #ef4444 16%, var(--mj-bg-surface)); color: #ef4444; }
-.mj-attachment-thumb--image { background: color-mix(in srgb, #6366f1 16%, var(--mj-bg-surface)); color: #818cf8; }
-.mj-attachment-thumb--doc, .mj-attachment-thumb--document { background: color-mix(in srgb, #3b82f6 16%, var(--mj-bg-surface)); color: #60a5fa; }
-.mj-attachment-thumb--video { background: color-mix(in srgb, #d946ef 16%, var(--mj-bg-surface)); color: #e879f9; }
-.mj-attachment-thumb--audio { background: color-mix(in srgb, #f59e0b 16%, var(--mj-bg-surface)); color: #fbbf24; }
-.mj-attachment-thumb--text { background: color-mix(in srgb, #06b6d4 16%, var(--mj-bg-surface)); color: #22d3ee; }
+.mj-attachment-thumb--pdf { background: color-mix(in srgb, var(--mj-status-error, #ef4444) 16%, var(--mj-bg-surface)); color: var(--mj-status-error, #ef4444); }
+.mj-attachment-thumb--image { background: color-mix(in srgb, var(--mj-media-image, #6366f1) 16%, var(--mj-bg-surface)); color: var(--mj-media-image-text, #818cf8); }
+.mj-attachment-thumb--doc, .mj-attachment-thumb--document { background: color-mix(in srgb, var(--mj-brand-primary, #3b82f6) 16%, var(--mj-bg-surface)); color: var(--mj-brand-primary-light, #60a5fa); }
+.mj-attachment-thumb--video { background: color-mix(in srgb, var(--mj-media-video, #d946ef) 16%, var(--mj-bg-surface)); color: var(--mj-media-video-text, #e879f9); }
+.mj-attachment-thumb--audio { background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 16%, var(--mj-bg-surface)); color: var(--mj-status-warning-light, #fbbf24); }
+.mj-attachment-thumb--text { background: color-mix(in srgb, var(--mj-media-text, #06b6d4) 16%, var(--mj-bg-surface)); color: var(--mj-media-text-light, #22d3ee); }
 .mj-attachment-thumb--other { background: color-mix(in srgb, var(--mj-text-primary) 10%, var(--mj-bg-surface)); color: var(--mj-text-secondary); }
 
 .mj-attachment-info {
@@ -884,8 +884,8 @@
   font-size: 0.72rem;
   padding: 2px 8px;
   border-radius: var(--mj-radius-full, 9999px);
-  background: color-mix(in srgb, #10b981 15%, var(--mj-bg-surface));
-  color: #10b981;
+  background: color-mix(in srgb, var(--mj-status-success, #10b981) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-success, #10b981);
   font-weight: 600;
 }
 
@@ -905,8 +905,8 @@
   gap: 8px;
 }
 
-/* Generic Buttons */
-.mj-btn {
+/* Attachment Action Buttons */
+.mj-attach-btn {
   padding: 6px 12px;
   border-radius: var(--mj-radius-sm, 6px);
   font-size: 0.82rem;
@@ -919,37 +919,37 @@
   transition: all 0.12s;
 }
 
-.mj-btn-sm {
+.mj-attach-btn-sm {
   padding: 4px 8px;
   font-size: 0.78rem;
 }
 
-.mj-btn-flat {
+.mj-attach-btn-flat {
   background: transparent;
   color: var(--mj-text-secondary);
 }
 
-.mj-btn-flat:hover {
+.mj-attach-btn-flat:hover {
   background: color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface));
   color: var(--mj-text-primary);
 }
 
-.mj-btn-secondary {
+.mj-attach-btn-secondary {
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
   color: var(--mj-text-primary);
 }
 
-.mj-btn-secondary:hover {
+.mj-attach-btn-secondary:hover {
   background: var(--mj-bg-surface-sunken);
   border-color: var(--mj-text-muted);
 }
 
-.mj-btn-primary {
+.mj-attach-btn-primary {
   background: var(--mj-brand-primary);
   color: var(--mj-text-inverse, #ffffff);
 }
 
-.mj-btn-primary:hover {
+.mj-attach-btn-primary:hover {
   background: var(--mj-brand-primary-hover);
 }

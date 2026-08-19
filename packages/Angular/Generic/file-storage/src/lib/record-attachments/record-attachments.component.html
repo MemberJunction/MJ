@@ -23,7 +23,7 @@
       </div>
 
       <div class="mj-record-attachments-top-actions">
-        <button type="button" class="mj-btn mj-btn-sm mj-btn-flat" (click)="Refresh()" [disabled]="IsLoading" title="Refresh attachments">
+        <button type="button" class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-flat" (click)="Refresh()" [disabled]="IsLoading" title="Refresh attachments">
           <i class="fa-solid fa-rotate-right" [class.fa-spin]="IsLoading"></i>
         </button>
       </div>
@@ -302,14 +302,14 @@
 
         <!-- Sub-Panel Footer Actions -->
         <div class="mj-subpanel-footer">
-          <button type="button" class="mj-btn mj-btn-sm mj-btn-flat" (click)="CloseEditMetadataModal()">
+          <button type="button" class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-flat" (click)="CloseEditMetadataModal()">
             Cancel
           </button>
           <div class="mj-subpanel-footer-right">
             @if (AllowDownload) {
               <button
                 type="button"
-                class="mj-btn mj-btn-sm mj-btn-secondary"
+                class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-secondary"
                 (click)="DownloadAttachment(EditMetadataItem)"
                 title="Open in new tab"
               >
@@ -319,7 +319,7 @@
             }
             <button
               type="button"
-              class="mj-btn mj-btn-sm mj-btn-primary"
+              class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-primary"
               (click)="SaveEditMetadata()"
               [disabled]="!EditMetadataName.trim() || IsLoading"
             >
@@ -436,9 +436,9 @@
           }
         </div>
         <div class="mj-preview-footer-actions">
-          <button type="button" class="mj-btn mj-btn-sm mj-btn-flat" (click)="ClosePreviewModal()">Close</button>
+          <button type="button" class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-flat" (click)="ClosePreviewModal()">Close</button>
           @if (AllowDownload) {
-            <button type="button" class="mj-btn mj-btn-sm mj-btn-primary" (click)="DownloadAttachment(ActivePreviewItem)">
+            <button type="button" class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-primary" (click)="DownloadAttachment(ActivePreviewItem)">
               <i class="fa-solid fa-download"></i>
               <span>Download</span>
             </button>

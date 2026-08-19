@@ -99,9 +99,9 @@ export class MediaAccessKeyManager extends BaseSingleton<MediaAccessKeyManager> 
   }
 
   /**
-   * Mints a signed upload staging token for a user, expiring after `ttlMinutes`.
+   * Mints a signed upload staging token for a user, expiring after `ttlMinutes` (default 10 minutes).
    */
-  public SignUpload(userId: string, ttlMinutes: number = 60): { Token: string; ExpiresAt: Date } {
+  public SignUpload(userId: string, ttlMinutes: number = 10): { Token: string; ExpiresAt: Date } {
     this.ensureSecret();
     const claims = { fileId: '*', userId, typ: MEDIA_UPLOAD_ACCESS_TOKEN_TYPE };
     const expiresInSeconds = Math.floor(ttlMinutes * 60);

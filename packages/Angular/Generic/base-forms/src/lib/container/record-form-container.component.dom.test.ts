@@ -24,6 +24,7 @@ class ToolbarStub {
   @Input() IsSaving = false; @Input() VisibleSectionCount = 0; @Input() TotalSectionCount = 0; @Input() ExpandedSectionCount = 0;
   @Input() SearchFilter = ''; @Input() ShowEmptyFields = false; @Input() WidthMode = ''; @Input() HasCustomSectionOrder = false;
   @Input() Variants: unknown; @Input() CurrentVariantID: unknown;
+  @Input() RegisteredItems: unknown; @Input() ItemOverrides: unknown; @Input() FormComponent: unknown;
   @Input() ChromeLayout = 'accordion';
   @Output() Navigate = new EventEmitter<unknown>();
   @Output() EditModeChange = new EventEmitter<boolean>();
@@ -31,6 +32,7 @@ class ToolbarStub {
   @Output() SaveRequested = new EventEmitter<void>();
   @Output() CancelRequested = new EventEmitter<void>();
   @Output() DeleteRequested = new EventEmitter<void>();
+  @Output() ToolbarItemClick = new EventEmitter<unknown>();
 }
 @Component({ standalone: true, selector: 'mj-section-manager', template: '' })
 class SectionManagerStub {

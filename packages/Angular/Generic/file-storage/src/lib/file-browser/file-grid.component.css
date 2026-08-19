@@ -222,7 +222,7 @@
 
 .mj-btn-search-toggle.active {
   background-color: var(--mj-brand-primary);
-  color: #fff;
+  color: var(--mj-text-inverse, #ffffff);
   border-color: var(--mj-brand-primary);
 }
 
@@ -274,12 +274,12 @@
 
 .mj-action-btn--primary {
   background-color: var(--mj-brand-primary, #3b82f6);
-  color: #ffffff;
+  color: var(--mj-text-inverse, #ffffff);
   border-color: var(--mj-brand-primary, #3b82f6);
 }
 
 .mj-action-btn--primary:hover:not([disabled]) {
-  background-color: color-mix(in srgb, var(--mj-brand-primary) 85%, #000);
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 85%, var(--mj-text-primary, #000000));
 }
 
 .mj-action-btn--secondary {
@@ -294,12 +294,12 @@
 
 .mj-action-btn--danger {
   background-color: var(--mj-status-error, #ef4444);
-  color: #ffffff;
+  color: var(--mj-text-inverse, #ffffff);
   border-color: var(--mj-status-error, #ef4444);
 }
 
 .mj-action-btn--danger:hover:not([disabled]) {
-  background-color: color-mix(in srgb, var(--mj-status-error) 85%, #000);
+  background-color: color-mix(in srgb, var(--mj-status-error, #ef4444) 85%, var(--mj-text-primary, #000000));
 }
 
 .mj-action-btn[disabled] {
@@ -579,7 +579,7 @@
 .group-count-badge {
   margin-left: auto;
   background-color: var(--mj-brand-primary);
-  color: #fff;
+  color: var(--mj-text-inverse, #ffffff);
   font-size: 0.7rem;
   font-weight: 600;
   padding: 1px 6px;
@@ -917,38 +917,38 @@
 }
 
 .mj-file-thumb--pdf {
-  background-color: color-mix(in srgb, #ef4444 14%, transparent);
-  color: #ef4444;
+  background-color: color-mix(in srgb, var(--mj-status-error, #ef4444) 14%, transparent);
+  color: var(--mj-status-error, #ef4444);
 }
 
 .mj-file-thumb--image {
-  background-color: color-mix(in srgb, #8b5cf6 14%, transparent);
-  color: #8b5cf6;
+  background-color: color-mix(in srgb, var(--mj-media-image, #8b5cf6) 14%, transparent);
+  color: var(--mj-media-image, #8b5cf6);
 }
 
 .mj-file-thumb--video {
-  background-color: color-mix(in srgb, #3b82f6 14%, transparent);
-  color: #3b82f6;
+  background-color: color-mix(in srgb, var(--mj-brand-primary, #3b82f6) 14%, transparent);
+  color: var(--mj-brand-primary, #3b82f6);
 }
 
 .mj-file-thumb--audio {
-  background-color: color-mix(in srgb, #f59e0b 14%, transparent);
-  color: #f59e0b;
+  background-color: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 14%, transparent);
+  color: var(--mj-status-warning, #f59e0b);
 }
 
 .mj-file-thumb--code {
-  background-color: color-mix(in srgb, #10b981 14%, transparent);
-  color: #10b981;
+  background-color: color-mix(in srgb, var(--mj-status-success, #10b981) 14%, transparent);
+  color: var(--mj-status-success, #10b981);
 }
 
 .mj-file-thumb--text {
-  background-color: color-mix(in srgb, #6b7280 14%, transparent);
-  color: #6b7280;
+  background-color: color-mix(in srgb, var(--mj-text-muted, #6b7280) 14%, transparent);
+  color: var(--mj-text-muted, #6b7280);
 }
 
 .mj-file-thumb--document {
-  background-color: color-mix(in srgb, #2563eb 14%, transparent);
-  color: #2563eb;
+  background-color: color-mix(in srgb, var(--mj-brand-primary-hover, #2563eb) 14%, transparent);
+  color: var(--mj-brand-primary-hover, #2563eb);
 }
 
 /* ==========================================================================

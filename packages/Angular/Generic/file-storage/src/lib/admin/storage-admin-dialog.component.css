@@ -504,8 +504,8 @@
   margin: 0;
 }
 
-/* Buttons */
-.mj-btn {
+/* Dialog Action Buttons */
+.mj-admin-btn {
   padding: 7px 14px;
   border-radius: var(--mj-radius-sm, 6px);
   font-size: 0.82rem;
@@ -518,36 +518,36 @@
   transition: all 0.12s;
 }
 
-.mj-btn-primary {
+.mj-admin-btn-primary {
   background: var(--mj-brand-primary);
   color: var(--mj-text-inverse, #ffffff);
 }
 
-.mj-btn-primary:hover {
+.mj-admin-btn-primary:hover {
   background: var(--mj-brand-primary-hover);
 }
 
-.mj-btn-secondary {
+.mj-admin-btn-secondary {
   background: var(--mj-bg-surface);
   border-color: var(--mj-border-default);
   color: var(--mj-text-secondary);
 }
 
-.mj-btn-secondary:hover {
+.mj-admin-btn-secondary:hover {
   background: color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface));
   color: var(--mj-text-primary);
 }
 
-.mj-btn-danger {
+.mj-admin-btn-danger {
   background: var(--mj-status-error, #ef4444);
-  color: #ffffff;
+  color: var(--mj-text-inverse, #ffffff);
 }
 
-.mj-btn-danger:hover {
-  background: color-mix(in srgb, #000000 15%, var(--mj-status-error, #ef4444));
+.mj-admin-btn-danger:hover {
+  background: color-mix(in srgb, var(--mj-text-primary, #000000) 15%, var(--mj-status-error, #ef4444));
 }
 
-.mj-btn-link {
+.mj-admin-btn-link {
   background: none;
   border: none;
   color: var(--mj-brand-primary);
@@ -560,6 +560,6 @@
   padding: 0;
 }
 
-.mj-btn-link:hover {
+.mj-admin-btn-link:hover {
   text-decoration: underline;
 }
