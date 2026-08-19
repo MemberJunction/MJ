@@ -677,6 +677,19 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
+    await FileStorageEngine.Instance.Config(false, user, md);
+    let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+    if (accounts.length === 0) {
+      await FileStorageEngine.Instance.Config(true, user, md);
+      accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+    }
+
+    if (accounts.length > 0) {
+      const account = accounts[0];
+      const driver = await FileStorageEngine.Instance.GetDriver(account.ID, user);
+      return await driver.CreatePreAuthDownloadUrl(file.ProviderKey ?? file.Name);
+    }
+
     const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     await providerEntity.Load(file.ProviderID);
 
@@ -831,16 +844,13 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
-    // Load the account and its provider
-    const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
-
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
-    // Create download URL with extended user context (includes account for credential lookup)
-    const userContext = this.buildExtendedUserContext(context, account);
-    const downloadUrl = await createDownloadUrl(providerEntity, input.ObjectName, userContext);
+    await FileStorageEngine.Instance.Config(false, user, md);
+    const driver = await FileStorageEngine.Instance.GetDriver(input.AccountID, user);
+    const downloadUrl = await driver.CreatePreAuthDownloadUrl(input.ObjectName);
     return downloadUrl;
   }
 
@@ -863,32 +873,17 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
-    // Load the account and its provider
-    const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
-
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
-    // Create upload URL with extended user context (includes account for credential lookup)
-    const userContext = this.buildExtendedUserContext(context, account);
-    const { UploadUrl, updatedInput } = await createUploadUrl(
-      providerEntity,
-      {
-        ID: '', // Not needed for direct upload
-        Name: input.ObjectName,
-        ProviderID: providerEntity.ID,
-        ContentType: input.ContentType,
-      },
-      userContext,
-    );
-
-    // Extract ProviderKey if it exists (spread into updatedInput by createUploadUrl)
-    const providerKey = (updatedInput as { ProviderKey?: string }).ProviderKey;
+    await FileStorageEngine.Instance.Config(false, user, md);
+    const driver = await FileStorageEngine.Instance.GetDriver(input.AccountID, user);
+    const result = await driver.CreatePreAuthUploadUrl(input.ObjectName);
 
     return {
-      UploadUrl,
-      ProviderKey: providerKey,
+      UploadUrl: result.UploadUrl,
+      ProviderKey: result.ProviderKey,
     };
   }
 

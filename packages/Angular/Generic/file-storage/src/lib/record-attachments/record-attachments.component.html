@@ -240,25 +240,57 @@
         } @else {
           @switch (GetMediaType(ActivePreviewItem)) {
             @case ('image') {
-              <div class="mj-preview-image-container">
-                <img [src]="ActivePreviewUrl" [alt]="ActivePreviewItem.Name" />
-              </div>
+              @if (ActivePreviewUrl) {
+                <div class="mj-preview-image-container">
+                  <img [src]="ActivePreviewUrl" [alt]="ActivePreviewItem.Name" />
+                </div>
+              } @else {
+                <div class="mj-preview-generic-box">
+                  <i class="fa-solid fa-file-image mj-preview-generic-icon"></i>
+                  <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                  <div class="mj-preview-generic-sub">Preview could not be loaded</div>
+                </div>
+              }
             }
             @case ('pdf') {
-              <div class="mj-preview-frame-container">
-                <iframe [src]="ActivePreviewSafeUrl" title="PDF Preview"></iframe>
-              </div>
+              @if (ActivePreviewSafeUrl) {
+                <div class="mj-preview-frame-container">
+                  <iframe [src]="ActivePreviewSafeUrl" title="PDF Preview"></iframe>
+                </div>
+              } @else {
+                <div class="mj-preview-generic-box">
+                  <i class="fa-solid fa-file-pdf mj-preview-generic-icon"></i>
+                  <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                  <div class="mj-preview-generic-sub">PDF preview could not be loaded</div>
+                </div>
+              }
             }
             @case ('video') {
-              <div class="mj-preview-media-container">
-                <video controls autoplay [src]="ActivePreviewUrl"></video>
-              </div>
+              @if (ActivePreviewUrl) {
+                <div class="mj-preview-media-container">
+                  <video controls autoplay [src]="ActivePreviewUrl"></video>
+                </div>
+              } @else {
+                <div class="mj-preview-generic-box">
+                  <i class="fa-solid fa-file-video mj-preview-generic-icon"></i>
+                  <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                  <div class="mj-preview-generic-sub">Video preview could not be loaded</div>
+                </div>
+              }
             }
             @case ('audio') {
-              <div class="mj-preview-media-container mj-preview-audio-box">
-                <div class="mj-preview-audio-icon"><i class="fa-solid fa-headphones"></i></div>
-                <audio controls [src]="ActivePreviewUrl"></audio>
-              </div>
+              @if (ActivePreviewUrl) {
+                <div class="mj-preview-media-container mj-preview-audio-box">
+                  <div class="mj-preview-audio-icon"><i class="fa-solid fa-headphones"></i></div>
+                  <audio controls [src]="ActivePreviewUrl"></audio>
+                </div>
+              } @else {
+                <div class="mj-preview-generic-box">
+                  <i class="fa-solid fa-file-audio mj-preview-generic-icon"></i>
+                  <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                  <div class="mj-preview-generic-sub">Audio preview could not be loaded</div>
+                </div>
+              }
             }
             @case ('text') {
               <div class="mj-preview-text-container">
