@@ -209,9 +209,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Bridge Participants','SessionBridgeID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridge Participants')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridge Participants','SessionBridgeID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSessionBridgeParticipants')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionBridgeParticipants', $event.totalRowCount)"
                 >
