@@ -685,17 +685,19 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         const objectPath = `artifacts/${timestamp}/${uniqueId}/${file.name}`;
 
         // ─────────────────────────────────────────────────────────────────────
-        // 1. Try Direct Binary Upload via Pre-Authenticated URL
+        // 1. Try Direct Binary Upload via Pre-Authenticated URL (for S3, Azure Blob, GCS)
         // ─────────────────────────────────────────────────────────────────────
-        try {
-          console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Requesting pre-auth upload URL for '${file.name}' on account '${targetAccountID}'...`);
-          const preAuthResult = await GraphQLDataProvider.ExecuteGQL(CreatePreAuthUploadUrlMutation, {
-            input: {
-              AccountID: targetAccountID,
-              ObjectName: objectPath,
-              ContentType: file.type || 'application/octet-stream',
-            },
-          });
+        const supportsDirectPreAuth = this.ProviderSupportsDirectUpload(targetAccount?.provider);
+        if (supportsDirectPreAuth) {
+          try {
+            console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Requesting pre-auth upload URL for '${file.name}' on account '${targetAccountID}'...`);
+            const preAuthResult = await GraphQLDataProvider.ExecuteGQL(CreatePreAuthUploadUrlMutation, {
+              input: {
+                AccountID: targetAccountID,
+                ObjectName: objectPath,
+                ContentType: file.type || 'application/octet-stream',
+              },
+            });
 
           const parsedPreAuth = CreatePreAuthUploadUrlMutationSchema.safeParse(preAuthResult);
           if (
@@ -754,6 +756,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         } catch (preAuthErr) {
           console.warn(`[RecordAttachmentsComponent] Direct binary upload failed for '${file.name}', falling back to server upload:`, preAuthErr);
         }
+      }
 
         // ─────────────────────────────────────────────────────────────────────
         // 2. Tier 2: Ephemeral Binary Upload Staging + GraphQL Token Commit
@@ -1408,6 +1411,21 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     if (name.includes('dropbox')) return 'fa-brands fa-dropbox';
     if (name.includes('sharepoint') || name.includes('onedrive')) return 'fa-brands fa-microsoft';
     return 'fa-solid fa-cloud';
+  }
+
+  private ProviderSupportsDirectUpload(provider?: MJFileStorageProviderEntity | null): boolean {
+    if (!provider) return false;
+    const key = (provider.ServerDriverKey || '').toLowerCase();
+    const name = (provider.Name || '').toLowerCase();
+    return (
+      key.includes('aws') ||
+      key.includes('azure') ||
+      key.includes('google cloud') ||
+      name.includes('aws') ||
+      name.includes('s3') ||
+      name.includes('azure') ||
+      name.includes('google cloud')
+    );
   }
 
   private TriggerBrowserDownload(url: string, fileName: string): void {
