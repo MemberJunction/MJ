@@ -100,4 +100,48 @@ describe('MJDropdownComponent (DOM)', () => {
     expect(overlayText('.mj-dropdown-no-data')).toBe('No data found');
     expect(overlayQueryAll('.mj-dropdown-option').length).toBe(0);
   });
+
+  // ── #3860: the accessible name ────────────────────────────────────────────────────────────────
+
+  it('names the combobox with AriaLabel — on the trigger AND the popup listbox', () => {
+    const f = render({ AriaLabel: 'Interview persona' });
+    expect(trigger(f).getAttribute('aria-label')).toBe('Interview persona');
+    open(f);
+    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-label')).toBe('Interview persona');
+  });
+
+  it('names the combobox from a visible label via AriaLabelledBy — trigger AND popup listbox', () => {
+    // The visible-label path. NOT <label for>: the trigger is a div[role=combobox], which
+    // label-for neither names nor focuses — the label carries an id and the combobox points at it.
+    const f = render({ AriaLabelledBy: 'persona-label' });
+    expect(trigger(f).getAttribute('aria-labelledby')).toBe('persona-label');
+    open(f);
+    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-labelledby')).toBe('persona-label');
+  });
+
+  it('exposes InputId so other markup can reference the trigger', () => {
+    const f = render({ InputId: 'persona-select' });
+    expect(trigger(f).getAttribute('id')).toBe('persona-select');
+  });
+
+  it('passes AriaDescribedBy through for hint and error text', () => {
+    const f = render({ AriaDescribedBy: 'persona-hint' });
+    expect(trigger(f).getAttribute('aria-describedby')).toBe('persona-hint');
+  });
+
+  it('renders NO empty name attributes when nothing is configured — absent beats empty', () => {
+    // aria-label="" is worse than no attribute: it overrides any other naming source with an
+    // explicitly empty name in the accessible-name computation.
+    const f = render({});
+    expect(trigger(f).hasAttribute('aria-label')).toBe(false);
+    expect(trigger(f).hasAttribute('aria-labelledby')).toBe(false);
+    expect(trigger(f).hasAttribute('id')).toBe(false);
+    expect(trigger(f).hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('names the filter box from the dropdown name, so it is not a second unnamed control', () => {
+    const f = render({ Filterable: true, AriaLabel: 'Interview persona' });
+    open(f);
+    expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter Interview persona');
+  });
 });
