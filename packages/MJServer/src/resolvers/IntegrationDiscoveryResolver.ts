@@ -56,7 +56,7 @@ import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
-import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
+import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
 import type { MJCompanyIntegrationEntityServer } from "@memberjunction/core-entities-server";
@@ -3147,13 +3147,38 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      *
      * Before #3738 this mutation inherited a full schema refresh from the
      * CompanyIntegration save hook, with no way to decline it.  The refresh is
-     * now this resolver's own, explicit step — same default behaviour, but
-     * visible in the API and suppressible with `runSchemaRefresh: false`.
+     * now this resolver's own, explicit step — visible in the API, suppressible
+     * with `runSchemaRefresh: false`, and (since it gained `awaitSchemaRefresh`)
+     * no longer something the caller has to sit through.
+     *
+     * WHY THIS ONE DEFAULTS TO DETACHED AND ITS SIBLINGS DO NOT.  Create and
+     * Update default to `awaitSchemaRefresh: true` because the caller is in a
+     * wizard, waiting on a form, and the counts ARE the answer they asked for.
+     * Reactivate is a one-click toggle on a connection row, and — unlike its
+     * siblings — its entire durable effect is already committed by the time the
+     * refresh begins: the `Save()` above returned. Blocking the response for the
+     * minutes a live introspect takes cannot make that reactivation any more
+     * true; it can only misreport it.
+     *
+     * And it did. The transport, not this resolver, is what breaks: a held
+     * request dies at the load balancer's fixed ~240s ceiling (Azure App Service
+     * cannot configure it), and the client then shows a resumed connection as a
+     * failure. Note the shape of that bug — the two failure paths BELOW are both
+     * handled correctly, returning `Success: true` with the refresh problem
+     * appended, precisely because reactivation already happened. The gateway is
+     * the one caller of this mutation that never reaches them.
+     *
+     * So the default here optimises for the operation actually being requested
+     * (resume this connection) rather than for the operation that happens to be
+     * expensive (rescan the source). The refresh still runs — detached, on a
+     * durable, tailable run stream — and `awaitSchemaRefresh: true` restores the
+     * blocking behaviour for a caller that genuinely wants the counts inline.
      */
     @Mutation(() => MutationResultOutput)
     async IntegrationReactivateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default), re-runs IntegrationConnectorCreationPipeline after reactivating so the catalog reflects the source as it is now. Pass false to reactivate without a live scan — useful when the catalog is known-current, or when the source is large enough that discovery should be scheduled separately." }) runSchemaRefresh: boolean,
+        @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: false, description: "When false (default), the schema refresh is launched detached and this mutation returns as soon as the connection is active, naming the run to tail. Reactivation is already committed at that point, so blocking on a minutes-long live introspect can only delay — or, at the load balancer's ~240s ceiling, misreport — an operation that has already succeeded. Pass true to block until the refresh finishes and get its counts in the message." }) awaitSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
@@ -3165,13 +3190,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             ci.IsActive = true;
             if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.Message ?? 'Unknown error'}` };
 
+            if (runSchemaRefresh && !awaitSchemaRefresh) {
+                const detached = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md);
+                return { Success: true, Message: BuildReactivateMessage(detached) };
+            }
+
             if (runSchemaRefresh) {
                 try {
                     const refreshResult = await this.runSchemaRefreshPipeline(companyIntegrationID, user, md);
-                    return {
-                        Success: true,
-                        Message: `Reactivated, schema refresh: ${refreshResult.ObjectsCreated} created, ${refreshResult.ObjectsUpdated} updated, ${refreshResult.UnresolvedObjects.length} PK-unresolved`,
-                    };
+                    return { Success: true, Message: BuildReactivateMessage(refreshResult) };
                 } catch (refreshErr) {
                     // Refresh failure does NOT undo the reactivation — the
                     // connection is active, only discovery failed, and the
@@ -3181,7 +3208,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
-            return { Success: true, Message: 'Reactivated' };
+            return { Success: true, Message: BuildReactivateMessage(undefined) };
         } catch (e) {
             LogError(`IntegrationReactivateConnection error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
