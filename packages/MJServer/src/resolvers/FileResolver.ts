@@ -49,6 +49,45 @@ export class CreateUploadURLInput {
   FileID: string;
 }
 
+@InputType()
+export class UploadStorageFileInput {
+  @Field(() => String)
+  FileName: string;
+
+  @Field(() => String)
+  Base64Data: string;
+
+  @Field(() => String, { nullable: true })
+  MimeType?: string;
+
+  @Field(() => String, { nullable: true })
+  AccountID?: string;
+
+  @Field(() => String, { nullable: true })
+  CategoryID?: string;
+
+  @Field(() => String, { nullable: true })
+  Description?: string;
+
+  @Field(() => String, { nullable: true })
+  PathPrefix?: string;
+}
+
+@ObjectType()
+export class UploadStorageFilePayload {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  FileID?: string;
+
+  @Field(() => MJFile_, { nullable: true })
+  File?: MJFile_;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+}
+
 @ObjectType()
 export class CreateFilePayload {
   @Field(() => MJFile_)
@@ -571,6 +610,58 @@ export class FileResolver extends FileResolverBase {
     const File = mapper.MapFields({ ...fileEntity.GetAll() });
 
     return { File, UploadUrl, NameExists };
+  }
+
+  /**
+   * Direct server-side file upload using MJ Storage subsystem.
+   * Uploads file contents directly via the configured storage driver (Box, Azure, S3, Google Drive, Dropbox, etc.)
+   * and creates/persists the MJ: Files database record.
+   */
+  @Mutation(() => UploadStorageFilePayload)
+  async UploadStorageFile(
+    @Arg('input', () => UploadStorageFileInput) input: UploadStorageFileInput,
+    @Ctx() context: AppContext
+  ): Promise<UploadStorageFilePayload> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const user = this.GetUserFromPayload(context.userPayload);
+
+      // Permission check on MJ: Files
+      const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+      fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+
+      const buffer = Buffer.from(input.Base64Data, 'base64');
+      const mimeType = input.MimeType || 'application/octet-stream';
+
+      const uploadResult = await FileStorageEngine.Instance.UploadFile({
+        content: buffer,
+        fileName: input.FileName,
+        mimeType,
+        contextUser: user,
+        storageAccountId: input.AccountID,
+        categoryID: input.CategoryID,
+        description: input.Description,
+        pathPrefix: input.PathPrefix,
+        provider,
+      });
+
+      const loaded = await fileEntity.Load(uploadResult.FileID);
+      const mapper = new FieldMapper();
+      const File = loaded ? (mapper.MapFields({ ...fileEntity.GetAll() }) as unknown as MJFile_) : undefined;
+
+      return {
+        Success: true,
+        FileID: uploadResult.FileID,
+        File,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`UploadStorageFile failed for '${input.FileName}': ${message}`);
+      return {
+        Success: false,
+        ErrorMessage: message,
+      };
+    }
   }
 
   @FieldResolver(() => String)

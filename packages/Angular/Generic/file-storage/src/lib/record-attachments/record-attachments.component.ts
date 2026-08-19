@@ -67,26 +67,38 @@ const FileFieldsFragment = gql`
   }
 `;
 
-const FileUploadMutation = gql`
-  ${FileFieldsFragment}
-  mutation CreateFile($input: CreateMJFileInput!) {
-    CreateFile(input: $input) {
-      NameExists
-      UploadUrl
+const UploadStorageFileMutation = gql`
+  mutation UploadStorageFile($input: UploadStorageFileInput!) {
+    UploadStorageFile(input: $input) {
+      Success
+      FileID
+      ErrorMessage
       File {
-        ...FileFields
+        Category
+        CategoryID
+        ContentType
+        _mj__CreatedAt
+        Description
+        ID
+        Name
+        Provider
+        ProviderID
+        ProviderKey
+        Status
+        _mj__UpdatedAt
       }
     }
   }
 `;
 
-const FileUploadMutationSchema = z.object({
-  CreateFile: z.object({
-    NameExists: z.boolean(),
-    UploadUrl: z.string(),
+const UploadStorageFileMutationSchema = z.object({
+  UploadStorageFile: z.object({
+    Success: z.boolean(),
+    FileID: z.string().optional().nullable(),
+    ErrorMessage: z.string().optional().nullable(),
     File: z.object({
       ID: z.string(),
-      Name: z.string(),
+      Name: z.string().optional().nullable(),
       ProviderID: z.string().optional().nullable(),
       Provider: z.string().optional().nullable(),
       ContentType: z.string().optional().nullable(),
@@ -94,7 +106,7 @@ const FileUploadMutationSchema = z.object({
       Status: z.string().optional().nullable(),
       CategoryID: z.string().optional().nullable(),
       Category: z.string().optional().nullable(),
-    }).passthrough(),
+    }).passthrough().optional().nullable(),
   }),
 });
 
@@ -522,8 +534,6 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
     try {
       const md = this.ProviderToUse;
-      const targetAccount = this.StorageAccounts.find((sa) => UUIDsEqual(sa.account.ID, beforeEvent.StorageAccountID));
-      const providerId = targetAccount?.provider.ID ?? (this.ActiveProviders[0]?.ID || '');
 
       for (const file of files) {
         // Enforce max size if configured
@@ -533,49 +543,40 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
           continue;
         }
 
+        const base64Data = await this.fileToBase64(file);
+
         const input = {
-          Name: file.name,
-          ProviderID: providerId,
-          Status: 'Pending',
-          CategoryID: beforeEvent.CategoryID,
+          FileName: file.name,
+          Base64Data: base64Data,
+          MimeType: file.type || 'application/octet-stream',
+          AccountID: beforeEvent.StorageAccountID || undefined,
+          CategoryID: beforeEvent.CategoryID || undefined,
         };
 
-        const gqlResult = await GraphQLDataProvider.ExecuteGQL(FileUploadMutation, { input });
-        const parsed = FileUploadMutationSchema.safeParse(gqlResult);
+        const gqlResult = await GraphQLDataProvider.ExecuteGQL(UploadStorageFileMutation, { input });
+        const parsed = UploadStorageFileMutationSchema.safeParse(gqlResult);
 
-        if (!parsed.success) {
-          this.notifications.CreateSimpleNotification(`Failed to initialize upload for '${file.name}'`, 'error');
+        if (!parsed.success || !parsed.data.UploadStorageFile.Success || !parsed.data.UploadStorageFile.FileID) {
+          const errorMsg = parsed.success ? parsed.data.UploadStorageFile.ErrorMessage : 'Upload failed';
+          this.notifications.CreateSimpleNotification(`Failed to upload '${file.name}': ${errorMsg || 'Unknown error'}`, 'error');
           continue;
         }
 
-        const { File: fileData, UploadUrl } = parsed.data.CreateFile;
-
-        // Perform signed PUT upload
-        await window.fetch(UploadUrl, {
-          method: 'PUT',
-          headers: {
-            'x-ms-blob-type': 'BlockBlob',
-            'Content-Type': file.type || 'application/octet-stream',
-          },
-          body: file,
-        });
-
-        // Update File Entity Status
-        const fileEntity: MJFileEntity = await md.GetEntityObject('MJ: Files');
-        await fileEntity.LoadFromData(fileData);
-        fileEntity.Status = 'Uploaded';
-        fileEntity.ContentType = file.type || 'application/octet-stream';
-        await fileEntity.Save();
-        uploadedFileEntities.push(fileEntity);
+        const fileId = parsed.data.UploadStorageFile.FileID;
+        const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files');
+        const fileLoaded = await fileEntity.Load(fileId);
+        if (fileLoaded) {
+          uploadedFileEntities.push(fileEntity);
+        }
 
         // Create Link Entity
         const linkEntity: MJFileEntityRecordLinkEntity = await md.GetEntityObject('MJ: File Entity Record Links');
-        linkEntity.FileID = fileEntity.ID;
+        linkEntity.FileID = fileId;
         linkEntity.EntityID = entityId;
         linkEntity.RecordID = recordId;
         const linkSuccess = await linkEntity.Save();
 
-        if (linkSuccess) {
+        if (linkSuccess && fileLoaded) {
           const newItem: RecordAttachmentItem = {
             LinkID: linkEntity.ID,
             FileID: fileEntity.ID,
@@ -969,5 +970,22 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     document.body.appendChild(link);
     link.click();
     link.parentNode?.removeChild(link);
+  }
+
+  private fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result === 'string') {
+          const base64 = result.substring(result.indexOf(',') + 1);
+          resolve(base64);
+        } else {
+          reject(new Error('Failed to read file as base64 string'));
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
   }
 }

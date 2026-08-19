@@ -37,6 +37,14 @@ export interface UploadFileOptions {
      */
     provider?: IMetadataProvider;
     /**
+     * Optional category ID to associate with the MJ: Files record.
+     */
+    categoryID?: string;
+    /**
+     * Optional description for the file.
+     */
+    description?: string;
+    /**
      * Optional path prefix within the storage bucket.
      * Defaults to `'artifacts/<date>/<uuid>'`.
      */
@@ -383,6 +391,12 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         fileEntity.ProviderID = resolved.provider.ID;
         fileEntity.ProviderKey = storagePath;
         fileEntity.Status = 'Uploaded';
+        if (options.categoryID) {
+            fileEntity.CategoryID = options.categoryID;
+        }
+        if (options.description) {
+            fileEntity.Description = options.description;
+        }
 
         if (!(await fileEntity.Save())) {
             throw new Error(`FileStorageEngine.UploadFile: failed to save MJ: Files record for '${fileName}'`);
