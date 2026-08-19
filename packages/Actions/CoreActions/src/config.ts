@@ -12,6 +12,9 @@ const apiIntegrationsSchema = z.object({
    * Perplexity AI API Key for AI-powered web search
    * Used by: Perplexity Search action
    * Get your API key from: https://www.perplexity.ai/settings/api
+   *
+   * This is the recommended web-search credential for new deployments — a single key with no
+   * engine ID, and open to new customers. See `google.customSearch` below for why.
    */
   perplexityApiKey: z.string().optional(),
 
@@ -33,6 +36,12 @@ const apiIntegrationsSchema = z.object({
      * Used by: Google Custom Search action
      * Get your API key from: https://developers.google.com/custom-search/v1/overview
      * Get your CX from: https://programmablesearchengine.google.com/
+     *
+     * NOTE: the Custom Search JSON API is CLOSED TO NEW CUSTOMERS. Projects that already have it
+     * enabled are served until 2027-01-01, when the API is discontinued. New deployments should
+     * configure `perplexityApiKey` above instead — Google's stated successor (Vertex AI Search)
+     * searches your own indexed content rather than the public web and yields neither an API key
+     * nor a CX, so it is not a drop-in for this action.
      */
     customSearch: z.object({
       /**

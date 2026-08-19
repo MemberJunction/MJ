@@ -167,8 +167,9 @@ export interface HierarchyTreeConfig {
     ColorField?: string;
 
     /**
-     * Default accent color when a node does not provide one.
-     * @default `'#38bdf8'`
+     * Default accent color when a node does not provide one. Prefer a design token over a
+     * literal so the accent follows the active theme.
+     * @default `'var(--mj-brand-primary, #38bdf8)'`
      */
     DefaultColor?: string;
 

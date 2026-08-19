@@ -46,7 +46,7 @@ export class OrgChartComponent {
     ParentField: 'ParentID',
     SubtitleField: 'OrganizationType',
     DefaultIcon: 'fa-solid fa-building',
-    DefaultColor: '#38bdf8',
+    DefaultColor: 'var(--mj-brand-primary)',
     Height: '600px'
   };
 
@@ -72,8 +72,8 @@ export class OrgChartComponent {
 | `SubtitleField` | `string` | `undefined` | Optional field for the secondary metadata tag or subtitle. |
 | `IconField` | `string` | `undefined` | Optional field containing a dynamic Font Awesome icon class or image URL. |
 | `DefaultIcon` | `string` | `'fa-solid fa-sitemap'` | Fallback icon when node does not specify one. |
-| `ColorField` | `string` | `undefined` | Optional field for dynamic hex color accent. |
-| `DefaultColor` | `string` | `'#38bdf8'` | Fallback accent color. |
+| `ColorField` | `string` | `undefined` | Optional field for a dynamic accent color — a design token is preferred over a hex literal. |
+| `DefaultColor` | `string` | `'var(--mj-brand-primary, #38bdf8)'` | Fallback accent color. Bound to an inline style, so a `var()` token resolves at paint time and follows the active theme. |
 | `ExtraFilter` | `string` | `undefined` | SQL-like filter string applied to the `RunView` query (e.g. `'IsActive = 1'`). |
 | `OrderBy` | `string` | `'Name ASC'` | Sort order for sibling nodes. |
 | `FocusRecordID` | `string` | `undefined` | Initial record ID to focus as subtree root. |

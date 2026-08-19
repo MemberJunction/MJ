@@ -133,7 +133,9 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJBizAppsOrdersOrderHeadersSalesRepUserID', sectionName: 'Order Headers (Sales Rep)', isExpanded: false },
             { sectionKey: 'mJBizAppsAccountingJournalEntryBatchesApprovedByUserID', sectionName: 'Journal Entry Batches (Approved By User ID)', isExpanded: false },
             { sectionKey: 'mJBizAppsOrdersPaymentLines', sectionName: 'Payment Lines', isExpanded: false },
-            { sectionKey: 'mJBizAppsAccountingJournalEntryBatchesBatchedByUserID', sectionName: 'Journal Entry Batches (Batched By User ID)', isExpanded: false }
+            { sectionKey: 'mJBizAppsAccountingJournalEntryBatchesBatchedByUserID', sectionName: 'Journal Entry Batches (Batched By User ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivitySyncConnections', sectionName: 'Activity Sync Connections', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivities', sectionName: 'Activities', isExpanded: false }
         ]);
     }
 }
