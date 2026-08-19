@@ -230,12 +230,8 @@ export class GraphQLFileStorageClient {
             const mutation = gql`
                 mutation CreatePreAuthUploadUrl($input: CreatePreAuthUploadUrlInput!) {
                     CreatePreAuthUploadUrl(input: $input) {
-                        Success
-                        ErrorMessage
                         UploadUrl
                         ProviderKey
-                        HttpMethod
-                        HttpHeadersJSON
                     }
                 }
             `;
@@ -255,22 +251,12 @@ export class GraphQLFileStorageClient {
             }
 
             const data = result.CreatePreAuthUploadUrl;
-            let headers: Record<string, string> | undefined;
-            if (data.HttpHeadersJSON) {
-                try {
-                    headers = JSON.parse(data.HttpHeadersJSON) as Record<string, string>;
-                } catch {
-                    // ignore JSON parse failure
-                }
-            }
 
             return {
-                success: data.Success !== false,
-                errorMessage: data.ErrorMessage,
+                success: !!data.UploadUrl,
                 uploadUrl: data.UploadUrl || '',
                 providerKey: data.ProviderKey,
-                httpMethod: data.HttpMethod || 'PUT',
-                httpHeaders: headers,
+                httpMethod: 'PUT',
             };
         } catch (e) {
             const error = e as Error;

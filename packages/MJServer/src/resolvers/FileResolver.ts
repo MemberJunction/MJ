@@ -178,23 +178,11 @@ export class CreatePreAuthUploadUrlInput {
 
 @ObjectType()
 export class CreatePreAuthUploadUrlPayload {
-  @Field(() => Boolean)
-  Success: boolean;
-
-  @Field(() => String, { nullable: true })
-  ErrorMessage?: string;
-
-  @Field(() => String, { nullable: true })
-  UploadUrl?: string;
+  @Field(() => String)
+  UploadUrl: string;
 
   @Field(() => String, { nullable: true })
   ProviderKey?: string;
-
-  @Field(() => String, { nullable: true })
-  HttpMethod?: string;
-
-  @Field(() => String, { nullable: true })
-  HttpHeadersJSON?: string;
 }
 
 @InputType()
@@ -889,37 +877,22 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
-    try {
-      // Check permissions
-      const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
-      fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+    // Check permissions
+    const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
+    fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
-      await FileStorageEngine.Instance.Config(false, user, md);
-      const driver = await FileStorageEngine.Instance.GetDriver(input.AccountID, user);
-      if (!driver.SupportsPreAuthUpload) {
-        return {
-          Success: false,
-          ErrorMessage: `Storage provider '${driver.constructor.name}' does not support pre-authenticated direct uploads.`,
-        };
-      }
-
-      const result = await driver.CreatePreAuthUploadUrl(input.ObjectName);
-
-      return {
-        Success: true,
-        UploadUrl: result.UploadUrl,
-        ProviderKey: result.ProviderKey,
-        HttpMethod: result.HttpMethod || 'PUT',
-        HttpHeadersJSON: result.HttpHeaders ? JSON.stringify(result.HttpHeaders) : undefined,
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      LogError(`CreatePreAuthUploadUrl failed for '${input.ObjectName}': ${message}`);
-      return {
-        Success: false,
-        ErrorMessage: message,
-      };
+    await FileStorageEngine.Instance.Config(false, user, md);
+    const driver = await FileStorageEngine.Instance.GetDriver(input.AccountID, user);
+    if (!driver.SupportsPreAuthUpload) {
+      throw new Error(`Storage provider '${driver.constructor.name}' does not support pre-authenticated direct uploads.`);
     }
+
+    const result = await driver.CreatePreAuthUploadUrl(input.ObjectName);
+
+    return {
+      UploadUrl: result.UploadUrl,
+      ProviderKey: result.ProviderKey,
+    };
   }
 
   @Mutation(() => Boolean)

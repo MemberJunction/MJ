@@ -152,24 +152,16 @@ const CreateMediaAccessTokenMutationSchema = z.object({
 const CreatePreAuthUploadUrlMutation = gql`
   mutation CreatePreAuthUploadUrl($input: CreatePreAuthUploadUrlInput!) {
     CreatePreAuthUploadUrl(input: $input) {
-      Success
-      ErrorMessage
       UploadUrl
       ProviderKey
-      HttpMethod
-      HttpHeadersJSON
     }
   }
 `;
 
 const CreatePreAuthUploadUrlMutationSchema = z.object({
   CreatePreAuthUploadUrl: z.object({
-    Success: z.boolean().optional(),
-    ErrorMessage: z.string().optional().nullable(),
     UploadUrl: z.string().optional().nullable(),
     ProviderKey: z.string().optional().nullable(),
-    HttpMethod: z.string().optional().nullable(),
-    HttpHeadersJSON: z.string().optional().nullable(),
   }),
 });
 
@@ -680,18 +672,9 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
           const parsedPreAuth = CreatePreAuthUploadUrlMutationSchema.safeParse(preAuthResult);
           if (
             parsedPreAuth.success &&
-            parsedPreAuth.data.CreatePreAuthUploadUrl.Success !== false &&
             parsedPreAuth.data.CreatePreAuthUploadUrl.UploadUrl
           ) {
             const preAuth = parsedPreAuth.data.CreatePreAuthUploadUrl;
-            let customHeaders: Record<string, string> | undefined;
-            if (preAuth.HttpHeadersJSON) {
-              try {
-                customHeaders = JSON.parse(preAuth.HttpHeadersJSON) as Record<string, string>;
-              } catch {
-                // ignore JSON parse error
-              }
-            }
 
             console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Direct binary upload URL obtained. Streaming raw bytes...`);
             this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}) directly to storage...`;
@@ -701,8 +684,6 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
               await this.uploadBinaryDirect(
                 preAuth.UploadUrl,
                 file,
-                preAuth.HttpMethod || 'PUT',
-                customHeaders,
                 (loaded, total) => {
                   const singleFileSlice = 85 / files.length;
                   const currentFileBase = (i / files.length) * 100;
@@ -1291,22 +1272,18 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   private uploadBinaryDirect(
     uploadUrl: string,
     file: File,
-    httpMethod: string = 'PUT',
-    headers?: Record<string, string>,
     onProgress?: (loaded: number, total: number) => void
   ): Promise<boolean> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open(httpMethod, uploadUrl, true);
+      xhr.open('PUT', uploadUrl, true);
 
       // Set standard content type
       xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
 
-      // Set any provider-specific headers (e.g. Azure BlockBlob)
-      if (headers) {
-        for (const [key, value] of Object.entries(headers)) {
-          xhr.setRequestHeader(key, value);
-        }
+      // For Azure Blob Storage SAS uploads, add the required block blob header
+      if (uploadUrl.includes('.blob.core.windows.net')) {
+        xhr.setRequestHeader('x-ms-blob-type', 'BlockBlob');
       }
 
       if (xhr.upload && onProgress) {
