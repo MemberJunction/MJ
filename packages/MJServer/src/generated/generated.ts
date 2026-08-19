@@ -466,6 +466,22 @@ export class MJActionCategory_ {
     @MaxLength(255)
     Parent?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -2052,6 +2068,22 @@ export class MJAction_ {
     @MaxLength(255)
     CreatedByAgent?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -2955,6 +2987,22 @@ export class MJAIAgentCategory_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     DefaultStorageAccount?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
 }
 
@@ -5916,10 +5964,6 @@ export class MJAIAgentNote_ {
     @MaxLength(20)
     ConsolidatedIntoNote?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    RootConsolidatedIntoNoteID?: string;
-        
 }
 
 //****************************************************************************
@@ -7781,6 +7825,18 @@ detailed information about what validation rules failed.`})
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -8256,9 +8312,17 @@ each time the agent processes a prompt step.`})
     @MaxLength(36)
     RootParentRunID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentRunIDDepth?: number;
+        
     @Field({nullable: true}) 
-    @MaxLength(36)
-    RootLastRunID?: string;
+    ParentRunIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentRunIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentRunIDChildCount?: number;
         
 }
 
@@ -9721,10 +9785,6 @@ export class MJAIAgentSession_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     LinkedEntity?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    RootLastSessionID?: string;
         
 }
 
@@ -11311,6 +11371,22 @@ if this limit is exceeded.`})
     @MaxLength(255)
     ConversationSummaryPrompt?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -11937,6 +12013,18 @@ export class MJAIArchitecture_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentArchitectureID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentArchitectureIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentArchitectureIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentArchitectureIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentArchitectureIDChildCount?: number;
         
 }
 
@@ -13145,6 +13233,18 @@ export class MJAIConfiguration_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
 }
 
@@ -16826,9 +16926,17 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
     @Field({nullable: true}) 
-    @MaxLength(36)
-    RootRerunFromPromptRunID?: string;
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
 }
 
@@ -17816,10 +17924,6 @@ export class MJAIPrompt_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     ResultSelectorPrompt?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    RootResultSelectorPromptID?: string;
         
 }
 
@@ -21484,6 +21588,18 @@ export class MJAPIScope_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -23780,6 +23896,18 @@ export class MJArtifactType_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -24875,6 +25003,18 @@ export class MJAuditLogType_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -25777,6 +25917,18 @@ export class MJAuthorization_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
 }
 
@@ -26815,6 +26967,18 @@ export class MJCollection_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
 }
 
@@ -31712,6 +31876,18 @@ export class MJContentItemChunk_ {
     @MaxLength(36)
     RootParentChunkID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentChunkIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentChunkIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentChunkIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentChunkIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -32490,6 +32666,18 @@ export class MJContentItem_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
 }
 
@@ -36091,6 +36279,18 @@ export class MJConversationDetail_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -36814,10 +37014,6 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     LastConversation?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    RootLastConversationID?: string;
         
 }
 
@@ -63313,6 +63509,18 @@ export class MJProject_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -67129,10 +67337,6 @@ export class MJRecordChange_ {
     @Field({nullable: true}) 
     @MaxLength(750)
     RestoredFrom?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    RootRestoredFromID?: string;
         
 }
 
@@ -75628,6 +75832,18 @@ export class MJSkill_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
 }
 
 //****************************************************************************
@@ -81309,6 +81525,18 @@ export class MJTestSuite_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
 }
 
@@ -87014,6 +87242,18 @@ export class MJVersionLabel_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
 }
 

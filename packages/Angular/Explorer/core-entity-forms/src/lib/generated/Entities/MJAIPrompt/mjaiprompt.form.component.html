@@ -134,14 +134,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RootResultSelectorPromptID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -788,10 +780,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Runs (Judge Prompt) Section -->
+    <!-- AI Prompt Runs (Judge) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunsJudgeID"
-        SectionName="AI Prompt Runs (Judge Prompt)"
+        SectionName="AI Prompt Runs (Judge)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
