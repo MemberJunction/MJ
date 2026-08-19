@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MJFileEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -8,29 +8,45 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJFileFormComponent } from '../../generated/Entities/MJFile/mjfile.form.component';
 import { z } from 'zod';
 
-const CreateMediaAccessTokenSchema = z.object({
-  CreateMediaAccessToken: z.object({
-    Success: z.boolean(),
-    ErrorMessage: z.string().nullable().optional(),
-    Token: z.string().nullable().optional(),
-    Url: z.string().nullable().optional(),
-    ExpiresAt: z.string().nullable().optional(),
-    MimeType: z.string().nullable().optional(),
-  }),
-});
-
 const CreateMediaAccessTokenMutation = gql`
   mutation CreateMediaAccessToken($fileId: String!) {
     CreateMediaAccessToken(fileId: $fileId) {
       Success
-      ErrorMessage
       Token
       Url
-      ExpiresAt
       MimeType
+      ErrorMessage
     }
   }
 `;
+
+const CreateMediaAccessTokenMutationSchema = z.object({
+  CreateMediaAccessToken: z.object({
+    Success: z.boolean(),
+    Token: z.string().optional().nullable(),
+    Url: z.string().optional().nullable(),
+    MimeType: z.string().optional().nullable(),
+    ErrorMessage: z.string().optional().nullable(),
+  }),
+});
+
+const DownloadUrlMutation = gql`
+  mutation DownloadUrl($fileId: String!) {
+    DownloadUrl(fileId: $fileId) {
+      Success
+      ErrorMessage
+      Url
+    }
+  }
+`;
+
+const DownloadUrlMutationSchema = z.object({
+  DownloadUrl: z.object({
+    Success: z.boolean(),
+    ErrorMessage: z.string().optional().nullable(),
+    Url: z.string().optional().nullable(),
+  }),
+});
 
 @RegisterClass(BaseFormComponent, 'MJ: Files', 100)
 @Component({
@@ -39,8 +55,10 @@ const CreateMediaAccessTokenMutation = gql`
   templateUrl: './file-form.component.html',
   styleUrls: ['../../../shared/form-styles.css', './file-form.component.css'],
 })
-export class MJFileFormComponentExtended extends MJFileFormComponent implements OnInit, OnDestroy {
+export class MJFileFormComponentExtended extends MJFileFormComponent implements OnInit, OnDestroy, OnChanges {
   public override record!: MJFileEntity;
+
+  public static readonly PREF_SHOW_DETAILS = 'mj.fileViewer.showDetailsSidebar';
 
   public IsLoadingMedia: boolean = true;
   public IsMediaLoaded: boolean = false;
@@ -56,8 +74,15 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
 
   public override async ngOnInit(): Promise<void> {
     await super.ngOnInit();
+    this.RestoreUserPreferences();
     if (this.record?.ID) {
-      await this.LoadMediaPreview();
+      void this.LoadMediaPreview();
+    }
+  }
+
+  public async ngOnChanges(changes: SimpleChanges): Promise<void> {
+    if (changes['record'] && this.record?.ID) {
+      void this.LoadMediaPreview();
     }
   }
 
@@ -66,6 +91,17 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
       clearTimeout(this.mediaTimer);
     }
     super.ngOnDestroy();
+  }
+
+  private RestoreUserPreferences(): void {
+    const saved = UserInfoEngine.Instance.GetSetting(MJFileFormComponentExtended.PREF_SHOW_DETAILS);
+    if (saved !== undefined && saved !== null) {
+      try {
+        this.ShowDetailsSidebar = JSON.parse(saved) === true;
+      } catch {
+        this.ShowDetailsSidebar = saved === 'true';
+      }
+    }
   }
 
   /**
@@ -82,21 +118,33 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
     this.cdr.markForCheck();
 
     try {
-      const result = await GraphQLDataProvider.ExecuteGQL(
+      // 1. Try CreateMediaAccessToken (supports Range headers and browser tab titles)
+      const mediaResult = await GraphQLDataProvider.ExecuteGQL(
         CreateMediaAccessTokenMutation,
         { fileId: this.record.ID }
       );
+      const parsedMedia = CreateMediaAccessTokenMutationSchema.safeParse(mediaResult);
+      if (parsedMedia.success && parsedMedia.data.CreateMediaAccessToken.Success && parsedMedia.data.CreateMediaAccessToken.Url) {
+        this.MediaUrl = parsedMedia.data.CreateMediaAccessToken.Url;
+        this.SafeMediaUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.MediaUrl);
+      } else {
+        // 2. Fallback to DownloadUrl
+        const downloadResult = await GraphQLDataProvider.ExecuteGQL(
+          DownloadUrlMutation,
+          { fileId: this.record.ID }
+        );
+        const parsedDownload = DownloadUrlMutationSchema.safeParse(downloadResult);
+        if (parsedDownload.success && parsedDownload.data.DownloadUrl.Success && parsedDownload.data.DownloadUrl.Url) {
+          this.MediaUrl = parsedDownload.data.DownloadUrl.Url;
+          this.SafeMediaUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.MediaUrl);
+        }
+      }
 
-      const parsed = CreateMediaAccessTokenSchema.safeParse(result);
-      if (parsed.success && parsed.data.CreateMediaAccessToken.Success && parsed.data.CreateMediaAccessToken.Url) {
-        const url = parsed.data.CreateMediaAccessToken.Url;
-        this.MediaUrl = url;
-        this.SafeMediaUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
-
+      if (this.MediaUrl) {
         const mediaType = this.MediaType;
         if (mediaType === 'text') {
           try {
-            const resp = await window.fetch(url);
+            const resp = await window.fetch(this.MediaUrl);
             if (resp.ok) {
               this.TextContent = await resp.text();
             }
@@ -177,6 +225,10 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
 
   public ToggleDetailsSidebar(): void {
     this.ShowDetailsSidebar = !this.ShowDetailsSidebar;
+    UserInfoEngine.Instance.SetSettingDebounced(
+      MJFileFormComponentExtended.PREF_SHOW_DETAILS,
+      JSON.stringify(this.ShowDetailsSidebar)
+    );
   }
 
   public ToggleViewMode(): void {

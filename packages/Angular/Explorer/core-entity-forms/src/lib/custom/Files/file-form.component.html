@@ -29,10 +29,12 @@
           <i class="fa-solid fa-circle-info"></i>
           <span>{{ ShowDetailsSidebar ? 'Hide Details' : 'Details' }}</span>
         </button>
-        <button type="button" mjButton variant="tertiary" size="sm" (click)="ToggleViewMode()" title="Switch to full record editor">
-          <i class="fa-solid fa-pen-to-square"></i>
-          <span>Edit Record</span>
-        </button>
+        @if (UserCanEdit) {
+          <button type="button" mjButton variant="tertiary" size="sm" (click)="ToggleViewMode()" title="Switch to full record editor">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>Edit Record</span>
+          </button>
+        }
       </div>
     </header>
 
