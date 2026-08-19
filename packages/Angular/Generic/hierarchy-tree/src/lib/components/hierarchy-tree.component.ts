@@ -360,10 +360,11 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
             }
 
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const defaultOrderBy = `${this.resolveNameFieldName()} ASC`;
             const rvParams = {
                 EntityName: targetEntityName,
                 ExtraFilter: this.Config.ExtraFilter || '',
-                OrderBy: this.Config.OrderBy || 'Name ASC',
+                OrderBy: this.Config.OrderBy || defaultOrderBy,
                 ResultType: 'simple' as const,
                 MaxRows: this.Config.MaxRows ?? 0
             };
