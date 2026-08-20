@@ -19,7 +19,6 @@ export class MJAIArchitectureFormComponent extends BaseFormComponent {
             { sectionKey: 'coreArchitecture', sectionName: 'Core Architecture', isExpanded: true },
             { sectionKey: 'hierarchy', sectionName: 'Hierarchy', isExpanded: true },
             { sectionKey: 'publicationReferences', sectionName: 'Publication & References', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIArchitectures', sectionName: 'AI Architectures', isExpanded: false },
             { sectionKey: 'mJAIModelArchitectures', sectionName: 'AI Model Architectures', isExpanded: false }

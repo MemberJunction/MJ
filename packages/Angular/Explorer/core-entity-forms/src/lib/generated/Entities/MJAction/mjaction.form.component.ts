@@ -20,7 +20,6 @@ export class MJActionFormComponent extends BaseFormComponent {
             { sectionKey: 'definitionPrompting', sectionName: 'Definition & Prompting', isExpanded: true },
             { sectionKey: 'codeApproval', sectionName: 'Code & Approval', isExpanded: true },
             { sectionKey: 'displayExecution', sectionName: 'Display & Execution', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJActionParams', sectionName: 'Params', isExpanded: false },
             { sectionKey: 'mJActionLibraries', sectionName: 'Libraries', isExpanded: false },

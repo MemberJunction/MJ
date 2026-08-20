@@ -171,14 +171,14 @@
     <mj-collapsible-panel
         SectionKey="taskExecutionData"
         SectionName="Task Execution Data"
-        Icon="fa fa-terminal"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="InputPayload"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -186,7 +186,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="OutputPayload"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

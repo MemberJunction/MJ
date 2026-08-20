@@ -31,9 +31,30 @@
 -- declare, positional save-capture misaligns, every write to an affected entity fails,
 -- and `mj sync push` -- a required CI step -- dies partway through.
 --
--- The repeatable R__RefreshMetadata still runs afterwards and removes the two Root*
--- columns this regeneration drops (MJ: AI Agent Notes.RootConsolidatedIntoNoteID,
--- MJ: AI Agent Runs.RootLastRunID); neither has any TypeScript consumer.
+-- DROPPED VIEW COLUMNS -- read before merging. The OLD CodeGen emitted a Root<Field>
+-- column for ANY self-referencing FK; the NEW one emits it only for fields seeded
+-- IsHierarchy=true. NINE Root* columns therefore leave the base views (43 -> 34 across
+-- the schema, measured against a pre-PR baseline database):
+--
+--   RootConsolidatedIntoNoteID   RootDefaultCoAgentID       RootLastConversationID
+--   RootLastRunID                RootLastSessionID          RootMergedIntoTagID
+--   RootRerunFromPromptRunID     RootRestoredFromID         RootResultSelectorPromptID
+--
+-- None has an in-repo consumer (TypeScript, metadata or queries), and R__RefreshMetadata
+-- removes their EntityField rows once the columns leave the views. But saved User Views,
+-- ad-hoc queries and downstream OpenApps referencing them get "Invalid column name" with
+-- no warning. Re-seeding any of these fields as IsHierarchy=true restores its Root column
+-- and adds the four hierarchy columns alongside it.
+--
+-- APPLIES TO FRESH / MIGRATIONS-ONLY DATABASES. The Form Chrome Rules provisioning below
+-- is CodeGen's unguarded "new entity" output: it assumes the Entity row and the
+-- __mj_CreatedAt/__mj_UpdatedAt columns do not exist yet, which holds for CI, for fresh
+-- installs, and for any database built from migrations alone (V202608151200 creates the
+-- table but deliberately leaves that metadata to CodeGen). It does NOT hold on a dev box
+-- that ran `mj codegen` locally after migrating next -- there it fails with "Column names
+-- in each table must be unique". Accepted deliberately: v6.1.x is unreleased and the
+-- table is days old, so that population is local dev databases only, each of which can
+-- re-migrate from scratch.
 --
 -- NOT COVERED, deliberately: MJ: Employees.SupervisorID and MJ: Entities.ParentID. Both
 -- are self-referencing FKs with single-column PKs, but both entities have
