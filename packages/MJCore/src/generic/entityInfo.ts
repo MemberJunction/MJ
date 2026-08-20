@@ -994,6 +994,8 @@ export class EntityFieldInfo extends BaseInfo {
     private _valueListValuesForDisplay: string | undefined = undefined;
     /** Latches the broken-metadata error so a bulk load cannot emit it once per row. */
     private _loggedEmptyValueList: boolean = false;
+    /** Latches the unsupported-value-type error for the same reason. */
+    private _loggedUnsupportedValueListType: boolean = false;
     _EntityFieldValues: EntityFieldValueInfo[];
     _RelatedEntityNameFieldMap: string
     /**
@@ -1152,6 +1154,23 @@ export class EntityFieldInfo extends BaseInfo {
             return true;
         }
         if (typeof value !== 'string' && typeof value !== 'number') {
+            // null/undefined is entirely normal — an unset nullable field, or a new record — and
+            // belongs to the nullability check, so it passes quietly. ANY other type means the rule
+            // cannot be applied at all, and that is a mismatch rather than a state to absorb: either
+            // the field should not declare a value list (a value list on a bit or date column; zero
+            // exist in practice) or a caller assigned the wrong type. Skipping it silently would
+            // leave the caller believing a guard is on when it is not, which is the exact failure
+            // mode this rung was added to fix — so it is reported, once per field.
+            if (value !== null && value !== undefined && !this._loggedUnsupportedValueListType) {
+                this._loggedUnsupportedValueListType = true;
+                LogError(
+                    `Entity field ${this.Entity}.${this.Name} has ValueListType='List' but was given a ` +
+                    `${typeof value} value (SQL type ${this.SQLFullType}). Value-list validation compares ` +
+                    `string and number values only — comparing anything else would reject legal values ` +
+                    `rather than guard them — so it is being SKIPPED for this field. Either the field's ` +
+                    `metadata should not declare a value list, or the caller is assigning the wrong type.`
+                );
+            }
             return true;
         }
 

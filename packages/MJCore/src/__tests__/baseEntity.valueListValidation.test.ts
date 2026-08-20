@@ -269,10 +269,42 @@ describe('EntityField.Validate — value lists (#3969)', () => {
             expect(result.Errors[0].Message).not.toContain('Value25');
         });
 
-        it('ignores non-scalar values rather than stringifying them', () => {
-            // Dates/objects with a value list are nonsense metadata; never manufacture a failure.
-            const result = new EntityField(makeFieldInfo(), new Date('2026-01-01')).Validate();
-            expect(result.Errors.filter(e => e.Message.includes('must be one of'))).toHaveLength(0);
+        it('permits a non-scalar value rather than stringifying it, but reports it once', () => {
+            // Dates/objects/booleans with a value list are nonsense metadata; comparing them would
+            // reject legal values rather than guard them. Permitted — but not in silence, since a
+            // caller would otherwise believe the guard is on when it is not.
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const fieldInfo = makeFieldInfo();
+
+                for (const bad of [new Date('2026-01-01'), true, { a: 1 }]) {
+                    const result = new EntityField(fieldInfo, bad as never).Validate();
+                    expect(result.Errors.filter(e => e.Message.includes('must be one of'))).toHaveLength(0);
+                }
+
+                expect(consoleError).toHaveBeenCalledTimes(1);
+                expect(String(consoleError.mock.calls[0][0])).toContain('Value-list validation compares');
+            } finally {
+                consoleError.mockRestore();
+            }
+        });
+
+        it('says nothing for null or undefined — an unset field is not an anomaly', () => {
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const fieldInfo = makeFieldInfo();
+                const nullField = new EntityField(fieldInfo);
+                nullField.Value = null;
+                expect(nullField.Validate().Success).toBe(true);
+
+                const undefinedField = new EntityField(fieldInfo);
+                undefinedField.Value = undefined;
+                expect(undefinedField.Validate().Success).toBe(true);
+
+                expect(consoleError).not.toHaveBeenCalled();
+            } finally {
+                consoleError.mockRestore();
+            }
         });
     });
 });
