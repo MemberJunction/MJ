@@ -920,6 +920,19 @@ export abstract class BaseEntity<T = unknown> {
     private _pendingDelete$: Observable<boolean> | null = null;
 
     /**
+     * True while a delete plan that already validated this record is executing.
+     *
+     * A plan validates every node BEFORE the first row is deleted (companion children hold the
+     * foreign keys, so they go first, and a refusal found later can cost data on a provider with no
+     * local transaction). This flag is what keeps the per-record gate in `_InnerDelete` from running
+     * the same rules a second time — which would double whatever query an application's
+     * `ValidateDeleteAsync` performs.
+     *
+     * @see validateAndDeleteGraph
+     */
+    private _deleteValidated: boolean = false;
+
+    /**
      * Lazy `Map<fieldName, EntityField>` cache for O(1) `GetFieldByName()` lookups. Populated
      * on first call and cleared on `init()` so re-initialized entities rebuild fresh. Replaces
      * the previous O(N) `_Fields.find()` scan that dominated `SetMany`/setter/serialization paths.
@@ -1964,6 +1977,56 @@ export abstract class BaseEntity<T = unknown> {
     private async deleteGraph(plan: EntitySavePlan, options?: EntityDeleteOptions): Promise<boolean> {
         this.RaiseEvent('graph_save_started', { NodeCount: plan.NodeCount, Operation: 'Delete' });
         return this.executeGraphLocal(plan, undefined, options, 'delete');
+    }
+
+    /**
+     * Validates an entire delete plan, then executes it.
+     *
+     * Delete plans run **children first** — the foreign keys point at the row about to disappear —
+     * so validating each node when its turn came would mean a refusal discovered by the ROOT had
+     * already deleted every child. Inside a provider transaction that rolls back; on a client
+     * provider `executeGraphLocal` holds no transaction at all, so it is permanent. The refusal
+     * would cost exactly the data it existed to protect.
+     *
+     * So every node is validated up front, all errors are collected (a user should see everything
+     * blocking the delete, not the first thing found), and the nodes are flagged so the per-record
+     * gate in `_InnerDelete` does not re-run rules that may each carry a query.
+     *
+     * @param plan - The planned unit of work, children first.
+     * @param options - Delete options forwarded to every node.
+     * @returns True when the whole graph completed; false when validation refused it or it failed.
+     */
+    private async validateAndDeleteGraph(plan: EntitySavePlan, options?: EntityDeleteOptions): Promise<boolean> {
+        const startedAt = new Date();
+        const _options: EntityDeleteOptions = options ? options : new EntityDeleteOptions();
+        // Distinct entities only: a plan can legitimately name the same record twice (a child both
+        // present and pending-removal), and its rules should not run twice for that.
+        const nodes = [...new Set(plan.Nodes.filter(n => n.Operation === 'Delete').map(n => n.Entity))];
+
+        const combined = new ValidationResult();
+        combined.Success = true;
+        for (const node of nodes) {
+            const nodeResult = await node.runDeleteValidation(_options);
+            combined.Success = combined.Success && nodeResult.Success;
+            nodeResult.Errors.forEach(error => combined.Errors.push(error));
+        }
+        if (!combined.Success) {
+            // No `graph_save` event: nothing started, so `graph_save_started` never fired and a
+            // completion event with no beginning would be worse than silence. The refusal is on the
+            // result history, exactly where the single-record path leaves it.
+            this.registerDeleteValidationFailure(combined, startedAt);
+            return false;
+        }
+
+        nodes.forEach(node => node._deleteValidated = true);
+        try {
+            return await this.deleteGraph(plan, _options);
+        }
+        finally {
+            // Cleared unconditionally: a retried delete after a failed graph must validate again,
+            // and an entity left flagged would silently skip its own rules forever.
+            nodes.forEach(node => node._deleteValidated = false);
+        }
     }
 
     /**
@@ -4261,6 +4324,161 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Delete-side counterpart of {@link Validate}. Override this to refuse a delete **with a
+     * reason**.
+     *
+     * Called by `Delete()` before any provider work, exactly as `Validate()` is called by `Save()`:
+     * a result whose `Success` is false aborts the delete, and its `Errors` are recorded on the
+     * entity's `LatestResult` so the caller — a form, an agent, a Remote Operation — can show the
+     * user *why*. `ValidationErrorInfo.Source` names the field or relationship that blocks it, which
+     * is how MJ's forms mark the offending field, and `ValidationErrorType.Warning` entries are
+     * advice rather than a refusal (only `Success` governs).
+     *
+     * This exists because the alternative was overriding `Delete()` itself, checking by hand, and
+     * returning `false` — which throws the explanation away (a `boolean` has nowhere to put "this
+     * template is referenced by 5 signed contracts"), covers only callers that reach that
+     * subclass's method, and gives no guarantee about ordering relative to permissions, events or
+     * the companion delete graph. Applications had reimplemented that pattern once per entity, each
+     * slightly differently.
+     *
+     * Ordering guarantees, so a rule written here is not surprised:
+     * - **Permissions are checked first.** A user without delete rights gets a permission error, not
+     *   a validation message.
+     * - **Nothing has been written or raised yet.** `delete_started` has not fired and no row —
+     *   including the companion children a delete plan would remove first — has been touched.
+     * - **Every node of a companion delete plan is validated before the first row goes.** Children
+     *   hold the foreign keys and are deleted first, so a refusal discovered at the root's own turn
+     *   would already have removed them; on a client provider (no local transaction) that is
+     *   permanent. See {@link Delete}.
+     *
+     * The base implementation returns success. `EntityDeleteOptions.ReplayOnly` bypasses it, exactly
+     * as it bypasses `Validate()` on the save side.
+     *
+     * @example
+     * ```typescript
+     * public override ValidateDelete(): ValidationResult {
+     *     const result = super.ValidateDelete();
+     *     if (this.Status === 'Posted') {
+     *         result.Success = false;
+     *         result.Errors.push(new ValidationErrorInfo('Status',
+     *             'A posted journal entry cannot be deleted. Reverse it instead.', this.Status));
+     *     }
+     *     return result;
+     * }
+     * ```
+     *
+     * @returns The validation result. `Success: false` refuses the delete.
+     * @see {@link ValidateDeleteAsync} for checks that need a query.
+     */
+    public ValidateDelete(): ValidationResult {
+        // Default implementation just returns success. Subclasses override to refuse a delete.
+        const result = new ValidationResult();
+        result.Success = true;
+        return result;
+    }
+
+    /**
+     * Asynchronous half of the delete-validation seam — for the refusals that need a query, which
+     * is most of them ("referenced by N signed contracts" is a count, not a field check).
+     *
+     * **Overriding this method is what turns it on.** There is no second flag to find. That is a
+     * deliberate departure from the save side, where {@link DefaultSkipAsyncValidation} defaults to
+     * `true` and silently made hand-written `ValidateAsync` overrides dead code — the failure mode
+     * documented on that getter. To suppress the async half for one call, pass
+     * `SkipAsyncValidation: true` in the delete options; that flag never suppresses the synchronous
+     * {@link ValidateDelete}.
+     *
+     * Runs after `ValidateDelete()`, and **both** run: errors from the two halves are combined so
+     * the user sees everything blocking the delete in one pass rather than one reason at a time.
+     *
+     * @example
+     * ```typescript
+     * public override async ValidateDeleteAsync(): Promise<ValidationResult> {
+     *     const result = await super.ValidateDeleteAsync();
+     *     const rv = new RunView();
+     *     const used = await rv.RunView({ EntityName: 'Contracts',
+     *         ExtraFilter: `TemplateID='${this.ID}'`, ResultType: 'count_only' }, this.ContextCurrentUser);
+     *     if (used.TotalRowCount > 0) {
+     *         result.Success = false;
+     *         result.Errors.push(new ValidationErrorInfo('ID',
+     *             `This template is referenced by ${used.TotalRowCount} contract(s).`, this.ID));
+     *     }
+     *     return result;
+     * }
+     * ```
+     *
+     * @returns A promise for the validation result. `Success: false` refuses the delete.
+     * @see {@link ValidateDelete}
+     */
+    public async ValidateDeleteAsync(): Promise<ValidationResult> {
+        // Default implementation just returns success
+        // Subclasses should override this to perform actual async delete validation
+        const result = new ValidationResult();
+        result.Success = true;
+        return result;
+    }
+
+    /**
+     * Runs both halves of the delete-validation seam for this record and combines the outcome.
+     *
+     * @param options - The delete options in force; `ReplayOnly` bypasses validation entirely and
+     *                  `SkipAsyncValidation` governs the async half only.
+     * @returns The combined result. Errors from both halves are present.
+     */
+    private async runDeleteValidation(options: EntityDeleteOptions): Promise<ValidationResult> {
+        const result = new ValidationResult();
+        if (options.ReplayOnly) {
+            result.Success = true; // bypassing validation, same as _InnerSave does for a replay
+            return result;
+        }
+
+        const syncResult = this.ValidateDelete();
+        result.Success = syncResult.Success;
+        syncResult.Errors.forEach(error => result.Errors.push(error));
+
+        // Only the ASYNC half is optional, and only the caller's explicit flag can turn it off.
+        // Otherwise it runs precisely when a subclass wrote something to run — see the note on
+        // ValidateDeleteAsync for why this is not routed through DefaultSkipAsyncValidation.
+        const skipAsync = options.SkipAsyncValidation !== undefined
+            ? options.SkipAsyncValidation
+            : !IsMemberOverridden(this, 'ValidateDeleteAsync', BaseEntity);
+
+        if (!skipAsync) {
+            // Run even when the sync half already failed, so the caller gets every reason at once.
+            const asyncResult = await this.ValidateDeleteAsync();
+            result.Success = result.Success && asyncResult.Success;
+            asyncResult.Errors.forEach(error => result.Errors.push(error));
+        }
+
+        return result;
+    }
+
+    /**
+     * Records a refused delete on this entity's result history.
+     *
+     * The whole point of the seam is that the reason survives, so both `Errors` (field-named, for a
+     * form) and `Message` (for a caller that only logs) are populated. Note the save path leaves
+     * `Message` null on a validation failure because it throws the `ValidationResult` into a catch
+     * block that reads `e.message`; nothing here needs to repeat that.
+     *
+     * @param valResult - The failing validation result.
+     * @param startedAt - When the delete attempt began.
+     */
+    private registerDeleteValidationFailure(valResult: ValidationResult, startedAt: Date): void {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'delete';
+        result.Message =
+            valResult.Errors.map(e => e?.Message).filter(Boolean).join('; ') ||
+            `Delete of ${this.EntityInfo?.Name} was refused by validation`;
+        result.Errors = valResult.Errors;
+        result.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+        result.StartedAt = startedAt;
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
+    }
+
+    /**
      * This method deletes a record from the database. You must call Load() first in order to load the context of the record you are deleting.
      *
      * Debounces multiple calls so that if Delete() is called again while a delete is in progress,
@@ -4275,7 +4493,7 @@ export abstract class BaseEntity<T = unknown> {
         if (this.HasCompanions) {
             const plan = this.BuildDeletePlan();
             if (plan.NodeCount > 1) {
-                return this.deleteGraph(plan, options);
+                return this.validateAndDeleteGraph(plan, options);
             }
         }
 
@@ -4365,6 +4583,29 @@ export abstract class BaseEntity<T = unknown> {
                 await this.beginEntityTransactionScope(isISAInitiator);
 
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
+
+                // Delete-side counterpart of the Validate()/ValidateAsync() gate in _InnerSave, and
+                // placed to match it: AFTER permissions (a user without delete rights gets a
+                // permission error, not a validation message) and BEFORE any provider work or the
+                // delete_started event — nothing "started", so nothing should be announced.
+                //
+                // Skipped when a delete plan already validated this record: the plan validates every
+                // node up front, because companion children are deleted BEFORE the root and a
+                // refusal discovered on the root's own turn would have already removed them. See
+                // Delete().
+                if (!this._deleteValidated) {
+                    const valResult = await this.runDeleteValidation(_options);
+                    if (!valResult.Success) {
+                        // Settle the scope opened above, then report the refusal the way the seam
+                        // exists to report it: field-named errors the caller can put in front of a
+                        // user, not a bare `false`.
+                        await this.rollbackEntityTransactionScope();
+                        if (currentResultCount === this.ResultHistory.length) {
+                            this.registerDeleteValidationFailure(valResult, newResult.StartedAt);
+                        }
+                        return false;
+                    }
+                }
 
                 // Raise delete_started event before the actual delete operation begins
                 this.RaiseEvent('delete_started', null);

@@ -422,7 +422,9 @@ export class EntityDeleteOptions {
     SkipEntityActions?: boolean = false;
 
     /**
-     * When set to true, the save operation will BYPASS Validate() and the actual process of deleting the record from the database but WILL invoke any associated actions (AI Actions, Entity Actions, etc...)
+     * When set to true, the delete operation will BYPASS validation ({@link BaseEntity.ValidateDelete}
+     * and {@link BaseEntity.ValidateDeleteAsync}) and the actual process of deleting the record from
+     * the database, but WILL invoke any associated actions (AI Actions, Entity Actions, etc...)
      * Subclasses can also override the Delete() method to provide custom logic that will be invoked when ReplayOnly is set to true
      */
     ReplayOnly?: boolean = false;
@@ -433,6 +435,24 @@ export class EntityDeleteOptions {
      * then cascades deletion to its parent.
      */
     IsParentEntityDelete?: boolean = false;
+
+    /**
+     * Controls whether {@link BaseEntity.ValidateDeleteAsync} runs for this delete. When set, it
+     * wins outright.
+     *
+     * Left undefined — the normal case — async delete validation runs if, and only if, a subclass
+     * overrode `ValidateDeleteAsync`. Overriding the method IS the request to run it. This is
+     * deliberately NOT routed through {@link BaseEntity.DefaultSkipAsyncValidation}: that getter
+     * defaults to `true`, which is exactly what made hand-written `ValidateAsync` overrides silent
+     * no-ops on the save side.
+     *
+     * Note this governs only the ASYNC half. A synchronous {@link BaseEntity.ValidateDelete} refusal
+     * always applies — an opt-out of expensive rules must not become a way to delete a row the
+     * entity said could not be deleted.
+     *
+     * @see EntitySaveOptions.SkipAsyncValidation
+     */
+    SkipAsyncValidation?: boolean;
 
     /**
      * Cycle guard for the delete graph. Delete-path counterpart of
