@@ -369,11 +369,21 @@ export class EntityField {
             //     outside the list, so validating it would break every field that opted into free text.
             //   * An empty value list never rejects anything — a field marked `List` whose
             //     EntityFieldValue rows have not been populated is missing metadata, not a rule.
-            //   * Null/blank belongs to the nullability check above, so one mistake never produces
-            //     two errors.
+            //   * Null/undefined belongs to the nullability check above, so one mistake never
+            //     produces two errors. An EMPTY or whitespace-only string does NOT: SQL Server pads
+            //     on comparison, so `''` and `'   '` are the same value to a CHECK constraint and it
+            //     refuses both. Skipping them here would leave a hole exactly where a blanked-out
+            //     field lands, so both are validated and both fail — while `null` (a genuinely unset
+            //     value, legal on a nullable column) is left alone.
+            // The typeof gate is deliberately narrow and fails OPEN: every value list in MJ metadata
+            // today is on an nvarchar/nchar column, CodeGen's constraint parser only ever produces
+            // string values, and the one place a non-string list is anticipated is the generated
+            // union type (via NeedsQuotes), which is numeric. Booleans and Dates are excluded on
+            // purpose — a bit column carrying a '1'/'0' list would see String(true) === 'true' and
+            // reject every legal value, so an unsupported type skips validation rather than
+            // manufacturing a failure.
             if (ef.ValueListTypeEnum === EntityFieldValueListType.List &&
-                (typeof this.Value === 'string' || typeof this.Value === 'number') &&
-                String(this.Value).trim().length > 0) {
+                (typeof this.Value === 'string' || typeof this.Value === 'number')) {
                 const allowedValues = ef.EntityFieldValues;
                 if (allowedValues && allowedValues.length > 0) {
                     // Compared case-insensitively, trimmed, and as strings, all deliberately:
@@ -404,7 +414,8 @@ export class EntityField {
                             `${values.slice(0, EntityField.MaxValueListValuesInErrorMessage).join(', ')}, ... (${values.length} total)` :
                             values.join(', ');
                         result.Success = false;
-                        result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${shown}. Current value is '${this.Value}'`, this.Value));
+                        const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
+                        result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${shown}${nullNote}. Current value is '${this.Value}'`, this.Value));
                     }
                 }
             }

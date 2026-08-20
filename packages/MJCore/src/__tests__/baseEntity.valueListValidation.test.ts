@@ -109,7 +109,7 @@ describe('EntityField.Validate — value lists (#3969)', () => {
         expect(result.Errors).toHaveLength(0);
     });
 
-    it('leaves null to the nullability check on a nullable field (no error at all)', () => {
+    it('leaves null alone on a nullable field — null is genuine absence, unlike \'\'', () => {
         const field = new EntityField(makeFieldInfo());
         field.Value = null;
 
@@ -131,9 +131,35 @@ describe('EntityField.Validate — value lists (#3969)', () => {
         expect(result.Errors[0].Message).toContain('cannot be null');
     });
 
-    it('treats an empty string as absence, not as an out-of-list value', () => {
-        const result = new EntityField(makeFieldInfo(), '').Validate();
-        expect(result.Errors.filter(e => e.Message.includes('must be one of'))).toHaveLength(0);
+    it('rejects a whitespace-only value — the CHECK constraint refuses it too', () => {
+        // A blanked-out field is exactly where a bad value lands, so it must not slip through as
+        // "absence". SQL Server pads on comparison, so '   ' is the same value as '' to a CHECK.
+        const result = new EntityField(makeFieldInfo(), '   ').Validate();
+        expect(result.Success).toBe(false);
+        expect(result.Errors[0].Source).toBe('Status');
+    });
+
+    it('rejects an empty string for the same reason', () => {
+        // NOTE: assigned after construction — the EntityField constructor ignores a falsy initial
+        // value, so `new EntityField(fi, '')` would leave the field null, not empty.
+        const field = new EntityField(makeFieldInfo());
+        field.Value = '';
+
+        const result = field.Validate();
+
+        expect(result.Success).toBe(false);
+        expect(result.Errors[0].Message).toContain('must be one of');
+    });
+
+    it('names null as the alternative when the column is nullable', () => {
+        // Because '' is now refused, the message has to say what "no value" actually looks like.
+        const nullable = new EntityField(makeFieldInfo());
+        nullable.Value = '';
+        expect(nullable.Validate().Errors[0].Message).toContain('(or null)');
+
+        const notNull = new EntityField(makeFieldInfo({ AllowsNull: false }));
+        notNull.Value = '';
+        expect(notNull.Validate().Errors[0].Message).not.toContain('(or null)');
     });
 
     it('does not validate read-only fields (SkipValidation covers the whole ladder)', () => {
