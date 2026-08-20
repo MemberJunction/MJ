@@ -364,7 +364,7 @@ export class EntityField {
             // every path that is not a form: metadata sync, GraphQL mutations, an entity subclass
             // setting the field in code, an Action, or a migration-time data load.
             //
-            // Three boundaries keep the rule safe to apply everywhere:
+            // Four boundaries keep the rule safe to apply everywhere:
             //   * `ListOrUserEntry` is never checked — that mode exists precisely to permit values
             //     outside the list, so validating it would break every field that opted into free text.
             //   * An empty value list never rejects anything — a field marked `List` whose
@@ -375,13 +375,18 @@ export class EntityField {
             //     refuses both. Skipping them here would leave a hole exactly where a blanked-out
             //     field lands, so both are validated and both fail — while `null` (a genuinely unset
             //     value, legal on a nullable column) is left alone.
-            // The typeof gate is deliberately narrow and fails OPEN: every value list in MJ metadata
-            // today is on an nvarchar/nchar column, CodeGen's constraint parser only ever produces
-            // string values, and the one place a non-string list is anticipated is the generated
-            // union type (via NeedsQuotes), which is numeric. Booleans and Dates are excluded on
-            // purpose — a bit column carrying a '1'/'0' list would see String(true) === 'true' and
-            // reject every legal value, so an unsupported type skips validation rather than
-            // manufacturing a failure.
+            //   * Only string and number values are checked, and the gate fails OPEN — an
+            //     unsupported type skips validation rather than manufacturing a failure. Nothing in
+            //     the schema restricts which columns may carry a value list
+            //     (`CK_EntityField_ValueListType_New` constrains the mode, not the column type), but
+            //     in practice every one is a string column: measured on a current 6.x instance,
+            //     455 nvarchar + 7 nchar and nothing else, which follows from CodeGen's constraint
+            //     parser only ever extracting quoted literals. `number` is admitted because the
+            //     generated union type anticipates a non-quoted list via NeedsQuotes. Booleans and
+            //     Dates are excluded deliberately: a bit column carrying a '1'/'0' list would see
+            //     String(true) === 'true' and reject every legal value, and a Date has no sane
+            //     string form to compare — so guessing there would break saves rather than guard
+            //     them.
             if (ef.ValueListTypeEnum === EntityFieldValueListType.List &&
                 (typeof this.Value === 'string' || typeof this.Value === 'number')) {
                 const allowedValues = ef.EntityFieldValues;
@@ -391,7 +396,7 @@ export class EntityField {
                     //     value-list values in fixed-width `nchar(n)` columns, so the value read
                     //     back is space-padded while the metadata value is not. Measured on a
                     //     current 6.x instance database, an untrimmed comparison would have rejected
-                    //     9,306 existing rows — `MJ: Action Params`.Type (`"Input     "`),
+                    //     9,301 existing rows — `MJ: Action Params`.Type (`"Input     "`),
                     //     `MJ: Record Changes`.Status (`"Complete       "`),
                     //     `MJ: Entity Relationships`.Type, `MJ: Authorization Roles`.Type and
                     //     `MJ: Users`.Type — i.e. it would break saves on MJ core itself. Every one
