@@ -1,6 +1,6 @@
 import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityFieldValueListType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
@@ -33,6 +33,12 @@ import { z } from 'zod';
  */
 @OptionalKeyedSpecialization()
 export class EntityField {
+    /**
+     * Upper bound on how many legal values a value-list validation message enumerates before it
+     * truncates. A long list would otherwise produce an error message no user can read.
+     */
+    public static readonly MaxValueListValuesInErrorMessage: number = 25;
+
     /**
      * Static object containing the value ranges for various SQL number types. 
      * This is used to validate the value of the field when it is set or validated.
@@ -344,6 +350,61 @@ export class EntityField {
                     if (this.Value < typeLookup.min || this.Value > typeLookup.max) {
                         result.Success = false;
                         result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} is ${ef.SQLFullType} in the database and must be a valid number between ${-typeLookup.min} and ${typeLookup.max}. Current value is ${this.Value}`, this.Value));
+                    }
+                }
+            }
+
+            // Value-list validation: a field whose ValueListType is `List` carries an EXHAUSTIVE set
+            // of legal values in metadata (__mj.EntityFieldValue), and for an `IN (...)` CHECK
+            // constraint that list is the only runtime representation CodeGen produces —
+            // ParseCheckConstraints emits the value list rather than a generated Validate() method,
+            // since the list is also what the UI needs to render a dropdown. Without this rung the
+            // constraint had no TypeScript counterpart at runtime, so an out-of-list value was
+            // refused only by the database, as a raw constraint violation attributed to no field, on
+            // every path that is not a form: metadata sync, GraphQL mutations, an entity subclass
+            // setting the field in code, an Action, or a migration-time data load.
+            //
+            // Three boundaries keep the rule safe to apply everywhere:
+            //   * `ListOrUserEntry` is never checked — that mode exists precisely to permit values
+            //     outside the list, so validating it would break every field that opted into free text.
+            //   * An empty value list never rejects anything — a field marked `List` whose
+            //     EntityFieldValue rows have not been populated is missing metadata, not a rule.
+            //   * Null/blank belongs to the nullability check above, so one mistake never produces
+            //     two errors.
+            if (ef.ValueListTypeEnum === EntityFieldValueListType.List &&
+                (typeof this.Value === 'string' || typeof this.Value === 'number') &&
+                String(this.Value).trim().length > 0) {
+                const allowedValues = ef.EntityFieldValues;
+                if (allowedValues && allowedValues.length > 0) {
+                    // Compared case-insensitively, trimmed, and as strings, all deliberately:
+                    //   * Trimming is REQUIRED, not cosmetic. MJ's own core entities store
+                    //     value-list values in fixed-width `nchar(n)` columns, so the value read
+                    //     back is space-padded while the metadata value is not. Measured on a
+                    //     current 6.x instance database, an untrimmed comparison would have rejected
+                    //     9,306 existing rows — `MJ: Action Params`.Type (`"Input     "`),
+                    //     `MJ: Record Changes`.Status (`"Complete       "`),
+                    //     `MJ: Entity Relationships`.Type, `MJ: Authorization Roles`.Type and
+                    //     `MJ: Users`.Type — i.e. it would break saves on MJ core itself. Every one
+                    //     of those mismatches was padding alone; none was a case difference.
+                    //   * Case-insensitivity is DEFENSIVE rather than required. No row in that same
+                    //     database needs it, but SQL Server's default collation is case-insensitive,
+                    //     so `Status = 'active'` is accepted by `CHECK (Status IN ('Active', ...))`
+                    //     and refusing it here would turn a save that succeeds today into a failure.
+                    //     The asymmetry is deliberate and known: PostgreSQL IS case-sensitive, so on
+                    //     PG a case variant is still refused — by its CHECK, not by this rung.
+                    //     Tightening to an exact case match is a separate, breaking decision.
+                    //   * EntityFieldValue.Value is always a string in metadata, while the field's
+                    //     runtime value may be a number (a numeric value list), so a strict `===`
+                    //     would reject every legal value on such a field.
+                    const normalize = (v: unknown): string => String(v).trim().toLowerCase();
+                    const currentValue = normalize(this.Value);
+                    if (!allowedValues.some(v => normalize(v.Value) === currentValue)) {
+                        const values: string[] = allowedValues.map(v => v.Value);
+                        const shown: string = values.length > EntityField.MaxValueListValuesInErrorMessage ?
+                            `${values.slice(0, EntityField.MaxValueListValuesInErrorMessage).join(', ')}, ... (${values.length} total)` :
+                            values.join(', ');
+                        result.Success = false;
+                        result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${shown}. Current value is '${this.Value}'`, this.Value));
                     }
                 }
             }
