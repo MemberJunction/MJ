@@ -98,33 +98,6 @@ describe('BaseEntityResult.CompleteMessage', () => {
         expect(result.CompleteMessage).not.toContain('"');
     });
 
-    it('does not say the same thing twice when Message was built out of Errors', () => {
-        // Exactly what `_InnerSave`/`_InnerDelete` leave behind on an IS-A parent failure: the
-        // summary Message is composed FROM the errors, which are then also attached.
-        const result = new BaseEntityResult();
-        result.Message = "Failed to save parent entity 'Products': A; B";
-        result.Errors = [
-            new ValidationErrorInfo('A_Field', 'A', null),
-            new ValidationErrorInfo('B_Field', 'B', null),
-        ];
-
-        expect(result.CompleteMessage).toBe("Failed to save parent entity 'Products': A; B");
-    });
-
-    it('still reports an error the Message did NOT already contain', () => {
-        // The guard on the de-duplication above: it may only skip text already visible to the reader.
-        const result = new BaseEntityResult();
-        result.Message = "Failed to save parent entity 'Products': A";
-        result.Errors = [
-            new ValidationErrorInfo('A_Field', 'A', null),
-            new ValidationErrorInfo('C_Field', 'C is a different problem entirely', null),
-        ];
-
-        expect(result.CompleteMessage).toBe(
-            "Failed to save parent entity 'Products': A\nC is a different problem entirely",
-        );
-    });
-
     it('reads the single Error property the same way', () => {
         const result = new BaseEntityResult();
         result.Error = new ValidationErrorInfo('SourceURL', 'A template must record where its text came from.', null);

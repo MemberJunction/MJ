@@ -727,44 +727,27 @@ export class BaseEntityResult {
             msg = this.Message;
         }   
 
-        /**
-         * Appends one piece of text UNLESS it is already somewhere in what we have built.
-         *
-         * Producers legitimately set BOTH `Message` and `Errors`, and some build the former OUT OF
-         * the latter — `_InnerSave` and `_InnerDelete` do exactly that on an IS-A parent failure
-         * (`Failed to save parent entity 'X': A; B`, with `Errors` then set to the same A and B).
-         * Rendering both then says everything twice:
-         *
-         *     Failed to save parent entity 'Products': A; B
-         *     A
-         *     B
-         *
-         * Skipping a duplicate cannot hide anything from the reader, because the condition for
-         * skipping is that the text is ALREADY in the output — the only thing dropped is a second
-         * rendering of a string the user can already see. Fixing it here rather than in each producer
-         * protects every producer at once, including the ones that must keep a directly-readable
-         * `Message` for the callers that have not yet moved to `CompleteMessage` (issue #1431).
-         */
-        const append = (text: string): void => {
-            if (!text || (msg && msg.includes(text))) {
-                return;
-            }
-            msg = msg ? msg + '\n' : '';
-            msg += text;
-        };
-
         // now check the simple Error property. Same shape problem as the Errors array below, so the
         // same helper answers it: a string, an Error (lowercase `message`), or an MJ
         // ValidationErrorInfo (capital `Message`) all render as their text rather than as JSON.
         if (this.Error) {
-            append(BaseEntityResult.ErrorText(this.Error));
+            msg = (msg ? msg + '\n' : '') + BaseEntityResult.ErrorText(this.Error);
         }
 
-        // now check the Errors array
+        // now check the Errors array.
+        //
+        // NOT de-duplicated, deliberately. Some producers set BOTH `Message` and `Errors` and build
+        // the former out of the latter — `_InnerSave`/`_InnerDelete` do on an IS-A parent failure —
+        // so their text does appear twice here. Suppressing a repeat was tried and reverted: any
+        // containment test is lossy in ways a reader cannot detect. Three fields failing with the
+        // same sentence collapse to one line; an entry whose text is a substring of another is kept
+        // or dropped depending on ARRAY ORDER; and a distinct error vanishes when its text happens to
+        // appear inside the summary. Saying something twice is ugly. Silently reporting one problem
+        // when there were three is the failure this whole class of bug is about, so the duplication
+        // stays until a producer-side fix removes it at the source.
         if (this.Errors && this.Errors.length > 0) {
-            for (const err of this.Errors) {
-                append(BaseEntityResult.ErrorText(err));
-            }
+            // append
+            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => BaseEntityResult.ErrorText(err)).join('\n');
         }
 
         return msg;
