@@ -14,6 +14,8 @@
  * Reduction: 69% smaller
  */
 
+const path = require('node:path');
+
 /** @type {import('@memberjunction/config').MJConfig} */
 /**
  * The active database platform, with the same contract as `resolveDbPlatformFromEnv` in
@@ -55,9 +57,14 @@ module.exports = {
    * @memberjunction/integration-test-suite package, so the published CLI cannot depend on it;
    * this config key is the sanctioned runtime-plugin seam that loads it in-repo. External
    * adopters point this at their own check packages.
+   *
+   * An absolute __dirname-based path, NOT the bare package name: nothing creates a
+   * workspace-root node_modules link for it, and check-module-loader.ts COLLECTS load
+   * failures instead of throwing — so a bare specifier would silently degrade every bundle
+   * to "Unknown integration check bundle". sibling-parity.test.ts pins this.
    */
   testing: {
-    checkModules: [require('node:path').join(__dirname, 'packages/TestingFramework/integration-test-suite/dist/index.js')],
+    checkModules: [path.join(__dirname, 'packages/TestingFramework/integration-test-suite/dist/index.js')],
   },
 
   dbPlatform: dbPlatform() || 'sqlserver',

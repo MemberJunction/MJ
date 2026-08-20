@@ -54,6 +54,7 @@
     "@memberjunction/auth-providers": "6.1.0-edge.2"
   },
   "devDependencies": {
+    "@memberjunction/cli": "6.1.0-edge.2",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/yargs": "^17.0.35",

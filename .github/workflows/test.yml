@@ -62,17 +62,20 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------------------
-  # Gates that need NO dependency install at all — every script here imports only Node
-  # builtins (and the Python suite needs pip, not node_modules). Split out of the test job so
-  # they report in well under a minute instead of behind a ~2.5-minute `pnpm install` and a
-  # ~20-minute build. Previously a vacuous-assertion failure was invisible until the whole
-  # suite had been scheduled, and the dynamic-replace guard could be skipped entirely by an
-  # earlier failure.
+  # Cheapest gates first, and none of them need a BUILD. The guards below the install line
+  # import only Node builtins (the Python suite needs pip, not node_modules); the two DOM
+  # ratchets are the sole steps here that need node_modules, so the install sits directly
+  # above them and the free checks still fail first. Split out of the test job so all of this
+  # reports in ~2 minutes instead of behind a ~20-minute build. Previously a vacuous-assertion
+  # failure was invisible until the whole suite had been scheduled, and the dynamic-replace
+  # guard could be skipped entirely by an earlier failure.
   # ---------------------------------------------------------------------------------------
   quick-gates:
     name: Fast file gates
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -161,15 +164,6 @@ jobs:
           PR_BASE_REF: ${{ github.base_ref || 'next' }}
         run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
 
-      # Decide what to run:
-      #  - pull_request: only packages changed since the base branch PLUS everything that
-      #    depends on them (turbo's `...[ref]` package-dependency selection).
-      #  - a change to a ROOT/global file (root package.json, lockfile, turbo.json, root
-      #    vitest/tsconfig, this workflow) can affect every package but lives in no package
-      #    dir, so turbo's filter would select nothing — fall back to the FULL suite there.
-      #    (Root package.json matters: editing `workspaces` globs or root `scripts` reshapes
-      #    the whole build without necessarily touching package-lock.json.)
-      #  - push to next / schedule / manual dispatch: always FULL (the backstop).
       # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
       # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never
       # executed mj_postgres.py — which let the code reference exp.IfBlock (added in
@@ -193,15 +187,6 @@ jobs:
             python3 -m pip install --quiet -r packages/SQLGlotTS/requirements.txt
             python3 packages/SQLGlotTS/src/python/test_mj_postgres.py
           fi
-
-      # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT
-      # "type": "module" package's entry point with Node's native ESM resolver and fail
-      # on the extensionless-relative-specifier signature in the package's own dist/ —
-      # the bug class that tsc + bundler builds tolerate but Vitest-externalized deps,
-      # plain Node, and non-symlinked installs reject with ERR_MODULE_NOT_FOUND.
-      # Packages without a built dist/ classify NOT_BUILT and are skipped, so PR-scoped
-      # affected runs check exactly what they built; the push/nightly full-suite backstop
-      # (which builds everything) sweeps all packages.
 
   test:
     name: Run unit tests
@@ -257,7 +242,10 @@ jobs:
       # Note this changes eviction blast radius, not total volume — the repo cache size limit
       # still has to accommodate the working set.
       - name: Set up turbo remote cache
-        uses: rharkor/caching-for-turbo@v2.5.1
+        # SHA-pinned: third-party action whose cache entries are built dist/ that later runs
+        # execute (`next`'s backstop included, once this merges), so a mutable tag would be a
+        # code-execution path into CI. Upgrade = resolve the new tag to its commit, replace both.
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Create MJExplorer environment file
         run: |
@@ -285,6 +273,15 @@ jobs:
           ENVEOF
           sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
 
+      # Decide what to run:
+      #  - pull_request: only packages changed since the base branch PLUS everything that
+      #    depends on them (turbo's `...[ref]` package-dependency selection).
+      #  - a change to a ROOT/global file (root package.json, lockfile, turbo.json, root
+      #    vitest/tsconfig, this workflow) can affect every package but lives in no package
+      #    dir, so turbo's filter would select nothing — fall back to the FULL suite there.
+      #    (Root package.json matters: editing `workspaces` globs or root `scripts` reshapes
+      #    the whole build without necessarily touching the lockfile.)
+      #  - push to next / schedule / manual dispatch: always FULL (the backstop).
       - name: Determine test scope
         run: |
           FILTER=""
@@ -367,6 +364,8 @@ jobs:
     name: Native-ESM import guard
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -387,8 +386,22 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Set up turbo remote cache
-        uses: rharkor/caching-for-turbo@v2.5.1
+        # SHA-pinned: third-party action whose cache entries are built dist/ that later runs
+        # execute (`next`'s backstop included, once this merges), so a mutable tag would be a
+        # code-execution path into CI. Upgrade = resolve the new tag to its commit, replace both.
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
+      # `!mj_explorer` on both turbo calls below. Two independent reasons, and it must stay on
+      # the --dry run and the real build alike so the scope file and the build agree:
+      #  1) CORRECTNESS. `ng build` reads src/environments/environment.ts, which is GITIGNORED
+      #     (.gitignore) and synthesized in CI — the `test` and `coverage` jobs each write it
+      #     before building. This job does not, so any PR touching packages/MJExplorer/** would
+      #     select mj_explorer via `[ref]` and die on the missing file BEFORE sweeping anything.
+      #     Excluding it is preferred over a third copy of that 25-line heredoc.
+      #  2) COST, at zero coverage loss. mj_explorer is a CommonJS leaf app, not `"type":
+      #     "module"`, so the guard can never sweep it however long it takes to build.
+      # If a future Angular app lands in the PR-scoped build, it needs the same treatment or
+      # its own env-file step — the gitignored-build-input trap is what bites here, not Angular.
       - name: Build the packages to sweep
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -406,17 +419,17 @@ jobs:
               # in the graph leaves a few hundred packages built and needlessly swept. A
               # dependency's dist is regenerated but emitted from ITS unchanged source, so it
               # cannot acquire an extensionless specifier this PR is answerable for.
-              npx turbo run build "--filter=[origin/${{ github.base_ref }}]" --dry=json > /tmp/esm-dry.json
+              npx turbo run build "--filter=[origin/${{ github.base_ref }}]" "--filter=!mj_explorer" --dry=json > "$RUNNER_TEMP/esm-dry.json"
               node -e '
-                const j = JSON.parse(require("fs").readFileSync("/tmp/esm-dry.json", "utf8"));
+                const j = JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/esm-dry.json", "utf8"));
                 const selected = new Set(j.packages || []);
                 const dirs = new Set();
                 for (const t of j.tasks || []) if (selected.has(t.package) && t.directory) dirs.add(t.directory);
                 process.stdout.write([...dirs].join("\n") + "\n");
-              ' > esm-scope.txt
-              echo "Scoping the ESM sweep to $(grep -c . esm-scope.txt) changed package(s)."
-              echo "ESM_SCOPE_ARG=--scope-file=$PWD/esm-scope.txt" >> "$GITHUB_ENV"
-              npx turbo run build --log-order=stream "--filter=[origin/${{ github.base_ref }}]"
+              ' > "$RUNNER_TEMP/esm-scope.txt"
+              echo "Scoping the ESM sweep to $(grep -c . "$RUNNER_TEMP/esm-scope.txt") changed package(s)."
+              echo "ESM_SCOPE_ARG=--scope-file=$RUNNER_TEMP/esm-scope.txt" >> "$GITHUB_ENV"
+              npx turbo run build --log-order=stream "--filter=[origin/${{ github.base_ref }}]" "--filter=!mj_explorer"
             fi
           else
             pnpm run build
@@ -519,7 +532,10 @@ jobs:
       # Same task-granular remote cache as the test job, so this nightly build is a
       # near-total replay of whatever the backstop already built.
       - name: Set up turbo remote cache
-        uses: rharkor/caching-for-turbo@v2.5.1
+        # SHA-pinned: third-party action whose cache entries are built dist/ that later runs
+        # execute (`next`'s backstop included, once this merges), so a mutable tag would be a
+        # code-execution path into CI. Upgrade = resolve the new tag to its commit, replace both.
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Create MJExplorer environment file
         run: |
