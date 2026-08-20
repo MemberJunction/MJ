@@ -1546,6 +1546,29 @@ export interface TaskGraphControlOutput {
     errorMessage?: string;
 }
 
+/** Input for the step-scoped intervention verbs. */
+export interface TaskGraphTaskInterventionInput {
+    taskID: string;
+    /** ForceCompleteTask: the output downstream paths evaluate against. UpdateTaskInput: the new input. */
+    payload?: Record<string, unknown> | string | null;
+}
+
+/** Output of the task-graph debug control verbs — what happened and the debug state now in force. */
+export interface TaskGraphDebugControlOutput {
+    success: boolean;
+    /** The graph's debug state after the verb (pause/step/breakpoints/overrides). */
+    debug?: {
+        paused?: boolean;
+        pausedBy?: string | null;
+        pausedReason?: 'user' | 'breakpoint';
+        pausedAtTaskID?: string | null;
+        breakpoints?: string[];
+        step?: string;
+        edgeOverrides?: Record<string, 'true' | 'false'>;
+    };
+    errorMessage?: string;
+}
+
 /** Output of `TaskGraph.GetStatus`. */
 export interface TaskGraphStatusOutput {
     success: boolean;
@@ -1564,10 +1587,41 @@ export interface TaskGraphStatusOutput {
     errorMessage?: string;
 }
 
-/** Input for `TaskGraph.RetryTask`. */
+/** Input for TaskGraph.OverrideEdge. */
+export interface TaskGraphOverrideEdgeInput {
+    parentTaskID: string;
+    /** The MJ: Task Dependencies row being answered. */
+    edgeID: string;
+    /** 'false' = branch not taken, 'true' = gate open, omitted/null = remove the override. */
+    verdict?: 'true' | 'false' | null;
+}
+
+/** Input for TaskGraph.Pause and TaskGraph.Resume. */
+export interface TaskGraphPauseInput {
+    /** Parent task ID identifying the workflow run. */
+    parentTaskID: string;
+}
+
+/** Input for TaskGraph.RetryTask. */
 export interface TaskGraphRetryInput {
-    /** The failed task to retry. */
+    /** The failed task to return to Pending. */
     taskID: string;
+    /** Optional edited input for the re-run — the operator saw why it failed and corrected the brief. Applies to this run only. */
+    inputPayload?: Record<string, unknown> | string;
+}
+
+/** Input for TaskGraph.SetBreakpoints. */
+export interface TaskGraphSetBreakpointsInput {
+    parentTaskID: string;
+    /** The full breakpoint set — replaces what was there. Empty clears all breakpoints. */
+    taskIDs: string[];
+}
+
+/** Input for TaskGraph.Step. */
+export interface TaskGraphStepInput {
+    parentTaskID: string;
+    /** 'one' (default) releases the next eligible step, 'wave' the current frontier, a task ID exactly that step. */
+    target?: string;
 }
 
 /** Input for `TaskGraph.Submit`. */
@@ -1605,6 +1659,10 @@ export interface TaskGraphSubmitInput {
     environmentID: string;
     /** Conversation this graph answers, when submitted from a conversational channel. */
     conversationDetailID?: string;
+    /** Continuation hops that produced this graph. Counts toward the runaway-loop reinvoke cap exactly as in-process submissions do; omit for a fresh submission. */
+    reinvokeDepth?: number;
+    /** The invocation's runtime parameters, resolved by the flow dialect's `data.*` and `context.*` condition roots. Without it those documented conditions evaluate against nothing. */
+    invocation?: { data?: unknown; context?: unknown };
 }
 
 /** Output of `TaskGraph.Submit`. */
@@ -2180,6 +2238,22 @@ export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphCo
 }
 
 // ============================================================
+// TaskGraph.ForceCompleteTask — Force Complete Workflow Step
+// ============================================================
+/**
+ * Force Complete Workflow Step
+ * Mark a wedged or externally-resolved step Complete with an operator-supplied output; downstream paths evaluate against it exactly as they would a runner's. Refused for a step running under a live claim (cancel it or wait for the claim to lapse) and for human steps (those complete through CompleteTask with the assignee check). Implemented by TaskGraphForceCompleteTaskServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.ForceCompleteTask'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphForceCompleteTaskOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.ForceCompleteTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // TaskGraph.GetStatus — Get Task Graph Status
 // ============================================================
 /**
@@ -2192,6 +2266,54 @@ export class TaskGraphGetStatusOperation extends BaseRemotableOperation<TaskGrap
     public readonly OperationKey = "TaskGraph.GetStatus";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.OverrideEdge — Override Workflow Path
+// ============================================================
+/**
+ * Override Workflow Path
+ * Answer one path's condition by operator decision — the escape hatch for a held graph (a condition that cannot be evaluated) or a broken guard. 'false' reads as branch-not-taken and cascades skips; 'true' opens the gate; omitting the verdict removes the override. Durable: survives restarts and is honored by every dispatcher instance. Implemented by TaskGraphOverrideEdgeServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.OverrideEdge'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphOverrideEdgeOperation extends BaseRemotableOperation<TaskGraphOverrideEdgeInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.OverrideEdge";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Pause — Pause Workflow Run
+// ============================================================
+/**
+ * Pause Workflow Run
+ * Pause a running workflow: nothing new is claimed until it is resumed, while in-flight steps finish naturally and their completions land. Durable, declarative state the dispatcher's claim filter consults on its next pass — works across instances and restarts. Implemented by TaskGraphPauseServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Pause'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphPauseOperation extends BaseRemotableOperation<TaskGraphPauseInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Pause";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Resume — Resume Workflow Run
+// ============================================================
+/**
+ * Resume Workflow Run
+ * Resume a paused workflow run; claiming continues normally. Breakpoints and edge overrides survive — only the pause clears. Implemented by TaskGraphResumeServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Resume'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphResumeOperation extends BaseRemotableOperation<TaskGraphPauseInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Resume";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
 }
 
@@ -2212,6 +2334,54 @@ export class TaskGraphRetryTaskOperation extends BaseRemotableOperation<TaskGrap
 }
 
 // ============================================================
+// TaskGraph.SetBreakpoints — Set Workflow Breakpoints
+// ============================================================
+/**
+ * Set Workflow Breakpoints
+ * Replace a workflow run's breakpoint set. When an eligible step carries a breakpoint the dispatcher pauses the whole graph BEFORE claiming it and announces BreakpointHit — a breakpoint is an authored hold, implemented by the same claim-filter machinery that already holds unevaluable conditions. Empty array clears all breakpoints. Implemented by TaskGraphSetBreakpointsServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.SetBreakpoints'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphSetBreakpointsOperation extends BaseRemotableOperation<TaskGraphSetBreakpointsInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.SetBreakpoints";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.SkipTask — Skip Workflow Step
+// ============================================================
+/**
+ * Skip Workflow Step
+ * Declare a Pending step not-taken. Dependents proceed (Skipped satisfies a prerequisite) and any open human request for the step is withdrawn. Only a step that has not started can be skipped. Implemented by TaskGraphSkipTaskServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.SkipTask'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphSkipTaskOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.SkipTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Step — Step Workflow Run
+// ============================================================
+/**
+ * Step Workflow Run
+ * Arm a one-shot claim allowance on a paused workflow run: 'one' releases the next eligible step, 'wave' releases the current frontier, a task ID releases exactly that step. Consumed atomically so two dispatcher instances stepping the same graph release work exactly once. Implemented by TaskGraphStepServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Step'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphStepOperation extends BaseRemotableOperation<TaskGraphStepInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Step";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // TaskGraph.Submit — Submit Task Graph
 // ============================================================
 /**
@@ -2222,6 +2392,22 @@ export class TaskGraphRetryTaskOperation extends BaseRemotableOperation<TaskGrap
  */
 export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSubmitInput, TaskGraphSubmitOutput> {
     public readonly OperationKey = "TaskGraph.Submit";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.UpdateTaskInput — Update Workflow Step Input
+// ============================================================
+/**
+ * Update Workflow Step Input
+ * Replace a Pending step's input — the edit-the-brief-before-stepping move at a breakpoint. Applies to this run only; the step must not have started. Implemented by TaskGraphUpdateTaskInputServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.UpdateTaskInput'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphUpdateTaskInputOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.UpdateTaskInput";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;

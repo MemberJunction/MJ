@@ -1217,6 +1217,9 @@ export abstract class BaseEntity<T = unknown> {
 
         this._childEntity = childEntity;
 
+        // Capture any pending modifications on this entity or its ancestors before child InnerLoad
+        const dirtySnapshots = this.captureChainDirtyState();
+
         // Load the child's record using our shared PK
         const loaded = await childEntity.InnerLoad(this.PrimaryKey);
         if (!loaded) {
@@ -1225,9 +1228,36 @@ export abstract class BaseEntity<T = unknown> {
             return;
         }
 
+        // Re-apply any pending modifications so child hydration does not overwrite unsaved in-memory edits
+        this.restoreChainDirtyState(dirtySnapshots);
+
         // Recursively discover grandchildren (child may also be a parent type)
         // InitializeChildEntity is idempotent via _childEntityDiscoveryDone flag
         await childEntity.InitializeChildEntity();
+    }
+
+    private captureChainDirtyState(): Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> {
+        const snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> = [];
+        let curr: BaseEntity | null = this;
+        while (curr) {
+            const dirtyFields = curr.Fields.filter(f => f.Dirty).map(f => ({
+                name: f.Name,
+                value: f.Value,
+            }));
+            if (dirtyFields.length > 0) {
+                snapshots.push({ entity: curr, dirtyFields });
+            }
+            curr = curr._parentEntity;
+        }
+        return snapshots;
+    }
+
+    private restoreChainDirtyState(snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }>): void {
+        for (const snap of snapshots) {
+            for (const df of snap.dirtyFields) {
+                snap.entity.Set(df.name, df.value);
+            }
+        }
     }
 
     /**
@@ -3664,7 +3694,11 @@ export abstract class BaseEntity<T = unknown> {
     private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            this.SetMany(data, false, true, true); // set the new values from the data returned from the save, this will also reset the old values
+            const fieldData = (data instanceof BaseEntity || (data && typeof data.GetAll === 'function')) ? data.GetAll() : data;
+            // IS-A GetAll() merges the parent, including parent virtuals this entity
+            // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
+            // this entity defines, and ignore anything leftover.
+            this.SetMany(this.ownedFieldsFrom(fieldData), true, true, true);
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
@@ -3709,7 +3743,9 @@ export abstract class BaseEntity<T = unknown> {
 
         // Cache it via this entity's provider so the cache lives on the right connection.
         const md = this.ProviderToUse as unknown as IMetadataProvider;
-        md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        if (typeof md?.SetCachedRecordName === 'function') {
+            md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        }
     }
 
     /**

@@ -13,7 +13,8 @@ const destDir = path.resolve(__dirname, '../src/generic/JSONType-interfaces');
 const allowedFiles = new Set([
   'IEntityConfiguration.ts',
   'IEntityFieldConfiguration.ts',
-  'IEntityRelationshipConfiguration.ts'
+  'IEntityRelationshipConfiguration.ts',
+  'IFileStorageProviderConfiguration.ts'
 ]);
 
 if (fs.existsSync(srcDir)) {

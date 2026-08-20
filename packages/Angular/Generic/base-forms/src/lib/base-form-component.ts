@@ -23,6 +23,7 @@ import {
   FormContext,
   FormNotificationEvent,
   RecordSavedEvent,
+  RecordRefreshedEvent,
   RecordDeletedEvent,
   RecordSaveFailedEvent,
   RecordDeleteFailedEvent,
@@ -30,6 +31,7 @@ import {
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
 import { EntityFormConfig } from './types/entity-form-config';
+import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
 import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
 import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
@@ -52,6 +54,7 @@ import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 @Directive()
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
   public EditMode: boolean = false;
+  public IsRefreshing: boolean = false;
   public FavoriteInitDone: boolean = false;
 
   /**
@@ -125,6 +128,94 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   private _pendingRecords: PendingRecordItem[] = [];
+  private _registeredToolbarItems = new Map<string, FormToolbarItemConfig>();
+  private _toolbarItemOverrides = new Map<string, Partial<FormToolbarItemConfig>>();
+
+  /**
+   * Registers a dynamic toolbar action item / button.
+   * Can be called during ngOnInit or at runtime.
+   */
+  public RegisterToolbarItem(item: FormToolbarItemConfig): void {
+    this._registeredToolbarItems.set(item.Key, { ...item });
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Unregisters a previously registered dynamic toolbar item by key.
+   */
+  public UnregisterToolbarItem(key: string): void {
+    if (this._registeredToolbarItems.delete(key)) {
+      this.cdr?.markForCheck();
+    }
+  }
+
+  /**
+   * Configures overrides for any toolbar item (standard built-in items like 'edit',
+   * 'delete', 'favorite', 'history', etc., or custom items).
+   * Allows dynamically changing visibility, disabled state, tooltips, order, icon, etc.
+   */
+  public ConfigureToolbarItem(key: FormToolbarItemKey, overrides: Partial<FormToolbarItemConfig>): void {
+    const existing = this._toolbarItemOverrides.get(key) || {};
+    this._toolbarItemOverrides.set(key, { ...existing, ...overrides });
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Dynamically hides a toolbar item by key.
+   */
+  public HideToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Visible: false });
+  }
+
+  /**
+   * Dynamically shows a toolbar item by key.
+   */
+  public ShowToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Visible: true });
+  }
+
+  /**
+   * Dynamically disables a toolbar item by key, with an optional reason string for the tooltip.
+   */
+  public DisableToolbarItem(key: FormToolbarItemKey, reason?: string): void {
+    this.ConfigureToolbarItem(key, { Disabled: reason ?? true });
+  }
+
+  /**
+   * Dynamically enables a toolbar item by key.
+   */
+  public EnableToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Disabled: false });
+  }
+
+  /**
+   * Sets the numeric display order for a toolbar item (lower numbers appear earlier).
+   */
+  public SetToolbarItemOrder(key: FormToolbarItemKey, order: number): void {
+    this.ConfigureToolbarItem(key, { Order: order });
+  }
+
+  /**
+   * Returns all dynamically registered toolbar items.
+   */
+  public get RegisteredToolbarItems(): FormToolbarItemConfig[] {
+    return Array.from(this._registeredToolbarItems.values());
+  }
+
+  /**
+   * Returns the map of toolbar item overrides.
+   */
+  public get ToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> {
+    return this._toolbarItemOverrides;
+  }
+
+  /**
+   * Hook invoked when a custom or dynamic toolbar item is clicked.
+   * Subclasses can override this method to handle custom button clicks.
+   */
+  public OnCustomToolbarButtonClick(event: FormToolbarItemClickEventArgs): void {
+    // Subclasses can override
+  }
 
   // #region Injected Dependencies (no constructor params)
 
@@ -144,6 +235,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /** Emitted after a record is saved successfully */
   @Output() RecordSaved = new EventEmitter<RecordSavedEvent>();
+
+  /** Emitted after a record is refreshed from the database successfully */
+  @Output() RecordRefreshed = new EventEmitter<RecordRefreshedEvent>();
 
   /** Emitted after a record is deleted successfully */
   @Output() RecordDeleted = new EventEmitter<RecordDeletedEvent>();
@@ -432,6 +526,86 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (wasNeverSaved) {
         this.Navigate.emit({ Kind: 'dismiss', Reason: 'new-record-discarded' });
       }
+    }
+  }
+
+  /**
+   * Re-fetches the current record from the database, updating field values
+   * in-place and resetting dirty flags. No-op in edit mode or on an unsaved
+   * record. Related-entity grids are notified via the form container's
+   * {@link FormRecordRefreshCoordinator} after this emits {@link RecordRefreshed}.
+   *
+   * @returns true if the record was reloaded from the database.
+   */
+  public async RefreshRecord(): Promise<boolean> {
+    if (!this.canRefreshRecord()) {
+      return false;
+    }
+
+    this.IsRefreshing = true;
+    this.cdr.markForCheck();
+
+    try {
+      return await this.executeRecordRefresh();
+    } finally {
+      this.IsRefreshing = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private canRefreshRecord(): boolean {
+    return !!this.record && this.record.IsSaved && !this.EditMode;
+  }
+
+  private async executeRecordRefresh(): Promise<boolean> {
+    const record = this.record;
+    if (!record) {
+      return false;
+    }
+
+    try {
+      const ok = await record.Refresh();
+      if (!ok) {
+        this.Notification.emit({
+          Message: 'Failed to refresh record from database',
+          Type: 'error',
+          Duration: 5000,
+        });
+        return false;
+      }
+
+      await this.reloadFavoriteStatusAfterRefresh(record);
+      this.Notification.emit({
+        Message: 'Record refreshed from database',
+        Type: 'info',
+        Duration: 2000,
+      });
+      this.RecordRefreshed.emit({
+        EntityName: record.EntityInfo.Name,
+        Record: record,
+      });
+      return true;
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      this.Notification.emit({
+        Message: 'Error refreshing record: ' + detail,
+        Type: 'error',
+        Duration: 5000,
+      });
+      return false;
+    }
+  }
+
+  private async reloadFavoriteStatusAfterRefresh(record: BaseEntity): Promise<void> {
+    const md = this.ProviderToUse;
+    try {
+      this._isFavorite = await md.GetRecordFavoriteStatus(
+        md.CurrentUser.ID,
+        record.EntityInfo.Name,
+        record.PrimaryKey,
+      );
+    } catch {
+      // Non-critical — favorite status remains as is
     }
   }
 
