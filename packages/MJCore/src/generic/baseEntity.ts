@@ -354,9 +354,9 @@ export class EntityField {
                 }
             }
 
-            // Value-list validation: a field whose ValueListType is `List` carries an EXHAUSTIVE set
-            // of legal values in metadata (__mj.EntityFieldValue), and for an `IN (...)` CHECK
-            // constraint that list is the only runtime representation CodeGen produces —
+            // Value-list validation (MJ issue #3969): a field whose ValueListType is `List` carries an
+            // EXHAUSTIVE set of legal values in metadata (__mj.EntityFieldValue), and for an `IN (...)`
+            // CHECK constraint that list is the only runtime representation CodeGen produces —
             // ParseCheckConstraints emits the value list rather than a generated Validate() method,
             // since the list is also what the UI needs to render a dropdown. Without this rung the
             // constraint had no TypeScript counterpart at runtime, so an out-of-list value was
