@@ -54,6 +54,12 @@ let asyncRuns = 0;
 let syncRuns = 0;
 /** Whether the provider claims local transaction support (server tier) for this test. */
 let supportsTransactions = false;
+/**
+ * Class the provider instantiates for a companion child. Children come from
+ * `provider.GetEntityObject()`, so this is the only way to give a CHILD a rule the root does not
+ * have — which is the case that proves the pre-flight validates the whole plan, not just the root.
+ */
+let childEntityClass: new (...a: never[]) => BaseEntity;
 
 function makeProvider() {
     const provider = {
@@ -65,7 +71,7 @@ function makeProvider() {
             return false;
         },
         async GetEntityObject<T extends BaseEntity>(): Promise<T> {
-            return new CompositeEntity(
+            return new (childEntityClass as never)(
                 productEntityInfo,
                 provider as unknown as IEntityDataProvider,
             ) as unknown as T;
@@ -174,6 +180,21 @@ class OptedOutWithSyncRuleEntity extends RefusingEntity {
     }
 }
 
+/** Refuses at the permission layer, the way `CheckPermissions(_, true)` really does — by throwing. */
+class UnauthorizedEntity extends RefusingEntity {
+    public override CheckPermissions(): boolean {
+        throw new Error('User does not have permission to delete Standalone Items');
+    }
+}
+
+/** An application rule that blows up rather than returning a result. */
+class ThrowingRuleEntity extends PlainEntity {
+    public override async ValidateDeleteAsync(): Promise<ValidationResult> {
+        asyncRuns++;
+        throw new Error('the referential probe query failed');
+    }
+}
+
 /** A parent that owns its children, so `Delete()` routes through the companion delete graph. */
 class CompositeEntity extends BaseEntity {
     public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
@@ -185,6 +206,17 @@ class CompositeEntity extends BaseEntity {
 
     public override CheckPermissions(): boolean {
         return true;
+    }
+}
+
+/** A child that refuses. Reached only through a plan, never as the root. */
+class RefusingChildEntity extends CompositeEntity {
+    public override ValidateDelete(): ValidationResult {
+        syncRuns++;
+        const result = super.ValidateDelete();
+        result.Success = false;
+        result.Errors.push(new ValidationErrorInfo('Line', 'A posted line cannot be deleted.', null));
+        return result;
     }
 }
 
@@ -218,6 +250,7 @@ beforeEach(() => {
     asyncRuns = 0;
     syncRuns = 0;
     supportsTransactions = false;
+    childEntityClass = CompositeEntity;
 });
 
 /** A loaded, saved-looking record of `cls`, ready to delete. */
@@ -400,6 +433,106 @@ describe('one async-validation policy, shared with the save seam', () => {
     });
 });
 
+describe('the ordering guarantees the seam documents', () => {
+    // Each of these is a promise the JSDoc makes to someone writing a rule. Untested, they are
+    // just prose.
+
+    it('checks permissions BEFORE running any rule', async () => {
+        // A user without delete rights must get a permission error, not a validation message about a
+        // record they may not be allowed to know the state of.
+        const entity = existingRecord(UnauthorizedEntity);
+
+        expect(await entity.Delete()).toBe(false);
+        expect(syncRuns, 'the rule never ran').toBe(0);
+        expect(entity.LatestResult?.Message).toContain('does not have permission');
+    });
+
+    it('does not raise delete_started when the delete is refused', async () => {
+        // Nothing started, so nothing is announced. A listener that provisions on delete_started and
+        // tears down on delete would otherwise leak on every refusal.
+        const entity = existingRecord(RefusingEntity);
+        const events: string[] = [];
+        entity.RegisterEventHandler(e => events.push(e.type));
+
+        await entity.Delete();
+
+        expect(events).not.toContain('delete_started');
+        expect(events).not.toContain('delete');
+    });
+
+    it('raises delete_started when the delete proceeds', async () => {
+        // The control for the case above: the gate must not have silenced the normal path.
+        const entity = existingRecord(PlainEntity);
+        const events: string[] = [];
+        entity.RegisterEventHandler(e => events.push(e.type));
+
+        await entity.Delete();
+
+        expect(events).toContain('delete_started');
+    });
+});
+
+describe('a rule that throws rather than returning a result', () => {
+    // An application rule is arbitrary code: a RunView that fails, a null dereference. `Delete()`
+    // reports failure by RETURNING false, so a rejection must never escape it.
+
+    it('reports failure rather than rejecting, on the single-record path', async () => {
+        const entity = existingRecord(ThrowingRuleEntity);
+
+        await expect(entity.Delete()).resolves.toBe(false);
+        expect(asyncRuns).toBe(1);
+        expect(deleteLog, 'and nothing was deleted').toEqual([]);
+        expect(entity.LatestResult?.Message).toContain('referential probe query failed');
+    });
+});
+
+describe('the IS-A parent chain', () => {
+    /**
+     * A saved child whose parent chain is a second entity, wired the way the IS-A suites do it. The
+     * child's own row is deleted first (the FK requires it), then the delete cascades to the parent.
+     */
+    function childWithParent(parentClass: new (...a: never[]) => BaseEntity) {
+        const child = existingRecord(PlainEntity, 'child-row');
+        const parent = existingRecord(parentClass, 'parent-row');
+        (child as unknown as { _parentEntity: BaseEntity })._parentEntity = parent;
+        return { child, parent };
+    }
+
+    it('carries SkipAsyncValidation to the parent delete', async () => {
+        // REGRESSION GUARD. `_InnerSave` copies this flag onto its parentSaveOptions; the delete path
+        // built parentDeleteOptions without it, so an explicit opt-out was honoured for the child and
+        // silently ignored one link up — the parent paid for a query the caller had opted out of, and
+        // its refusal failed the whole delete. Found by auditing the two option-builders against each
+        // other, not by a failure.
+        const { child } = childWithParent(AsyncRefusingEntity);
+
+        expect(await child.Delete({ SkipAsyncValidation: true } as never)).toBe(true);
+        expect(asyncRuns, "the parent's async rule was skipped too").toBe(0);
+        expect(deleteLog).toEqual(['child-row', 'parent-row']);
+    });
+
+    it('runs the parent rule when nothing opted out', async () => {
+        // The control: without the flag, the parent's own rule still governs its own row.
+        const { child } = childWithParent(AsyncRefusingEntity);
+
+        expect(await child.Delete()).toBe(false);
+        expect(asyncRuns).toBe(1);
+    });
+
+    it("surfaces the parent's reason on the CHILD, which is the object the caller holds", async () => {
+        // `_parentEntity` is private, so a caller has no reference to the object the parent's result
+        // was recorded on. KNOWN LIMITATION pinned here rather than hidden: unlike a companion plan,
+        // the chain is NOT validated up front, so the child's own row is already gone when the parent
+        // refuses. Inside a provider transaction that rolls back; this fixture has none, which is why
+        // the child appears in the log.
+        const { child } = childWithParent(RefusingEntity);
+
+        expect(await child.Delete()).toBe(false);
+        expect(child.LatestResult?.Message).toContain('5 signed contracts');
+        expect(deleteLog).toEqual(['child-row']);
+    });
+});
+
 describe('the companion delete graph', () => {
     /** A parent with `count` owned children attached, so the delete plan has more than one node. */
     async function makeParentWithChildren(count: number, cls = CompositeEntity) {
@@ -435,6 +568,30 @@ describe('the companion delete graph', () => {
         expect(await parent.Delete()).toBe(false);
         expect(deleteLog, 'the children survived the refusal').toEqual([]);
         expect(parent.LatestResult?.Errors[0].Source).toBe('Status');
+    });
+
+    it('refuses the whole plan when a CHILD refuses, before any row is deleted', async () => {
+        // The pre-flight validates every node, not just the root. Otherwise a child's rule would be
+        // consulted only when its own turn came — after its siblings were already gone.
+        childEntityClass = RefusingChildEntity;
+        const parent = await makeParentWithChildren(2); // the ROOT has no rule of its own
+
+        expect(await parent.Delete()).toBe(false);
+        expect(deleteLog, 'no row was deleted, including the siblings').toEqual([]);
+        expect(syncRuns, 'both children were asked').toBe(2);
+        expect(parent.LatestResult?.Errors[0].Source).toBe('Line');
+    });
+
+    it('reports failure rather than rejecting when a rule throws mid-plan', async () => {
+        const parent = await makeParentWithChildren(2);
+        // Make the ROOT's rule throw, so the plan is already half-validated when it does.
+        (parent as unknown as { ValidateDelete: () => ValidationResult }).ValidateDelete = () => {
+            throw new Error('the referential probe query failed');
+        };
+
+        await expect(parent.Delete()).resolves.toBe(false);
+        expect(deleteLog).toEqual([]);
+        expect(parent.LatestResult?.Message).toContain('referential probe query failed');
     });
 
     it('validates the root exactly once for a graph delete', async () => {

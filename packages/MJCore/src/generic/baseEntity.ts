@@ -2005,10 +2005,29 @@ export abstract class BaseEntity<T = unknown> {
 
         const combined = new ValidationResult();
         combined.Success = true;
-        for (const node of nodes) {
-            const nodeResult = await node.runDeleteValidation(_options);
-            combined.Success = combined.Success && nodeResult.Success;
-            nodeResult.Errors.forEach(error => combined.Errors.push(error));
+        try {
+            for (const node of nodes) {
+                // Permissions before rules, per node — the same order the single-record path uses, and
+                // for the same reason: a user without delete rights should get a permission error, not a
+                // validation message about a record they may not be allowed to inspect. Hoisting it here
+                // also means a permission failure on the LAST child no longer leaves the earlier ones
+                // deleted on a provider with no transaction. `CheckPermissions(_, true)` throws; the
+                // catch below turns that into the `false` the Delete() contract promises.
+                node.CheckPermissions(EntityPermissionType.Delete, true);
+                const nodeResult = await node.runDeleteValidation(_options);
+                combined.Success = combined.Success && nodeResult.Success;
+                nodeResult.Errors.forEach(error => combined.Errors.push(error));
+            }
+        }
+        catch (e) {
+            // An application's rule is arbitrary code — a RunView that fails, a null dereference — and
+            // `Delete()` reports failure by RETURNING false. An escaping rejection here would break that
+            // contract for exactly this path, the same hazard `executeGraphLocal` documents for its
+            // transaction begin. Nothing has been deleted yet, so there is nothing to roll back.
+            const detail = e instanceof Error ? e.message : String(e);
+            LogError(`BaseEntity.validateAndDeleteGraph: delete validation failed for ${this.EntityInfo?.Name}: ${detail}`);
+            combined.Success = false;
+            combined.Errors.push(new ValidationErrorInfo(this.EntityInfo?.Name ?? 'Delete', detail, null));
         }
         if (!combined.Success) {
             // No `graph_save` event: nothing started, so `graph_save_started` never fired and a
@@ -4680,6 +4699,12 @@ export abstract class BaseEntity<T = unknown> {
                             parentDeleteOptions.SkipEntityAIActions = _options.SkipEntityAIActions;
                             parentDeleteOptions.SkipEntityActions = _options.SkipEntityActions;
                             parentDeleteOptions.ReplayOnly = _options.ReplayOnly;
+                            // Carried for the same reason _InnerSave carries it to parentSaveOptions: the
+                            // caller opted out of async validation for THIS delete, and the parent chain is
+                            // part of that one delete. Dropping it here ran the parent's async rules against
+                            // an explicit opt-out — silently, since nothing reports which link of the chain
+                            // paid for the query.
+                            parentDeleteOptions.SkipAsyncValidation = _options.SkipAsyncValidation;
                             parentDeleteOptions.IsParentEntityDelete = true;
 
                             const parentResult = await this._parentEntity.Delete(parentDeleteOptions);
