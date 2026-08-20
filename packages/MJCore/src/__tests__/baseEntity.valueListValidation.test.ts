@@ -190,6 +190,87 @@ describe('EntityField.Validate — value lists (#3969)', () => {
         expect(result.Success).toBe(true);
     });
 
+    describe('date value lists', () => {
+        // A `date` column really can carry a value list: SQL Server stores
+        // CHECK (D IN ('2026-01-01','2026-07-01')) as quoted literals, the same shape CodeGen's
+        // parser captures for strings. So these cases are reachable, not hypothetical.
+        const dateField = (overrides: Record<string, unknown> = {}) => makeFieldInfo({
+            Name: 'EffectiveDate',
+            Type: 'date',
+            SQLFullType: 'date',
+            MaxLength: 0,
+            EntityFieldValues: [
+                { ID: 'd-1', EntityFieldID: 'field-1', Sequence: 1, Value: '2026-01-01', Code: '2026-01-01' },
+                { ID: 'd-2', EntityFieldID: 'field-1', Sequence: 2, Value: '2026-07-01', Code: '2026-07-01' },
+            ],
+            ...overrides,
+        });
+
+        it('accepts a listed date read back from the database (UTC midnight)', () => {
+            expect(new EntityField(dateField(), new Date('2026-07-01T00:00:00.000Z')).Validate().Success).toBe(true);
+        });
+
+        it('accepts a listed date built in local time — the timezone must not decide it', () => {
+            // new Date(2026, 6, 1) is LOCAL midnight; west of Greenwich its UTC calendar date is
+            // 2026-06-30. Insisting on the UTC reading would refuse a legal value for half the world.
+            expect(new EntityField(dateField(), new Date(2026, 6, 1)).Validate().Success).toBe(true);
+        });
+
+        it('rejects a date that is not in the list', () => {
+            const result = new EntityField(dateField(), new Date('2026-03-15T00:00:00.000Z')).Validate();
+            expect(result.Success).toBe(false);
+            expect(result.Errors[0].Source).toBe('EffectiveDate');
+            expect(result.Errors[0].Message).toContain('2026-01-01');
+        });
+
+        it('skips a column carrying a time component, and says why once', () => {
+            // The metadata literal has no timezone, so comparing instants would mean guessing how
+            // the database interprets it — and guessing wrong rejects a legal value.
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const fieldInfo = dateField({ Type: 'datetime2', SQLFullType: 'datetime2(7)' });
+
+                for (let i = 1; i <= 3; i++) {
+                    expect(new EntityField(fieldInfo, new Date(`2020-01-0${i}`)).Validate().Success).toBe(true);
+                }
+
+                expect(consoleError).toHaveBeenCalledTimes(1);
+                expect(String(consoleError.mock.calls[0][0])).toContain('`date` column');
+            } finally {
+                consoleError.mockRestore();
+            }
+        });
+
+        it('skips a date field whose value list is not made of yyyy-mm-dd literals', () => {
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const fieldInfo = dateField({
+                    EntityFieldValues: [
+                        { ID: 'q-1', EntityFieldID: 'field-1', Sequence: 1, Value: 'Q1', Code: 'Q1' },
+                        { ID: 'q-2', EntityFieldID: 'field-1', Sequence: 2, Value: 'Q2', Code: 'Q2' },
+                    ],
+                });
+
+                expect(new EntityField(fieldInfo, new Date('2026-07-01')).Validate().Success).toBe(true);
+                expect(consoleError).toHaveBeenCalledTimes(1);
+            } finally {
+                consoleError.mockRestore();
+            }
+        });
+
+        it('does not report an unset date field', () => {
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const field = new EntityField(dateField());
+                field.Value = null;
+                expect(field.Validate().Success).toBe(true);
+                expect(consoleError).not.toHaveBeenCalled();
+            } finally {
+                consoleError.mockRestore();
+            }
+        });
+    });
+
     describe('comparison semantics', () => {
         it('accepts a case variant — MJ must not refuse what the database accepts', () => {
             // SQL Server's default collation is case-insensitive, so CHECK (Status IN ('Active'))
@@ -283,7 +364,7 @@ describe('EntityField.Validate — value lists (#3969)', () => {
                 }
 
                 expect(consoleError).toHaveBeenCalledTimes(1);
-                expect(String(consoleError.mock.calls[0][0])).toContain('Value-list validation compares');
+                expect(String(consoleError.mock.calls[0][0])).toContain('validation is being SKIPPED for this field');
             } finally {
                 consoleError.mockRestore();
             }

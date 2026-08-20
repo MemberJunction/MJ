@@ -996,6 +996,8 @@ export class EntityFieldInfo extends BaseInfo {
     private _loggedEmptyValueList: boolean = false;
     /** Latches the unsupported-value-type error for the same reason. */
     private _loggedUnsupportedValueListType: boolean = false;
+    /** Memoized yyyy-mm-dd keys for a `date` field's value list; null when it cannot be compared. */
+    private _valueListDateKeys: Set<string> | null | undefined = undefined;
     _EntityFieldValues: EntityFieldValueInfo[];
     _RelatedEntityNameFieldMap: string
     /**
@@ -1153,25 +1155,8 @@ export class EntityFieldInfo extends BaseInfo {
         if (this.ValueListTypeEnum !== EntityFieldValueListType.List) {
             return true;
         }
-        if (typeof value !== 'string' && typeof value !== 'number') {
-            // null/undefined is entirely normal — an unset nullable field, or a new record — and
-            // belongs to the nullability check, so it passes quietly. ANY other type means the rule
-            // cannot be applied at all, and that is a mismatch rather than a state to absorb: either
-            // the field should not declare a value list (a value list on a bit or date column; zero
-            // exist in practice) or a caller assigned the wrong type. Skipping it silently would
-            // leave the caller believing a guard is on when it is not, which is the exact failure
-            // mode this rung was added to fix — so it is reported, once per field.
-            if (value !== null && value !== undefined && !this._loggedUnsupportedValueListType) {
-                this._loggedUnsupportedValueListType = true;
-                LogError(
-                    `Entity field ${this.Entity}.${this.Name} has ValueListType='List' but was given a ` +
-                    `${typeof value} value (SQL type ${this.SQLFullType}). Value-list validation compares ` +
-                    `string and number values only — comparing anything else would reject legal values ` +
-                    `rather than guard them — so it is being SKIPPED for this field. Either the field's ` +
-                    `metadata should not declare a value list, or the caller is assigning the wrong type.`
-                );
-            }
-            return true;
+        if (value === null || value === undefined) {
+            return true; // an unset nullable field or a new record — the nullability check's business
         }
 
         if (this._normalizedValueListValues === undefined) {
@@ -1194,7 +1179,111 @@ export class EntityFieldInfo extends BaseInfo {
             return true;
         }
 
+        // Dates are compared on the calendar date rather than the string form — see
+        // dateValueIsPermittedByValueList. A `date` column CAN carry a value list: SQL Server stores
+        // `CHECK (D IN ('2026-01-01','2026-07-01'))` as quoted literals, which is exactly the shape
+        // CodeGen's parser captures, so this is a reachable case rather than a hypothetical one.
+        if (value instanceof Date) {
+            return this.dateValueIsPermittedByValueList(value);
+        }
+
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            // The rule cannot be applied to this type at all, and that is a mismatch rather than a
+            // state to absorb: either the field should not declare a value list (one on a bit column
+            // — which CodeGen never produces, since SQL Server renders `IN (0,1)` as unquoted
+            // `([B]=(1) OR [B]=(0))`) or a caller assigned the wrong type. Skipping it silently would
+            // leave the caller believing a guard is on when it is not, which is the exact failure
+            // mode this rung was added to fix — so it is reported, once per field.
+            this.reportUnsupportedValueListValue(
+                `a ${typeof value} value (SQL type ${this.SQLFullType})`,
+                'value-list validation compares strings, numbers and dates only — comparing anything ' +
+                'else would reject legal values rather than guard them'
+            );
+            return true;
+        }
+
         return this._normalizedValueListValues.has(EntityFieldInfo.NormalizeValueListValue(value));
+    }
+
+    /**
+     * Value-list membership for a `Date` runtime value, compared on the CALENDAR DATE rather than
+     * the instant.
+     *
+     * Only `date` columns are compared. A column carrying a time component is deliberately skipped:
+     * the metadata value has no timezone, so deciding whether `'2026-01-01T00:00:00'` is the same
+     * instant as the value read back would mean guessing the database's interpretation, and guessing
+     * wrong rejects a legal value.
+     *
+     * For a `date` column the comparison accepts EITHER the value's UTC calendar date or its LOCAL
+     * one. That asymmetry is deliberate: a value read back from SQL Server arrives as UTC midnight,
+     * while application code that builds a date with `new Date(2026, 6, 1)` produces LOCAL midnight —
+     * whose UTC calendar date is the previous day west of Greenwich. Insisting on one representation
+     * would refuse legal values for half the world, so a date is in the list if either reading of it
+     * is. The cost is that an adjacent day can slip through when both days are in the list, which is
+     * a far better trade than a false failure.
+     */
+    private dateValueIsPermittedByValueList(value: Date): boolean {
+        if (this._valueListDateKeys === undefined) {
+            this._valueListDateKeys = this.buildValueListDateKeys();
+        }
+        if (this._valueListDateKeys === null) {
+            this.reportUnsupportedValueListValue(
+                `a Date value (SQL type ${this.SQLFullType})`,
+                'only a `date` column whose value list is entirely yyyy-mm-dd literals can be ' +
+                'compared — anything else would require guessing how the database interprets a ' +
+                'time-zone-less literal'
+            );
+            return true;
+        }
+        if (Number.isNaN(value.getTime())) {
+            return true; // an Invalid Date is not an out-of-list value; leave it to the date check
+        }
+        return this._valueListDateKeys.has(value.toISOString().slice(0, 10)) ||
+               this._valueListDateKeys.has(EntityFieldInfo.LocalCalendarDate(value));
+    }
+
+    /**
+     * Builds the set of yyyy-mm-dd keys for a `date` field's value list, or null when the field is
+     * not a plain `date` column or any of its values is not a yyyy-mm-dd literal. Reads the already
+     * normalized values, so it costs no extra pass over the metadata (lower-casing cannot affect a
+     * numeric date literal).
+     */
+    private buildValueListDateKeys(): Set<string> | null {
+        if ((this.Type ?? '').trim().toLowerCase() !== 'date') {
+            return null;
+        }
+        const keys = new Set<string>();
+        for (const normalized of this._normalizedValueListValues ?? []) {
+            const match = /^(\d{4}-\d{2}-\d{2})$/.exec(normalized);
+            if (!match) {
+                return null; // not a date list — refuse to guess rather than reject legal values
+            }
+            keys.add(match[1]);
+        }
+        return keys.size > 0 ? keys : null;
+    }
+
+    /** The Date's LOCAL calendar date as yyyy-mm-dd (its UTC one is `toISOString().slice(0, 10)`). */
+    private static LocalCalendarDate(value: Date): string {
+        const pad = (n: number): string => String(n).padStart(2, '0');
+        return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+    }
+
+    /**
+     * Reports, once per field, that a value could not be checked against the field's value list.
+     * Latched because the metadata is shared by every record: a bulk load would otherwise emit the
+     * same line per row, which is the noise the memoization elsewhere in this class exists to avoid.
+     */
+    private reportUnsupportedValueListValue(received: string, reason: string): void {
+        if (this._loggedUnsupportedValueListType) {
+            return;
+        }
+        this._loggedUnsupportedValueListType = true;
+        LogError(
+            `Entity field ${this.Entity}.${this.Name} has ValueListType='List' but was given ${received}: ` +
+            `${reason}, so value-list validation is being SKIPPED for this field. Either the field's ` +
+            `metadata should not declare a value list, or the caller is assigning the wrong type.`
+        );
     }
 
     /**
