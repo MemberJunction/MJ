@@ -109,6 +109,71 @@ describe('EntityField.Validate — value lists (#3969)', () => {
         expect(result.Errors).toHaveLength(0);
     });
 
+    it('does not add a serialized key to every field — the display memo must not shadow its getter', () => {
+        // BaseInfo.toJSON walks own `_`-prefixed keys and serializes THROUGH the matching public
+        // getter, and ProviderBase stringifies the whole metadata tree into the browser cache. A memo
+        // named `_valueListValuesForDisplay` would therefore emit ValueListValuesForDisplay on every
+        // field of every entity — including the thousands with no value list — and force
+        // EntityFieldValues hydration to do it. Regression guard for that naming trap.
+        const serialized = makeFieldInfo().toJSON();
+
+        expect(Object.keys(serialized)).not.toContain('ValueListValuesForDisplay');
+        expect(Object.keys(serialized)).not.toContain('_valueListDisplayCache');
+    });
+
+    it('de-duplicates the values it lists — repeated EntityFieldValue rows exist in MJ core', () => {
+        const dupes = [
+            { ID: 'x-1', EntityFieldID: 'field-1', Sequence: 1, Value: 'Active', Code: 'Active' },
+            { ID: 'x-2', EntityFieldID: 'field-1', Sequence: 2, Value: 'Active', Code: 'Active' },
+            { ID: 'x-3', EntityFieldID: 'field-1', Sequence: 3, Value: 'Inactive', Code: 'Inactive' },
+        ];
+
+        const result = new EntityField(makeFieldInfo({ EntityFieldValues: dupes }), 'Archived').Validate();
+
+        expect(result.Success).toBe(false);
+        expect(result.Errors[0].Message).toContain('Active, Inactive');
+        expect(result.Errors[0].Message).not.toContain('Active, Active');
+    });
+
+    it('reports an unpopulated value list even when the value is null — the diagnostic is value-independent', () => {
+        // Otherwise "loud" would mean "loud if someone happens to set a string": a broken field whose
+        // column always holds null would never report at all.
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const field = new EntityField(makeFieldInfo({ EntityFieldValues: [] }));
+            field.Value = null;
+
+            expect(field.Validate().Success).toBe(true);
+            expect(consoleError).toHaveBeenCalledTimes(1);
+        } finally {
+            consoleError.mockRestore();
+        }
+    });
+
+    it('accepts a SQL default that matches the list by case alone — MJ core depends on this', () => {
+        // EntityField's constructor seeds a new record from DefaultValue, and two MJ core fields have
+        // a default that differs from their own value list only in case:
+        //   MJ: Entity AI Actions.TriggerEvent  default 'After Save'  list: before save | after save
+        //   MJ: Entity AI Actions.OutputType    default 'FIeld'       list: entity | field
+        // A case-sensitive comparison would fail validation on creating either record at its default.
+        const triggerEvent = makeFieldInfo({
+            Name: 'TriggerEvent',
+            Type: 'nchar',
+            SQLFullType: 'nchar(15)',
+            DefaultValue: 'After Save',
+            EntityFieldValues: [
+                { ID: 't-1', EntityFieldID: 'field-1', Sequence: 1, Value: 'before save', Code: 'before save' },
+                { ID: 't-2', EntityFieldID: 'field-1', Sequence: 2, Value: 'after save', Code: 'after save' },
+            ],
+        });
+
+        // No value supplied: the constructor seeds it from the default, exactly as a new record does.
+        const field = new EntityField(triggerEvent);
+
+        expect(field.Value).toBe('After Save');
+        expect(field.Validate().Success).toBe(true);
+    });
+
     it('reports the unpopulated value list loudly, but only ONCE per field', () => {
         // Permitting silently would hide broken metadata; logging per row would flood a bulk load,
         // so the report is latched on the shared EntityFieldInfo.

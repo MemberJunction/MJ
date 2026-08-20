@@ -988,10 +988,18 @@ export class EntityFieldInfo extends BaseInfo {
     _RelatedEntityNameFieldIsComputed: boolean
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
-    /** Memoized normalized membership set for {@link ValueIsPermittedByValueList}. */
+    /**
+     * Memoized state for value-list validation. NOTE THE NAMES: none of these may be the getter's
+     * name minus its underscore. `BaseInfo.toJSON` walks own keys, and for a `_`-prefixed one it
+     * looks for a public getter of the matching PascalCase name and serializes THROUGH it. A memo
+     * called `_valueListValuesForDisplay` would therefore add `ValueListValuesForDisplay` to every
+     * serialized field — including the ~5,700 MJ core fields with no value list — bloating the
+     * browser metadata cache and forcing EntityFieldValues hydration purely to serialize a string
+     * that only ever appears in an error message. Hence `_valueListDisplayCache`.
+     */
     private _normalizedValueListValues: Set<string> | undefined = undefined;
     /** Memoized message form of the value list, built on first validation failure. */
-    private _valueListValuesForDisplay: string | undefined = undefined;
+    private _valueListDisplayCache: string | undefined = undefined;
     /** Latches the broken-metadata error so a bulk load cannot emit it once per row. */
     private _loggedEmptyValueList: boolean = false;
     /** Latches the unsupported-value-type error for the same reason. */
@@ -1090,23 +1098,33 @@ export class EntityFieldInfo extends BaseInfo {
     /**
      * Normalizes a value for comparison against a value list: stringified, trimmed, lower-cased.
      *
-     * Every part of that is deliberate, and two of the three are REQUIRED rather than defensive:
-     *   * **Trimming is required.** MJ's own core entities store value-list values in fixed-width
-     *     `nchar(n)` columns, so the value read back is space-padded while the metadata value is
-     *     not. Measured on a current 6.x instance database, an untrimmed comparison would have
-     *     rejected 9,301 existing rows — `MJ: Action Params`.Type (`"Input     "`),
-     *     `MJ: Record Changes`.Status (`"Complete       "`), `MJ: Entity Relationships`.Type,
-     *     `MJ: Authorization Roles`.Type and `MJ: Users`.Type — i.e. it would break saves on MJ
-     *     core itself. Every one of those mismatches was padding alone; none was a case difference.
-     *   * **Stringifying is required.** `EntityFieldValue.Value` is always a string in metadata
-     *     while the field's runtime value may be a number (a numeric value list), so a strict
-     *     `===` would reject every legal value on such a field.
-     *   * **Lower-casing is defensive.** No row in that same database needs it, but SQL Server's
-     *     default collation is case-insensitive, so `Status = 'active'` is accepted by
+     * Each part earns its place, and the reasons are NOT equally strong — stated precisely, because
+     * a future maintainer will use this to decide whether to tighten the comparison:
+     *   * **Lower-casing is load-bearing on MJ core itself.** Not merely defensive: the default-value
+     *     path puts a field's SQL default into a new record (`EntityField`'s constructor assigns
+     *     `DefaultValue` when no value is supplied), and two MJ core fields have a default that
+     *     matches their value list by CASE ALONE — `MJ: Entity AI Actions`.TriggerEvent defaults to
+     *     `'After Save'` against a list of `before save | after save`, and its OutputType defaults to
+     *     `'FIeld'` against `entity | field`. Under a case-sensitive comparison, creating either
+     *     record at its database default would fail validation. Separately, SQL Server's default
+     *     collation is case-insensitive, so `Status = 'active'` is accepted by
      *     `CHECK (Status IN ('Active', ...))` and refusing it here would turn a save that succeeds
-     *     today into a failure. The asymmetry is deliberate and known: PostgreSQL IS
-     *     case-sensitive, so on PG a case variant is still refused — by its CHECK, not by this
-     *     rung. Tightening to an exact case match is a separate, breaking decision.
+     *     today into a failure. (PostgreSQL IS case-sensitive, so on PG a case variant is still
+     *     refused — by its CHECK, not by this rung.)
+     *   * **Stringifying is required.** `EntityFieldValue.Value` is always a string in metadata while
+     *     the field's runtime value may be a number, so a strict `===` would reject every legal value
+     *     on a numeric list. It is not lossless: `String(1.0)` is `'1'`, so a metadata value written
+     *     as `'1.0'` would fail closed. No numeric value lists exist today (CodeGen cannot produce
+     *     one — see the note in ValueIsPermittedByValueList), so this is recorded rather than solved.
+     *   * **Trimming is cheap insurance, NOT the load-bearing rule it was first documented as.** An
+     *     earlier version of this comment claimed an untrimmed comparison would reject 9,301 existing
+     *     rows in fixed-width `nchar` columns (`MJ: Action Params`.Type, `MJ: Record Changes`.Status
+     *     and others). That measurement was taken over RAW SQL ROWS and does not describe this code
+     *     path: `EntityField`'s value setter already strips trailing padding on fixed-width columns
+     *     (see `FixedWidthColumn`), and hydration assigns through that setter, so the padding is gone
+     *     before `Validate()` ever reads the value. Trimming is kept because it still covers LEADING
+     *     whitespace, stray spaces on the metadata side, and any caller that assigns a padded value
+     *     directly — none of which the setter handles.
      */
     public static NormalizeValueListValue(value: unknown): string {
         return String(value).trim().toLowerCase();
@@ -1131,8 +1149,9 @@ export class EntityFieldInfo extends BaseInfo {
      *     the list, so validating it would break every field that opted into free text.
      *   * A `List` field with no `EntityFieldValue` rows permits everything. Strictly it describes
      *     a field where nothing is legal, which should never exist; it means the metadata is
-     *     broken, not that every value is wrong, so this logs loudly (once) and permits rather
-     *     than failing every save on the field.
+     *     broken, not that every value is wrong, so this logs loudly (once per EntityFieldInfo
+     *     instance, which means it re-arms after a metadata refresh rather than being once ever)
+     *     and permits rather than failing every save on the field.
      *   * Null/undefined is the nullability check's job, so one mistake never produces two errors.
      *     An EMPTY or whitespace-only string is NOT absence: SQL Server pads on comparison, so
      *     `''` and `'   '` are the same value to a CHECK constraint and it refuses both. Skipping
@@ -1148,6 +1167,16 @@ export class EntityFieldInfo extends BaseInfo {
      *     would see `String(true) === 'true'` and reject every legal value, and a Date has no sane
      *     string form to compare — so guessing there would break saves rather than guard them.
      *
+     * TWO PRODUCERS, ONE OF WHICH HAS NO DATABASE FLOOR. A CHECK-derived list is safe by
+     * construction: the database refuses anything this rung refuses, so validating can only move a
+     * failure earlier. The other producer is `applyValueListConfig` in CodeGen, which applies
+     * DBAutoDoc's LLM enum detection from `additionalSchemaInfo` — those fields have NO CHECK
+     * constraint, so for them this rung converts a sampled, confidence-scored guess into a hard save
+     * refusal for any value the model did not see. It is opt-in (the config must exist) and arguably
+     * the intended reading of `List` as a closed set, with `ListOrUserEntry` available when unsure —
+     * but it means "MJ never refuses what the database would accept" holds for the first producer
+     * only.
+     *
      * @param value the field's current runtime value
      * @returns true when the value is permitted, INCLUDING when the rule does not apply
      */
@@ -1155,10 +1184,6 @@ export class EntityFieldInfo extends BaseInfo {
         if (this.ValueListTypeEnum !== EntityFieldValueListType.List) {
             return true;
         }
-        if (value === null || value === undefined) {
-            return true; // an unset nullable field or a new record — the nullability check's business
-        }
-
         if (this._normalizedValueListValues === undefined) {
             const values = this.EntityFieldValues ?? [];
             this._normalizedValueListValues = new Set<string>(
@@ -1166,6 +1191,11 @@ export class EntityFieldInfo extends BaseInfo {
             );
         }
 
+        // The broken-metadata report comes FIRST, before the null and type gates, so that it is
+        // value-independent: a `List` field with no values whose column happens to hold null (or a
+        // boolean) would otherwise never report at all, making "loud" mean "loud if someone happens
+        // to set a string". The cost is building one memoized set on a field that would build it
+        // anyway.
         if (this._normalizedValueListValues.size === 0) {
             if (!this._loggedEmptyValueList) {
                 this._loggedEmptyValueList = true; // latched: one report per field, not per row
@@ -1177,6 +1207,10 @@ export class EntityFieldInfo extends BaseInfo {
                 );
             }
             return true;
+        }
+
+        if (value === null || value === undefined) {
+            return true; // an unset nullable field or a new record — the nullability check's business
         }
 
         // Dates are compared on the calendar date rather than the string form — see
@@ -1191,7 +1225,8 @@ export class EntityFieldInfo extends BaseInfo {
             // The rule cannot be applied to this type at all, and that is a mismatch rather than a
             // state to absorb: either the field should not declare a value list (one on a bit column
             // — which CodeGen never produces, since SQL Server renders `IN (0,1)` as unquoted
-            // `([B]=(1) OR [B]=(0))`) or a caller assigned the wrong type. Skipping it silently would
+            // `([B]=(1) OR [B]=(0))`, the same reason no NUMERIC list exists either; see MJ #3978)
+            // or a caller assigned the wrong type. Skipping it silently would
             // leave the caller believing a guard is on when it is not, which is the exact failure
             // mode this rung was added to fix — so it is reported, once per field.
             this.reportUnsupportedValueListValue(
@@ -1292,15 +1327,18 @@ export class EntityFieldInfo extends BaseInfo {
      * repeatedly, and the string never changes.
      */
     get ValueListValuesForDisplay(): string {
-        if (this._valueListValuesForDisplay !== undefined) {
-            return this._valueListValuesForDisplay;
+        if (this._valueListDisplayCache !== undefined) {
+            return this._valueListDisplayCache;
         }
-        const values: string[] = (this.EntityFieldValues ?? []).map(v => v.Value);
+        // De-duplicated: EntityFieldValue rows are not unique in practice (`MJ: Action Params`.ValueType
+        // carries repeats today), and listing the same value twice — or double-counting it in the
+        // "(N total)" tail — makes the message look like a bug in the message.
+        const values: string[] = [...new Set((this.EntityFieldValues ?? []).map(v => v.Value))];
         const max = EntityFieldInfo.MaxValueListValuesInErrorMessage;
-        this._valueListValuesForDisplay = values.length > max ?
+        this._valueListDisplayCache = values.length > max ?
             `${values.slice(0, max).join(', ')}, ... (${values.length} total)` :
             values.join(', ');
-        return this._valueListValuesForDisplay;
+        return this._valueListDisplayCache;
     }
 
     get GeneratedFormSectionType(): GeneratedFormSectionType {
