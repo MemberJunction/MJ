@@ -67,6 +67,26 @@ vi.mock('@memberjunction/global', () => ({
   UUIDsEqual: (a: string, b: string) => a === b,
 }));
 
+/**
+ * `CredentialEngine` is mocked, not exercised: it extends `BaseEngine` and reaches for a provider,
+ * which these suites deliberately do not have. What IS asserted is that the credential path goes
+ * THROUGH the engine — `getCredential` is a spy, so a regression back to a raw `RunView` would show
+ * up as this never being called.
+ */
+vi.mock('@memberjunction/credentials', () => {
+  const getCredential = vi.fn(async () => ({ values: { accessToken: 'cred-token', apiKey: 'cred-apollo-key' } }));
+  return {
+    CredentialEngine: {
+      Instance: {
+        Config: vi.fn(async () => undefined),
+        Credentials: [{ ID: 'cred-1', Name: 'Test Credential', IsActive: true }],
+        getCredential,
+      },
+    },
+    __getCredentialSpy: getCredential,
+  };
+});
+
 vi.mock('@memberjunction/core', () => ({
   UserInfo: class UserInfo {},
   Metadata: vi.fn(),
@@ -230,7 +250,11 @@ describe('BufferCreatePostAction', () => {
         text: 'Queued post',
         mode: 'addToQueue',
         dueAt: undefined,
-        assets: { images: [{ url: 'https://img/1.jpg' }] },
+        // One AssetInput entry per attachment, each naming its kind. Buffer moved createPost to this
+        // array form on 2026-05-25 and REJECTS the older `{ images: [...] }` object this used to
+        // assert — so the previous expectation pinned a payload the vendor no longer accepts.
+        assets: [{ image: { url: 'https://img/1.jpg' } }],
+        metadata: undefined,
       },
     });
     expect(result.Success).toBe(true);
