@@ -988,6 +988,12 @@ export class EntityFieldInfo extends BaseInfo {
     _RelatedEntityNameFieldIsComputed: boolean
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
+    /** Memoized normalized membership set for {@link ValueIsPermittedByValueList}. */
+    private _normalizedValueListValues: Set<string> | undefined = undefined;
+    /** Memoized message form of the value list, built on first validation failure. */
+    private _valueListValuesForDisplay: string | undefined = undefined;
+    /** Latches the broken-metadata error so a bulk load cannot emit it once per row. */
+    private _loggedEmptyValueList: boolean = false;
     _EntityFieldValues: EntityFieldValueInfo[];
     _RelatedEntityNameFieldMap: string
     /**
@@ -1069,6 +1075,124 @@ export class EntityFieldInfo extends BaseInfo {
                 }
             }
         }
+    }
+
+    /**
+     * Upper bound on how many legal values a validation message enumerates before it truncates.
+     * A long list would otherwise produce an error message no user can read.
+     */
+    public static readonly MaxValueListValuesInErrorMessage: number = 25;
+
+    /**
+     * Normalizes a value for comparison against a value list: stringified, trimmed, lower-cased.
+     *
+     * Every part of that is deliberate, and two of the three are REQUIRED rather than defensive:
+     *   * **Trimming is required.** MJ's own core entities store value-list values in fixed-width
+     *     `nchar(n)` columns, so the value read back is space-padded while the metadata value is
+     *     not. Measured on a current 6.x instance database, an untrimmed comparison would have
+     *     rejected 9,301 existing rows — `MJ: Action Params`.Type (`"Input     "`),
+     *     `MJ: Record Changes`.Status (`"Complete       "`), `MJ: Entity Relationships`.Type,
+     *     `MJ: Authorization Roles`.Type and `MJ: Users`.Type — i.e. it would break saves on MJ
+     *     core itself. Every one of those mismatches was padding alone; none was a case difference.
+     *   * **Stringifying is required.** `EntityFieldValue.Value` is always a string in metadata
+     *     while the field's runtime value may be a number (a numeric value list), so a strict
+     *     `===` would reject every legal value on such a field.
+     *   * **Lower-casing is defensive.** No row in that same database needs it, but SQL Server's
+     *     default collation is case-insensitive, so `Status = 'active'` is accepted by
+     *     `CHECK (Status IN ('Active', ...))` and refusing it here would turn a save that succeeds
+     *     today into a failure. The asymmetry is deliberate and known: PostgreSQL IS
+     *     case-sensitive, so on PG a case variant is still refused — by its CHECK, not by this
+     *     rung. Tightening to an exact case match is a separate, breaking decision.
+     */
+    public static NormalizeValueListValue(value: unknown): string {
+        return String(value).trim().toLowerCase();
+    }
+
+    /**
+     * Whether `value` is permitted by this field's exhaustive value list (MJ issue #3969).
+     *
+     * A field whose `ValueListType` is `List` carries an exhaustive set of legal values in
+     * `__mj.EntityFieldValue`, and for an `IN (...)` CHECK constraint that list is the ONLY runtime
+     * representation CodeGen produces — `ParseCheckConstraints` emits the value list rather than a
+     * generated `Validate()` method, since the list is also what the UI needs to render a dropdown.
+     * So this is the only place such a constraint can be caught before the database refuses it as a
+     * raw violation attributed to no field.
+     *
+     * The normalized set is built ONCE per field and reused, because it derives from metadata that
+     * is immutable after load and is shared by every `EntityField` instance of this field — at
+     * import scale (thousands to millions of rows) rebuilding it per record is pure waste.
+     *
+     * Four boundaries keep the rule safe to apply everywhere:
+     *   * `ListOrUserEntry` is never checked — that mode exists precisely to permit values outside
+     *     the list, so validating it would break every field that opted into free text.
+     *   * A `List` field with no `EntityFieldValue` rows permits everything. Strictly it describes
+     *     a field where nothing is legal, which should never exist; it means the metadata is
+     *     broken, not that every value is wrong, so this logs loudly (once) and permits rather
+     *     than failing every save on the field.
+     *   * Null/undefined is the nullability check's job, so one mistake never produces two errors.
+     *     An EMPTY or whitespace-only string is NOT absence: SQL Server pads on comparison, so
+     *     `''` and `'   '` are the same value to a CHECK constraint and it refuses both. Skipping
+     *     them would leave a hole exactly where a blanked-out field lands.
+     *   * Only string and number values are checked, and the gate fails OPEN — an unsupported type
+     *     skips validation rather than manufacturing a failure. Nothing in the schema restricts
+     *     which columns may carry a value list (`CK_EntityField_ValueListType_New` constrains the
+     *     mode, not the column type), but in practice every one is a string column: measured on a
+     *     current 6.x instance, 455 nvarchar + 7 nchar and nothing else, which follows from
+     *     CodeGen's constraint parser only ever extracting quoted literals. `number` is admitted
+     *     because the generated union type anticipates a non-quoted list via `NeedsQuotes`.
+     *     Booleans and Dates are excluded deliberately: a bit column carrying a `'1'`/`'0'` list
+     *     would see `String(true) === 'true'` and reject every legal value, and a Date has no sane
+     *     string form to compare — so guessing there would break saves rather than guard them.
+     *
+     * @param value the field's current runtime value
+     * @returns true when the value is permitted, INCLUDING when the rule does not apply
+     */
+    public ValueIsPermittedByValueList(value: unknown): boolean {
+        if (this.ValueListTypeEnum !== EntityFieldValueListType.List) {
+            return true;
+        }
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return true;
+        }
+
+        if (this._normalizedValueListValues === undefined) {
+            const values = this.EntityFieldValues ?? [];
+            this._normalizedValueListValues = new Set<string>(
+                values.map(v => EntityFieldInfo.NormalizeValueListValue(v.Value))
+            );
+        }
+
+        if (this._normalizedValueListValues.size === 0) {
+            if (!this._loggedEmptyValueList) {
+                this._loggedEmptyValueList = true; // latched: one report per field, not per row
+                LogError(
+                    `Entity field ${this.Entity}.${this.Name} has ValueListType='List' but no EntityFieldValue rows. ` +
+                    `That describes a field where no value is legal, which is broken metadata rather than a rule, ` +
+                    `so value-list validation is being SKIPPED for this field. Re-run CodeGen for the entity, or ` +
+                    `set ValueListType='None' if the field is not meant to be constrained.`
+                );
+            }
+            return true;
+        }
+
+        return this._normalizedValueListValues.has(EntityFieldInfo.NormalizeValueListValue(value));
+    }
+
+    /**
+     * This field's legal values formatted for a validation message, truncated past
+     * {@link MaxValueListValuesInErrorMessage}. Memoized — a bad bulk load fails on the same field
+     * repeatedly, and the string never changes.
+     */
+    get ValueListValuesForDisplay(): string {
+        if (this._valueListValuesForDisplay !== undefined) {
+            return this._valueListValuesForDisplay;
+        }
+        const values: string[] = (this.EntityFieldValues ?? []).map(v => v.Value);
+        const max = EntityFieldInfo.MaxValueListValuesInErrorMessage;
+        this._valueListValuesForDisplay = values.length > max ?
+            `${values.slice(0, max).join(', ')}, ... (${values.length} total)` :
+            values.join(', ');
+        return this._valueListValuesForDisplay;
     }
 
     get GeneratedFormSectionType(): GeneratedFormSectionType {

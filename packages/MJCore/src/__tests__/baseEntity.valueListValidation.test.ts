@@ -109,6 +109,24 @@ describe('EntityField.Validate — value lists (#3969)', () => {
         expect(result.Errors).toHaveLength(0);
     });
 
+    it('reports the unpopulated value list loudly, but only ONCE per field', () => {
+        // Permitting silently would hide broken metadata; logging per row would flood a bulk load,
+        // so the report is latched on the shared EntityFieldInfo.
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const fieldInfo = makeFieldInfo({ EntityFieldValues: [] });
+
+            for (let i = 0; i < 5; i++) {
+                expect(new EntityField(fieldInfo, `Value${i}`).Validate().Success).toBe(true);
+            }
+
+            expect(consoleError).toHaveBeenCalledTimes(1);
+            expect(String(consoleError.mock.calls[0][0])).toContain("ValueListType='List' but no EntityFieldValue rows");
+        } finally {
+            consoleError.mockRestore();
+        }
+    });
+
     it('leaves null alone on a nullable field — null is genuine absence, unlike \'\'', () => {
         const field = new EntityField(makeFieldInfo());
         field.Value = null;
@@ -209,6 +227,46 @@ describe('EntityField.Validate — value lists (#3969)', () => {
 
             expect(new EntityField(makeFieldInfo(numeric), 2).Validate().Success).toBe(true);
             expect(new EntityField(makeFieldInfo(numeric), 7).Validate().Success).toBe(false);
+        });
+
+        it('builds the normalized value set once per FIELD, not once per record', () => {
+            // The set derives from metadata that is immutable after load and shared by every
+            // EntityField instance of the field, so validating 1,000 records must not rebuild it
+            // 1,000 times. Reading EntityFieldValues is the observable proxy for rebuilding.
+            const fieldInfo = makeFieldInfo();
+            const valuesRead = vi.spyOn(fieldInfo, 'EntityFieldValues', 'get');
+
+            for (let i = 0; i < 50; i++) {
+                expect(new EntityField(fieldInfo, 'Active').Validate().Success).toBe(true);
+            }
+
+            expect(valuesRead).toHaveBeenCalledTimes(1);
+            valuesRead.mockRestore();
+        });
+
+        it('reuses the formatted value list across repeated failures', () => {
+            // A bad bulk load fails on the same field over and over; the message never changes.
+            const fieldInfo = makeFieldInfo();
+            expect(new EntityField(fieldInfo, 'Archived').Validate().Success).toBe(false);
+            const valuesRead = vi.spyOn(fieldInfo, 'EntityFieldValues', 'get');
+
+            const second = new EntityField(fieldInfo, 'Archived').Validate();
+
+            expect(second.Errors[0].Message).toContain('Active, Inactive');
+            expect(valuesRead).not.toHaveBeenCalled();
+            valuesRead.mockRestore();
+        });
+
+        it('truncates a long value list in the message', () => {
+            const many = Array.from({ length: 30 }, (_, i) => ({
+                ID: `v-${i}`, EntityFieldID: 'field-1', Sequence: i + 1, Value: `Value${i}`, Code: `Value${i}`,
+            }));
+
+            const result = new EntityField(makeFieldInfo({ EntityFieldValues: many, MaxLength: 200 }), 'Nope').Validate();
+
+            expect(result.Success).toBe(false);
+            expect(result.Errors[0].Message).toContain('... (30 total)');
+            expect(result.Errors[0].Message).not.toContain('Value25');
         });
 
         it('ignores non-scalar values rather than stringifying them', () => {
