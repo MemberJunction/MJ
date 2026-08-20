@@ -688,10 +688,11 @@ export class BaseEntityResult {
      *
      * This used to read `err.message` ONLY, so every `ValidationErrorInfo` fell through to
      * `JSON.stringify(err)`. That is not a cosmetic difference: `CompleteMessage` is the string the
-     * server hands the client on a failed save — `ResolverBase.CreateRecord`/`UpdateRecord` put it in
-     * the `GraphQLError`, and `SaveEntityGraphOperation` puts it in `ErrorMessage` — so the whole
-     * point of writing a careful, field-named refusal in a subclass's `ValidateAsync()` was defeated
-     * at the last step, and the user saw
+     * server hands the client on a failed save — every write-refusal throw in `ResolverBase`
+     * (`CreateRecord`/`UpdateRecord`/`DeleteRecord`) puts it in the `GraphQLError`, and
+     * `SaveEntityGraphOperation` puts it in `ErrorMessage` — so the whole point of writing a careful,
+     * field-named refusal in a subclass's `ValidateAsync()` was defeated at the last step, and the
+     * user saw
      * `{"Source":"ParentContractID","Message":"…","Value":null,"Type":"Failure"}` in a toast.
      *
      * Nothing catches this at compile time because `Errors` is `any[]`; nothing catches it at runtime
