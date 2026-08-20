@@ -510,9 +510,10 @@ jobs:
   # see that step's comment).
   #
   # WHICH TAG: `latest` if this line already owns `latest` (or no `latest` exists
-  # yet), otherwise `lts-<line>`. Craig's ruling — 5.51.1 superseding 5.51.0 is the
-  # legitimate latest, so it should say so — applied at PUBLISH time, because that
-  # is the only moment an OIDC credential exists. A line release can still never
+  # yet), otherwise `lts-<line>`. When `latest` is already on this line, the new
+  # release IS the legitimate latest and should say so rather than leaving installs
+  # on a superseded patch — and the tag is applied at PUBLISH time, because that is
+  # the only moment an OIDC credential exists. A line release can still never
   # drag `latest` backwards off a newer line, and moving `latest` ACROSS lines
   # stays certification's job via ci/dist-tag-all.mjs. The cost of npm's one-tag-
   # per-publish limit is that the line tag then lags by one patch, so a best-effort
@@ -685,8 +686,9 @@ jobs:
       # lib/commands/dist-tag.js has no OIDC path at all. A post-publish
       # "npm dist-tag add" therefore needs a write token, and npm expires write
       # tokens every 90 days — line patches are rarer than that rotation, so a
-      # token-based step would be broken more often than it works. Craig's ruling:
-      # the latest tag has to be applied at OIDC publish time.
+      # token-based step would be broken more often than it works. The `latest` tag
+      # is therefore applied at OIDC publish time, never moved afterwards. Tracking
+      # issue for the underlying gap: https://github.com/npm/cli/issues/8547.
       #
       # Ownership rule: a bare-major line (lts/5) owns every 5.x, because major 5 has
       # no dotted lines; a dotted line (lts/6.1) owns 6.1.x only. Both reduce to a
@@ -833,10 +835,11 @@ jobs:
           fi
 
       # The GitHub "Latest" badge follows the same ownership rule as the npm tag, so
-      # the two surfaces cannot disagree about which build to install. This extends
-      # Craig's npm ruling to the badge by symmetry — he ruled on npm, not on this —
-      # so it is the one judgement in this PR a reviewer may want to strike. Striking
-      # it means deleting the LATEST_FLAG lines and going back to --latest=false.
+      # the two surfaces cannot disagree about which build to install. That is an
+      # extension by symmetry: the rule was set for the npm dist-tag, and applying it
+      # to the badge is this change's own inference rather than a settled decision —
+      # the one judgement here a reviewer may want to strike. Striking it means
+      # deleting the LATEST_FLAG lines and going back to --latest=false.
       - name: Create GitHub Release (Latest badge follows the npm tag)
         env:
           GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
