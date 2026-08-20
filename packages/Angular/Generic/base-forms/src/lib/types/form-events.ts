@@ -31,6 +31,11 @@ export class BeforeSaveEventArgs extends CancellableFormEvent {
 export class BeforeDeleteEventArgs extends CancellableFormEvent {}
 
 /**
+ * Event args for BeforeRefresh event
+ */
+export class BeforeRefreshEventArgs extends CancellableFormEvent {}
+
+/**
  * Event args for BeforeCancel event
  */
 export class BeforeCancelEventArgs extends CancellableFormEvent {}
