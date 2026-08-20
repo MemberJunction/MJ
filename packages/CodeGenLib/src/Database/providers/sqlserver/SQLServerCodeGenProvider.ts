@@ -17,6 +17,7 @@ import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Mis
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
+import { ExtractCreatedObjectName, SQLExecutionDiagnostics } from '../../sql-execution-diagnostics';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -1860,12 +1861,32 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 
             const pool = await MSSQLConnection();
 
-            for (const batch of batches) {
+            for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
                 try {
                     await pool.request().query(batch);
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                    // Deliberately non-fatal: one entity's broken object must not abort the
+                    // other several hundred, and the post-run CRUD validator is the
+                    // authoritative gap report. But a truncated warning among hundreds of
+                    // lines is how MJ#3975 §1 happened — the view-compilation error that
+                    // caused the run to fail was invisible, while the GRANT failures it
+                    // produced downstream were the loudest output. So: log the error IN FULL,
+                    // and record it so STEP 4 can name it as the cause of any permissions
+                    // failure on the same object.
+                    const objectName = ExtractCreatedObjectName(batch);
+                    SQLExecutionDiagnostics.Record({
+                        file: path.basename(filePath),
+                        batchNumber: i + 1,
+                        totalBatches: batches.length,
+                        objectName,
+                        message: msg,
+                    });
+                    logWarning(
+                        `[CodeGen] SQL batch ${i + 1}/${batches.length} failed in ${path.basename(filePath)}` +
+                        `${objectName ? ` (creating ${objectName})` : ''}: ${msg}`,
+                    );
                 }
             }
 

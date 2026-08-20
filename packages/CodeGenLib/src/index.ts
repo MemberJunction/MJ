@@ -52,6 +52,7 @@ export * from './Database/dbSchema'
 export * from './Database/manage-metadata'
 export * from './Database/sql_codegen'
 export * from './Database/sql'
+export * from './Database/sql-execution-diagnostics'
 
 // Code generation exports
 export * from './Misc/entity_subclasses_codegen'
