@@ -31,11 +31,14 @@ import { MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-
         ClusterViewPropSheetComponent,
     ],
 })
-export class ClusteringModule {
-    constructor() {
-        // Guarantee the Cluster view-type descriptor's @RegisterClass runs whenever the
-        // clustering feature loads (ng-clustering sets sideEffects:false). App-wide
-        // registration is also covered by the generated ng-bootstrap class manifest.
-        LoadClusterViewType();
-    }
-}
+export class ClusteringModule {}
+
+// Guarantee the Cluster view-type descriptor's @RegisterClass runs whenever the
+// clustering feature loads (ng-clustering sets sideEffects:false). App-wide
+// registration is also covered by the generated ng-bootstrap class manifest.
+//
+// MODULE SCOPE, not the constructor: a lazily-imported module is often evaluated
+// for its side effects without ever being instantiated, so a constructor-scoped
+// loader silently never runs. See `ai-dashboards.module.ts` for the case where
+// that let a whole resource component get tree-shaken out of its chunk.
+LoadClusterViewType();
