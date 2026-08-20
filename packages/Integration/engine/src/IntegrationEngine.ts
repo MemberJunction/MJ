@@ -55,6 +55,7 @@ import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrenc
 import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
+import { CollapseDuplicateIdentities } from './BatchIdentity.js';
 
 /** Default batch size for fetching records from external systems */
 const DEFAULT_BATCH_SIZE = 200;
@@ -2448,8 +2449,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 }
             }
 
+            // Within-batch identity, enforced before mapping: two records sharing an ExternalID are
+            // two observations of ONE source record. The write path cannot catch this — it decides
+            // insert-vs-update against the DATABASE, where a first-time identity is absent for both
+            // copies, so both insert and the pair re-inserts every sync. The fingerprint guard above
+            // only sees a batch repeated in FULL. Never silent: a connector emitting duplicate
+            // identities is a defect worth fixing at its source.
+            const identity = CollapseDuplicateIdentities(batch.Records);
+            if (identity.Collapsed > 0) {
+                logger?.warning(
+                    entityMap.ExternalObjectName ?? 'sync',
+                    'DUPLICATE_IDENTITIES_IN_BATCH',
+                    `${entityMap.ExternalObjectName}: ${identity.Collapsed} record(s) repeated an ExternalID already `
+                    + `present in the same batch and were collapsed (last occurrence kept). Two records sharing an `
+                    + `identity are one source record observed twice; writing both would insert duplicate rows that `
+                    + `no later sync could reconcile. Sample: ${identity.SampleIDs.join(', ')}`,
+                    { object: entityMap.ExternalObjectName, collapsed: identity.Collapsed, sample: identity.SampleIDs }
+                );
+            }
+
             const mapped = this.fieldMappingEngine.Apply(
-                batch.Records, fieldMaps, entityMap.Entity
+                identity.Records, fieldMaps, entityMap.Entity
             );
             // Custom-key stats: aggregate unmapped keys for EVERY mapped record here —
             // before any skip decision — so candidates + sizing stats exist even when the
