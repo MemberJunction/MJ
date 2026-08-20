@@ -565,62 +565,6 @@
   },
   {
     "fields": {
-      "Name": "MJ: Employees"
-    },
-    "relatedEntities": {
-      "MJ: Entity Fields": [
-        {
-          "fields": {
-            "Configuration": {
-              "Hierarchy": {
-                "IsHierarchy": true
-              }
-            }
-          },
-          "primaryKey": {
-            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Employees&Name=SupervisorID"
-          },
-          "sync": {
-            "lastModified": "2026-08-19T20:02:03.819Z",
-            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Employees"
-    }
-  },
-  {
-    "fields": {
-      "Name": "MJ: Entities"
-    },
-    "relatedEntities": {
-      "MJ: Entity Fields": [
-        {
-          "fields": {
-            "Configuration": {
-              "Hierarchy": {
-                "IsHierarchy": true
-              }
-            }
-          },
-          "primaryKey": {
-            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=ParentID"
-          },
-          "sync": {
-            "lastModified": "2026-08-19T20:02:03.819Z",
-            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Entities"
-    }
-  },
-  {
-    "fields": {
       "Name": "MJ: File Categories"
     },
     "relatedEntities": {
