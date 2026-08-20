@@ -1964,7 +1964,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         const entities: BaseEntity[] = [];
                         for(const entityData of item.Results) {
                             const entity: BaseEntity = await p.GetEntityObject(item.EntityName, contextUser);
-                            entity.SetMany(entityData);
+                            await entity.LoadFromData(entityData);
                             entities.push(entity);
                         }
 

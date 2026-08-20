@@ -55,7 +55,7 @@
 
 .mj-search-box:focus-within {
     border-color: var(--mj-brand-primary, #38bdf8);
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 18%, transparent);
 }
 
 .mj-search-icon {
@@ -95,7 +95,7 @@
     font-weight: 700;
     padding: 2px 7px;
     border-radius: 9999px;
-    background: rgba(56, 189, 248, 0.15);
+    background: color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 15%, transparent);
     color: var(--mj-brand-primary, #38bdf8);
     white-space: nowrap;
 }
@@ -107,15 +107,15 @@
     gap: 8px;
     font-size: 12px;
     color: var(--mj-brand-primary, #38bdf8);
-    background: rgba(56, 189, 248, 0.1);
-    border: 1px solid rgba(56, 189, 248, 0.3);
+    background: color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 30%, transparent);
     padding: 4px 10px;
     border-radius: 6px;
 }
 
 .mj-reset-focus-btn {
     background: var(--mj-brand-primary, #38bdf8);
-    color: #041124;
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 4px;
     padding: 3px 8px;
@@ -198,7 +198,7 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    background: rgba(8, 13, 26, 0.85);
+    background: var(--mj-bg-overlay);
     backdrop-filter: blur(4px);
     z-index: 20;
     color: var(--mj-text-secondary, #94a3b8);
@@ -208,7 +208,7 @@
 .mj-spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid rgba(56, 189, 248, 0.2);
+    border: 3px solid color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 20%, transparent);
     border-top-color: var(--mj-brand-primary, #38bdf8);
     border-radius: 50%;
     animation: mj-spin 0.8s linear infinite;
@@ -225,7 +225,7 @@
 
 .mj-retry-btn {
     background: var(--mj-brand-primary, #38bdf8);
-    color: #041124;
+    color: var(--mj-text-inverse);
     border: none;
     padding: 6px 14px;
     font-size: 12px;
@@ -261,22 +261,22 @@
 .mj-node-card:hover {
     border-color: var(--mj-brand-primary, #38bdf8);
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 12px rgba(56, 189, 248, 0.2);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 12px color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 20%, transparent);
 }
 
 .mj-node-card.selected {
     border-color: var(--mj-brand-primary, #38bdf8);
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.4), 0 6px 20px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 40%, transparent), 0 6px 20px rgba(0, 0, 0, 0.6);
 }
 
 .mj-node-card.highlighted {
-    border-color: #f59e0b;
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4), 0 6px 20px rgba(0, 0, 0, 0.6);
+    border-color: var(--mj-status-warning);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-status-warning) 40%, transparent), 0 6px 20px rgba(0, 0, 0, 0.6);
 }
 
 .mj-node-card.focus-root {
-    border-color: #10b981;
-    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.4);
+    border-color: var(--mj-status-success);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
 }
 
 /* Accent Top Bar */
@@ -363,14 +363,14 @@
 
 .mj-expand-badge:hover {
     background: var(--mj-brand-primary, #38bdf8);
-    color: #041124;
+    color: var(--mj-text-inverse);
     border-color: var(--mj-brand-primary, #38bdf8);
 }
 
 .mj-expand-badge.collapsed {
-    background: rgba(56, 189, 248, 0.15);
+    background: color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 15%, transparent);
     color: var(--mj-brand-primary, #38bdf8);
-    border-color: rgba(56, 189, 248, 0.35);
+    border-color: color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 35%, transparent);
 }
 
 .mj-leaf-indicator {
@@ -625,7 +625,7 @@
     justify-content: center;
     gap: 8px;
     background: var(--mj-brand-primary, #38bdf8);
-    color: #041124;
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 8px;
     padding: 9px 16px;
@@ -633,12 +633,12 @@
     font-weight: 700;
     cursor: pointer;
     transition: all 0.18s ease;
-    box-shadow: 0 2px 8px rgba(56, 189, 248, 0.3);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 30%, transparent);
 }
 
 .mj-drawer-btn-primary:hover {
-    background: #7dd3fc;
-    box-shadow: 0 4px 14px rgba(56, 189, 248, 0.45);
+    background: var(--mj-brand-primary-hover);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 45%, transparent);
     transform: translateY(-1px);
 }
 

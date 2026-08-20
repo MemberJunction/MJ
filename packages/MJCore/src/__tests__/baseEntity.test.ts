@@ -18,6 +18,12 @@ function createMockFieldInfo(overrides: Partial<EntityFieldInfo> = {}): EntityFi
         DefaultValue: null,
         Entity: 'MJTestEntity',
         IsSpecialDateField: false,
+        // The validation ladder calls this for value-list fields. Borrow the REAL implementation
+        // rather than stubbing it true: it only reads ValueListTypeEnum / EntityFieldValues off
+        // `this`, so a duck-typed mock gets genuine behaviour (and, with neither set, the
+        // not-a-value-list path). Value-list coverage itself lives in
+        // baseEntity.valueListValidation.test.ts, against real EntityFieldInfo instances.
+        ValueIsPermittedByValueList: EntityFieldInfo.prototype.ValueIsPermittedByValueList,
         ...overrides
     };
     return base as unknown as EntityFieldInfo;

@@ -15,8 +15,9 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Metadata, RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
+import { RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent, RecordNavigationEvent } from '@memberjunction/ng-base-forms';
 import * as d3 from 'd3';
 import {
@@ -69,8 +70,10 @@ import {
     templateUrl: './hierarchy-tree.component.html',
     styleUrls: ['./hierarchy-tree.component.css']
 })
-export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
-    constructor(private cdr?: ChangeDetectorRef) {}
+export class HierarchyTreeComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
+    constructor(private cdr?: ChangeDetectorRef) {
+        super();
+    }
 
     @ViewChild('svgContainer', { static: false }) svgContainerRef!: ElementRef<HTMLDivElement>;
     @ViewChild('svgElement', { static: false }) svgRef!: ElementRef<SVGSVGElement>;
@@ -287,7 +290,10 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         if (!this.Config) return;
         this.Config = {
             DefaultIcon: 'fa-solid fa-sitemap',
-            DefaultColor: '#38bdf8',
+            // Design token, not a literal — the accent is bound to [style.background]/[style.color],
+            // so a var() resolves at paint time and follows the active theme. The fallback keeps the
+            // original rendering wherever the token stylesheet isn't loaded.
+            DefaultColor: 'var(--mj-brand-primary, #38bdf8)',
             Orientation: 'top-to-bottom',
             NodeStyle: 'card',
             AllowDragDropReparent: false,
@@ -326,10 +332,13 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         this.cdr?.detectChanges();
 
         try {
-            const md = new Metadata();
+            // ProviderToUse, not `new Metadata()` — this is an L1 widget, so it must read metadata
+            // from whatever provider the host bound via @Input() Provider (BaseAngularComponent
+            // falls back to the ambient one). Binding the global provider here would silently query
+            // the wrong database wherever the component is hosted against a non-default connection.
             const configEntityLower = this.Config.EntityName.toLowerCase();
             const configEntityStripped = this.Config.EntityName.replace(/^mj[:_\s]+/i, '').trim().toLowerCase();
-            this.entityInfo = md.Entities.find((e) => {
+            this.entityInfo = this.ProviderToUse.Entities.find((e) => {
                 const eNameLower = e.Name.toLowerCase();
                 const eNameStripped = e.Name.replace(/^mj[:_\s]+/i, '').trim().toLowerCase();
                 return eNameLower === configEntityLower || eNameStripped === configEntityStripped;
@@ -350,11 +359,12 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
                 return;
             }
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const defaultOrderBy = `${this.resolveNameFieldName()} ASC`;
             const rvParams = {
                 EntityName: targetEntityName,
                 ExtraFilter: this.Config.ExtraFilter || '',
-                OrderBy: this.Config.OrderBy || 'Name ASC',
+                OrderBy: this.Config.OrderBy || defaultOrderBy,
                 ResultType: 'simple' as const,
                 MaxRows: this.Config.MaxRows ?? 0
             };

@@ -397,6 +397,18 @@ export interface ConversationCompactionFixture {
     AgentRuns: Array<{ Delete(): Promise<boolean> }>;
     /** Tagged MJ: AI Agent Run Steps fixture rows (deleted first). */
     Steps: Array<{ Delete(): Promise<boolean> }>;
+    /**
+     * Rows the transcript-window checks create that REFERENCE a conversation detail —
+     * `MJ: Conversation Detail Artifacts` junctions. Deleted before the details they point at.
+     */
+    WindowJunctions: Array<{ Delete(): Promise<boolean> }>;
+    /**
+     * Rows the transcript-window checks create that details reference, or that the junctions
+     * reference — agent sessions, artifact versions, artifacts. Deleted LAST (after the
+     * details and conversations), in reverse insertion order so a version goes before its
+     * artifact.
+     */
+    WindowRoots: Array<{ Delete(): Promise<boolean> }>;
 }
 
 /**

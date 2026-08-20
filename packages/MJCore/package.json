@@ -9,6 +9,7 @@
     "/dist"
   ],
   "scripts": {
+    "prebuild": "node scripts/sync-json-types.mjs",
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
