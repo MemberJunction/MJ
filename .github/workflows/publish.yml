@@ -504,9 +504,10 @@ jobs:
   # changeset version (normal, non-pre mode) -> lockfile refresh as its own
   # [skip ci] commit -> decide the dist-tag -> build -> changeset publish under
   # that tag -> verify against the registry -> push the release commit + tag to
-  # the line branch -> GitHub Release -> file a tracking issue if the line tag was
-  # left behind -> dispatch the docs deploy (the one step publish-lts.yml never
-  # had; docs.yml cannot watch for this run, see that step's comment).
+  # the line branch -> GitHub Release -> best-effort catch-up of the line tag, and
+  # a tracking issue only if that could not finish -> dispatch the docs deploy
+  # (the one step publish-lts.yml never had; docs.yml cannot watch for this run,
+  # see that step's comment).
   #
   # WHICH TAG: `latest` if this line already owns `latest` (or no `latest` exists
   # yet), otherwise `lts-<line>`. Craig's ruling — 5.51.1 superseding 5.51.0 is the
@@ -514,8 +515,9 @@ jobs:
   # is the only moment an OIDC credential exists. A line release can still never
   # drag `latest` backwards off a newer line, and moving `latest` ACROSS lines
   # stays certification's job via ci/dist-tag-all.mjs. The cost of npm's one-tag-
-  # per-publish limit is that the line tag then lags by one patch; the tracking
-  # issue carries the one-liner that fixes it.
+  # per-publish limit is that the line tag then lags by one patch, so a best-effort
+  # step corrects it with a stored token and, when that token has expired, a
+  # tracking issue carries the one-liner instead.
   #
   # The runbook's prohibition on `workflow_dispatch`ing the routine publish path
   # from a line branch still stands and is not what this is: the line branch is
@@ -804,7 +806,7 @@ jobs:
           if [ "$OWNS_LATEST" = "true" ]; then
             LINE_NOW=$(jq -r --arg t "$LINE_TAG" '.[$t] // empty' <<<"$TAGS")
             echo "::notice::Verified: @memberjunction/core@$NEW is live under 'latest' (this line already owned it)."
-            echo "::warning::$LINE_TAG still points at ${LINE_NOW:-<unset>}, not $NEW — npm applies one dist-tag per publish, and this publish spent it on 'latest'. The next step files a tracking issue with the one-liner that fixes it."
+            echo "::warning::$LINE_TAG still points at ${LINE_NOW:-<unset>}, not $NEW — npm applies one dist-tag per publish, and this publish spent it on 'latest'. The catch-up step below attempts to correct it with the stored token; if that cannot run, a tracking issue carries the one-liner."
           else
             NOW=$(jq -r '.latest // empty' <<<"$TAGS")
             if [ "$NOW" != "$PREV_LATEST" ]; then
@@ -855,20 +857,109 @@ jobs:
       # The cost of applying `latest` at publish time: npm applies ONE dist-tag per
       # publish, so a release that spends it on `latest` leaves lts-<N> pointing at
       # the previous patch — and lts-<N> is the channel tag line consumers install
-      # from. Nothing in this run can fix that (the fix needs a write credential this
-      # job deliberately does not have), so it is handed to a human as a tracked task
-      # with the exact command, rather than left as a surprise in the registry.
+      # from. Publishing needs no stored credential, but a dist-tag move does, and
+      # npm caps write tokens at 90 days — more often than a line ships. So the
+      # stored token is treated as strictly BEST EFFORT: when it is alive the tag is
+      # corrected automatically here, and when it is not, the run stays green and the
+      # next step hands a human the one-liner.
+      #
+      # The credential is step-scoped by construction: written under RUNNER_TEMP and
+      # reached via npm_config_userconfig, never exported to $GITHUB_ENV and never
+      # written into the repo tree. The publish steps above therefore cannot see it,
+      # which leaves npm's own OIDC path — and the automatic provenance that rides on
+      # it — exactly as it was.
+      #
+      # A dead, revoked, read-only or 2FA-gated token is caught on ONE package before
+      # the full sweep: ci/dist-tag-all.mjs reports failures only after attempting all
+      # ~300, so a bad credential would otherwise produce ~300 auth errors instead of
+      # one. The probe is not throwaway work — it sets the same tag on the same
+      # package the sweep would.
+      - name: Catch up the line dist-tag (best effort)
+        id: catchup
+        if: ${{ steps.channel.outputs.OWNS_LATEST == 'true' }}
+        continue-on-error: true
+        env:
+          NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          LINE_TAG: ${{ steps.version.outputs.NPM_TAG }}
+        run: |
+          set -uo pipefail
+          NEW="${VERSION#v}"
+          AUTH_RX='E401|E403|EAUTH|ENEEDAUTH|EOTP|Unauthorized|Forbidden|one-time pass'
+          RESULT=none
+          DETAIL=""
+
+          if [ -z "$NPM_TOKEN" ]; then
+            RESULT=no-secret
+            echo "::warning::$LINE_TAG was not advanced to $NEW: no npm credential is configured. The release itself is complete — see the tracking issue for the one-liner."
+          else
+            NPMRC="$RUNNER_TEMP/.npmrc"
+            printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$NPMRC"
+            export npm_config_userconfig="$NPMRC"
+
+            PROBE=$(npm dist-tag add "@memberjunction/core@$NEW" "$LINE_TAG" 2>&1) && PROBE_RC=0 || PROBE_RC=$?
+            echo "$PROBE"
+
+            if [ "$PROBE_RC" -eq 0 ]; then
+              SWEEP=$(node ci/dist-tag-all.mjs --version "$NEW" --tag "$LINE_TAG" 2>&1) && SWEEP_RC=0 || SWEEP_RC=$?
+              echo "$SWEEP"
+              if [ "$SWEEP_RC" -eq 0 ]; then
+                RESULT=success
+              elif printf '%s' "$SWEEP" | grep -qE "$AUTH_RX"; then
+                RESULT=auth
+                DETAIL="the sweep hit auth errors partway through"
+                echo "::warning::$LINE_TAG catch-up stopped on an auth error partway through the sweep — the token may have expired mid-run."
+              else
+                RESULT=partial
+                DETAIL=$(printf '%s' "$SWEEP" | grep -E '^FAIL ' | head -20 | tr '\n' ' ')
+                echo "::warning::$LINE_TAG catch-up did not converge; the tracking issue lists what is left."
+              fi
+            elif printf '%s' "$PROBE" | grep -qE "$AUTH_RX"; then
+              RESULT=auth
+              echo "::warning::$LINE_TAG was not advanced to $NEW: the stored npm token is expired, revoked, read-only or 2FA-gated. Stopped after ONE package rather than attempting ~300 with a dead credential. The release itself is complete."
+            else
+              RESULT=partial
+              DETAIL="the probe on @memberjunction/core failed: $(printf '%s' "$PROBE" | tail -3 | tr '\n' ' ')"
+              echo "::warning::$LINE_TAG catch-up aborted on a non-auth error before the sweep; see the tracking issue."
+            fi
+
+            rm -f "$NPMRC"
+          fi
+
+          # On success the registry is the proof, exactly as for the publish: both
+          # tags must read the new version. Anything else downgrades to partial so a
+          # tracking issue still gets filed.
+          if [ "$RESULT" = "success" ]; then
+            TAGS=$(npm view @memberjunction/core dist-tags --json)
+            LATEST_NOW=$(jq -r '.latest // empty' <<<"$TAGS")
+            LINE_NOW=$(jq -r --arg t "$LINE_TAG" '.[$t] // empty' <<<"$TAGS")
+            if [ "$LATEST_NOW" = "$NEW" ] && [ "$LINE_NOW" = "$NEW" ]; then
+              echo "::notice::Verified both tags at $NEW: latest and $LINE_TAG."
+            else
+              RESULT=partial
+              DETAIL="post-sweep check read latest=${LATEST_NOW:-<unset>} and $LINE_TAG=${LINE_NOW:-<unset>}, expected both at $NEW"
+              echo "::warning::$DETAIL"
+            fi
+          fi
+
+          {
+            echo "RESULT=$RESULT"
+            echo "DETAIL=$DETAIL"
+          } >> "$GITHUB_OUTPUT"
+          # Never non-zero: this step is optional bookkeeping on top of a release
+          # that is already published, verified, tagged and released.
+          exit 0
+
+      # Files the tracking issue when the catch-up did not finish the job, and closes
+      # it when it did — so the label is a live list of lines whose channel tag is
+      # behind, not a growing pile of stale notices.
       #
       # Dedupe follows .github/scripts/backstop-alarm.mjs: key on a LABEL and list
       # issues by label rather than through the search API, which is eventually
       # consistent — two line releases minutes apart could each search, see nothing,
       # and file duplicates. The label is created first (--force is idempotent)
       # because listing by a label that does not exist yet is not reliable either.
-      #
-      # continue-on-error: bookkeeping must never retroactively fail a release that
-      # is published, verified, tagged and released. A failure here is loud in the
-      # log and leaves the run green, because the release itself IS good.
-      - name: File a tracking issue for the lagging line dist-tag
+      - name: Track or resolve the line dist-tag lag
         if: ${{ steps.channel.outputs.OWNS_LATEST == 'true' }}
         continue-on-error: true
         env:
@@ -877,17 +968,46 @@ jobs:
           VERSION: ${{ steps.version.outputs.VERSION }}
           LINE_TAG: ${{ steps.version.outputs.NPM_TAG }}
           PREV_LINE: ${{ steps.channel.outputs.PREV_LINE }}
+          CATCHUP: ${{ steps.catchup.outputs.RESULT }}
+          DETAIL: ${{ steps.catchup.outputs.DETAIL }}
           LABEL: lts-dist-tag-lag
         run: |
-          set -euo pipefail
+          set -uo pipefail
           NEW="${VERSION#v}"
+          RUN_URL="https://github.com/$REPO/actions/runs/${GITHUB_RUN_ID}"
           TITLE_PREFIX="$LINE_TAG dist-tag lags"
+
+          gh label create "$LABEL" --force --color FBCA04 \
+            --description "A line's lts-N dist-tag is behind its newest release" --repo "$REPO"
+
+          EXISTING=$(gh issue list --repo "$REPO" --label "$LABEL" --state open --limit 100 \
+            --json number,title | jq -r --arg p "$TITLE_PREFIX" 'map(select(.title | startswith($p))) | .[0].number // empty')
+
+          if [ "$CATCHUP" = "success" ]; then
+            echo "::notice::$LINE_TAG is at $NEW — no tracking issue needed."
+            if [ -n "$EXISTING" ]; then
+              gh issue close "$EXISTING" --repo "$REPO" \
+                --comment "Resolved automatically: \`$LINE_TAG\` now points at \`$NEW\`, verified against the registry by [this run]($RUN_URL)."
+              echo "::notice::Closed #$EXISTING — the lag it tracked is gone."
+            fi
+            exit 0
+          fi
+
+          case "$CATCHUP" in
+            no-secret) CAUSE="No npm credential was available to the workflow, so the automatic catch-up did not run. The \`CRAIG_BC_NPM_TOKEN\` secret is missing or empty." ;;
+            auth)      CAUSE="The automatic catch-up ran but the stored npm token is expired, revoked, read-only or 2FA-gated. npm caps write tokens at 90 days, so this is expected maintenance rather than a defect — rotate \`CRAIG_BC_NPM_TOKEN\` to re-arm it." ;;
+            partial)   CAUSE="The automatic catch-up ran and did not converge: ${DETAIL:-see the run log}. \`ci/dist-tag-all.mjs\` is idempotent, so re-running the command below finishes the job." ;;
+            *)         CAUSE="The automatic catch-up did not report a result (\`${CATCHUP:-unset}\`); see the run log." ;;
+          esac
+
           TITLE="$TITLE_PREFIX after $NEW (published as latest)"
           BODY="$RUNNER_TEMP/dist-tag-lag.md"
           cat > "$BODY" <<EOF
-          \`$LINE_TAG\` still points at \`${PREV_LINE:-<unset>}\`, but the newest release on $LINE is \`$NEW\`, which was published under \`latest\`.
+          \`$LINE_TAG\` points at \`${PREV_LINE:-<unset>}\`, but the newest release on $LINE is \`$NEW\`, which was published under \`latest\`.
 
-          **Why this happens.** npm applies exactly one dist-tag at publish time, and publish time is the only moment the release workflow holds a credential: trusted publishing (OIDC) authorizes \`npm publish\` alone — in the npm CLI, \`lib/utils/oidc.js\` is required by \`lib/commands/publish.js\` and nothing else, and \`lib/commands/dist-tag.js\` has no OIDC path. A post-publish \`npm dist-tag add\` needs a write token, and npm expires those every 90 days, which is more often than this line ships. So the publish spends its one tag on \`latest\` when the line already owns \`latest\`, and \`$LINE_TAG\` is set by hand afterwards.
+          **Why a second step is needed at all.** npm applies exactly one dist-tag at publish time, and publish time is the only moment the release workflow holds a credential it cannot lose: trusted publishing (OIDC) authorizes \`npm publish\` alone — in the npm CLI, \`lib/utils/oidc.js\` is required by \`lib/commands/publish.js\` and nothing else, and \`lib/commands/dist-tag.js\` has no OIDC path. When a line already owns \`latest\`, the publish spends its one tag there, and \`$LINE_TAG\` is corrected afterwards with a stored token. Tracking issue: [npm/cli#8547](https://github.com/npm/cli/issues/8547) — if OIDC ever authorizes \`dist-tag\`, both the token and these issues stop being necessary.
+
+          **What happened this time.** $CAUSE
 
           **Fix it** (needs npm write access to the \`@memberjunction\` scope), from a checkout of the release so the package set matches:
 
@@ -902,22 +1022,17 @@ jobs:
           npm view @memberjunction/core dist-tags
           \`\`\`
 
-          Filed by [this run](https://github.com/$REPO/actions/runs/${GITHUB_RUN_ID}).
+          The release itself is complete and verified — only the channel tag is behind. Filed by [this run]($RUN_URL).
           EOF
-
-          gh label create "$LABEL" --force --color FBCA04 \
-            --description "A line's lts-N dist-tag is behind its newest release" --repo "$REPO"
-
-          EXISTING=$(gh issue list --repo "$REPO" --label "$LABEL" --state open --limit 100 \
-            --json number,title | jq -r --arg p "$TITLE_PREFIX" 'map(select(.title | startswith($p))) | .[0].number // empty')
 
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --repo "$REPO" --body-file "$BODY"
-            echo "::warning::$LINE_TAG is stale at ${PREV_LINE:-<unset>} — commented on existing issue #$EXISTING with the fix command."
+            echo "::warning::$LINE_TAG is behind at ${PREV_LINE:-<unset>} — commented on existing issue #$EXISTING."
           else
             URL=$(gh issue create --repo "$REPO" --title "$TITLE" --label "$LABEL" --body-file "$BODY")
-            echo "::warning::$LINE_TAG is stale at ${PREV_LINE:-<unset>} — filed $URL with the fix command."
+            echo "::warning::$LINE_TAG is behind at ${PREV_LINE:-<unset>} — filed $URL."
           fi
+          exit 0
 
       # Docs follow releases, and a line release reaches docs.yml ONLY through
       # this dispatch: docs.yml listens for workflow_run on `main` alone, by
