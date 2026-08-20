@@ -3,7 +3,7 @@ import path from 'path';
 import chokidar, { type FSWatcher } from 'chokidar';
 import { BaseEntity, Metadata } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { loadEntityConfig, loadSyncConfig } from '../config';
+import { loadEntityConfig, loadSyncConfig, DEFAULT_SQL_LOG_MAX_FILE_SIZE } from '../config';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { configManager } from '../lib/config-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
@@ -372,8 +372,11 @@ export class WatchService {
             // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
             // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
             variableBatchThreshold: syncConfig.sqlLogging?.variableBatchThreshold ?? 200,
+            // Split into multiple part files past this size so a long watch capture stays under
+            // host file-size limits. Defaults to 90 MiB; `sqlLogging.maxFileSize: 0` disables it.
+            maxFileSize: syncConfig.sqlLogging?.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE,
           });
-          
+
           callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
         }
       }

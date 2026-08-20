@@ -8,7 +8,7 @@ import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
 import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
-import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
+import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig, DEFAULT_SQL_LOG_MAX_FILE_SIZE } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
@@ -99,7 +99,13 @@ export interface PushResult {
   deferred: number;
   errors: number;
   warnings: string[];
+  /** First (or only) captured SQL migration file. Equals `sqlLogPaths[0]` when logging is enabled. */
   sqlLogPath?: string;
+  /**
+   * All captured SQL migration files, in order. Single-element when the capture fit under
+   * `sqlLogging.maxFileSize`; multiple `*.partNNN.sql` files when size-based splitting triggered.
+   */
+  sqlLogPaths?: string[];
   /** Structured per-record changes captured during the push, for the changes recap. */
   changeLog: RecordChangeDetail[];
 }
@@ -341,6 +347,10 @@ export class PushService {
             filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
             filterType: this.syncConfig?.sqlLogging?.filterType,
             verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+            // Split the capture into multiple part files when it would exceed this size, so a
+            // large push stays under host file-size limits (e.g. GitHub's 100 MiB cap). Defaults
+            // to 90 MiB; a `.mj-sync.json` `sqlLogging.maxFileSize` of 0 disables splitting.
+            maxFileSize: this.syncConfig?.sqlLogging?.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE,
           });
           
           if (options.verbose) {
@@ -608,18 +618,30 @@ export class PushService {
       // actually has content — otherwise the "SQL log saved to…" line would point at a
       // file dispose() just unlinked.
       let sqlLogPath: string | undefined;
+      let sqlLogPaths: string[] | undefined;
       if (sqlLoggingSession) {
-        const filePath = sqlLoggingSession.filePath;
+        // Capture the (final) part list before dispose — it's stable once logging is done.
+        const paths = [...sqlLoggingSession.filePaths];
         const hadStatements = sqlLoggingSession.statementCount > 0;
         await sqlLoggingSession.dispose();
         if (hadStatements) {
-          sqlLogPath = filePath;
-          if (options.verbose) {
-            callbacks?.onLog?.(`📝 SQL log written to: ${filePath}`);
+          sqlLogPaths = paths;
+          sqlLogPath = paths[0];
+          if (paths.length > 1) {
+            // Always surface a multi-part split (not just in verbose) — the user needs to know
+            // the migration is several files so they commit/rename all of them.
+            const effectiveLimit = this.syncConfig?.sqlLogging?.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE;
+            const mib = effectiveLimit / (1024 * 1024);
+            const limitStr = mib >= 1 ? `${mib >= 10 ? Math.round(mib) : mib.toFixed(1)} MiB` : `${Math.round(effectiveLimit / 1024)} KiB`;
+            callbacks?.onLog?.(`📝 SQL log split into ${paths.length} parts (each ≤ ~${limitStr} unless a single statement exceeds it):`);
+            const pad = String(paths.length).length;
+            paths.forEach((p, i) => callbacks?.onLog?.(`   ${String(i + 1).padStart(pad, '0')}. ${p}`));
+          } else if (options.verbose) {
+            callbacks?.onLog?.(`📝 SQL log written to: ${paths[0]}`);
           }
         }
       }
-      
+
       return {
         created: totalCreated,
         updated: totalUpdated,
@@ -630,6 +652,7 @@ export class PushService {
         errors: totalErrors,
         warnings: this.warnings,
         sqlLogPath,
+        sqlLogPaths,
         changeLog: this.changeDetails
       };
 
