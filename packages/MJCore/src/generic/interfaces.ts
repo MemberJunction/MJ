@@ -440,11 +440,11 @@ export class EntityDeleteOptions {
      * Controls whether {@link BaseEntity.ValidateDeleteAsync} runs for this delete. When set, it
      * wins outright.
      *
-     * Left undefined — the normal case — async delete validation runs if, and only if, a subclass
-     * overrode `ValidateDeleteAsync`. Overriding the method IS the request to run it. This is
-     * deliberately NOT routed through {@link BaseEntity.DefaultSkipAsyncValidation}: that getter
-     * defaults to `true`, which is exactly what made hand-written `ValidateAsync` overrides silent
-     * no-ops on the save side.
+     * Left undefined — the normal case — the decision follows the SAME policy the save path uses:
+     * an explicit {@link BaseEntity.DefaultSkipAsyncValidation} override wins (either value), and
+     * only when the entity has stated no policy is it inferred from whether a subclass overrode
+     * `ValidateDeleteAsync`. Overriding the method IS the request to run it. One getter governs both
+     * seams, so an entity states its async-validation policy once rather than once per verb.
      *
      * Note this governs only the ASYNC half. A synchronous {@link BaseEntity.ValidateDelete} refusal
      * always applies — an opt-out of expensive rules must not become a way to delete a row the

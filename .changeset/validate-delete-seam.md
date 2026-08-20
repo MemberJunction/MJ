@@ -10,7 +10,7 @@ The new methods are called from `_InnerDelete` in the slot `Validate()` occupies
 
 Two details worth knowing:
 
-- **The async half turns on by being overridden.** It is deliberately *not* gated on `DefaultSkipAsyncValidation`, whose `true` default is exactly what made hand-written `ValidateAsync` overrides silent no-ops. `EntityDeleteOptions.SkipAsyncValidation` overrides per call and never suppresses the synchronous half.
+- **The async half turns on by being overridden**, decided by the *same* policy the save seam uses. `DefaultSkipAsyncValidation` now governs both seams through one shared helper, so an entity states its async-validation policy once rather than once per verb: an explicit `SkipAsyncValidation` option wins, then an explicit override of that getter (either value), and only when nobody stated a policy is it inferred from whether the async validator was overridden. That flag never suppresses the synchronous half — an opt-out of expensive rules must not become a way to delete a row the entity said could not be deleted.
 - **A companion delete plan is validated whole, up front.** Children are deleted first (they hold the foreign keys), so a refusal discovered at the root's turn would already have removed them — and on a client provider there is no transaction to undo that. Plan nodes are flagged so no rule, or its query, runs twice.
 
 Purely additive: entities that override neither method behave exactly as before.

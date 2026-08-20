@@ -149,6 +149,31 @@ class BothRefusingEntity extends RefusingEntity {
     }
 }
 
+/**
+ * Overrides the shared policy getter, opting OUT deliberately. One getter governs BOTH seams, so
+ * this must suppress the delete rule too — a `true` returned by an override is a choice, unlike the
+ * `true` inherited from the base.
+ */
+class DeliberatelyOptedOutEntity extends AsyncRefusingEntity {
+    public override get DefaultSkipAsyncValidation(): boolean {
+        return true;
+    }
+}
+
+/** Overrides the shared policy getter, opting IN — the 15 server classes in this repo. */
+class DeliberatelyOptedInEntity extends AsyncRefusingEntity {
+    public override get DefaultSkipAsyncValidation(): boolean {
+        return false;
+    }
+}
+
+/** Opted out of ASYNC validation, but still carries a SYNCHRONOUS refusal. */
+class OptedOutWithSyncRuleEntity extends RefusingEntity {
+    public override get DefaultSkipAsyncValidation(): boolean {
+        return true;
+    }
+}
+
 /** A parent that owns its children, so `Delete()` routes through the companion delete graph. */
 class CompositeEntity extends BaseEntity {
     public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
@@ -332,6 +357,46 @@ describe('delete options outrank the inference', () => {
         const entity = existingRecord(RefusingEntity, 'replayed');
         expect(await entity.Delete({ ReplayOnly: true } as never)).toBe(true);
         expect(syncRuns).toBe(0);
+    });
+});
+
+describe('one async-validation policy, shared with the save seam', () => {
+    // The design question this pins: DefaultSkipAsyncValidation governs BOTH seams. An entity states
+    // its async-validation policy once, not once per verb. The alternative — a second
+    // delete-specific getter — is a second flag for an author to not know about, which is the exact
+    // failure mode that made hand-written ValidateAsync overrides dead code.
+
+    it('honours a deliberate opt-out, suppressing the delete rule too', async () => {
+        const entity = existingRecord(DeliberatelyOptedOutEntity, 'opted-out');
+
+        expect(await entity.Delete(), 'the delete is not refused').toBe(true);
+        expect(asyncRuns, 'the async rule did not run').toBe(0);
+        expect(deleteLog).toEqual(['opted-out']);
+    });
+
+    it('honours a deliberate opt-in', async () => {
+        const entity = existingRecord(DeliberatelyOptedInEntity);
+
+        expect(await entity.Delete()).toBe(false);
+        expect(asyncRuns).toBe(1);
+    });
+
+    it('lets delete options override a deliberate opt-out', async () => {
+        // The precedence, top to bottom: option, then explicit policy, then inference.
+        const entity = existingRecord(DeliberatelyOptedOutEntity);
+
+        expect(await entity.Delete({ SkipAsyncValidation: false } as never)).toBe(false);
+        expect(asyncRuns).toBe(1);
+    });
+
+    it('never lets an async opt-out suppress a synchronous refusal', async () => {
+        // The policy is about the COST of async rules. If opting out of them could also delete a row
+        // the entity synchronously said could not be deleted, the getter would be a data-loss switch.
+        const entity = existingRecord(OptedOutWithSyncRuleEntity);
+
+        expect(await entity.Delete()).toBe(false);
+        expect(syncRuns).toBe(1);
+        expect(deleteLog).toEqual([]);
     });
 });
 

@@ -3565,11 +3565,10 @@ export abstract class BaseEntity<T = unknown> {
                         // confirm an order with no lines" guard and an entire per-line validation
                         // loop — was dead on every save in production, and it is the same reasoning
                         // that already exempts companions below.
-                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined
-                            ? _options.SkipAsyncValidation
-                            : IsMemberOverridden(this, 'DefaultSkipAsyncValidation', BaseEntity)
-                                ? this.DefaultSkipAsyncValidation
-                                : !IsMemberOverridden(this, 'ValidateAsync', BaseEntity);
+                        const skipAsyncValidation = this.shouldSkipAsyncValidation(
+                            _options.SkipAsyncValidation,
+                            'ValidateAsync',
+                        );
 
                         // If not skipping async validation, run it - even if sync validation failed
                         // This ensures all validation errors (sync and async) are collected
@@ -4274,22 +4273,69 @@ export abstract class BaseEntity<T = unknown> {
      * Default value for whether async validation should be skipped.
      *
      * @remarks
+     * **This is one policy for the whole entity, covering BOTH seams** — {@link ValidateAsync} on
+     * the save path and {@link ValidateDeleteAsync} on the delete path. An entity states its
+     * async-validation policy once, not once per verb; the shared decision lives in
+     * `shouldSkipAsyncValidation`.
+     *
      * Override this to state a policy explicitly; an explicit override always wins over the
-     * inference described below. When the options object passed to `Save()` includes
+     * inference described below. When the options object passed to `Save()` or `Delete()` includes
      * `SkipAsyncValidation`, that value takes precedence over both.
      *
-     * **If no subclass overrides this getter**, the answer is inferred instead: async validation
-     * runs when a subclass has overridden {@link ValidateAsync}, and is skipped when none has.
-     * Reading the literal `true` below as "async validation is off unless you find this getter"
-     * made every hand-written `ValidateAsync` a silent no-op — see the note on that method.
+     * **If no subclass overrides this getter**, the answer is inferred instead, per seam: async
+     * validation runs when a subclass has overridden the corresponding async validator, and is
+     * skipped when none has. Reading the literal `true` below as "async validation is off unless you
+     * find this getter" made every hand-written `ValidateAsync` a silent no-op — see the note on
+     * that method.
+     *
+     * One consequence to know before overriding this to `true`: doing so opts out of async
+     * validation on **both** paths, including a `ValidateDeleteAsync` written later by someone who
+     * never saw this getter. That is the same trap the inference above exists to close, and the
+     * reason the name is a candidate for renaming to something that says "policy", not "switch".
      *
      * @see {@link Save}
+     * @see {@link Delete}
      * @see {@link ValidateAsync}
+     * @see {@link ValidateDeleteAsync}
      *
      * @protected
      */
     public get DefaultSkipAsyncValidation(): boolean {
         return true; // By default, skip async validation unless explicitly enabled
+    }
+
+    /**
+     * Decides whether the ASYNC half of a validation seam runs. Shared by `Save()` and `Delete()`,
+     * so an entity states its async-validation policy **once** rather than once per verb.
+     *
+     * Precedence, and this ordering is the whole design:
+     *   1. An explicit flag in the call's options wins outright.
+     *   2. An explicit {@link DefaultSkipAsyncValidation} override wins next — EITHER value. A `true`
+     *      returned by an override is a CHOICE; a `true` inherited from the base is the absence of
+     *      one, and the two must not behave alike.
+     *   3. Only when nobody stated a policy is it inferred: run it if, and only if, a subclass wrote
+     *      the async method. Overriding the method IS the request to run it.
+     *
+     * Step 3 is what fixed a silent no-op. The default is `true` and the base async validators just
+     * return success, so skipping costs a subclass that did not override one precisely nothing; the
+     * flag's only reachable effect was therefore to disable the async rules of subclasses that had
+     * WRITTEN async rules and never learned a second, separate getter had to be overridden too.
+     *
+     * @param explicitOption - `SkipAsyncValidation` from the save or delete options, if the caller set it.
+     * @param asyncMemberName - Which async validator this decision is about.
+     * @returns True when the async half should be skipped.
+     */
+    private shouldSkipAsyncValidation(
+        explicitOption: boolean | undefined,
+        asyncMemberName: 'ValidateAsync' | 'ValidateDeleteAsync',
+    ): boolean {
+        if (explicitOption !== undefined) {
+            return explicitOption;
+        }
+        if (IsMemberOverridden(this, 'DefaultSkipAsyncValidation', BaseEntity)) {
+            return this.DefaultSkipAsyncValidation;
+        }
+        return !IsMemberOverridden(this, asyncMemberName, BaseEntity);
     }
     
     /**
@@ -4381,10 +4427,13 @@ export abstract class BaseEntity<T = unknown> {
      * Asynchronous half of the delete-validation seam — for the refusals that need a query, which
      * is most of them ("referenced by N signed contracts" is a count, not a field check).
      *
-     * **Overriding this method is what turns it on.** There is no second flag to find. That is a
-     * deliberate departure from the save side, where {@link DefaultSkipAsyncValidation} defaults to
-     * `true` and silently made hand-written `ValidateAsync` overrides dead code — the failure mode
-     * documented on that getter. To suppress the async half for one call, pass
+     * **Overriding this method is what turns it on** — there is no second flag to find, unless the
+     * entity deliberately states one. The decision is the SAME policy the save seam uses
+     * ({@link DefaultSkipAsyncValidation}, resolved by `shouldSkipAsyncValidation`): an explicit
+     * option wins, then an explicit override of that getter — either value — and only when nobody
+     * stated a policy is it inferred from whether this method was overridden. So an entity that
+     * deliberately opts out of async validation opts out on both paths, and an entity that says
+     * nothing gets the rules it actually wrote. To suppress the async half for one call, pass
      * `SkipAsyncValidation: true` in the delete options; that flag never suppresses the synchronous
      * {@link ValidateDelete}.
      *
@@ -4436,12 +4485,10 @@ export abstract class BaseEntity<T = unknown> {
         result.Success = syncResult.Success;
         syncResult.Errors.forEach(error => result.Errors.push(error));
 
-        // Only the ASYNC half is optional, and only the caller's explicit flag can turn it off.
-        // Otherwise it runs precisely when a subclass wrote something to run — see the note on
-        // ValidateDeleteAsync for why this is not routed through DefaultSkipAsyncValidation.
-        const skipAsync = options.SkipAsyncValidation !== undefined
-            ? options.SkipAsyncValidation
-            : !IsMemberOverridden(this, 'ValidateDeleteAsync', BaseEntity);
+        // Only the ASYNC half is optional, and it is decided by the SAME policy the save seam uses —
+        // one shared getter, one shared helper, so an entity states its async-validation policy once
+        // rather than once per verb. See shouldSkipAsyncValidation.
+        const skipAsync = this.shouldSkipAsyncValidation(options.SkipAsyncValidation, 'ValidateDeleteAsync');
 
         if (!skipAsync) {
             // Run even when the sync half already failed, so the caller gets every reason at once.
