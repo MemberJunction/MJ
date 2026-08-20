@@ -727,17 +727,44 @@ export class BaseEntityResult {
             msg = this.Message;
         }   
 
+        /**
+         * Appends one piece of text UNLESS it is already somewhere in what we have built.
+         *
+         * Producers legitimately set BOTH `Message` and `Errors`, and some build the former OUT OF
+         * the latter — `_InnerSave` and `_InnerDelete` do exactly that on an IS-A parent failure
+         * (`Failed to save parent entity 'X': A; B`, with `Errors` then set to the same A and B).
+         * Rendering both then says everything twice:
+         *
+         *     Failed to save parent entity 'Products': A; B
+         *     A
+         *     B
+         *
+         * Skipping a duplicate cannot hide anything from the reader, because the condition for
+         * skipping is that the text is ALREADY in the output — the only thing dropped is a second
+         * rendering of a string the user can already see. Fixing it here rather than in each producer
+         * protects every producer at once, including the ones that must keep a directly-readable
+         * `Message` for the callers that have not yet moved to `CompleteMessage` (issue #1431).
+         */
+        const append = (text: string): void => {
+            if (!text || (msg && msg.includes(text))) {
+                return;
+            }
+            msg = msg ? msg + '\n' : '';
+            msg += text;
+        };
+
         // now check the simple Error property. Same shape problem as the Errors array below, so the
         // same helper answers it: a string, an Error (lowercase `message`), or an MJ
         // ValidationErrorInfo (capital `Message`) all render as their text rather than as JSON.
         if (this.Error) {
-            msg = (msg ? msg + '\n' : '') + BaseEntityResult.ErrorText(this.Error);
+            append(BaseEntityResult.ErrorText(this.Error));
         }
-        
+
         // now check the Errors array
         if (this.Errors && this.Errors.length > 0) {
-            // append
-            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => BaseEntityResult.ErrorText(err)).join('\n');
+            for (const err of this.Errors) {
+                append(BaseEntityResult.ErrorText(err));
+            }
         }
 
         return msg;
