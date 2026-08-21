@@ -1969,7 +1969,8 @@ export class BaseAgent {
      * bridge host injects its OWN UX tools (none for LiveKit audio today); identity/precedence/invoke-target
      * come from the core. `AgentSessionID` groups this session's observability runs (see
      * {@link RealtimeClientSessionService.WireBridgeRealtimeSession}). `realtimeInstructions` is the host's
-     * optional per-session persona text, which the core APPENDS to the companion prompt.
+     * optional per-session persona text; on this path it IS the seat's identity, so the core leads with
+     * it instead of appending it behind the framework's own framing.
      *
      * @param params The bridge execution parameters.
      * @returns The core prep input.
@@ -1987,9 +1988,16 @@ export class BaseAgent {
             ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
             : undefined;
         // Caller-supplied per-session persona/scenario text (a bridge host asking THIS seat to be a
-        // specific character). The core producer APPENDS it to the companion prompt it assembles — it
-        // never replaces the framing — and the transport layer gated it before it got here, exactly as
-        // it gates the config overrides. Blank/absent ⇒ omitted, so the prompt is unchanged.
+        // specific character), gated by the transport layer before it got here exactly as the config
+        // overrides are. Blank/absent ⇒ omitted, so the prompt is unchanged.
+        //
+        // On the BRIDGE path this text IS the seat's identity, so it leads the prompt and the
+        // framework's identity framing is left out (`InstructionsOwnIdentity`). That is what the field
+        // was added for: a room seat asked to be Dr. Chen is not a voice speaking on Dr. Chen's behalf.
+        // Composed the other way round — framing first, persona 200 words later — the framing wins:
+        // measured on a live three-seat room, seats introduced themselves as assistants and offered to
+        // fetch the character they were supposed to BE, with the correct persona text sitting in the
+        // delivered prompt the whole time. Client-direct callers are untouched and keep the append rule.
         const instructions = (params.data?.realtimeInstructions as string | undefined)?.trim() || undefined;
         return {
             CoAgent: params.agent,
@@ -2002,6 +2010,7 @@ export class BaseAgent {
             DisableAutoResponse: meetingMode || undefined,
             SelfNames: selfNames,
             Instructions: instructions,
+            InstructionsOwnIdentity: instructions !== undefined,
             // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
             // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
             // Both ride params.data, the same conduit async agents use for appContext.

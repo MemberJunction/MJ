@@ -557,5 +557,26 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             const input = agent.callBuildBridgePrepInput(makeParams({ data: { realtimeInstructions: '   ' } }));
             expect(input.Instructions).toBeUndefined();
         });
+
+        // On the bridge path the caller's text IS the seat's identity. Without this the framing —
+        // "you are the real-time voice for another agent; do not do the work yourself" — precedes the
+        // persona and wins: seats offer to fetch the character they are supposed to be.
+        it('declares that bridged instructions OWN the identity, so they lead the prompt', () => {
+            const agent = new TestableRealtimeAgent();
+            const input = agent.callBuildBridgePrepInput(
+                makeParams({ data: { realtimeInstructions: 'You are Dr. Maya Chen.' } }),
+            );
+            expect(input.InstructionsOwnIdentity).toBe(true);
+        });
+
+        it('never claims ownership of an identity the host did not supply', () => {
+            const agent = new TestableRealtimeAgent();
+            for (const data of [{ targetAgentID: 'target-1' }, { realtimeInstructions: '  ' }]) {
+                const input = agent.callBuildBridgePrepInput(makeParams({ data }));
+                // False, not merely falsy: the service gates on `=== true`, and a seat that claimed to
+                // own an identity it did not supply would get no identity at all.
+                expect(input.InstructionsOwnIdentity).toBe(false);
+            }
+        });
     });
 });
