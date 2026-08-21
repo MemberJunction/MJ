@@ -174,6 +174,57 @@ export interface PrepareClientSessionInput {
      * deployments (a public web-widget guest's `VoiceMaxSessionMinutes`); omitted otherwise.
      */
     MaxSessionSeconds?: number;
+    /**
+     * Optional CALLER-SUPPLIED per-session instructions — the persona/scenario text that makes THIS
+     * session a specific character. It is **APPENDED to** the companion system prompt, never a
+     * replacement for it: {@link RealtimeClientSessionService.buildCompanionSystemPrompt} assembles the
+     * framework's own framing (first-person-as-the-target identity, the `invoke-target-agent`
+     * discipline, meeting rules, voice manner, memory) FIRST and joins this text onto the end — exactly
+     * what a subclass overriding that seam does when it composes `super(...)` + its own text (the
+     * established client-direct pattern). No host can strip the framing or safety text by supplying it.
+     *
+     * Why it exists: without it a bridged ROOM seat could only ever be the generic co-agent voice, so a
+     * multi-agent room was N copies of one character rather than a panel of distinct ones — while a solo
+     * client-direct session could already be a persona via the subclass seam. This closes that gap for
+     * hosts that cannot subclass (a GraphQL caller starting a room seat).
+     *
+     * **Pre-authorized by the transport layer**, exactly like {@link ConfigOverridesJson}: it is
+     * per-session prompt influence, so the MJServer resolvers gate it behind the
+     * `Realtime: Advanced Session Controls` authorization BEFORE threading it here; the service trusts
+     * the input. Absent/blank ⇒ the prompt is byte-for-byte what it is without this field.
+     */
+    Instructions?: string;
+
+    /**
+     * Declares that {@link Instructions} **is the agent's identity**, not an addition to it — so it
+     * LEADS the prompt and the framework's identity framing is left out.
+     *
+     * Default (absent/false) is the composition rule described above and nothing changes for any
+     * existing caller: framing first, caller text appended.
+     *
+     * ── WHY THIS EXISTS ──
+     *
+     * The default rule is right for a co-agent that speaks *on behalf of* another agent. It is wrong
+     * for a room SEAT that is a character in its own right, and the failure is not subtle: the framing
+     * opens by telling the model it is the real-time voice for another agent and must not do the work
+     * itself, and only then — 200-odd words later — does the seat's own persona arrive. Measured on a
+     * live three-seat room: seats introduced themselves as assistants, offered to fetch the person they
+     * were supposed to BE, and answered "I'm here, how can I help" in a panel interview. The persona
+     * text was present and correct in the delivered prompt the whole time; it was simply behind an
+     * instruction that contradicted it.
+     *
+     * What is suppressed is exactly the identity trio — the companion framing, the co-agent's own
+     * system prompt, and the target-identity block. Everything that is not identity still applies and
+     * still cannot be stripped by a caller: meeting rules, voice manner, app context, prior transcript,
+     * history and memory. A host that sets this is choosing WHO the model is, never what safety text
+     * it gets.
+     *
+     * Ignored when {@link Instructions} is absent or blank — a caller claiming to own an identity it
+     * did not supply would otherwise get a seat with no identity at all.
+     *
+     * **Pre-authorized by the transport layer**, exactly like {@link Instructions} itself.
+     */
+    InstructionsOwnIdentity?: boolean;
 }
 
 /**
@@ -1853,6 +1904,9 @@ export class RealtimeClientSessionService {
      * short "Voice & manner" section (tone / speaking style) is appended after the co-agent's
      * own prompt so the model speaks in the configured manner.
      *
+     * Caller-supplied {@link PrepareClientSessionInput.Instructions} land LAST — appended to everything
+     * the framework assembled, never replacing any of it (see that field for the why + the gate).
+     *
      * @param input The prepare-session input.
      * @param coAgent The resolved co-agent.
      * @param contextUser The calling user.
@@ -1885,8 +1939,32 @@ export class RealtimeClientSessionService {
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
+        // The caller's per-session persona text goes LAST, appended — the composition rule this field
+        // has by DEFAULT (see PrepareClientSessionInput.Instructions). Doing it here, in the shared
+        // producer, is what makes it byte-identical to the `super(...) + own text` subclass override
+        // every client-direct consumer already uses, and keeps the framework's framing ahead of caller
+        // text on every host.
+        const callerInstructions = input.Instructions ?? '';
 
-        return [framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
+        // ...unless the caller declares those instructions ARE the identity (a room seat that is a
+        // character rather than a voice for someone else). Then they LEAD and the identity trio is
+        // left out — see PrepareClientSessionInput.InstructionsOwnIdentity for what that does and
+        // does not suppress. Gated on the text being present, so the flag can never produce a seat
+        // with no identity at all.
+        const callerOwnsIdentity = input.InstructionsOwnIdentity === true
+            && callerInstructions.trim().length > 0;
+
+        const parts = callerOwnsIdentity
+            ? [
+                callerInstructions, meetingFraming, voiceManner, appContextSection,
+                priorTranscript, history, memoryContext,
+            ]
+            : [
+                framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection,
+                priorTranscript, history, memoryContext, callerInstructions,
+            ];
+
+        return parts
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }

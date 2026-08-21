@@ -27,6 +27,7 @@ import { IMetadataProvider } from '@memberjunction/core';
 import { BaseAgentType } from '../agent-types/base-agent-type';
 import { BaseAgent } from '../base-agent';
 import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest } from '../realtime/realtime-session-runner';
+import { PrepareClientSessionInput } from '../realtime/realtime-client-session-service';
 import { RealtimeRecordingController } from '../realtime/realtime-recording-capture';
 
 // ════════════════════════════════════════════════════════════════════
@@ -95,6 +96,12 @@ class TestableRealtimeAgent extends BaseAgent {
     /** Injects (or clears) the active recording controller so the media-field stamping path can be exercised. */
     public setRecording(controller: RealtimeRecordingController | null): void {
         (this as unknown as { realtimeRecording: RealtimeRecordingController | null }).realtimeRecording = controller;
+    }
+    /** Drives the private `params.data` → core prep-input adaptation every server-bridged host goes through. */
+    public callBuildBridgePrepInput(params: ExecuteAgentParams): PrepareClientSessionInput {
+        return (this as unknown as {
+            buildBridgePrepInput(p: ExecuteAgentParams): PrepareClientSessionInput;
+        }).buildBridgePrepInput(params);
     }
 }
 
@@ -523,6 +530,53 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             clock = 2100; // 1100ms in
             await agent.callPersist(params, { Role: 'user', Text: 'question', IsFinal: true });
             expect(detail.UtteranceEndMs).toBe(1100);
+        });
+    });
+
+    // The adaptation a bridge host's extras go through on their way to the ONE shared session-prep
+    // producer. Instructions matter here specifically: they are the only extra that ends up as prompt
+    // TEXT, so a drop shows up as a seat quietly speaking as the generic co-agent instead of failing.
+    describe('buildBridgePrepInput — per-session instructions', () => {
+        it('maps params.data.realtimeInstructions onto the core prep input (trimmed)', () => {
+            const agent = new TestableRealtimeAgent();
+            const input = agent.callBuildBridgePrepInput(
+                makeParams({ data: { targetAgentID: 'target-1', realtimeInstructions: '  Be Dr. Chen.  ' } }),
+            );
+            expect(input.Instructions).toBe('Be Dr. Chen.');
+            expect(input.TargetAgentID).toBe('target-1'); // the other extras are untouched
+        });
+
+        it('leaves Instructions undefined when the host supplied none', () => {
+            const agent = new TestableRealtimeAgent();
+            const input = agent.callBuildBridgePrepInput(makeParams({ data: { targetAgentID: 'target-1' } }));
+            expect(input.Instructions).toBeUndefined();
+        });
+
+        it('leaves Instructions undefined for a blank value (never an empty appended section)', () => {
+            const agent = new TestableRealtimeAgent();
+            const input = agent.callBuildBridgePrepInput(makeParams({ data: { realtimeInstructions: '   ' } }));
+            expect(input.Instructions).toBeUndefined();
+        });
+
+        // On the bridge path the caller's text IS the seat's identity. Without this the framing —
+        // "you are the real-time voice for another agent; do not do the work yourself" — precedes the
+        // persona and wins: seats offer to fetch the character they are supposed to be.
+        it('declares that bridged instructions OWN the identity, so they lead the prompt', () => {
+            const agent = new TestableRealtimeAgent();
+            const input = agent.callBuildBridgePrepInput(
+                makeParams({ data: { realtimeInstructions: 'You are Dr. Maya Chen.' } }),
+            );
+            expect(input.InstructionsOwnIdentity).toBe(true);
+        });
+
+        it('never claims ownership of an identity the host did not supply', () => {
+            const agent = new TestableRealtimeAgent();
+            for (const data of [{ targetAgentID: 'target-1' }, { realtimeInstructions: '  ' }]) {
+                const input = agent.callBuildBridgePrepInput(makeParams({ data }));
+                // False, not merely falsy: the service gates on `=== true`, and a seat that claimed to
+                // own an identity it did not supply would get no identity at all.
+                expect(input.InstructionsOwnIdentity).toBe(false);
+            }
         });
     });
 });

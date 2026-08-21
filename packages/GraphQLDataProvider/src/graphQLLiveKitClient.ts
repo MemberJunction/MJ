@@ -58,6 +58,12 @@ export interface StartLiveKitAgentRoomSessionInput {
   AgentSessionID?: string;
   /** Turn-taking mode. */
   TurnMode?: 'Passive' | 'Active' | 'Hybrid';
+  /**
+   * How eagerly the agent takes the floor: `'proactive'` (the default — an ordinary voice that
+   * auto-responds and can be brought into a meeting unaddressed) or `'addressed-only'` (a deliberately
+   * quiet observer/specialist seat that speaks only when one of its names is said, alone or in a meeting).
+   */
+  ParticipationMode?: 'proactive' | 'addressed-only';
 }
 
 /** Result of starting an agent room session (includes a client token so the caller can immediately join). */

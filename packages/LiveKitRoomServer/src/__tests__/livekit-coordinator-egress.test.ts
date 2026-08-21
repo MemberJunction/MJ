@@ -20,10 +20,13 @@ function makeBridgeOps(providerFound = true) {
       return { SessionBridgeID: `bridge-${++seq}` } as any;
     }),
     StopBridgeSession: vi.fn(async () => true),
-    ReconfigureSessionToMeeting: vi.fn((id: string) => {
+    // The gate the coordinator drives: reconfigure-in-place where the provider allows it, reconnect where it
+    // doesn't. The engine owns that choice — from out here it is one call that either gates the seat or doesn't.
+    EnsureSessionMeetingGated: vi.fn(async (id: string) => {
       reconfigureCalls.push({ id });
       return true;
     }),
+    GetEffectiveTurnState: vi.fn(() => ({ MeetingGated: true, CanReconfigureTurnMode: true })),
   } satisfies BridgeOps;
   return { ops, startCalls, reconfigureCalls };
 }
@@ -125,6 +128,37 @@ describe('LiveKitAgentRoomCoordinator', () => {
     expect((startCalls[1].TurnMatcher as object).constructor.name).toBe('RegexAddressedMatcher');
   });
 
+  it('an explicitly addressed-only agent is gated even when it is ALONE in the room', async () => {
+    const { ops, startCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+    const factoryCtx: Record<string, unknown>[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    coordinator.SetSessionFactory(async (ctx: any) => { factoryCtx.push(ctx); return {} as any; });
+
+    // No moderator mode, no other agent in the room — the gate comes purely from the caller's request.
+    await coordinator.StartAgentRoomSession({
+      AgentSessionID: 'q1', RoomName: 'quiet-room-1', AgentName: 'Scribe', AgentAliases: ['Note Taker'],
+      ParticipationMode: 'addressed-only',
+    });
+
+    expect(startCalls[0].ParticipationMode).toBe('addressed-only');
+    expect(startCalls[0].DisableAutoResponse).toBe(true);
+    expect((startCalls[0].TurnMatcher as object).constructor.name).toBe('RegexAddressedMatcher');
+    expect(factoryCtx[0].MeetingMode).toBe(true);
+    expect(factoryCtx[0].SelfNames).toEqual(['Scribe', 'Note Taker']);
+  });
+
+  it('defaults to proactive — omitting ParticipationMode keeps the solo 1:1 auto-response behavior', async () => {
+    const { ops, startCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'q2', RoomName: 'quiet-room-2', AgentName: 'Sage' });
+
+    expect(startCalls[0].ParticipationMode).toBe('proactive');
+    expect(startCalls[0].DisableAutoResponse).toBeUndefined();
+    expect((startCalls[0].TurnMatcher as object).constructor.name).toBe('AlwaysAddressedMatcher');
+  });
+
   it('re-gates the agents already in the room when it becomes multi-agent', async () => {
     vi.stubEnv('MJ_REALTIME_MODERATOR_MODE', 'on'); // meeting mode is gated behind the moderator opt-in
     const { ops, reconfigureCalls } = makeBridgeOps(true);
@@ -139,7 +173,70 @@ describe('LiveKitAgentRoomCoordinator', () => {
     await coordinator.StartAgentRoomSession({ AgentSessionID: 'g2', RoomName: room, AgentName: 'Marketing' });
     expect(reconfigureCalls.map((c) => c.id)).toContain('bridge-1');
     // The re-gate matcher carries the first agent's names (built into a RegexAddressedMatcher).
-    expect(ops.ReconfigureSessionToMeeting).toHaveBeenCalledWith('bridge-1', expect.anything());
+    expect(ops.EnsureSessionMeetingGated).toHaveBeenCalledWith('bridge-1', expect.anything());
+  });
+
+  it('passes per-session Instructions through to the realtime session factory', async () => {
+    const { ops } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+    const factoryCtx: Record<string, unknown>[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    coordinator.SetSessionFactory(async (ctx: any) => { factoryCtx.push(ctx); return {} as any; });
+
+    await coordinator.StartAgentRoomSession({
+      AgentSessionID: 'p1', RoomName: 'persona-room-1', AgentName: 'Chen',
+      Instructions: 'You are Dr. Chen, a skeptical CFO.',
+    });
+
+    expect(factoryCtx[0].Instructions).toBe('You are Dr. Chen, a skeptical CFO.');
+  });
+
+  it('leaves Instructions undefined when the caller supplies none (today’s behavior, unchanged)', async () => {
+    const { ops } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+    const factoryCtx: Record<string, unknown>[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    coordinator.SetSessionFactory(async (ctx: any) => { factoryCtx.push(ctx); return {} as any; });
+
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'p2', RoomName: 'persona-room-2', AgentName: 'Sage' });
+
+    expect(factoryCtx[0].Instructions).toBeUndefined();
+  });
+
+  it('carries Instructions into a meeting-mode RE-MINT — a re-opened seat is the SAME character', async () => {
+    const { ops, startCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+    const factoryCtx: Record<string, unknown>[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    coordinator.SetSessionFactory(async (ctx: any) => { factoryCtx.push(ctx); return {} as any; });
+
+    await coordinator.StartAgentRoomSession({
+      AgentSessionID: 'p3', RoomName: 'persona-room-3', AgentName: 'Chen',
+      Instructions: 'You are Dr. Chen, a skeptical CFO.',
+    });
+
+    // A provider that fixes turn config at connect is re-opened in meeting mode through this closure. The
+    // persona has to come back with it, or the agent returns mid-meeting as somebody else.
+    const reopen = startCalls[0].ReopenInMeetingMode as () => Promise<unknown>;
+    await reopen();
+
+    expect(factoryCtx).toHaveLength(2);
+    expect(factoryCtx[1].Instructions).toBe('You are Dr. Chen, a skeptical CFO.');
+    expect(factoryCtx[1].MeetingMode).toBe(true);
+  });
+
+  it('reports the seat’s EFFECTIVE turn state, read back from the engine rather than assumed', async () => {
+    const { ops } = makeBridgeOps(true);
+    ops.GetEffectiveTurnState.mockReturnValue({ MeetingGated: true, CanReconfigureTurnMode: false });
+    coordinator.SetBridgeOps(ops);
+
+    const result = await coordinator.StartAgentRoomSession({ AgentSessionID: 't1', RoomName: 'turnstate-room-1', AgentName: 'Sage' });
+
+    // A fixed-config provider (CanReconfigureTurnMode false) that IS gated — i.e. it had to be reconnected.
+    // The point of the read-back: the coordinator reports what the seat is doing, not what it asked for.
+    expect(result.MeetingGated).toBe(true);
+    expect(result.CanReconfigureTurnMode).toBe(false);
+    expect(ops.GetEffectiveTurnState).toHaveBeenCalledWith('bridge-1');
   });
 });
 

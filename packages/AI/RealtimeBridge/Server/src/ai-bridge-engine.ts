@@ -93,11 +93,77 @@ const SESSION_IDLE_TTL_MS = 10 * 60 * 1000; // 10 min with no transcript activit
 const SESSION_MAX_DURATION_MS = 4 * 60 * 60 * 1000; // 4 h absolute cap
 const STALE_SWEEP_INTERVAL_MS = 60 * 1000; // sweep cadence when self-scheduled
 
+/**
+ * The addressed-matcher a **suspended** agent runs behind: nothing ever addresses it, so its turn policy
+ * can never decide `Speak` while a human holds its seat. Swapping the matcher (rather than tearing the
+ * policy out) is the same move {@link AIBridgeEngine.ReconfigureSessionToMeeting} makes to re-gate a live
+ * session — everything else about the session keeps running; only the gate that lets it talk changes.
+ * Stateless and side-effect-free, so one shared instance serves every suspended session.
+ */
+const SUSPENDED_AGENT_MATCHER: IAddressedMatcher = {
+    IsAddressed: () => false,
+};
+
 /** Context note injected into a re-gated agent so it knows it's now in a meeting (its prompt predates it). */
 const MEETING_REGATE_CONTEXT_NOTE =
     'You are now in a multi-party meeting with other people and agents. Stop responding to everything you ' +
     'hear — listen, and speak only when you are addressed by name or the conversation clearly needs your ' +
     'expertise. Never talk over others, and keep your replies brief.';
+
+/**
+ * How many times {@link AIBridgeEngine.EnsureSessionMeetingGated} will ask the session's
+ * {@link MeetingModeSessionReopener} for a fresh meeting-mode socket before giving up. Small on purpose: the
+ * reopen runs INSIDE room formation while the un-gated agent is muted, so a long retry ladder would hold the
+ * room open with a silent seat. One retry covers a transient provider hiccup; anything worse is a real
+ * outage and is reported LOUDLY instead of being retried into a timeout.
+ */
+const MEETING_REGATE_REOPEN_MAX_ATTEMPTS = 2;
+
+/**
+ * Re-opens ONE bridged agent's provider socket in **meeting mode** (model auto-response disabled, meeting
+ * prompt phrasing) and returns the fresh session — the escape hatch for providers that fix their turn config
+ * at connect (Gemini Live) and therefore cannot be re-gated on a live socket.
+ *
+ * Registered per session via {@link StartBridgeSessionParams.ReopenInMeetingMode}, because the engine
+ * deliberately does NOT own the realtime-session factory (see {@link AIBridgeEngine} — the injected
+ * `IRealtimeSession` is the engine's only coupling to the model layer). The layer that DID mint the session
+ * hands the engine a closure over its own factory arguments, so the engine keeps the whole "can this provider
+ * re-gate in place, and what do we do if it can't?" decision in one place instead of leaking it to callers.
+ *
+ * The reopened session MUST be for the same agent + the same `AIAgentSession`: the engine reuses the existing
+ * `AIAgentSessionBridge` row, driver, room membership, scribe role and per-turn attribution, and only swaps
+ * the provider socket underneath them.
+ *
+ * @returns The fresh, meeting-mode realtime session to swap in.
+ * @throws When the session cannot be re-opened (surfaced by the engine, capped by
+ *   {@link MEETING_REGATE_REOPEN_MAX_ATTEMPTS}).
+ */
+export type MeetingModeSessionReopener = () => Promise<IRealtimeSession>;
+
+/**
+ * The **effective** turn state of a live bridged session — what the session is actually doing right now, as
+ * opposed to what it was started with. Read via {@link AIBridgeEngine.GetEffectiveTurnState}.
+ *
+ * This exists because a mis-gated agent is otherwise only *audible*: an agent that keeps auto-responding to a
+ * whole room talks over the cast, and nothing in the API surface said so. Exposing the state lets room
+ * formation (and automated tests) ASSERT the room is gated instead of listening to it.
+ */
+export interface EffectiveTurnState {
+    /**
+     * Whether the session is currently meeting-gated: the model's blind auto-response is OFF **and** the
+     * bridge's own gate is the addressed-only (`Passive`) policy — i.e. it speaks only when its matcher says
+     * it was addressed (or when the room moderator routes it a turn). `false` means the session is in 1:1
+     * auto-response and WILL answer everything it hears, which is exactly the multi-agent failure mode.
+     */
+    MeetingGated: boolean;
+
+    /**
+     * Whether this session's provider can change turn mode on a LIVE socket
+     * ({@link RealtimeSessionCapabilities.CanReconfigureTurnMode}). `false` (Gemini Live) means re-gating it
+     * costs a socket reconnect — see {@link AIBridgeEngine.EnsureSessionMeetingGated}.
+     */
+    CanReconfigureTurnMode: boolean;
+}
 
 /**
  * Finalizes the co-agent observability run(s) for an agent session when a bridge is torn down WITHOUT a
@@ -316,6 +382,14 @@ export interface StartBridgeSessionParams {
      */
     DisableAutoResponse?: boolean;
 
+    /**
+     * Optional per-session hook that re-opens THIS agent's provider socket in meeting mode. Supplied by the
+     * layer that owns the realtime-session factory (e.g. `LiveKitAgentRoomCoordinator`), it is what lets
+     * {@link AIBridgeEngine.EnsureSessionMeetingGated} re-gate a provider whose turn config is fixed at
+     * connect — the reconnect path. Omit it and such a session simply cannot be gated (reported loudly).
+     */
+    ReopenInMeetingMode?: MeetingModeSessionReopener;
+
     /** Per-session bridge configuration (resolved credential refs, region, …) passed to the driver. */
     Configuration?: Record<string, unknown>;
 
@@ -375,6 +449,31 @@ export interface StartBridgeSessionParams {
 }
 
 /**
+ * What a **suspended** agent's seat is restored to on resume — captured verbatim at suspend time so
+ * {@link AIBridgeEngine.ResumeBridgeAgent} puts back what was actually there instead of a guessed default.
+ * That matters: a session may have started 1:1 and been re-gated to meeting mode by
+ * {@link AIBridgeEngine.ReconfigureSessionToMeeting}, or carry per-session turn tuning from its start
+ * params — "restore the defaults" would silently change how the agent behaves after a takeover.
+ */
+export interface SuspendedAgentState {
+    /** The turn-taking policy in force at suspend time (mode + matcher + tuning + its live throttle state). */
+    PriorTurnPolicy: TurnTakingPolicy;
+
+    /** {@link ActiveBridgeSession.DisableAutoResponse} as it was at suspend time. */
+    PriorDisableAutoResponse: boolean;
+
+    /**
+     * Whether the session held the room floor when it was suspended. Recorded for observability only —
+     * the floor is released on suspend and deliberately NOT re-claimed on resume (the agent speaks again
+     * when it is next addressed/routed, like any other agent that just finished a turn).
+     */
+    HeldFloor: boolean;
+
+    /** Epoch-ms the suspension began (observability / diagnostics). */
+    SuspendedAtMs: number;
+}
+
+/**
  * The live, in-memory handle for one running bridged session held by the engine. Carries the driver,
  * the wired realtime session, the per-session turn-taking policy, and the persisted bridge row id so
  * teardown can reach all of them.
@@ -404,6 +503,36 @@ export interface ActiveBridgeSession {
      * `false` the model auto-responds and the engine stays hands-off (forcing would double-fire).
      */
     DisableAutoResponse: boolean;
+
+    /**
+     * Set while this agent is **suspended** — a human has taken its seat. Its presence IS the suspended
+     * flag, and it carries the exact pre-suspend state {@link AIBridgeEngine.ResumeBridgeAgent} restores.
+     * A suspended session stays fully alive — provider socket, `AIAgentSession`, transcript persistence,
+     * participant row and co-agent observability run all keep running, and it keeps HEARING the room — it
+     * simply never speaks or publishes. `undefined` whenever the agent is active.
+     */
+    SuspendedState?: SuspendedAgentState;
+
+    /**
+     * The per-session hook that re-opens this agent's provider socket in meeting mode, as supplied at start
+     * ({@link StartBridgeSessionParams.ReopenInMeetingMode}). Held here because the re-gate decision happens
+     * long after start, when a second agent joins the room.
+     */
+    ReopenInMeetingMode?: MeetingModeSessionReopener;
+
+    /**
+     * The in-flight meeting-mode reopen for this session, when one is running. Serves two jobs at once:
+     *
+     * 1. **Idempotency** — a second `EnsureSessionMeetingGated` call (two agents joining at once) awaits the
+     *    SAME promise instead of minting a second socket and racing to swap it in.
+     * 2. **The mute** — its mere presence means "the socket currently wired here is the un-gated one we are
+     *    replacing", so the outbound half of the transport seam drops its frames (see
+     *    {@link AIBridgeEngine.wireTransportSeam}). Without it, the agent we've already decided is talking
+     *    over the room would keep doing exactly that for the whole reconnect.
+     *
+     * `undefined` whenever no reopen is running.
+     */
+    PendingMeetingReopen?: Promise<boolean>;
 
     /**
      * Whether at least one HUMAN participant has been seen in the room. Auto-leave only fires after a human
@@ -736,6 +865,19 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         this.turnModerator = moderator;
     }
 
+    /**
+     * Whether a room turn moderator is bound — i.e. whether a multi-agent room will actually take turns
+     * rather than run free-for-all.
+     *
+     * Reports the EFFECTIVE state, not what an env var says. `MJ_REALTIME_MODERATOR_MODE=on` is only the
+     * usual way the moderator gets bound; a host can bind one directly, and a typo in the variable binds
+     * nothing while still looking set. Since the difference between a moderated panel and crosstalk is
+     * otherwise only AUDIBLE, an operator needs a way to ask the running server which one they have.
+     */
+    public get HasTurnModerator(): boolean {
+        return this.turnModerator != null;
+    }
+
     /** Returns the active identities for an agent. @see AIBridgeEngineBase.IdentitiesForAgent */
     public IdentitiesForAgent(agentId: string, providerId?: string): MJAIBridgeAgentIdentityEntity[] {
         return this.Base.IdentitiesForAgent(agentId, providerId);
@@ -870,6 +1012,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 RealtimeSession: params.RealtimeSession,
                 TurnPolicy: turnPolicy,
                 DisableAutoResponse: params.DisableAutoResponse === true,
+                ReopenInMeetingMode: params.ReopenInMeetingMode,
                 HasSeenHuman: false,
                 RoomKey: result.ExternalConnectionId,
                 BotParticipantID: result.BotParticipantId,
@@ -993,6 +1136,18 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
         // Outbound: the agent speaks → into the meeting/call.
         RealtimeSession.OnOutput((chunk: ArrayBuffer) => {
+            // SUSPENDED (a human took this agent's seat): the model may still be finishing a response it
+            // started before the takeover, and a provider that ignores a reconfigure would keep generating.
+            // The outbound half of the seam is the one place the engine can GUARANTEE silence regardless —
+            // so drop the frames here rather than trusting the gates upstream. See SuspendBridgeAgent.
+            //
+            // RE-GATING (a meeting-mode reopen is in flight): the socket wired here is the un-gated 1:1 one
+            // we have already decided must stop answering the room — and by definition it cannot be told to.
+            // The same outbound gate is the only thing that keeps it quiet for the seconds the reconnect
+            // takes. See EnsureSessionMeetingGated.
+            if (active.SuspendedState || active.PendingMeetingReopen) {
+                return;
+            }
             if (!this.diagOutbound.has(active.SessionBridgeID)) {
                 this.diagOutbound.add(active.SessionBridgeID);
                 LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`, verboseOnly: true });
@@ -1005,6 +1160,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // audio-only sessions don't implement OnVideoOutput, so call it null-safely. The bridge driver
         // gates the actual publish on its `VideoOut` capability.
         RealtimeSession.OnVideoOutput?.((chunk: ArrayBuffer) => {
+            if (active.SuspendedState || active.PendingMeetingReopen) {
+                return; // takeover / re-gate reopen — the avatar goes quiet with the voice (same rationale as above)
+            }
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
@@ -1227,13 +1385,23 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         row.DisplayName = p.DisplayName ?? null;
         row.Role = p.Role;
-        // Persist IsAgent ONLY for THIS bridge's own bot — the row-level invariant is "one bot per bridge".
-        // In a multi-agent room the live roster (driver-side `p.IsAgent`) flags OTHER agents too (turn-taking
-        // + occupancy need that), but on THIS bridge's persisted roster they are remote participants, not its
-        // bot. Diarization still resolves them: each agent's OWN bridge marks itself, and the transcript
-        // viewer OR-reduces IsAgent per identity across all of the room's bridges.
+        // Trust the DRIVER's answer, which already means "is this identity an agent" — the local bot
+        // (`IsLocal`) or any bot by identity convention.
+        //
+        // This used to recompute it as "is this MY bot", on the reasoning that a remote agent is not
+        // this bridge's bot and that diarization could OR-reduce across the room because "each
+        // agent's OWN bridge marks itself". That last premise is false: a roster comes from
+        // `room.remoteParticipants`, and a participant is never in its own remote list, so a
+        // bridge's own bot NEVER appears in its roster. The OR-reduce therefore reduced over
+        // nothing — measured on a live two-agent room, ZERO rows had IsAgent set, so per-turn
+        // diarization could not tell an agent from a human anywhere in a panel.
+        //
+        // Flagging remote agents is also what a consumer actually asks: "is this speaker an agent?"
+        // is a property of the identity, not of which bridge happened to observe it.
         row.IsAgent =
-            active.BotParticipantID != null && p.ExternalId.toLowerCase() === active.BotParticipantID.toLowerCase();
+            p.IsAgent === true
+            || (active.BotParticipantID != null
+                && p.ExternalId.toLowerCase() === active.BotParticipantID.toLowerCase());
         const saved = await row.Save();
         if (!saved) {
             LogError(
@@ -1320,10 +1488,19 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             this.roomConsecutiveAgentTurns.set(source.RoomKey.toLowerCase(), 0);
         }
 
+        // Speaking discipline only concerns agents that MAY speak: a suspended seat (a human took it over)
+        // is skipped from here down — the human answers in its place. It still got `noteHumanPresence`
+        // above, so it is never auto-reaped while the person is holding its seat.
+        const speakers = peers.filter((p) => !p.SuspendedState);
+        if (speakers.length === 0) {
+            return; // every agent in this room is suspended — the humans have the conversation to themselves
+        }
         if (peers.length <= 1) {
-            this.evaluateUserTurnForAgent(source, text); // 1:1 / solo room — no broadcast, no dedup
+            this.evaluateUserTurnForAgent(speakers[0], text); // 1:1 / solo room — no broadcast, no dedup
             return;
         }
+        // Dedup keys on the ROOM, not on the eligible speakers: a SUSPENDED agent still hears and transcribes,
+        // so the same utterance can arrive from it too and must collapse into the one dispatch.
         const now = Date.now();
         const dedupKey = `${source.RoomKey!.toLowerCase()}\n${text.trim().toLowerCase()}`;
         if (now - (this.recentRoomTurnDispatch.get(dedupKey) ?? 0) < ROOM_TURN_DEDUP_MS) {
@@ -1336,12 +1513,15 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
         // MODERATOR PATH: one LLM decision routes the turn to 0+ agents (serialized via the floor). FALLBACK
         // (no moderator configured): each agent independently evaluates its own addressed-matcher (broadcast).
-        if (this.turnModerator) {
+        // The moderator only arbitrates BETWEEN agents, so a room down to one eligible speaker (its peers on
+        // human takeover) falls through to the matcher path — the moderator would bail on a 1-agent roster
+        // and nobody would answer.
+        if (this.turnModerator && speakers.length > 1) {
             void this.runRoomModerator(source.RoomKey!, { Speaker: this.speakerLabel(source, false), IsAgent: false, Text: text });
             return;
         }
-        LogStatusEx({ message: `[AIBridgeEngine][diag] broadcasting user turn "${text.slice(0, 60)}" to ${peers.length} room agents for addressing (source bridge ${source.SessionBridgeID})`, verboseOnly: true });
-        for (const peer of peers) {
+        LogStatusEx({ message: `[AIBridgeEngine][diag] broadcasting user turn "${text.slice(0, 60)}" to ${speakers.length} room agents for addressing (source bridge ${source.SessionBridgeID})`, verboseOnly: true });
+        for (const peer of speakers) {
             this.evaluateUserTurnForAgent(peer, text);
         }
     }
@@ -1362,6 +1542,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         const decision = active.TurnPolicy.EvaluateTurn({ Segment: segment });
         LogStatusEx({ message: `[AIBridgeEngine][diag] turn decision=${decision.Action} for user turn "${(text ?? '').slice(0, 60)}" (bridge ${active.SessionBridgeID})`, verboseOnly: true });
         this.applyTurnDecision(active, decision.Action);
+    }
+
+    /**
+     * The room's agents that are eligible to SPEAK — everything in the room minus the seats a human has
+     * taken over ({@link SuspendBridgeAgent}). Turn routing (broadcast, moderator roster, continuation)
+     * uses this. Anything about presence or liveness — occupancy, auto-leave, the stale sweep — must keep
+     * using {@link roomAgents}: a suspended agent is still very much in the room and must not be reaped
+     * while the human is speaking for it.
+     */
+    private speakingRoomAgents(roomKey: string): ActiveBridgeSession[] {
+        return this.roomAgents(roomKey).filter((a) => !a.SuspendedState);
     }
 
     /** All active bridged sessions sharing a room (by external room key), case-insensitive. */
@@ -1430,7 +1621,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * still playing out), the moderator's latency is hidden behind playback. No-op for single-agent rooms.
      */
     private onAgentTurnCompleted(active: ActiveBridgeSession, text: string): void {
-        if (!active.RoomKey || !this.turnModerator || this.roomAgents(active.RoomKey).length <= 1) {
+        // Suspended seats don't take turns, so a room whose only other agent is on takeover has no
+        // agent↔agent continuation to run (its remaining agent is routed by the matcher path instead).
+        if (!active.RoomKey || !this.turnModerator || this.speakingRoomAgents(active.RoomKey).length <= 1) {
             return;
         }
         const key = active.RoomKey.toLowerCase();
@@ -1505,7 +1698,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /** Builds the {@link TurnModeratorContext} for a room from the live roster + diarized lookback. */
     private buildModeratorContext(roomKey: string, latest: ModeratorLookbackTurn): TurnModeratorContext {
         const key = roomKey.toLowerCase();
-        const agents = this.roomAgents(roomKey);
+        // Suspended agents are off the roster: the moderator must never route a turn to a seat a human is
+        // holding (it would be answered by nobody, since triggerMeetingSpeak refuses a suspended session).
+        const agents = this.speakingRoomAgents(roomKey);
         const roster: ModeratorRosterAgent[] = agents.map((a) => ({
             AgentSessionID: a.AgentSessionID,
             AgentID: a.AgentID,
@@ -1561,6 +1756,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * (stays silent) when another agent holds the floor. Shared by the matcher path and the moderator drainer.
      */
     private triggerMeetingSpeak(active: ActiveBridgeSession): boolean {
+        if (active.SuspendedState) {
+            // A human holds this seat. BOTH routes to the agent's voice funnel through here — the matcher
+            // path via applyTurnDecision and the moderator's queue drain, which bypasses the turn policy
+            // entirely — so this single guard is what actually keeps a suspended agent silent. Returning
+            // `false` also makes drainSpeakerQueue advance to the next queued speaker instead of stalling.
+            LogStatusEx({ message: `[AIBridgeEngine][diag] meeting trigger SKIPPED for bridge ${active.SessionBridgeID} — the agent is suspended (a human has its seat)`, verboseOnly: true });
+            return false;
+        }
         if (active.RoomKey) {
             const floor = this.roomCoordinator.TakeFloor(active.RoomKey, active.AgentSessionID);
             if (!floor.Granted) {
@@ -1653,11 +1856,16 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
-     * Retroactively switches an already-running session into **meeting mode** (auto-response off +
-     * addressed-only) — used when a room becomes multi-agent and the first (1:1) agent must stop
-     * auto-responding. **Capability-gated**: only sessions whose provider reports
-     * {@link RealtimeSessionCapabilities.CanReconfigureTurnMode} can change turn mode on a live socket;
-     * others (e.g. Gemini, fixed at connect) are left in their start mode — no dead-method call. Idempotent.
+     * The **in-place** half of re-gating: switches an already-running session into meeting mode
+     * (auto-response off + addressed-only) on its LIVE socket, with no reconnect. Used when a room becomes
+     * multi-agent and the first (1:1) agent must stop auto-responding. **Capability-gated**: only sessions
+     * whose provider reports {@link RealtimeSessionCapabilities.CanReconfigureTurnMode} can change turn mode
+     * on a live socket; others (e.g. Gemini, fixed at connect) are refused here — no dead-method call.
+     * Idempotent.
+     *
+     * **Prefer {@link EnsureSessionMeetingGated}**, the complete operation: it takes this cheap path when the
+     * provider supports it and re-opens the socket in meeting mode when it doesn't. This primitive stays
+     * public (and synchronous) for callers that specifically want "re-gate it only if it's free".
      *
      * @param sessionBridgeID The bridge to re-gate.
      * @param matcher The addressed-matcher (the agent's names) the re-gated session should speak on.
@@ -1674,15 +1882,16 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         if (active.RealtimeSession.Capabilities?.CanReconfigureTurnMode !== true) {
             // LOUD: this agent was the FIRST in the room (1:1 auto-response) and its provider can't switch a
-            // live socket to meeting mode (e.g. Gemini). It will keep auto-responding to ALL room audio,
-            // bypassing the turn moderator and likely talking over the other agents. The robust fix is to
-            // reconnect it in meeting mode; until then, prefer a re-configurable provider (OpenAI) as the FIRST
-            // agent in a room that will become multi-agent. See the Bridges guide §9.
+            // live socket to meeting mode (e.g. Gemini). Left like this it keeps auto-responding to ALL room
+            // audio, bypassing the turn moderator and talking over the other agents. That is exactly what
+            // {@link EnsureSessionMeetingGated} exists to prevent — it re-opens the socket in meeting mode
+            // instead of giving up — so callers should use IT, not this in-place primitive, whenever a
+            // reconnect is acceptable. Reaching here means the caller took the in-place path knowingly.
             LogError(
-                `[AIBridgeEngine] ⚠️ bridge ${sessionBridgeID} CANNOT re-gate to meeting mode mid-session ` +
+                `[AIBridgeEngine] ⚠️ bridge ${sessionBridgeID} CANNOT re-gate to meeting mode IN PLACE ` +
                     `(provider config fixed at connect, e.g. Gemini). It stays in 1:1 auto-response and will ` +
-                    `respond to ALL room audio, bypassing the moderator — use an OpenAI-realtime agent as the ` +
-                    `first agent in multi-agent rooms.`,
+                    `respond to ALL room audio, bypassing the moderator. Call EnsureSessionMeetingGated ` +
+                    `instead — it re-opens the session in meeting mode when the provider can't be reconfigured.`,
             );
             return false;
         }
@@ -1694,6 +1903,352 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // meeting-appropriate. A context note is additive (doesn't clobber the prompt) — no-op if unsupported.
         active.RealtimeSession.SendContextNote?.(MEETING_REGATE_CONTEXT_NOTE);
         LogStatus(`[AIBridgeEngine] re-gated bridge ${sessionBridgeID} to meeting mode (room became multi-agent)`);
+        return true;
+    }
+
+    /**
+     * Guarantees a live session ends up **meeting-gated** — the complete operation
+     * {@link ReconfigureSessionToMeeting} is only the cheap half of. Two paths, one outcome:
+     *
+     * - **Provider can reconfigure a live socket** (OpenAI realtime): the in-place path, unchanged and free.
+     * - **Provider fixes its turn config at connect** (Gemini Live): the socket is **re-opened** in meeting
+     *   mode via the session's {@link MeetingModeSessionReopener} and swapped in underneath the running
+     *   bridge. The `AIAgentSessionBridge` row, the `AIAgentSession`, the driver + room membership, the
+     *   scribe election and per-turn attribution are all reused — only the provider socket changes.
+     *
+     * That second path is why this method exists. Before it, a room whose FIRST agent ran a fixed-config
+     * provider was never gated at all: the engine logged a warning and that agent kept auto-responding to
+     * every utterance in the room, talking over the whole cast. There was no way to even *observe* it short
+     * of listening — see {@link GetEffectiveTurnState}, which now makes the outcome assertable.
+     *
+     * **Idempotent and concurrency-safe.** An already-gated session returns `true` untouched; two callers
+     * arriving together (two agents joining at once) share ONE reopen via
+     * {@link ActiveBridgeSession.PendingMeetingReopen} rather than minting two sockets. Never throws — a
+     * failure is logged LOUDLY and reported as `false` so room formation can decide what to do about a seat
+     * it could not gate.
+     *
+     * @param sessionBridgeID The bridge to gate into meeting mode.
+     * @param matcher The addressed-matcher (the agent's names) the gated session should speak on.
+     * @returns `true` when the session is meeting-gated (or already was); `false` when it is unknown to this
+     *   process, has no reopen hook and can't reconfigure, or the reopen failed.
+     */
+    public async EnsureSessionMeetingGated(sessionBridgeID: string, matcher: IAddressedMatcher): Promise<boolean> {
+        const active = this.activeSessions.get(sessionBridgeID.toLowerCase());
+        if (!active) {
+            return false;
+        }
+        if (active.DisableAutoResponse) {
+            return true; // already meeting mode — nothing to do (same idempotency contract as the in-place path)
+        }
+        if (active.PendingMeetingReopen) {
+            return active.PendingMeetingReopen; // a reopen is already running for this session — share it
+        }
+        if (active.RealtimeSession.Capabilities?.CanReconfigureTurnMode === true) {
+            return this.ReconfigureSessionToMeeting(sessionBridgeID, matcher);
+        }
+        if (!active.ReopenInMeetingMode) {
+            // LOUD + structured: the provider can't be reconfigured AND nobody gave us a way to re-open it, so
+            // this seat physically cannot be gated. Say exactly that — the alternative is an agent that talks
+            // over the room with only a stale log line to explain it.
+            LogError(
+                `[AIBridgeEngine] ⚠️ bridge ${sessionBridgeID} (agentSession ${active.AgentSessionID}) CANNOT be ` +
+                    `meeting-gated: its provider fixes turn config at connect (e.g. Gemini) and no ` +
+                    `ReopenInMeetingMode hook was supplied at StartBridgeSession. It stays in 1:1 auto-response ` +
+                    `and will answer ALL room audio, talking over the other agents. Supply the reopen hook from ` +
+                    `the layer that owns the realtime-session factory, or start this agent addressed-only.`,
+            );
+            return false;
+        }
+
+        // Publish the in-flight promise BEFORE anything can await: it is both the dedupe key and the outbound
+        // mute that keeps the un-gated socket quiet for the duration (see ActiveBridgeSession.PendingMeetingReopen).
+        const pending = this.reopenSessionInMeetingMode(active, matcher);
+        active.PendingMeetingReopen = pending;
+        try {
+            return await pending;
+        } finally {
+            // Always un-mute: on success the freshly-wired session is gated and may speak; on failure the old
+            // socket is still there and going permanently silent would be a worse, invisible failure than the
+            // loud one already logged.
+            active.PendingMeetingReopen = undefined;
+        }
+    }
+
+    /**
+     * Re-opens a session's provider socket in meeting mode and swaps it onto the SAME
+     * {@link ActiveBridgeSession}. The reconnect path of {@link EnsureSessionMeetingGated} — see there for
+     * the why; this is the mechanism.
+     *
+     * Ordering is deliberate: mint the replacement FIRST, swap, and only then close the old socket. A mint
+     * that fails therefore leaves the agent exactly as it was (present, un-gated, audible) rather than mute
+     * or dead — a degraded seat beats a missing one. The close runs in a `finally` so the old provider
+     * connection is released on every path, including a re-wire that throws; leaking it would leave a second
+     * live socket happily auto-responding into the room, which is the very bug being fixed.
+     *
+     * Two things deliberately NOT redone: the channel plane (its perception sink reads
+     * `active.RealtimeSession` at call time, so it follows the swap by itself) and the meeting context note
+     * (the fresh session was MINTED in meeting mode, so its prompt already carries the discipline).
+     *
+     * @param active The live session to re-open.
+     * @param matcher The addressed-matcher the re-gated session should speak on.
+     * @returns `true` when the fresh, gated session is wired in; `false` when the reopen was exhausted or the
+     *   swap failed.
+     */
+    private async reopenSessionInMeetingMode(active: ActiveBridgeSession, matcher: IAddressedMatcher): Promise<boolean> {
+        const reopen = active.ReopenInMeetingMode;
+        if (!reopen) {
+            return false; // guarded by the caller; defensive so this stays safe if ever called elsewhere
+        }
+        const previous = active.RealtimeSession;
+        let fresh: IRealtimeSession | undefined;
+        for (let attempt = 1; attempt <= MEETING_REGATE_REOPEN_MAX_ATTEMPTS; attempt++) {
+            try {
+                fresh = await reopen();
+                break;
+            } catch (err) {
+                LogError(
+                    `[AIBridgeEngine] meeting-mode reopen attempt ${attempt}/${MEETING_REGATE_REOPEN_MAX_ATTEMPTS} ` +
+                        `failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
+        }
+        if (!fresh) {
+            // Attempt cap hit — handled explicitly rather than looping: the agent keeps its ORIGINAL, un-gated
+            // socket (it is still in the room and still audible), and the room is told loudly that one seat is
+            // not gated so an operator isn't left guessing why an agent talks over everyone.
+            LogError(
+                `[AIBridgeEngine] ⚠️ bridge ${active.SessionBridgeID} (agentSession ${active.AgentSessionID}) could ` +
+                    `NOT be re-opened in meeting mode after ${MEETING_REGATE_REOPEN_MAX_ATTEMPTS} attempts. It stays ` +
+                    `on its original 1:1 socket and will answer ALL room audio — expect it to talk over the room.`,
+            );
+            return false;
+        }
+        if (this.activeSessions.get(active.SessionBridgeID.toLowerCase()) !== active) {
+            // The seat went away while we were minting (room emptied, janitor reaped it, the caller hung up).
+            // Wiring the fresh socket onto a torn-down session would strand it — teardown has already run and
+            // will never close it — so hand it straight back to the provider.
+            LogStatus(
+                `[AIBridgeEngine] bridge ${active.SessionBridgeID} was torn down during its meeting-mode reopen — ` +
+                    `closing the freshly minted session instead of wiring it to a dead seat.`,
+            );
+            try {
+                await fresh.Close();
+            } catch (err) {
+                LogError(
+                    `[AIBridgeEngine] closing the orphaned re-gate session failed for bridge ` +
+                        `${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
+            return false;
+        }
+
+        let swapped = false;
+        try {
+            // Swap the socket, then re-run the two wirings that close over the session handle. Both register a
+            // SINGLE handler per hook (IRealtimeSession contract; the driver's OnMedia likewise), so re-running
+            // them replaces the old closures instead of stacking a second copy.
+            active.RealtimeSession = fresh;
+            active.DisableAutoResponse = true;
+            active.TurnPolicy = new TurnTakingPolicy({ Mode: 'Passive', Matcher: matcher });
+            this.wireTransportSeam(active);
+            this.wireTurnTaking(active);
+            swapped = true;
+        } catch (err) {
+            LogError(
+                `[AIBridgeEngine] ⚠️ bridge ${active.SessionBridgeID} re-opened in meeting mode but FAILED to wire ` +
+                    `the fresh session: ${err instanceof Error ? err.message : String(err)}. The agent may be mute ` +
+                    `until the session is stopped and restarted.`,
+            );
+        } finally {
+            // Release the old provider connection on every path. Closing it also finalizes the co-agent run the
+            // agent layer wrapped onto Close(): the `AIAgentSession` is unchanged, so the reopened session's run
+            // groups under the SAME session — one session, two runs across the re-gate, not a severed chain.
+            try {
+                await previous.Close();
+            } catch (err) {
+                LogError(
+                    `[AIBridgeEngine] closing the pre-re-gate realtime session failed for bridge ` +
+                        `${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
+        }
+        if (swapped) {
+            LogStatus(
+                `[AIBridgeEngine] re-gated bridge ${active.SessionBridgeID} to meeting mode by RECONNECTING its ` +
+                    `provider socket (config fixed at connect) — same bridge row, same agent session, same seat.`,
+            );
+        }
+        return swapped;
+    }
+
+    /**
+     * Reports the **effective** turn state of a live session — is this seat actually gated right now?
+     *
+     * The read exists so callers (room formation, health checks, tests) can ASSERT a multi-agent room is
+     * properly gated instead of discovering it by ear when an agent talks over everyone. Pure query: it never
+     * mutates the session.
+     *
+     * {@link EffectiveTurnState.MeetingGated} is the conjunction the room actually depends on — the model's
+     * blind auto-response is off AND the bridge's own gate is the addressed-only `Passive` policy. Either one
+     * alone is not enough: auto-response on means the model answers everything regardless of the bridge, and
+     * an `Active`/`Hybrid` policy is a scorer-driven seat rather than an addressed-only one.
+     *
+     * @param sessionBridgeID The bridge row id to inspect.
+     * @returns The session's effective turn state, or `null` when this process holds no such session.
+     */
+    public GetEffectiveTurnState(sessionBridgeID: string): EffectiveTurnState | null {
+        const active = this.activeSessions.get(sessionBridgeID.toLowerCase());
+        if (!active) {
+            return null;
+        }
+        return {
+            MeetingGated: active.DisableAutoResponse && active.TurnPolicy.Mode === 'Passive',
+            CanReconfigureTurnMode: active.RealtimeSession.Capabilities?.CanReconfigureTurnMode === true,
+        };
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Human takeover — suspend / resume an agent WITHOUT ending its session.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * **Suspends** the agent on a live bridge session: it stops talking and stops publishing, but stays
+     * present. This is the seat-takeover primitive — a coach steps into the agent's place, speaks to the
+     * room themselves, then hands the seat back via {@link ResumeBridgeAgent}.
+     *
+     * Suspend is deliberately NOT {@link StopBridgeSession}. Stopping disconnects the driver, closes the
+     * realtime session, finalizes the co-agent run and marks the bridge `Disconnected` — which severs the
+     * session chain and the recording legs, so "hand it back" would mean a brand-new session with none of
+     * the meeting's history. Here **everything keeps running**: the provider socket, the `AIAgentSession`,
+     * the participant rows, transcript persistence and the observability run. Only the ways the agent can
+     * make sound are closed:
+     *
+     * 1. The model's blind auto-response goes OFF, so it stops answering the room on its own.
+     * 2. Its turn policy is swapped onto {@link SUSPENDED_AGENT_MATCHER}, so the bridge's own addressing
+     *    gate can never decide `Speak`. (The moderator path bypasses the policy entirely, so
+     *    {@link triggerMeetingSpeak} refuses a suspended session too — that's the second, load-bearing gate.)
+     * 3. The room floor is released if this session held it, so the human can speak immediately.
+     * 4. Queued outbound media is flushed and the outbound half of the transport seam drops frames while
+     *    suspended (see {@link wireTransportSeam}), so not even an in-flight response reaches the room.
+     *
+     * The INBOUND half stays wired on purpose: a suspended agent keeps hearing and transcribing the
+     * meeting, so when it resumes it has the context it missed rather than a hole.
+     *
+     * **Capability-gated**, on the same terms as {@link ReconfigureSessionToMeeting}: a session still in
+     * 1:1 auto-response can only be silenced by turning auto-response off on the LIVE socket, which a
+     * provider that fixes its config at connect (e.g. Gemini) cannot do. Nothing is mutated before that
+     * check — a half-suspended agent (gated by the bridge, yet still auto-answering over the human who
+     * just took its seat) is worse than a refusal, so it refuses LOUDLY instead.
+     *
+     * Idempotent — suspending an already-suspended session is a no-op that returns `true`.
+     *
+     * @param sessionBridgeID The `AIAgentSessionBridge` row id of the agent to suspend.
+     * @returns `true` when the agent is suspended (or already was); `false` when the session is unknown to
+     *   this process or its provider cannot stop auto-responding mid-session.
+     */
+    public SuspendBridgeAgent(sessionBridgeID: string): boolean {
+        const active = this.activeSessions.get(sessionBridgeID.toLowerCase());
+        if (!active) {
+            return false;
+        }
+        if (active.SuspendedState) {
+            return true; // already suspended — nothing to do
+        }
+        const needsAutoResponseOff = !active.DisableAutoResponse;
+        if (needsAutoResponseOff && active.RealtimeSession.Capabilities?.CanReconfigureTurnMode !== true) {
+            // LOUD: this session is in 1:1 auto-response and its provider can't change that on a live socket
+            // (e.g. Gemini). Suspending it would leave the model answering every human turn — talking OVER
+            // the person who just took its seat. The robust fix is to run a re-configurable provider
+            // (OpenAI realtime) for any seat a human may take over; otherwise stop the session instead.
+            LogError(
+                `[AIBridgeEngine] ⚠️ bridge ${sessionBridgeID} CANNOT be suspended for a human takeover ` +
+                    `(provider config fixed at connect, e.g. Gemini): its model would keep auto-responding to ` +
+                    `the room, talking over the human taking the seat. Stop the session instead, or use an ` +
+                    `OpenAI-realtime agent for seats a human may take over.`,
+            );
+            return false;
+        }
+
+        const prior: SuspendedAgentState = {
+            PriorTurnPolicy: active.TurnPolicy,
+            PriorDisableAutoResponse: active.DisableAutoResponse,
+            HeldFloor: active.HoldsFloor,
+            SuspendedAtMs: Date.now(),
+        };
+        // Mark the seat suspended FIRST: releasing the floor below drains the room's speaker queue, and a
+        // session that isn't yet flagged could be routed straight back into speaking by that drain.
+        active.SuspendedState = prior;
+
+        if (needsAutoResponseOff) {
+            active.RealtimeSession.Reconfigure?.({ DisableAutoResponse: true });
+            active.DisableAutoResponse = true;
+        }
+        active.TurnPolicy = new TurnTakingPolicy({ Mode: 'Passive', Matcher: SUSPENDED_AGENT_MATCHER });
+        if (active.HoldsFloor) {
+            this.releaseRoomFloor(active);
+        }
+        // Drop whatever the driver still has buffered, so the tail of the agent's last sentence doesn't
+        // play over the person taking the seat. No-op for drivers with no outbound buffer.
+        active.Bridge.FlushOutboundMedia();
+
+        LogStatus(
+            `[AIBridgeEngine] SUSPENDED agent on bridge ${sessionBridgeID} (agentSession ${active.AgentSessionID}) — ` +
+                `a human has its seat. The session, its transcript and its co-agent run stay live; it keeps ` +
+                `listening but cannot speak or publish until ResumeBridgeAgent.`,
+        );
+        return true;
+    }
+
+    /**
+     * **Resumes** an agent suspended by {@link SuspendBridgeAgent} — the human hands the seat back. Puts
+     * back exactly the turn policy and auto-response state that were in force at suspend time (captured in
+     * {@link SuspendedAgentState}, never re-derived), and re-opens the outbound seam.
+     *
+     * The room floor is deliberately NOT re-claimed even if the agent held it when suspended: it becomes
+     * *eligible* to speak again and takes the floor the next time it is addressed or routed, exactly like
+     * an agent that just finished a turn. Re-claiming would make a resumed agent cut off whoever is
+     * speaking now.
+     *
+     * Idempotent — resuming a session that isn't suspended is a no-op that returns `true`.
+     *
+     * @param sessionBridgeID The `AIAgentSessionBridge` row id of the agent to resume.
+     * @returns `true` when the agent is active again (or already was); `false` when the session is unknown
+     *   to this process or its provider can no longer restore the prior auto-response mode.
+     */
+    public ResumeBridgeAgent(sessionBridgeID: string): boolean {
+        const active = this.activeSessions.get(sessionBridgeID.toLowerCase());
+        if (!active) {
+            return false;
+        }
+        const prior = active.SuspendedState;
+        if (!prior) {
+            return true; // not suspended — nothing to do
+        }
+        // Same gate-before-mutate posture as suspend. Only a session that must go BACK to auto-response
+        // needs the live-reconfigure capability, and suspend already refused when that wasn't available —
+        // so this is defense-in-depth against a session whose capability changed underneath us. Leaving it
+        // permanently mute after a takeover would be a silent failure, so it is refused LOUDLY.
+        const needsAutoResponseRestored = active.DisableAutoResponse !== prior.PriorDisableAutoResponse;
+        if (needsAutoResponseRestored && active.RealtimeSession.Capabilities?.CanReconfigureTurnMode !== true) {
+            LogError(
+                `[AIBridgeEngine] ⚠️ bridge ${sessionBridgeID} CANNOT be resumed: its provider can no longer ` +
+                    `restore auto-response on a live socket, so the agent would stay silent with no signal. ` +
+                    `It remains suspended — stop and restart the session to bring this agent back.`,
+            );
+            return false;
+        }
+        if (needsAutoResponseRestored) {
+            active.RealtimeSession.Reconfigure?.({ DisableAutoResponse: prior.PriorDisableAutoResponse });
+            active.DisableAutoResponse = prior.PriorDisableAutoResponse;
+        }
+        active.TurnPolicy = prior.PriorTurnPolicy;
+        active.SuspendedState = undefined;
+
+        LogStatus(
+            `[AIBridgeEngine] RESUMED agent on bridge ${sessionBridgeID} (agentSession ${active.AgentSessionID}) ` +
+                `after ${Date.now() - prior.SuspendedAtMs}ms suspended — prior turn gate restored; it speaks ` +
+                `again when next addressed (the floor is not re-claimed).`,
+        );
         return true;
     }
 

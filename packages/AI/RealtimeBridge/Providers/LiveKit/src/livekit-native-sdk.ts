@@ -282,9 +282,14 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         throw new Error(
-            `LiveKitNativeMeetingSdk could not load the native LiveKit room module at '${specifier}'. Build/install ` +
-                'the native LiveKit Node room-client wrapper (livekit-server-sdk + a room client like @livekit/rtc-node) ' +
-                `and set LiveKitNativeSdkConfig.NativeModuleSpecifier to it. Underlying error: ${message}`,
+            `LiveKitNativeMeetingSdk could not load the native LiveKit room module at '${specifier}'. Install the ` +
+                'native LiveKit Node room-client wrapper (livekit-server-sdk + a room client like @livekit/rtc-node), ' +
+                'then point this provider at it with the LIVEKIT_NATIVE_MODULE env var (or ' +
+                'LiveKitNativeSdkConfig.NativeModuleSpecifier directly). NOTE: a bare package name is resolved from ' +
+                "THIS provider's location, not the host's — so installing the wrapper alongside your app is not enough " +
+                'on a strict-isolation installer such as pnpm. Use an ABSOLUTE PATH to the wrapper there. The provider ' +
+                'deliberately does not declare the wrapper as a dependency: @memberjunction/ai-bridge-livekit-native ' +
+                `depends on this package, so declaring it back would be a dependency cycle. Underlying error: ${message}`,
         );
     }
 };

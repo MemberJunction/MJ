@@ -657,6 +657,57 @@ describe('RealtimeClientSessionService.PrepareClientSession — PriorTranscript 
 });
 
 // ════════════════════════════════════════════════════════════════════
+// Caller-supplied per-session Instructions (persona text)
+// ════════════════════════════════════════════════════════════════════
+
+describe('RealtimeClientSessionService.PrepareClientSession — caller Instructions', () => {
+    const persona = 'You are Dr. Chen, a skeptical CFO. Interrupt when numbers do not add up.';
+
+    it('APPENDS the instructions to the companion prompt — the framework framing is still there, first', async () => {
+        const svc = new TestableService();
+        const result = await svc.PrepareClientSession(makePrepInput({ Instructions: persona }), contextUser, provider);
+
+        const prompt = result.SessionParams!.SystemPrompt;
+        expect(prompt).toContain(persona);
+        // Nothing the framework assembles was replaced — and all of it precedes the caller's text.
+        expect(prompt).toContain(INVOKE_TARGET_AGENT_TOOL_NAME);
+        expect(prompt).toContain('CO-AGENT PROMPT BODY');
+        expect(prompt).toContain('Sales Agent');
+        expect(prompt.indexOf('CO-AGENT PROMPT BODY')).toBeLessThan(prompt.indexOf(persona));
+        expect(prompt.indexOf(INVOKE_TARGET_AGENT_TOOL_NAME)).toBeLessThan(prompt.indexOf(persona));
+    });
+
+    it('appends LAST, joined by a blank line — the prompt is the base prompt plus the persona text', async () => {
+        const svc = new TestableService();
+        const base = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        const withPersona = await svc.PrepareClientSession(makePrepInput({ Instructions: persona }), contextUser, provider);
+
+        expect(withPersona.SessionParams!.SystemPrompt).toBe(`${base.SessionParams!.SystemPrompt}\n\n${persona}`);
+        expect(withPersona.SessionParams!.SystemPrompt.endsWith(persona)).toBe(true);
+    });
+
+    it('leaves the prompt byte-for-byte unchanged when Instructions are omitted', async () => {
+        const svc = new TestableService();
+        const withField = await svc.PrepareClientSession(makePrepInput({ Instructions: undefined }), contextUser, provider);
+        const without = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(withField.SessionParams!.SystemPrompt).toBe(without.SessionParams!.SystemPrompt);
+    });
+
+    it('contributes nothing for an empty / whitespace-only value (no trailing blank section)', async () => {
+        const svc = new TestableService();
+        const blank = await svc.PrepareClientSession(makePrepInput({ Instructions: '   \n  ' }), contextUser, provider);
+        const without = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(blank.SessionParams!.SystemPrompt).toBe(without.SessionParams!.SystemPrompt);
+    });
+
+    it('reaches the minted session (the model is asked to speak with the persona in its instructions)', async () => {
+        const svc = new TestableService();
+        await svc.PrepareClientSession(makePrepInput({ Instructions: persona }), contextUser, provider);
+        expect(svc.Model.LastParams!.SystemPrompt).toContain(persona);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // FinalizeCoAgentRun
 // ════════════════════════════════════════════════════════════════════
 

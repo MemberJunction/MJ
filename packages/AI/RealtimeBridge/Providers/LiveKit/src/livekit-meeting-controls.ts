@@ -21,14 +21,14 @@ import {
     BridgeMeetingControlsCapability,
     BridgeMeetingParticipantRole,
 } from '@memberjunction/ai-bridge-base';
-import { ILiveKitRoomSdk, LiveKitParticipant, LiveKitParticipantRole } from './livekit-sdk';
+import { ILiveKitRoomSdk, LiveKitParticipant, LiveKitParticipantRole, IsAgentParticipant } from './livekit-sdk';
 
 /**
  * Maps a LiveKit participant role to the bridge's meeting-participant role. LiveKit has no distinct
  * "Agent" role; the bot is flagged via `IsLocal` and surfaced as `'Agent'`.
  */
-function mapRole(role: LiveKitParticipantRole, isLocal: boolean | undefined): BridgeMeetingParticipantRole {
-    if (isLocal) {
+function mapRole(role: LiveKitParticipantRole, isAgent: boolean): BridgeMeetingParticipantRole {
+    if (isAgent) {
         return 'Agent';
     }
     switch (role) {
@@ -43,11 +43,14 @@ function mapRole(role: LiveKitParticipantRole, isLocal: boolean | undefined): Br
 
 /** Maps one LiveKit participant onto the channel's {@link BridgeMeetingParticipant} shape. */
 export function toMeetingParticipant(p: LiveKitParticipant): BridgeMeetingParticipant {
+    // Same single decision the bridge roster uses — the Meet UI's participant list and the persisted roster
+    // must not disagree about who in the room is a bot.
+    const isAgent = IsAgentParticipant(p);
     return {
         ParticipantId: p.Identity,
         DisplayName: p.DisplayName,
-        Role: mapRole(p.Role, p.IsLocal),
-        IsAgent: p.IsLocal === true,
+        Role: mapRole(p.Role, isAgent),
+        IsAgent: isAgent,
     };
 }
 

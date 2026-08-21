@@ -98,6 +98,43 @@ describe('CreateBridgeRealtimeSession', () => {
         expect(lastStartParams?.conversationMessages).toEqual([]);
     });
 
+    it('threads Instructions into params.data.realtimeInstructions (trimmed)', async () => {
+        await CreateBridgeRealtimeSession({
+            AgentID: 'AAAA0000-0000-0000-0000-000000000001',
+            Instructions: '  You are Dr. Chen, a skeptical CFO.  ',
+        });
+        const data = lastStartParams?.data as Record<string, unknown>;
+        expect(data.realtimeInstructions).toBe('You are Dr. Chen, a skeptical CFO.');
+    });
+
+    it('omits realtimeInstructions entirely when none are supplied (data stays absent for a plain start)', async () => {
+        await CreateBridgeRealtimeSession({ AgentID: 'AAAA0000-0000-0000-0000-000000000001' });
+        expect(lastStartParams?.data).toBeUndefined();
+    });
+
+    it('omits realtimeInstructions for a whitespace-only value (never an empty prompt section)', async () => {
+        await CreateBridgeRealtimeSession({ AgentID: 'AAAA0000-0000-0000-0000-000000000001', Instructions: '   \n ' });
+        expect(lastStartParams?.data).toBeUndefined();
+    });
+
+    it('carries Instructions alongside the other realtime extras without disturbing them', async () => {
+        await CreateBridgeRealtimeSession({
+            AgentID: 'AAAA0000-0000-0000-0000-000000000001',
+            TargetAgentID: 'target-1',
+            RealtimeVoice: 'echo',
+            MeetingMode: true,
+            SelfNames: ['Chen'],
+            Instructions: 'Be terse.',
+        });
+        expect(lastStartParams?.data).toEqual({
+            targetAgentID: 'target-1',
+            realtimeVoice: 'echo',
+            realtimeMeetingMode: true,
+            realtimeSelfNames: ['Chen'],
+            realtimeInstructions: 'Be terse.',
+        });
+    });
+
     it('throws a clear error when the agent cannot be resolved', async () => {
         await expect(CreateBridgeRealtimeSession({ AgentID: 'missing-id' })).rejects.toThrow(/no agent found/);
     });

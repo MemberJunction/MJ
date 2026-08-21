@@ -69,8 +69,10 @@ class MockRealtimeSession implements IRealtimeSession {
     public OnUsage(): void {
         /* no-op */
     }
+    /** `true` once Close() ran — lets a re-gate test assert the replaced socket was actually released. */
+    public Closed = false;
     public async Close(): Promise<void> {
-        /* no-op */
+        this.Closed = true;
     }
     public RequestSpokenUpdate(instructions: string): void {
         this.SpokenUpdates.push(instructions);
@@ -497,6 +499,390 @@ describe('AIBridgeEngine — ReconfigureSessionToMeeting', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
+// EnsureSessionMeetingGated — the complete gate, including the RECONNECT path for providers whose turn
+// config is fixed at connect (Gemini-like). Before this existed, such an agent — if it was FIRST into the
+// room — simply kept auto-responding to every utterance and talked over the whole cast.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — EnsureSessionMeetingGated', () => {
+    /** Only "gem" addresses this agent — so an unaddressed turn proves the gate, not just the flag. */
+    const addressesGem = { IsAddressed: (seg: { Text: string }) => /gem/i.test(seg.Text) };
+    const always = { IsAddressed: () => true };
+
+    it('re-gates a NON-reconfigurable provider by RECONNECTING it in meeting mode, on the same seat', async () => {
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const original = new MockRealtimeSession();
+        original.CanReconfigure = false; // Gemini-like: turn config fixed at connect
+        // The replacement is the SAME provider — it is the meeting-mode MINT that gates it, not a capability
+        // that magically appeared. Keeping the flag false is what makes this test about the reconnect.
+        const fresh = new MockRealtimeSession();
+        fresh.CanReconfigure = false;
+        let reopens = 0;
+
+        const a = await engine().StartBridgeSession(
+            baseParams(original, provider, {
+                Address: 'loopback://regate-reconnect-room',
+                AgentSessionID: 'regate-1',
+                ReopenInMeetingMode: async () => {
+                    reopens++;
+                    return fresh;
+                },
+            }),
+        );
+        // The bug, stated as an assertion: a solo 1:1 seat answers everything it hears.
+        expect(engine().GetEffectiveTurnState(a.SessionBridgeID)).toEqual({ MeetingGated: false, CanReconfigureTurnMode: false });
+
+        expect(await engine().EnsureSessionMeetingGated(a.SessionBridgeID, addressesGem)).toBe(true);
+
+        expect(reopens).toBe(1);
+        expect(engine().GetEffectiveTurnState(a.SessionBridgeID)).toEqual({ MeetingGated: true, CanReconfigureTurnMode: false });
+        // Same seat: same ActiveBridgeSession object, same bridge row, same agent session — only the socket moved.
+        expect(engine().ActiveSessions).toContain(a);
+        expect(a.AgentSessionID).toBe('regate-1');
+        expect(a.RealtimeSession).toBe(fresh);
+        expect(original.Closed).toBe(true); // the replaced socket is released, never left auto-responding
+        expect(original.ReconfigureCalls.length).toBe(0); // no dead call on a provider that can't take one
+
+        // The transport seam follows the swap: room audio reaches the FRESH socket, and only it.
+        (a.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: bytes(7) });
+        expect(fresh.Heard.length).toBe(1);
+        expect(original.Heard.length).toBe(0);
+
+        // And turn-taking is genuinely gated now: addressed → the bridge triggers it; unaddressed → silence.
+        fresh.EmitTranscript({ Role: 'user', Text: 'gem, are you with us?', IsFinal: true });
+        expect(fresh.SpokenUpdates.length).toBe(1);
+        fresh.EmitTranscript({ Role: 'assistant', Text: 'yes', IsFinal: true }); // finishes → frees the floor
+        fresh.EmitTranscript({ Role: 'user', Text: 'anyway, back to the roadmap', IsFinal: true });
+        expect(fresh.SpokenUpdates.length).toBe(1); // it stayed OUT of a turn it wasn't named in
+
+        await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+    });
+
+    it('keeps the cheap in-place path for a re-configurable provider, and is idempotent', async () => {
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const capable = new MockRealtimeSession(); // CanReconfigure defaults true (OpenAI-like)
+        let reopens = 0;
+        const a = await engine().StartBridgeSession(
+            baseParams(capable, provider, {
+                Address: 'loopback://regate-inplace-room',
+                ReopenInMeetingMode: async () => {
+                    reopens++;
+                    return new MockRealtimeSession();
+                },
+            }),
+        );
+
+        expect(await engine().EnsureSessionMeetingGated(a.SessionBridgeID, always)).toBe(true);
+        // No reconnect: the live socket was simply reconfigured, and it is still the session in use.
+        expect(reopens).toBe(0);
+        expect(capable.ReconfigureCalls).toEqual([{ DisableAutoResponse: true }]);
+        expect(a.RealtimeSession).toBe(capable);
+        expect(capable.Closed).toBe(false);
+        expect(engine().GetEffectiveTurnState(a.SessionBridgeID)).toEqual({ MeetingGated: true, CanReconfigureTurnMode: true });
+
+        // Idempotent — a second (or third) agent joining must not re-push the same reconfigure.
+        expect(await engine().EnsureSessionMeetingGated(a.SessionBridgeID, always)).toBe(true);
+        expect(capable.ReconfigureCalls.length).toBe(1);
+        expect(reopens).toBe(0);
+
+        await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+    });
+
+    it('reconnects ONCE for concurrent callers, and mutes the un-gated socket while it happens', async () => {
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const original = new MockRealtimeSession();
+        original.CanReconfigure = false;
+        const fresh = new MockRealtimeSession();
+        fresh.CanReconfigure = false;
+        let reopens = 0;
+        let releaseReopen: (() => void) | undefined;
+        const a = await engine().StartBridgeSession(
+            baseParams(original, provider, {
+                Address: 'loopback://regate-concurrent-room',
+                ReopenInMeetingMode: async () => {
+                    reopens++;
+                    await new Promise<void>((resolve) => {
+                        releaseReopen = resolve;
+                    });
+                    return fresh;
+                },
+            }),
+        );
+        const loopback = a.Bridge as LoopbackBridge;
+        // Baseline: while un-gated, the agent's audio does reach the room.
+        original.EmitOutput(bytes(1));
+        expect(loopback.Sent.length).toBe(1);
+
+        // Two agents join the room at the same instant → both ask for the gate.
+        const first = engine().EnsureSessionMeetingGated(a.SessionBridgeID, addressesGem);
+        const second = engine().EnsureSessionMeetingGated(a.SessionBridgeID, addressesGem);
+
+        // MID-RECONNECT: the socket still wired here is the one we've decided must stop answering the room —
+        // and by definition it can't be told to. The outbound seam is what keeps it quiet meanwhile.
+        original.EmitOutput(bytes(2));
+        expect(loopback.Sent.length).toBe(1);
+
+        releaseReopen?.();
+        expect(await first).toBe(true);
+        expect(await second).toBe(true);
+        expect(reopens).toBe(1); // ONE socket minted, not two racing to be swapped in
+        expect(a.RealtimeSession).toBe(fresh);
+
+        // Un-muted once the gated session is in place.
+        fresh.EmitOutput(bytes(3));
+        expect(loopback.Sent.length).toBe(2);
+
+        await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+    });
+
+    it('fails LOUDLY (never silently degrades) when the session cannot be re-opened', async () => {
+        const { provider } = makeProvider(() => makeBridgeRow());
+
+        // (a) No reopen hook at all → nothing can gate this seat; it must say so rather than pretend.
+        const orphan = new MockRealtimeSession();
+        orphan.CanReconfigure = false;
+        const noHook = await engine().StartBridgeSession(
+            baseParams(orphan, provider, { Address: 'loopback://regate-nohook-room' }),
+        );
+        expect(await engine().EnsureSessionMeetingGated(noHook.SessionBridgeID, always)).toBe(false);
+        expect(engine().GetEffectiveTurnState(noHook.SessionBridgeID)).toEqual({ MeetingGated: false, CanReconfigureTurnMode: false });
+        await engine().StopBridgeSession(noHook.SessionBridgeID, 'Explicit');
+
+        // (b) The hook is there but the provider is down. Capped attempts, then an honest `false` — and the
+        //     agent keeps its ORIGINAL socket: a degraded seat beats a dead one.
+        const stubborn = new MockRealtimeSession();
+        stubborn.CanReconfigure = false;
+        let attempts = 0;
+        const failing = await engine().StartBridgeSession(
+            baseParams(stubborn, provider, {
+                Address: 'loopback://regate-failing-room',
+                ReopenInMeetingMode: async () => {
+                    attempts++;
+                    throw new Error('provider refused the connection');
+                },
+            }),
+        );
+        expect(await engine().EnsureSessionMeetingGated(failing.SessionBridgeID, always)).toBe(false);
+        expect(attempts).toBe(2); // MEETING_REGATE_REOPEN_MAX_ATTEMPTS — bounded, not a retry storm
+        expect(failing.RealtimeSession).toBe(stubborn);
+        expect(stubborn.Closed).toBe(false);
+        expect(engine().GetEffectiveTurnState(failing.SessionBridgeID)?.MeetingGated).toBe(false);
+
+        // Retryable: a later join can try again (the in-flight guard was cleared, not latched).
+        expect(await engine().EnsureSessionMeetingGated(failing.SessionBridgeID, always)).toBe(false);
+        expect(attempts).toBe(4);
+
+        await engine().StopBridgeSession(failing.SessionBridgeID, 'Explicit');
+    });
+
+    it('does not strand the fresh socket when the seat is torn down mid-reopen', async () => {
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const original = new MockRealtimeSession();
+        original.CanReconfigure = false;
+        const fresh = new MockRealtimeSession();
+        let releaseReopen: (() => void) | undefined;
+        const a = await engine().StartBridgeSession(
+            baseParams(original, provider, {
+                Address: 'loopback://regate-torndown-room',
+                ReopenInMeetingMode: async () => {
+                    await new Promise<void>((resolve) => {
+                        releaseReopen = resolve;
+                    });
+                    return fresh;
+                },
+            }),
+        );
+
+        const gating = engine().EnsureSessionMeetingGated(a.SessionBridgeID, always);
+        // The room empties (or the janitor reaps it) while the replacement socket is still being minted.
+        await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+        releaseReopen?.();
+
+        expect(await gating).toBe(false);
+        // Teardown already ran, so nothing would ever close the newcomer — it is handed back, not wired in.
+        expect(fresh.Closed).toBe(true);
+        expect(fresh.Heard.length).toBe(0);
+    });
+
+    it('reports no turn state for a bridge this process does not hold', async () => {
+        expect(engine().GetEffectiveTurnState('nope')).toBeNull();
+        expect(await engine().EnsureSessionMeetingGated('nope', always)).toBe(false);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Human takeover — suspend / resume an agent WITHOUT ending its session.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — SuspendBridgeAgent / ResumeBridgeAgent', () => {
+    it('a suspended meeting agent stops speaking + publishing but keeps hearing on a live session', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(
+            baseParams(session, provider, {
+                TurnMode: 'Passive',
+                DisableAutoResponse: true,
+                TurnMatcher: { IsAddressed: () => true },
+            }),
+        );
+        const loopback = active.Bridge as LoopbackBridge;
+
+        // Baseline: addressed → the bridge triggers the model, and the agent's audio reaches the room.
+        session.EmitTranscript({ Role: 'user', Text: 'hello', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(1);
+        session.EmitOutput(bytes(1));
+        expect(loopback.Sent.length).toBe(1);
+        session.EmitTranscript({ Role: 'assistant', Text: 'hi there', IsFinal: true }); // finishes → frees the floor
+
+        // A human takes the seat.
+        expect(engine().SuspendBridgeAgent(active.SessionBridgeID)).toBe(true);
+        expect(engine().SuspendBridgeAgent(active.SessionBridgeID)).toBe(true); // idempotent
+
+        // It no longer answers when addressed...
+        session.EmitTranscript({ Role: 'user', Text: 'hello again', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(1);
+        // ...and nothing it emits reaches the room (an in-flight response can't leak through).
+        session.EmitOutput(bytes(2));
+        expect(loopback.Sent.length).toBe(1);
+
+        // But the session is fully alive: still connected, still in the registry, still HEARING the meeting
+        // (so it resumes with the context it missed rather than a hole).
+        expect(loopback.IsConnected).toBe(true);
+        expect(engine().ActiveSessions.find((s) => s.SessionBridgeID === active.SessionBridgeID)).toBeDefined();
+        const heardBefore = session.Heard.length;
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(5) });
+        expect(session.Heard.length).toBe(heardBefore + 1);
+
+        // Handing the seat back restores the voice.
+        expect(engine().ResumeBridgeAgent(active.SessionBridgeID)).toBe(true);
+        session.EmitTranscript({ Role: 'user', Text: 'you again', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(2);
+        session.EmitOutput(bytes(3));
+        expect(loopback.Sent.length).toBe(2);
+        // It was ALREADY in meeting mode, so suspending never had to touch the socket config.
+        expect(session.ReconfigureCalls.length).toBe(0);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('silences a 1:1 agent on the live socket, and resume restores exactly the prior state (not a default)', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(
+            baseParams(session, provider, { TurnMode: 'Passive', TurnMatcher: { IsAddressed: () => true } }),
+        );
+        const priorPolicy = active.TurnPolicy;
+        expect(active.DisableAutoResponse).toBe(false);
+
+        expect(engine().SuspendBridgeAgent(active.SessionBridgeID)).toBe(true);
+        // The only way to silence an auto-responding model is to turn auto-response off on the live socket.
+        expect(session.ReconfigureCalls).toEqual([{ DisableAutoResponse: true }]);
+        expect(active.DisableAutoResponse).toBe(true);
+        expect(active.TurnPolicy).not.toBe(priorPolicy); // swapped onto the never-addressed matcher
+        expect(active.SuspendedState?.PriorDisableAutoResponse).toBe(false);
+
+        expect(engine().ResumeBridgeAgent(active.SessionBridgeID)).toBe(true);
+        // Restored to what it WAS (1:1 auto-response + its own policy), NOT to the meeting-mode state the
+        // suspension gated it into — a resumed agent must behave exactly as it did before the takeover.
+        expect(session.ReconfigureCalls).toEqual([{ DisableAutoResponse: true }, { DisableAutoResponse: false }]);
+        expect(active.DisableAutoResponse).toBe(false);
+        expect(active.TurnPolicy).toBe(priorPolicy);
+        expect(active.SuspendedState).toBeUndefined();
+        // Idempotent — resuming an active agent changes nothing.
+        expect(engine().ResumeBridgeAgent(active.SessionBridgeID)).toBe(true);
+        expect(session.ReconfigureCalls.length).toBe(2);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('refuses to suspend a 1:1 agent whose provider cannot gate the model mid-session — and mutates NOTHING', async () => {
+        const session = new MockRealtimeSession();
+        session.CanReconfigure = false; // Gemini-like: config fixed at connect
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(
+            baseParams(session, provider, { TurnMode: 'Passive', TurnMatcher: { IsAddressed: () => true } }),
+        );
+        const priorPolicy = active.TurnPolicy;
+
+        // Refused: a half-suspended agent would keep auto-answering OVER the human taking its seat.
+        expect(engine().SuspendBridgeAgent(active.SessionBridgeID)).toBe(false);
+        expect(session.ReconfigureCalls.length).toBe(0);
+        expect(active.TurnPolicy).toBe(priorPolicy);
+        expect(active.DisableAutoResponse).toBe(false);
+        expect(active.SuspendedState).toBeUndefined();
+        // Still fully operational — its audio still reaches the room.
+        session.EmitOutput(bytes(1));
+        expect((active.Bridge as LoopbackBridge).Sent.length).toBe(1);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('suspends an INCAPABLE agent that is already in meeting mode (no socket change is needed)', async () => {
+        const session = new MockRealtimeSession();
+        session.CanReconfigure = false;
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(
+            baseParams(session, provider, {
+                TurnMode: 'Passive',
+                DisableAutoResponse: true,
+                TurnMatcher: { IsAddressed: () => true },
+            }),
+        );
+
+        expect(engine().SuspendBridgeAgent(active.SessionBridgeID)).toBe(true);
+        expect(session.ReconfigureCalls.length).toBe(0);
+        session.EmitTranscript({ Role: 'user', Text: 'anyone there?', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(0);
+        // Resume likewise needs no socket change (the prior state was already auto-response-off).
+        expect(engine().ResumeBridgeAgent(active.SessionBridgeID)).toBe(true);
+        expect(session.ReconfigureCalls.length).toBe(0);
+        session.EmitTranscript({ Role: 'user', Text: 'back with us?', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(1);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('suspending frees the room floor and takes the seat out of the room broadcast', async () => {
+        const addr = 'loopback://takeover-room';
+        const sessionA = new MockRealtimeSession();
+        const sessionB = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const meeting = { TurnMode: 'Passive' as const, DisableAutoResponse: true, TurnMatcher: { IsAddressed: () => true } };
+        const a = await engine().StartBridgeSession(baseParams(sessionA, provider, { ...meeting, Address: addr, AgentSessionID: 'take-A' }));
+        const b = await engine().StartBridgeSession(baseParams(sessionB, provider, { ...meeting, Address: addr, AgentSessionID: 'take-B' }));
+        const coord = engine().RoomCoordinator;
+        const roomKey = a.RoomKey!;
+
+        // A answers first and holds the floor; B is blocked behind it.
+        sessionA.EmitTranscript({ Role: 'user', Text: 'hello room', IsFinal: true });
+        expect(sessionA.SpokenUpdates.length).toBe(1);
+        expect(sessionB.SpokenUpdates.length).toBe(0);
+        expect(coord.IsFloorHolder(roomKey, 'take-A')).toBe(true);
+
+        // A human takes A's seat mid-turn: the floor is handed back immediately...
+        expect(engine().SuspendBridgeAgent(a.SessionBridgeID)).toBe(true);
+        expect(coord.IsFloorHolder(roomKey, 'take-A')).toBe(false);
+        expect(a.SuspendedState?.HeldFloor).toBe(true);
+
+        // ...and the next turn routes past the suspended seat to B.
+        sessionA.EmitTranscript({ Role: 'user', Text: 'anyone else', IsFinal: true });
+        expect(sessionA.SpokenUpdates.length).toBe(1);
+        expect(sessionB.SpokenUpdates.length).toBe(1);
+
+        // A is still a room member throughout (present, just silent) — never unregistered, never reaped.
+        expect(coord.GetRoomState(roomKey)!.AgentSessionIds).toEqual(expect.arrayContaining(['take-A', 'take-B']));
+
+        await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+        await engine().StopBridgeSession(b.SessionBridgeID, 'Explicit');
+    });
+
+    it('returns false for an unknown bridge (both directions)', () => {
+        expect(engine().SuspendBridgeAgent('nope')).toBe(false);
+        expect(engine().ResumeBridgeAgent('nope')).toBe(false);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Stale-session sweep (same-process janitor).
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -559,7 +945,7 @@ describe('AIBridgeEngine — participant tracking', () => {
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 
-    it('persists IsAgent ONLY for this bridge’s own bot — other agents in the room are remote participants (one-bot-per-bridge invariant)', async () => {
+    it('flags EVERY agent identity, not just this bridge’s own bot — a room’s own bot never appears in its roster', async () => {
         const session = new MockRealtimeSession();
         const bridgeRow = makeBridgeRow();
         const participantRows: FakeEntity[] = [];
@@ -576,8 +962,16 @@ describe('AIBridgeEngine — participant tracking', () => {
         const loopback = active.Bridge as LoopbackBridge;
         await new Promise((r) => setTimeout(r, 0));
 
-        // A multi-agent room as THIS bridge sees it: its OWN bot, ANOTHER agent, and a human — both agents
-        // arrive IsAgent=true in the live roster, but only the bot may persist IsAgent=true.
+        // A multi-agent room as THIS bridge sees it. NOTE the shape: a real roster comes from
+        // `room.remoteParticipants`, and a participant is never in its own remote list — so in
+        // production the bridge's own bot is NOT here. It is included below only to prove the
+        // self-match branch still works; the row that matters is `agent-other`.
+        //
+        // This test previously asserted the opposite (`other` must be false), on the reasoning that
+        // diarization would OR-reduce IsAgent across the room because every agent's own bridge marks
+        // itself. Measured against a live two-agent LiveKit room, ZERO participant rows had IsAgent
+        // set at all — because no bridge ever sees its own bot — so the OR-reduce reduced over
+        // nothing and a panel's agents were indistinguishable from its humans.
         loopback.EmitParticipants([
             { ExternalId: active.BotParticipantID as string, DisplayName: 'Me', Role: 'Agent', IsAgent: true },
             { ExternalId: 'agent-other', DisplayName: 'Other Bot', Role: 'Participant', IsAgent: true },
@@ -588,9 +982,9 @@ describe('AIBridgeEngine — participant tracking', () => {
         const bot = participantRows.find((p) => p.ExternalParticipantID === active.BotParticipantID);
         const other = participantRows.find((p) => p.ExternalParticipantID === 'agent-other');
         const human = participantRows.find((p) => p.ExternalParticipantID === 'human-1');
-        expect(bot?.IsAgent).toBe(true); // its own bot
-        expect(other?.IsAgent).toBe(false); // another agent → not THIS bridge's bot
-        expect(human?.IsAgent).toBe(false);
+        expect(bot?.IsAgent).toBe(true);    // its own bot, when the driver does report it
+        expect(other?.IsAgent).toBe(true);  // a REMOTE agent is still an agent — this is the fix
+        expect(human?.IsAgent).toBe(false); // and a human is still a human
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
@@ -941,6 +1335,18 @@ describe('AIBridgeEngine — turn moderator (LLM router)', () => {
         } finally {
             engine().SetTurnModerator(undefined);
         }
+    });
+
+    // Backs the RealtimeRoomMode query: an operator must be able to ASK whether rooms are moderated,
+    // because the alternative — a deployment that mistyped MJ_REALTIME_MODERATOR_MODE — is otherwise
+    // only discoverable by listening to a panel talk over itself.
+    it('HasTurnModerator reports whether a moderator is actually bound', () => {
+        engine().SetTurnModerator(undefined);
+        expect(engine().HasTurnModerator).toBe(false);
+        engine().SetTurnModerator(async () => []);
+        expect(engine().HasTurnModerator).toBe(true);
+        engine().SetTurnModerator(undefined);
+        expect(engine().HasTurnModerator).toBe(false);
     });
 
     it('falls back to per-agent matchers when no moderator is set', async () => {
