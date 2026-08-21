@@ -158,6 +158,35 @@ describe('RealtimeSurfaceTabsModel', () => {
     });
   });
 
+  describe('Closable (#3498)', () => {
+    it('makes channel tabs closable by default and the Activity tab never closable', () => {
+      model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' });
+      model.SetShowActivityTab(true);
+
+      expect(model.Tabs.find(t => t.Key === 'Whiteboard')?.Closable).toBe(true);
+      // Activity is the panel's fallback focus and owns nothing to release, so it stays irremovable —
+      // which RemoveTab already enforced and the strip must not offer a control for.
+      expect(model.Tabs.find(t => t.Key === 'activity')?.Closable).toBeFalsy();
+    });
+
+    it('lets a host mark a channel the user may NOT dismiss', () => {
+      // Closing withdraws a channel's tools for the rest of the session and is not undoable, so a
+      // session that depends on a surface can refuse the affordance.
+      model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard', Closable: false });
+
+      expect(model.Tabs.find(t => t.Key === 'Whiteboard')?.Closable).toBe(false);
+    });
+
+    it('re-registering a tab carries the closable decision through the upgrade', () => {
+      // Channel tabs are registered as placeholders and UPGRADED when the plugin arrives; an upgrade
+      // that silently re-enabled the affordance would hand the user a close button the host refused.
+      model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard', Closable: false });
+      model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard', Closable: false });
+
+      expect(model.Tabs.find(t => t.Key === 'Whiteboard')?.Closable).toBe(false);
+    });
+  });
+
   describe('RemoveTab', () => {
     it('removes a channel tab and emits Changed$ once', () => {
       model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' });

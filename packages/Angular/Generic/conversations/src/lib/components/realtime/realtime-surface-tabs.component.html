@@ -25,26 +25,40 @@
           <!-- Flex spacer pushes the Activity tab to the far right -->
           <span class="tabs-spacer" aria-hidden="true"></span>
         }
-        <button type="button"
-                class="s-tab"
-                role="tab"
-                [class.s-tab--activity]="tab.Kind === 'activity'"
-                [class.s-tab--channel]="tab.Kind === 'channel'"
-                [class.s-tab--active]="tab.Key === Model.ActiveKey"
-                [class.s-tab--flash]="tab.Key === Model.FlashKey"
-                [style.--tab-accent]="tab.Color || null"
-                [attr.aria-selected]="tab.Key === Model.ActiveKey"
-                [title]="tab.Title"
-                (click)="Model.Focus(tab.Key)">
-          @if (tab.Kind === 'channel') {
-            <span class="s-tab__dot" aria-hidden="true"></span>
+        <!-- A close control cannot nest inside the tab button, so each tab lives in a slot with the
+             close affordance as its sibling. -->
+        <span class="s-tab-slot" [class.s-tab-slot--active]="tab.Key === Model.ActiveKey">
+          <button type="button"
+                  class="s-tab"
+                  role="tab"
+                  [class.s-tab--activity]="tab.Kind === 'activity'"
+                  [class.s-tab--channel]="tab.Kind === 'channel'"
+                  [class.s-tab--active]="tab.Key === Model.ActiveKey"
+                  [class.s-tab--flash]="tab.Key === Model.FlashKey"
+                  [class.s-tab--closable]="tab.Closable"
+                  [style.--tab-accent]="tab.Color || null"
+                  [attr.aria-selected]="tab.Key === Model.ActiveKey"
+                  [title]="tab.Title"
+                  (click)="Model.Focus(tab.Key)">
+            @if (tab.Kind === 'channel') {
+              <span class="s-tab__dot" aria-hidden="true"></span>
+            }
+            <i [class]="tab.Icon" aria-hidden="true"></i>
+            <span class="s-tab__title">{{ tab.Title }}</span>
+            @if (tab.Kind === 'activity' && State.Cards.length > 0) {
+              <span class="s-tab__badge" aria-hidden="true">{{ State.Cards.length }}</span>
+            }
+          </button>
+          @if (tab.Closable) {
+            <button type="button"
+                    class="s-tab__close"
+                    [attr.aria-label]="'Close ' + tab.Title"
+                    [title]="'Close ' + tab.Title"
+                    (click)="RequestCloseTab(tab.Key)">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
           }
-          <i [class]="tab.Icon" aria-hidden="true"></i>
-          <span class="s-tab__title">{{ tab.Title }}</span>
-          @if (tab.Kind === 'activity' && State.Cards.length > 0) {
-            <span class="s-tab__badge" aria-hidden="true">{{ State.Cards.length }}</span>
-          }
-        </button>
+        </span>
       }
       <div class="tabs-end">
         <button type="button"

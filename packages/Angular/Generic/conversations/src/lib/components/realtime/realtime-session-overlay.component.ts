@@ -609,6 +609,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.realtime.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
       // The agent ACTED on a channel — auto-reveal its surface tab on first activity.
       this.realtime.ChannelActivity$.subscribe(plugin => this.onChannelActivity(plugin)),
+      // Tab removal is a CONSEQUENCE of the channel being closed, never the action itself (#3498).
+      this.realtime.ChannelClosed$.subscribe(channelName => this.onChannelClosed(channelName)),
       // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
       this.realtime.Active$.subscribe(active => this.onActiveChanged(active)),
       // Connection lifecycle drives chrome (the `connecting` loader) + the public output.
@@ -1396,6 +1398,28 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.registerPluginChannelTab(plugin);
     }
     this.cdr.markForCheck();
+  }
+
+  /** Removes a closed channel's tab once the session service has finished tearing the channel down. */
+  private onChannelClosed(channelName: string): void {
+    this.surfaceTabs?.RemoveTab(channelName);
+    this.recomputeUi();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * The user dismissed a surface (#3498). Closes the CHANNEL — the tab disappears as a consequence,
+   * via {@link RealtimeSessionService.ChannelClosed$}, not because this hid it.
+   *
+   * A key that matches no live channel still removes the tab: a review-mode board tab or a stale
+   * placeholder has no plugin behind it, and leaving a close control that visibly does nothing is
+   * worse than removing a tab that owns no resources.
+   */
+  public OnCloseTabRequested(key: string): void {
+    if (this.realtime.CloseChannel(key)) {
+      return;   // ChannelClosed$ removes the tab
+    }
+    this.surfaceTabs?.RemoveTab(key);
   }
 
   /** Registers (or upgrades) one channel plugin's surface tab on the panel. */

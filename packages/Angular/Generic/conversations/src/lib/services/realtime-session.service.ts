@@ -265,6 +265,16 @@ export class RealtimeSessionService {
   private _modelName$ = new BehaviorSubject<string | null>(null);
   private _minimized$ = new BehaviorSubject<boolean>(false);
   private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
+
+  /** Emits a channel's name once {@link CloseChannel} has finished tearing it down (#3498). */
+  private _channelClosed$ = new Subject<string>();
+
+  /**
+   * `ToolNamePrefix`es of channels closed this session. The model was told its tool vocabulary at
+   * connect and cannot be told otherwise mid-session, so a closed channel's tools remain CALLABLE —
+   * see {@link CloseChannel} for why they are answered with a refusal rather than unregistered.
+   */
+  private closedToolPrefixes = new Set<string>();
   private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
   // ─── Generic session-lifecycle events (consumed by RealtimeSessionsAdapter to
   // bridge into @memberjunction/conversations-runtime's framework-agnostic
@@ -360,6 +370,15 @@ export class RealtimeSessionService {
    * than {@link SessionStarted$}/{@link SessionEnded$} (per tool call, not per session).
    */
   public readonly ChannelActivity$: Observable<BaseRealtimeChannelClient> = this._channelActivity$.asObservable();
+
+  /**
+   * Fires with a channel's name after {@link CloseChannel} has torn it down (#3498). The overlay
+   * removes the surface tab in response, which is why tab removal is a CONSEQUENCE of closing rather
+   * than the whole action — hiding the tab on its own would leave the plugin initialized, its tools
+   * answering, and its server-side resources held, so the agent could still act on a surface the user
+   * believes they dismissed.
+   */
+  public readonly ChannelClosed$: Observable<string> = this._channelClosed$.asObservable();
 
   /** Synchronous access to the session's active interactive-channel plugins. */
   public get ActiveChannels(): readonly BaseRealtimeChannelClient[] {
@@ -1347,6 +1366,82 @@ export class RealtimeSessionService {
     }
   }
 
+  /**
+   * Closes ONE live interactive channel: the user is done with the browser but still wants the
+   * whiteboard (#3498).
+   *
+   * Before this, the only way to remove a surface was to end the call, which tore down every channel
+   * plus the voice session. `RealtimeSurfaceTabsComponent.RemoveTab` existed and did the right thing,
+   * but hiding a tab is not closing a channel — it would leave the plugin initialized, its tools
+   * answering, and its server-side resources held. So tab removal is a CONSEQUENCE of this, driven by
+   * {@link ChannelClosed$}, rather than the whole action.
+   *
+   * What closing actually does, in order:
+   *  1. flushes the channel's debounced state save, so a board closed three seconds after the last
+   *     stroke does not lose those strokes;
+   *  2. replaces its tool route with a REFUSAL (see below);
+   *  3. disposes the plugin, which releases what the plugin owns (the Remote Browser channel stops
+   *     its screencast and audio stream here);
+   *  4. drops it from the live set and announces the close.
+   *
+   * **Why the tool prefix is re-registered rather than unregistered.** The model was handed its tool
+   * vocabulary at connect and there is no mid-session way to withdraw part of it, so `browser_*` stays
+   * callable no matter what happens here. An unregistered prefix does not become inert — unrouted
+   * tools fall through to the SERVER relay, so the agent would keep driving the very browser the user
+   * dismissed, now with no surface showing it. A refusal keeps the call local, gives the model an
+   * answer it can narrate, and cannot reach the server.
+   *
+   * @param channelName The channel to close (compared case-insensitively, like every channel name).
+   * @returns `true` when a live channel was found and closed; `false` when none matched.
+   */
+  public CloseChannel(channelName: string): boolean {
+    const wanted = (channelName ?? '').trim().toLowerCase();
+    const plugin = this._activeChannels$.value.find(c => (c.ChannelName ?? '').trim().toLowerCase() === wanted);
+    if (!plugin) {
+      return false;
+    }
+    this.flushChannelSave(plugin.ChannelName);
+    this.refuseToolsFor(plugin);
+    try {
+      plugin.Dispose();
+    } catch (error) {
+      // A plugin that throws on the way out must not strand the close: the tab, the tool route and the
+      // live set all still have to change, or the user's dismissal silently does nothing.
+      console.error(`[RealtimeSession] Channel '${plugin.ChannelName}' Dispose failed while closing:`, error);
+    }
+    this._activeChannels$.next(this._activeChannels$.value.filter(c => c !== plugin));
+    this.SendContextNote(
+      `[${plugin.ChannelName}] The user closed this surface. It is no longer available — do not try to use it, ` +
+        `and say so plainly if asked to.`,
+    );
+    this._channelClosed$.next(plugin.ChannelName);
+    return true;
+  }
+
+  /**
+   * Points a closed channel's tool prefix at a refusal, so a tool the model still knows about answers
+   * "that surface is closed" instead of falling through to the server relay.
+   *
+   * The refusal shape matches what {@link handleToolCall} produces for a thrown handler, so the model
+   * reads it exactly the way it reads any other tool failure.
+   */
+  private refuseToolsFor(plugin: BaseRealtimeChannelClient): void {
+    const channelName = plugin.ChannelName;
+    this.closedToolPrefixes.add(plugin.ToolNamePrefix);
+    this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName: string) =>
+      JSON.stringify({
+        success: false,
+        error: `The '${channelName}' surface was closed by the user. '${toolName}' is unavailable for the rest of this session.`,
+      }),
+    );
+  }
+
+  /** Whether the named channel is live right now — false once {@link CloseChannel} has closed it. */
+  public IsChannelOpen(channelName: string): boolean {
+    const wanted = (channelName ?? '').trim().toLowerCase();
+    return this._activeChannels$.value.some(c => (c.ChannelName ?? '').trim().toLowerCase() === wanted);
+  }
+
   /** Disposes all channel plugins (errors contained per plugin) and clears the live set. */
   private disposeChannels(): void {
     for (const plugin of this._activeChannels$.value) {
@@ -1360,6 +1455,12 @@ export class RealtimeSessionService {
       this._activeChannels$.next([]);
     }
     this.usedChannelNames.clear();
+    // Tombstones are per SESSION: the next session mints a fresh tool vocabulary, and a stale refusal
+    // would answer for a channel that is open again.
+    for (const prefix of this.closedToolPrefixes) {
+      this.UnregisterClientToolHandler(prefix);
+    }
+    this.closedToolPrefixes.clear();
   }
 
   // ── Realtime client resolution + wiring ────────────────────────────────────
