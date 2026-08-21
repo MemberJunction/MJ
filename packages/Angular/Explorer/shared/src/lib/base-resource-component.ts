@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
 import { Subject, Subscription } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
-import { BaseEntity } from "@memberjunction/core";
+import { BaseEntity, LogError } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
 import { NavigationService, TabQueryParamUpdateGuard } from "./navigation.service";
@@ -168,12 +168,30 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     /**
      * Push query param changes to the URL. Creates a browser history entry.
      * Safe to call during OnQueryParamsChanged — auto-suppressed to prevent loops.
+     *
+     * The write is ALWAYS scoped to this component's own tab. A component that cannot
+     * identify its tab does not write at all — see the guard below.
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
         if (this._suppressQueryParamSync) return;
         const tabId = this.getTabId();
         if (!tabId) {
-            this.navigationService.UpdateActiveTabQueryParams(params);
+            // Deliberately NO fallback to "the active tab". The active tab is whatever the user is
+            // looking at RIGHT NOW — which, for a background dashboard finishing an async load, is
+            // somebody else's deep link. That fallback silently rewrote the visible tab's URL from an
+            // invisible tab (a background Studio dashboard replacing a Review tab's ?id=…&tab=… with
+            // its own ?section=… twelve seconds after the user navigated). A correctly scoped write
+            // is already harmless from a background tab, so refusing here costs nothing and closes
+            // the corruption entirely.
+            //
+            // Fix the HOST, not this guard: whoever renders a resource component must give it a tab
+            // id — Data.Configuration.tabId (what the tab container sets) or the ParentTabId input
+            // (what a wrapper rendering a child dashboard sets).
+            LogError(
+                `${this.constructor.name}.UpdateQueryParams: no tab id — query-param update DROPPED ` +
+                `(params: ${Object.keys(params).join(', ') || 'none'}). The host rendering this component must set ` +
+                `ParentTabId or Data.Configuration.tabId; writing to the active tab would corrupt whichever tab the user is viewing.`
+            );
             return;
         }
 

@@ -6,8 +6,10 @@
  * - Tab-scoped filtering prevents cross-tab leakage
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { LogError } from '@memberjunction/core';
 import { NavigationService, TabQueryParamUpdateGuard } from '../navigation.service';
 import { BaseResourceComponent } from '../base-resource-component';
+import { ResourceData } from '@memberjunction/core-entities';
 
 // Mock Angular dependencies
 vi.mock('@angular/core', () => ({
@@ -31,6 +33,7 @@ vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   Metadata: class {},
   CompositeKey: class {},
+  LogError: vi.fn(),
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
@@ -596,7 +599,13 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
     }));
   });
 
-  it('falls back to active-tab updates when no tab id is available', () => {
+  /**
+   * The cross-tab URL corruption this replaced: a component with no tab id used to write into
+   * "the active tab" — the tab the USER is looking at, not the caller's. A background dashboard
+   * finishing an async load therefore rewrote the visible tab's deep link. There is no safe
+   * fallback, so a tab-less component writes nowhere and says so loudly.
+   */
+  it('refuses to write query params when it cannot identify its own tab', () => {
     const { component, updateTabQueryParams, updateActiveTabQueryParams } = createComponent({
       Configuration: {
         resourceType: 'Custom',
@@ -606,7 +615,48 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
 
     (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ panel: 'details' });
 
-    expect(updateActiveTabQueryParams).toHaveBeenCalledWith({ panel: 'details' });
+    expect(updateActiveTabQueryParams).not.toHaveBeenCalled();
     expect(updateTabQueryParams).not.toHaveBeenCalled();
+  });
+
+  it('logs the offending component and the dropped params instead of writing somewhere arbitrary', () => {
+    class BackgroundStudioDashboard extends BaseResourceComponent {
+      async GetResourceDisplayName(_data: ResourceData): Promise<string> { return 'Studio'; }
+      async GetResourceIconClass(_data: ResourceData): Promise<string> { return 'fa-solid fa-flask'; }
+    }
+    const component = Object.create(BackgroundStudioDashboard.prototype) as BaseResourceComponent;
+    const updateTabQueryParams = vi.fn(() => true);
+    (component as unknown as { navigationService: unknown }).navigationService = {
+      UpdateTabQueryParams: updateTabQueryParams,
+      UpdateActiveTabQueryParams: vi.fn()
+    };
+    component.Data = { ResourceRecordID: '', Configuration: {} } as any;
+
+    (component as any).UpdateQueryParams({ section: 'blueprint' });
+
+    expect(updateTabQueryParams).not.toHaveBeenCalled();
+    const message = vi.mocked(LogError).mock.calls.at(-1)?.[0] as string;
+    expect(message).toContain('BackgroundStudioDashboard');
+    expect(message).toContain('section');
+    expect(message).toContain('ParentTabId');
+  });
+
+  it('still writes — scoped to its own tab — once the host supplies a tab id', () => {
+    const { component, updateTabQueryParams, updateActiveTabQueryParams } = createComponent({
+      Configuration: {
+        resourceType: 'Custom',
+        navItemName: 'Embedded'
+      }
+    });
+    // What DashboardResource / BaseAdminContainer now do for ClassFactory-resolved dashboards.
+    component.ParentTabId = 'host-tab';
+
+    (component as any).UpdateQueryParams({ panel: 'details' });
+
+    expect(updateTabQueryParams).toHaveBeenCalledWith('host-tab', { panel: 'details' }, expect.objectContaining({
+      resourceType: 'Custom',
+      navItemName: 'Embedded'
+    }));
+    expect(updateActiveTabQueryParams).not.toHaveBeenCalled();
   });
 });

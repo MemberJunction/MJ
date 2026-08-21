@@ -233,6 +233,12 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
         }
         const ref = this.contentHost.createComponent(reg.SubClass as Type<BaseDashboard>);
         const instance = ref.instance as BaseDashboard;
+        // Scope the embedded dashboard's query-param reads/writes to THIS container's tab. The
+        // sibling `createResourceRef` path inherits the tab id through `instance.Data`; a dashboard
+        // gets no ResourceData, so hand it the tab id explicitly. Without it the dashboard has no
+        // tab identity and its URL updates are dropped (previously: applied to whichever tab the
+        // user was viewing, which need not be this one).
+        instance.ParentTabId = this.getTabId();
         // BaseDashboard catches a failing initDashboard()/loadData(), emits Error and still signals
         // load-complete — so without this subscription an embedded dashboard's load failure would
         // render as a blank content pane with a console-only error. Surface it in LoadError, which
