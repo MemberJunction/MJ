@@ -1,5 +1,370 @@
 # Change Log - @memberjunction/server
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 711c208: Durable sync runs: lease/fence run ownership, DB-backed cancellation and progress, and an opt-in worker mode.
+
+  A sync run is now owned by exactly one process for the life of its lease. `MJ: RSU Pending Work` records the queue, and each run carries an owner token, lease expiry, heartbeat, and fence token, so a stalled or killed process releases its work instead of stranding it, and a resumed process cannot write through a newer owner's fence. Cancellation and progress move through the database rather than in-process state, so either is observable and actionable from any process. The engine no longer shares a single provider across concurrent runs — each run carries its own through an `AsyncLocalStorage` context — and run history is pruned to `MJ_INTEGRATION_MAX_RUNS_PER_CI`.
+
+  RSU post-restart work moves the same way: `RuntimeSchemaManager` now registers it as `MJ: RSU Pending Work` rows instead of `.rsu_pending` files that were deleted as they were read, so a crash mid-consumption leaves visible, resumable work rather than losing it silently. Registration failures are reported on the pipeline result — a migration whose post-restart work never persisted no longer reports success, since the restart discards that work.
+
+  **Additive on the public API.** Reading progress and requesting cancellation now hit the database, which cannot be done from a synchronous method, so they ship under new names: `IntegrationEngine.GetSyncProgressAsync()` and `IntegrationEngine.CancelSyncAsync()`. The three published statics they supersede — `GetSyncProgress`, `CancelSync`, `GetAllSyncProgress` — keep their exact original signatures so a consumer taking this minor upgrade still compiles. They are marked `@deprecated` and are no longer functional, because the in-process map they read no longer exists; each logs once naming its replacement, and each returns the value that previously meant "nothing to report" (`undefined`, `false`, empty map) rather than pretending to have succeeded.
+
+  `RuntimeSchemaManager`'s pending-work entry points follow the same rule, since it too is exported from a published package. `ReadAndClearPendingWork()` keeps its zero-argument signature, warns once, and returns an empty array. `WritePendingWork(data)` keeps compiling — its new `contextUser` parameter is optional — but the one-argument form throws rather than returning a fabricated ID, because a durability queue that silently discards work is worse than one that fails loudly. Both replacements, `ReadPendingWork()` and `WritePendingWork(data, contextUser)`, are named in the messages.
+
+  **One caveat on "additive", for TypeScript consumers.** The paragraph above concerns the deprecated statics. The `Status` value list itself is a different matter: it widens from five values to seven (`Queued`, `Cancelled`), and CodeGen turns a CHECK constraint into a literal union. Widening a union a consumer _reads_ is source-breaking in two patterns — assigning `run.Status` into a narrower hand-written type, and an exhaustive `switch` with no `default` and a declared return type. That is not hypothetical: the Integration dashboard in this repo carried two hand-copied `Status` unions and both had already fallen behind `Queued`. Consumers on those patterns will need one edit; the fix in both cases is to derive the type from the entity (`MJCompanyIntegrationRunEntity['Status']`) rather than restate it, which is what this PR does to the dashboard.
+
+  **Two behaviour changes that are not compile breaks but are observable.** A cancelled run now reports `Cancelled` rather than `Failed`, so anything keyed on `Status='Failed'` — external dashboards, alerts, error-rate SLOs — will report fewer errors than before. And cancellation is now resumable, so "cancel, then re-run to re-pull" no longer re-fetches the window before the cancel point; that needs an explicit full sync.
+
+  **`Cancelled` is now a run status.** `CK_CompanyIntegrationRun_Status` gains it alongside `Queued`, so a deliberately-stopped run records itself instead of being finalized as `Failed` with an explanatory `ErrorLog` — which meant every health, cadence, and error-rate consumer booked operator cancellations as errors unless it string-matched that text. `RunOwnershipService.Release` now takes a `TerminalRunStatus` (`Extract`-ed from the entity's own union, so the terminal subset can never drift from the CHECK constraint), and the Integration dashboard's status colours, icons, activity filter and KPIs handle both new values — its two hand-copied status unions are replaced with indexed access to the entity, which is also how they had already fallen behind `Queued`.
+
+  **A cancelled sync no longer repeats its work on resume.** Stopping mid-fetch logged `— saving watermark`, but only keyset connectors actually persisted a position; a watermark-based connector saved nothing, so the next incremental re-fetched everything back to the last clean run. Measured on a 2,000-record source cancelled at 1,400: the following incremental processed 1,750 records (resuming from 250) where it now processes 600. The max watermark seen is persisted whenever whole batches completed and no page was skipped — never wall-clock `now`, since partial coverage must not advance past the point actually reached, and never when a page was skipped, because that leaves a hole behind the watermark.
+
+  **Sync options survive a process death.** The run row now records its options (the shape `EnqueueSync` already wrote), and `ResumeOrphanedSyncs` reads them back, so an adopted run finishes what was asked for. Previously the resume rebuilt config from the `CompanyIntegration` alone: a `FullSync` that lost its owner resumed as an _incremental_, re-fetched nothing, and reported `Success` — the opposite of why a full sync is requested. The resumed run also reports its real trigger type rather than a hardcoded `Scheduled`.
+
+  The worker's startup line moves from verbose-only to standard log level. `Stop()` already logged at standard level, so logs showed a worker stopping that never started, and there was no way to confirm from logs that a process was in worker mode.
+
+- 9cd81ca: Integration apply path: stop record-map write amplification, surface pagination violations, and stop blocking the connection wizard on a schema refresh.
+
+  `MJ: Company Integration Record Maps` is the highest-volume table the sync path writes — one row per external record ever mapped, re-touched every sync — and unlike its run-log siblings it still shipped with `TrackRecordChanges = 1`, so every mapping upsert also wrote a `RecordChange` row and doubled a sync's write volume. Nothing reads that history: the mapping row is the current state, and operators audit a sync through the per-run artifact stream. Change tracking is now off for that entity; existing history rows are left in place. Separately, a connector returning an oversized batch (a pagination-contract violation) is now reported rather than absorbed silently, and `IntegrationUpdateConnection` can launch its schema refresh without waiting on it.
+
+  `MJCompanyIntegrationEntityServer` gains `SuppressActivationSchemaRefresh`, a transient opt-out that stops the activation (`IsActive` false→true) schema refresh from running inside `Save()` when the caller is going to run it itself. `IntegrationCreateConnection` sets it for `awaitSchemaRefresh: false`, which makes that flag actually non-blocking on create — previously the Save-side refresh ran first and awaited, so the mutation paid a full live introspect regardless — and moves the introspect after the connection test, so a connection rejected by that test is rolled back without having written IntegrationObject rows. Default false, so every other activation path is unchanged.
+
+  `IntegrationConnectorCreationPipeline.Run()` now honours a caller-supplied `RunID` even when it coalesces onto an already-running or just-completed run for the same CompanyIntegration. Previously the supplied ID was silently discarded, so a caller that had already handed it to a client as "the run to tail" left that client polling a run directory that was never created — `IntegrationTailRunEvents` answering "Run not found" forever, which is indistinguishable from "hasn't started yet". A coalesced call now publishes a terminal alias run under the requested ID that mirrors the served run's outcome and names it, so the ID is always tailable.
+
+- 048c5ce: feat(auth): metadata-driven pluggable authentication providers
+
+  Authentication providers are now discovered the MJ way — a `@RegisterClass(BaseAuthProvider, 'x')`
+  subclass plus a row in the new `MJ: Authentication Providers` entity, resolved at runtime through
+  `ClassFactory` by `DriverClass`. Adding a provider requires no core edits.
+  - **New entity** `__mj.AuthenticationProvider`, with the OIDC connection fields as columns, an
+    optional `CredentialID` for the rare provider needing server-side secrets, and login-picker
+    presentation fields. Driver configuration is split by trust boundary: `AdditionalConfiguration`
+    is server-only, `ClientConfiguration` is published to the browser.
+  - **`AuthProviderEngine`** loads the catalog at startup and registers it with `AuthProviderFactory`.
+  - **Layered resolution** — `mj.config.cjs` `authProviders[]` remains fully supported as the baseline
+    and fallback, so existing deployments are unaffected and need no changes.
+  - **`GET /auth/providers`** publishes the non-secret catalog to the pre-auth browser (rate-limited,
+    mounted ahead of the auth middleware, allow-list projection).
+  - **`<mj-login-picker>`** — a reusable, app-agnostic multi-IdP picker built on `mjButton`, rendered
+    only when 2+ client-visible providers exist. Single-provider deployments look exactly as before.
+  - `AuthProviderFactory` no longer carries a hard-wired list of built-in provider imports; the
+    package entry point and the class-registration manifests already covered registration.
+  - **Environment-variable configuration is now pluggable too.** The hard-coded block in MJServer's
+    config that enumerated Entra / Auth0 / Cognito inline is replaced by an optional
+    `configFromEnvironment` static on each provider class (`IEnvironmentConfigurableProvider`),
+    collected through the ClassFactory registry by `AuthProviderFactory.discoverFromEnvironment()`.
+    A third-party provider can now offer the same "set two variables and you're done" experience
+    with no change to MJ core. The three existing mappings are preserved byte-for-byte; **Okta**
+    (`OKTA_DOMAIN` + `OKTA_CLIENT_ID`) and **WorkOS** (`WORKOS_CLIENT_ID`) gain env-var support they
+    did not previously have.
+
+- 7300953: Query & Entity Materialization — snapshot a stored Query's result (or an entity's base view) into a physical table that IS its own read-only entity, refreshed on a schedule with an atomic wrapper-view swap. Base-view (entity) materialization is cross-engine (SQL Server + PostgreSQL); query materialization runs on SQL Server today and becomes cross-engine once the pre-existing `spCreateVirtualEntity` support proc is ported to PostgreSQL (tracked with the broader PG parity effort). The refresh SQL and read path are cross-engine on both.
+  - **New `@memberjunction/materialization`** package: the refresh engine (`MaterializationRefresher`) — full-rebuild (shadow table + atomic view swap), `DirtyGroupRecompute` and MERGE-upsert `Incremental` strategies for keyed aggregations, combined-key `SHA2_256` surrogate hashing, and the advisory `MaterializationFreshness` mixed-freshness inspector.
+  - **CodeGen** (`codegen-lib`): materializes flagged stored Queries + entity base views (cross-engine DDL, wrapper view, read-only Virtual Entity minting, migration-reuse detection); parameterization (row-filter → materialize-broad + read-time predicate); aggregation-key auto-detection; RLS-downgrade gate; and `DriftHold` flag-and-hold drift detection.
+  - **Read path**: `RunViewParams.DataSource: 'Live' | 'Materialized'` (`core`) routed by `GenericDatabaseProvider.GetEffectiveBaseView`, plumbed through the GraphQL layer (`server`, `graphql-dataprovider`).
+  - **Scheduling** (`scheduling-engine`): `MaterializationRefreshScheduledJobDriver` sweeps due materializations (skips `Disabled`/`DriftHold`).
+  - **`core-entities` / `ng-core-entity-forms`**: generated `MJ: Materialized Results` + `MJ: Materialized Result Queries` (join) entities + `Query.IsMaterialized` + forms. The MR↔Query link lives in the `MaterializedResultQuery` join table — there is no `MaterializedResult.SourceQueryID` / `Query.MaterializedResultID` FK — avoiding the circular dependency of the direct-FK design.
+
+  See `plans/query-entity-materialization.md` for the full design.
+
+- 7300953: Query Materialization — Phase 2: parameterized RowFilterBroad read-time injection. A caller can now run a materialized parameterized stored Query with `RunQueryParams.DataSource: 'Materialized'` and the provider serves it from the broad materialized table with the query's row-filter parameters injected as **bound** read-time predicates, falling back to the live query on any uncertainty (serving live is always correct).
+  - **`codegen-lib`**: the render-and-diff verifier now captures each row-filter predicate's operator + value shape (normalized to `column <op> value`, flipping `value < column`); `qualifyParameterizedQuery` builds a structured `ReadFilterSpec` and gates it to a safe operator whitelist (`=, !=, <>, <, >, <=, >=, IN, NOT IN` — `LIKE`/`IS`/`BETWEEN` stay live-only); `manage-metadata` persists the spec and enables Bucket-1 materialization. New migration adds `MaterializedResult.ReadFilterSpec` (+ the CodeGen-regenerated view/procs/EntityField).
+  - **`core`**: `RunQueryParams.DataSource: 'Live' | 'Materialized'` (mirrors `RunViewParams`).
+  - **`generic-database-provider`**: `InternalRunQuery` redirects a `DataSource:'Materialized'` read to `SELECT … FROM <materialized view> WHERE <spec predicates>` with values **bound** (never interpolated), and falls back to live on any doubt — not opted in, not fresh/Active, a parameter absent from the spec, an unsafe operator, or an execution error.
+  - **`server` / `graphql-dataprovider`**: `DataSource` threaded through the RunQuery GraphQL surface (singular, batch, cache-check, and SystemUser paths).
+
+  Proven by a differential reconstruction proof (13/13, real SQL Server) and a full provider-level `RunQuery` E2E (16/16). See `plans/query-entity-materialization-phase2.md`. Stacks on the Phase 1 materialization PR (merges after it).
+
+- f5ec13b: Fix the queue engine's terminal-status write, and stop MJAPI's task-graph dispatcher from competing with a test harness.
+
+  **`QueueBase` could never record a task outcome.** `StartTask` discarded the boolean `Save()` return, so the terminal-status write failed silently: the row kept whatever status it held before the run while the in-memory task still reported `Complete`. Underneath it, no role held `CanUpdate` on `MJ: Queue Tasks` or `MJ: Queues`, so CodeGen had never emitted an update grant and `spUpdateQueueTask` carried no `EXECUTE` grant at all. The Developer + Integration CRUD grants are now in `metadata/entity-permissions`, matching every other engine-written entity (`MJ: Tasks`, `MJ: Scheduled Jobs`, `MJ: Action Execution Logs`), with a migration that applies the SQL grants directly — a fresh install runs `migrate` + `sync push` and no CodeGen, so metadata alone would leave the permission correct in Explorer and broken at runtime.
+
+  **`MJ_DISABLE_TASK_GRAPH_DISPATCHER` opts a server out of claiming.** A dispatcher claims from the whole `Task` table rather than from "its own" graphs, so a second dispatcher on the same database is a competitor — correct in production, and wrong for a harness that injects a stub runner and then asserts which tasks its own runner executed. Tasks MJAPI won were executed with the real agent runner and never reached the stub, which the harness read as "never ran". Immediately-eligible root tasks lose that race most often, so it presented as an intermittent failure.
+
+  Also in the integration suite: the RLS fixture now carries the clauses discovery compared (a client-transport check cannot re-derive them and was reporting a cache leak that did not exist), the auth-validation fixtures supply every shipped provider's required config fields, the cache-gauntlet anti-vacuity floors are created rather than assumed, and the task-graph checks wait for the child read-back instead of silently undercounting.
+
+- 6cd337d: Workflow Run Console — realtime runner and debugger for task graphs (`plans/task-graph-realtime-runner.md`).
+
+  Engine: new frame kinds (`GateDecision`, `ClaimChanged`, `PassCompleted`, `GraphPaused`, `GraphResumed`, `BreakpointHit`, `NodeProgress`) emitting state the dispatcher already computes; durable debug state (`$.debug` in the parent metadata bag) gating the claim filter — pause, single-step, breakpoints, and edge-condition overrides are claim gating, never new execution machinery. New Remote Operations: `TaskGraph.Pause/.Resume/.Step/.SetBreakpoints/.OverrideEdge/.SkipTask/.ForceCompleteTask/.UpdateTaskInput`; `RetryTask` accepts an edited input. Metadata rows for the new operations ride the branch (bump is `minor` per the metadata-branch rule).
+
+  Client: `GraphQLDataProvider.TaskGraphFrames(parentTaskId)` — the first consumer of the `taskGraphFrames` subscription (shared, refcounted per graph). The run view accepts a `LiveFrame` input (frames patch the canvas; cascade frames trigger a debounced row reconcile — frames advisory, rows truth) and a `ReplayAt` input (post-settle scrubbing from row timestamps). The Workflows app's Runs surface becomes the console: pause/resume/step toolbar, engine pass strip, stall banner, step inspector (claim, path verdicts, live progress, what-if via the engine's own algorithms), and replay scrub.
+
+### Patch Changes
+
+- 2003cd3: Make the `FetchChanges` per-page timeout configurable instead of a hard-coded 30s.
+
+  `IntegrationEngine` previously wrapped every `FetchChanges` call in `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs` (30s) with no way to change it. That punished the connectors that need it most: a connector that fans out one request per parent record does `BatchSize` requests inside a single `FetchChanges` call, so its page time scales with batch size and with however much concurrency the adaptive controller currently allows. Once a page exceeded 30s the timeout fired and `WithRetry` re-ran the _same_ page, paying the full cost again, until the retry budget was spent and the object ended with an incomplete result set.
+
+  Two new resolution sources, checked before the framework default:
+  - `CompanyIntegration.Configuration` → `{"fetchTimeoutMs": 120000}` — per-deployment, no code change. Settable and readable as a typed `FetchTimeoutMs` field on the `IntegrationSetSyncConfig` / `IntegrationGetSyncConfig` GraphQL surface, alongside the concurrency, rate-limit and discovery-budget knobs it sits with in that JSON.
+  - `BaseIntegrationConnector.FetchChangesTimeoutMs` — a connector declares its own default (`null` keeps the framework's 30s).
+
+  Precedence, highest first: `Configuration.fetchTimeoutMs` → `connector.FetchChangesTimeoutMs` → `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs`. **Both** override sources go through the same guard: non-numeric, non-finite and non-positive values are rejected and fall through to the next source. That matters for the connector source in particular — its declared type is `number | null`, so `0`, a negative, or the `NaN` you get from `Number(process.env.UNSET)` are all type-legal, and `setTimeout` coerces every one of them to ~1ms rather than erroring, which would silently time out every page. Resolution happens once per entity map.
+
+  Fully backward compatible — with neither source set, behavior is byte-identical to before. `FetchChangesTimeoutMs` is additive to the `BaseIntegrationConnector` public surface, and `patch` is still the right level: every MJ package shares one `fixed` group, so `minor` is reserved for branches that change the database (a migration, or `metadata/**` that becomes one at release). This branch changes neither.
+
+  Separately, an **unskippable fetch failure no longer completes silently.** When a persistent error hits a page the engine cannot page past (cursor paging, or the page-skip budget spent), the object stops with an incomplete result set — and previously reported nothing, so an object whose very first page failed was indistinguishable from a clean "nothing changed" run. It now emits a structured `FETCH_ABORTED_INCOMPLETE` warning on the run-event stream **and** records a `Warning`-severity entry in `CompanyIntegrationRun.ErrorLog`, so the condition survives in queryable run history rather than only in a pod-local artifact. The run's `Status` is deliberately unchanged (`Success` unless a record actually errored): the watermark is held, so the unfetched window is retried next run — this is a warning, not a failed run.
+
+- 199eb2b: Debug a Flow agent from the Agent form Run dialog. Debug starts the graph paused at Submit (`$.debug.paused` on the parent row — Pause-after-submit races the dispatcher). The harness and Runs console share a VS Code-style icon toolbar and a red-circle breakpoint toggle. The invocation-envelope sanitizer from #3783 is preserved.
+- 815b9bc: feat(storage,core,forms): ephemeral staged binary upload pipeline, polymorphic related collections, and file record viewer
+  - **Storage & Server**:
+    - Implement Tier 2 ephemeral staged raw binary upload pipeline (UploadTokenManager, POST /media/upload-stage, CreateUploadStageToken mutation, UploadStorageFile token consumption).
+    - Add single-use cryptographic token security, user identity ownership binding, automated TTL eviction, and memory bounds.
+    - Sanitize paths/filenames and add X-Content-Type-Options: nosniff to /media endpoints.
+  - **Core & ORM**:
+    - Add support for polymorphic IS-A subtypes in RelatedRecordCollection and dirty state preservation across relationship chains.
+    - Support IEntityConfiguration and entity hierarchy traversal.
+  - **Angular & UI**:
+    - Add 3-tier upload pipeline in RecordAttachmentsComponent with real-time wire progress.
+    - Add dedicated MJ: Files custom record viewer form component in ng-core-entity-forms.
+    - Add attachment count badges to base form container and toolbar.
+    - Add ResizeObserver lifecycle handling to Gantt chart and OpenNewEntityRecord in SharedService.
+
+- cefc302: security: harden SQL-filter validation, the OAuth callback handler, API-key lookup, and the new-user domain gate
+
+  **SQL literal stripping (`@memberjunction/global`, `@memberjunction/core`).** Both of MJ's SQL screens — `DatabaseProviderBase.ValidateUserProvidedSQLClause` (which guards `ExtraFilter`, `OrderBy` and `UserSearchString`) and `SQLExpressionValidator` (which guards `Aggregates` and ad-hoc queries) — stripped string literals with a regex that honored **backslash escaping**. SQL Server and PostgreSQL do not treat `\` as an escape, so a payload such as `x = 'a\') ; DROP TABLE Users; --'` was swallowed whole as one "literal" and stripped away before the keyword denylist ran, while the database closed the literal at the real quote and executed the stacked statement. Both screens now share a single `StripSQLStringLiterals` helper that matches SQL-standard doubled-quote (`''`) semantics, and a regression suite in each package pins the behavior.
+
+  **OAuth callback handler (`@memberjunction/server`).** Caller-supplied `connectionId` was interpolated into a raw `ExtraFilter` without escaping; it is now validated as a UUID at the request boundary and escaped at the SQL sink. `frontendReturnUrl` was redirected to after only a URL-parse check, making the callback an open redirect from the trusted MJAPI origin; its origin is now validated against `cors.allowedOrigins` (plus the built-in redirect origins) both when the flow is initiated and when the redirect is issued.
+
+  If you run frontends other than MJExplorer against MJAPI, note that the return-URL allowlist is derived from `cors.allowedOrigins`. Deployments on the default `['*']` are unaffected — every return URL is still allowed. Deployments that have narrowed `cors.allowedOrigins` are mostly self-protecting, since a browser frontend must already be on that list to call `/oauth/initiate` at all, but three cases can now fall back to MJAPI's built-in page instead of returning to the app: a return URL on a _different_ origin than the caller, a server-to-server initiate whose return origin was never CORS-listed, and any proxy setup where the browser-visible origin differs from the configured one (matching is exact on scheme + host + port). Each rejection is logged with the offending URL.
+
+  **API-key lookup (`@memberjunction/api-keys`).** `ValidateKeyByHash` now asserts its argument is a SHA-256 hex digest before building the SQL filter, enforcing the injection-safety invariant at the sink for all present and future callers.
+
+  **⚠️ Behavior change — `userHandling.newUserAuthorizedDomains`.** The new-user domain gate previously authorized against the hostname parsed from the request's `Origin` header, which is trivially spoofable on non-browser requests: a holder of any valid IdP token could auto-provision an account under an authorized domain by forging `Origin`. It now authorizes against the **email domain of the verified identity token**.
+
+  If `newUserLimitedToAuthorizedDomains` is enabled, review `newUserAuthorizedDomains` before upgrading:
+  - Entries that are **frontend hostnames** (`app.example.com`, `localhost`) must be replaced with the **email domains** your users sign in with (`example.com`). Deployments where the two happened to coincide are unaffected.
+  - Wildcards match in full, so `*.example.com` matches `mail.example.com` but **not** `example.com` — list both if you need both.
+  - Identity providers that issue a bare username with no `email` claim can no longer auto-provision; the denial is logged explicitly. Configure the provider to emit an `email` claim, or set `newUserLimitedToAuthorizedDomains: false`.
+
+  The gate is off by default (`newUserLimitedToAuthorizedDomains: false`, `newUserAuthorizedDomains: []`), so deployments that never enabled it are unaffected.
+
+  **⚠️ Related expansion — MCP OAuth auto-provisioning.** Auto-provisioning previously also required a non-empty request `Origin` as a precondition for entering the check at all. `MCPServer`'s `resolveOAuthUser` passes no request domain, so with the domain gate enabled, MCP OAuth users could never be auto-created regardless of their email domain. Now that the spoofable precondition is gone, an MCP OAuth user whose **JWKS-verified** token carries an authorized email domain plus given/family name claims **will** be auto-provisioned, consistent with the browser path. If you run MCP with `newUserLimitedToAuthorizedDomains` enabled and were relying on that side effect to keep MJ user records from being created, add the restriction explicitly (narrow `newUserAuthorizedDomains`, or set `autoCreateNewUsers: false`).
+
+- 2875f6f: Stop running a live source introspection inside `CompanyIntegration.Save()`
+
+  `MJCompanyIntegrationEntityServer` no longer overrides `Save()` to fire
+  `IntegrationConnectorCreationPipeline` on an `IsActive false→true` transition.
+  That hook made an unbounded scan of the customer's source a side effect of
+  writing a row — it ran for any writer of that transition, inside the caller's
+  HTTP request, and on the create path it ran before the credential had been
+  tested.
+
+  Discovery is now something a caller asks for:
+  - `IntegrationCreateConnection` creates the row inactive and activates it only
+    after the credential test, so the scan can never run against a password that
+    is about to be rejected and rolled back.
+  - `IntegrationReactivateConnection` gains a `runSchemaRefresh` argument
+    (default `true`, matching the previous behaviour) so the refresh is visible
+    in the API and can be declined.
+  - `runSchemaRefreshPipeline` now takes the `IntegrationEngine` maintenance lock,
+    which the other pipeline call sites already held, and supplies the
+    SoftPKClassifier LLM callback the save hook used to provide.
+
+  `MJCompanyIntegrationEntityServer.RunSchemaRefreshPipeline()` is public for
+  callers that want the old behaviour explicitly.
+
+- 2e2879e: Stop emitting GraphQL child-array FieldResolvers (`Foo_BarIDArray`). Load children via RunView or a hand-written mutation result type. CurrentUser now returns a first-class Roles field; query create/update return Fields/Parameters/Entities/Permissions on the mutation result.
+
+  CurrentUser is an intentional schema break for the first 6.x LTS (no deprecated MJUserRoles_UserIDArray alias). Role load now throws on a missing user or a failed RunView instead of presenting an empty role set.
+
+- b46330e: feat(codegen,core): full-stack recursive foreign key support with automated TVF suites, base view projections, and hierarchy traversal APIs
+  - **Database / TVF Suite**: CodeGen automatically emits 4 table-valued functions per recursive self-referencing foreign key on both SQL Server (T-SQL) and PostgreSQL (PL/pgSQL):
+    - `fn<Table><Field>_GetHierarchyMeta` (computes `RootID`, `Depth`, materialized `Path`, `IsLeaf`, and `ChildCount`)
+    - `fn<Table><Field>_GetDescendants` (full subtree retrieval with cycle detection)
+    - `fn<Table><Field>_GetAncestors` (materialized path-based ancestor retrieval)
+    - `fn<Table><Field>_GetRootID` (top-level root resolver)
+  - **Base View Projections**: Every base view (`vw<Entities>`) automatically joins the hierarchy metadata via lateral joins (`OUTER APPLY` in SQL Server, `LEFT JOIN LATERAL` in PostgreSQL), projecting `[Root<Field>]`, `[<Field>Depth]`, `[<Field>Path]`, `[<Field>IsLeaf]`, and `[<Field>ChildCount]`.
+  - **`BaseEntity` & Generated Subclasses**:
+    - `BaseEntity` in `@memberjunction/core` provides generic hierarchy traversal methods `GetDescendants<T>()`, `GetAncestors<T>()`, and `GetChildren<T>()` with automated `ParentID` and recursive FK resolution.
+    - CodeGen generates strongly-typed convenience methods (`entity.GetDescendants()`, `entity.GetAncestors()`, `entity.GetChildren()`) on all generated entity subclasses with self-referencing foreign keys.
+  - **Documentation**: Added comprehensive architectural documentation in [`guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`](guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md) and cross-referenced in package READMEs.
+
+- 6d130a5: Publish Runtime Schema Update runs to the integration progress stream, so an RSU is observable the way a sync or a connector build is.
+
+  `IntegrationRunKind` has always included `'RSU'` and `RUN_KIND_TO_TOPIC` has always mapped it to an `'RSU'` subscription channel, but nothing in production ever published to it — the channel carried no traffic and `IntegrationTailRunEvents` had no RSU runs to tail. The only live signal was polling `RuntimeSchemaUpdateStatus`, which reports the _current_ step and nothing else: no history, no durable record, and nothing readable at all across the mid-run API restart the pipeline performs on itself as one of its own steps. A run that failed after that restart left no artifact to inspect.
+
+  `@memberjunction/schema-engine` now publishes framework-free lifecycle events (`run.start` / `step.start` / `step.end` / `run.end`) through an opt-in `PipelineObserver`, defaulting to `null` so a process that never registers one (the CLI, tests) pays nothing. `@memberjunction/server` translates them onto the progress-artifact stream, so an RSU run produces the same `manifest.json` / `progress.jsonl` / `result.json` triple as any other run kind. The split is deliberate: SchemaEngine sits below the progress-artifacts package and must not depend on it, so the emitter lifecycle lives one layer up where both are already dependencies.
+
+  This makes RSU runs **observable, not resumable** — a retry re-enters the pipeline and is legitimately a new run with its own start/end pair, not a continuation. What survives the mid-run restart is the record, not the run.
+
+  Correctness details: `run.end` publishes from a `finally` so it fires on normal completion, early validation failure, and a throw that produces no result at all — without the last case an observer's run would stay in flight forever. `runStep` is the single chokepoint for step publication, and a `recordStep` helper replaces the three remaining direct `steps.push` sites so a step cannot be recorded without being published. Counts are emitted once at run level in migrations, never per step: a per-step quartet would make a 12-step single-migration run report `processed: 12`. A failed step is a `stage.error` rather than a `stage.complete`, because a per-item failure does not abort the batch.
+
+  `RSUProgressBridge` is a `BaseSingleton`. Its `CurrentRunID` exists so a resolver that has just triggered an RSU can hand its client a run to tail, and that is only reachable if the instance is — previously the bridge was constructed inside its registration function and the sole surviving reference was the observer closure, leaving the accessor unreachable from any caller. `Configure()` supplies emitter options (a settable property because `BaseSingleton` requires a zero-argument constructor) and `Reset()` returns the bridge to idle without emitting a terminal event, so process-wide state cannot leak between runs or hold an interval open.
+
+- 6d7d3da: Task-graph engine hardening, Round 3 — the residual gaps in Round 2's own fixes, found by a three-track adversarial review of the merged engine. The pattern this round is not new seams but **incomplete closures**: six Round 2 fixes worked at their own anchor and left the layer just outside it open.
+
+  **R3-1 — an early finish could discard a step that was already running.** R2-10 moved the sibling skips after `CompleteClaimed` on the premise that "siblings are Pending and unclaimed until the skip lands". They are not: task execution is not awaited, so the deciding instance's own poll tick runs concurrently with its skip loop, and the decision existed only in that instance's memory — no claim filter anywhere could know about it. A sibling claimed mid-loop had `In Progress` reverted to `Skipped` and its claim cleared _while its agent body ran_: side effects fired, completion refused, output discarded, graph settled `Complete` with nothing recording it. The early finish now declares itself durably before mutating anything (so every instance's claim filter sees it) and every skip is a guarded single statement that refuses a task something else has taken.
+
+  **R3-2 — R2-4 gated one dialect and left the other blind.** Under `failureSemantics: 'block'` — the spec default, so every agent-emitted graph — a `Failed` origin's ordinary conditional edge that read false was dropped, its target skipped rather than blocked, and the dropped edge severed the block cascade's forward walk. `Skipped` satisfies prerequisites, so a join fed by an independent healthy route executed downstream of an unhandled failure while the parent still rolled up `Failed`. R2-3 made this _more_ reachable, not less: a failed step rarely has output, so the null-safe envelope answers positive conditions with a confident false→drop where they previously threw→held visibly. `Cancelled` is now decided once and written into the spec: it never decides an ordinary edge under either dialect.
+
+  **R3-3 — the documented `data`/`context` conditions never worked on the dispatcher.** They resolved against the origin _step's_ output rather than the invocation's parameters, so every `data.x` comparison read `undefined`, came out false, and silently took a branch the legacy walker never took — on every invocation, with the validator blessing the condition at the door. An invocation envelope is now threaded from the agent through submit, the parent's metadata, and condition evaluation. Round 1's carried-forward D2 lands as code. `stepResult.step` also now carries a status word rather than the step's name, matching what the flow engine actually exposes — the documented `stepResult.step === 'Success'` was false for every step before this.
+
+  **Also fixed:** a `Stop()` during boot no longer has its timers reinstalled by `Start()`'s own continuation (R3-4); concurrent human-step notifications no longer leave a duplicate, un-answerable inbox item — collapsing them belongs to the sweep over _waiting_ steps rather than to the raise, because a task is notified exactly once and the raise never runs again afterwards, so a duplicate that outlived its own raise was previously unreachable by the only code that could have closed it (R3-5); the data-absence classifier is inverted so it cannot rot per operator — a `ReferenceError` is a broken guard, everything else is absent data (R3-6); the determinism tiebreak is ordinal rather than locale-collated, so two hosts with different `LANG` cannot resolve the same tie differently (R3-7); a transient cost-rollup failure defers delivery instead of claiming the marker and locking a wrong total in forever (R3-8); `Cancel`'s child writes are guarded statements that cannot overwrite an outcome that landed first (R3-9); nested cancel is type-scoped and its depth cap actually engages (R3-10); and a host with the dispatcher disabled now refuses graph submissions instead of accepting work nobody will run (R3-11).
+
+  **Smaller:** `deliverContinuation` returned `undefined` after every successful delivery, costing a spurious settle pass per graph (C1, with `noImplicitReturns` now on for the package); the default dispatcher instance id gains real entropy, because host+pid collides under systemd, pm2 and containers — and a shared id defeats every ownership guard at once (C2); the run's rollup and lifecycle writes are column-scoped (C4); and the drain's heartbeat purge no longer races the registration it is purging (C5).
+
+  **Wrap-up fixes (post-round):** the claim protocol's lease now lives entirely on the database clock — `ClaimExpiresAt` is written (`DATEADD` over `SYSUTCDATETIME`) and compared in SQL time, so NTP skew between dispatcher hosts can no longer reclaim a live lease or extend a dead one. And the `TaskGraph.Submit` remote operation stops dropping `reinvokeDepth` (the runaway-loop cap now counts remote continuation hops) and gains the R3-3 `invocation` envelope so `data.*`/`context.*` conditions work for MCP-submitted flows; the operation's metadata contract carries both fields (hence this release's `minor`).
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [5ef97ff]
+- Updated dependencies [d4a5b4c]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [407f2f7]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [8c9ed6f]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [2875f6f]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e68d90d]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [3b6be0b]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [2e2879e]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [6d130a5]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [2741d46]
+- Updated dependencies [b6416f4]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ae2baef]
+- Updated dependencies [4b1257f]
+- Updated dependencies [6cd337d]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/ai-agents@6.1.0-edge.3
+  - @memberjunction/scheduling-engine@6.1.0-edge.3
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.3
+  - @memberjunction/codegen-lib@6.1.0-edge.3
+  - @memberjunction/core-entities-server@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/task-graph@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/computer-use@6.1.0-edge.3
+  - @memberjunction/ai-vector-sync@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.3
+  - @memberjunction/testing-engine@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/schema-engine@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/api-keys@6.1.0-edge.3
+  - @memberjunction/core-actions@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+  - @memberjunction/auth-providers@6.1.0-edge.3
+  - @memberjunction/queue@6.1.0-edge.3
+  - @memberjunction/search-engine@6.1.0-edge.3
+  - @memberjunction/testing-engine-base@6.1.0-edge.3
+  - @memberjunction/ai-agent-manager-actions@6.1.0-edge.3
+  - @memberjunction/ai-agent-manager@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/clustering-engine@6.1.0-edge.3
+  - @memberjunction/tag-engine@6.1.0-edge.3
+  - @memberjunction/tag-engine-base@6.1.0-edge.3
+  - @memberjunction/ai-mcp-client@6.1.0-edge.3
+  - @memberjunction/computer-use-engine@6.1.0-edge.3
+  - @memberjunction/ai-bridge-base@6.1.0-edge.3
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.3
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.3
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.3
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.3
+  - @memberjunction/ai-bridge-server@6.1.0-edge.3
+  - @memberjunction/remote-browser-base@6.1.0-edge.3
+  - @memberjunction/remote-browser-cdp@6.1.0-edge.3
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.3
+  - @memberjunction/remote-browser-server@6.1.0-edge.3
+  - @memberjunction/ai-vectordb@6.1.0-edge.3
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.3
+  - @memberjunction/actions-apollo@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+  - @memberjunction/communication-types@6.1.0-edge.3
+  - @memberjunction/communication-engine@6.1.0-edge.3
+  - @memberjunction/entity-communications-base@6.1.0-edge.3
+  - @memberjunction/entity-communications-server@6.1.0-edge.3
+  - @memberjunction/notifications@6.1.0-edge.3
+  - @memberjunction/communication-ms-graph@6.1.0-edge.3
+  - @memberjunction/communication-sendgrid@6.1.0-edge.3
+  - @memberjunction/component-registry-client-sdk@6.1.0-edge.3
+  - @memberjunction/credentials@6.1.0-edge.3
+  - @memberjunction/doc-utils@6.1.0-edge.3
+  - @memberjunction/encryption@6.1.0-edge.3
+  - @memberjunction/external-change-detection@6.1.0-edge.3
+  - @memberjunction/integration-engine-base@6.1.0-edge.3
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.3
+  - @memberjunction/integration-schema-builder@6.1.0-edge.3
+  - @memberjunction/lists@6.1.0-edge.3
+  - @memberjunction/livekit-room-server@6.1.0-edge.3
+  - @memberjunction/data-context@6.1.0-edge.3
+  - @memberjunction/data-context-server@6.1.0-edge.3
+  - @memberjunction/record-comparison@6.1.0-edge.3
+  - @memberjunction/redis-provider@6.1.0-edge.3
+  - @memberjunction/scheduling-actions@6.1.0-edge.3
+  - @memberjunction/scheduling-base-types@6.1.0-edge.3
+  - @memberjunction/server-extensions-core@6.1.0-edge.3
+  - @memberjunction/templates@6.1.0-edge.3
+  - @memberjunction/version-history@6.1.0-edge.3
+  - @memberjunction/esignature@6.1.0-edge.3
+  - @memberjunction/interactive-component-types@6.1.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.3
+  - @memberjunction/config@6.1.0-edge.3
+  - @memberjunction/lists-base@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes

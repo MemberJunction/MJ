@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/core-entities",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "Entity subclasses for the metadata layer of MemberJunction defined in the MJ_CORE schema (usually '__mj'), distributed as part of each release of MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,10 +21,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/interactive-component-types": "6.1.0-edge.2",
+    "@memberjunction/ai": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/interactive-component-types": "6.1.0-edge.3",
     "rxjs": "^7.8.2",
     "zod": "^3.25.0"
   },

@@ -1,5 +1,16 @@
 # @memberjunction/scheduling-base-types
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [cefc302]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1bd9674]
+  - @memberjunction/global@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

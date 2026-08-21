@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/geo-maps",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: Framework-agnostic Leaflet map engine for point, heatmap, and choropleth rendering",
   "main": "src/map-core.js",
   "types": "types/index.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-task-graph-editor",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: View and edit a TaskGraphSpec on a canvas — the one graph contract shared by design-time flows and runtime task graphs",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -26,7 +26,7 @@
   "devDependencies": {
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
-    "@memberjunction/ng-test-utils": "6.1.0-edge.2",
+    "@memberjunction/ng-test-utils": "6.1.0-edge.3",
     "sass": "^1.97.3",
     "vitest": "^4.0.18"
   },
@@ -37,13 +37,13 @@
     "@angular/platform-browser": "^21.1.3"
   },
   "dependencies": {
-    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/ng-base-types": "6.1.0-edge.2",
-    "@memberjunction/ng-flow-editor": "6.1.0-edge.2",
-    "@memberjunction/ng-ui-components": "6.1.0-edge.2",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/ng-base-types": "6.1.0-edge.3",
+    "@memberjunction/ng-flow-editor": "6.1.0-edge.3",
+    "@memberjunction/ng-ui-components": "6.1.0-edge.3",
     "angular-split": "^20.0.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1"

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/scheduling-base-types",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: Scheduling Base Types - core type definitions for the scheduled jobs system, usable anywhere without heavy dependencies",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,7 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.2"
+    "@memberjunction/global": "6.1.0-edge.3"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
