@@ -3,7 +3,6 @@
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/server": patch
-"@memberjunction/api": patch
 "@memberjunction/ng-core-entity-forms": patch
 ---
 
