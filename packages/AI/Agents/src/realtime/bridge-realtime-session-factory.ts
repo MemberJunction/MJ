@@ -80,7 +80,7 @@ export interface BridgeRealtimeSessionContext {
  *
  * @param ctx The bridge session context (agent id/name + user + provider).
  * @returns The live realtime session to hand to `AIBridgeEngine.StartBridgeSession`.
- * @throws When the agent can't be resolved, has no DriverClass, the driver can't be instantiated, or no
+ * @throws When the agent can't be resolved, names a DriverClass no BaseAgent subclass is registered for, or no
  *   usable Realtime model is configured (surfaced from {@link BaseAgent.StartBridgeRealtimeSession}).
  */
 export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionContext): Promise<IRealtimeSession> {
@@ -95,16 +95,38 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         );
     }
 
-    // Instantiate the right BaseAgent subclass exactly as AgentRunner does (agent DriverClass, else its type's).
-    const agentType = AIEngine.Instance.AgentTypes.find((t) => UUIDsEqual(t.ID, agent.TypeID));
-    const driverClass = agent.DriverClass || agentType?.DriverClass;
-    if (!driverClass) {
-        throw new Error(`CreateBridgeRealtimeSession: agent '${agent.Name}' has no DriverClass (and its type none either).`);
-    }
-
-    const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverClass);
-    if (!instance) {
-        throw new Error(`CreateBridgeRealtimeSession: ClassFactory could not create a BaseAgent for DriverClass '${driverClass}'.`);
+    // Instantiate the agent's own BaseAgent subclass — or the plain BaseAgent when it declares none.
+    //
+    // ── WHY NOT `agentType.DriverClass` AS A FALLBACK ──
+    //
+    // `AIAgentType.DriverClass` names a **BaseAgentType** subclass; the key needed here is a
+    // **BaseAgent** one. They are different ClassFactory registries, so passing the type's key to
+    // `CreateInstance(BaseAgent, …)` matches no registration — and `CreateInstance` does not return
+    // null for an unmatched key, it falls back. The observed result was a bridged seat running an
+    // unrelated registered agent: a voice seat configured as an interviewer answered as
+    // `QueryBuilderAgent`, in the interviewer's voice, with no error anywhere. That is worse than a
+    // failure, because it looks like a bad prompt.
+    //
+    // Most agents declare no `DriverClass` at all and are meant to run on the base implementation
+    // (that is what makes them data rather than code), so an absent one is NOT an error — it is the
+    // common case, and the old throw was unreachable only because the wrong-registry fallback
+    // silently satisfied it.
+    const driverClass = agent.DriverClass || undefined;
+    let instance: BaseAgent | null;
+    if (driverClass) {
+        // `TryCreateInstance`, not `CreateInstance`: an unresolvable key must be an error here rather
+        // than a hollow anchor-base object that answers plausibly and wrongly.
+        const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAgent>(BaseAgent, driverClass);
+        instance = resolution.Resolved ? resolution.Instance : null;
+        if (!instance) {
+            throw new Error(
+                `CreateBridgeRealtimeSession: no BaseAgent subclass is registered as '${driverClass}' ` +
+                    `(agent '${agent.Name}'). Refusing the base-class fallback: it would run a different ` +
+                    `agent than the one configured, in this agent's voice.`,
+            );
+        }
+    } else {
+        instance = new BaseAgent();
     }
 
     return instance.StartBridgeRealtimeSession({
