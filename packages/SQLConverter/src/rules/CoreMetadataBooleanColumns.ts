@@ -116,7 +116,7 @@ const CORE_METADATA_BOOLEAN_COLUMNS: Record<string, string[]> = {
   EncryptionAlgorithm: ['IsAEAD', 'IsActive'],
   EncryptionKey: ['IsActive'],
   EncryptionKeySource: ['IsActive'],
-  Entity: ['AutoUpdateDescription', 'BaseViewGenerated', 'VirtualEntity', 'TrackRecordChanges', 'AuditRecordAccess', 'AuditViewRuns', 'IncludeInAPI', 'AllowAllRowsAPI', 'AllowUpdateAPI', 'AllowCreateAPI', 'AllowDeleteAPI', 'CustomResolverAPI', 'AllowUserSearchAPI', 'FullTextSearchEnabled', 'FullTextCatalogGenerated', 'FullTextIndexGenerated', 'FullTextSearchFunctionGenerated', 'spCreateGenerated', 'spUpdateGenerated', 'spDeleteGenerated', 'CascadeDeletes', 'AllowRecordMerge', 'UserFormGenerated', 'AllowMultipleSubtypes', 'AutoUpdateFullTextSearch', 'AutoUpdateAllowUserSearchAPI', 'TrustServerCacheCompletely', 'SupportsGeoCoding', 'AutoUpdateSupportsGeoCoding', 'AllowCaching', 'DetectExternalChanges'],
+  Entity: ['AutoUpdateDescription', 'BaseViewGenerated', 'VirtualEntity', 'TrackRecordChanges', 'AuditRecordAccess', 'AuditViewRuns', 'IncludeInAPI', 'AllowAllRowsAPI', 'AllowUpdateAPI', 'AllowCreateAPI', 'AllowDeleteAPI', 'CustomResolverAPI', 'AllowUserSearchAPI', 'FullTextSearchEnabled', 'FullTextCatalogGenerated', 'FullTextIndexGenerated', 'FullTextSearchFunctionGenerated', 'spCreateGenerated', 'spUpdateGenerated', 'spDeleteGenerated', 'CascadeDeletes', 'AllowRecordMerge', 'UserFormGenerated', 'AllowMultipleSubtypes', 'IsTotalSpecialization', 'AutoUpdateFullTextSearch', 'AutoUpdateAllowUserSearchAPI', 'TrustServerCacheCompletely', 'SupportsGeoCoding', 'AutoUpdateSupportsGeoCoding', 'AllowCaching', 'DetectExternalChanges'],
   EntityAIAction: ['SkipIfOutputFieldNotEmpty'],
   EntityCommunicationMessageType: ['IsActive'],
   EntityDocument: ['EnableLLMReasoning'],
