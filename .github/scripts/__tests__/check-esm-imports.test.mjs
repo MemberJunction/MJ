@@ -428,6 +428,29 @@ describe('sweep', () => {
         ]);
         expect(failures.map((f) => f.name)).toEqual(['fixture-missing-ext-pkg']);
     });
+
+    it('narrows to the named packages when `only` is passed, leaving the rest unimported', async () => {
+        const { results } = await sweep(FIXTURES, { only: new Set([join(FIXTURES, 'ok-pkg')]) });
+        expect(results.map((r) => r.name)).toEqual(['fixture-ok-pkg']);
+    });
+
+    it('still gates on an in-scope offender', async () => {
+        const { failures } = await sweep(FIXTURES, { only: new Set([join(FIXTURES, 'missing-ext-pkg')]) });
+        expect(failures.map((f) => f.name)).toEqual(['fixture-missing-ext-pkg']);
+    });
+
+    it('does not report an out-of-scope offender — scoping is the caller\'s claim about blast radius', async () => {
+        // The point of the scope: a break in a package this PR did not rebuild is not this
+        // PR's to fail on. The unscoped sweep above proves the same tree DOES surface it.
+        const { results, failures } = await sweep(FIXTURES, { only: new Set([join(FIXTURES, 'ok-pkg')]) });
+        expect(failures).toEqual([]);
+        expect(results.map((r) => r.name)).not.toContain('fixture-missing-ext-pkg');
+    });
+
+    it('yields no results when the scope names only non-type:module packages', async () => {
+        const { results } = await sweep(FIXTURES, { only: new Set([join(FIXTURES, 'cjs-pkg')]) });
+        expect(results).toEqual([]);
+    });
 });
 
 describe('CLI', () => {
@@ -443,6 +466,50 @@ describe('CLI', () => {
     it('exits 0 when every checked package imports cleanly', async () => {
         const result = await run(process.execPath, [SCRIPT, join(FIXTURES, 'ok-pkg')]).catch((e) => e);
         expect(result.code ?? 0).toBe(0);
+    });
+
+    it('--scope-file limits the sweep, so an out-of-scope offender does not fail the run', async () => {
+        const scope = join(FIXTURES, 'scope-ok.txt');
+        writeFileSync(scope, `${join(FIXTURES, 'ok-pkg')}\n`);
+        try {
+            const result = await run(process.execPath, [SCRIPT, FIXTURES, `--scope-file=${scope}`]).catch((e) => e);
+            expect(result.code ?? 0).toBe(0);
+            expect(result.stdout).not.toContain('fixture-missing-ext-pkg');
+        } finally {
+            rmSync(scope, { force: true });
+        }
+    });
+
+    it('--scope-file still exits 1 when the offender IS in scope', async () => {
+        const scope = join(FIXTURES, 'scope-bad.txt');
+        writeFileSync(scope, `${join(FIXTURES, 'missing-ext-pkg')}\n`);
+        try {
+            const result = await run(process.execPath, [SCRIPT, FIXTURES, `--scope-file=${scope}`]).catch((e) => e);
+            expect(result.code).toBe(1);
+            expect(result.stdout + result.stderr).toContain('fixture-missing-ext-pkg');
+        } finally {
+            rmSync(scope, { force: true });
+        }
+    });
+
+    it('--scope-file naming no type:module package exits 0, NOT the unscoped exit-2 misconfiguration path', async () => {
+        // A PR touching only ng-packagr libraries produces exactly this. Scoping made zero
+        // results legitimate, so the "wrong path" hard failure must not fire here.
+        const scope = join(FIXTURES, 'scope-cjs.txt');
+        writeFileSync(scope, `${join(FIXTURES, 'cjs-pkg')}\n`);
+        try {
+            const result = await run(process.execPath, [SCRIPT, FIXTURES, `--scope-file=${scope}`]).catch((e) => e);
+            expect(result.code ?? 0).toBe(0);
+            expect(result.stdout).toContain('nothing to import');
+        } finally {
+            rmSync(scope, { force: true });
+        }
+    });
+
+    it('exits 2 when --scope-file points at a path that does not exist', async () => {
+        const result = await run(process.execPath, [SCRIPT, FIXTURES, '--scope-file=/nonexistent/scope.txt']).catch((e) => e);
+        expect(result.code).toBe(2);
+        expect(result.stderr).toContain('scope file not found');
     });
 
     it('exits 2 when the target contains zero type:module packages (misconfiguration / wrong path)', async () => {

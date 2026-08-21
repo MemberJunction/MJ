@@ -80,15 +80,6 @@ importers:
       '@changesets/cli':
         specifier: ^2.27.12
         version: 2.29.8(@types/node@24.10.11)
-      '@memberjunction/cli':
-        specifier: workspace:*
-        version: link:packages/MJCLI
-      '@memberjunction/integration-test-suite':
-        specifier: workspace:*
-        version: link:packages/TestingFramework/integration-test-suite
-      '@memberjunction/server-bootstrap-lite':
-        specifier: workspace:*
-        version: link:packages/ServerBootstrapLite
       '@playwright/test':
         specifier: ^1.58.1
         version: 1.58.1
@@ -246,6 +237,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/cli':
+        specifier: 6.1.0-edge.2
+        version: link:../../MJCLI
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -1193,6 +1187,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/cli':
+        specifier: 6.1.0-edge.2
+        version: link:../../MJCLI
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -11336,6 +11333,9 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
     devDependencies:
+      '@memberjunction/cli':
+        specifier: 6.1.0-edge.2
+        version: link:../MJCLI
       '@types/compression':
         specifier: ^1.8.1
         version: 1.8.1

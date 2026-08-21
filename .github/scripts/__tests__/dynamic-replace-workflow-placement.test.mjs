@@ -13,6 +13,12 @@ import { fileURLToPath } from 'node:url';
 //      skipped again on run 31848972923 when the unrelated Generic DOM coverage ratchet failed
 //      three steps earlier.
 //
+// The gate now lives in the install-free `quick-gates` job rather than in `test`, which serves
+// the same intent more strongly: a job with no build step cannot put the gate behind a build,
+// and a job with no `needs:` cannot be blocked by another job failing. So the assertions below
+// pin those PROPERTIES (no build in its job, no `needs:`, an explicit non-success() condition)
+// rather than an index within one particular job — the property is what kept regressing.
+//
 // A gate that reports "skipped" reads as "not applicable" on the PR page, not as "unknown" —
 // which is why both regressions survived review. Assert the shape here rather than trusting
 // the next person to re-derive it.
@@ -24,59 +30,63 @@ import { fileURLToPath } from 'node:url';
 const WORKFLOW = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'workflows', 'test.yml');
 
 const GUARD = 'Dynamic-replace guard';
-const BUILD = 'Build + run unit tests';
+const BUILD_STEPS = ['Build + run unit tests', 'Build', 'Build the packages to sweep'];
 
 /**
- * Split the `test` job's step list into `{ name, body }` records, in file order.
+ * Parse every job into `{ name, needs, steps: [{ name, body }] }`, in file order.
  *
  * Steps are the 6-space `      - name:` entries; a step's body runs to the next such entry.
- * Scanning stops at the next top-level job so the `coverage` job's steps can't leak in.
  */
-function readTestJobSteps() {
+function readJobs() {
     const lines = readFileSync(WORKFLOW, 'utf8').split('\n');
-    const steps = [];
-    let inTestJob = false;
-    let current = null;
+    const jobs = [];
+    let job = null;
+    let step = null;
+
+    const flushStep = () => { if (job && step) job.steps.push(step); step = null; };
 
     for (const line of lines) {
         const jobMatch = /^  ([A-Za-z0-9_-]+):\s*$/.exec(line);
         if (jobMatch) {
-            if (current) steps.push(current);
-            current = null;
-            inTestJob = jobMatch[1] === 'test';
+            flushStep();
+            job = { name: jobMatch[1], needs: null, steps: [] };
+            jobs.push(job);
             continue;
         }
-        if (!inTestJob) continue;
+        if (!job) continue;
+
+        const needsMatch = /^ {4}needs:\s*(.+?)\s*$/.exec(line);
+        if (needsMatch) { job.needs = needsMatch[1]; continue; }
 
         const stepMatch = /^ {6}- name: (.+?)\s*$/.exec(line);
-        if (stepMatch) {
-            if (current) steps.push(current);
-            current = { name: stepMatch[1], body: [] };
-            continue;
-        }
-        if (current) current.body.push(line);
+        if (stepMatch) { flushStep(); step = { name: stepMatch[1], body: [] }; continue; }
+        if (step) step.body.push(line);
     }
-    if (current) steps.push(current);
-    return steps;
+    flushStep();
+    return jobs;
 }
 
 describe('test.yml — dynamic-replace gate placement', () => {
-    const steps = readTestJobSteps();
-    const names = steps.map((s) => s.name);
+    const jobs = readJobs();
+    const owning = jobs.filter((j) => j.steps.some((s) => s.name === GUARD));
 
-    it('parses the test job into steps (guards the parser itself)', () => {
-        expect(names).toContain(GUARD);
-        expect(names).toContain(BUILD);
-        // The coverage job also has a "Build" step; make sure it was not swept in.
-        expect(names).not.toContain('Run tests with coverage');
+    it('parses the workflow into jobs and steps (guards the parser itself)', () => {
+        expect(jobs.map((j) => j.name)).toEqual(expect.arrayContaining(['quick-gates', 'test', 'coverage']));
+        expect(owning, `exactly one job must own "${GUARD}"`).toHaveLength(1);
     });
 
-    it('runs the gate before the build, not after it', () => {
-        expect(names.indexOf(GUARD)).toBeLessThan(names.indexOf(BUILD));
+    it('runs the gate in a job that has no build step, so it can never sit behind one', () => {
+        const names = owning[0].steps.map((s) => s.name);
+        const builds = names.filter((n) => BUILD_STEPS.includes(n));
+        expect(builds, `"${GUARD}" shares a job with ${builds.join(', ')} — it would run behind the build again`).toEqual([]);
+    });
+
+    it('runs the gate in a job nothing can block', () => {
+        expect(owning[0].needs, `"${GUARD}"'s job must not declare needs: — a failing dependency would skip it`).toBeNull();
     });
 
     it('runs the gate even when an earlier step has already failed', () => {
-        const guard = steps.find((s) => s.name === GUARD);
+        const guard = owning[0].steps.find((s) => s.name === GUARD);
         const condition = guard.body.map((l) => /^ {8}if:\s*(.+?)\s*$/.exec(l)?.[1]).find(Boolean);
 
         // The default (`if: success()`) is what silenced it — anything relying on every
