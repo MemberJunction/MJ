@@ -14,5 +14,12 @@
       }
     }
   },
-  "lines": {}
+  "lines": {
+    "5.51": {
+      "status": "candidate",
+      "candidateDate": "2026-07-31",
+      "supportEnds": "2027-02-14",
+      "upgradeImpact": "none"
+    }
+  }
 }
