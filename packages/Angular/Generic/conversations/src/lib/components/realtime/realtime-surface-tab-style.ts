@@ -10,26 +10,53 @@
 /**
  * Whether a channel name denotes the live WHITEBOARD channel (case-insensitive, trimmed).
  *
- * The whiteboard is the ONE channel whose surface tab appears immediately at session start
- * — a user can be the first to draw on it, whereas every other channel only earns its tab
- * once the agent actually USES it. Detection is by name (the registry `Name` / plugin
- * `ChannelName`) rather than a flag so a deployment can't accidentally opt a non-board
- * channel into the immediate-tab behavior.
+ * The whiteboard is the channel MJ tabs up front by DEFAULT — a user can be the first to draw on
+ * it, whereas every other channel only earns its tab once the agent actually uses it. That default
+ * is a good one, and a deployment that disagrees now says so via `tabUpFrontChannels`
+ * ({@link ShouldRegisterChannelTabUpFront}) rather than being stuck with it.
  */
 export function IsWhiteboardChannel(channelName: string | null | undefined): boolean {
-  return (channelName ?? '').trim().toLowerCase() === 'whiteboard';
+  return NormalizeChannelName(channelName) === 'whiteboard';
+}
+
+/** The comparable form of a channel name — trimmed and lowercased, in exactly one place. */
+export function NormalizeChannelName(channelName: string | null | undefined): string {
+  return (channelName ?? '').trim().toLowerCase();
 }
 
 /**
- * Whether a channel should get its surface tab registered UP FRONT (at the
- * registry-resolved emission) rather than waiting for first use.
+ * Whether a channel should get its surface tab registered UP FRONT (at the registry-resolved
+ * emission) rather than waiting for first use.
  *
- * True only for the whiteboard (see {@link IsWhiteboardChannel}) OR a channel the agent has
- * already used this session (`hasBeenUsed`). Every other channel stays tab-less until its
- * first activity registers it — keeping the strip decluttered to the surfaces actually in play.
+ * **A channel already in use always gets its tab**, whatever the deployment configured — a surface
+ * the agent is driving with no tab on screen is not a decluttered strip, it is a hidden surface.
+ *
+ * `tabUpFrontChannels` is the deployment's answer for everything else:
+ *
+ *  - **omitted / `null`** — MJ's default: the whiteboard tabs up front, nothing else does. This is
+ *    exactly the previous behaviour, so no existing deployment changes.
+ *  - **an array** — the COMPLETE list of channels that tab up front, replacing the default rather
+ *    than adding to it. `[]` therefore means "no surface until something uses it", which is the
+ *    voice-first interview case: a session opens on the agent talking, nobody is going to draw
+ *    first, and a blank board sitting there makes the product read as a tool with a canvas bolted
+ *    on rather than a conversation that can produce one.
+ *
+ * A design-review session wants the opposite of that interview, and both are legitimate — which is
+ * why this is configuration rather than a different hardcoded answer.
  */
-export function ShouldRegisterChannelTabUpFront(channelName: string, hasBeenUsed: boolean): boolean {
-  return IsWhiteboardChannel(channelName) || hasBeenUsed;
+export function ShouldRegisterChannelTabUpFront(
+  channelName: string,
+  hasBeenUsed: boolean,
+  tabUpFrontChannels?: readonly string[] | null,
+): boolean {
+  if (hasBeenUsed) {
+    return true;
+  }
+  if (tabUpFrontChannels === null || tabUpFrontChannels === undefined) {
+    return IsWhiteboardChannel(channelName);
+  }
+  const wanted = NormalizeChannelName(channelName);
+  return wanted.length > 0 && tabUpFrontChannels.some((name) => NormalizeChannelName(name) === wanted);
 }
 
 /**

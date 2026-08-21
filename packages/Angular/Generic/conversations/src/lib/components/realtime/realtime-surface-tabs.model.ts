@@ -1,7 +1,7 @@
 import { Subject } from 'rxjs';
 import type { TemplateRef } from '@angular/core';
 import type { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
-import { ChannelTabColor } from './realtime-surface-tab-style';
+import { ChannelTabColor, IsWhiteboardChannel } from './realtime-surface-tab-style';
 
 /**
  * The kind of a surface-panel tab:
@@ -294,5 +294,5 @@ export function ShouldRemoveReviewWhiteboardTab(
   if (!liveSessionActive || !reviewWhiteboardTabRegistered) {
     return false;
   }
-  return !liveChannels.some(c => c.ChannelName?.trim().toLowerCase() === 'whiteboard');
+  return !liveChannels.some(c => IsWhiteboardChannel(c.ChannelName));
 }

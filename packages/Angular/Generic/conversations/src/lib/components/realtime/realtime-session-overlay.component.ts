@@ -136,6 +136,22 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @Input() Hidden = false;
 
+  /**
+   * Which channels get a surface tab at session start, before anything has used them (#3599).
+   *
+   * `null` (the default) keeps MJ's answer: the whiteboard tabs up front, nothing else does. Bind an
+   * array to replace that entirely — `[]` means no surface appears until something uses one, which
+   * is what a voice-first session wants (nobody is going to draw first, and a blank board makes the
+   * product read as a tool with a canvas bolted on). A design-review session wants the opposite, and
+   * both are legitimate, so this is the deployment's call rather than a compiled-in one.
+   *
+   * A channel the agent has already used ALWAYS gets its tab, whatever is bound here — a surface
+   * being driven with no tab on screen is a hidden surface, not a decluttered strip.
+   *
+   * Read when the session's channels resolve, so bind it before the call starts.
+   */
+  @Input() TabUpFrontChannels: string[] | null = null;
+
   /** Display name of the agent the voice session fronts (e.g. "Sage"). */
   @Input()
   set AgentName(value: string) {
@@ -1390,8 +1406,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       if (!plugin.HasSurface()) {
         continue; // server-only channel — no surface to tab.
       }
-      if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.realtime.HasChannelBeenUsed(plugin.ChannelName))) {
-        continue; // not the whiteboard and not used yet — it earns its tab on first activity.
+      if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.realtime.HasChannelBeenUsed(plugin.ChannelName), this.TabUpFrontChannels)) {
+        continue; // not configured to tab up front and not used yet — it earns its tab on first activity.
       }
       this.registerPluginChannelTab(plugin);
     }
