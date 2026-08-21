@@ -928,7 +928,7 @@ export abstract class BaseEntity<T = unknown> {
      * the same rules a second time — which would double whatever query an application's
      * `ValidateDeleteAsync` performs.
      *
-     * @see validateAndDeleteGraph
+     * @see deleteGraph
      */
     private _deleteValidated: boolean = false;
 
@@ -1962,7 +1962,7 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Runs a multi-record delete as one unit of work.
+     * Validates a multi-record delete, then runs it as one unit of work.
      *
      * Unlike the save path there is no remote counterpart: a delete graph carries no state that
      * needs rebuilding server-side, so on a client provider the nodes execute in order over
@@ -1970,33 +1970,23 @@ export abstract class BaseEntity<T = unknown> {
      * committed. Callers needing an atomic multi-record delete from the browser should expose a
      * dedicated remote operation, which is also what MJ's own cascade-delete tooling does.
      *
-     * @param plan - The planned unit of work, children first.
-     * @param options - Delete options forwarded to every node.
-     * @returns True when the whole graph completed.
-     */
-    private async deleteGraph(plan: EntitySavePlan, options?: EntityDeleteOptions): Promise<boolean> {
-        this.RaiseEvent('graph_save_started', { NodeCount: plan.NodeCount, Operation: 'Delete' });
-        return this.executeGraphLocal(plan, undefined, options, 'delete');
-    }
-
-    /**
-     * Validates an entire delete plan, then executes it.
-     *
-     * Delete plans run **children first** — the foreign keys point at the row about to disappear —
-     * so validating each node when its turn came would mean a refusal discovered by the ROOT had
-     * already deleted every child. Inside a provider transaction that rolls back; on a client
-     * provider `executeGraphLocal` holds no transaction at all, so it is permanent. The refusal
+     * **Validation happens here, over the whole plan, before the first row goes** — the mirror image
+     * of `saveGraph`, which needs no such pass because its root node runs FIRST and validates the
+     * graph on the way through. A delete plan is the other way round: children are contributed
+     * first, because the foreign keys point at the row about to disappear. Validating each node when
+     * its turn came would therefore mean a refusal raised by the ROOT had already deleted every
+     * child — and per the paragraph above there may be no transaction to undo that. The refusal
      * would cost exactly the data it existed to protect.
      *
-     * So every node is validated up front, all errors are collected (a user should see everything
-     * blocking the delete, not the first thing found), and the nodes are flagged so the per-record
-     * gate in `_InnerDelete` does not re-run rules that may each carry a query.
+     * Each node's permissions are checked before its rules, matching the order `_InnerDelete` uses
+     * for a single record, and the nodes are flagged so that gate does not re-run rules that may
+     * each carry a query.
      *
      * @param plan - The planned unit of work, children first.
      * @param options - Delete options forwarded to every node.
      * @returns True when the whole graph completed; false when validation refused it or it failed.
      */
-    private async validateAndDeleteGraph(plan: EntitySavePlan, options?: EntityDeleteOptions): Promise<boolean> {
+    private async deleteGraph(plan: EntitySavePlan, options?: EntityDeleteOptions): Promise<boolean> {
         const startedAt = new Date();
         const _options: EntityDeleteOptions = options ? options : new EntityDeleteOptions();
         // Distinct entities only: a plan can legitimately name the same record twice (a child both
@@ -2025,25 +2015,26 @@ export abstract class BaseEntity<T = unknown> {
             // contract for exactly this path, the same hazard `executeGraphLocal` documents for its
             // transaction begin. Nothing has been deleted yet, so there is nothing to roll back.
             const detail = e instanceof Error ? e.message : String(e);
-            LogError(`BaseEntity.validateAndDeleteGraph: delete validation failed for ${this.EntityInfo?.Name}: ${detail}`);
+            LogError(`BaseEntity.deleteGraph: delete validation failed for ${this.EntityInfo?.Name}: ${detail}`);
             combined.Success = false;
             combined.Errors.push(new ValidationErrorInfo(this.EntityInfo?.Name ?? 'Delete', detail, null));
         }
         if (!combined.Success) {
-            // No `graph_save` event: nothing started, so `graph_save_started` never fired and a
-            // completion event with no beginning would be worse than silence. The refusal is on the
-            // result history, exactly where the single-record path leaves it.
+            // Returning before `graph_save_started`: nothing started, and a completion event with no
+            // beginning would be worse than silence. The refusal lands on the result history, exactly
+            // where the single-record path leaves it.
             this.registerDeleteValidationFailure(combined, startedAt);
             return false;
         }
 
         nodes.forEach(node => node._deleteValidated = true);
         try {
-            return await this.deleteGraph(plan, _options);
+            this.RaiseEvent('graph_save_started', { NodeCount: plan.NodeCount, Operation: 'Delete' });
+            return await this.executeGraphLocal(plan, undefined, _options, 'delete');
         }
         finally {
-            // Cleared unconditionally: a retried delete after a failed graph must validate again,
-            // and an entity left flagged would silently skip its own rules forever.
+            // Cleared unconditionally: a retried delete after a failed graph must validate again, and an
+            // entity left flagged would silently skip its own rules forever.
             nodes.forEach(node => node._deleteValidated = false);
         }
     }
@@ -4559,7 +4550,7 @@ export abstract class BaseEntity<T = unknown> {
         if (this.HasCompanions) {
             const plan = this.BuildDeletePlan();
             if (plan.NodeCount > 1) {
-                return this.validateAndDeleteGraph(plan, options);
+                return this.deleteGraph(plan, options);
             }
         }
 
