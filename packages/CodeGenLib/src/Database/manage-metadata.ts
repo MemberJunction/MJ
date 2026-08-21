@@ -5899,7 +5899,6 @@ export class ManageMetadataBase {
                LogError(`   >>>> WARNING: Entity name already exists, so using ${newEntityName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
             }
 
-            const isNewSchema = await this.isSchemaNew(pool, newEntity.SchemaName);
             const newEntityID = this.createNewUUID();
             const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix, newEntityDisplayName);
             await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
@@ -5909,51 +5908,26 @@ export class ManageMetadataBase {
             // add it to the new entity list
             ManageMetadataBase.newEntityList.push(newEntityName);
 
-            // next, check if this entity is in a schema that is new (e.g. no other entities have been added to this schema yet), if so and if
-            // our config option is set to create new applications from new schemas, then create a new application for this schema
-            let apps: string[] | null;
-            if (isNewSchema && configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
-               // new schema and config option is to create a new application from the schema name so do that
-
-               // check to see if the app already exists
-               apps = await this.getApplicationIDForSchema(pool, newEntity.SchemaName);
-               if (!apps || apps.length === 0) {
-                  // doesn't already exist, so create it
-                  const appUUID = this.createNewUUID();
-                  const newAppID = await this.createNewApplication(pool, appUUID, newEntity.SchemaName, newEntity.SchemaName, currentUser);
-                  if (newAppID) {
-                     apps = [newAppID];
-                  }
-                  else {
-                     LogError(`   >>>> ERROR: Unable to create new application for schema ${newEntity.SchemaName}`);
-                  }
-                  await md.Refresh(); // refresh now since we've added a new application, not super efficient to do this for each new application but that won't happen super
-                                      // often so not a huge deal, would be more efficient do this in batch after all new apps are created but that would be an over optimization IMO
-               }
-            }
-            else {
-               // not a new schema, attempt to look up the application for this schema
-               apps = await this.getApplicationIDForSchema(pool, newEntity.SchemaName);
-            }
-
-            if (apps && apps.length > 0) {
-               if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
-                  // only do this if the configuration setting is set to add new entities to applications for schema names
-                  for (const appUUID of apps) {
-                     const sSQLInsertApplicationEntity = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationEntity')}
-                                       (${this.qi('ApplicationID')}, ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
-                     await this.LogSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
-                  }
-               }
-               else {
-                  // this is NOT an error condition, we do have an application UUID, but the configuration setting is to NOT add new entities to applications for schema names
-               }
-            }
-            else {
-               // this is an error condition, we should have an application for this schema, if we don't, log an error, non fatal, but should be logged
-               LogError(`   >>>> ERROR: Unable to add new entity ${newEntityName} to an application because no Application has SchemaAutoAddNewEntities='${newEntity.SchemaName}'. To fix this, update an existing Application record or create a new one with SchemaAutoAddNewEntities='${newEntity.SchemaName}'.`);
-            }
+            // Resolve (and if necessary create) the schema's Application, then map this entity to it.
+            //
+            // This was gated on `isSchemaNew()`, which is
+            //    SELECT COUNT(*) FROM Entity WHERE SchemaName = X   ->   === 0
+            // evaluated a few statements ABOVE the INSERT that adds this very entity, with no
+            // transaction spanning the two. That made Application creation a one-shot window: once
+            // any Entity row existed for the schema the flag was false forever, and the else-branch
+            // only LOOKED UP an application - it never created one. A schema whose entities were
+            // registered by anything other than this method (RuntimeSchemaUpdate registers connector
+            // entities directly) could therefore never acquire an Application, and no re-run repaired it.
+            //
+            // Observed: a connector schema with 27 entities, 0 Applications and 0 ApplicationEntity
+            // rows, with CreateNewApplicationWithSchemaName=true set correctly throughout. Its entities
+            // sat in the UI's "System & Other" bucket - where every entity with no ApplicationEntity
+            // row goes - and nothing could move them out.
+            //
+            // `addEntityToApplicationForSchema` is the same logic without the latch: look up, create if
+            // absent, map. The virtual-entity and query paths already call it, so this removes a
+            // divergent second implementation rather than adding a third.
+            await this.addEntityToApplicationForSchema(pool, newEntityID, newEntityName, newEntity.SchemaName, currentUser);
 
             // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
             if (configInfo.newEntityDefaults.PermissionDefaults && configInfo.newEntityDefaults.PermissionDefaults.AutoAddPermissionsForNewEntities) {
@@ -5989,6 +5963,18 @@ export class ManageMetadataBase {
       }
    }
 
+   /**
+    * True when no Entity row yet carries this schema name.
+    *
+    * @deprecated Do not use this to decide whether to CREATE something. It reports a
+    * transient condition — "no entity has been registered for this schema yet" — that any
+    * writer can end permanently, including callers outside CodeGen (RuntimeSchemaUpdate
+    * registers connector entities directly). Gating Application creation on it produced a
+    * one-shot window that, once missed, no re-run could reopen: schemas ended up with
+    * entities and no Application, and the fallback path only looked one up rather than
+    * creating it. Use {@link addEntityToApplicationForSchema}, which looks up then creates
+    * on every call and is therefore safe to run repeatedly.
+    */
    protected async isSchemaNew(pool: CodeGenConnection, schemaName: string): Promise<boolean> {
       // check to see if there are any entities in the db with this schema name
       // Quote the alias so PostgreSQL preserves PascalCase (unquoted aliases are lowercased in PG)
