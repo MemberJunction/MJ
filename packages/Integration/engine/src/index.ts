@@ -124,6 +124,8 @@ export type { PersistSchemaOptions, PersistSchemaResult } from './IntegrationSch
 // ── Restored module exports dropped by the origin/next index.ts merge (union) ──
 export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
 export { CUSTOM_OVERFLOW_COLUMN, computeUnmappedFields, hasUnmappedFields, foldCustomKeyStats, CUSTOM_KEY_SAMPLE_CAP } from './CustomOverflow.js';
+export { SYNC_DIRECTIVE_CONFIG_KEY, ReadFieldSyncDirective, WriteFieldSyncDirective, ComputeExcludedSourceNames, StripExcludedFields } from './SyncDirectives.js';
+export type { FieldSyncDirective, FieldWithConfiguration } from './SyncDirectives.js';
 export type { CustomKeyAccumulator } from './CustomOverflow.js';
 export { planPromotions, planColumnReclamations, inferColumnTypeFromSamples, inferColumnTypeFromStats, buildOverflowStats, sanitizeColumnName } from './CustomColumnPromotion.js';
 export { discoverFromStream, pickPrimaryKeyFromStats } from './StreamingDiscovery.js';
