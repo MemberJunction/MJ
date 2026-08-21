@@ -311,6 +311,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    */
   private audioStreaming = false;
 
+  /**
+   * The last URL the agent was TOLD about, so an unchanged page is not re-announced (#3496). `null`
+   * until the first sighting, which is deliberately announced as a plain "current page" rather than
+   * as somebody else navigating — the first page of a session was nobody's takeover.
+   */
+  private lastNotedUrl: string | null = null;
+
   /** The client-side audio player fed pushed chunks while {@link audioStreaming}; `null` until started. */
   private audioPlayer: RemoteBrowserAudioPlayer | null = null;
 
@@ -421,11 +428,18 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * when a `RemoteBrowserScreencastFrame` arrives on the push-status stream for THIS session. No-op when
    * the channel isn't streaming or has no bound surface (e.g. the tab pane is collapsed).
    *
+   * Under streaming the surface's snapshot poll is stopped, so this is the ONLY thing that sees the
+   * page while frames are being pushed — which is why the frame now carries the URL (#3496). Without
+   * it, a user navigating during a screencast changed the picture and nothing else: the agent kept
+   * describing the page it last opened, and the pixels proving otherwise were right there on screen.
+   *
    * @param dataBase64 The frame image as raw base64 JPEG (no `data:` prefix).
+   * @param currentUrl The browser's URL when the frame was captured; absent from older servers.
    */
-  public OnScreencastFrame(dataBase64: string): void {
+  public OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void {
     if (this.streaming) {
       this.surface?.RenderFrame(dataBase64);
+      this.notePageChange(currentUrl, 'observed');
     }
   }
 
@@ -553,6 +567,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * Fetches one live snapshot of the server browser for the surface — the PERCEPTION poll.
    * Best-effort by contract ({@link RemoteBrowserSnapshotFetcher}): returns `null` when no
    * session is live or the query fails (the surface keeps its last good frame).
+   *
+   * Also the channel's chance to NOTICE a page change it did not cause (#3496): the poll already
+   * carries the URL, and until now only the surface read it.
    */
   private async fetchSnapshot(): Promise<RemoteBrowserSnapshotView | null> {
     const sessionId = this.Context?.AgentSessionID;
@@ -560,7 +577,52 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       return null;
     }
     const data = await this.Context?.ExecuteServerAction<RemoteBrowserSnapshotResult>(REMOTE_BROWSER_SNAPSHOT_QUERY, { agentSessionID: sessionId });
-    return data?.RemoteBrowserSnapshot ?? null;
+    const snapshot = data?.RemoteBrowserSnapshot ?? null;
+    this.notePageChange(snapshot?.CurrentUrl ?? null, 'observed');
+    return snapshot;
+  }
+
+  /**
+   * The ONE place the agent is told where the page is (#3496).
+   *
+   * Before this, the `[browser] current page:` note was pushed from exactly two call sites, both
+   * immediately after a server action the MODEL itself initiated. That placement — not any caching —
+   * was the bug: **a surface change the agent did not cause was invisible to it.** A user taking over
+   * and navigating produced no note, so the agent went on confidently describing the previous page,
+   * and only corrected when told to look again. Human takeover is on by default for `Collaborative`
+   * providers, so the default configuration was the broken one.
+   *
+   * Routing every observation through here makes the rule "the agent hears about the page whenever it
+   * MOVES, whoever moved it" — a property of this method rather than of where callers happen to be.
+   *
+   * `cause` is what the agent could never work out for itself. An `'agent'` change is one this
+   * channel just performed; anything spotted by the perception poll or a pushed frame is
+   * `'observed'` — someone else is driving, and saying so is the difference between the agent
+   * knowing the page moved and knowing it is no longer the one moving it.
+   *
+   * Silent when the URL has not changed, which is not an optimisation but a requirement: the
+   * perception poll runs every ~700ms and an unconditional note would bury the conversation in
+   * hundreds of identical lines.
+   */
+  private notePageChange(url: string | null | undefined, cause: 'agent' | 'observed'): void {
+    const next = (url ?? '').trim();
+    if (next.length === 0) {
+      return;
+    }
+    // The live-view bar is refreshed even when the URL is unchanged: it is idempotent, and in
+    // streaming mode it is the only thing keeping the bar off "No page loaded yet".
+    this.surface?.SetCurrentUrl(next);
+    if (next === this.lastNotedUrl) {
+      return;
+    }
+    const firstSighting = this.lastNotedUrl === null;
+    this.lastNotedUrl = next;
+    this.Context?.SendContextNote(
+      cause === 'agent' || firstSighting
+        ? `[browser] current page: ${next}`
+        : `[browser] the page changed to: ${next} — you did not navigate here, so someone else is driving. `
+          + `Describe THIS page, not the one you last opened.`,
+    );
   }
 
   /**
@@ -621,13 +683,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       return this.fail(result.Detail ?? 'The browser action failed.');
     }
 
-    if (result.CurrentUrl) {
-      // PERCEPTION: tell the agent where the page is now (background — no spoken reply).
-      this.Context?.SendContextNote(`[browser] current page: ${result.CurrentUrl}`);
-      // In streaming mode the surface's snapshot poll (which carries the URL) is stopped, so push the new
-      // URL to the live-view bar directly — otherwise it stays stuck on "No page loaded yet".
-      this.surface?.SetCurrentUrl(result.CurrentUrl);
-    }
+    // PERCEPTION: tell the agent where the page is now (background — no spoken reply), and refresh
+    // the live-view bar, which in streaming mode has no poll feeding it.
+    this.notePageChange(result.CurrentUrl, 'agent');
     return this.ok(result.CurrentUrl, result.Detail);
   }
 
@@ -687,10 +745,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     if (!result) {
       return this.fail('The browser goal is taking longer than expected and could not be confirmed. It may still be running.');
     }
-    if (result.CurrentUrl) {
-      this.Context?.SendContextNote(`[browser] current page: ${result.CurrentUrl}`);
-      this.surface?.SetCurrentUrl(result.CurrentUrl);
-    }
+    this.notePageChange(result.CurrentUrl, 'agent');
     if (!result.Success) {
       return this.fail(result.Detail ?? `The goal could not be completed (${result.Status ?? 'unknown'}).`);
     }

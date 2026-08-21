@@ -508,7 +508,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
       const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName);
-      await liveSession.StartScreencast((frame) => this.publishFrame(pubSub, userPayload, agentSessionID, frame));
+      await liveSession.StartScreencast((frame) =>
+        this.publishFrame(pubSub, userPayload, agentSessionID, frame, liveSession.GetCurrentUrl()),
+      );
       this.startedScreencasts.add(agentSessionID);
       return { Streaming: true };
     } catch (err) {
@@ -749,11 +751,18 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     userPayload: UserPayload,
     agentSessionID: string,
     frame: { DataBase64: string; Width: number; Height: number; SequenceNumber: number },
+    currentUrl?: string | null,
   ): void {
     this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserScreencastFrame',
       agentSessionID,
+      // WHERE the page was when this frame was captured (#3496). Under streaming the client's
+      // snapshot poll — the only other thing carrying the URL — is stopped, so without this a user
+      // navigating mid-screencast changes the picture and nothing else, and the agent keeps
+      // describing the page it last opened. `GetCurrentUrl()` is the session's last-known URL, a
+      // synchronous read, so this costs nothing per frame.
+      currentUrl: currentUrl ?? null,
       dataBase64: frame.DataBase64,
       width: frame.Width,
       height: frame.Height,
