@@ -262,6 +262,21 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   }
 
   /**
+   * What is on the board right now, for the surface roster (#3497) — deliberately a count and not
+   * the scene. The model already receives coalesced scene deltas as it watches; the roster answers
+   * the different question "is there anything on the board at all", which is what it used to guess.
+   */
+  public override DescribeState(): string | null {
+    const items = this.State.Items.length;
+    const pages = this.State.Pages.length;
+    if (items === 0) {
+      return pages > 1 ? `empty, ${pages} pages` : 'empty';
+    }
+    const drawn = items === 1 ? '1 item' : `${items} items`;
+    return pages > 1 ? `${drawn} across ${pages} pages` : drawn;
+  }
+
+  /**
    * Rehydrates a prior session's saved board into THIS session's state engine (in place —
    * the {@link State} instance and its subscriptions are preserved). Returns `true` on
    * success; malformed / incompatible JSON returns `false` and the board stays fresh

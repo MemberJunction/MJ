@@ -6,6 +6,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import { DescribeChannelRoster, RealtimeChannelRosterEntry } from '../components/realtime/realtime-channel-roster';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
@@ -265,6 +266,16 @@ export class RealtimeSessionService {
   private _modelName$ = new BehaviorSubject<string | null>(null);
   private _minimized$ = new BehaviorSubject<boolean>(false);
   private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
+
+  /** The channel currently owning the screen (channel focus mode), or `null` when none is (#3497). */
+  private focusedChannelName: string | null = null;
+
+  /**
+   * The last roster line the model was told, so an unchanged roster is not re-announced. Same
+   * discipline the page-change note uses: a fact repeated verbatim costs context and teaches the
+   * model nothing.
+   */
+  private lastRosterNote: string | null = null;
   private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
   // ─── Generic session-lifecycle events (consumed by RealtimeSessionsAdapter to
   // bridge into @memberjunction/conversations-runtime's framework-agnostic
@@ -738,6 +749,11 @@ export class RealtimeSessionService {
         sessionId: this.agentSessionId,
         channelNames: this._activeChannels$.value.map(c => c.ChannelName),
       });
+
+      // Tell the model what surfaces it actually has (#3497). Here and not in startChannels():
+      // SendContextNote is a no-op until the session is live, and the moment the model most needs
+      // the roster is its FIRST — before it has answered anything from a guess.
+      this.announceChannelRoster();
     } catch (error) {
       console.error('[RealtimeSession] Failed to start session:', error);
       this._connectionState$.next('error');
@@ -1027,6 +1043,8 @@ export class RealtimeSessionService {
     }
     this._activeChannels$.next(channels);
     return channels.flatMap(plugin => plugin.GetToolDefinitions());
+    // NOTE: the roster is announced AFTER the session is live (see the mint path) — SendContextNote
+    // is a no-op before then, and the one moment the model most needs the roster is its first.
   }
 
   /**
@@ -1127,7 +1145,11 @@ export class RealtimeSessionService {
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
-      SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on }),
+      SetFocusMode: (on: boolean) => {
+        this.focusedChannelName = on ? plugin.ChannelName : null;
+        this._channelFocus$.next({ Channel: plugin, Focused: on });
+        this.announceChannelRoster();
+      },
       // Live session id + GraphQL escape hatch for SERVER-BACKED channels (e.g. Remote
       // Browser). `get` so a channel always reads the CURRENT id — it's null at Initialize
       // (the plugin is built before mintSession resolves) and set once the session is live.
@@ -1347,6 +1369,68 @@ export class RealtimeSessionService {
     }
   }
 
+  /**
+   * The live surface roster (#3497) — which channels are actually open, and what each holds.
+   *
+   * Public because the roster is a READ the host (and, once a session-level tool route exists, the
+   * agent itself) should be able to take at any moment. The pushed note below is a snapshot; a
+   * channel's contents keep changing after it is sent, and this is how you get the current answer
+   * rather than the last announced one.
+   */
+  public get ChannelRoster(): RealtimeChannelRosterEntry[] {
+    return this._activeChannels$.value.map(plugin => ({
+      ChannelName: plugin.ChannelName,
+      TabTitle: plugin.TabTitle,
+      HasSurface: plugin.HasSurface(),
+      Focused: plugin.ChannelName === this.focusedChannelName,
+      State: this.describeChannelSafely(plugin),
+    }));
+  }
+
+  /** The roster as the one line the model reads. See `DescribeChannelRoster` for the wording rules. */
+  public DescribeChannelRoster(): string {
+    return DescribeChannelRoster(this.ChannelRoster);
+  }
+
+  /**
+   * Asks a channel to describe itself, containing any failure.
+   *
+   * A channel that throws while describing itself must not take out the roster — the roster's whole
+   * job is to stop the model guessing, and one broken description would put every OTHER surface back
+   * into the dark.
+   */
+  private describeChannelSafely(plugin: BaseRealtimeChannelClient): string | null {
+    try {
+      return plugin.DescribeState();
+    } catch (error) {
+      console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' DescribeState threw — omitting its summary:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Tells the model what surfaces it has, when that answer CHANGES (#3497).
+   *
+   * Pushed rather than offered as a read tool, and that is the point: the failure being fixed is a
+   * model that does not know it should ask. It infers a browser exists from having `browser_*` tools
+   * and answers from that inference. A tool it never calls would leave the guess in place.
+   *
+   * Sent on membership and focus changes only — not on every stroke or navigation. Per-channel
+   * contents move constantly, and a note per change would drown the conversation; what the model
+   * could not previously work out at all is which surfaces EXIST.
+   *
+   * Silent when the composed line is unchanged, so a refresh triggered by something that did not
+   * actually alter the roster costs nothing.
+   */
+  private announceChannelRoster(): void {
+    const note = this.DescribeChannelRoster();
+    if (note === this.lastRosterNote) {
+      return;
+    }
+    this.lastRosterNote = note;
+    this.SendContextNote(note);
+  }
+
   /** Disposes all channel plugins (errors contained per plugin) and clears the live set. */
   private disposeChannels(): void {
     for (const plugin of this._activeChannels$.value) {
@@ -1360,6 +1444,8 @@ export class RealtimeSessionService {
       this._activeChannels$.next([]);
     }
     this.usedChannelNames.clear();
+    this.focusedChannelName = null;
+    this.lastRosterNote = null;
   }
 
   // ── Realtime client resolution + wiring ────────────────────────────────────
