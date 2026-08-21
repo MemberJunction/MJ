@@ -197,12 +197,16 @@ Respond in JSON format:
         const actualStr = JSON.stringify(input.actualOutput, null, 2);
         const criteriaStr = criteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
 
-        // Replace placeholders
+        // Replace placeholders. Function replacements throughout: these are test
+        // inputs, expected values and actual outputs, all of which routinely
+        // contain `$` — and a string replacement would expand `$&`/`` $` ``/`$'`,
+        // silently feeding the judge a prompt that differs from the data under
+        // test. See issue #3171.
         return template
-            .replace('{{input}}', inputStr)
-            .replace('{{expected}}', expectedStr)
-            .replace('{{actual}}', actualStr)
-            .replace('{{criteria}}', criteriaStr);
+            .replace('{{input}}', () => inputStr)
+            .replace('{{expected}}', () => expectedStr)
+            .replace('{{actual}}', () => actualStr)
+            .replace('{{criteria}}', () => criteriaStr);
     }
 
     /**

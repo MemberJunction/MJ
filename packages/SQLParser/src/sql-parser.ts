@@ -1988,7 +1988,13 @@ export class SQLParser {
         for (const [alias, originalBracketed] of aliasMap) {
             out = out.split(`[${alias}]`).join(originalBracketed);
             out = out.split('`' + alias + '`').join(originalBracketed);
-            out = out.replace(new RegExp(`\\b${alias}\\b`, 'g'), originalBracketed);
+            // Function replacement, not a string. `originalBracketed` is the caller's
+            // own identifier, and the aliasing path above fires precisely BECAUSE it
+            // contains a non-word character — `$` being one. As a string replacement
+            // `$$`/`$&`/`` $` ``/`$'` in it were expanded rather than inserted, so
+            // `[a$'b]` spliced the surrounding SQL into the identifier. The two
+            // `split`/`join` branches above were already immune. See issue #3171.
+            out = out.replace(new RegExp(`\\b${alias}\\b`, 'g'), () => originalBracketed);
         }
         return out;
     }

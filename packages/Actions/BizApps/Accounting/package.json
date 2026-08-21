@@ -22,7 +22,7 @@
     "dynamics"
   ],
   "author": "MemberJunction",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/actions": "6.1.0-edge.2",
     "@memberjunction/actions-base": "6.1.0-edge.2",

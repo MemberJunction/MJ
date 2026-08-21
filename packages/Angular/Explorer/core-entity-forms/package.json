@@ -15,7 +15,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
@@ -51,6 +51,7 @@
     "@memberjunction/ng-entity-relationship-diagram": "6.1.0-edge.2",
     "@memberjunction/ng-entity-viewer": "6.1.0-edge.2",
     "@memberjunction/ng-flow-editor": "6.1.0-edge.2",
+    "@memberjunction/ng-hierarchy-tree": "6.1.0-edge.2",
     "@memberjunction/ng-join-grid": "6.1.0-edge.2",
     "@memberjunction/ng-link-directives": "6.1.0-edge.2",
     "@memberjunction/ng-list-management": "6.1.0-edge.2",
@@ -79,7 +80,8 @@
     "rete-connection-plugin": "^2.0.5",
     "rete-render-utils": "^2.0.3",
     "rxjs": "~7.8.2",
-    "tslib": "^2.8.1"
+    "tslib": "^2.8.1",
+    "zod": "^3.25.0"
   },
   "sideEffects": true,
   "repository": {

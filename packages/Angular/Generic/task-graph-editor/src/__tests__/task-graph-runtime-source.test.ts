@@ -129,3 +129,41 @@ describe('SummarizeRuntime', () => {
         expect(SummarizeRuntime({ a: 'Complete' }, ['a'])).toContain('1 step —');
     });
 });
+
+/**
+ * `Skipped` and the silent default.
+ *
+ * `NormalizeRuntimeState` fell back to `Pending` for anything it did not recognise, and it did not
+ * recognise `Skipped` — so a branch the workflow declined was reported to the canvas as STILL
+ * WAITING TO RUN. That is not a near-miss, it is the opposite of the truth, and every consumer
+ * believed it: the node drew as an ordinary pending step, the edges into and out of it drew as live
+ * routes, and a settled graph could never satisfy `IsRuntimeSettled`.
+ */
+describe('a branch that was not taken', () => {
+    it('is carried through as Skipped, not flattened to Pending', () => {
+        expect(NormalizeRuntimeState('Skipped')).toBe('Skipped');
+    });
+
+    it('still falls back to Pending for a status the client has never heard of', () => {
+        // The fallback itself is right — a schema ahead of the client should degrade to "we don't
+        // know yet" rather than throw in a render path. The defect was what it was swallowing.
+        expect(NormalizeRuntimeState('SomethingNew')).toBe('Pending');
+        expect(NormalizeRuntimeState(null)).toBe('Pending');
+    });
+
+    it('reaches the canvas from a row', () => {
+        const status = BuildRuntimeStatus(
+            [{ ID: 'a', Name: 'Get Weather', Status: 'Skipped' }],
+            new Map(),
+            new Set(['a']),
+        );
+        expect(status['a']).toBe('Skipped');
+    });
+
+    it('counts as settled — it is not going to be taken later', () => {
+        // Without this a workflow containing a declined branch never reports as finished, so a host
+        // polling on it polls a completed run forever.
+        const status = { a: 'Complete', b: 'Skipped' } as const;
+        expect(IsRuntimeSettled(status, ['a', 'b'])).toBe(true);
+    });
+});

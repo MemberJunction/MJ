@@ -71,7 +71,10 @@ npm run check:changeset
 - Always create changeset files manually
 - Package names must match exactly what's in each package's `package.json` (e.g., `DBAutoDoc` → `@memberjunction/db-auto-doc`)
 - If no migrations AND no package changes, ask the user what changed
-- **ALWAYS use `next` branch as baseline** for BOTH migration and package comparisons
+- **Use `next` as the baseline** for BOTH migration and package comparisons — *unless the branch is
+  a backport to a certified line*, in which case the baseline is that line (`origin/lts/5`, …) and
+  the rule inverts to patch-only. `npm run check:changeset` works this out from ancestry; see
+  [`.claude/rules/changesets.md`](../rules/changesets.md)
 - This ensures you only count changes added in the current branch, not changes from other branches
 
 ## Example Output

@@ -23,7 +23,7 @@
     "record"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
@@ -45,6 +45,7 @@
     "@memberjunction/ng-base-types": "6.1.0-edge.2",
     "@memberjunction/ng-code-editor": "6.1.0-edge.2",
     "@memberjunction/ng-entity-viewer": "6.1.0-edge.2",
+    "@memberjunction/ng-file-storage": "6.1.0-edge.2",
     "@memberjunction/ng-list-management": "6.1.0-edge.2",
     "@memberjunction/ng-markdown": "6.1.0-edge.2",
     "@memberjunction/ng-notifications": "6.1.0-edge.2",

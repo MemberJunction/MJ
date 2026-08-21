@@ -60,6 +60,76 @@ interface BoxConfig extends StorageProviderConfig {
 }
 
 /**
+ * The diagnostic fields worth logging from a failed Box API call.
+ *
+ * Deliberately an allowlist rather than a redaction of the raw error. A
+ * `BoxApiError` carries `requestInfo.headers`, and that map contains the live
+ * `Authorization` bearer token. The SDK does redact it on both of its own
+ * serialisation paths (`toJSON()` and its `util.inspect.custom` hook run every
+ * header through `DataSanitizer`), so logging the whole object prints
+ * `"authorization": "---[redacted]---"` today — but that is the SDK's promise,
+ * not ours, and it does not cover `requestInfo.body`, which `toJSON()` passes
+ * through untouched. Naming the fields we want makes the logged set a property
+ * of this file, so an SDK upgrade cannot widen it.
+ */
+interface BoxErrorDiagnostics {
+  statusCode?: number;
+  code?: string;
+  message?: string;
+  requestId?: string;
+  helpUrl?: string;
+  contextInfo?: unknown;
+}
+
+/**
+ * Shape of the errors thrown by `box-node-sdk` v10 (the generated SDK).
+ *
+ * Status, code and context live under `responseInfo`. The flat `statusCode` /
+ * `code` / `context_info` properties this driver used to read are the **v3**
+ * shape and are `undefined` on v10 — which silently disabled the 409-conflict
+ * handling in `PutObject` and half of the condition in `CreateDirectory`.
+ */
+interface BoxApiErrorShape {
+  message?: string;
+  responseInfo?: {
+    statusCode?: number;
+    code?: string;
+    requestId?: string;
+    helpUrl?: string;
+    contextInfo?: unknown;
+  };
+  /** Legacy v3 fields, still read so a downgrade degrades rather than breaks. */
+  statusCode?: number;
+  code?: string;
+  context_info?: unknown;
+}
+
+/**
+ * Builds a log-safe, bounded description of a Box SDK error.
+ *
+ * Reads the v10 `responseInfo` shape and falls back to the legacy flat fields,
+ * so it is correct on either. Never returns the error object itself.
+ */
+function describeBoxError(error: unknown): BoxErrorDiagnostics {
+  const e = (error ?? {}) as BoxApiErrorShape;
+  const info = e.responseInfo;
+  return {
+    statusCode: info?.statusCode ?? e.statusCode,
+    code: info?.code ?? e.code,
+    message: e.message,
+    requestId: info?.requestId,
+    helpUrl: info?.helpUrl,
+    contextInfo: info?.contextInfo ?? e.context_info,
+  };
+}
+
+/** True when a Box error reports the "an item with that name already exists" conflict. */
+function isBoxNameConflict(error: unknown): boolean {
+  const { statusCode, code, message } = describeBoxError(error);
+  return statusCode === 409 || code === 'item_name_in_use' || !!message?.includes('item_name_in_use');
+}
+
+/**
  * FileStorageBase implementation for Box.com cloud storage
  *
  * This provider allows working with files stored in Box.com. It supports
@@ -1096,12 +1166,12 @@ export class BoxFileStorage extends FileStorageBase {
         return true;
       } catch (error) {
         // Handle conflicts - if the folder already exists, that's a success
-        if (error.statusCode === 409 || (error.message && error.message.includes('item_name_in_use'))) {
+        if (isBoxNameConflict(error)) {
           console.log(`Folder already exists (conflict): ${normalizedPath}`);
           return true;
         }
 
-        console.error(`Error creating folder: ${error.message || JSON.stringify(error)}`);
+        console.error(`Error creating folder: ${normalizedPath}`, describeBoxError(error));
         return false;
       }
     } catch (error) {
@@ -1415,6 +1485,14 @@ export class BoxFileStorage extends FileStorageBase {
     return true;
   }
 
+  public override get SupportsPreAuthUpload(): boolean {
+    return false;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
+    return true;
+  }
+
   /**
    * Streams a file's content from Box, optionally honoring a byte range.
    *
@@ -1589,15 +1667,8 @@ export class BoxFileStorage extends FileStorageBase {
         }
         return true;
       } catch (uploadError: unknown) {
-        const error = uploadError as { statusCode?: number; message?: string; code?: string; context_info?: unknown };
-        console.error(`[Box PutObject] Error uploading file:`, {
-          statusCode: error.statusCode,
-          message: error.message,
-          code: error.code,
-          contextInfo: error.context_info,
-          fullError: uploadError,
-        });
-        if (error.statusCode === 409) {
+        console.error(`[Box PutObject] Error uploading file:`, describeBoxError(uploadError));
+        if (isBoxNameConflict(uploadError)) {
           console.log(`[Box PutObject] File already exists (conflict): ${objectName}`);
           return true;
         }

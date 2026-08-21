@@ -189,6 +189,20 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84CC71B1-14DA-4341-A301-D7781EDFE6E3"
+          },
+          "sync": {
+            "lastModified": "2026-08-20T22:30:09.554Z",
+            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression",
             "Status": "Active"
           },

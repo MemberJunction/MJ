@@ -23,6 +23,7 @@ import {
   FormContext,
   FormNotificationEvent,
   RecordSavedEvent,
+  RecordRefreshedEvent,
   RecordDeletedEvent,
   RecordSaveFailedEvent,
   RecordDeleteFailedEvent,
@@ -30,6 +31,9 @@ import {
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
 import { EntityFormConfig } from './types/entity-form-config';
+import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
+import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
+import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -50,6 +54,7 @@ import { EntityFormConfig } from './types/entity-form-config';
 @Directive()
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
   public EditMode: boolean = false;
+  public IsRefreshing: boolean = false;
   public FavoriteInitDone: boolean = false;
 
   /**
@@ -123,6 +128,94 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   private _pendingRecords: PendingRecordItem[] = [];
+  private _registeredToolbarItems = new Map<string, FormToolbarItemConfig>();
+  private _toolbarItemOverrides = new Map<string, Partial<FormToolbarItemConfig>>();
+
+  /**
+   * Registers a dynamic toolbar action item / button.
+   * Can be called during ngOnInit or at runtime.
+   */
+  public RegisterToolbarItem(item: FormToolbarItemConfig): void {
+    this._registeredToolbarItems.set(item.Key, { ...item });
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Unregisters a previously registered dynamic toolbar item by key.
+   */
+  public UnregisterToolbarItem(key: string): void {
+    if (this._registeredToolbarItems.delete(key)) {
+      this.cdr?.markForCheck();
+    }
+  }
+
+  /**
+   * Configures overrides for any toolbar item (standard built-in items like 'edit',
+   * 'delete', 'favorite', 'history', etc., or custom items).
+   * Allows dynamically changing visibility, disabled state, tooltips, order, icon, etc.
+   */
+  public ConfigureToolbarItem(key: FormToolbarItemKey, overrides: Partial<FormToolbarItemConfig>): void {
+    const existing = this._toolbarItemOverrides.get(key) || {};
+    this._toolbarItemOverrides.set(key, { ...existing, ...overrides });
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Dynamically hides a toolbar item by key.
+   */
+  public HideToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Visible: false });
+  }
+
+  /**
+   * Dynamically shows a toolbar item by key.
+   */
+  public ShowToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Visible: true });
+  }
+
+  /**
+   * Dynamically disables a toolbar item by key, with an optional reason string for the tooltip.
+   */
+  public DisableToolbarItem(key: FormToolbarItemKey, reason?: string): void {
+    this.ConfigureToolbarItem(key, { Disabled: reason ?? true });
+  }
+
+  /**
+   * Dynamically enables a toolbar item by key.
+   */
+  public EnableToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Disabled: false });
+  }
+
+  /**
+   * Sets the numeric display order for a toolbar item (lower numbers appear earlier).
+   */
+  public SetToolbarItemOrder(key: FormToolbarItemKey, order: number): void {
+    this.ConfigureToolbarItem(key, { Order: order });
+  }
+
+  /**
+   * Returns all dynamically registered toolbar items.
+   */
+  public get RegisteredToolbarItems(): FormToolbarItemConfig[] {
+    return Array.from(this._registeredToolbarItems.values());
+  }
+
+  /**
+   * Returns the map of toolbar item overrides.
+   */
+  public get ToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> {
+    return this._toolbarItemOverrides;
+  }
+
+  /**
+   * Hook invoked when a custom or dynamic toolbar item is clicked.
+   * Subclasses can override this method to handle custom button clicks.
+   */
+  public OnCustomToolbarButtonClick(event: FormToolbarItemClickEventArgs): void {
+    // Subclasses can override
+  }
 
   // #region Injected Dependencies (no constructor params)
 
@@ -142,6 +235,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /** Emitted after a record is saved successfully */
   @Output() RecordSaved = new EventEmitter<RecordSavedEvent>();
+
+  /** Emitted after a record is refreshed from the database successfully */
+  @Output() RecordRefreshed = new EventEmitter<RecordRefreshedEvent>();
 
   /** Emitted after a record is deleted successfully */
   @Output() RecordDeleted = new EventEmitter<RecordDeletedEvent>();
@@ -167,7 +263,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Subscription to form state changes */
   private formStateSubscription?: Subscription;
 
-  @ViewChildren(MjCollapsiblePanelComponent) collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
+  @ViewChildren(MjCollapsiblePanelComponent)
+  collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
 
   async ngOnInit() {
     if (this.record) {
@@ -432,6 +529,86 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     }
   }
 
+  /**
+   * Re-fetches the current record from the database, updating field values
+   * in-place and resetting dirty flags. No-op in edit mode or on an unsaved
+   * record. Related-entity grids are notified via the form container's
+   * {@link FormRecordRefreshCoordinator} after this emits {@link RecordRefreshed}.
+   *
+   * @returns true if the record was reloaded from the database.
+   */
+  public async RefreshRecord(): Promise<boolean> {
+    if (!this.canRefreshRecord()) {
+      return false;
+    }
+
+    this.IsRefreshing = true;
+    this.cdr.markForCheck();
+
+    try {
+      return await this.executeRecordRefresh();
+    } finally {
+      this.IsRefreshing = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private canRefreshRecord(): boolean {
+    return !!this.record && this.record.IsSaved && !this.EditMode;
+  }
+
+  private async executeRecordRefresh(): Promise<boolean> {
+    const record = this.record;
+    if (!record) {
+      return false;
+    }
+
+    try {
+      const ok = await record.Refresh();
+      if (!ok) {
+        this.Notification.emit({
+          Message: 'Failed to refresh record from database',
+          Type: 'error',
+          Duration: 5000,
+        });
+        return false;
+      }
+
+      await this.reloadFavoriteStatusAfterRefresh(record);
+      this.Notification.emit({
+        Message: 'Record refreshed from database',
+        Type: 'info',
+        Duration: 2000,
+      });
+      this.RecordRefreshed.emit({
+        EntityName: record.EntityInfo.Name,
+        Record: record,
+      });
+      return true;
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      this.Notification.emit({
+        Message: 'Error refreshing record: ' + detail,
+        Type: 'error',
+        Duration: 5000,
+      });
+      return false;
+    }
+  }
+
+  private async reloadFavoriteStatusAfterRefresh(record: BaseEntity): Promise<void> {
+    const md = this.ProviderToUse;
+    try {
+      this._isFavorite = await md.GetRecordFavoriteStatus(
+        md.CurrentUser.ID,
+        record.EntityInfo.Name,
+        record.PrimaryKey,
+      );
+    } catch {
+      // Non-critical — favorite status remains as is
+    }
+  }
+
   protected async InternalSaveRecord(): Promise<boolean> {
     if (this.record) {
       if (this._pendingRecords.length > 0) {
@@ -551,6 +728,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return {};
   }
 
+  /**
+   * One grid over several FKs to the same related entity (Bill-To OR Ship-To).
+   */
+  public BuildRelationshipViewParamsForJoinFields(relatedEntityName: string, joinFields: readonly string[]): RunViewParams {
+    if (!this.record) return {};
+    return EntityInfo.BuildRelationshipViewParamsForJoinFields(this.record, relatedEntityName, joinFields);
+  }
+
   public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string, relatedEntityJoinField?: string): EntityRelationshipInfo | undefined {
     if (this.record) {
       const r = <BaseEntity>this.record;
@@ -568,12 +753,37 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return undefined;
   }
 
-  public NewRecordValues(relatedEntityName: string): Record<string, unknown> {
-    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName);
-    if (eri)
-      return this.NewRecordValuesByEntityRelationship(eri);
-    else
-      return {};
+  /**
+   * Default values for a new related-entity record so it links back here.
+   * Pass `relatedEntityJoinField` when more than one relationship targets the
+   * same entity (Bill-To vs Ship-To). When omitted and several matches exist,
+   * every matching FK is set — same fields the related grid is filtering on.
+   */
+  public NewRecordValues(relatedEntityName: string, relatedEntityJoinField?: string): Record<string, unknown> {
+    if (!this.record) return {};
+    if (relatedEntityJoinField) {
+      const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName, relatedEntityJoinField);
+      if (eri) return this.NewRecordValuesByEntityRelationship(eri);
+      return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(this.record, [relatedEntityJoinField]);
+    }
+    const matches = this.record.EntityInfo.RelatedEntities.filter(
+      (x) => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase(),
+    );
+    if (matches.length === 0) return {};
+    if (matches.length === 1) return this.NewRecordValuesByEntityRelationship(matches[0]);
+    return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(
+      this.record,
+      matches.map((m) => m.RelatedEntityJoinField),
+    );
+  }
+
+  /**
+   * Default values for a new related record, setting every listed join field
+   * to this record's key. Pair with {@link BuildRelationshipViewParamsForJoinFields}.
+   */
+  public NewRecordValuesForJoinFields(relatedEntityName: string, joinFields: readonly string[]): Record<string, unknown> {
+    if (!this.record || !relatedEntityName) return {};
+    return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(this.record, joinFields);
   }
 
   public NewRecordValuesByEntityRelationship(item: EntityRelationshipInfo): Record<string, unknown> {
@@ -748,10 +958,32 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       collapsibleSections: this.Config?.CollapsibleSections,
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
-      hiddenSectionKeys: this.Config?.HiddenSectionKeys,
+      hiddenSectionKeys: this.resolveHiddenSectionKeys(),
       visibleSectionKeys: this.Config?.VisibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
+  }
+
+  /**
+   * Config HiddenSectionKeys plus section keys winning contributions asked
+   * to hide (related-entity claims and `replacesSectionKey` field panels).
+   */
+  private resolveHiddenSectionKeys(): string[] | undefined {
+    const claimed = this.contributionHiddenSectionKeys();
+    const configured = this.Config?.HiddenSectionKeys;
+    if (claimed.length === 0) return configured;
+    return [...(configured ?? []), ...claimed];
+  }
+
+  private contributionHiddenSectionKeys(): string[] {
+    const entity = this.record?.EntityInfo;
+    if (!entity) return [];
+    return ContributionHiddenSectionKeys(
+      entity.Name,
+      entity.RelatedEntities,
+      entity.ChildEntities.map((child) => child.ID),
+      CollectFormPanelRegistrations(),
+    );
   }
 
   /**
@@ -830,10 +1062,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public SetSectionRowCount(sectionKey: string, rowCount: number): void {
-    const section = this.sectionMap.get(sectionKey);
-    if (section) {
+    let section = this.sectionMap.get(sectionKey);
+    if (!section) {
+      // Contribution panels use their own SectionKey (e.g. 'orders') which
+      // is never seeded by generated initSections(). Upsert so the left-nav
+      // rail badge can read the count the same way baked grids do.
+      section = new BaseFormSectionInfo(sectionKey, sectionKey, false, rowCount);
+      this.sections.push(section);
+      this.sectionMap.set(sectionKey, section);
+    } else {
       section.rowCount = rowCount;
     }
+    this.cdr.markForCheck();
   }
 
   public GetSectionPanelHeight(sectionKey: string): number | undefined {
@@ -997,6 +1237,25 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return this.formStateService.hasCustomSectionOrder(entityName);
     }
     return false;
+  }
+
+  public getMoreSectionKeys(): string[] {
+    const entityName = this.getEntityName();
+    if (!entityName) return [];
+    return this.formStateService.getMoreSectionKeys(entityName) ?? [];
+  }
+
+  public getFirstClassSectionKeys(): string[] {
+    const entityName = this.getEntityName();
+    if (!entityName) return [];
+    return this.formStateService.getFirstClassSectionKeys(entityName) ?? [];
+  }
+
+  public setChromeMembership(moreSectionKeys: string[], firstClassSectionKeys: string[]): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setChromeMembership(entityName, moreSectionKeys, firstClassSectionKeys);
+    }
   }
 
   public getSectionDisplayOrder(sectionKey: string): number {

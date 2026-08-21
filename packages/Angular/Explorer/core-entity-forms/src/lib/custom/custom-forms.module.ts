@@ -2,6 +2,7 @@ import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+import { HIERARCHY_FORM_PANELS } from './HierarchyPanels/hierarchy-form-panels';
 import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
@@ -10,6 +11,7 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponentExtended } from "./Entities/entity-form.component";
+import { MJFileFormComponentExtended } from "./Files/file-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
 import { MJEntityActionFormComponentExtended } from "./EntityActions/entityaction.form.component";
 import { MJTemplateFormComponentExtended } from "./Templates/templates-form.component";
@@ -98,6 +100,8 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
 // dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
 // Skills form. Imported so the @RegisterClassEx decorator runs at module load.
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
+import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
+import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 
 @NgModule({
@@ -159,6 +163,9 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         MJAIBridgeAgentIdentityFormComponentExtended,
         AgentRealtimePanel,
         RecordProcessFormComponentExtended,
+        EntityFormChromeEditorComponent,
+        EntityRelationshipFormRolePanel,
+        MJFileFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -205,10 +212,13 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         MjFormDialogComponent,
         SearchModule,
         RecordProcessEditorComponent,
-        ResourcePermissionsModule
+        ResourcePermissionsModule,
+        ...HIERARCHY_FORM_PANELS
     ],
     exports: [
+        ...HIERARCHY_FORM_PANELS,
         MJEntityFormComponentExtended,
+        MJFileFormComponentExtended,
         MJEntityActionFormComponentExtended,
         MJTemplateFormComponentExtended,
         TemplateEditorComponent,

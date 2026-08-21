@@ -1,5 +1,6 @@
 {
   "name": "mj_explorer",
+  "license": "BUSL-1.1",
   "description": "MemberJunction Explorer UI",
   "version": "1.0.0",
   "scripts": {
@@ -81,6 +82,7 @@
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
     "@workos-inc/authkit-js": "^0.20.1",
+    "acorn": "^8.15.0",
     "ag-grid-angular": "^35.0.1",
     "ag-grid-community": "^35.0.1",
     "ajv": "^8.17.1",
@@ -138,7 +140,8 @@
     "@memberjunction/ng-shared-generic": "6.1.0-edge.2",
     "@memberjunction/ng-ui-components": "6.1.0-edge.2",
     "@memberjunction/ng-explorer-service-worker": "6.1.0-edge.2",
-    "@auth0/auth0-spa-js": "^2.14.0"
+    "@auth0/auth0-spa-js": "^2.14.0",
+    "acorn": "^8.15.0"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "21.1.3",

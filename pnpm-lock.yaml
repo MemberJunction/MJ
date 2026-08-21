@@ -74,6 +74,9 @@ importers:
       '@angular/platform-browser':
         specifier: 21.1.3
         version: 21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@axe-core/playwright':
+        specifier: ^4.10.2
+        version: 4.12.1(playwright-core@1.58.1)
       '@changesets/cli':
         specifier: ^2.27.12
         version: 2.29.8(@types/node@24.10.11)
@@ -83,6 +86,9 @@ importers:
       '@memberjunction/integration-test-suite':
         specifier: workspace:*
         version: link:packages/TestingFramework/integration-test-suite
+      '@memberjunction/server-bootstrap-lite':
+        specifier: workspace:*
+        version: link:packages/ServerBootstrapLite
       '@playwright/test':
         specifier: ^1.58.1
         version: 1.58.1
@@ -1408,6 +1414,9 @@ importers:
         specifier: ^13.0.0
         version: 13.0.0
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -1471,6 +1480,9 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../../UnitTesting
       rimraf:
         specifier: ^5.0.10
         version: 5.0.10
@@ -1641,6 +1653,9 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1742,6 +1757,9 @@ importers:
         specifier: ^0.37.0
         version: 0.37.0(encoding@0.1.13)
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1894,6 +1912,9 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1919,6 +1940,9 @@ importers:
         specifier: 4.5.0
         version: 4.5.0(axios@1.19.0)
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1938,6 +1962,9 @@ importers:
         specifier: ^0.6.3
         version: 0.6.3
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1976,6 +2003,9 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -2057,6 +2087,9 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.2
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -4026,6 +4059,9 @@ importers:
       '@angular/core':
         specifier: ^21.1.3
         version: 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
       '@angular/router':
         specifier: ^21.1.3
         version: 21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
@@ -4148,6 +4184,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0-edge.2
+        version: link:../../Generic/ui-components
       '@okta/okta-auth-js':
         specifier: ^7.14.1
         version: 7.14.1(encoding@0.1.13)
@@ -4288,6 +4327,9 @@ importers:
       '@memberjunction/ng-flow-editor':
         specifier: 6.1.0-edge.2
         version: link:../../Generic/flow-editor
+      '@memberjunction/ng-hierarchy-tree':
+        specifier: 6.1.0-edge.2
+        version: link:../../Generic/hierarchy-tree
       '@memberjunction/ng-join-grid':
         specifier: 6.1.0-edge.2
         version: link:../../Generic/join-grid
@@ -4375,6 +4417,9 @@ importers:
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
     devDependencies:
       '@angular/compiler':
         specifier: 21.1.3
@@ -4809,6 +4854,9 @@ importers:
       typescript:
         specifier: ~5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Explorer/explorer-core:
     dependencies:
@@ -6027,6 +6075,9 @@ importers:
       '@memberjunction/ng-entity-viewer':
         specifier: 6.1.0-edge.2
         version: link:../entity-viewer
+      '@memberjunction/ng-file-storage':
+        specifier: 6.1.0-edge.2
+        version: link:../file-storage
       '@memberjunction/ng-list-management':
         specifier: 6.1.0-edge.2
         version: link:../list-management
@@ -7120,6 +7171,9 @@ importers:
       '@memberjunction/ng-container-directives':
         specifier: 6.1.0-edge.2
         version: link:../container-directives
+      '@memberjunction/ng-credentials':
+        specifier: 6.1.0-edge.2
+        version: link:../credentials
       '@memberjunction/ng-notifications':
         specifier: 6.1.0-edge.2
         version: link:../notifications
@@ -7421,6 +7475,98 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.1.0-edge.2
         version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/graph-view:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.2
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0-edge.2
+        version: link:../ui-components
+      '@types/d3':
+        specifier: ^7.4.3
+        version: 7.4.3
+      d3:
+        specifier: ^7.9.0
+        version: 7.9.0
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.1.3
+        version: 21.1.3
+      '@angular/compiler-cli':
+        specifier: 21.1.3
+        version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
+
+  packages/Angular/Generic/hierarchy-tree:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@memberjunction/core':
+        specifier: 6.1.0-edge.2
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.2
+        version: link:../../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.2
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-base-forms':
+        specifier: 6.1.0-edge.2
+        version: link:../base-forms
+      '@memberjunction/ng-base-types':
+        specifier: 6.1.0-edge.2
+        version: link:../base-types
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0-edge.2
+        version: link:../ui-components
+      d3:
+        specifier: ^7.9.0
+        version: 7.9.0
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.1.3
+        version: 21.1.3
+      '@angular/compiler-cli':
+        specifier: 21.1.3
+        version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.1.0-edge.2
+        version: link:../test-utils
+      '@types/d3':
+        specifier: ^7.4.3
+        version: 7.4.3
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
@@ -8517,6 +8663,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.1.0-edge.2
         version: link:../ui-components
+      angular-split:
+        specifier: ^20.0.0
+        version: 20.0.0(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -8604,6 +8753,9 @@ importers:
       '@angular/forms':
         specifier: 21.1.3
         version: 21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      axe-core:
+        specifier: 4.11.1
+        version: 4.11.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -11600,6 +11752,9 @@ importers:
       '@workos-inc/authkit-js':
         specifier: ^0.20.1
         version: 0.20.1
+      acorn:
+        specifier: ^8.15.0
+        version: 8.15.0
       ag-grid-angular:
         specifier: ^35.0.1
         version: 35.0.1(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))
@@ -11816,6 +11971,9 @@ importers:
 
   packages/MJGlobal:
     dependencies:
+      acorn:
+        specifier: ^8.15.0
+        version: 8.15.0
       lodash:
         specifier: ^4.17.23
         version: 4.17.23
@@ -12404,6 +12562,34 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Materialization:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0-edge.2
+        version: link:../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.2
+        version: link:../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.2
+        version: link:../MJGlobal
+      '@memberjunction/sql-dialect':
+        specifier: 6.1.0-edge.2
+        version: link:../SQLDialect
+      '@memberjunction/sql-parser':
+        specifier: 6.1.0-edge.2
+        version: link:../SQLParser
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MessagingAdapters:
     dependencies:
@@ -13412,6 +13598,9 @@ importers:
       '@memberjunction/integration-engine':
         specifier: 6.1.0-edge.2
         version: link:../../Integration/engine
+      '@memberjunction/materialization':
+        specifier: 6.1.0-edge.2
+        version: link:../../Materialization
       '@memberjunction/notifications':
         specifier: 6.1.0-edge.2
         version: link:../../Communication/notifications
@@ -13458,6 +13647,9 @@ importers:
       '@memberjunction/core':
         specifier: 6.1.0-edge.2
         version: link:../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.2
+        version: link:../MJCoreEntities
       '@memberjunction/global':
         specifier: 6.1.0-edge.2
         version: link:../MJGlobal
@@ -13870,6 +14062,9 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0(typescript@5.9.3)
     devDependencies:
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.2
+        version: link:../MJGlobal
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -14102,6 +14297,9 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../TestingFramework/Engine
     devDependencies:
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.2
+        version: link:../MJGlobal
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -14175,6 +14373,9 @@ importers:
       '@memberjunction/notifications':
         specifier: 6.1.0-edge.2
         version: link:../Communication/notifications
+      '@memberjunction/sql-dialect':
+        specifier: 6.1.0-edge.2
+        version: link:../SQLDialect
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -14299,6 +14500,10 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+    optionalDependencies:
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.1.0-edge.2
+        version: link:../../PostgreSQLDataProvider
 
   packages/TestingFramework/Engine:
     dependencies:
@@ -14418,6 +14623,9 @@ importers:
       '@memberjunction/api-keys':
         specifier: 6.1.0-edge.2
         version: link:../../APIKeys/Engine
+      '@memberjunction/auth-providers':
+        specifier: 6.1.0-edge.2
+        version: link:../../AuthProviders
       '@memberjunction/codegen-lib':
         specifier: 6.1.0-edge.2
         version: link:../../CodeGenLib
@@ -14481,21 +14689,33 @@ importers:
       '@memberjunction/query-processor':
         specifier: 6.1.0-edge.2
         version: link:../../QueryProcessor
+      '@memberjunction/queue':
+        specifier: 6.1.0-edge.2
+        version: link:../../MJQueue
       '@memberjunction/record-set-processor':
         specifier: 6.1.0-edge.2
         version: link:../../RecordSetProcessor/engine
       '@memberjunction/record-set-processor-base':
         specifier: 6.1.0-edge.2
         version: link:../../RecordSetProcessor/base
+      '@memberjunction/redis-provider':
+        specifier: 6.1.0-edge.2
+        version: link:../../RedisProvider
       '@memberjunction/scheduling-engine':
         specifier: 6.1.0-edge.2
         version: link:../../Scheduling/engine
       '@memberjunction/search-engine':
         specifier: 6.1.0-edge.2
         version: link:../../SearchEngine
+      '@memberjunction/server-bootstrap-lite':
+        specifier: 6.1.0-edge.2
+        version: link:../../ServerBootstrapLite
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.2
         version: link:../../SQLServerDataProvider
+      '@memberjunction/storage':
+        specifier: 6.1.0-edge.2
+        version: link:../../MJStorage
       '@memberjunction/task-graph':
         specifier: 6.1.0-edge.2
         version: link:../../TaskGraph
@@ -14511,6 +14731,9 @@ importers:
       dotenv:
         specifier: 17.2.4
         version: 17.2.4
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.10.0
       mssql:
         specifier: ^12.2.0
         version: 12.7.0
@@ -14586,6 +14809,9 @@ importers:
 
   packages/UnitTesting:
     dependencies:
+      '@memberjunction/ai':
+        specifier: 6.1.0-edge.2
+        version: link:../AI/Core
       '@memberjunction/global':
         specifier: 6.1.0-edge.2
         version: link:../MJGlobal
@@ -15574,6 +15800,11 @@ packages:
   '@aws/lambda-invoke-store@0.3.0':
     resolution: {integrity: sha512-sl4Bm6yiMNYrZKkqqDFWN0UfnWhlS8ivKxrYl+6t0gCLrqr8y3B2IqZZbFRkfaVVp7C/baApyh71P+LeE1A2sQ==}
     engines: {node: '>=18.0.0'}
+
+  '@axe-core/playwright@4.12.1':
+    resolution: {integrity: sha512-rMd7xriptqKpP+w5265i4Hdkv2X5kbu6uiBi/B2I7uf3hieRBM3qDCfaKPtxfiYb2mKXfF+yLODJwIx+Jv1GDw==}
+    peerDependencies:
+      playwright-core: '>= 1.0.0'
 
   '@azure-rest/ai-inference@1.0.0-beta.6':
     resolution: {integrity: sha512-j5FrJDTHu2P2+zwFVe5j2edasOIhqkFj+VkDjbhGkQuOoIAByF0egRkgs0G1k03HyJ7bOOT9BkRF7MIgr/afhw==}
@@ -21407,6 +21638,10 @@ packages:
 
   axe-core@4.11.1:
     resolution: {integrity: sha512-BASOg+YwO2C+346x3LZOeoovTIoTrRqEsqMa6fmfAV0P+U9mFr9NsyOEpiYvFjbc64NMrSswhV50WdXzdb/Z5A==}
+    engines: {node: '>=4'}
+
+  axe-core@4.12.1:
+    resolution: {integrity: sha512-s7iGf5GaVMxEG0ENN9x+xTr7GFZCb1ZP/1uATUpCEK2X78nDB3RwbtFCo9pGAf9ru+VwoQ464DkaLEeRM08wJA==}
     engines: {node: '>=4'}
 
   axios-retry@4.5.0:
@@ -31466,6 +31701,11 @@ snapshots:
 
   '@aws/lambda-invoke-store@0.3.0': {}
 
+  '@axe-core/playwright@4.12.1(playwright-core@1.58.1)':
+    dependencies:
+      axe-core: 4.12.1
+      playwright-core: 1.58.1
+
   '@azure-rest/ai-inference@1.0.0-beta.6':
     dependencies:
       '@azure-rest/core-client': 2.5.1
@@ -39404,6 +39644,8 @@ snapshots:
   aws-ssl-profiles@1.1.2: {}
 
   axe-core@4.11.1: {}
+
+  axe-core@4.12.1: {}
 
   axios-retry@4.5.0(axios@1.13.6):
     dependencies:

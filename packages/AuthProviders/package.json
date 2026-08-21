@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/auth-providers",
+  "license": "BUSL-1.1",
   "version": "6.1.0-edge.2",
   "description": "Authentication provider interfaces, base classes, and implementations for MemberJunction",
   "type": "module",

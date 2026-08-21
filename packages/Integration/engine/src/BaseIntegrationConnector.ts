@@ -150,6 +150,45 @@ export interface FetchContext {
     RateLimitAcquire?: () => Promise<void>;
     RateLimitReport?: (throttledErr?: unknown) => void;
     MaxConcurrency?: number;
+    /**
+     * SAMPLING, NOT SYNCING — and the wall-clock this call must not outlive.
+     *
+     * Discovery wants a corpus, not a corpus of everything: ~50 records is enough to infer columns,
+     * types, string widths and a provable primary key. `DiscoverFieldsViaFetch` already knows that
+     * and already computes a budget — but it hands that budget to the code CONSUMING the record
+     * stream, and the consumer only regains control BETWEEN `FetchChanges` calls. Nothing was ever
+     * passed to the connector itself, so a connector could not honour a budget even if it wanted to:
+     * it had no way to know it was being sampled rather than synced.
+     *
+     * That is survivable while one `FetchChanges` is one HTTP page — the consumer stops after 50
+     * records and the gap never shows. It is NOT survivable for a parent-scoped object, where a
+     * single call fans out internally into one request per parent. There the consumer cannot
+     * interrupt anything, because control does not come back until every parent has been walked.
+     *
+     * Observed live 2026-08-12: a Totara discovery spent 28 minutes inside ONE `FetchChanges` call,
+     * walking every parent, and returned `rows=0` — half an hour of correct, pointless work to
+     * collect a sample it could never have found there. A sampling operation had silently become an
+     * exhaustive one.
+     *
+     * So the intent now travels with the call. A connector that ignores these behaves exactly as
+     * before; one that fans out internally can stop early and return what it has.
+     *
+     * STOP ON RECORDS, NOT ON PARENTS. A child object only yields through its parents, so capping the
+     * number of parents visited would be wrong — if the first three courses have no enrolments you
+     * genuinely must keep walking to find fifty rows. `SampleTargetRecords` is therefore the primary
+     * stop and the walk should honour it the moment it is met, whichever parent it happens to be on.
+     * `DeadlineMs` is the BACKSTOP for the other case: parents that will never yield anything, where
+     * no record count can ever be reached and only the clock can end it.
+     *
+     * - `IsDiscoverySample`    — this call exists to characterise the shape of the data, not to move it.
+     * - `SampleTargetRecords`  — stop as soon as this many records have been collected. Enough is enough.
+     * - `DeadlineMs`           — epoch ms after which the connector should stop and return what it has.
+     *                            A partial sample is the CORRECT result here: discovery infers from
+     *                            whatever it gets, and returning little beats half an hour of silence.
+     */
+    IsDiscoverySample?: boolean;
+    SampleTargetRecords?: number;
+    DeadlineMs?: number;
 }
 
 /**
@@ -212,14 +251,48 @@ export const DEFAULT_OPERATION_TIMEOUTS: OperationTimeouts = {
 };
 
 /**
- * Wraps a promise with a timeout. Rejects with a timeout error if the
+ * The error {@link WithTimeout} rejects with when ITS OWN budget expires — as distinct from an error
+ * the wrapped operation itself produced.
+ *
+ * That distinction is the whole point of the class. `ClassifyError` maps anything matching "timeout"
+ * to `NETWORK_TIMEOUT`, which `IsRetryableError` treats as transient — correct for a socket that
+ * dropped, wrong for "we gave this operation N ms and it wanted more." Retrying the latter re-runs
+ * the same work under the same budget, so it fails the same way, having spent the budget again.
+ *
+ * The message is deliberately UNCHANGED from the plain `Error` this replaced: `ClassifyError` reads
+ * message text, so existing classification, logging and the run-event stream all behave exactly as
+ * before. Only callers that explicitly check `instanceof` see any difference.
+ */
+export class OperationTimeoutError extends Error {
+    /** The `operationName` passed to {@link WithTimeout}. */
+    public readonly OperationName: string;
+    /** The budget that expired, in milliseconds. */
+    public readonly TimeoutMs: number;
+
+    constructor(operationName: string, timeoutMs: number) {
+        super(`Operation '${operationName}' timed out after ${timeoutMs}ms`);
+        this.name = 'OperationTimeoutError';
+        this.OperationName = operationName;
+        this.TimeoutMs = timeoutMs;
+    }
+}
+
+/**
+ * Wraps a promise with a timeout. Rejects with {@link OperationTimeoutError} if the
  * promise does not resolve within the specified duration.
+ *
+ * CAVEAT — this does NOT cancel the wrapped operation. It is a `Promise.race`, so on timeout the
+ * underlying work keeps running to completion (or its own failure) with nobody awaiting it. A caller
+ * that retries a timed-out operation therefore stacks a second copy on top of the first, still
+ * in-flight — which is why `IntegrationEngine`'s fetch path does not retry
+ * {@link OperationTimeoutError}. Real cancellation needs an `AbortSignal` threaded into the
+ * connector contract; until then, treat a timeout as terminal for that attempt.
  *
  * @param promise - The promise to wrap
  * @param timeoutMs - Timeout in milliseconds
  * @param operationName - Name of the operation for error messaging
  * @returns The result of the promise
- * @throws Error if the operation times out
+ * @throws OperationTimeoutError if the operation times out
  */
 export async function WithTimeout<T>(
     promise: Promise<T>,
@@ -230,7 +303,7 @@ export async function WithTimeout<T>(
 
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
         timeoutHandle = setTimeout(() => {
-            reject(new Error(`Operation '${operationName}' timed out after ${timeoutMs}ms`));
+            reject(new OperationTimeoutError(operationName, timeoutMs));
         }, timeoutMs);
     });
 
@@ -458,6 +531,30 @@ export abstract class BaseIntegrationConnector {
     public get MaxConcurrencyHint(): number | null { return null; }
 
     /**
+     * Per-connector override for the `FetchChanges` timeout, in milliseconds. `null` → use
+     * `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs` (30s).
+     *
+     * Raise this when a single page is legitimately slow: a connector that fans out one request per
+     * parent (ORCID's per-iD `/record`, any second-layer object) does N requests inside ONE
+     * `FetchChanges` call, so its page time scales with `BatchSize` — and with how much concurrency
+     * the engine's adaptive controller currently allows. Under the fixed 30s, a page that comfortably
+     * fit when parallel no longer fit once the controller had cut concurrency, which forced connector
+     * authors to shrink `BatchSize` for the sequential worst case and waste the parallel headroom the
+     * rest of the time.
+     *
+     * Note the timeout does NOT itself cut concurrency: `ClassifyError` gives it `NETWORK_TIMEOUT`,
+     * and only `RATE_LIMIT_EXCEEDED` feeds the adaptive limiter. A timing-out page simply never ramps
+     * the rate UP (the ramp needs a clean fetch), and the object ends incomplete — reported as
+     * `FETCH_ABORTED_INCOMPLETE`. Earlier revisions of this comment described a self-reinforcing
+     * timeout→concurrency-cut spiral; that is not what the code does.
+     *
+     * Precedence (highest first): `CompanyIntegration.Configuration.fetchTimeoutMs` → this property
+     * → `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs`. Deployments therefore keep the last word without
+     * a code change, while a connector that KNOWS it is slow ships a sane default.
+     */
+    public get FetchChangesTimeoutMs(): number | null { return null; }
+
+    /**
      * Name of a stable, monotonic ordering key (PK/identity) usable for KEYSET/seek resume on
      * watermark-less objects (plan.md §7 — resume from last-seen key, robust to mid-stream
      * insert/delete). `null` → keyset resume unavailable for this object.
@@ -643,10 +740,26 @@ export abstract class BaseIntegrationConnector {
         // late-appearing field). Operator-tunable via env or, per-connection, the IntegrationSetSyncConfig
         // `discoveryMaxRecords` knob. Sampling itself is the FALLBACK path — used only when the source lacks a
         // describe endpoint that yields pk+type+columns; a describe-capable connector returns here-unused.
-        const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
+        // The Configuration read was MISSING from this line. `discoveryMaxRecords` is declared in the cfg
+        // type above, documented directly above as a per-connection knob, accepted and persisted by
+        // MJServer's IntegrationSetSyncConfig, returned by IntegrationGetSyncConfig, and surfaced in the
+        // product as a settings field ("Max records" - cap on records sampled during discovery). All of
+        // that worked. Nothing read the value back, so setting it saved a number and changed nothing.
+        //
+        // Its two siblings immediately above both read Configuration. This one did not, which made the one
+        // discovery budget an operator actually wants to lower for a slow source the ONLY one that needed
+        // an app setting and a process restart. Same precedence as the others now:
+        // explicit opts > per-connection Configuration > operator env > default.
+        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
         try {
             return await this.DiscoverFieldsViaStream(
-                this.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords),
+                this.DiscoverySampleRecordStream(
+                    companyIntegration, objectName, contextUser, batchSize, maxRecords,
+                    // The SAME budget the stream consumer is given, now also reaching the producer —
+                    // the consumer can only act between FetchChanges calls, which is no help at all
+                    // when one call fans out into thousands of requests internally.
+                    Date.now() + timeBudgetMs,
+                ),
                 { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
             );
         } catch (err) {
@@ -668,6 +781,11 @@ export abstract class BaseIntegrationConnector {
         contextUser: UserInfo,
         batchSize: number,
         maxRecords: number,
+        /**
+         * Epoch ms this sample must not outlive, forwarded to the connector as `FetchContext.DeadlineMs`.
+         * Optional so existing overrides of this method keep compiling and keep their current behaviour.
+         */
+        deadlineMs?: number,
     ): AsyncGenerator<Record<string, unknown>> {
         let ctx: FetchContext = {
             CompanyIntegration: companyIntegration,
@@ -675,6 +793,12 @@ export abstract class BaseIntegrationConnector {
             WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
             BatchSize: batchSize,
             ContextUser: contextUser,
+            // TELL THE CONNECTOR WHAT THIS CALL IS FOR. Stopping after `maxRecords` here only works
+            // when one FetchChanges is one page; a connector that fans out internally (one request
+            // per parent) never hands control back for us to stop it. See FetchContext.DeadlineMs.
+            IsDiscoverySample: true,
+            SampleTargetRecords: maxRecords,
+            DeadlineMs: deadlineMs,
         };
         let yielded = 0;
         for (;;) {

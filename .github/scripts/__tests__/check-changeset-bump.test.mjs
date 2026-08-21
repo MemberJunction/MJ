@@ -57,6 +57,8 @@ beforeAll(() => {
     write('migrations/v6/keep.sql', 'GO\n');
     git('add', '-A');
     git('commit', '-q', '-m', 'base');
+    // A real clone has origin/next; bare invocations resolve their default against it.
+    git('update-ref', 'refs/remotes/origin/next', 'HEAD');
 });
 
 afterAll(() => {
@@ -210,6 +212,302 @@ describe('check-changeset-bump', () => {
             write('.changeset/h.md', changeset({ '@memberjunction/foo': 'patch' }));
         });
         expect(code).toBe(0);
+    });
+
+    /**
+     * On a CERTIFIED LINE the rule inverts. `plans/lts-process.md` §12: on a line everything is a
+     * patch — metadata migrations, CodeGen repairs, and even schema migrations under a security
+     * exception. The migration-⇒-minor rule is Edge-tuple grammar (§3.1) and does not reach here.
+     *
+     * Before this, the Edge rule was applied universally, so a canon-correct cert-fix backport
+     * carrying a migration and a `patch` was REJECTED — the gate demanding a level the release
+     * process forbids, on the highest-stakes branch in the repo.
+     */
+    describe('on a certified LTS line', () => {
+        /** Builds a line branch off `next` and a topic branch on top of it. */
+        function runOnLine(name, build, { base = 'lts/6.1', explicitBase = true } = {}) {
+            git('checkout', '-q', 'next');
+            try {
+                git('checkout', '-q', 'lts/6.1');
+            } catch {
+                git('checkout', '-q', '-b', 'lts/6.1');
+                git('commit', '-q', '--allow-empty', '-m', 'line 6.1 certified');
+                // A remote-tracking ref as well: a real clone discovers lines as origin/lts/*, and
+                // detection reads both.
+                git('update-ref', 'refs/remotes/origin/lts/6.1', 'HEAD');
+            }
+            git('checkout', '-q', '-b', name);
+            build();
+            git('add', '-A');
+            git('commit', '-q', '-m', name);
+            const args = explicitBase ? [SCRIPT, '--base', base] : [SCRIPT];
+            try {
+                return { code: 0, output: execFileSync('node', args, { cwd: repo, encoding: 'utf8' }) };
+            } catch (error) {
+                return { code: error.status, output: `${error.stdout ?? ''}${error.stderr ?? ''}` };
+            }
+        }
+
+        it('ACCEPTS a migration backport declared patch (the case that used to be rejected)', () => {
+            const { code, output } = runOnLine('certfix-patch', () => {
+                write('migrations/v6/V202601011500__v6.1.x__SecurityFix.sql', 'GO\n');
+                write('.changeset/certfix.md', changeset({ '@memberjunction/core': 'patch' }));
+            });
+            expect(code).toBe(0);
+            expect(output).toContain('certified line');
+        });
+
+        it('REJECTS a minor on a line, even with a migration', () => {
+            const { code, output } = runOnLine('certfix-minor', () => {
+                write('migrations/v6/V202601011600__v6.1.x__Other.sql', 'GO\n');
+                write('.changeset/certfix2.md', changeset({ '@memberjunction/core': 'minor' }));
+            });
+            expect(code).toBe(1);
+            expect(output).toContain('patch-only');
+        });
+
+        it('rejects a minor on a line even with NO database change', () => {
+            const { code, output } = runOnLine('line-code-minor', () => {
+                write('packages/Foo/line.ts', 'export const l = 1;\n');
+                write('.changeset/certfix3.md', changeset({ '@memberjunction/core': 'minor' }));
+            });
+            expect(code).toBe(1);
+            // Asserting the LINE-specific reason, not just the exit code: the pre-line-awareness
+            // rule also rejected a minor on a no-DB branch, so a bare `code === 1` here passed
+            // against the unfixed implementation and tested nothing.
+            expect(output).toContain('patch-only');
+            expect(output).toContain('certified line');
+        });
+
+        /**
+         * The case that matters, and the one a name-based check cannot see: real backport branches
+         * are NOT named `lts/*`. The repo's only line backport to date is
+         * `fix/codegen-isa-postgres-lts5` → base `lts/5`, and korthout/backport-action emits
+         * `backport-<n>-to-<target>`. Detection has to come from ancestry, not the branch's name.
+         */
+        it('detects the line from ANCESTRY on a realistically-named backport branch', () => {
+            const { code, output } = runOnLine(
+                'fix/cve-2026-1234',
+                () => {
+                    write('migrations/v6/V202601011800__v6.1.x__SecFix.sql', 'GO\n');
+                    write('.changeset/sec.md', changeset({ '@memberjunction/core': 'patch' }));
+                },
+                { explicitBase: false }
+            );
+            expect(code).toBe(0);
+            expect(output).toContain('certified line');
+        });
+
+        it('detects the line from a DETACHED HEAD (CI checkouts usually are)', () => {
+            git('checkout', '-q', 'lts/6.1');
+            git('checkout', '-q', '-b', 'detach-src');
+            write('migrations/v6/V202601011900__v6.1.x__Det.sql', 'GO\n');
+            write('.changeset/det.md', changeset({ '@memberjunction/core': 'patch' }));
+            git('add', '-A');
+            git('commit', '-q', '-m', 'detached work');
+            const sha = git('rev-parse', 'HEAD').trim();
+            git('checkout', '-q', sha); // detached
+            try {
+                const output = execFileSync('node', [SCRIPT], { cwd: repo, encoding: 'utf8' });
+                expect(output).toContain('certified line');
+            } finally {
+                git('checkout', '-q', 'next');
+            }
+        });
+
+        it('does not attribute the LINE\'s own pre-existing migration to a code-only backport', () => {
+            // Diffing a line branch against origin/next spans the fork point, so migrations already
+            // certified on the line look like this branch's work.
+            const { code } = runOnLine(
+                'fix/typo-backport',
+                () => {
+                    write('packages/Foo/typo.ts', 'export const t = 1;\n');
+                    write('.changeset/typo.md', changeset({ '@memberjunction/core': 'patch' }));
+                },
+                { explicitBase: false }
+            );
+            expect(code).toBe(0);
+        });
+
+        /**
+         * A real clone has NO local `lts/*` branches — only remote-tracking `origin/lts/*`. The
+         * fixtures elsewhere create both, so a lookup that finds only the local one still passes
+         * them while being dead in production. This case deletes the local branch first.
+         */
+        /**
+         * The mirror of the bug this suite exists for. Between a line being cut and receiving its
+         * first line-only commit, the line tip IS a commit on `next` — so it is an ancestor of every
+         * `next` topic branch cut afterwards, and inference would judge ordinary Edge work by the
+         * line rule, rejecting the `minor` a migration requires.
+         *
+         * A ref still wholly contained in `next` has not diverged, so it is not yet a line for rule
+         * purposes. The window is short in the happy path but stays open indefinitely for a line
+         * cut and then withdrawn.
+         */
+        it('does NOT treat a just-cut line (no line-only commit yet) as a line', () => {
+            git('checkout', '-q', 'next');
+            git('update-ref', 'refs/remotes/origin/lts/9.9', 'refs/remotes/origin/next');
+            try {
+                git('checkout', '-q', '-b', 'feat/edge-after-cut');
+                write('migrations/v6/V202601012400__v6.1.x__Edge.sql', 'GO\n');
+                write('.changeset/edge.md', changeset({ '@memberjunction/foo': 'minor' }));
+                git('add', '-A');
+                git('commit', '-q', '-m', 'edge work');
+                const out = execFileSync('node', [SCRIPT], { cwd: repo, encoding: 'utf8' });
+                expect(out).toContain('minor is required');
+                expect(out).not.toContain('certified line');
+            } finally {
+                execFileSync('git', ['update-ref', '-d', 'refs/remotes/origin/lts/9.9'], { cwd: repo });
+                git('checkout', '-q', 'next');
+            }
+        });
+
+        it('detects the line from a REMOTE-TRACKING ref alone (as a real clone has)', () => {
+            git('checkout', '-q', 'next');
+            git('checkout', '-q', '-b', 'remote-only-src', 'lts/6.1');
+            write('migrations/v6/V202601012000__v6.1.x__RemoteOnly.sql', 'GO\n');
+            write('.changeset/remote.md', changeset({ '@memberjunction/core': 'patch' }));
+            git('add', '-A');
+            git('commit', '-q', '-m', 'remote-only backport');
+            git('update-ref', 'refs/remotes/origin/lts/6.1', 'lts/6.1');
+            git('branch', '-q', '-D', 'lts/6.1'); // only origin/lts/6.1 remains
+            try {
+                const output = execFileSync('node', [SCRIPT], { cwd: repo, encoding: 'utf8' });
+                expect(output).toContain('certified line');
+            } finally {
+                git('checkout', '-q', 'next');
+                git('branch', '-q', 'lts/6.1', 'refs/remotes/origin/lts/6.1');
+            }
+        });
+
+        it('detects the line when the topic branch IS named lts/… too', () => {
+            // The name is not what makes this work — ancestry is — but a conventionally-named
+            // branch must not be a regression just because detection stopped reading names.
+            const { code, output } = runOnLine(
+                'lts/6.1-local',
+                () => {
+                    write('migrations/v6/V202601011700__v6.1.x__Local.sql', 'GO\n');
+                    write('.changeset/certfix4.md', changeset({ '@memberjunction/core': 'patch' }));
+                },
+                { explicitBase: false }
+            );
+            expect(code).toBe(0);
+            expect(output).toContain('certified line');
+        });
+    });
+
+    describe('--base argument handling', () => {
+        function run(...args) {
+            try {
+                return { code: 0, output: execFileSync('node', [SCRIPT, ...args], { cwd: repo, encoding: 'utf8' }) };
+            } catch (error) {
+                return { code: error.status, output: `${error.stdout ?? ''}${error.stderr ?? ''}` };
+            }
+        }
+
+        it('fails loudly on the empty equals form --base=', () => {
+            const { code, output } = run('--base=');
+            expect(code).toBe(2);
+            expect(output).toContain('--base requires a value');
+        });
+
+        it('fails loudly when --base is passed with no value', () => {
+            // Regression guard: `explicitBase ?? DEFAULT_BASE` swallowed the undefined and silently
+            // applied the Edge rule against origin/next — turning a loud failure into a wrong answer.
+            const { code, output } = run('--base');
+            expect(code).toBe(2);
+            expect(output).toContain('--base requires a value');
+        });
+
+        it('accepts the --base=REF equals form', () => {
+            const { code, output } = run('--base=lts/6.1');
+            expect(code).toBe(0);
+            expect(output).toContain('certified line');
+        });
+
+        it.each([
+            ['refs/heads/lts/6.1'],
+            ['origin/lts/6.1'],
+        ])('recognises %s as a line base', (ref) => {
+            const { output } = run('--base', ref);
+            expect(output).toContain('certified line');
+        });
+    });
+
+    describe('history shapes', () => {
+        it('does not judge a changeset this branch merely RENAMED', () => {
+            // git reports a rename as `R`, which --diff-filter=A excludes. Deliberate: the content
+            // is another branch's decision, and re-judging it against THIS branch's DB context is
+            // exactly the cross-branch false rejection the scoping rule exists to prevent.
+            // Accepted cost: editing a pending changeset *via* a rename escapes the check.
+            git('checkout', '-q', 'next');
+            write('.changeset/pre-existing.md', changeset({ '@memberjunction/foo': 'minor' }));
+            git('add', '-A');
+            git('commit', '-q', '-m', 'someone else pending changeset');
+            const { code } = runOnBranch('renamer', () => {
+                execFileSync('git', ['mv', '.changeset/pre-existing.md', '.changeset/renamed.md'], { cwd: repo });
+            });
+            expect(code).toBe(0);
+        });
+
+        it('sees no changeset when one is added and deleted within the branch', () => {
+            const { code, output } = runOnBranch('added-then-deleted', () => {
+                write('migrations/v6/V202601012300__v6.1.x__Trans.sql', 'GO\n');
+                write('.changeset/transient.md', changeset({ '@memberjunction/foo': 'minor' }));
+            });
+            expect(code).toBe(0);
+            execFileSync('git', ['rm', '-q', '.changeset/transient.md'], { cwd: repo });
+            git('commit', '-q', '-m', 'drop the changeset again');
+            const after = execFileSync('node', [SCRIPT, '--base', 'next'], { cwd: repo, encoding: 'utf8' });
+            // Falls to the documented presence gap, not to a wrong level.
+            expect(after).toContain('nothing to check');
+        });
+    });
+
+    describe('robustness against real working trees', () => {
+        it('works when invoked from a SUBDIRECTORY, not just the repo root', () => {
+            // git reports paths from the repo root, so reading them relative to process.cwd()
+            // crashed with an uncaught ENOENT anywhere but the top level.
+            const { code } = runOnBranch('subdir', () => {
+                write('migrations/v6/V202601012100__v6.1.x__Sub.sql', 'GO\n');
+                write('.changeset/sub.md', changeset({ '@memberjunction/foo': 'minor' }));
+                mkdirSync(join(repo, 'packages/Foo'), { recursive: true });
+            });
+            expect(code).toBe(0);
+            const out = execFileSync('node', [SCRIPT, '--base', 'next'], {
+                cwd: join(repo, 'packages/Foo'),
+                encoding: 'utf8',
+            });
+            expect(out).toContain('bump levels are correct');
+        });
+
+        it('reads a CRLF changeset (a Windows contributor\'s file)', () => {
+            const { code, output } = runOnBranch('crlf', () => {
+                write('migrations/v6/V202601012200__v6.1.x__Crlf.sql', 'GO\n');
+                write('.changeset/crlf.md', '---\r\n"@memberjunction/foo": minor\r\n---\r\n\r\nSummary.\r\n');
+            });
+            expect(code).toBe(0);
+            expect(output).not.toContain('no front matter');
+        });
+
+        it('sees a trigger path containing non-ASCII characters', () => {
+            // git quotes such paths by default (`"metadata/caf\303\251.json"`), so the trigger
+            // pattern missed them — a real metadata change went unseen and a correct `minor` was
+            // rejected as unjustified.
+            const { code } = runOnBranch('nonascii', () => {
+                write('metadata/café.json', '{}');
+                write('.changeset/uni.md', changeset({ '@memberjunction/foo': 'minor' }));
+            });
+            expect(code).toBe(0);
+        });
+
+        it('sees a trigger path containing a space', () => {
+            const { code } = runOnBranch('spaced', () => {
+                write('metadata/with space/thing.json', '{}');
+                write('.changeset/spaced.md', changeset({ '@memberjunction/foo': 'minor' }));
+            });
+            expect(code).toBe(0);
+        });
     });
 
     it('fails loudly on an unresolvable base ref', () => {

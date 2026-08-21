@@ -1,21 +1,23 @@
+// Load the JIT compiler BEFORE any Angular library evaluates: npm-published Angular
+// packages ship partial declarations whose static initializers need the compiler facade.
+import '@angular/compiler';
+import { describe, it, expect } from 'vitest';
+import * as publicApi from '../public-api';
+import { EntityPermissionsModule, EntityPermissionsSelectorWithGridComponent, EntityPermissionsGridComponent } from '../public-api';
+
 /**
- * Tests for entity-permissions package:
- * - Module export verification
+ * Entry-point smoke test: importing the public entry must succeed (catches
+ * broken exports / import-graph breakage) and the load-bearing symbols the
+ * package exists to provide must be real constructors.
  */
-import { describe, it, expect, vi } from 'vitest';
+describe('@memberjunction/ng-entity-permissions', () => {
+  it('exposes a non-empty public export surface', () => {
+    expect(Object.keys(publicApi).length).toBeGreaterThan(0);
+  });
 
-vi.mock('@angular/core', () => ({
-  Component: () => (target: Function) => target,
-  NgModule: () => (target: Function) => target,
-  Input: () => () => {},
-  Output: () => () => {},
-  EventEmitter: class { emit() {} },
-  ChangeDetectorRef: class {},
-  ChangeDetectionStrategy: { OnPush: 1 },
-}));
-
-describe('entity-permissions package', () => {
-  it('should be a valid module', () => {
-    expect(true).toBe(true);
+  it('exports its load-bearing classes as constructors', () => {
+    expect(EntityPermissionsModule).toBeTypeOf('function');
+    expect(EntityPermissionsSelectorWithGridComponent).toBeTypeOf('function');
+    expect(EntityPermissionsGridComponent).toBeTypeOf('function');
   });
 });

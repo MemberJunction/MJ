@@ -17,11 +17,19 @@ const h = vi.hoisted(() => ({
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
 }));
 
+// These two are instantiated with `new` by the resolver, so they must be constructible. They were
+// `vi.fn(() => ({...}))`, which vitest 3 tolerated as a constructor but vitest 4 rejects with
+// "is not a constructor" — classes express the intent and work under both.
 vi.mock('@memberjunction/livekit-room-server', () => ({
-  LiveKitTokenService: vi.fn(() => ({ MintClientToken: h.mintClientToken })),
+  LiveKitTokenService: class {
+    MintClientToken = h.mintClientToken;
+  },
   // SetSessionFactory is exercised by the resolver's module-load binding of the realtime-session factory.
   LiveKitAgentRoomCoordinator: { Instance: { StartAgentRoomSession: vi.fn(), SetSessionFactory: vi.fn() } },
-  LiveKitEgressService: vi.fn(() => ({ StartRoomRecording: h.startRecording, StopRecording: h.stopRecording })),
+  LiveKitEgressService: class {
+    StartRoomRecording = h.startRecording;
+    StopRecording = h.stopRecording;
+  },
 }));
 
 // Mock the agent factory so importing the resolver doesn't pull the heavy @memberjunction/ai-agents graph

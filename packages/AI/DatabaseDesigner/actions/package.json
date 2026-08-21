@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/database-designer-actions",
+  "license": "BUSL-1.1",
   "type": "module",
   "version": "6.1.0-edge.2",
   "description": "Database Designer Actions — metadata-driven action layer for entity creation and modification",

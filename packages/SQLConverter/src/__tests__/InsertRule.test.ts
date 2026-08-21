@@ -19,6 +19,33 @@ describe('InsertRule', () => {
     });
   });
 
+
+  /**
+   * `$`-expansion in the schema substitution (issue #3171).
+   *
+   * The sibling `ViewRule` had this exact line converted to a replacement
+   * function by the #3171 sweep; `InsertRule` was missed, while the changeset
+   * lists `@memberjunction/sql-converter` as fixed. Both sides matter here: the
+   * `$1` back-reference is intentional and must survive, but `schema` is
+   * configured data whose `$` must not be expanded.
+   */
+  describe('schema substitution ($-expansion, #3171)', () => {
+    it('keeps the $1 back-reference working for a normal schema', () => {
+      const ctx = createConversionContext('tsql', 'postgres');
+      ctx.Schema = '__mj';
+      const out = rule.PostProcess!('INSERT INTO __mj.vwUsers VALUES (1)', '', ctx);
+      expect(out).toContain('__mj."vwUsers"');
+    });
+
+    it('does not expand a $-sequence in the configured schema name', () => {
+      const ctx = createConversionContext('tsql', 'postgres');
+      ctx.Schema = 'a$&b';
+      const out = rule.PostProcess!('INSERT INTO a$&b.vwUsers VALUES (1)', '', ctx);
+      // The schema must appear literally, never with the match spliced into it.
+      expect(out).toContain('a$&b."vwUsers"');
+    });
+  });
+
   describe('identifier conversion', () => {
     it('should convert bracket identifiers in a simple INSERT', () => {
       const sql = "INSERT INTO [__mj].[Users] ([Name], [Email]) VALUES ('Alice', 'alice@example.com')";

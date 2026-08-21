@@ -4,9 +4,6 @@ import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
 import path from 'path';
 
-const DEFAULT_SS_SQL_OUTPUT_FOLDER = './migrations/v5/';
-const DEFAULT_PG_SQL_OUTPUT_FOLDER = './migrations-pg/v5/';
-
 /**
  * Utility class for logging SQL to a run file that can be fresh for each run or appended to depending on the settings in the configuration
  */
@@ -19,6 +16,55 @@ export class SQLLogging {
     }
     public static get OmitRecurringScriptsFromLog(): boolean {
         return SQLLogging._OmitRecurringScriptsFromLog
+    }
+
+    /**
+     * Rewrites the migrations-root segment of a path to `migrations-pg`.
+     *
+     * Matching on a path SEGMENT rather than a prefix is what makes this reliable. The original
+     * code exact-matched the single string `'./migrations/v5/'`, so once the repo moved to v6 an
+     * ordinary `'./migrations/v6/'` stopped matching and PostgreSQL CodeGen wrote its audit SQL
+     * into the SQL Server tree — silently. Anchoring at the start of the string fixes that case
+     * but still misses an absolute path (`/repo/migrations/v6/`, which is what `path.resolve` on
+     * a config value produces) and a Windows separator (`.\migrations\v6\`).
+     *
+     * Only the LAST such segment is rewritten, and the match is not global. Rewriting every
+     * occurrence is wrong twice over: a checkout that itself lives under a directory named
+     * `migrations` (`/Users/x/migrations/mj/migrations/v6/`) would have its ANCESTOR rewritten
+     * too, and `initSQLLogging` then `mkdirSync`s the result — silently fabricating a tree
+     * outside the repo and writing the audit SQL into it, which is precisely the misroute this
+     * helper exists to prevent. It also made the function non-idempotent for adjacent segments,
+     * because a shared separator stops two neighbours matching in one pass.
+     *
+     * Paths with no `migrations` segment are returned untouched — an explicit override elsewhere
+     * on disk is honored as-is, which is the documented behaviour. `migrations-pg` is already the
+     * destination and is left alone, so the function is idempotent.
+     *
+     * Public so the routing can be unit-tested without a CodeGen run.
+     */
+    public static redirectToPGMigrations(folderPath: string): string {
+        // Split on either separator so a Windows-style path is handled without normalizing the
+        // whole string (which would rewrite the caller's separators as a side effect).
+        const segments = folderPath.split(/([\\/])/);
+
+        // Already inside the PostgreSQL tree — nothing to do. This check is what makes the
+        // function idempotent, and it is not redundant with the loop below: after one rewrite the
+        // path may STILL contain an earlier `migrations` segment (an ancestor directory that
+        // happens to be named that), and a second application would walk left and rewrite the
+        // ancestor too.
+        if (segments.includes('migrations-pg')) return folderPath;
+
+        // Rewrite only the LAST `migrations` segment — the migrations root, not an ancestor that
+        // shares its name. Rewriting an ancestor sends the audit SQL to a path that does not
+        // exist, and `initSQLLogging` mkdirSync's it, silently fabricating a tree outside the
+        // repo: exactly the misroute this helper exists to prevent.
+        for (let i = segments.length - 1; i >= 0; i--) {
+            if (segments[i] === 'migrations') {
+                segments[i] = 'migrations-pg';
+                return segments.join('');
+            }
+        }
+        return folderPath;
     }
     public static initSQLLogging() {
         SQLLogging._OmitRecurringScriptsFromLog = configInfo.SQLOutput.omitRecurringScriptsFromLog;
@@ -34,13 +80,11 @@ export class SQLLogging {
                 return; // we are not doing anything here....
 
             if (config.folderPath) {
-                // On PostgreSQL, swap the default SQL Server output folder for the
-                // PG-equivalent so CodeGen audit SQL lands in migrations-pg/v5/ alongside
-                // the rest of the PG tooling. Users who explicitly override folderPath are
-                // honored as-is.
+                // On PostgreSQL, redirect the migrations root so CodeGen audit SQL lands in
+                // migrations-pg/ alongside the rest of the PG tooling.
                 let folderPath = config.folderPath;
-                if (dbPlatform() === 'postgresql' && folderPath === DEFAULT_SS_SQL_OUTPUT_FOLDER) {
-                    folderPath = DEFAULT_PG_SQL_OUTPUT_FOLDER;
+                if (dbPlatform() === 'postgresql') {
+                    folderPath = SQLLogging.redirectToPGMigrations(folderPath);
                 }
 
                 const dirExists: boolean = fs.existsSync(folderPath);
