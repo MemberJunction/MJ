@@ -453,6 +453,109 @@ describe('EntityField.Validate — value lists (#3969)', () => {
             }
         });
     });
+
+    describe('numeric value lists (#3978)', () => {
+        // CodeGen now captures SQL Server's unquoted numeric CHECK literals, so a numeric column can
+        // carry a value list for the first time. The literals are stored EXACTLY as the catalog renders
+        // them — `CHECK (Price IN (0.50, 1.00))` becomes the values '0.50' and '1.00' — while the
+        // runtime value is the number 1. A string comparison would refuse a value the database accepts,
+        // so a numeric column's list is compared by value.
+        const money = {
+            Name: 'Price',
+            Type: 'money',
+            SQLFullType: 'money',
+            NeedsQuotes: false,
+            ValueListType: 'List',
+            EntityFieldValues: [
+                { ID: 'm-1', EntityFieldID: 'field-1', Sequence: 1, Value: '0.50', Code: '0.50' },
+                { ID: 'm-2', EntityFieldID: 'field-1', Sequence: 2, Value: '1.00', Code: '1.00' },
+            ],
+        };
+
+        it('accepts a value whose scale differs from the stored literal', () => {
+            expect(new EntityField(makeFieldInfo(money), 0.5).Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(money), 1).Validate().Success).toBe(true);
+        });
+
+        it('still rejects a value that is genuinely not in the list', () => {
+            expect(new EntityField(makeFieldInfo(money), 0.75).Validate().Success).toBe(false);
+        });
+
+        it('accepts a numeric STRING in any scale — a form control hands back text', () => {
+            expect(new EntityField(makeFieldInfo(money), '1').Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(money), '1.00').Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(money), ' 0.50 ').Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(money), '2.00').Validate().Success).toBe(false);
+        });
+
+        it('handles the exponential form SQL Server stores for a float literal', () => {
+            const float = {
+                Name: 'Ratio',
+                Type: 'float',
+                SQLFullType: 'float',
+                NeedsQuotes: false,
+                ValueListType: 'List',
+                EntityFieldValues: [
+                    { ID: 'f-1', EntityFieldID: 'field-1', Sequence: 1, Value: '1.0000000000000000e+030', Code: 'x' },
+                ],
+            };
+            expect(new EntityField(makeFieldInfo(float), 1e30).Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(float), 1e29).Validate().Success).toBe(false);
+        });
+
+        it('handles zero and negative values', () => {
+            const signed = {
+                Name: 'Delta',
+                Type: 'int',
+                SQLFullType: 'int',
+                NeedsQuotes: false,
+                ValueListType: 'List',
+                EntityFieldValues: [
+                    { ID: 's-1', EntityFieldID: 'field-1', Sequence: 1, Value: '-1', Code: '-1' },
+                    { ID: 's-2', EntityFieldID: 'field-1', Sequence: 2, Value: '0', Code: '0' },
+                ],
+            };
+            expect(new EntityField(makeFieldInfo(signed), 0).Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(signed), -1).Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(signed), 1).Validate().Success).toBe(false);
+        });
+
+        it('does NOT compare a STRING column numerically — the database would not', () => {
+            // CHECK (Code IN ('1','2')) on nvarchar is a string list: '01' is refused by the database,
+            // so comparing numerically here would permit a value that cannot be saved.
+            const stringList = {
+                Name: 'Code',
+                Type: 'nvarchar',
+                SQLFullType: 'nvarchar(10)',
+                NeedsQuotes: true,
+                ValueListType: 'List',
+                EntityFieldValues: [
+                    { ID: 'c-1', EntityFieldID: 'field-1', Sequence: 1, Value: '1', Code: '1' },
+                    { ID: 'c-2', EntityFieldID: 'field-1', Sequence: 2, Value: '2', Code: '2' },
+                ],
+            };
+            expect(new EntityField(makeFieldInfo(stringList), '1').Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(stringList), '01').Validate().Success).toBe(false);
+        });
+
+        it('falls back to the string comparison when a numeric column has a non-numeric list', () => {
+            // CodeGen cannot produce this, but applyValueListConfig (LLM enum detection) can, so the
+            // numeric path must not swallow it.
+            const oddball = {
+                Name: 'Level',
+                Type: 'int',
+                SQLFullType: 'int',
+                NeedsQuotes: false,
+                ValueListType: 'List',
+                EntityFieldValues: [
+                    { ID: 'o-1', EntityFieldID: 'field-1', Sequence: 1, Value: 'Low', Code: 'Low' },
+                    { ID: 'o-2', EntityFieldID: 'field-1', Sequence: 2, Value: 'High', Code: 'High' },
+                ],
+            };
+            expect(new EntityField(makeFieldInfo(oddball), 'Low').Validate().Success).toBe(true);
+            expect(new EntityField(makeFieldInfo(oddball), 'Medium').Validate().Success).toBe(false);
+        });
+    });
 });
 
 /**
