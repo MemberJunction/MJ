@@ -16,10 +16,13 @@
   },
   "lines": {
     "5.51": {
-      "status": "candidate",
+      "status": "certified",
+      "certifiedBuild": "5.51.0",
       "candidateDate": "2026-07-31",
+      "certifiedDate": "2026-08-14",
       "supportEnds": "2027-02-14",
-      "upgradeImpact": "none"
+      "upgradeImpact": "none",
+      "scorecard": "certifications/5.51.0.md"
     }
   }
 }
