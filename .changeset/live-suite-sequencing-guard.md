@@ -1,5 +1,5 @@
 ---
-'@memberjunction/testing-engine': patch
+'@memberjunction/testing-engine': minor
 ---
 
 Sequence IT85 ahead of the live suite's client bundle, and guard the invariant
