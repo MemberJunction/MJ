@@ -347,6 +347,21 @@ export class EntityField {
                     }
                 }
             }
+
+            // Value-list validation (MJ issue #3969): a field whose ValueListType is `List` carries an
+            // EXHAUSTIVE set of legal values in metadata, and for an `IN (...)` CHECK constraint that
+            // list is the only runtime representation CodeGen produces — so without this rung an
+            // out-of-list value reached the database as a raw constraint violation attributed to no
+            // field, on every path that is not a form. Which modes and value types the rule applies
+            // to, how values are compared, and why, all live in
+            // EntityFieldInfo.ValueIsPermittedByValueList: the normalized set of legal values is
+            // derived from immutable metadata SHARED by every EntityField instance of this field, so
+            // it is built once per field rather than rebuilt on every record's validation.
+            if (!ef.ValueIsPermittedByValueList(this.Value)) {
+                result.Success = false;
+                const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
+                result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
+            }
         }
 
         return result;
