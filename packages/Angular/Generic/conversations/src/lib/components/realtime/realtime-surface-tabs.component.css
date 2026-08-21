@@ -204,6 +204,23 @@
 }
 
 /* ---------- panes: all alive, only the active one displayed ---------- */
+/* The pane region. In tabbed mode it is a plain column holding the one visible pane; in split mode
+   it becomes the grid, which is why it exists at all — the panel itself is a flex COLUMN carrying
+   the tab strip, so panes cannot be laid out in a row at that level. */
+.s-panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.surface--split .s-panes {
+  display: grid;
+  grid-template-columns: repeat(var(--surface-split-count, 2), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 1px;
+  background: var(--mj-border-default);   /* the gap reads as a divider between surfaces */
+}
+
 .s-pane {
   display: none;
   flex: 1;
@@ -215,6 +232,23 @@
 }
 .s-pane--active {
   display: flex;
+}
+/* A split pane shows whether or not it is the focused one — that is the whole point of the mode.
+   `min-width: 0` keeps a wide surface (a browser canvas) from forcing its column past its share. */
+.surface--split .s-pane--split {
+  display: flex;
+  min-width: 0;
+  background: var(--mj-bg-surface);
+}
+/* …and a pane NOT in the split stays hidden even when it is the focused tab, so choosing a tab
+   outside the arrangement cannot silently drop a third surface into a two-column grid. */
+.surface--split .s-pane:not(.s-pane--split) {
+  display: none;
+}
+/* The focused surface stays identifiable inside the split — the tab strip still drives focus, and
+   an unmarked grid would make "which one am I acting on" unanswerable. */
+.surface--split .s-pane--split.s-pane--active {
+  box-shadow: inset 0 2px 0 0 var(--tab-accent);
 }
 
 /* Empty strip (idle voice-first session): a gentle hint rather than a bare grid. */
