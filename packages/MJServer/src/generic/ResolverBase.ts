@@ -1332,7 +1332,15 @@ export class ResolverBase {
         // MapFieldNamesToCodeNames now handles encryption filtering as well
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
       } else {
-        throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
+        // CompleteMessage, not Message. A validation refusal puts its reasons in `Errors` and leaves
+        // `Message` unset, so reading `Message` here fell through to 'Unknown error' and discarded
+        // every field-named explanation the entity had just produced. CreateRecord already read
+        // CompleteMessage; this path did not, which is why the SAME rule on the SAME entity explained
+        // itself on a create and said nothing on an update. CompleteMessage is a strict superset — it
+        // starts from `Message`, then appends `Error` and `Errors` — so nothing previously reported is
+        // lost, and it still yields undefined when there is genuinely nothing to say, leaving the
+        // fallback below to fire rather than showing the user a blank error.
+        throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error', {
           extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
         });
       }
@@ -1558,7 +1566,11 @@ export class ResolverBase {
         // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
         return returnValue;
       } else {
-        throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
+        // CompleteMessage, for the same reason as the update path above. It matters more going
+        // forward: apps already refuse deletes by overriding Delete() and returning false with the
+        // reason on LatestResult, and #3971 proposes a first-class delete-validation seam. Every one
+        // of those reasons was being replaced by 'Unknown error' at the API boundary.
+        throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error', {
           extensions: { code: 'DELETE_ENTITY_ERROR', entityName },
         });
       }
