@@ -123,6 +123,45 @@ export interface RealtimeDelegationResult {
 export type RealtimeClientToolHandler = (toolName: string, argsJson: string) => string | Promise<string>;
 
 /**
+ * A client-executed tool that belongs to the SESSION rather than to any one channel (#3536).
+ *
+ * Client tools are routed to a channel by the declaring channel's `ToolNamePrefix`, so a tool that
+ * operates ACROSS surfaces — report every open surface, group two surfaces into a workspace, hand a
+ * multi-step job to a delegate that drives several — had to be declared by whichever channel
+ * happened to be present, and then shipped wearing that channel's badge:
+ *
+ * ```
+ * browser_WorkspaceStatus      ← reports ALL surfaces, not just the browser
+ * browser_CombineSurfaces      ← groups the whiteboard with something
+ * ```
+ *
+ * Every description then opens by contradicting its own name, which is prompt budget spent undoing a
+ * routing decision — and it degrades selection, because a model reasonably infers scope from a name.
+ * It also made availability depend on which surface happened to claim the tool, complete with a
+ * claim/ownership dance and tool names that changed with the winner.
+ *
+ * These are declared to the model at mint alongside the channel tools and dispatched by NAME, so
+ * they can be called anything (`WorkspaceStatus`, `session_WorkspaceStatus`) and are reachable
+ * whether or not any particular channel is open.
+ */
+export interface RealtimeSessionClientTool {
+  /** What the model is told: name, description, parameter schema. */
+  Definition: RealtimeToolDefinition;
+  /**
+   * Runs the tool in the browser and returns the JSON result string the model reads.
+   *
+   * **May be async**, which is the other half of the fix. A channel's `ApplyAgentTool` returns
+   * `string`, so a cross-surface tool that has to AWAIT something (a delegate returning a
+   * consolidated result after several steps) could only be declared by a channel whose entry point
+   * happened to be async — making the tool's very existence depend on which surface claimed it.
+   *
+   * Thrown errors are wrapped into `{ success: false, error }` by the session, exactly like a
+   * channel tool's, so a failure is narrated rather than silent.
+   */
+  Execute: (argsJson: string) => string | Promise<string>;
+}
+
+/**
  * A channel's request to enter / leave the FOCUS layout, emitted on
  * {@link RealtimeSessionService.ChannelFocus$} when a plugin calls its context's
  * `SetFocusMode`. The overlay shell subscribes: it collapses/restores the main call column
@@ -568,6 +607,12 @@ export class RealtimeSessionService {
    */
   private clientToolHandlers = new Map<string, RealtimeClientToolHandler>();
 
+  /**
+   * Session-level client tools (#3536), keyed by LOWERCASED tool name — matched exactly, never by
+   * prefix, which is the whole point of the route.
+   */
+  private sessionClientTools = new Map<string, RealtimeSessionClientTool>();
+
   // ── Interactive channels (registry-resolved plugins) ───────────────────────
   /** Debounce window for persisting a channel's state of record after a change burst. */
   private static readonly ChannelSaveDebounceMs = 3000;
@@ -695,7 +740,11 @@ export class RealtimeSessionService {
     try {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
-      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
+      const channelTools = await this.startChannels();
+      // Session-level tools are declared alongside the channel tools (#3536) — the model is told its
+      // whole vocabulary once, at mint, and cannot be told again.
+      this.assertNoShadowedSessionTools();
+      const allClientTools = [...(clientTools ?? []), ...channelTools, ...this.SessionClientToolDefinitions];
       const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
@@ -810,6 +859,36 @@ export class RealtimeSessionService {
   /** Removes the handler registered for `toolNamePrefix` (no-op when none is registered). */
   public UnregisterClientToolHandler(toolNamePrefix: string): void {
     this.clientToolHandlers.delete(toolNamePrefix);
+  }
+
+  /**
+   * Replaces the set of SESSION-level client tools (#3536) — tools that belong to the session rather
+   * than to any one surface. Declared to the model at mint and dispatched by exact name. Passing `[]`
+   * clears them.
+   *
+   * Call before starting a session: the declarations are sent at mint, and a realtime model's tool
+   * vocabulary cannot be changed mid-session. Registering later still routes calls correctly, but the
+   * model will never have been told the tool exists.
+   *
+   * @param tools The session's cross-surface tools.
+   */
+  public RegisterSessionClientTools(tools: ReadonlyArray<RealtimeSessionClientTool>): void {
+    this.sessionClientTools.clear();
+    for (const tool of tools) {
+      const name = tool?.Definition?.Name?.trim();
+      if (!name || typeof tool.Execute !== 'function') {
+        // A declaration the model can see but nothing can run is worse than no tool: the model
+        // calls it, gets a server relay it never meant to trigger, and narrates the wrong outcome.
+        console.warn('[RealtimeSession] Ignoring a session client tool with no name or no Execute.');
+        continue;
+      }
+      this.sessionClientTools.set(name.toLowerCase(), tool);
+    }
+  }
+
+  /** The session-level tool declarations, for the mint call. */
+  public get SessionClientToolDefinitions(): RealtimeToolDefinition[] {
+    return Array.from(this.sessionClientTools.values()).map(tool => tool.Definition);
   }
 
   /**
@@ -1641,14 +1720,52 @@ export class RealtimeSessionService {
     }
   }
 
-  /** Finds the registered client-tool handler whose prefix matches `toolName`, or `null`. */
+  /**
+   * Finds the local handler for `toolName`: an EXACT session-level tool first (#3536), else the
+   * registered channel handler whose prefix matches. `null` means the call goes to the server relay.
+   *
+   * Exact before prefix, and the order is load-bearing rather than arbitrary. A session tool is named
+   * for what it does, not for a channel, so nothing guarantees its name avoids every live prefix —
+   * and if a prefix won, a cross-surface tool would be silently delivered to one surface's channel,
+   * which is the exact failure this route exists to remove. {@link assertNoShadowedSessionTools}
+   * makes such a name impossible to ship rather than merely losing quietly.
+   */
   private findClientToolHandler(toolName: string): RealtimeClientToolHandler | null {
+    const sessionTool = this.sessionClientTools.get((toolName ?? '').trim().toLowerCase());
+    if (sessionTool) {
+      return (_name, argsJson) => sessionTool.Execute(argsJson);
+    }
     for (const [prefix, handler] of this.clientToolHandlers) {
       if (toolName.startsWith(prefix)) {
         return handler;
       }
     }
     return null;
+  }
+
+  /**
+   * Refuses to start a session whose session-level tool names collide with a live channel's prefix.
+   *
+   * Fails FAST and loudly because the alternative is invisible: the session tool would win dispatch
+   * (exact match first) and quietly shadow every channel tool sharing that prefix, so a whiteboard
+   * would stop responding to its own tools and nothing would say why. The clash is deterministic and
+   * belongs to the host's naming, so it surfaces the first time the session is run.
+   *
+   * @throws When a session tool's name starts with any live channel's `ToolNamePrefix`.
+   */
+  private assertNoShadowedSessionTools(): void {
+    for (const tool of this.sessionClientTools.values()) {
+      const name = tool.Definition.Name;
+      for (const plugin of this._activeChannels$.value) {
+        const prefix = plugin.ToolNamePrefix;
+        if (prefix && name.startsWith(prefix)) {
+          throw new Error(
+            `[RealtimeSession] Session-level tool '${name}' starts with the '${plugin.ChannelName}' channel's ` +
+              `tool prefix '${prefix}'. It would shadow that channel's tools. Rename the session tool.`,
+          );
+        }
+      }
+    }
   }
 
   /**
