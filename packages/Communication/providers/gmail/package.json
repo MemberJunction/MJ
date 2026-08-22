@@ -2,7 +2,7 @@
   "name": "@memberjunction/communication-gmail",
   "license": "BUSL-1.1",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "Gmail/Google Suite provider for MemberJunction Communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,9 +15,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/communication-types": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
     "dotenv": "^17.2.4",
     "env-var": "^7.4.1",
     "googleapis": "^171.4.0"
