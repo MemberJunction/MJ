@@ -1592,18 +1592,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /**
-   * Run CodeGen programmatically.
-   *
-   * Writes a temporary .mjs script that imports CodeGenLib directly (bypassing
-   * the oclif-based `mj` CLI which has heavy dependencies). The script:
-   *   1. Loads dotenv/config for DB env vars
-   *   2. Bootstraps class registrations via server-bootstrap-lite
-   *   3. Initializes config from mj.config.cjs
-   *   4. Runs full CodeGen pipeline (metadata + SQL + TypeScript generation)
-   *
-   * Override via RSU_CODEGEN_COMMAND env var for custom setups.
-   */
-  /**
    * The reason the last in-process CodeGen run failed, when the injected runner can report one.
    * Returns '' when it cannot, so the message degrades to the bare legacy text rather than
    * claiming a cause it does not have.
@@ -1617,6 +1605,18 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     return ` — ${detail}`;
   }
 
+  /**
+   * Run CodeGen programmatically.
+   *
+   * Writes a temporary .mjs script that imports CodeGenLib directly (bypassing
+   * the oclif-based `mj` CLI which has heavy dependencies). The script:
+   *   1. Loads dotenv/config for DB env vars
+   *   2. Bootstraps class registrations via server-bootstrap-lite
+   *   3. Initializes config from mj.config.cjs
+   *   4. Runs full CodeGen pipeline (metadata + SQL + TypeScript generation)
+   *
+   * Override via RSU_CODEGEN_COMMAND env var for custom setups.
+   */
   private async runCodeGen(): Promise<boolean> {
     // Prefer in-process CodeGen runner if injected (no child process, no filesystem deps)
     if (this._codeGenRunner) {
