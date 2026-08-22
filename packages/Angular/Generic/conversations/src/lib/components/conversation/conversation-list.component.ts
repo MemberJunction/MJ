@@ -180,6 +180,17 @@ interface FolderNode {
         }
       </div>
 
+      <!-- Escalate the in-place filter to a full cross-entity search. Pinned below the
+           scroll region rather than appended to the results so it stays reachable without
+           scrolling past every match. Only meaningful while filtering. -->
+      @if (isSearching && !isSelectionMode) {
+        <button class="search-escalate" (click)="escalateSearch()">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span class="search-escalate-label">Search all of Chat for &ldquo;{{ searchQuery }}&rdquo;</span>
+          <i class="fa-solid fa-arrow-right search-escalate-go"></i>
+        </button>
+      }
+
       <!-- Selection Action Bar -->
       @if (isSelectionMode) {
         <div class="selection-action-bar">
@@ -419,6 +430,40 @@ interface FolderNode {
 
     /* Collapsible Sections */
     .sidebar-section { margin-bottom: 20px; }
+
+    /* Reads as a continuation of the list rather than a second control: full-width row,
+       ink-derived like every other affordance in this panel, no input styling. */
+    .search-escalate {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 12px;
+      border: none;
+      border-top: 1px solid color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      background: transparent;
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .search-escalate:hover {
+      background: var(--conv-list-hover-bg);
+      color: var(--conv-list-ink);
+    }
+
+    /* Truncate rather than wrap — the query is user text of unbounded length. */
+    .search-escalate-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .search-escalate-go { opacity: 0.6; }
     .pinned-section .section-title .section-icon {
       color: var(--mj-status-warning);
       font-size: 11px;
@@ -1065,6 +1110,12 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Output() pinSidebarRequested = new EventEmitter<void>(); // Request to pin sidebar
   @Output() unpinSidebarRequested = new EventEmitter<void>(); // Request to unpin (collapse) sidebar
   @Output() refreshRequested = new EventEmitter<void>(); // Emitted after list refresh so chat area can also reload
+  /**
+   * The user wants the current filter term searched across all of Chat, not just this list.
+   * Emits the term. This panel filters only loaded conversations by Name/Description, so it
+   * cannot answer "where did we discuss X" — the host owns that surface and the routing to it.
+   */
+  @Output() searchEscalated = new EventEmitter<string>();
 
   public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
@@ -1130,6 +1181,11 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** True when a search filter is active. */
   get isSearching(): boolean {
     return this._searchQuery.trim().length > 0;
+  }
+
+  /** Hand the current filter term to the host to search across every Chat entity. */
+  escalateSearch(): void {
+    this.searchEscalated.emit(this._searchQuery.trim());
   }
 
   /** Conversations matching the current search (used by selection-mode helpers). */

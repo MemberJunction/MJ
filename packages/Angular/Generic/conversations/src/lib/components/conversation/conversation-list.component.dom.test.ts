@@ -145,3 +145,70 @@ describe('ConversationListComponent (DOM) — chrome toggles', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * The escalation row is the sole entry point to cross-entity search. This panel filters only
+ * loaded conversations by Name/Description, so it cannot answer "where did we discuss X" —
+ * it hands the term to the host instead of routing (widgets must not route).
+ */
+describe('ConversationListComponent (DOM) — search escalation', () => {
+  const currentUser = { ID: 'u1' } as unknown as UserInfo;
+  const conv = (id: string, name: string) =>
+    ({ ID: id, Name: name, Description: '', ProjectID: null } as unknown as MJConversationEntity);
+
+  beforeEach(() => {
+    vi.spyOn(ConversationListComponent.prototype, 'ngOnInit').mockImplementation(() => {});
+  });
+
+  const render = (setup?: (c: ConversationListComponent) => void) =>
+    renderComponentFixture(ConversationListComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: [ConversationListComponent, StubNotificationBadgeComponent],
+      providers: [
+        { provide: DialogService, useValue: {} },
+        { provide: NotificationService, useValue: {} },
+        { provide: ActiveTasksService, useValue: {} },
+        { provide: MJDialogService, useValue: {} },
+      ],
+      inputs: { environmentId: 'env1', currentUser },
+      setup: (c) => {
+        c.pinnedConversations = [];
+        c.ungroupedConversations = [conv('c2', 'Loose One')];
+        c.unpinnedConversations = [conv('c2', 'Loose One')];
+        setup?.(c);
+      },
+    });
+
+  it('is hidden when no filter is active', () => {
+    const f = render();
+    expect(queryAll(f, '.search-escalate').length).toBe(0);
+  });
+
+  it('appears once a filter term is typed, echoing the term', () => {
+    const f = render((c) => {
+      c.searchQuery = 'poem';
+    });
+    expect(queryAll(f, '.search-escalate').length).toBe(1);
+    expect(query(f, '.search-escalate-label')!.textContent).toContain('poem');
+  });
+
+  it('emits the trimmed term rather than routing itself', () => {
+    const f = render((c) => {
+      c.searchQuery = '  poem  ';
+    });
+
+    const emitted: string[] = [];
+    f.componentInstance.searchEscalated.subscribe((q: string) => emitted.push(q));
+    query(f, '.search-escalate')!.click();
+
+    expect(emitted).toEqual(['poem']);
+  });
+
+  it('stays hidden in selection mode, where the row would compete with the action bar', () => {
+    const f = render((c) => {
+      c.searchQuery = 'poem';
+      c.isSelectionMode = true;
+    });
+    expect(queryAll(f, '.search-escalate').length).toBe(0);
+  });
+});

@@ -3,7 +3,7 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
@@ -52,7 +52,8 @@ import { Subject, takeUntil } from 'rxjs';
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
                 (unpinSidebarRequested)="unpinSidebar()"
-                (refreshRequested)="onRefreshRequested()">
+                (refreshRequested)="onRefreshRequested()"
+                (searchEscalated)="openSearch($event)">
               </mj-conversation-list>
               <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
                    section component by Read permission on 'MJ: User Routines'. -->
@@ -108,6 +109,18 @@ import { Subject, takeUntil } from 'rxjs';
       </div>
     }
     
+    <!-- Cross-entity search panel (conversations / messages / artifacts / collections / tasks) -->
+    @if (currentUser) {
+      <mj-search-panel
+        [initialQuery]="searchSeedQuery"
+        [isOpen]="isSearchPanelOpen"
+        [environmentId]="environmentId"
+        [currentUser]="currentUser"
+        (close)="closeSearch()"
+        (resultSelected)="onSearchResultSelected($event)">
+      </mj-search-panel>
+    }
+
     <!-- Toast notifications container -->
     <mj-toast></mj-toast>
     `,
@@ -1107,6 +1120,73 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  // ========================================
+  // CROSS-ENTITY SEARCH PANEL
+  // ========================================
+
+  /** Whether the cross-entity search panel is open. */
+  public isSearchPanelOpen = false;
+
+  /** Term the panel opens with, handed over from the conversation list's own filter. */
+  public searchSeedQuery = '';
+
+  /**
+   * Open the cross-entity search panel, carrying over the term the user had already typed
+   * into the conversation list's filter so they do not retype it.
+   */
+  openSearch(query: string = ''): void {
+    this.searchSeedQuery = query;
+    this.isSearchPanelOpen = true;
+  }
+
+  /** Close the cross-entity search panel. */
+  closeSearch(): void {
+    this.isSearchPanelOpen = false;
+  }
+
+  /**
+   * Route a search result to the right Explorer surface.
+   *
+   * ConversationWorkspaceComponent handles this by flipping its own `activeTab`, which
+   * does not exist here — Explorer renders each chat surface as a separate resource, so
+   * cross-surface results have to go through NavigationService instead. Conversations and
+   * messages both resolve to a conversation, which this component already owns, so they
+   * are selected in place rather than round-tripping through navigation.
+   */
+  onSearchResultSelected(result: SearchResult): void {
+    this.closeSearch();
+
+    switch (result.type) {
+      case 'conversation':
+        this.onConversationSelected(result.id);
+        break;
+
+      case 'message':
+        // A message is only actionable via its parent conversation.
+        if (result.conversationId) {
+          this.onConversationSelected(result.conversationId);
+        }
+        break;
+
+      case 'artifact':
+        // Open the artifact directly rather than routing through a parent collection or
+        // conversation. An artifact need not have either — one created standalone has no
+        // Collection Artifact row and no Conversation Detail referencing it — and the
+        // search result only ever carries collectionId, so parent-based routing silently
+        // did nothing for every artifact outside a collection.
+        this.navigationService.OpenArtifact(result.id, result.title);
+        break;
+
+      case 'collection':
+        this.navigationService.OpenNavItemByName('Collections', { collectionId: result.id });
+        break;
+
+      case 'task':
+        this.navigationService.OpenNavItemByName('Tasks', { taskId: result.id });
+        break;
+    }
   }
 
   /**
