@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios, { AxiosResponse } from 'axios';
+import { safeFetch, SSRFError } from "../utilities/ssrf-guard";
 
 /**
  * Action that extracts comprehensive metadata from web pages including OpenGraph, Twitter Cards,
@@ -92,9 +92,11 @@ export class URLMetadataExtractorAction extends BaseAction {
                 };
             }
 
-            // Fetch the webpage
+            // Fetch the webpage. The URL is caller-controlled, so route it through the SSRF guard —
+            // private/loopback/link-local/reserved targets are blocked and each redirect hop is
+            // re-validated, defeating DNS-rebinding / redirect bypasses.
             try {
-                const response = await axios.get(url, {
+                const response = await safeFetch(url, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -103,14 +105,18 @@ export class URLMetadataExtractorAction extends BaseAction {
                         'Cache-Control': 'max-age=0',
                         'Upgrade-Insecure-Requests': '1'
                     },
-                    timeout: this.TIMEOUT,
-                    maxContentLength: this.MAX_CONTENT_SIZE,
-                    maxBodyLength: this.MAX_CONTENT_SIZE,
-                    responseType: 'text',
-                    validateStatus: (status) => status >= 200 && status < 400 // Only accept success status codes
+                    signal: AbortSignal.timeout(this.TIMEOUT)
                 });
 
-                const contentType = response.headers['content-type'] || '';
+                if (response.status < 200 || response.status >= 400) {
+                    return {
+                        Success: false,
+                        Message: `HTTP Error ${response.status}: ${response.statusText} for URL: ${url}`,
+                        ResultCode: `HTTP_${response.status}`
+                    };
+                }
+
+                const contentType = response.headers.get('content-type') || '';
                 if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
                     return {
                         Success: false,
@@ -119,8 +125,8 @@ export class URLMetadataExtractorAction extends BaseAction {
                     };
                 }
 
-                const html = response.data;
-                
+                const html = await response.text();
+
                 if (html.length > this.MAX_CONTENT_SIZE) {
                     return {
                         Success: false,
@@ -131,12 +137,12 @@ export class URLMetadataExtractorAction extends BaseAction {
 
                 // Extract metadata
                 const metadata = await this.extractAllMetadata(
-                    html, 
-                    parsedUrl, 
-                    includeOpenGraph, 
-                    includeTwitterCards, 
-                    includeSchemaOrg, 
-                    includeBasicMeta, 
+                    html,
+                    parsedUrl,
+                    includeOpenGraph,
+                    includeTwitterCards,
+                    includeSchemaOrg,
+                    includeBasicMeta,
                     includeFavicon
                 );
 
@@ -160,42 +166,31 @@ export class URLMetadataExtractorAction extends BaseAction {
                 };
 
             } catch (fetchError) {
-                if (axios.isAxiosError(fetchError)) {
-                    // Check for 404 or other HTTP errors
-                    if (fetchError.response) {
-                        return {
-                            Success: false,
-                            Message: `HTTP Error ${fetchError.response.status}: ${fetchError.response.statusText} for URL: ${url}`,
-                            ResultCode: `HTTP_${fetchError.response.status}`
-                        };
-                    }
-                    
-                    if (fetchError.code === 'ECONNABORTED' || fetchError.code === 'ETIMEDOUT') {
-                        return {
-                            Success: false,
-                            Message: `Request timed out after ${this.TIMEOUT}ms`,
-                            ResultCode: "TIMEOUT"
-                        };
-                    }
-                    if (fetchError.code === 'ENOTFOUND') {
-                        return {
-                            Success: false,
-                            Message: `DNS lookup failed for URL: ${url}`,
-                            ResultCode: "DNS_FAILURE"
-                        };
-                    }
-                    if (fetchError.code === 'ECONNREFUSED') {
-                        return {
-                            Success: false,
-                            Message: `Connection refused for URL: ${url}`,
-                            ResultCode: "CONNECTION_REFUSED"
-                        };
-                    }
+                if (fetchError instanceof SSRFError) {
+                    throw fetchError; // handled by the outer catch as SSRF_BLOCKED
                 }
-                throw fetchError;
+                if (fetchError instanceof Error && (fetchError.name === 'TimeoutError' || fetchError.name === 'AbortError')) {
+                    return {
+                        Success: false,
+                        Message: `Request timed out after ${this.TIMEOUT}ms`,
+                        ResultCode: "TIMEOUT"
+                    };
+                }
+                return {
+                    Success: false,
+                    Message: `Failed to fetch URL: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
+                    ResultCode: "FETCH_FAILED"
+                };
             }
 
         } catch (error) {
+            if (error instanceof SSRFError) {
+                return {
+                    Success: false,
+                    Message: "URL resolves to a private or reserved address and was blocked",
+                    ResultCode: "SSRF_BLOCKED"
+                };
+            }
             return {
                 Success: false,
                 Message: `Failed to extract metadata: ${error instanceof Error ? error.message : String(error)}`,

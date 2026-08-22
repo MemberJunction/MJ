@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import { safeFetch, SSRFError } from "../utilities/ssrf-guard";
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
 import pdfParse from 'pdf-parse';
@@ -174,6 +175,13 @@ export class WebPageContentAction extends BaseAction {
             };
 
         } catch (error) {
+            if (error instanceof SSRFError) {
+                return {
+                    Success: false,
+                    Message: "URL resolves to a private or reserved address and was blocked",
+                    ResultCode: "SSRF_BLOCKED"
+                };
+            }
             return {
                 Success: false,
                 Message: `Failed to retrieve web content: ${error instanceof Error ? error.message : String(error)}`,
@@ -735,7 +743,9 @@ export class WebPageContentAction extends BaseAction {
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                const response = await fetch(url, options);
+                // Route through the SSRF guard: the URL is caller-controlled, so private/loopback/
+                // link-local/reserved targets are blocked and every redirect hop is re-validated.
+                const response = await safeFetch(url, options);
 
                 // Retry on specific status codes that might be transient
                 if (attempt < maxRetries && this.shouldRetry(response.status)) {
