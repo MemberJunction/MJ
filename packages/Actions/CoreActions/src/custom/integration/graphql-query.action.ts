@@ -1,8 +1,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import axios from "axios";
 import { JSONParamHelper } from "../utilities/json-param-helper";
+import { safeFetch, SSRFError } from "../utilities/ssrf-guard";
 
 /**
  * Action that executes GraphQL queries and mutations
@@ -107,7 +107,7 @@ export class GraphQLQueryAction extends BaseAction {
                 };
             }
 
-            // Validate endpoint URL
+            // Validate endpoint URL format
             try {
                 new URL(endpoint);
             } catch (e) {
@@ -119,8 +119,8 @@ export class GraphQLQueryAction extends BaseAction {
             }
 
             // Prepare GraphQL request body
-            const requestBody: any = { query };
-            
+            const requestBody: Record<string, unknown> = { query };
+
             if (variables) {
                 requestBody.variables = variables;
             }
@@ -130,17 +130,20 @@ export class GraphQLQueryAction extends BaseAction {
             }
 
             // Prepare headers
-            const requestHeaders = {
+            const requestHeaders: Record<string, string> = {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                ...headers
+                ...(headers as Record<string, string>)
             };
 
-            // Make GraphQL request
-            const response = await axios.post(endpoint, requestBody, {
+            // Make GraphQL request. The endpoint is caller-controlled, so route it through the
+            // SSRF guard — private/loopback/link-local/reserved targets are blocked and each
+            // redirect hop is re-validated.
+            const response = await safeFetch(endpoint, {
+                method: 'POST',
                 headers: requestHeaders,
-                timeout,
-                validateStatus: () => true // Handle all status codes
+                body: JSON.stringify(requestBody),
+                signal: AbortSignal.timeout(timeout)
             });
 
             // Check for HTTP errors
@@ -153,7 +156,8 @@ export class GraphQLQueryAction extends BaseAction {
             }
 
             // Check for GraphQL errors
-            const responseData = response.data;
+            const responseText = await response.text();
+            const responseData = responseText.length > 0 ? JSON.parse(responseText) : {};
             const hasErrors = responseData.errors && responseData.errors.length > 0;
 
             // Add output parameters
@@ -215,6 +219,13 @@ export class GraphQLQueryAction extends BaseAction {
             }
 
         } catch (error) {
+            if (error instanceof SSRFError) {
+                return {
+                    Success: false,
+                    Message: "URL resolves to a private or reserved address and was blocked",
+                    ResultCode: "SSRF_BLOCKED"
+                };
+            }
             return {
                 Success: false,
                 Message: `GraphQL request failed: ${error instanceof Error ? error.message : String(error)}`,

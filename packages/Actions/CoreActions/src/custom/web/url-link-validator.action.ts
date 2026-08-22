@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import { assertPublicUrl, safeFetch, SSRFError } from "../utilities/ssrf-guard";
 
 /**
  * Action that validates URLs by checking accessibility, response codes, and basic health checks
@@ -159,6 +160,7 @@ export class URLLinkValidatorAction extends BaseAction {
         const result: any = {
             url: url.trim(),
             isValid: false,
+            blocked: false,
             responseTime: null,
             statusCode: null,
             statusText: null,
@@ -182,19 +184,41 @@ export class URLLinkValidatorAction extends BaseAction {
                 return result;
             }
 
+            // SSRF guard: block URLs resolving to private/loopback/link-local/reserved addresses.
+            // Mark the individual link as blocked rather than failing the whole batch.
+            try {
+                await assertPublicUrl(result.url);
+            } catch (error) {
+                if (error instanceof SSRFError) {
+                    result.error = "URL resolves to a private or reserved address and was blocked";
+                    result.blocked = true;
+                    return result;
+                }
+                throw error;
+            }
+
             // Create AbortController for timeout
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
             try {
-                const response = await fetch(result.url, {
-                    method: 'HEAD', // Use HEAD to minimize data transfer
-                    headers: {
-                        'User-Agent': userAgent
-                    },
-                    redirect: followRedirects ? 'follow' : 'manual',
-                    signal: controller.signal
-                });
+                // When following redirects, use safeFetch so each hop is re-validated (defeats
+                // redirect / DNS-rebinding SSRF). When not following, a manual fetch surfaces the
+                // 3xx status directly (the initial URL is already validated above).
+                const response = followRedirects
+                    ? await safeFetch(result.url, {
+                        method: 'HEAD',
+                        headers: { 'User-Agent': userAgent },
+                        signal: controller.signal
+                    })
+                    : await fetch(result.url, {
+                        method: 'HEAD', // Use HEAD to minimize data transfer
+                        headers: {
+                            'User-Agent': userAgent
+                        },
+                        redirect: 'manual',
+                        signal: controller.signal
+                    });
 
                 clearTimeout(timeoutId);
                 result.responseTime = Date.now() - startTime;
@@ -228,7 +252,10 @@ export class URLLinkValidatorAction extends BaseAction {
                 clearTimeout(timeoutId);
                 result.responseTime = Date.now() - startTime;
                 
-                if (fetchError instanceof Error) {
+                if (fetchError instanceof SSRFError) {
+                    result.error = "URL resolves to a private or reserved address and was blocked";
+                    result.blocked = true;
+                } else if (fetchError instanceof Error) {
                     if (fetchError.name === 'AbortError') {
                         result.error = `Request timed out after ${timeout}ms`;
                     } else {
