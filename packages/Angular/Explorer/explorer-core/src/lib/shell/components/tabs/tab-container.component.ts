@@ -28,7 +28,7 @@ import {
   LayoutNode,
   FlattenLayoutToSingleStack
 } from '@memberjunction/ng-base-application';
-import { MJGlobal } from '@memberjunction/global';
+import { ClassRegistration, MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges, ExplorerBreakpointService, ResolveRecordTypeIcon } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { RecordOriginCrumbComponent } from '../record-open/record-origin-crumb.component';
@@ -509,6 +509,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     this.updateTabDisplayName(tab);
   }
 
+
+  /**
+   * Memoized throwaway instances used only to read a resource's display name,
+   * keyed by driver class. Holds the in-flight PROMISE, not the resolved value, so
+   * the N tabs a workspace restore resolves concurrently share one attempt. A
+   * promise resolving to `null` marks a driver that cannot be instantiated outside
+   * a view — see `resolveDisplayNameProvider`.
+   */
+  private displayNameProviders = new Map<string, Promise<BaseResourceComponent | null>>();
 
   constructor(
     private layoutManager: GoldenLayoutManager,
@@ -999,6 +1008,10 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       ref.destroy();
     });
     this.componentRefs.clear();
+
+    // These instances were built outside any view, so Angular will never call their
+    // ngOnDestroy — drop our references so nothing they hold outlives the shell.
+    this.displayNameProviders.clear();
   }
 
   /**
@@ -1879,25 +1892,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
-      // Get the resource registration to access GetResourceDisplayName without loading full component
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
-      const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
-        BaseResourceComponent,
-        driverClass
-      );
-
-      if (!resourceReg) {
+      const provider = await this.resolveDisplayNameProvider(driverClass);
+      if (!provider) {
+        // This driver can't supply a name — keep the tab's stored title.
         return;
       }
 
-      // Create a lightweight instance just to call GetResourceDisplayName.
-      // Must run inside an injection context because BaseResourceComponent
-      // uses inject() field initializers (e.g. NavigationService).
-      const tempInstance = runInInjectionContext(
-        this.environmentInjector,
-        () => new resourceReg.SubClass() as BaseResourceComponent
-      );
-      const displayName = await tempInstance.GetResourceDisplayName(resourceData);
+      const displayName = await provider.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
         // Update the tab title in whichever Golden Layout hosts this tab
@@ -1909,6 +1911,82 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }
     } catch (error) {
       console.error('[TabContainer.updateTabDisplayName] Error updating tab display name:', error);
+    }
+  }
+
+  /**
+   * Resolve — and memoize per driver class — the throwaway component instance
+   * used to read a resource's display name without loading the full component.
+   *
+   * Memoizes the PROMISE, and registers it BEFORE the first `await`, because
+   * callers are fire-and-forget: a workspace restore runs a synchronous
+   * `sortedTabs.forEach(tab => this.createTab(tab))`, so every tab enters here
+   * before any of them could have written a resolved value. Caching the value
+   * instead of the promise would still instantiate once per restored tab.
+   *
+   * @returns the instance, or `null` when this driver cannot provide a name.
+   */
+  private resolveDisplayNameProvider(driverClass: string): Promise<BaseResourceComponent | null> {
+    let pending = this.displayNameProviders.get(driverClass);
+    if (!pending) {
+      pending = this.buildDisplayNameProvider(driverClass);
+      this.displayNameProviders.set(driverClass, pending);
+    }
+    return pending;
+  }
+
+  /**
+   * Instantiate a driver's `BaseResourceComponent` outside any view.
+   *
+   * This is inherently partial: the subclass's `inject()` field initializers
+   * resolve against the *environment* injector, which by design cannot supply
+   * node-injector-only tokens (`ElementRef`, `ChangeDetectorRef`,
+   * `ViewContainerRef`) or component-scoped providers. Drivers that need one of
+   * those throw NG0201 here and always will, so that failure stays memoized and
+   * is reported once per driver class — uncached it fired on every tab add and
+   * every tab reload, producing 50k console errors in one regression run.
+   *
+   * "Not registered" is NOT memoized: a lazy chunk may register the class later,
+   * and `ClassFactory` already caches its own null and invalidates it on
+   * `Register()`. Neither is a REJECTED lookup — a lazy loader rejects when its
+   * chunk fetch fails, which is just as transient.
+   */
+  private async buildDisplayNameProvider(driverClass: string): Promise<BaseResourceComponent | null> {
+    let resourceReg: ClassRegistration | null;
+    try {
+      resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
+        BaseResourceComponent,
+        driverClass
+      );
+    } catch {
+      // Memoizing this rejection would disable display names for the driver for
+      // the life of the shell over one flaky chunk fetch — and hand every later
+      // caller a rejected promise. Delete and let the next ask retry; the failed
+      // load already reports itself on the resource's real load path.
+      this.displayNameProviders.delete(driverClass);
+      return null;
+    }
+    if (!resourceReg) {
+      this.displayNameProviders.delete(driverClass);
+      return null;
+    }
+
+    try {
+      return runInInjectionContext(
+        this.environmentInjector,
+        () => new resourceReg.SubClass() as BaseResourceComponent
+      );
+    } catch (error) {
+      // console.warn (not LogError) deliberately: the message must stay a plain
+      // string. Passing an Error to console.* makes the browser retain it — and,
+      // under Playwright, a handle to it — with its full stack attached, which is
+      // what turned the error flood into 6.5 GB of retained heap.
+      const reason = error instanceof Error ? error.message.split('\n')[0] : String(error);
+      console.warn(
+        `[TabContainer] Resource driver "${driverClass}" cannot be instantiated outside a view (${reason}) — ` +
+          `its tabs will keep their stored titles.`
+      );
+      return null;
     }
   }
 
