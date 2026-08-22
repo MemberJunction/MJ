@@ -68,115 +68,103 @@
 
 /* SQL generated to create new entity MJ: Form Chrome Rules */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Entity] WHERE [ID] = '53695c5d-e659-4025-825a-23c5fa873b6a' OR [Name] = 'MJ: Form Chrome Rules')
-      BEGIN
-          INSERT INTO [${flyway:defaultSchema}].[Entity] (
-             [ID],
-             [Name],
-             [DisplayName],
-             [Description],
-             [NameSuffix],
-             [BaseTable],
-             [BaseView],
-             [SchemaName],
-             [IncludeInAPI],
-             [AllowUserSearchAPI],
-             [AllowCaching]
-             , [TrackRecordChanges]
-             , [AuditRecordAccess]
-             , [AuditViewRuns]
-             , [AllowAllRowsAPI]
-             , [AllowCreateAPI]
-             , [AllowUpdateAPI]
-             , [AllowDeleteAPI]
-             , [UserViewMaxRows]
-             , [__mj_CreatedAt]
-             , [__mj_UpdatedAt]
-          )
-          VALUES (
-             '53695c5d-e659-4025-825a-23c5fa873b6a',
-             'MJ: Form Chrome Rules',
-             'Form Chrome Rules',
-             'Install-overlay (L3) pins for generated-form chrome. One row sets Primary / More / None for a parent form''s related entity or contribution. Not app-synced — site admin only.',
-             NULL,
-             'FormChromeRule',
-             'vwFormChromeRules',
-             '${flyway:defaultSchema}',
-             1,
-             1,
-             1
-             , 1
-             , 0
-             , 0
-             , 0
-             , 1
-             , 1
-             , 1
-             , 1000
-             , GETUTCDATE()
-             , GETUTCDATE()
-          );
-      END
-      GO
+      INSERT INTO [${flyway:defaultSchema}].[Entity] (
+         [ID],
+         [Name],
+         [DisplayName],
+         [Description],
+         [NameSuffix],
+         [BaseTable],
+         [BaseView],
+         [SchemaName],
+         [IncludeInAPI],
+         [AllowUserSearchAPI],
+         [AllowCaching]
+         , [TrackRecordChanges]
+         , [AuditRecordAccess]
+         , [AuditViewRuns]
+         , [AllowAllRowsAPI]
+         , [AllowCreateAPI]
+         , [AllowUpdateAPI]
+         , [AllowDeleteAPI]
+         , [UserViewMaxRows]
+         , [__mj_CreatedAt]
+         , [__mj_UpdatedAt]
+      )
+      VALUES (
+         '53695c5d-e659-4025-825a-23c5fa873b6a',
+         'MJ: Form Chrome Rules',
+         'Form Chrome Rules',
+         'Install-overlay (L3) pins for generated-form chrome. One row sets Primary / More / None for a parent form''s related entity or contribution. Not app-synced — site admin only.',
+         NULL,
+         'FormChromeRule',
+         'vwFormChromeRules',
+         '${flyway:defaultSchema}',
+         1,
+         1,
+         1
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+         , GETUTCDATE()
+         , GETUTCDATE()
+      );
 
 /* SQL generated to add new entity MJ: Form Chrome Rules to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Entity] WHERE [ID] = '53695c5d-e659-4025-825a-23c5fa873b6a')
-   AND NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' AND [EntityID] = '53695c5d-e659-4025-825a-23c5fa873b6a')
-BEGIN
-   INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '53695c5d-e659-4025-825a-23c5fa873b6a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
-END
-GO
 
 /* SQL generated to add new permission for entity MJ: Form Chrome Rules for role UI */
-IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Entity] WHERE [ID] = '53695c5d-e659-4025-825a-23c5fa873b6a')
-   AND NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission] WHERE [EntityID] = '53695c5d-e659-4025-825a-23c5fa873b6a' AND [RoleID] = 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E')
-BEGIN
-   INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
                                                    ('53695c5d-e659-4025-825a-23c5fa873b6a', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
-END
-GO
 
 /* SQL generated to add new permission for entity MJ: Form Chrome Rules for role Developer */
-IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Entity] WHERE [ID] = '53695c5d-e659-4025-825a-23c5fa873b6a')
-   AND NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission] WHERE [EntityID] = '53695c5d-e659-4025-825a-23c5fa873b6a' AND [RoleID] = 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E')
-BEGIN
-   INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
                                                    ('53695c5d-e659-4025-825a-23c5fa873b6a', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
-END
-GO
 
 /* SQL generated to add new permission for entity MJ: Form Chrome Rules for role Integration */
-IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Entity] WHERE [ID] = '53695c5d-e659-4025-825a-23c5fa873b6a')
-   AND NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission] WHERE [EntityID] = '53695c5d-e659-4025-825a-23c5fa873b6a' AND [RoleID] = 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E')
-BEGIN
-   INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
                                                    ('53695c5d-e659-4025-825a-23c5fa873b6a', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
-END
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.FormChromeRule */
+ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.FormChromeRule */
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[FormChromeRule]') AND name = N'__mj_CreatedAt')
-BEGIN
-    ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-    EXEC(N'UPDATE [${flyway:defaultSchema}].[FormChromeRule] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;');
-    ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-    ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ADD CONSTRAINT [DF___mj_FormChromeRule___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-END
+UPDATE [${flyway:defaultSchema}].[FormChromeRule] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.FormChromeRule */
+ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.FormChromeRule */
+ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ADD CONSTRAINT [DF___mj_FormChromeRule___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
 GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.FormChromeRule */
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[FormChromeRule]') AND name = N'__mj_UpdatedAt')
-BEGIN
-    ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-    EXEC(N'UPDATE [${flyway:defaultSchema}].[FormChromeRule] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;');
-    ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-    ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ADD CONSTRAINT [DF___mj_FormChromeRule___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-END
+ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.FormChromeRule */
+UPDATE [${flyway:defaultSchema}].[FormChromeRule] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.FormChromeRule */
+ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.FormChromeRule */
+ALTER TABLE [${flyway:defaultSchema}].[FormChromeRule] ADD CONSTRAINT [DF___mj_FormChromeRule___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
 /* SQL text to insert 11 new entity field(s) */
