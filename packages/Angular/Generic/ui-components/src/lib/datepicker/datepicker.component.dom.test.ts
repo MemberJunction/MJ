@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
+import { Component, Input } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { MJDatepickerComponent } from './datepicker.component';
 
@@ -49,4 +51,86 @@ describe('MJDatepickerComponent (DOM)', () => {
   //   - PreviousMonth()/NextMonth() change MonthYearLabel
   //   - SelectDate(day)/SelectToday() set the value, emit ValueChange, and close
   //   - day cells: mj-calendar-day--selected / --today / --other-month + aria-selected
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Disabled-state contract — the control is unusable exactly when the `Disabled` input OR the
+ * reactive-forms disabled state says so, **at every point in time**, not only at the moment
+ * Angular Forms registers the ControlValueAccessor.
+ *
+ * Needs a real `ngModel` host (the specs above render the component bare, which never triggers
+ * CVA registration): Angular calls `setDisabledState()` ONCE, at registration, and `IsDisabled`
+ * used to be assigned only there — freezing whatever `Disabled` happened to be at that instant
+ * and ignoring every later change. Found on `mj-dropdown` 2026-08-07; all five MJ form controls
+ * carried the identical defect.
+ */
+@Component({
+  standalone: true,
+  imports: [MJDatepickerComponent, FormsModule],
+  template: `<mj-datepicker [Disabled]="Locked" [(ngModel)]="Value" />`,
+})
+class DisabledHostComponent {
+  /** An @Input so specs flip it via `componentRef.setInput()` — the zoneless-correct way to mark
+   *  the view dirty; a plain field assignment trips NG0100 on the verify pass. */
+  @Input() Locked = false;
+  public Value: Date | null = null;
+}
+
+describe('MJDatepickerComponent — disabled state (DOM, ngModel host)', () => {
+  let fixture: ComponentFixture<DisabledHostComponent>;
+
+  const control = (): MJDatepickerComponent =>
+    fixture.debugElement.children[0].componentInstance as MJDatepickerComponent;
+  const nativeControl = (): HTMLInputElement | HTMLButtonElement =>
+    fixture.nativeElement.querySelector('input.mj-input');
+  const lock = (value: boolean): void => {
+    fixture.componentRef.setInput('Locked', value);
+    fixture.detectChanges();
+  };
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [DisabledHostComponent] }).compileComponents();
+    fixture = TestBed.createComponent(DisabledHostComponent);
+  });
+
+  it('RE-ENABLES when Disabled flips to false after registration', () => {
+    lock(true);
+    expect(control().IsDisabled).toBe(true);
+    expect(nativeControl().disabled).toBe(true);
+
+    lock(false);
+    expect(control().IsDisabled, 'the gate must follow the @Input back to false').toBe(false);
+    expect(nativeControl().disabled).toBe(false);
+  });
+
+  it('LOCKS when Disabled flips to true after registration', () => {
+    lock(false);
+    expect(control().IsDisabled).toBe(false);
+
+    lock(true);
+    expect(control().IsDisabled).toBe(true);
+    expect(nativeControl().disabled).toBe(true);
+  });
+
+  it('stays disabled while the forms-driven state holds, regardless of @Input churn', () => {
+    lock(false); // first CD pass — this is what registers the ControlValueAccessor
+
+    // `setDisabledState` is how Angular Forms reports a programmatically disabled control. Render
+    // it via a `lock()` (setInput) rather than a bare `detectChanges()`: a direct call mutates
+    // state without marking the view dirty, and zoneless dev-mode check-no-changes then throws
+    // NG0100 (guides/ANGULAR_TESTING_GUIDE.md). The @Input churn is the assertion anyway.
+    control().setDisabledState(true);
+    lock(true);
+    lock(false);
+    expect(control().IsDisabled, 'forms-driven disable survives @Input churn').toBe(true);
+    expect(nativeControl().disabled, 'and it is still rendered disabled').toBe(true);
+
+    control().setDisabledState(false);
+    lock(true);
+    lock(false);
+    expect(control().IsDisabled, 'released by both sources ⇒ usable').toBe(false);
+    expect(nativeControl().disabled).toBe(false);
+  });
 });
