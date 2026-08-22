@@ -20414,7 +20414,7 @@ export const MJFormChromeRuleSchema = z.object({
         * * Description: Contribution key to pin when TargetKind is Contribution. Null for Relationship rows.`),
     Inclusion: z.union([z.literal('More'), z.literal('None'), z.literal('Primary')]).describe(`
         * * Field Name: Inclusion
-        * * Display Name: Inclusion
+        * * Display Name: Inclusion Rule
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
@@ -20435,7 +20435,7 @@ export const MJFormChromeRuleSchema = z.object({
         * * Description: Tie-break when more than one rule matches the same target. Higher Sequence wins.`),
     Title: z.string().nullable().describe(`
         * * Field Name: Title
-        * * Display Name: Title
+        * * Display Name: Section Title
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional admin display title for this section. Null keeps the relationship DisplayName or contribution name. Survives OpenApp upgrades because the row is keyed by RelatedEntityID / ContributionKey, not by the previous label.`),
     __mj_CreatedAt: z.date().describe(`
@@ -20629,6 +20629,162 @@ export const MJGeneratedCodeSchema = z.object({
 });
 
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Identity Claim Types
+ */
+export const MJIdentityClaimTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name identifying this claim type (e.g., "EntitlementGrant", "PersonAccountLink", "OrgInvite").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description explaining the intent and behavior of this claim type.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Plugin class name implementing BaseIdentityClaimDriver, registered via @RegisterClass(BaseIdentityClaimDriver, DriverClass) and resolved at runtime.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration specific to this claim type driver.`),
+    DefaultExpirationDays: z.number().describe(`
+        * * Field Name: DefaultExpirationDays
+        * * Display Name: Default Expiration Days
+        * * SQL Data Type: int
+        * * Default Value: 30
+        * * Description: Default lifespan in days for claims of this type before they expire automatically.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this claim type is active and available for issuing new claims.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJIdentityClaimTypeEntityType = z.infer<typeof MJIdentityClaimTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Identity Claims
+ */
+export const MJIdentityClaimSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ClaimTypeID: z.string().describe(`
+        * * Field Name: ClaimTypeID
+        * * Display Name: Claim Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Identity Claim Types (vwIdentityClaimTypes.ID)
+        * * Description: Foreign key linking this claim to its IdentityClaimType definition.`),
+    NormalizedEmail: z.string().describe(`
+        * * Field Name: NormalizedEmail
+        * * Display Name: Email Address
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Normalized lowercase email address of the intended claimant.`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Optional polymorphic foreign key to the Entity representing the resource being claimed.`),
+    RecordID: z.string().nullable().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional primary key / record ID of the specific entity record being claimed.`),
+    PayloadJSON: z.string().nullable().describe(`
+        * * Field Name: PayloadJSON
+        * * Display Name: Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional payload JSON containing custom data or parameters consumed by the claim type driver during redemption.`),
+    Status: z.union([z.literal('Claimed'), z.literal('Expired'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Claimed
+    *   * Expired
+    *   * Pending
+    *   * Revoked
+        * * Description: Current lifecycle state of the claim: Pending, Claimed, Expired, or Revoked.`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp after which this claim can no longer be redeemed.`),
+    ClaimedAt: z.date().nullable().describe(`
+        * * Field Name: ClaimedAt
+        * * Display Name: Claimed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the claim was successfully redeemed.`),
+    ClaimedByUserID: z.string().nullable().describe(`
+        * * Field Name: ClaimedByUserID
+        * * Display Name: Claimed By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User ID of the authenticated user who successfully claimed this record.`),
+    MagicLinkInviteID: z.string().nullable().describe(`
+        * * Field Name: MagicLinkInviteID
+        * * Display Name: Magic Link Invite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+        * * Description: Optional link to a MagicLinkInvite record for email ownership verification links.`),
+    MetadataJSON: z.string().nullable().describe(`
+        * * Field Name: MetadataJSON
+        * * Display Name: Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional metadata JSON for auditing or tracking client provenance.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ClaimType: z.string().describe(`
+        * * Field Name: ClaimType
+        * * Display Name: Claim Type
+        * * SQL Data Type: nvarchar(100)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    ClaimedByUser: z.string().nullable().describe(`
+        * * Field Name: ClaimedByUser
+        * * Display Name: Claimed By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJIdentityClaimEntityType = z.infer<typeof MJIdentityClaimSchema>;
 
 /**
  * zod schema definition for the entity MJ: Instance Configurations
@@ -89090,41 +89246,44 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
 
     /**
     * Validate() method override for MJ: Form Chrome Rules entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Ensures that if the Target Kind is 'Relationship', a Related Entity must be specified and the Contribution Key must be empty. Conversely, if the Target Kind is 'Contribution', a Contribution Key must be specified and the Related Entity must be empty.
+    * * Table-Level: Ensures that if the target kind is 'Relationship', a related entity is specified and the contribution key is empty. If the target kind is 'Contribution', a contribution key must be specified and the related entity must be empty.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateTargetKindDependencies(result);
+        this.ValidateTargetKindAndAssociatedKeys(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * Ensures that if the Target Kind is 'Relationship', a Related Entity must be specified and the Contribution Key must be empty. Conversely, if the Target Kind is 'Contribution', a Contribution Key must be specified and the Related Entity must be empty.
+    * Ensures that if the target kind is 'Relationship', a related entity is specified and the contribution key is empty. If the target kind is 'Contribution', a contribution key must be specified and the related entity must be empty.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateTargetKindDependencies(result: ValidationResult) {
-    	if (this.TargetKind === 'Relationship') {
+    public ValidateTargetKindAndAssociatedKeys(result: ValidationResult) {
+    	const isRelationship = this.TargetKind === "Relationship";
+    	const isContribution = this.TargetKind === "Contribution";
+    
+    	if (isRelationship) {
     		if (this.RelatedEntityID == null || this.ContributionKey != null) {
     			result.Errors.push(new ValidationErrorInfo(
-    				"TargetKind",
-    				"When Target Kind is 'Relationship', Related Entity must be specified and Contribution Key must be empty.",
-    				this.TargetKind,
+    				"RelatedEntityID",
+    				"When Target Kind is 'Relationship', Related Entity ID must be specified and Contribution Key must be empty.",
+    				this.RelatedEntityID,
     				ValidationErrorType.Failure
     			));
     		}
-    	} else if (this.TargetKind === 'Contribution') {
+    	} else if (isContribution) {
     		if (this.ContributionKey == null || this.RelatedEntityID != null) {
     			result.Errors.push(new ValidationErrorInfo(
-    				"TargetKind",
-    				"When Target Kind is 'Contribution', Contribution Key must be specified and Related Entity must be empty.",
-    				this.TargetKind,
+    				"ContributionKey",
+    				"When Target Kind is 'Contribution', Contribution Key must be specified and Related Entity ID must be empty.",
+    				this.ContributionKey,
     				ValidationErrorType.Failure
     			));
     		}
@@ -89211,7 +89370,7 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
 
     /**
     * * Field Name: Inclusion
-    * * Display Name: Inclusion
+    * * Display Name: Inclusion Rule
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
@@ -89256,7 +89415,7 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
 
     /**
     * * Field Name: Title
-    * * Display Name: Title
+    * * Display Name: Section Title
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional admin display title for this section. Null keeps the relationship DisplayName or contribution name. Survives OpenApp upgrades because the row is keyed by RelatedEntityID / ContributionKey, not by the previous label.
     */
@@ -89714,6 +89873,397 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     */
     get LinkedEntity(): string | null {
         return this.Get('LinkedEntity');
+    }
+}
+
+
+/**
+ * MJ: Identity Claim Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: IdentityClaimType
+ * * Base View: vwIdentityClaimTypes
+ * * @description Metadata catalog of identity claim types. Each row defines a claim kind whose lifecycle (create, claim, revoke, expire) is executed by a BaseIdentityClaimDriver plugin resolved at runtime from DriverClass via ClassFactory.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Identity Claim Types')
+export class MJIdentityClaimTypeEntity extends BaseEntity<MJIdentityClaimTypeEntityType> {
+    /**
+    * Loads the MJ: Identity Claim Types record from the database
+    * @param ID: string - primary key value to load the MJ: Identity Claim Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJIdentityClaimTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name identifying this claim type (e.g., "EntitlementGrant", "PersonAccountLink", "OrgInvite").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description explaining the intent and behavior of this claim type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Plugin class name implementing BaseIdentityClaimDriver, registered via @RegisterClass(BaseIdentityClaimDriver, DriverClass) and resolved at runtime.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration specific to this claim type driver.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: DefaultExpirationDays
+    * * Display Name: Default Expiration Days
+    * * SQL Data Type: int
+    * * Default Value: 30
+    * * Description: Default lifespan in days for claims of this type before they expire automatically.
+    */
+    get DefaultExpirationDays(): number {
+        return this.Get('DefaultExpirationDays');
+    }
+    set DefaultExpirationDays(value: number) {
+        this.Set('DefaultExpirationDays', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this claim type is active and available for issuing new claims.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Identity Claims - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: IdentityClaim
+ * * Base View: vwIdentityClaims
+ * * @description Records of pending, claimed, or expired identity claims addressed to an email address. Facilitates cross-system entitlement claiming, account linking, and invite verification.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Identity Claims')
+export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType> {
+    /**
+    * Loads the MJ: Identity Claims record from the database
+    * @param ID: string - primary key value to load the MJ: Identity Claims record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJIdentityClaimEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ClaimTypeID
+    * * Display Name: Claim Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Identity Claim Types (vwIdentityClaimTypes.ID)
+    * * Description: Foreign key linking this claim to its IdentityClaimType definition.
+    */
+    get ClaimTypeID(): string {
+        return this.Get('ClaimTypeID');
+    }
+    set ClaimTypeID(value: string) {
+        this.Set('ClaimTypeID', value);
+    }
+
+    /**
+    * * Field Name: NormalizedEmail
+    * * Display Name: Email Address
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Normalized lowercase email address of the intended claimant.
+    */
+    get NormalizedEmail(): string {
+        return this.Get('NormalizedEmail');
+    }
+    set NormalizedEmail(value: string) {
+        this.Set('NormalizedEmail', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Optional polymorphic foreign key to the Entity representing the resource being claimed.
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional primary key / record ID of the specific entity record being claimed.
+    */
+    get RecordID(): string | null {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string | null) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: PayloadJSON
+    * * Display Name: Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional payload JSON containing custom data or parameters consumed by the claim type driver during redemption.
+    */
+    get PayloadJSON(): string | null {
+        return this.Get('PayloadJSON');
+    }
+    set PayloadJSON(value: string | null) {
+        this.Set('PayloadJSON', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Claimed
+    *   * Expired
+    *   * Pending
+    *   * Revoked
+    * * Description: Current lifecycle state of the claim: Pending, Claimed, Expired, or Revoked.
+    */
+    get Status(): 'Claimed' | 'Expired' | 'Pending' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Claimed' | 'Expired' | 'Pending' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp after which this claim can no longer be redeemed.
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: ClaimedAt
+    * * Display Name: Claimed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the claim was successfully redeemed.
+    */
+    get ClaimedAt(): Date | null {
+        return this.Get('ClaimedAt');
+    }
+    set ClaimedAt(value: Date | null) {
+        this.Set('ClaimedAt', value);
+    }
+
+    /**
+    * * Field Name: ClaimedByUserID
+    * * Display Name: Claimed By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User ID of the authenticated user who successfully claimed this record.
+    */
+    get ClaimedByUserID(): string | null {
+        return this.Get('ClaimedByUserID');
+    }
+    set ClaimedByUserID(value: string | null) {
+        this.Set('ClaimedByUserID', value);
+    }
+
+    /**
+    * * Field Name: MagicLinkInviteID
+    * * Display Name: Magic Link Invite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+    * * Description: Optional link to a MagicLinkInvite record for email ownership verification links.
+    */
+    get MagicLinkInviteID(): string | null {
+        return this.Get('MagicLinkInviteID');
+    }
+    set MagicLinkInviteID(value: string | null) {
+        this.Set('MagicLinkInviteID', value);
+    }
+
+    /**
+    * * Field Name: MetadataJSON
+    * * Display Name: Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional metadata JSON for auditing or tracking client provenance.
+    */
+    get MetadataJSON(): string | null {
+        return this.Get('MetadataJSON');
+    }
+    set MetadataJSON(value: string | null) {
+        this.Set('MetadataJSON', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ClaimType
+    * * Display Name: Claim Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ClaimType(): string {
+        return this.Get('ClaimType');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: ClaimedByUser
+    * * Display Name: Claimed By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ClaimedByUser(): string | null {
+        return this.Get('ClaimedByUser');
     }
 }
 
