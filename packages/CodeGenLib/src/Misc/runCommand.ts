@@ -11,6 +11,27 @@ export type CommandExecutionResult = {
   elapsedTime: number;
 }
 
+/** Cap on how much of a failed command's output travels with the rejection. */
+const FAILED_COMMAND_TAIL_LINES = 40;
+const FAILED_COMMAND_TAIL_CHARS = 4000;
+
+/**
+ * Render the tail of a failed command's combined stdout/stderr for inclusion in an Error
+ * message. Bounded on both lines and characters, because a failing build can emit megabytes
+ * and this text ends up in logs and API error payloads.
+ */
+function formatCommandTail(output: string): string {
+  const trimmed = (output ?? '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  let tail = trimmed.split('\n').slice(-FAILED_COMMAND_TAIL_LINES).join('\n');
+  if (tail.length > FAILED_COMMAND_TAIL_CHARS) {
+    tail = '...' + tail.slice(-FAILED_COMMAND_TAIL_CHARS);
+  }
+  return `\n${tail}`;
+}
+
 /**
  * Base class that handles the process of running commands which can be done executed from any other area of the system, typically done by the main runMemberJunctionCodeGen process
  */
@@ -101,7 +122,13 @@ export class RunCommandsBase {
                       elapsedTime: elapsedTime
                     });
           } else {
-            reject(new Error(`Process exited with code ${code}`));
+            // Carry the command's own output into the rejection. Without it the only record of
+            // the failure is the exit code, and callers that report command failures (see
+            // RunCommandsBase.runCommands -> RunCodeGenBase.recordCommandFailures) had nothing
+            // to report but "Process exited with code 1" — so a build that fails on a host is
+            // indistinguishable from one that fails on a compile error, and the actual
+            // npm/tsc/webpack message is lost at the moment it is produced.
+            reject(new Error(`Process exited with code ${code}${formatCommandTail(output)}`));
           }
         });
       });

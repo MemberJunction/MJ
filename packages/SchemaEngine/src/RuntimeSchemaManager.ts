@@ -374,6 +374,13 @@ export interface RSUStatus {
 export interface IRSUCodeGenRunner {
   /** Run CodeGen in-process. Returns true on success. */
   RunInProcess(skipDatabaseGeneration?: boolean): Promise<boolean>;
+  /**
+   * Optional detail for the most recent run's BEFORE/AFTER command failures. CodeGen decides a
+   * run's success from that list, so without this the boolean above is the entire diagnosis: a
+   * failed `npm run build` and a failed migration are the same false, and RSU could only report
+   * "In-process CodeGen failed" while the actual compiler message was discarded.
+   */
+  LastRunFailures?(): ReadonlyArray<{ context?: string; message: string }>;
 }
 
 // ─── Schema Protection ───────────────────────────────────────────────
@@ -1596,13 +1603,27 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    *
    * Override via RSU_CODEGEN_COMMAND env var for custom setups.
    */
+  /**
+   * The reason the last in-process CodeGen run failed, when the injected runner can report one.
+   * Returns '' when it cannot, so the message degrades to the bare legacy text rather than
+   * claiming a cause it does not have.
+   */
+  private codeGenFailureDetail(): string {
+    const failures = this._codeGenRunner?.LastRunFailures?.() ?? [];
+    if (failures.length === 0) {
+      return '';
+    }
+    const detail = failures.map((f) => (f.context ? `${f.context}: ${f.message}` : f.message)).join(' | ');
+    return ` — ${detail}`;
+  }
+
   private async runCodeGen(): Promise<boolean> {
     // Prefer in-process CodeGen runner if injected (no child process, no filesystem deps)
     if (this._codeGenRunner) {
       this.rsuLog('Running CodeGen in-process');
       const success = await this._codeGenRunner.RunInProcess(false);
       if (!success) {
-        throw new RSUError('CODEGEN', 'In-process CodeGen failed');
+        throw new RSUError('CODEGEN', `In-process CodeGen failed${this.codeGenFailureDetail()}`);
       }
       return true;
     }

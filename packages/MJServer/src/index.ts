@@ -426,6 +426,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
           RuntimeSchemaManager.Instance.SetCodeGenRunner({
             RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
+            // Without this, a failed BEFORE/AFTER command reaches RSU as a bare `false` and the
+            // real npm/tsc output never leaves CodeGenLib.
+            LastRunFailures: () => runObject.CommandFailures,
           });
           startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized (PostgreSQL).');
 
@@ -570,6 +573,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
           RuntimeSchemaManager.Instance.SetCodeGenRunner({
             RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
+            // Without this, a failed BEFORE/AFTER command reaches RSU as a bare `false` and the
+            // real npm/tsc output never leaves CodeGenLib.
+            LastRunFailures: () => runObject.CommandFailures,
           });
           startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized.');
 

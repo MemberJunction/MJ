@@ -56,6 +56,16 @@ export class RunCodeGenBase {
    */
   protected commandFailures: Array<{ context: string; message: string }> = [];
 
+  /**
+   * The BEFORE/AFTER command failures from the most recent run, for callers that get a bare
+   * boolean back from {@link RunInProcess}. `executeCodeGenPipeline` decides the run's success
+   * from exactly this list, so a caller that has only the boolean knows a command failed and
+   * cannot say WHICH — the in-process (RSU) path had no way to report the real npm/tsc message.
+   */
+  public get CommandFailures(): ReadonlyArray<{ context: string; message: string }> {
+    return this.commandFailures;
+  }
+
   /** Record any failed entries from a BEFORE/AFTER command batch, paired by index. */
   protected recordCommandFailures(phase: string, cmds: CommandInfo[], results: CommandExecutionResult[]): void {
     results.forEach((r, i) => {
@@ -110,7 +120,16 @@ export class RunCodeGenBase {
       // are seen as PK-less → entities are skipped ("No primary key found") → 0 rows sync until an MJAPI
       // restart. In-process path only; the CLI Run() keeps load-once. Deterministic — no mtime/TOCTOU.
       ManageMetadataBase.invalidateSoftPKFKConfigCache();
-      return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
+      const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
+      if (!success && this.commandFailures.length > 0) {
+        // The boolean return cannot carry this, and the in-process host (RSU) is the one caller
+        // that has no console to read the pipeline's own output from. Log it here so the reason
+        // a run failed is in the host log even when the caller only checks the boolean.
+        for (const f of this.commandFailures) {
+          logError(`In-process CodeGen ${f.context} failed: ${f.message}`);
+        }
+      }
+      return success;
     } catch (e) {
       logError('In-process CodeGen failed: ' + e);
       return false;

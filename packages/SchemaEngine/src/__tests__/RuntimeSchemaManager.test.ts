@@ -478,3 +478,48 @@ describe('RuntimeSchemaManager', () => {
         });
     });
 });
+
+// ─── CodeGen failure detail ──────────────────────────────────────────
+//
+// RSU's RunCodeGen step used to throw RSUError('CODEGEN', 'In-process CodeGen failed') and
+// nothing else, because the injected runner returns a bare boolean. CodeGen decides a run's
+// success from its BEFORE/AFTER command failures, so that boolean was hiding the one thing an
+// operator needs — WHICH command failed and what it said. Applies on a host where the AFTER
+// build could not run reported only a failed step, and the tables were created while the
+// entity maps never were.
+describe('RunCodeGen failure detail', () => {
+    const runCodeGen = (rsm: RuntimeSchemaManager) =>
+        (rsm as unknown as { runCodeGen: () => Promise<boolean> }).runCodeGen();
+
+    afterEach(() => {
+        // The manager is a singleton — leave no stub runner behind for the rest of the suite.
+        (RuntimeSchemaManager.Instance as unknown as { _codeGenRunner: unknown })._codeGenRunner = null;
+    });
+
+    it('carries the runner-reported command failure into the RSUError', async () => {
+        const rsm = RuntimeSchemaManager.Instance;
+        rsm.SetCodeGenRunner({
+            RunInProcess: async () => false,
+            LastRunFailures: () => [
+                { context: 'AFTER command', message: '`npm run build` failed: error TS18003: No inputs were found' },
+            ],
+        });
+
+        await expect(runCodeGen(rsm)).rejects.toThrow(/TS18003: No inputs were found/);
+    });
+
+    it('names the step even when the runner reports no detail', async () => {
+        const rsm = RuntimeSchemaManager.Instance;
+        rsm.SetCodeGenRunner({ RunInProcess: async () => false });
+
+        // Degrades to the legacy message rather than claiming a cause it does not have.
+        await expect(runCodeGen(rsm)).rejects.toThrow('In-process CodeGen failed');
+    });
+
+    it('does not throw when the run succeeds', async () => {
+        const rsm = RuntimeSchemaManager.Instance;
+        rsm.SetCodeGenRunner({ RunInProcess: async () => true, LastRunFailures: () => [] });
+
+        await expect(runCodeGen(rsm)).resolves.toBe(true);
+    });
+});
