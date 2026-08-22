@@ -1426,15 +1426,18 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Converts an IntegrationObjectFieldEntity to the ExternalFieldSchema format.
      *
-     * `IsPrimaryKey` MUST be carried through. An apply builds each field map with
-     * `fm.IsKeyField = field.IsPrimaryKey ?? false` (IntegrationDiscoveryResolver), so dropping it
-     * here made every field map keyless for every declarative REST connector — object-state then
-     * reports "NO KEY FIELD: every row is unmatchable, so writes cannot be reconciled" even though
-     * the catalog declares the key correctly. Note that `IsUniqueKey` is NOT a substitute: a PK is
-     * one of possibly several unique fields, and IsKeyField was deliberately narrowed from unique
-     * to primary (see the U1 note on PK ≠ unique) — which is exactly what turned this omission
-     * from cosmetic into a silent no-sync. `BuildSourceObjectInfo`, the sibling converter for the
-     * same entity, has always propagated it; only this one did not.
+     * `IsPrimaryKey` MUST be carried through. The initial apply builds each field map with
+     * `fm.IsKeyField = field.IsPrimaryKey ?? false` from `DiscoverFields`
+     * (IntegrationDiscoveryResolver.createFieldMapsForEntityMap), so dropping it here created
+     * KEYLESS field maps for every declarative REST connector — object-state then reports "NO KEY
+     * FIELD: every row is unmatchable, so writes cannot be reconciled" even though the catalog
+     * declares the key correctly. The other two field-map writers read the entity rows straight
+     * off the engine cache and were always right, which is why only freshly APPLIED objects show
+     * the symptom. `IsUniqueKey` is NOT a substitute: a PK is one of possibly several unique
+     * fields, and IsKeyField was deliberately narrowed from unique to primary (see the U1 note on
+     * PK ≠ unique) — which is exactly what turned this omission from cosmetic into a silent
+     * no-sync. `BuildSourceObjectInfo`, the sibling converter over the same entity in this class,
+     * has always propagated it; only this one did not.
      */
     private FieldEntityToSchema(f: MJIntegrationObjectFieldEntity): ExternalFieldSchema {
         return {
