@@ -10,7 +10,7 @@
         @if (IsFKWithNameField) {
           <span class="mj-forms-field-value">
             @if (RecordLinksEnabled) {
-              <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+              <a class="mj-forms-field-link mj-forms-field-link--fk" role="link" tabindex="0" (click)="OnRecordLinkClick($event)" (keydown.enter)="OnRecordLinkClick($event)" title="View related record">
                 {{ FKDisplayName }}
               </a>
             } @else {
@@ -22,26 +22,26 @@
           @switch (LinkType) {
             @case ('Email') {
               <span class="mj-forms-field-value">
-                <a class="mj-forms-field-link" (click)="OnEmailLinkClick($event)" title="Send email">
+                <a class="mj-forms-field-link" role="link" tabindex="0" (click)="OnEmailLinkClick($event)" (keydown.enter)="OnEmailLinkClick($event)" title="Send email">
                   {{ FormatValue() }}
-                  <i class="fa-solid fa-envelope mj-forms-field-link-icon"></i>
+                  <i class="fa-solid fa-envelope mj-forms-field-link-icon" aria-hidden="true"></i>
                 </a>
               </span>
             }
             @case ('URL') {
               <span class="mj-forms-field-value">
-                <a class="mj-forms-field-link" (click)="OnUrlLinkClick($event)" title="Open link">
+                <a class="mj-forms-field-link" role="link" tabindex="0" (click)="OnUrlLinkClick($event)" (keydown.enter)="OnUrlLinkClick($event)" title="Open link">
                   {{ FormatValue() }}
-                  <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                  <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon" aria-hidden="true"></i>
                 </a>
               </span>
             }
             @case ('Record') {
               <span class="mj-forms-field-value">
                 @if (RecordLinksEnabled) {
-                  <a class="mj-forms-field-link" (click)="OnRecordLinkClick($event)" title="View related record">
+                  <a class="mj-forms-field-link" role="link" tabindex="0" (click)="OnRecordLinkClick($event)" (keydown.enter)="OnRecordLinkClick($event)" title="View related record">
                     {{ FormatValue() }}
-                    <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                    <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon" aria-hidden="true"></i>
                   </a>
                 } @else {
                   {{ FormatValue() }}
@@ -52,7 +52,7 @@
               @if (Type === 'checkbox') {
                 <span class="mj-forms-field-value">
                   <div class="mj-forms-field-checkbox">
-                    <input type="checkbox" [checked]="!!Value" disabled>
+                    <input type="checkbox" [checked]="!!Value" disabled [attr.aria-label]="DisplayName">
                   </div>
                 </span>
               }
@@ -91,7 +91,7 @@
   @if (EditMode && !IsFieldReadOnly) {
     <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings">
       @if (ShowLabel) {
-        <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+        <label class="mj-forms-field-label" [id]="LabelId" [attr.for]="ControlId" [innerHTML]="HighlightedDisplayName"></label>
       }
       <div class="mj-forms-field-control">
         <!-- Foreign Key fields get custom search autocomplete -->
@@ -105,6 +105,16 @@
             <input type="text"
               class="mj-forms-field-input"
               [class.mj-forms-field-input--linked]="FKHasLinkedValue"
+              [id]="ControlId"
+              role="combobox"
+              aria-autocomplete="list"
+              [attr.aria-expanded]="ShowFKDropdown"
+              [attr.aria-controls]="ShowFKDropdown ? ListboxId : null"
+              [attr.aria-activedescendant]="ShowFKDropdown && FKActiveIndex >= 0 ? ControlId + '-fk-row-' + FKActiveIndex : null"
+              [attr.aria-label]="AriaLabel"
+              [attr.aria-required]="AriaRequired"
+              [attr.aria-invalid]="AriaInvalid"
+              [attr.aria-describedby]="AriaDescribedBy"
               [value]="FKSearchText"
               (input)="OnFKInput($event)"
               (focus)="OnFKFocus($event)"
@@ -127,11 +137,11 @@
             }
 
             @if (FKSearchText) {
-              <button class="mj-fk-clear" (mousedown)="OnFKClearClick($event)" title="Clear">
-                <i class="fa-solid fa-xmark"></i>
+              <button class="mj-fk-clear" type="button" (mousedown)="OnFKClearClick($event)" title="Clear" aria-label="Clear search text">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
               </button>
             } @else {
-              <i class="fa-solid fa-magnifying-glass mj-fk-search-icon"></i>
+              <i class="fa-solid fa-magnifying-glass mj-fk-search-icon" aria-hidden="true"></i>
             }
             @if (ShowFKDropdown) {
               <div class="mj-fk-dropdown mj-fk-dropdown--multi"
@@ -209,8 +219,8 @@
                       @if (FKSelectedSuggestion.ExtraColumns.length && FKSelectedSuggestion.ExtraColumns[0].Value) {
                         <span class="mj-fk-current-detail">{{ FKSelectedSuggestion.ExtraColumns[0].Value }}</span>
                       }
-                      <button type="button" class="mj-fk-current-clear" (mousedown)="OnFKClearClick($event)" title="Clear selection">
-                        <i class="fa-solid fa-xmark"></i>
+                      <button type="button" class="mj-fk-current-clear" (mousedown)="OnFKClearClick($event)" title="Clear selection" aria-label="Clear selection">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                       </button>
                     </div>
                   </div>
@@ -230,15 +240,16 @@
                 }
                 @if (!FKLoading && FKSuggestions.length > 0) {
                   <div class="mj-fk-options">
-                    <div class="mj-fk-grid" [style.grid-template-columns]="FKGridTemplateColumns">
+                    <div class="mj-fk-grid" [id]="ListboxId" role="grid" [style.grid-template-columns]="FKGridTemplateColumns">
                       <!-- Header row: click to sort, drag the right edge to resize.
                            (Column reorder lives in the field-selector menu, not here.) -->
-                      <div class="mj-fk-grid-row mj-fk-grid-row--header">
+                      <div class="mj-fk-grid-row mj-fk-grid-row--header" role="row">
                         @if (FKHasIconColumn) {
-                          <div class="mj-fk-hcell mj-fk-hcell--icon"></div>
+                          <div class="mj-fk-hcell mj-fk-hcell--icon" role="columnheader"></div>
                         }
                         @for (col of FKColumnFields; track col; let i = $index) {
                           <div class="mj-fk-hcell"
+                              role="columnheader"
                               (mousedown)="OnFKHeaderSort($event, col)"
                               [title]="'Click to sort by ' + FKColumnHeaders[i]">
                             <span class="mj-fk-hcell-label">{{ FKColumnHeaders[i] }}</span>
@@ -250,25 +261,28 @@
                       <!-- Data rows -->
                       @for (suggestion of FKSuggestions; track suggestion.PrimaryKeyValue; let i = $index) {
                         <div class="mj-fk-grid-row"
+                            role="row"
+                            [attr.id]="ControlId + '-fk-row-' + i"
+                            [attr.aria-selected]="IsFKRowSelected(suggestion)"
                             [class.mj-fk-grid-row--active]="i === FKActiveIndex"
                             [class.mj-fk-grid-row--selected]="IsFKRowSelected(suggestion)"
                             (mousedown)="OnFKSelectItem(suggestion, $event)"
                             (mouseenter)="FKActiveIndex = i">
                           @if (FKHasIconColumn) {
-                            <div class="mj-fk-cell mj-fk-cell--icon">
-                              @if (suggestion.Icon) { <i [class]="suggestion.Icon"></i> }
+                            <div class="mj-fk-cell mj-fk-cell--icon" role="gridcell">
+                              @if (suggestion.Icon) { <i [class]="suggestion.Icon" aria-hidden="true"></i> }
                             </div>
                           }
                           @for (col of FKColumnFields; track col; let last = $last) {
                             @if (col === FKNameField) {
-                              <div class="mj-fk-cell mj-fk-cell--name" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)">
+                              <div class="mj-fk-cell mj-fk-cell--name" role="gridcell" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)">
                                 @if (IsFKRowSelected(suggestion)) {
-                                  <i class="fa-solid fa-check mj-fk-selected-check" title="Currently selected"></i>
+                                  <i class="fa-solid fa-check mj-fk-selected-check" title="Currently selected" aria-hidden="true"></i>
                                 }
                                 <span [innerHTML]="suggestion.HighlightedName"></span>
                               </div>
                             } @else {
-                              <div class="mj-fk-cell" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)" [title]="FKCellFor(suggestion, col)?.Value || ''">
+                              <div class="mj-fk-cell" role="gridcell" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)" [title]="FKCellFor(suggestion, col)?.Value || ''">
                                 <span [innerHTML]="FKCellFor(suggestion, col)?.HighlightedValue || ''"></span>
                               </div>
                             }
@@ -304,30 +318,55 @@
             @case ('textbox') {
               <input type="text"
                 class="mj-forms-field-input"
+                [id]="ControlId"
+                [attr.aria-label]="AriaLabel"
+                [attr.aria-required]="AriaRequired"
+                [attr.aria-invalid]="AriaInvalid"
+                [attr.aria-describedby]="AriaDescribedBy"
                 [value]="FormatValue()"
                 (input)="OnInputChange($event)">
             }
             @case ('textarea') {
               <textarea
                 class="mj-forms-field-input mj-forms-field-input--textarea"
+                [id]="ControlId"
+                [attr.aria-label]="AriaLabel"
+                [attr.aria-required]="AriaRequired"
+                [attr.aria-invalid]="AriaInvalid"
+                [attr.aria-describedby]="AriaDescribedBy"
                 [value]="FormatValue()"
                 (input)="OnInputChange($event)"></textarea>
             }
             @case ('number') {
               <input type="number"
                 class="mj-forms-field-input mj-forms-field-input--number"
+                [id]="ControlId"
+                [attr.aria-label]="AriaLabel"
+                [attr.aria-required]="AriaRequired"
+                [attr.aria-invalid]="AriaInvalid"
+                [attr.aria-describedby]="AriaDescribedBy"
                 [value]="Value"
                 (change)="OnNumberChange($event)">
             }
             @case ('datepicker') {
               <input type="date"
                 class="mj-forms-field-input mj-forms-field-input--date"
+                [id]="ControlId"
+                [attr.aria-label]="AriaLabel"
+                [attr.aria-required]="AriaRequired"
+                [attr.aria-invalid]="AriaInvalid"
+                [attr.aria-describedby]="AriaDescribedBy"
                 [value]="DateInputValue"
                 (change)="OnDateChange($event)">
             }
             @case ('checkbox') {
               <div class="mj-forms-field-checkbox">
                 <input type="checkbox"
+                  [id]="ControlId"
+                  [attr.aria-label]="AriaLabel"
+                  [attr.aria-required]="AriaRequired"
+                  [attr.aria-invalid]="AriaInvalid"
+                  [attr.aria-describedby]="AriaDescribedBy"
                   [checked]="!!Value"
                   (change)="OnCheckboxChange($event)">
               </div>
@@ -335,17 +374,35 @@
             @case ('select') {
               <div class="mj-custom-select-trigger"
                 tabindex="0"
+                role="combobox"
+                aria-haspopup="listbox"
+                [id]="ControlId"
+                [attr.aria-expanded]="ShowSelectDropdown"
+                [attr.aria-controls]="ShowSelectDropdown ? ListboxId : null"
+                [attr.aria-activedescendant]="ShowSelectDropdown && SelectActiveIndex >= 0 ? ControlId + '-opt-' + SelectActiveIndex : null"
+                [attr.aria-labelledby]="ShowLabel ? LabelId : null"
+                [attr.aria-label]="AriaLabel"
+                [attr.aria-required]="AriaRequired"
+                [attr.aria-invalid]="AriaInvalid"
+                [attr.aria-describedby]="AriaDescribedBy"
                 (click)="OnSelectTriggerClick($event)"
+                (keydown)="OnSelectTriggerKeydown($event)"
                 (blur)="OnSelectTriggerBlur()">
                 <span class="mj-custom-select-value" [class.mj-custom-select-value--placeholder]="!FormatValue()">
                   {{ FormatValue() || '-- Select --' }}
                 </span>
-                <i class="fa-solid fa-chevron-down mj-custom-select-chevron" [class.mj-custom-select-chevron--open]="ShowSelectDropdown"></i>
+                <i class="fa-solid fa-chevron-down mj-custom-select-chevron" [class.mj-custom-select-chevron--open]="ShowSelectDropdown" aria-hidden="true"></i>
               </div>
               @if (ShowSelectDropdown && PossibleValues.length > 0) {
-                <div class="mj-fk-dropdown" [ngStyle]="DropdownPositionStyle" [class.mj-fk-dropdown--above]="OpenAbove">
-                  @for (option of PossibleValues; track option) {
-                    <div class="mj-fk-option" [class.mj-fk-option--selected]="FormatValue() === option" (mousedown)="OnSelectOptionClick(option, $event)">
+                <div class="mj-fk-dropdown" [id]="ListboxId" role="listbox" [ngStyle]="DropdownPositionStyle" [class.mj-fk-dropdown--above]="OpenAbove">
+                  @for (option of PossibleValues; track option; let i = $index) {
+                    <div class="mj-fk-option"
+                      role="option"
+                      [attr.id]="ControlId + '-opt-' + i"
+                      [attr.aria-selected]="FormatValue() === option"
+                      [class.mj-fk-option--selected]="FormatValue() === option"
+                      [class.mj-fk-option--active]="i === SelectActiveIndex"
+                      (mousedown)="OnSelectOptionClick(option, $event)">
                       {{ option }}
                     </div>
                   }
@@ -356,16 +413,32 @@
               <div class="mj-fk-search">
                 <input type="text"
                   class="mj-forms-field-input"
+                  [id]="ControlId"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  [attr.aria-expanded]="ShowValueListDropdown"
+                  [attr.aria-controls]="ShowValueListDropdown ? ListboxId : null"
+                  [attr.aria-activedescendant]="ShowValueListDropdown && ValueListActiveIndex >= 0 ? ControlId + '-opt-' + ValueListActiveIndex : null"
+                  [attr.aria-label]="AriaLabel"
+                  [attr.aria-required]="AriaRequired"
+                  [attr.aria-invalid]="AriaInvalid"
+                  [attr.aria-describedby]="AriaDescribedBy"
                   [value]="FormatValue()"
                   (input)="OnValueListInput($event)"
                   (focus)="OnValueListFocus($event)"
                   (blur)="OnValueListBlur()"
+                  (keydown)="OnValueListKeydown($event)"
                   placeholder="Type to search...">
-                <i class="fa-solid fa-magnifying-glass mj-fk-search-icon"></i>
+                <i class="fa-solid fa-magnifying-glass mj-fk-search-icon" aria-hidden="true"></i>
                 @if (ShowValueListDropdown && FilteredPossibleValues.length > 0) {
-                  <div class="mj-fk-dropdown" [ngStyle]="DropdownPositionStyle" [class.mj-fk-dropdown--above]="OpenAbove">
-                    @for (option of FilteredPossibleValues; track option) {
-                      <div class="mj-fk-option" (mousedown)="OnValueListSelect(option, $event)">
+                  <div class="mj-fk-dropdown" [id]="ListboxId" role="listbox" [ngStyle]="DropdownPositionStyle" [class.mj-fk-dropdown--above]="OpenAbove">
+                    @for (option of FilteredPossibleValues; track option; let i = $index) {
+                      <div class="mj-fk-option"
+                        role="option"
+                        [attr.id]="ControlId + '-opt-' + i"
+                        [attr.aria-selected]="FormatValue() === option"
+                        [class.mj-fk-option--active]="i === ValueListActiveIndex"
+                        (mousedown)="OnValueListSelect(option, $event)">
                         {{ option }}
                       </div>
                     }
@@ -376,6 +449,11 @@
             @default {
               <input type="text"
                 class="mj-forms-field-input"
+                [id]="ControlId"
+                [attr.aria-label]="AriaLabel"
+                [attr.aria-required]="AriaRequired"
+                [attr.aria-invalid]="AriaInvalid"
+                [attr.aria-describedby]="AriaDescribedBy"
                 [value]="FormatValue()"
                 (change)="OnInputChange($event)">
             }
@@ -384,20 +462,20 @@
       </div>
       <!-- Inline validation messages -->
       @if (DisplayErrors.length > 0) {
-        <div class="mj-forms-field-validation mj-forms-field-validation--error">
+        <div class="mj-forms-field-validation mj-forms-field-validation--error" [id]="ErrorMessagesId" role="alert">
           @for (error of DisplayErrors; track error.Message) {
             <div class="mj-forms-field-validation-item">
-              <i class="fa-solid fa-circle-exclamation"></i>
+              <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
               <span>{{ error.Message }}</span>
             </div>
           }
         </div>
       }
       @if (DisplayWarnings.length > 0) {
-        <div class="mj-forms-field-validation mj-forms-field-validation--warning">
+        <div class="mj-forms-field-validation mj-forms-field-validation--warning" [id]="WarningMessagesId" role="status">
           @for (warning of DisplayWarnings; track warning.Message) {
             <div class="mj-forms-field-validation-item">
-              <i class="fa-solid fa-triangle-exclamation"></i>
+              <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
               <span>{{ warning.Message }}</span>
             </div>
           }

@@ -17,6 +17,13 @@ import { LinkedFieldOptionsStore } from './linked-field-options';
 export type FieldRichTextMode = 'markdown' | 'html' | 'code' | 'plain';
 
 /**
+ * Monotonic counter backing each field instance's unique DOM id — labels, inputs and
+ * validation messages must reference each other by id, and the same entity field can be
+ * rendered more than once on a page (e.g. a form dialog over an open form tab).
+ */
+let nextFormFieldInstanceId = 0;
+
+/**
  * One extra (non-name, non-PK) column rendered in an FK suggestion row.
  * Built from the related entity's fields where `DefaultInView === true`.
  */
@@ -377,6 +384,48 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       return values.map(v => v.Value);
     }
     return [];
+  }
+
+  // ============================================
+  // ACCESSIBILITY (WCAG 2.1 AA)
+  // ============================================
+
+  /** Unique per-instance id for the edit control; the label's `for` and ARIA references point here. */
+  readonly ControlId = `mj-form-field-${++nextFormFieldInstanceId}`;
+
+  /** DOM id of the visible label element (referenced by aria-labelledby on div-based comboboxes). */
+  get LabelId(): string { return `${this.ControlId}-label`; }
+
+  /** DOM id of the error-message container (referenced by aria-describedby). */
+  get ErrorMessagesId(): string { return `${this.ControlId}-errors`; }
+
+  /** DOM id of the warning-message container (referenced by aria-describedby). */
+  get WarningMessagesId(): string { return `${this.ControlId}-warnings`; }
+
+  /** DOM id of the popup list (select listbox, autocomplete listbox, or FK results grid). */
+  get ListboxId(): string { return `${this.ControlId}-listbox`; }
+
+  /** aria-describedby value: the ids of whichever validation-message containers are rendered. */
+  get AriaDescribedBy(): string | null {
+    const ids: string[] = [];
+    if (this.DisplayErrors.length > 0) ids.push(this.ErrorMessagesId);
+    if (this.DisplayWarnings.length > 0) ids.push(this.WarningMessagesId);
+    return ids.length > 0 ? ids.join(' ') : null;
+  }
+
+  /** aria-label fallback so the control keeps an accessible name when the visible label is hidden. */
+  get AriaLabel(): string | null {
+    return this.ShowLabel ? null : this.DisplayName;
+  }
+
+  /** aria-required: only advertised on required, editable fields. */
+  get AriaRequired(): 'true' | null {
+    return this.IsRequired ? 'true' : null;
+  }
+
+  /** aria-invalid: advertised while error-level validation failures are displayed. */
+  get AriaInvalid(): 'true' | null {
+    return this.ShowErrors ? 'true' : null;
   }
 
   /** Whether this field has a related entity (foreign key) */
@@ -1465,13 +1514,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       case 'ArrowDown':
         event.preventDefault();
         this.FKActiveIndex = Math.min(this.FKActiveIndex + 1, this.FKSuggestions.length - 1);
-        this.scrollActiveOptionIntoView();
+        this.scrollOptionIntoView('.mj-fk-grid-row:not(.mj-fk-grid-row--header)', this.FKActiveIndex);
         this.cdr.markForCheck();
         break;
       case 'ArrowUp':
         event.preventDefault();
         this.FKActiveIndex = Math.max(this.FKActiveIndex - 1, 0);
-        this.scrollActiveOptionIntoView();
+        this.scrollOptionIntoView('.mj-fk-grid-row:not(.mj-fk-grid-row--header)', this.FKActiveIndex);
         this.cdr.markForCheck();
         break;
       case 'Enter': {
@@ -1490,13 +1539,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
   }
 
-  /** Scroll the keyboard-active option into view inside the (possibly portaled) dropdown. */
-  private scrollActiveOptionIntoView(): void {
+  /** Scroll a keyboard-active option into view inside the (possibly portaled) dropdown. */
+  private scrollOptionIntoView(selector: string, index: number): void {
+    if (index < 0) return;
     Promise.resolve().then(() => {
       const dropdown = this._portaledDropdownEl
         ?? (this.hostRef?.nativeElement?.querySelector('.mj-fk-dropdown') as HTMLElement | null);
-      const active = dropdown?.querySelectorAll('.mj-fk-option')[this.FKActiveIndex] as HTMLElement | undefined;
-      active?.scrollIntoView({ block: 'nearest' });
+      const active = dropdown?.querySelectorAll(selector)[index] as HTMLElement | undefined;
+      // scrollIntoView is absent in non-layout DOM environments (jsdom tests)
+      if (typeof active?.scrollIntoView === 'function') {
+        active.scrollIntoView({ block: 'nearest' });
+      }
     });
   }
 
@@ -1683,6 +1736,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether the value list dropdown is visible */
   ShowValueListDropdown = false;
 
+  /** Keyboard-active option index inside the open value-list dropdown (-1 = none). */
+  ValueListActiveIndex = -1;
+
   /** Current filter text for the value list */
   private _valueListFilter = '';
 
@@ -1701,6 +1757,56 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.updateDropdownPosition(input);
     if (!this._scrollCleanup) this.startScrollListener();
     this.ShowValueListDropdown = true;
+    this.ValueListActiveIndex = -1;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Keyboard navigation in the value-list autocomplete: ArrowDown/ArrowUp move the
+   * active option, Enter commits it, Escape closes the dropdown (typed text stays).
+   */
+  OnValueListKeydown(event: KeyboardEvent): void {
+    if (!this.ShowValueListDropdown || this.FilteredPossibleValues.length === 0) {
+      if (event.key === 'Escape') {
+        this.ShowValueListDropdown = false;
+        this.stopScrollListener();
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+    const options = this.FilteredPossibleValues;
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        this.ValueListActiveIndex = Math.min(this.ValueListActiveIndex + 1, options.length - 1);
+        this.scrollOptionIntoView('.mj-fk-option', this.ValueListActiveIndex);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        this.ValueListActiveIndex = Math.max(this.ValueListActiveIndex - 1, 0);
+        this.scrollOptionIntoView('.mj-fk-option', this.ValueListActiveIndex);
+        break;
+      case 'Enter': {
+        const active = options[this.ValueListActiveIndex];
+        if (active !== undefined) {
+          event.preventDefault();
+          this.Value = active;
+          this._valueListFilter = '';
+          this.ShowValueListDropdown = false;
+          this.ValueListActiveIndex = -1;
+          this.stopScrollListener();
+        }
+        break;
+      }
+      case 'Escape':
+        event.preventDefault();
+        this.ShowValueListDropdown = false;
+        this.ValueListActiveIndex = -1;
+        this.stopScrollListener();
+        break;
+      default:
+        return;
+    }
     this.cdr.markForCheck();
   }
 
@@ -1728,6 +1834,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.Value = value;
     this._valueListFilter = '';
     this.ShowValueListDropdown = false;
+    this.ValueListActiveIndex = -1;
     this.stopScrollListener();
     this.cdr.markForCheck();
   }
@@ -1739,26 +1846,96 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether the custom select dropdown is visible */
   ShowSelectDropdown = false;
 
+  /** Keyboard-active option index inside the open select dropdown (-1 = none). */
+  SelectActiveIndex = -1;
+
   /** Toggle the custom select dropdown */
   OnSelectTriggerClick(event: Event): void {
     event.preventDefault();
     if (this.ShowSelectDropdown) {
-      this.ShowSelectDropdown = false;
-      this.stopScrollListener();
+      this.closeSelectDropdown();
     } else {
-      const el = event.currentTarget as HTMLElement;
-      this.updateDropdownPosition(el);
-      this.startScrollListener();
-      this.ShowSelectDropdown = true;
+      this.openSelectDropdown(event.currentTarget as HTMLElement);
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Keyboard support for the custom select (WAI-ARIA combobox/listbox pattern):
+   * Enter/Space/ArrowDown/ArrowUp open the dropdown; while open, arrows move the
+   * active option, Home/End jump, Enter/Space commit, Escape closes without changes.
+   */
+  OnSelectTriggerKeydown(event: KeyboardEvent): void {
+    const options = this.PossibleValues;
+    if (!this.ShowSelectDropdown) {
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+        event.preventDefault();
+        this.openSelectDropdown(event.currentTarget as HTMLElement);
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        this.SelectActiveIndex = Math.min(this.SelectActiveIndex + 1, options.length - 1);
+        this.scrollOptionIntoView('.mj-fk-option', this.SelectActiveIndex);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        this.SelectActiveIndex = Math.max(this.SelectActiveIndex - 1, 0);
+        this.scrollOptionIntoView('.mj-fk-option', this.SelectActiveIndex);
+        break;
+      case 'Home':
+        event.preventDefault();
+        this.SelectActiveIndex = options.length > 0 ? 0 : -1;
+        this.scrollOptionIntoView('.mj-fk-option', this.SelectActiveIndex);
+        break;
+      case 'End':
+        event.preventDefault();
+        this.SelectActiveIndex = options.length - 1;
+        this.scrollOptionIntoView('.mj-fk-option', this.SelectActiveIndex);
+        break;
+      case 'Enter':
+      case ' ': {
+        event.preventDefault();
+        const active = options[this.SelectActiveIndex];
+        if (active !== undefined) this.Value = active;
+        this.closeSelectDropdown();
+        break;
+      }
+      case 'Escape':
+      case 'Tab':
+        this.closeSelectDropdown();
+        break;
+      default:
+        return;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Open the select dropdown anchored to the trigger, activating the current value's option. */
+  private openSelectDropdown(trigger: HTMLElement): void {
+    this.updateDropdownPosition(trigger);
+    this.startScrollListener();
+    this.ShowSelectDropdown = true;
+    const current = this.FormatValue();
+    const idx = this.PossibleValues.indexOf(current);
+    this.SelectActiveIndex = idx >= 0 ? idx : (this.PossibleValues.length > 0 ? 0 : -1);
+    this.scrollOptionIntoView('.mj-fk-option', this.SelectActiveIndex);
+  }
+
+  /** Close the select dropdown and reset keyboard state. */
+  private closeSelectDropdown(): void {
+    this.ShowSelectDropdown = false;
+    this.SelectActiveIndex = -1;
+    this.stopScrollListener();
   }
 
   /** Close the select dropdown on blur */
   OnSelectTriggerBlur(): void {
     setTimeout(() => {
-      this.ShowSelectDropdown = false;
-      this.stopScrollListener();
+      this.closeSelectDropdown();
       this.cdr.markForCheck();
     }, 200);
   }
@@ -1767,8 +1944,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   OnSelectOptionClick(value: string, event: MouseEvent): void {
     event.preventDefault();
     this.Value = value;
-    this.ShowSelectDropdown = false;
-    this.stopScrollListener();
+    this.closeSelectDropdown();
     this.cdr.markForCheck();
   }
 
@@ -1958,9 +2134,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   // ---- Navigation Handlers ----
 
   /**
-   * Handle click on a record FK link in read-only mode.
+   * Handle activation of a record FK link in read-only mode (click or Enter key —
+   * Angular types pseudo-key `$event`s as plain Event, so narrow via instanceof).
    */
-  OnRecordLinkClick(event: MouseEvent): void {
+  OnRecordLinkClick(event: Event): void {
     event.preventDefault();
     event.stopPropagation();
 
@@ -1975,18 +2152,20 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const relatedFieldName = this.FieldInfo.RelatedEntityFieldName || 'ID';
     const targetKey = new CompositeKey([new KeyValuePair(relatedFieldName, fkValue)]);
 
+    const hasModifier = (event instanceof MouseEvent || event instanceof KeyboardEvent)
+      && (event.ctrlKey || event.metaKey);
     this.Navigate.emit({
       Kind: 'record',
       EntityName: relatedEntityName,
       PrimaryKey: targetKey,
-      OpenInNewTab: event.ctrlKey || event.metaKey
+      OpenInNewTab: hasModifier
     });
   }
 
   /**
-   * Handle click on an email link in read-only mode.
+   * Handle activation of an email link in read-only mode (click or Enter key).
    */
-  OnEmailLinkClick(event: MouseEvent): void {
+  OnEmailLinkClick(event: Event): void {
     event.preventDefault();
     event.stopPropagation();
 
@@ -1999,9 +2178,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
-   * Handle click on a URL link in read-only mode.
+   * Handle activation of a URL link in read-only mode (click or Enter key).
    */
-  OnUrlLinkClick(event: MouseEvent): void {
+  OnUrlLinkClick(event: Event): void {
     event.preventDefault();
     event.stopPropagation();
 

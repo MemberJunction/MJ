@@ -95,6 +95,8 @@
     "check:ui-ngc-scss": "./.github/scripts/check-ngc-scss.sh",
     "check:ui:all": "./.github/scripts/check-css-hex-tokens.sh --all && ./.github/scripts/check-mj-btn-override.sh --all && ./.github/scripts/check-ngc-scss.sh --all",
     "check:ui:adoption": "./scripts/measure-ui-adoption.sh",
+    "check:a11y": "./.github/scripts/check-a11y-templates.sh",
+    "check:a11y:all": "./.github/scripts/check-a11y-templates.sh --all",
     "check:alerts": "./.github/scripts/check-alerts.sh",
     "check:esm": "node .github/scripts/check-esm-imports.mjs packages",
     "check:dynamic-replace": "node .github/scripts/check-dynamic-replace.mjs",
