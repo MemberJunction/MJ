@@ -1425,6 +1425,16 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
     /**
      * Converts an IntegrationObjectFieldEntity to the ExternalFieldSchema format.
+     *
+     * `IsPrimaryKey` MUST be carried through. An apply builds each field map with
+     * `fm.IsKeyField = field.IsPrimaryKey ?? false` (IntegrationDiscoveryResolver), so dropping it
+     * here made every field map keyless for every declarative REST connector — object-state then
+     * reports "NO KEY FIELD: every row is unmatchable, so writes cannot be reconciled" even though
+     * the catalog declares the key correctly. Note that `IsUniqueKey` is NOT a substitute: a PK is
+     * one of possibly several unique fields, and IsKeyField was deliberately narrowed from unique
+     * to primary (see the U1 note on PK ≠ unique) — which is exactly what turned this omission
+     * from cosmetic into a silent no-sync. `BuildSourceObjectInfo`, the sibling converter for the
+     * same entity, has always propagated it; only this one did not.
      */
     private FieldEntityToSchema(f: MJIntegrationObjectFieldEntity): ExternalFieldSchema {
         return {
@@ -1433,6 +1443,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             Description: f.Description ?? undefined,
             DataType: f.Type,
             IsRequired: f.IsRequired,
+            IsPrimaryKey: f.IsPrimaryKey,
             IsUniqueKey: f.IsUniqueKey || f.IsPrimaryKey,
             IsReadOnly: f.IsReadOnly,
             IsForeignKey: f.RelatedIntegrationObjectID != null,
