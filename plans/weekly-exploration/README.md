@@ -17,7 +17,7 @@ capabilities, not by prescribing specific business applications.
 
 | Week | Ideas | PR |
 |---|---|---|
-| [2026-08-14](./2026-08-14/) | Universal Approval Gates for Actions, Agents & Workflows · Unified Resource Governance Engine · Consent & Data Rights Primitive | _(this week's PR)_ |
+| [2026-08-14](./2026-08-14/) | Universal Approval Gates for Actions, Agents & Workflows · Unified Resource Governance Engine · Consent & Data Rights Primitive | [#4009](https://github.com/MemberJunction/MJ/pull/4009) |
 | [2026-08-07](./2026-08-07/) | Relationship Graph & Engagement Signal Engine · Decision Provenance Layer & AI Handoff Briefs · Accessibility-by-Default Framework Layer | [#3609](https://github.com/MemberJunction/MJ/pull/3609) implements idea 3 (Accessibility-by-Default) |
 
 ## Before starting a new week
