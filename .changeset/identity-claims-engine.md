@@ -1,9 +1,9 @@
 ---
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
-"@memberjunction/core-entity-forms": minor
-"@memberjunction/bootstrap": minor
-"@memberjunction/bootstrap-lite": minor
+"@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ng-bootstrap": minor
+"@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
 "@memberjunction/server": minor

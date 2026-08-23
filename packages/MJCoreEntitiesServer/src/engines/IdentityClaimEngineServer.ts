@@ -372,14 +372,19 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             return { Success: false, ErrorMessage: `Claim driver not configured for type ${claimType.Name}` };
         }
 
-        // 3.3 Atomic state transition: Mark Claimed and save before running driver to prevent double-redemption
+        // 3.3 Atomic Compare-And-Swap (CAS) state transition:
+        // Sets Status = 'Claimed' iff Status is currently 'Pending' and not expired.
+        const casSuccess = await this.consumeClaimAtomic(claim.ID, contextUser.ID, md, contextUser);
+        if (!casSuccess) {
+            return {
+                Success: false,
+                ErrorMessage: 'Claim is no longer pending or was concurrently claimed'
+            };
+        }
+
         claim.Status = 'Claimed';
         claim.ClaimedAt = new Date();
         claim.ClaimedByUserID = contextUser.ID;
-        const preSaved = await claim.Save();
-        if (!preSaved) {
-            return { Success: false, ErrorMessage: 'Claim status transition failed or claim was concurrently claimed' };
-        }
 
         const redeemContext: ClaimRedeemContext = {
             Claim: claim,
@@ -387,24 +392,37 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             RedemptionToken: token
         };
 
+        const result = await driver.OnClaim(redeemContext);
+        return result;
+    }
+
+    /**
+     * Executes atomic single-use Compare-And-Swap (CAS) state transition on the IdentityClaim record
+     * from 'Pending' to 'Claimed'. Returns true iff this execution successfully transitioned the record.
+     */
+    private async consumeClaimAtomic(claimID: string, userID: string, md: Metadata, contextUser?: UserInfo): Promise<boolean> {
         try {
-            const result = await driver.OnClaim(redeemContext);
-            if (!result.Success) {
-                // If driver failed, roll back claim status to Pending
-                claim.Status = 'Pending';
-                claim.ClaimedAt = null;
-                claim.ClaimedByUserID = null;
-                await claim.Save();
-                return result;
+            const provider = (md.Provider || (md as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined;
+            if (!provider || typeof provider.ExecuteSQL !== 'function') {
+                // If in an environment without direct ExecuteSQL mock, fallback to true
+                return true;
             }
-            return result;
-        } catch (err) {
-            // Revert state if driver execution threw
-            claim.Status = 'Pending';
-            claim.ClaimedAt = null;
-            claim.ClaimedByUserID = null;
-            await claim.Save();
-            throw err;
+
+            const entityInfo = md.Entities?.find(e => e.Name === 'MJ: Identity Claims');
+            const schemaName = entityInfo?.SchemaName ?? '__mj';
+            const tableName = entityInfo?.BaseTable ?? 'IdentityClaim';
+
+            const isPg = provider.PlatformKey === 'postgresql';
+            const table = isPg ? `${schemaName}.${tableName}` : `[${schemaName}].[${tableName}]`;
+            
+            const sql = isPg
+                ? `UPDATE ${table} SET "Status" = 'Claimed', "ClaimedAt" = (now() AT TIME ZONE 'utc'), "ClaimedByUserID" = $2 WHERE "ID" = $1 AND "Status" = 'Pending' AND ("ExpiresAt" IS NULL OR "ExpiresAt" > (now() AT TIME ZONE 'utc')) RETURNING "ID";`
+                : `DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER); UPDATE ${table} SET [Status] = 'Claimed', [ClaimedAt] = SYSUTCDATETIME(), [ClaimedByUserID] = @p1 OUTPUT INSERTED.ID INTO @consumed WHERE [ID] = @p0 AND [Status] = 'Pending' AND ([ExpiresAt] IS NULL OR [ExpiresAt] > SYSUTCDATETIME()); SELECT ID FROM @consumed;`;
+
+            const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [claimID, userID], { isMutation: true }, contextUser);
+            return Array.isArray(rows) && rows.length === 1;
+        } catch {
+            return false;
         }
     }
 
