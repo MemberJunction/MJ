@@ -11416,6 +11416,12 @@ importers:
       '@memberjunction/aiengine':
         specifier: 6.1.0-edge.3
         version: link:../AI/Engine
+      '@memberjunction/communication-engine':
+        specifier: 6.1.0-edge.3
+        version: link:../Communication/engine
+      '@memberjunction/communication-types':
+        specifier: 6.1.0-edge.3
+        version: link:../Communication/base-types
       '@memberjunction/core':
         specifier: 6.1.0-edge.3
         version: link:../MJCore
@@ -11458,6 +11464,9 @@ importers:
       '@memberjunction/tag-engine':
         specifier: 6.1.0-edge.3
         version: link:../AI/Knowledge/TagEngine
+      '@memberjunction/templates':
+        specifier: 6.1.0-edge.3
+        version: link:../Templates/engine
       nunjucks:
         specifier: 3.2.4
         version: 3.2.4(chokidar@3.6.0)
