@@ -1,5 +1,3 @@
-import { SafeFetch } from "./SSRFGuard.js";
-
 /**
  * A dependency-free HTTP client built on Node's native `fetch`.
  *
@@ -19,6 +17,8 @@ import { SafeFetch } from "./SSRFGuard.js";
  * by default would break them. Set `ValidateUrl: true` — or use {@link SafeFetch} directly —
  * wherever the URL is caller-controlled.
  */
+
+import { SafeFetch } from "./SSRFGuard.js";
 
 /** HTTP methods supported by {@link HttpRequest}. */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
@@ -40,7 +40,25 @@ export type HttpResponseType = "json" | "text" | "arraybuffer" | "blob" | "strea
  */
 export type HttpQueryValue = string | number | boolean | Date | null | undefined | ReadonlyArray<string | number | boolean | Date>;
 
-/** A successful (or, when `ThrowOnError` is false, any) HTTP response. */
+/**
+ * The result of a request. Returned for 2xx responses, and — when `ThrowOnError` is disabled —
+ * for any response at all.
+ *
+ * The axios equivalent is its response object, with the fields renamed to MJ's `PascalCase`
+ * convention: `data` -> `Data`, `status` -> `Status`, `headers` -> `Headers`.
+ *
+ * @typeParam T - the shape of the parsed response body. Supply it at the call site
+ *   (`HttpGet<Payload>(...)`) so `Data` is typed rather than `unknown`.
+ *
+ * @example
+ * ```ts
+ * interface Repo { id: number; full_name: string }
+ * const response = await HttpGet<Repo>('https://api.github.com/repos/a/b');
+ * response.Data.full_name;   // typed as string
+ * response.Status;           // 200
+ * response.Headers['etag'];  // header keys are always lower-cased
+ * ```
+ */
 export interface HttpResponse<T = unknown> {
     /** The parsed response body, per the request's `ResponseType`. */
     Data: T;
@@ -56,7 +74,25 @@ export interface HttpResponse<T = unknown> {
     Ok: boolean;
 }
 
-/** Everything {@link HttpRequest} accepts. All fields optional except `Url`. */
+/**
+ * Everything {@link HttpRequest} accepts. Only `Url` is required.
+ *
+ * When used through {@link HttpClient}, each field falls back to the client's corresponding
+ * option, except `Headers`, which is *merged* over the client's defaults key-by-key.
+ *
+ * @example
+ * ```ts
+ * await HttpRequest({
+ *     Url: '/reports',
+ *     BaseURL: 'https://api.example.com/v2',
+ *     Method: 'POST',
+ *     Query: { format: 'json', tag: ['a', 'b'] },   // -> ?format=json&tag=a&tag=b
+ *     Body: { name: 'Q3' },                          // JSON-encoded automatically
+ *     Timeout: 15000,
+ *     ValidateUrl: false,
+ * });
+ * ```
+ */
 export interface HttpRequestConfig {
     /** Target URL. Resolved against `BaseURL` when that is set and this is relative. */
     Url: string;
@@ -80,7 +116,13 @@ export interface HttpRequestConfig {
     Timeout?: number;
     /** When true, run the URL through the SSRF guard (and re-check every redirect hop). Default: false. */
     ValidateUrl?: boolean;
-    /** Maximum redirect hops to follow. Default: 5. Set 0 to return the 3xx response itself. */
+    /**
+     * Maximum redirect hops to follow. Default: 5.
+     *
+     * With `ValidateUrl` off, `0` returns the 3xx response itself rather than following it. With
+     * `ValidateUrl` on, {@link SafeFetch} drives redirects manually, so `0` makes a redirected
+     * request throw once the cap is hit rather than returning the 3xx.
+     */
     MaxRedirects?: number;
     /** When true (default), a non-2xx status throws {@link HttpError} instead of returning. */
     ThrowOnError?: boolean;
@@ -93,7 +135,32 @@ export interface HttpRequestConfig {
     BasicAuth?: { Username: string; Password: string };
 }
 
-/** Thrown for a non-2xx response (when `ThrowOnError` is on), a timeout, or a transport failure. */
+/**
+ * Thrown for a non-2xx response (when `ThrowOnError` is on), a timeout, a caller-initiated
+ * cancellation, or a transport failure.
+ *
+ * Unlike axios's error — which nests response details under `error.response` and leaves you
+ * guessing whether that property exists — every field here is always present. A request that
+ * never reached a server reports `Status: 0`, so `error.Status === 404` is safe to write without
+ * an optional-chain dance.
+ *
+ * Distinguish the three failure modes with `Status`, {@link HttpError.IsTimeout}, and
+ * {@link HttpError.IsCancelled}.
+ *
+ * @example
+ * ```ts
+ * try {
+ *     await client.Get('/thing');
+ * } catch (error) {
+ *     if (!IsHttpError(error)) throw error;
+ *     if (error.IsCancelled) return;                       // caller aborted; not a failure
+ *     if (error.IsTimeout) LogError('upstream slow');
+ *     else if (error.Status === 404) LogError('missing');
+ *     else if (error.Status === 429) await backOff(error.Headers['retry-after']);
+ *     else LogError(`HTTP ${error.Status}`, error.Data);
+ * }
+ * ```
+ */
 export class HttpError extends Error {
     /** HTTP status code, or 0 when the request never produced a response (timeout / network error). */
     public readonly Status: number;
@@ -138,14 +205,46 @@ export class HttpError extends Error {
     }
 }
 
-/** Type guard for {@link HttpError} — the replacement for axios's `isAxiosError`. */
+/**
+ * Narrows an unknown caught value to {@link HttpError} — the replacement for axios's
+ * `isAxiosError`.
+ *
+ * @param error - the value from a `catch` block.
+ * @returns true when the value is an {@link HttpError}, narrowing its type for the caller.
+ *
+ * @example
+ * ```ts
+ * catch (error) {
+ *     if (IsHttpError(error) && error.Status === 403) { ... }
+ *     throw error;   // anything else is not ours to interpret
+ * }
+ * ```
+ */
 export function IsHttpError(error: unknown): error is HttpError {
     return error instanceof HttpError;
 }
 
 /**
  * True when a request failed because the caller's own `Signal` aborted it — the replacement for
- * axios's `isCancel`. A native `AbortError` (thrown before the request reached us) also counts.
+ * axios's `isCancel`.
+ *
+ * A request's own {@link HttpRequestConfig.Timeout} elapsing is NOT a cancellation; that reports
+ * {@link HttpError.IsTimeout} instead. The distinction matters because a cancellation is usually
+ * an expected outcome to swallow, while a timeout is a fault worth logging or retrying.
+ *
+ * A native `AbortError` — thrown when the signal was already aborted before the request
+ * started — also counts.
+ *
+ * @param error - the value from a `catch` block.
+ * @returns true when the failure was caller-initiated cancellation.
+ *
+ * @example
+ * ```ts
+ * catch (error) {
+ *     if (IsCancellationError(error)) return null;   // the caller gave up; stay quiet
+ *     throw error;
+ * }
+ * ```
  */
 export function IsCancellationError(error: unknown): boolean {
     if (error instanceof HttpError) {
@@ -155,8 +254,22 @@ export function IsCancellationError(error: unknown): boolean {
 }
 
 /**
- * Builds a query string from a parameter object.
- * `null`/`undefined` values are omitted; arrays become repeated keys (`?tag=a&tag=b`).
+ * Serializes a parameter object into a URL-encoded query string.
+ *
+ * Exported because it is occasionally useful on its own; {@link HttpRequest} applies it to
+ * `Query` automatically, so you rarely need to call it directly.
+ *
+ * Rules: `null` and `undefined` entries are omitted entirely (rather than becoming the strings
+ * `"null"`/`"undefined"`), arrays expand to repeated keys, and `Date` values render as ISO 8601.
+ *
+ * @param query - the parameters to serialize.
+ * @returns the encoded query string, WITHOUT a leading `?`. Empty when nothing survives.
+ *
+ * @example
+ * ```ts
+ * BuildQueryString({ q: 'a b', tag: ['x', 'y'], skip: null });
+ * // 'q=a+b&tag=x&tag=y'
+ * ```
  */
 export function BuildQueryString(query: Record<string, HttpQueryValue>): string {
     const params = new URLSearchParams();
@@ -248,13 +361,36 @@ async function ReadBody(response: Response, responseType: HttpResponseType): Pro
 }
 
 /**
- * Performs a single HTTP request using native `fetch`.
+ * Performs a single HTTP request using native `fetch`. This is the primitive the rest of the
+ * module is built on — the method shorthands and {@link HttpClient} all funnel through it.
  *
+ * Reach for a shorthand ({@link HttpGet}, {@link HttpPost}, …) for one-off calls, and for
+ * {@link HttpClient} when several requests share a base URL, credentials, or retry policy.
+ *
+ * @typeParam T - the expected shape of the parsed response body.
  * @param config - the request configuration; see {@link HttpRequestConfig}.
- * @returns the {@link HttpResponse} with a parsed `Data` payload.
- * @throws {HttpError} on a non-2xx status (unless `ThrowOnError` is false), a timeout, or a
- *   transport failure.
- * @throws {SSRFError} when `ValidateUrl` is true and the URL resolves to a blocked address.
+ * @returns the {@link HttpResponse}, whose `Data` is parsed per `ResponseType`.
+ * @throws {HttpError} on a non-2xx status (unless `ThrowOnError` is disabled), on a timeout, on
+ *   caller cancellation, or on a transport failure. Inspect `Status` / `IsTimeout` / `IsCancelled`
+ *   to tell them apart.
+ * @throws {SSRFError} when `ValidateUrl` is enabled and the URL — or any redirect hop — resolves
+ *   to a private or reserved address. This propagates as itself rather than being wrapped in an
+ *   {@link HttpError}, so a security decision is never mistaken for an unreachable host.
+ *
+ * @example Reading a JSON payload
+ * ```ts
+ * const response = await HttpRequest<{ items: Item[] }>({
+ *     Url: 'https://api.example.com/items',
+ *     Query: { page: 1 },
+ * });
+ * return response.Data.items;
+ * ```
+ *
+ * @example Inspecting a non-2xx instead of catching it
+ * ```ts
+ * const response = await HttpRequest({ Url: url, ThrowOnError: false });
+ * if (response.Status === 404) return null;
+ * ```
  */
 export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promise<HttpResponse<T>> {
     const method = config.Method ?? "GET";
@@ -370,46 +506,163 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
     }
 }
 
-/** Convenience wrapper for a `GET` request. */
+/**
+ * Sends a `GET` request. Shorthand for {@link HttpRequest} with `Method: 'GET'`.
+ *
+ * @typeParam T - the expected shape of the parsed response body.
+ * @param url - absolute URL, or a path when `config.BaseURL` is supplied.
+ * @param config - optional per-request settings (query, headers, timeout, …).
+ * @returns the {@link HttpResponse}.
+ * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+ *
+ * @example
+ * ```ts
+ * const { Data } = await HttpGet<User[]>('https://api.example.com/users', {
+ *     Query: { active: true },
+ *     Headers: { Authorization: `Bearer ${token}` },
+ * });
+ * ```
+ */
 export async function HttpGet<T = unknown>(url: string, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
     return await HttpRequest<T>({ ...config, Url: url, Method: "GET" });
 }
 
-/** Convenience wrapper for a `POST` request. */
+/**
+ * Sends a `POST` request. Shorthand for {@link HttpRequest} with `Method: 'POST'`.
+ *
+ * A plain object or array `body` is JSON-encoded and given a JSON `Content-Type`. Pass a
+ * `URLSearchParams` for form encoding or a `FormData` for multipart, and `fetch` sets the correct
+ * `Content-Type` (including the multipart boundary) itself.
+ *
+ * @typeParam T - the expected shape of the parsed response body.
+ * @param url - absolute URL, or a path when `config.BaseURL` is supplied.
+ * @param body - the request body.
+ * @param config - optional per-request settings.
+ * @returns the {@link HttpResponse}.
+ * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+ *
+ * @example
+ * ```ts
+ * await HttpPost('https://api.example.com/items', { name: 'Widget' });               // JSON
+ * await HttpPost(tokenUrl, new URLSearchParams({ grant_type: 'refresh_token' }));    // form
+ * ```
+ */
 export async function HttpPost<T = unknown>(url: string, body?: unknown, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
     return await HttpRequest<T>({ ...config, Url: url, Method: "POST", Body: body });
 }
 
-/** Convenience wrapper for a `PUT` request. */
+/**
+ * Sends a `PUT` request. Shorthand for {@link HttpRequest} with `Method: 'PUT'`.
+ * Body handling matches {@link HttpPost}.
+ *
+ * @typeParam T - the expected shape of the parsed response body.
+ * @param url - absolute URL, or a path when `config.BaseURL` is supplied.
+ * @param body - the request body.
+ * @param config - optional per-request settings.
+ * @returns the {@link HttpResponse}.
+ * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+ */
 export async function HttpPut<T = unknown>(url: string, body?: unknown, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
     return await HttpRequest<T>({ ...config, Url: url, Method: "PUT", Body: body });
 }
 
-/** Convenience wrapper for a `PATCH` request. */
+/**
+ * Sends a `PATCH` request. Shorthand for {@link HttpRequest} with `Method: 'PATCH'`.
+ * Body handling matches {@link HttpPost}.
+ *
+ * @typeParam T - the expected shape of the parsed response body.
+ * @param url - absolute URL, or a path when `config.BaseURL` is supplied.
+ * @param body - the request body.
+ * @param config - optional per-request settings.
+ * @returns the {@link HttpResponse}.
+ * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+ */
 export async function HttpPatch<T = unknown>(url: string, body?: unknown, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
     return await HttpRequest<T>({ ...config, Url: url, Method: "PATCH", Body: body });
 }
 
-/** Convenience wrapper for a `DELETE` request. */
+/**
+ * Sends a `DELETE` request. Shorthand for {@link HttpRequest} with `Method: 'DELETE'`.
+ *
+ * @typeParam T - the expected shape of the parsed response body.
+ * @param url - absolute URL, or a path when `config.BaseURL` is supplied.
+ * @param config - optional per-request settings.
+ * @returns the {@link HttpResponse}.
+ * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+ */
 export async function HttpDelete<T = unknown>(url: string, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
     return await HttpRequest<T>({ ...config, Url: url, Method: "DELETE" });
 }
 
-/** Convenience wrapper for a `HEAD` request. */
+/**
+ * Sends a `HEAD` request. Shorthand for {@link HttpRequest} with `Method: 'HEAD'`.
+ *
+ * `ResponseType` is forced to `none` because a HEAD response has no body by definition, so `Data`
+ * is always `null` — use `Status` and `Headers`. Pair with `ThrowOnError: false` when probing a
+ * URL's reachability, so a 4xx is reported as a status rather than thrown.
+ *
+ * @typeParam T - unused in practice; `Data` is always `null`.
+ * @param url - absolute URL, or a path when `config.BaseURL` is supplied.
+ * @param config - optional per-request settings.
+ * @returns the {@link HttpResponse}, with `Data` set to `null`.
+ * @throws {HttpError} on a non-2xx status (unless `ThrowOnError` is disabled), timeout,
+ *   cancellation, or transport failure.
+ *
+ * @example Probing whether a link is alive
+ * ```ts
+ * const response = await HttpHead(url, { ThrowOnError: false, Timeout: 10000 });
+ * const reachable = response.Status >= 200 && response.Status < 400;
+ * ```
+ */
 export async function HttpHead<T = unknown>(url: string, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
     return await HttpRequest<T>({ ...config, Url: url, Method: "HEAD", ResponseType: "none" });
 }
 
 /**
- * Fetches a caller-controlled URL with the SSRF guard on, returning a parsed {@link HttpResponse}.
- * Equivalent to {@link HttpRequest} with `ValidateUrl: true` — provided so that call sites handling
- * untrusted URLs read as obviously safe.
+ * {@link HttpRequest} with the SSRF guard switched on — equivalent to passing
+ * `ValidateUrl: true`, but named so a reviewer can see at a glance that the call site handles an
+ * untrusted URL.
+ *
+ * Use this (or set `ValidateUrl` explicitly) wherever the URL can be influenced by an AI agent, an
+ * Action parameter, an API caller, or stored data those can write. Prefer {@link SafeFetch} when
+ * you want the raw `Response` rather than a parsed body.
+ *
+ * @typeParam T - the expected shape of the parsed response body.
+ * @param config - the request configuration; `ValidateUrl` is forced on.
+ * @returns the {@link HttpResponse}.
+ * @throws {SSRFError} when the URL, or any redirect hop, resolves to a private or reserved address.
+ * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+ *
+ * @example
+ * ```ts
+ * try {
+ *     const response = await SafeHttpRequest({ Url: userSuppliedUrl });
+ *     return response.Data;
+ * } catch (error) {
+ *     if (error instanceof SSRFError) {
+ *         return { Success: false, ResultCode: 'SSRF_BLOCKED' };
+ *     }
+ *     throw error;
+ * }
+ * ```
  */
 export async function SafeHttpRequest<T = unknown>(config: HttpRequestConfig): Promise<HttpResponse<T>> {
     return await HttpRequest<T>({ ...config, ValidateUrl: true });
 }
 
-/** Per-instance defaults and hooks for {@link HttpClient}. */
+/**
+ * Per-instance defaults and hooks for {@link HttpClient}.
+ *
+ * The three hooks replace what axios interceptors did, with one important difference: they are
+ * plain options on the instance rather than entries appended to a mutable global chain, so what a
+ * given client does is visible at its construction site and cannot be changed from elsewhere.
+ *
+ * | axios | here |
+ * |---|---|
+ * | `interceptors.request.use(fn)` | {@link HttpClientOptions.OnRequest} |
+ * | `interceptors.response.use(onOk)` | {@link HttpClientOptions.OnResponse} |
+ * | `interceptors.response.use(_, onErr)` | {@link HttpClientOptions.OnRetry} |
+ */
 export interface HttpClientOptions {
     /** Prefix applied to every relative request URL. */
     BaseURL?: string;
@@ -427,18 +680,56 @@ export interface HttpClientOptions {
     BasicAuth?: { Username: string; Password: string };
     /**
      * Called before each request with the fully merged config; return the config to actually send.
-     * This is the replacement for an axios request interceptor (injecting auth, signing, etc.).
+     * The replacement for an axios request interceptor — this is where token injection, request
+     * signing, and per-request query defaults belong.
+     *
+     * Treat the incoming config as immutable and return a new object; it is re-derived on every
+     * retry attempt, so a token read here is always current rather than captured at construction.
+     *
+     * @example
+     * ```ts
+     * OnRequest: (config) => ({
+     *     ...config,
+     *     Headers: { ...config.Headers, Authorization: `Bearer ${this.getAccessToken()}` },
+     * })
+     * ```
      */
     OnRequest?: (config: HttpRequestConfig) => HttpRequestConfig | Promise<HttpRequestConfig>;
     /**
-     * Called after each successful response. Observation only — the response is returned to the
-     * caller regardless. Replaces the success half of an axios response interceptor.
+     * Called after each successful response. Observation only: whatever this does, the response is
+     * still returned to the caller unchanged. Replaces the success half of an axios response
+     * interceptor — logging, metrics, and rate-limit headroom tracking belong here.
+     *
+     * @example
+     * ```ts
+     * OnResponse: (response) => {
+     *     const remaining = response.Headers['x-rate-limit-remaining'];
+     *     if (remaining) LogStatus(`Rate limit remaining: ${remaining}`);
+     * }
+     * ```
      */
     OnResponse?: (response: HttpResponse<unknown>) => void | Promise<void>;
     /**
-     * Called when a request fails. Return `true` to retry (bounded by `MaxRetries`), `false` to let
-     * the error propagate. Replaces the error half of an axios response interceptor — this is where
-     * 429 / rate-limit back-off belongs.
+     * Called when a request fails. Return `true` to retry, `false` to let the error propagate.
+     * Replaces the error half of an axios response interceptor — 429 back-off, and one-shot token
+     * refresh on a 401, belong here.
+     *
+     * Retries are bounded by `MaxRetries` (default 3) so a hook that always returns `true` cannot
+     * loop forever. Await the back-off inside the hook; the retry fires as soon as it resolves, and
+     * `OnRequest` runs again first, so a refreshed token is picked up automatically.
+     *
+     * Only an {@link HttpError} reaches this hook — an {@link SSRFError} is a security decision and
+     * is never retried.
+     *
+     * @example
+     * ```ts
+     * OnRetry: async (error, attempt) => {
+     *     if (error.Status !== 429) return false;
+     *     const retryAfter = Number(error.Headers['retry-after']) || 2 ** attempt;
+     *     await new Promise((r) => setTimeout(r, retryAfter * 1000));
+     *     return true;
+     * }
+     * ```
      */
     OnRetry?: (error: HttpError, attempt: number) => boolean | Promise<boolean>;
 }
@@ -446,24 +737,45 @@ export interface HttpClientOptions {
 /**
  * A configured HTTP client — the replacement for `axios.create(...)`.
  *
- * Holds a `BaseURL`, default headers, and a timeout, and exposes `OnRequest` / `OnResponse` /
- * `OnRetry` hooks that cover what MJ used axios interceptors for (auth injection and rate-limit
- * retry). Unlike axios interceptors, the hooks are plain options on the instance rather than a
- * mutable global chain, so what a given client does is visible at its construction site.
+ * Holds a base URL, default headers, a timeout, and the {@link HttpClientOptions} hooks that stand
+ * in for axios interceptors. Construct one per upstream API, typically behind a lazy getter on a
+ * provider base class so the cost is paid only when that provider is actually used.
  *
- * @example
+ * Instances are stateless apart from their options and safe to share across concurrent requests.
+ * Nothing is cached between calls, so a client whose `OnRequest` reads a token always sends the
+ * current one.
+ *
+ * @example A provider client with auth injection and 429 back-off
  * ```ts
- * const client = new HttpClient({
- *     BaseURL: 'https://graph.facebook.com/v18.0',
- *     Timeout: 30000,
- *     OnRequest: (config) => ({ ...config, Query: { ...config.Query, access_token: token } }),
- *     OnRetry: async (error) => {
- *         if (error.Status !== 429) return false;
- *         await new Promise((r) => setTimeout(r, 60000));
- *         return true;
- *     },
- * });
- * const response = await client.Get<Feed>('/me/feed');
+ * private _client: HttpClient | null = null;
+ *
+ * protected get httpClient(): HttpClient {
+ *     if (!this._client) {
+ *         this._client = new HttpClient({
+ *             BaseURL: 'https://graph.facebook.com/v18.0',
+ *             Timeout: 30000,
+ *             Headers: { Accept: 'application/json' },
+ *
+ *             // Runs before every attempt, so a refreshed token is picked up automatically.
+ *             OnRequest: (config) => ({
+ *                 ...config,
+ *                 Query: { ...config.Query, access_token: this.getAccessToken() },
+ *             }),
+ *
+ *             // Bounded by MaxRetries (default 3).
+ *             OnRetry: async (error) => {
+ *                 if (error.Status !== 429) return false;
+ *                 await this.handleRateLimit(60);
+ *                 return true;
+ *             },
+ *         });
+ *     }
+ *     return this._client;
+ * }
+ *
+ * // Then, at the call sites:
+ * const response = await this.httpClient.Get<FacebookPagedResponse<Post>>('/me/feed');
+ * return response.Data.data;
  * ```
  */
 export class HttpClient {
@@ -473,14 +785,29 @@ export class HttpClient {
         this._options = options;
     }
 
-    /** The options this client was constructed with. */
+    /**
+     * The options this client was constructed with. Read-only — a client's behavior is fixed at
+     * construction, so build a second client rather than trying to mutate one.
+     */
     public get Options(): Readonly<HttpClientOptions> {
         return this._options;
     }
 
     /**
-     * Sends a request using this client's defaults and hooks.
+     * Sends a request using this client's defaults and hooks. Every other method on the class
+     * delegates here.
+     *
+     * Per-request values win over client defaults, except `Headers`, which are merged key-by-key so
+     * one request can override a single default header without discarding the rest. `OnRequest`
+     * then gets the last word on the merged config.
+     *
+     * @typeParam T - the expected shape of the parsed response body.
      * @param config - per-request configuration, merged over the client's defaults.
+     * @returns the {@link HttpResponse}.
+     * @throws {HttpError} when the request fails and `OnRetry` does not ask for another attempt, or
+     *   once `MaxRetries` is exhausted.
+     * @throws {SSRFError} when `ValidateUrl` is enabled and the target resolves to a blocked
+     *   address. Never retried.
      */
     public async Request<T = unknown>(config: HttpRequestConfig): Promise<HttpResponse<T>> {
         const maxRetries = this._options.MaxRetries ?? 3;
@@ -520,32 +847,83 @@ export class HttpClient {
         }
     }
 
-    /** Sends a `GET` request. */
+    /**
+     * Sends a `GET` request through this client.
+     *
+     * @typeParam T - the expected shape of the parsed response body.
+     * @param url - absolute URL, or a path resolved against the client's `BaseURL`.
+     * @param config - optional per-request settings, merged over the client's defaults.
+     * @returns the {@link HttpResponse}.
+     * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+     */
     public async Get<T = unknown>(url: string, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
         return await this.Request<T>({ ...config, Url: url, Method: "GET" });
     }
 
-    /** Sends a `POST` request. */
+    /**
+     * Sends a `POST` request through this client. Body handling matches {@link HttpPost}.
+     *
+     * @typeParam T - the expected shape of the parsed response body.
+     * @param url - absolute URL, or a path resolved against the client's `BaseURL`.
+     * @param body - the request body.
+     * @param config - optional per-request settings, merged over the client's defaults.
+     * @returns the {@link HttpResponse}.
+     * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+     */
     public async Post<T = unknown>(url: string, body?: unknown, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
         return await this.Request<T>({ ...config, Url: url, Method: "POST", Body: body });
     }
 
-    /** Sends a `PUT` request. */
+    /**
+     * Sends a `PUT` request through this client. Body handling matches {@link HttpPost}.
+     *
+     * @typeParam T - the expected shape of the parsed response body.
+     * @param url - absolute URL, or a path resolved against the client's `BaseURL`.
+     * @param body - the request body.
+     * @param config - optional per-request settings, merged over the client's defaults.
+     * @returns the {@link HttpResponse}.
+     * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+     */
     public async Put<T = unknown>(url: string, body?: unknown, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
         return await this.Request<T>({ ...config, Url: url, Method: "PUT", Body: body });
     }
 
-    /** Sends a `PATCH` request. */
+    /**
+     * Sends a `PATCH` request through this client. Body handling matches {@link HttpPost}.
+     *
+     * @typeParam T - the expected shape of the parsed response body.
+     * @param url - absolute URL, or a path resolved against the client's `BaseURL`.
+     * @param body - the request body.
+     * @param config - optional per-request settings, merged over the client's defaults.
+     * @returns the {@link HttpResponse}.
+     * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+     */
     public async Patch<T = unknown>(url: string, body?: unknown, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
         return await this.Request<T>({ ...config, Url: url, Method: "PATCH", Body: body });
     }
 
-    /** Sends a `DELETE` request. */
+    /**
+     * Sends a `DELETE` request through this client.
+     *
+     * @typeParam T - the expected shape of the parsed response body.
+     * @param url - absolute URL, or a path resolved against the client's `BaseURL`.
+     * @param config - optional per-request settings, merged over the client's defaults.
+     * @returns the {@link HttpResponse}.
+     * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+     */
     public async Delete<T = unknown>(url: string, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
         return await this.Request<T>({ ...config, Url: url, Method: "DELETE" });
     }
 
-    /** Sends a `HEAD` request. */
+    /**
+     * Sends a `HEAD` request through this client. `ResponseType` is forced to `none`, so `Data` is always `null`.
+     *
+     * @typeParam T - the expected shape of the parsed response body.
+     * @param url - absolute URL, or a path resolved against the client's `BaseURL`.
+     * @param config - optional per-request settings, merged over the client's defaults.
+     * @returns the {@link HttpResponse}.
+     * @throws {HttpError} on a non-2xx status, timeout, cancellation, or transport failure.
+     */
     public async Head<T = unknown>(url: string, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
         return await this.Request<T>({ ...config, Url: url, Method: "HEAD", ResponseType: "none" });
     }
