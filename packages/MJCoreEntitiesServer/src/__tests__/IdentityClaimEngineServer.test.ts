@@ -11,6 +11,7 @@ import {
     type MJIdentityClaimTypeEntity
 } from '@memberjunction/core-entities';
 import { Metadata, type UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 class MockDriver extends BaseIdentityClaimDriver {
     public onCreateCalled = false;
@@ -241,6 +242,54 @@ describe('IdentityClaimEngineServer', () => {
         expect(redeemResult.Success).toBe(true);
         expect(mockDriver.onClaimCalled).toBe(true);
         expect(mockClaim.Status).toBe('Claimed');
+    });
+
+    it('should read the claim under the system user, not the redeeming user', async () => {
+        const engine = IdentityClaimEngineServer.Instance;
+        const mockClaim = createMockClaim({
+            NormalizedEmail: 'claimant@example.com'
+        });
+
+        const systemUser = createMockUser({ ID: 'system-user-000', Email: 'system@memberjunction.com' });
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
+
+        const getEntityObject = vi
+            .spyOn(Metadata.prototype, 'GetEntityObject')
+            .mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+        // This suite's beforeEach does not restore mocks, so the prototype spy carries call
+        // history from earlier tests. Clear it so the negative assertion below is about THIS
+        // redemption rather than a structurally identical user from a previous one.
+        getEntityObject.mockClear();
+
+        const redeemingUser = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
+        const redeemResult = await engine.RedeemClaim('claim-123', redeemingUser);
+
+        expect(redeemResult.Success).toBe(true);
+        // Row-level security applies to single-record loads, not just RunView. Loaded as the
+        // redeeming user, a claim addressed to a different email — the exact case the bearer
+        // token exists to serve — could never be loaded at all.
+        expect(getEntityObject).toHaveBeenCalledWith('MJ: Identity Claims', systemUser);
+        expect(getEntityObject).not.toHaveBeenCalledWith('MJ: Identity Claims', redeemingUser);
+    });
+
+    it('should fall back to the context user when the system user cache is unpopulated', async () => {
+        const engine = IdentityClaimEngineServer.Instance;
+        const mockClaim = createMockClaim({
+            NormalizedEmail: 'claimant@example.com'
+        });
+
+        // GetSystemUser() is typed UserInfo but returns undefined before the cache is refreshed.
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(undefined as unknown as UserInfo);
+
+        const getEntityObject = vi
+            .spyOn(Metadata.prototype, 'GetEntityObject')
+            .mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+
+        const redeemingUser = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
+        const redeemResult = await engine.RedeemClaim('claim-123', redeemingUser);
+
+        expect(redeemResult.Success).toBe(true);
+        expect(getEntityObject).toHaveBeenCalledWith('MJ: Identity Claims', redeemingUser);
     });
 
     it('should redeem a claim when a valid bearer token is presented, even if user email differs', async () => {

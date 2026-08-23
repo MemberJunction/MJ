@@ -24,6 +24,7 @@ import {
     MJIdentityClaimTypeEntity,
     MJMagicLinkInviteEntity
 } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -303,7 +304,24 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         }
 
         const md = new Metadata(); // global-provider-ok: server-side identity claim engine resolving claims under server default provider
-        const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
+        // Read the claim under the system user rather than `contextUser`.
+        //
+        // Authorization for redemption is enforced below: the caller must either own the
+        // claim's email or present a token whose SHA-256 matches the stored hash. That check
+        // IS the boundary — the entity read grant was never doing security work here.
+        //
+        // Loading under `contextUser` also breaks the feature now that UI reads are row-scoped.
+        // The row filter is applied to single-record loads, not just RunView (the provider
+        // appends GetEffectiveRowFilterWhereClause to the primary-key WHERE), so workflow #3
+        // from this entity's migration header — "purchase email differs from the login account
+        // email, a verification token confirms ownership" — could never load the very claim it
+        // exists to redeem. `contextUser` still drives everything else, including the save.
+        // `GetSystemUser()` is typed `UserInfo` but returns undefined when the cache has not been
+        // refreshed (see its own doc comment — callers are expected to guard). Fall back to
+        // `contextUser` so an unpopulated cache degrades to the previous behaviour rather than
+        // passing undefined down into the provider.
+        const readUser = UserCache.Instance.GetSystemUser() ?? contextUser;
+        const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', readUser);
         const loaded = await claim.Load(claimID);
         if (!loaded) {
             return { Success: false, ErrorMessage: `IdentityClaim not found for ID ${claimID}` };
@@ -327,7 +345,12 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             const computedHash = crypto.createHash('sha256').update(token).digest('base64url');
 
             if (claim.MagicLinkInviteID) {
-                const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>('MJ: Magic Link Invites', contextUser);
+                // Same rationale as the claim read above: this row is being fetched purely to
+                // compare its TokenHash against the presented token, which is itself the
+                // authorization check. A redeemer whose email differs from the purchase email
+                // has no read grant on the invite, and scoping this to them would defeat the
+                // token flow rather than protect it.
+                const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>('MJ: Magic Link Invites', readUser);
                 const inviteLoaded = await invite.Load(claim.MagicLinkInviteID);
                 if (!inviteLoaded) {
                     return { Success: false, ErrorMessage: 'Associated magic link invite could not be verified' };
