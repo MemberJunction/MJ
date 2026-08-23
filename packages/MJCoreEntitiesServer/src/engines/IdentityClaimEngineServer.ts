@@ -29,6 +29,8 @@ import { Message } from '@memberjunction/communication-types';
 import { TemplateEngineServer } from '@memberjunction/templates';
 
 export interface CreateClaimServerParams extends CreateClaimParams {
+    /** Optional raw verification token. If not provided and MagicLinkInviteID is null, one is securely generated. */
+    VerificationToken?: string;
     /** Whether to send an email notification to claimant (defaults to true) */
     SendEmail?: boolean;
     /** Optional custom email subject */
@@ -89,6 +91,15 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         return this.Base.NormalizeEmail(email);
     }
 
+    private escapeHtml(str: string): string {
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     /**
      * Creates and saves an IdentityClaim record, sends an email notification via the MJ Communications
      * framework if configured, and executes the driver's OnCreate lifecycle method.
@@ -111,11 +122,43 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         }
 
         const md = new Metadata();
+
+        // 2.2 Accept and normalize EntityID or EntityName
+        let resolvedEntityID: string | null = null;
+        if (params.EntityID) {
+            const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.EntityID);
+            if (isGuid) {
+                resolvedEntityID = params.EntityID;
+            } else {
+                const matchedEntity = md.Entities.find(e => e.Name.toLowerCase() === params.EntityID?.toLowerCase());
+                if (!matchedEntity) {
+                    throw new Error(`Invalid or unrecognized Entity name/ID: ${params.EntityID}`);
+                }
+                resolvedEntityID = matchedEntity.ID;
+            }
+        }
+
+        // 3.2 High-entropy token generation & hashing-at-rest
+        let rawToken = params.VerificationToken;
+        if (!rawToken && !params.MagicLinkInviteID) {
+            rawToken = crypto.randomBytes(32).toString('base64url');
+        }
+
+        let tokenHash: string | null = null;
+        if (rawToken) {
+            tokenHash = crypto.createHash('sha256').update(rawToken).digest('base64url');
+        }
+
+        const metadataObj: Record<string, unknown> = params.Metadata ? { ...params.Metadata } : {};
+        if (tokenHash) {
+            metadataObj.TokenHash = tokenHash;
+        }
+
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         claim.NewRecord();
         claim.ClaimTypeID = claimType.ID;
         claim.NormalizedEmail = normalizedEmail;
-        claim.EntityID = params.EntityID ?? null;
+        claim.EntityID = resolvedEntityID;
         claim.RecordID = params.RecordID ?? null;
         claim.PayloadJSON = params.Payload ? JSON.stringify(params.Payload) : null;
         claim.Status = 'Pending';
@@ -126,7 +169,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         claim.ExpiresAt = expiresAt;
 
         claim.MagicLinkInviteID = params.MagicLinkInviteID ?? null;
-        claim.MetadataJSON = params.Metadata ? JSON.stringify(params.Metadata) : null;
+        claim.MetadataJSON = Object.keys(metadataObj).length > 0 ? JSON.stringify(metadataObj) : null;
 
         const saved = await claim.Save();
         if (!saved) {
@@ -136,7 +179,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         // Send email notification via MJ Communications Framework if enabled
         if (params.SendEmail !== false) {
             try {
-                await this.sendClaimEmail(claim, claimType, params, contextUser);
+                await this.sendClaimEmail(claim, claimType, params, rawToken, contextUser);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 LogError(`[IdentityClaimEngineServer] Failed to dispatch claim email to ${normalizedEmail}: ${msg}`);
@@ -159,6 +202,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         claim: MJIdentityClaimEntity,
         claimType: MJIdentityClaimTypeEntity,
         params: CreateClaimServerParams,
+        rawToken?: string,
         contextUser?: UserInfo
     ): Promise<boolean> {
         try {
@@ -172,9 +216,10 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             message.From = process.env.CLAIM_FROM_EMAIL || process.env.NOTIFICATION_FROM_EMAIL || 'notifications@memberjunction.com';
             message.To = claim.NormalizedEmail;
 
-            // Generate claim / magic link URL
+            // Generate claim / magic link URL with token
             const baseUrl = params.ClaimBaseURL || process.env.PORTAL_BASE_URL || 'https://app.memberjunction.com';
-            const claimUrl = `${baseUrl.replace(/\/$/, '')}/claims/redeem?id=${claim.ID}`;
+            const tokenParam = rawToken ? `&token=${encodeURIComponent(rawToken)}` : '';
+            const claimUrl = `${baseUrl.replace(/\/$/, '')}/claims/redeem?id=${claim.ID}${tokenParam}`;
 
             message.Subject = params.EmailSubject || `You have a new ${claimType.Name} access claim`;
 
@@ -194,12 +239,12 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
                     ...(params.TemplateData ?? {})
                 };
             } else {
-                // Clean default responsive email body
+                // 3.4 Clean default responsive email body with escaped HTML
                 message.Body = `
                     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b;">
-                        <h2 style="color: #0f172a; margin-bottom: 16px;">Claim Your ${claimType.Name}</h2>
+                        <h2 style="color: #0f172a; margin-bottom: 16px;">Claim Your ${this.escapeHtml(claimType.Name)}</h2>
                         <p style="font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
-                            An item or entitlement has been issued to <strong>${claim.NormalizedEmail}</strong>. Click the link below to access or link it to your account:
+                            An item or entitlement has been issued to <strong>${this.escapeHtml(claim.NormalizedEmail)}</strong>. Click the link below to access or link it to your account:
                         </p>
                         <div style="margin-bottom: 28px;">
                             <a href="${claimUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
@@ -214,7 +259,9 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             }
 
             LogStatus(`[IdentityClaimEngineServer] Dispatching claim notification to ${claim.NormalizedEmail}`);
-            const sendResult = await commEngine.SendSingleMessage('SendGrid', 'Email', message, undefined, false);
+            // 3.5 Make email provider configurable via env
+            const commProvider = process.env.CLAIM_EMAIL_PROVIDER || 'SendGrid';
+            const sendResult = await commEngine.SendSingleMessage(commProvider, 'Email', message, undefined, false);
             return sendResult?.Success === true;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -272,16 +319,47 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             return { Success: false, ErrorMessage: 'Claim has expired' };
         }
 
-        // If claim is tied to a MagicLinkInvite, verify token match
-        if (claim.MagicLinkInviteID && token) {
-            const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>('MJ: Magic Link Invites', contextUser);
-            const inviteLoaded = await invite.Load(claim.MagicLinkInviteID);
-            if (inviteLoaded) {
-                const computedHash = crypto.createHash('sha256').update(token).digest('base64url');
-                if (invite.TokenHash && invite.TokenHash !== computedHash && invite.TokenHash !== token) {
-                    return { Success: false, ErrorMessage: 'Invalid claim verification token' };
+        // 3.1 & 3.2 Security verification: Email match OR verified bearer token required
+        const userEmailMatch = Boolean(contextUser.Email && this.NormalizeEmail(contextUser.Email) === claim.NormalizedEmail);
+        let tokenValid = false;
+
+        if (token) {
+            const computedHash = crypto.createHash('sha256').update(token).digest('base64url');
+
+            if (claim.MagicLinkInviteID) {
+                const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>('MJ: Magic Link Invites', contextUser);
+                const inviteLoaded = await invite.Load(claim.MagicLinkInviteID);
+                if (!inviteLoaded) {
+                    return { Success: false, ErrorMessage: 'Associated magic link invite could not be verified' };
+                }
+                if (invite.TokenHash) {
+                    const expectedBuf = Buffer.from(invite.TokenHash, 'utf8');
+                    const actualBuf = Buffer.from(computedHash, 'utf8');
+                    if (expectedBuf.length === actualBuf.length && crypto.timingSafeEqual(expectedBuf, actualBuf)) {
+                        tokenValid = true;
+                    }
+                }
+            } else if (claim.MetadataJSON) {
+                try {
+                    const metadata = JSON.parse(claim.MetadataJSON);
+                    if (metadata && typeof metadata.TokenHash === 'string') {
+                        const expectedBuf = Buffer.from(metadata.TokenHash, 'utf8');
+                        const actualBuf = Buffer.from(computedHash, 'utf8');
+                        if (expectedBuf.length === actualBuf.length && crypto.timingSafeEqual(expectedBuf, actualBuf)) {
+                            tokenValid = true;
+                        }
+                    }
+                } catch {
+                    // Ignore metadata parsing error
                 }
             }
+        }
+
+        if (!userEmailMatch && !tokenValid) {
+            return {
+                Success: false,
+                ErrorMessage: 'Authenticated user email does not match the claim recipient, and no valid verification token was provided'
+            };
         }
 
         const claimType = this.GetClaimTypeByID(claim.ClaimTypeID);
@@ -294,24 +372,40 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             return { Success: false, ErrorMessage: `Claim driver not configured for type ${claimType.Name}` };
         }
 
+        // 3.3 Atomic state transition: Mark Claimed and save before running driver to prevent double-redemption
+        claim.Status = 'Claimed';
+        claim.ClaimedAt = new Date();
+        claim.ClaimedByUserID = contextUser.ID;
+        const preSaved = await claim.Save();
+        if (!preSaved) {
+            return { Success: false, ErrorMessage: 'Claim status transition failed or claim was concurrently claimed' };
+        }
+
         const redeemContext: ClaimRedeemContext = {
             Claim: claim,
             User: contextUser,
             RedemptionToken: token
         };
 
-        const result = await driver.OnClaim(redeemContext);
-        if (result.Success) {
-            claim.Status = 'Claimed';
-            claim.ClaimedAt = new Date();
-            claim.ClaimedByUserID = contextUser.ID;
-            const saved = await claim.Save();
-            if (!saved) {
-                LogError(`[IdentityClaimEngineServer] Failed to update claim status after redemption: ${claim.LatestResult?.Message}`);
+        try {
+            const result = await driver.OnClaim(redeemContext);
+            if (!result.Success) {
+                // If driver failed, roll back claim status to Pending
+                claim.Status = 'Pending';
+                claim.ClaimedAt = null;
+                claim.ClaimedByUserID = null;
+                await claim.Save();
+                return result;
             }
+            return result;
+        } catch (err) {
+            // Revert state if driver execution threw
+            claim.Status = 'Pending';
+            claim.ClaimedAt = null;
+            claim.ClaimedByUserID = null;
+            await claim.Save();
+            throw err;
         }
-
-        return result;
     }
 
     /**
