@@ -4692,6 +4692,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                     // Initialize IS-A parent entity composition chain before any data operations
                     await newObject.InitializeParentEntity();
+                    // Construct declared embedded peers (no NewRecord/Load yet) so NewRecord()
+                    // can provision required FKs synchronously and Load() can fill them.
+                    await newObject.InitializeEmbeddedRecords();
 
                     if (actualLoadKey) {
                         // Load existing record

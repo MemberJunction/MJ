@@ -38,7 +38,7 @@ import type {
 } from './types.js';
 import { ClassifyError, IsRetryableError } from './types.js';
 import { WithRetry } from './RetryRunner.js';
-import { WithTimeout, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
+import { WithTimeout, OperationTimeoutError, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
@@ -230,6 +230,25 @@ function detectSchemaNotGenerated(entityName: string, errorMessage: string): Sch
     const postgres = errorMessage.match(/function\s+([^(\s]+)\s*\([^)]*\)\s+does not exist/i);
     if (postgres) return new SchemaNotGeneratedError(entityName, postgres[1]);
     return null;
+}
+
+/**
+ * Coerces an externally-supplied tuning value — a duration in ms, or a count — to a usable positive
+ * integer, or `undefined` when it is not one, so the caller's `??` chain falls through to the next
+ * source.
+ *
+ * Every source of these values is outside the engine's control: operator-authored JSON in
+ * `CompanyIntegration.Configuration`, and connector-authored properties like
+ * `BaseIntegrationConnector.FetchChangesTimeoutMs`, whose declared type (`number | null`) happily
+ * admits `0`, negatives and `NaN` — a connector computing one from an unset env var gets `NaN`
+ * without a type error. Handing any of those to `setTimeout` is silently catastrophic rather than
+ * loud: it coerces them to ~1ms, so every wrapped operation rejects immediately and the object
+ * syncs nothing. Guard BOTH sources, not just the JSON one.
+ *
+ * Exported so the guard itself is unit-testable without standing up a sync.
+ */
+export function PositiveInt(v: unknown): number | undefined {
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
 }
 
 export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
@@ -1960,17 +1979,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private getConfigOverrides(config: RunConfiguration): {
         maxConcurrency?: number; rateLimitTokensPerSec?: number; rateLimitBurst?: number; discoveryTimeBudgetMs?: number;
+        fetchTimeoutMs?: number;
     } {
         try {
             const raw = config.companyIntegration.Configuration;
             if (!raw) return {};
             const p = JSON.parse(raw) as Record<string, unknown>;
-            const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
             return {
-                maxConcurrency: num(p.maxConcurrency),
+                maxConcurrency: PositiveInt(p.maxConcurrency),
                 rateLimitTokensPerSec: typeof p.rateLimitTokensPerSec === 'number' && p.rateLimitTokensPerSec > 0 ? p.rateLimitTokensPerSec : undefined,
-                rateLimitBurst: num(p.rateLimitBurst),
-                discoveryTimeBudgetMs: num(p.discoveryTimeBudgetMs),
+                rateLimitBurst: PositiveInt(p.rateLimitBurst),
+                discoveryTimeBudgetMs: PositiveInt(p.discoveryTimeBudgetMs),
+                fetchTimeoutMs: PositiveInt(p.fetchTimeoutMs),
             };
         } catch { return {}; }
     }
@@ -2186,6 +2206,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let fetchGapCount = 0;            // CONSECUTIVE skipped pages (reset on any clean fetch)
         const MAX_FETCH_GAPS = 25;        // give up + hold the watermark if this many pages fail in a row (API down)
         let consecutiveEmptyBatches = 0;  // P3-D: detect a connector that pages empty-but-HasMore forever
+        let oversizeBatchWarned = false;  // pagination rule: warn ONCE per object that the connector ignored BatchSize
         const MAX_BATCHES_PER_MAP = 5000;
         const EMPTY_BATCH_WARN_THRESHOLD = 5; // warn once after this many empty-but-HasMore batches in a row
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
@@ -2196,6 +2217,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // one entry per distinct key + a capped value sample. See CustomKeyStat.
         const customKeyAgg = new Map<string, CustomKeyAccumulator>();
         let customKeyTotalRecords = 0;
+
+        // Per-page fetch timeout, resolved ONCE per entity map. A connector that fans out one request
+        // per parent does N requests inside a single FetchChanges call, so its page time scales with
+        // BatchSize and with however much concurrency the adaptive controller currently allows — the
+        // fixed 30s default punished exactly those connectors. Deployment config wins over the
+        // connector's own declared default, which wins over the framework default. BOTH overrides go
+        // through PositiveInt: `??` alone would only reject null/undefined, so a connector returning
+        // 0 / -1 / NaN (all legal for its `number | null` type) would be applied verbatim and time
+        // every page out at ~1ms.
+        const fetchTimeoutMs =
+            PositiveInt(this.getConfigOverrides(config).fetchTimeoutMs)
+            ?? PositiveInt(config.connector.FetchChangesTimeoutMs)
+            ?? DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs;
 
         while (hasMore) {
             if (abortSignal?.aborted) {
@@ -2250,11 +2284,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 batch = await WithRetry(
                     () => WithTimeout(
                         config.connector.FetchChanges(ctx),
-                        DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs,
+                        fetchTimeoutMs,
                         `FetchChanges(${entityMap.ExternalObjectName})`,
                     ),
                     undefined,
-                    (err) => IsRetryableError(ClassifyError(err).Code),
+                    // OUR OWN timeout is terminal for this page; a transport error is not.
+                    //
+                    // `WithTimeout` is a `Promise.race` with no cancellation, so the abandoned attempt
+                    // keeps running. Retrying meant a second full page of vendor requests overlapping
+                    // the first, then a third — up to 3x the load on a source that was already too slow
+                    // to finish once, which is a good way to earn a real 429 (and THAT does cut
+                    // concurrency). And the retry could not succeed on its merits anyway: the same work
+                    // under the same budget exceeds it again.
+                    //
+                    // Deliberately `instanceof` rather than the classified code. `ClassifyError` folds
+                    // `econnreset` in with timeouts under `NETWORK_TIMEOUT`, and a reset socket IS worth
+                    // retrying — so excluding the whole code would lose real resilience. Only the error
+                    // WithTimeout itself minted is excluded.
+                    (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
                     (attempt, err, delayMs) => logger?.emit('sync.fetch.retry', {
                         externalObjectName: entityMap.ExternalObjectName,
                         batchIndex: batchCount,
@@ -2308,7 +2355,39 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     else if (currentPage != null) currentPage += 1;
                     continue;
                 }
+                // Cannot skip past this page (cursor paging, or the gap budget is spent), so the object
+                // stops here with an incomplete result set. The watermark is held below and the run
+                // re-fetches next time — but WITHOUT this warning that outcome is invisible: the map
+                // reports success with the records it did get, so an object whose very first page
+                // failed reads as a clean "0 records, nothing changed" run. Verified live: a sync
+                // whose only page timed out finished Status=Success, errorCount=0, empty ErrorLog.
                 fetchCompletedCleanly = false;
+                const abortMessage =
+                    `Fetch for '${entityMap.ExternalObjectName}' stopped at batch ${batchCount} after a persistent ` +
+                    `error and could not continue past it, so this object's result set is INCOMPLETE ` +
+                    `(${recordsInMap} record(s) fetched before the failure). The watermark is held, so the ` +
+                    `unfetched window is retried next run. Error: ${errMsg}`;
+                logger?.warning(
+                    entityMap.ExternalObjectName ?? entityMap.ID,
+                    'FETCH_ABORTED_INCOMPLETE',
+                    abortMessage,
+                    { batchIndex: batchCount, recordsFetchedBeforeFailure: recordsInMap, error: errMsg },
+                );
+                // The structured warning above reaches the console and the per-run artifact — neither of
+                // which is queryable run history. The DURABLE record is CompanyIntegrationRun, whose
+                // Status is derived from RecordsErrored (unchanged here, correctly: no record failed) and
+                // whose ErrorLog is written from result.Errors. Without an entry there, a nightly sync
+                // that aborts on its first page every night reads as an unbroken run of clean Successes
+                // with TotalRecords=0. Severity 'Warning' is what keeps Status='Success': MergeResult
+                // only clears Success on RecordsErrored > 0, so this records the condition without
+                // reclassifying a held-watermark retry as a failed run.
+                result.Errors.push({
+                    ExternalID: '',
+                    ChangeType: 'Skip',
+                    ErrorMessage: abortMessage,
+                    ErrorCode: 'CONNECTOR_ERROR',
+                    Severity: 'Warning',
+                });
                 break;
             }
             logger?.emit('sync.fetch.batch.complete', {
@@ -2332,13 +2411,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 }
             }
 
-            // If the connector returned more records than MaxBatchSize, log it but never truncate —
-            // all records are written, just in sub-batches to keep DB transactions manageable.
-            if (batch.Records.length > this.MaxBatchSize) {
-                console.log(
-                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: connector returned ` +
-                    `${batch.Records.length} records (> MaxBatchSize ${this.MaxBatchSize}), writing in chunks.`
-                );
+            // Engine-side half of the pagination rule: a connector MUST honour ctx.BatchSize. We never
+            // truncate — every record is written, just in sub-batches to keep DB transactions manageable —
+            // but an over-size batch is a real connector defect and has to be visible on the structured
+            // run-event stream, not buried in a console.log nobody reads. Warned ONCE per object (the
+            // CONSECUTIVE_EMPTY_BATCHES pattern) so a paginating-but-over-size connector doesn't flood
+            // the artifact with one warning per page.
+            if (batch.Records.length > this.MaxBatchSize && !oversizeBatchWarned) {
+                oversizeBatchWarned = true;
+                this.warnOversizedBatch(entityMap, batch, batchCount, logger);
             }
 
             if (batch.Records.length > 0) {
@@ -2641,6 +2722,72 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         await this.CreateRunDetail(run, entityMap, result, contextUser);
         return result;
+    }
+
+    /**
+     * Classifies a fetched batch against the `ctx.BatchSize` the engine asked for. Returns null when
+     * the batch is within contract, so the caller can treat "no verdict" as "nothing to warn about".
+     *
+     * Two severities, because they are different defects:
+     *  - `CONNECTOR_UNBOUNDED_BATCH` — the FIRST batch came back over-size AND `HasMore` is not true,
+     *    i.e. the connector ignored pagination entirely and pulled the whole object into memory in one
+     *    request. That is what OOMs a large tenant, and it grows silently with the customer's data.
+     *  - `CONNECTOR_IGNORED_BATCH_SIZE` — the connector IS paging but overshoots the requested size
+     *    (e.g. a hardcoded page size). Bounded memory, still a contract violation worth fixing.
+     *
+     * Public + static because the decision is the interesting part and deserves a unit test that
+     * doesn't have to stand up a whole sync (same rationale as {@link RatchetProgressSnapshot}).
+     */
+    public static ClassifyOversizedBatch(
+        objectName: string,
+        recordCount: number,
+        requestedBatchSize: number,
+        batchIndex: number,
+        hasMore: boolean | undefined
+    ): { Code: 'CONNECTOR_UNBOUNDED_BATCH' | 'CONNECTOR_IGNORED_BATCH_SIZE'; Unbounded: boolean; Message: string } | null {
+        if (recordCount <= requestedBatchSize) return null;
+        const unbounded = batchIndex === 1 && hasMore !== true;
+        return unbounded
+            ? {
+                Code: 'CONNECTOR_UNBOUNDED_BATCH',
+                Unbounded: true,
+                Message: `'${objectName}': connector returned ALL ${recordCount} records in a single batch ` +
+                    `(requested ${requestedBatchSize}, HasMore=false) — pagination is not implemented for this ` +
+                    `object, so the entire object is held in memory. Every record was written, in chunks.`,
+            }
+            : {
+                Code: 'CONNECTOR_IGNORED_BATCH_SIZE',
+                Unbounded: false,
+                Message: `'${objectName}': connector returned ${recordCount} records for batch ${batchIndex} ` +
+                    `(requested ${requestedBatchSize}) — ctx.BatchSize is not being honoured. Every record was ` +
+                    `written, in chunks. Warned once per object.`,
+            };
+    }
+
+    /**
+     * Surfaces an over-size batch onto the structured run-event stream (queryable via
+     * IntegrationTailRunEvents) so the pagination-rule violation is visible instead of console-only.
+     * Never truncates and never fails the sync — the over-size batch is written in chunks either way.
+     */
+    private warnOversizedBatch(
+        entityMap: ICompanyIntegrationEntityMap,
+        batch: FetchBatchResult,
+        batchIndex: number,
+        logger?: SyncLogger
+    ): void {
+        const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
+        const verdict = IntegrationEngine.ClassifyOversizedBatch(
+            objectName, batch.Records.length, this.MaxBatchSize, batchIndex, batch.HasMore,
+        );
+        if (!verdict) return;
+        logger?.warning(objectName, verdict.Code, verdict.Message, {
+            batchIndex,
+            recordCount: batch.Records.length,
+            requestedBatchSize: this.MaxBatchSize,
+            hasMore: batch.HasMore ?? null,
+            unbounded: verdict.Unbounded,
+        });
+        console.warn(`[IntegrationEngine] ${verdict.Message}`);
     }
 
     /**

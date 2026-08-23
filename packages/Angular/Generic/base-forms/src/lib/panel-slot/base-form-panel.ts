@@ -1,7 +1,8 @@
 import { Directive, HostBinding, Input } from '@angular/core';
-import { BaseEntity, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, ValidationResult, type FormInclusion } from '@memberjunction/core';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
+import { FormToolbarItemConfig, FormToolbarItemKey } from '../types/form-toolbar-item';
 
 /**
  * Well-known slot positions where panels can be injected into a generated
@@ -90,6 +91,13 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * `'details'` — leftover own-fields group. `'more'` — overflow folder.
      */
     chromeGroup?: 'details' | 'more';
+    /**
+     * L1 inclusion for this contribution (same verbs as relationships).
+     * `'Primary'` — own first-class rail item, in the lead band before Details.
+     * `'More'` — overflow folder. `'None'` — hidden.
+     * L3 `MJ: Form Chrome Rules` still wins. `chromeGroup` still merges.
+     */
+    inclusion?: FormInclusion;
 }
 
 /**
@@ -150,5 +158,72 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
         const result = new ValidationResult();
         result.Success = true;
         return result;
+    }
+
+    /**
+     * Called after the parent form reloads the current record from the database.
+     * Default is a no-op. Override to refresh panel-owned data that is not a
+     * related-entity grid (those already subscribe to
+     * {@link FormRecordRefreshCoordinator} themselves).
+     */
+    public OnRecordRefreshed(_record: TRecord): void {
+        // Subclasses can override
+    }
+
+    /**
+     * Registers a dynamic toolbar action item / button into the host form toolbar.
+     */
+    public RegisterToolbarItem(item: FormToolbarItemConfig): void {
+        this.FormComponent?.RegisterToolbarItem(item);
+    }
+
+    /**
+     * Unregisters a previously registered dynamic toolbar item by key.
+     */
+    public UnregisterToolbarItem(key: string): void {
+        this.FormComponent?.UnregisterToolbarItem(key);
+    }
+
+    /**
+     * Configures overrides for any toolbar item (standard built-in items like 'edit',
+     * 'delete', 'favorite', 'history', etc., or custom items).
+     */
+    public ConfigureToolbarItem(key: FormToolbarItemKey, overrides: Partial<FormToolbarItemConfig>): void {
+        this.FormComponent?.ConfigureToolbarItem(key, overrides);
+    }
+
+    /**
+     * Dynamically hides a toolbar item by key.
+     */
+    public HideToolbarItem(key: FormToolbarItemKey): void {
+        this.FormComponent?.HideToolbarItem(key);
+    }
+
+    /**
+     * Dynamically shows a toolbar item by key.
+     */
+    public ShowToolbarItem(key: FormToolbarItemKey): void {
+        this.FormComponent?.ShowToolbarItem(key);
+    }
+
+    /**
+     * Dynamically disables a toolbar item by key, with an optional reason string for the tooltip.
+     */
+    public DisableToolbarItem(key: FormToolbarItemKey, reason?: string): void {
+        this.FormComponent?.DisableToolbarItem(key, reason);
+    }
+
+    /**
+     * Dynamically enables a toolbar item by key.
+     */
+    public EnableToolbarItem(key: FormToolbarItemKey): void {
+        this.FormComponent?.EnableToolbarItem(key);
+    }
+
+    /**
+     * Sets the numeric display order for a toolbar item.
+     */
+    public SetToolbarItemOrder(key: FormToolbarItemKey, order: number): void {
+        this.FormComponent?.SetToolbarItemOrder(key, order);
     }
 }

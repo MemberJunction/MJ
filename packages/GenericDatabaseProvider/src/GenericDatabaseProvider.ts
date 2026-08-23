@@ -2110,7 +2110,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         rawSafeTerm: string,
     ): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
-            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+            // Function replacement: the term is end-user input, so `$&`/`` $` ``/`$'`/`$$`
+            // in it must be data, not splice directives. See issue #3171.
+            return field.UserSearchParamFormatAPI.replace('{0}', () => rawSafeTerm);
         }
         if (!this.isTextSearchableType(field)) return '';
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
@@ -2187,7 +2189,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                             if (innerViewEntity) {
                                 const innerWhere = await this.RenderViewWhereClause(innerViewEntity, user, stack);
                                 const innerSQL = `SELECT ${this.QuoteIdentifier(innerViewEntity.ViewEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerViewEntity.ViewEntityInfo.SchemaName, innerViewEntity.ViewEntityInfo.BaseView)} WHERE (${innerWhere})`;
-                                sWhere = sWhere.replace(match, innerSQL);
+                                // Function replacement — `innerSQL` is generated SQL that can
+                                // legitimately contain `$`. See issue #3171.
+                                sWhere = sWhere.replace(match, () => innerSQL);
                             } else throw new Error(`View ID ${variableValue} not found in metadata`);
                         } else {
                             throw new Error(`Unknown variable ${variableName} as part of template match ${match} in view where clause`);

@@ -674,10 +674,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         contextUser: UserInfo,
         batchSize: number,
         maxRecords: number,
+        deadlineMs?: number,
     ): AsyncGenerator<Record<string, unknown>> {
         const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
         if (this.DetectTemplateVars(obj.APIPath).length === 0) {
-            yield* super.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords);
+            // FORWARD THE DEADLINE. Dropping it here silently un-bounds every REST connector that
+            // lands on this fallback — which is every connector expressing parent scope as
+            // CONFIGURATION rather than as URL template vars.
+            //
+            // The record-constrained sampler below is gated on template vars, so a connector like
+            // Totara (parent scope declared via `Configuration.parentScope` + a wsfunction, no vars
+            // in its APIPath) never qualifies for it and arrives here instead. Without the deadline
+            // the base builds a FetchContext carrying no discovery marker at all, the connector
+            // cannot tell a sample from a sync, and one FetchChanges call walks every parent.
+            // Live 2026-08-12: 28 minutes inside a single call, returning rows=0.
+            yield* super.DiscoverySampleRecordStream(
+                companyIntegration, objectName, contextUser, batchSize, maxRecords, deadlineMs,
+            );
             return;
         }
         let yielded = 0;

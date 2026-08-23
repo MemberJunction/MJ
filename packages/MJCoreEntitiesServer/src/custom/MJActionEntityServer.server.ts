@@ -1,6 +1,6 @@
 import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
+import { MJEventType, MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
@@ -281,6 +281,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
         if (this.ParentID) {
             const parentAction = await this.LoadParentAction();
             if (parentAction) {
+                const parentParams = ActionEngineBase.Instance.ActionParams.filter(p => UUIDsEqual(p.ActionID, parentAction.ID));
                 // Create the ChildActionInfo template variable with all parent details
                 data.ChildActionInfo = `
 **Parent Action ID:** ${parentAction.ID.trim().toLowerCase() /*just to make sure casing doesn't mess up the string we pass in*/}
@@ -288,7 +289,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
 **Parent Description:** ${parentAction.Description || 'No description provided'}
 
 **Parent Parameters:**
-${JSON.stringify(parentAction.Params.Items.map(p => {
+${JSON.stringify(parentParams.map(p => {
     return {
         Name: p.Name,
         Type: p.Type,
@@ -306,7 +307,7 @@ ${JSON.stringify(parentAction.Params.Items.map(p => {
                     Description: parentAction.Description,
                     Category: parentAction.Category
                 };
-                data.actionParams = parentAction.Params.Items.map(p => {
+                data.actionParams = parentParams.map(p => {
                     return {
                         Name: p.Name,
                         Type: p.Type,

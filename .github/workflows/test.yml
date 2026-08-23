@@ -19,8 +19,14 @@ on:
       # The native-ESM import guard + its vitest suite run in this workflow (see the
       # "Native-ESM import guard" step), so changes to them must trigger it.
       - '.github/scripts/check-esm-imports.mjs'
+      # The backstop alarm this workflow fires; its vitest suite runs in the guard step below.
+      - '.github/scripts/backstop-alarm.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # Same reasoning for the dynamic-replace guard (see that step). Without this
+      # entry a PR editing only the gate script runs neither the gate nor its own
+      # vitest suite — the one change that most needs both.
+      - '.github/scripts/check-dynamic-replace.mjs'
       # The DOM-spec guards/gates run in this workflow too.
       - 'scripts/check-dom-spec-placement.mjs'
       - 'scripts/check-spec-antipatterns.mjs'
@@ -30,6 +36,11 @@ on:
       # script itself lives in scripts/ — without this entry a detector-only PR never
       # runs its tests.
       - 'scripts/check-pg-migration-content.mjs'
+      # Same trap, same fix, for the CodeGen-tail guard: its unit suite lives in __tests__
+      # above, but a PR touching only the guard would never run the tests that prove its
+      # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
+      # "matches zero and therefore passes everything" is the precise regression to catch.
+      - '.github/scripts/check-codegen-tail.mjs'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -163,6 +174,39 @@ jobs:
 
       - name: Bootstrap DOM coverage ratchet
         run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
+
+      # Dynamic-replace guard (#3171): `.replace(search, replacement)` expands
+      # $$, $&, $` and $' when `replacement` is a STRING, so any '$' in runtime
+      # data passed there is silently executed instead of inserted. That wrote
+      # corrupted DB passwords into MJAPI's .env and rewrote RLS predicates.
+      # Line-aware on purpose: ~90 pre-existing sites remain (many benign), so
+      # this gates only the lines a change actually touches, preventing new
+      # occurrences without failing PRs for code they merely brushed past.
+      #
+      # Lives with the pure-file guards, NOT after the build: it reads source
+      # text only, costs about a second, and needs no dist/. Sitting after the
+      # ~20-minute build+test step meant any unit-test failure stopped it from
+      # running at all — the gate went silent exactly when a PR was already in
+      # trouble and most needed checking.
+      #
+      # `!cancelled()` for that same reason, one step further: a step's default
+      # `if: success()` also skips it when any EARLIER step failed, which is how
+      # the unrelated Generic DOM ratchet silenced it on run 31848972923. Moving
+      # it above the DOM guards would only hand the same silence to them —
+      # ordering can protect exactly one gate, and these are independent. This
+      # makes the gate's result independent of every other step's outcome; it
+      # still fails the job when it finds something. (Needs only git + node,
+      # both present from checkout, so it holds even if an earlier setup step is
+      # what broke.)
+      - name: Dynamic-replace guard
+        if: ${{ !cancelled() }}
+        env:
+          # Via env, never interpolated into the run: string — a ref name must not
+          # be able to reach the shell. On push/schedule base_ref is empty and HEAD
+          # IS origin/next, so the diff is empty and this is a no-op by design;
+          # the PR run is where it does its work.
+          PR_BASE_REF: ${{ github.base_ref || 'next' }}
+        run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
 
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
@@ -330,16 +374,28 @@ jobs:
       # slipped past PR affected-filtering and `next` is now red. These runs gate nothing, so surface the
       # failure as a GitHub issue instead of leaving it to whoever happens to open the Actions tab. Only
       # fires on the backstop events (never on PRs, where the red check is already visible + gating).
+      #
+      # This step used to be a bare `gh issue create`, which filed a NEW issue every red run and had no
+      # way to stand down: 140 were open by 2026-08-14 against four ever closed. The alarm is now a single
+      # rolling issue — red comments on it, green (below) closes it — so a fresh issue means a fresh break.
+      # Logic + tests live in .github/scripts/backstop-alarm.mjs.
       - name: Alert on backstop failure
         if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          gh issue create \
-            --title "🔴 Unit-test backstop failed on next (${GITHUB_SHA:0:7})" \
-            --body "The full-suite **backstop** (\`${{ github.event_name }}\`) failed on \`next\` — a break slipped past PR affected-filtering, so \`next\` is red. Run: ${RUN_URL}. Please triage per CONTRIBUTING (owner TBD)." \
-            || echo "::error::Backstop failed AND alert-issue creation failed — see ${RUN_URL}"
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs red
+
+      # The other half of the alarm: a green backstop is the proof that whatever the open alarm
+      # describes is fixed, so it closes itself here. Without this the alarm can only ever accumulate.
+      # `continue-on-error` is deliberate and belongs to this step alone — a cleanup failure must never
+      # turn a green backstop red, because that would file an alarm about the alarm. The script logs
+      # `::error::` so the failure is still visible in the run summary.
+      - name: Resolve backstop alarm on green
+        if: success() && (github.event_name == 'push' || github.event_name == 'schedule')
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs green
 
   # Nightly coverage lane. Runs ONLY on the scheduled backstop (plus manual dispatch), in its
   # own job so the backstop suite above is untouched: it executes the curated node-tier

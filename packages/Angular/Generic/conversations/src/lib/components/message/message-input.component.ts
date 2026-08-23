@@ -1321,10 +1321,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Priority 5: Check if Sage was explicitly @mentioned with a config preset
     // If so, treat it like agent continuity so the config preset is preserved
     if (this.converationManagerAgent?.ID) {
-      const sageConfigPreset = this.agentService.findConfigurationPresetFromHistory(
-        this.converationManagerAgent.ID,
-        this.conversationHistory
-      );
+      const sageConfigPreset = this.conversationId
+        ? await this.agentService.FindConfigurationPresetForAgent(
+            this.conversationId,
+            this.converationManagerAgent.ID
+          )
+        : undefined;
       if (sageConfigPreset) {
         // User explicitly @mentioned Sage with a config - use the shared execution helper directly
         // Pass the already-found config preset to avoid redundant history search
@@ -1493,20 +1495,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.intentCheckStarted.emit({ conversationId: this.conversationId });
 
     try {
-      // Build context from pre-loaded maps (if available)
-      if (!this.artifactsByDetailId || !this.agentRunsByDetailId) {
-        console.warn('⚠️ Artifact/agent run context not available for intent check');
-        return { decision: 'UNSURE' as const, reasoning: 'Context not available' };
+      // The pre-loaded artifact/agent-run maps are no longer passed: they are scoped to the
+      // loaded transcript window, and the service now queries for this agent's artifacts so
+      // the classifier reasons over the whole conversation. A conversation id is what it
+      // needs instead, and without one there is nothing to query.
+      if (!this.conversationId) {
+        console.warn('⚠️ No conversation id available for intent check');
+        return { decision: 'UNSURE' as const, reasoning: 'Conversation not available' };
       }
 
       const intent = await this.agentService.checkAgentContinuityIntent(
+        this.conversationId,
         agentId,
         message,
-        this.conversationHistory,
-        {
-          artifactsByDetailId: this.artifactsByDetailId,
-          agentRunsByDetailId: this.agentRunsByDetailId
-        }
+        this.conversationHistory
       );
       return intent;
     } catch (error) {
@@ -2023,59 +2025,37 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Load previous payload for an agent from its most recent OUTPUT artifact.
-   * Searches backwards through all messages from this agent until an artifact is found.
-   * This ensures payload continuity even after clarifying exchanges without artifacts.
-   * Checks both user-visible and system artifacts to support agents like Agent Manager.
+   *
+   * Resolved by QUERY rather than by scanning `conversationHistory`. That array is now the
+   * loaded transcript WINDOW, not the full conversation, so a scan silently misses any
+   * artifact below the window's oldest row — and a null payload is a legal agent input, so
+   * the miss surfaces as the agent regenerating from scratch instead of modifying. Covers
+   * system-visibility artifacts (Agent Manager and friends) for free: the query filters on
+   * Direction, not on Visibility.
    */
   private async loadPreviousPayloadForAgent(agentId: string): Promise<{
-    payload: any;
+    payload: Record<string, unknown> | null;
     artifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null;
   }> {
-    // Get all messages from this agent in reverse order (most recent first)
-    const agentMessages = this.conversationHistory
-      .slice()
-      .reverse()
-      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
-
-    if (agentMessages.length === 0) {
+    if (!this.conversationId) {
       return { payload: null, artifactInfo: null };
     }
 
-    // Search through all agent messages until we find one with an artifact
-    for (const message of agentMessages) {
-      // Check user-visible artifacts first
-      let artifacts = this.artifactsByDetailId?.get(message.ID);
-
-      // If not found, check system artifacts (Agent Manager, etc.)
-      if (!artifacts || artifacts.length === 0) {
-        artifacts = this.systemArtifactsByDetailId?.get(message.ID);
-      }
-
-      // Try to load artifact content as payload
-      if (artifacts && artifacts.length > 0) {
-        const artifact = artifacts[0];
-        try {
-          const version = await artifact.getVersion();
-          if (version.Content) {
-            console.log(`📦 Loaded previous payload for agent ${agentId} from artifact (message: ${message.ID})`);
-            return {
-              payload: JSON.parse(version.Content),
-              artifactInfo: {
-                artifactId: artifact.artifactId,
-                versionId: artifact.artifactVersionId,
-                versionNumber: artifact.versionNumber
-              }
-            };
-          }
-        } catch (error) {
-          console.error('Error loading payload from artifact:', error);
-          // Continue to next message
-        }
-      }
+    const source = await this.agentService.FindLatestAgentOutputVersion(this.conversationId, agentId);
+    if (!source || source.payload == null) {
+      console.log(`📦 No previous payload found for agent ${agentId}`);
+      return { payload: null, artifactInfo: null };
     }
 
-    console.log(`📦 No previous payload found for agent ${agentId} after searching ${agentMessages.length} messages`);
-    return { payload: null, artifactInfo: null };
+    console.log(`📦 Loaded previous payload for agent ${agentId} from artifact version ${source.versionId}`);
+    return {
+      payload: source.payload,
+      artifactInfo: {
+        artifactId: source.artifactId,
+        versionId: source.versionId,
+        versionNumber: source.versionNumber
+      }
+    };
   }
 
   /**
@@ -2132,7 +2112,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       // Find configuration preset from previous @mention in conversation history
       const configurationPresetId = agent?.ID
-        ? this.agentService.findConfigurationPresetFromHistory(agent.ID, this.conversationHistory)
+        ? await this.agentService.FindConfigurationPresetForAgent(conversationId, agent.ID)
         : undefined;
 
       // Invoke the sub-agent with progress callback
@@ -2266,33 +2246,23 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     const agentName = previousAgent.Name || 'Agent';
 
-    let previousPayload: any = null;
+    let previousPayload: Record<string, unknown> | null = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
 
-    // Use pre-loaded artifact data (no DB queries!)
-    // Check both user-visible and system artifacts
-    let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
-    if (!artifacts || artifacts.length === 0) {
-      artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
-    }
-
-    if (artifacts && artifacts.length > 0) {
-      try {
-        // Use the first artifact (should only be one OUTPUT per message)
-        const artifact = artifacts[0];
-        const version = await artifact.getVersion();
-        if (version.Content) {
-          previousPayload = JSON.parse(version.Content);
-          previousArtifactInfo = {
-            artifactId: artifact.artifactId,
-            versionId: artifact.artifactVersionId,
-            versionNumber: artifact.versionNumber
-          };
-          console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
-        }
-      } catch (error) {
-        console.warn('⚠️ Could not parse previous artifact content:', error);
-      }
+    // Resolved by QUERY, not from the window's artifact maps: `lastAIMessage` can sit inside
+    // the loaded window while its artifact does not, and this path silently degrades to a
+    // null payload when the lookup misses.
+    const source = await this.agentService.FindLatestAgentOutputVersion(
+      conversationId, lastAIMessage.AgentID
+    );
+    if (source && source.payload != null) {
+      previousPayload = source.payload;
+      previousArtifactInfo = {
+        artifactId: source.artifactId,
+        versionId: source.versionId,
+        versionNumber: source.versionNumber
+      };
+      console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
     }
 
     // Create status message showing agent continuity
@@ -2536,69 +2506,32 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     const agentName = agent.Name || 'Agent';
 
-    let previousPayload: any = null;
+    let previousPayload: Record<string, unknown> | null = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
     let previousConfigurationId: string | undefined = undefined;
 
-    // Use targetArtifactVersionId if specified (from intent check)
+    // Use targetArtifactVersionId if specified (from intent check).
+    // Resolved by ID against the database, not against artifactsByDetailId: the intent check
+    // may well have named a version attached to a message BELOW the loaded window, which is
+    // precisely when continuity matters and precisely what the window's maps cannot see.
     if (targetArtifactVersionId) {
-      // Find the artifact in pre-loaded data (check both user-visible and system artifacts)
-      for (const [detailId, artifacts] of (this.artifactsByDetailId?.entries() || [])) {
-        const targetArtifact = artifacts.find(a => a.artifactVersionId === targetArtifactVersionId);
-        if (targetArtifact) {
-          try {
-            // Lazy load the full version entity to get Content
-            const version = await targetArtifact.getVersion();
-            if (version.Content) {
-              previousPayload = JSON.parse(version.Content);
-              previousArtifactInfo = {
-                artifactId: targetArtifact.artifactId,
-                versionId: targetArtifact.artifactVersionId,
-                versionNumber: targetArtifact.versionNumber
-              };
-              console.log('📦 Loaded target artifact version as payload', previousArtifactInfo);
-            }
-          } catch (error) {
-            console.warn('⚠️ Could not load target artifact version:', error);
-          }
-          break;
-        }
-      }
-
-      // If not found in user-visible artifacts, check system artifacts
-      if (!previousPayload && this.systemArtifactsByDetailId) {
-        for (const [detailId, artifacts] of this.systemArtifactsByDetailId.entries()) {
-          const targetArtifact = artifacts.find(a => a.artifactVersionId === targetArtifactVersionId);
-          if (targetArtifact) {
-            try {
-              const version = await targetArtifact.getVersion();
-              if (version.Content) {
-                previousPayload = JSON.parse(version.Content);
-                previousArtifactInfo = {
-                  artifactId: targetArtifact.artifactId,
-                  versionId: targetArtifact.artifactVersionId,
-                  versionNumber: targetArtifact.versionNumber
-                };
-                console.log('📦 Loaded target artifact version as payload (from system artifacts)', previousArtifactInfo);
-              }
-            } catch (error) {
-              console.warn('⚠️ Could not load target artifact version:', error);
-            }
-            break;
-          }
-        }
+      const target = await this.agentService.FindArtifactVersionById(targetArtifactVersionId);
+      if (target && target.payload != null) {
+        previousPayload = target.payload;
+        previousArtifactInfo = {
+          artifactId: target.artifactId,
+          versionId: target.versionId,
+          versionNumber: target.versionNumber
+        };
+        console.log('📦 Loaded target artifact version as payload', previousArtifactInfo);
+      } else {
+        console.warn('⚠️ Could not load target artifact version:', targetArtifactVersionId);
       }
     }
 
-    // Get all messages from this agent in reverse order (most recent first)
-    const agentMessages = this.conversationHistory
-      .slice()
-      .reverse()
-      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
-
     // Extract configuration preset from the User message that @mentioned this agent
     // Uses the shared helper method in the agent service
-    previousConfigurationId = this.agentService.findConfigurationPresetFromHistory(agentId, this.conversationHistory);
+    previousConfigurationId = await this.agentService.FindConfigurationPresetForAgent(conversationId, agentId);
 
     // Fall back to the chat header's mode-picker selection when nothing
     // in the message history pinned a preset. The picker reflects the
@@ -2612,40 +2545,22 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     // Fall back to searching through all agent messages for an artifact
     // This ensures payload continuity even after clarifying exchanges without artifacts
-    if (!previousPayload && agentMessages.length > 0) {
-      console.log('📦 Searching through agent messages for most recent artifact...');
-
-      for (const message of agentMessages) {
-        // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
-        let artifacts = this.artifactsByDetailId?.get(message.ID);
-        if (!artifacts || artifacts.length === 0) {
-          artifacts = this.systemArtifactsByDetailId?.get(message.ID);
-        }
-
-        if (artifacts && artifacts.length > 0) {
-          try {
-            // Use the first artifact (should only be one OUTPUT per message)
-            const artifact = artifacts[0];
-            const version = await artifact.getVersion();
-            if (version.Content) {
-              previousPayload = JSON.parse(version.Content);
-              previousArtifactInfo = {
-                artifactId: artifact.artifactId,
-                versionId: artifact.artifactVersionId,
-                versionNumber: artifact.versionNumber
-              };
-              console.log(`📦 Loaded artifact as payload from message ${message.ID}`, previousArtifactInfo);
-              break; // Found an artifact, stop searching
-            }
-          } catch (error) {
-            console.warn('⚠️ Could not parse artifact content:', error);
-            // Continue to next message
-          }
-        }
-      }
-
-      if (!previousPayload) {
-        console.log(`📦 No artifact found after searching ${agentMessages.length} messages from agent`);
+    // Fall back to this agent's newest OUTPUT artifact when the intent check named no
+    // version (or named one that no longer resolves). Queried, not scanned: the array this
+    // used to walk is the loaded window, so the artifact it is looking for is exactly the
+    // one most likely to be missing from it.
+    if (!previousPayload) {
+      const source = await this.agentService.FindLatestAgentOutputVersion(conversationId, agentId);
+      if (source && source.payload != null) {
+        previousPayload = source.payload;
+        previousArtifactInfo = {
+          artifactId: source.artifactId,
+          versionId: source.versionId,
+          versionNumber: source.versionNumber
+        };
+        console.log('📦 Loaded artifact as payload for continuation', previousArtifactInfo);
+      } else {
+        console.log(`📦 No artifact found for agent ${agentId} in this conversation`);
       }
     }
 

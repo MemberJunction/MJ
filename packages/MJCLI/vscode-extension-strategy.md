@@ -757,7 +757,7 @@ One extension, tons of features:
 
 ### Public Marketplace (Phase 4+)
 - Publish to VSCode Marketplace
-- Free, open source
+- Free, source-available
 - Link from MJ documentation
 - Announce in community
 

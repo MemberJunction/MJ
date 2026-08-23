@@ -468,7 +468,11 @@ related stays Primary.
 `MJ: Form Chrome Rules` is the admin's global default. It is **not** in
 OpenApp `metadata/` push filters. A row pins a (parent entity, related entity)
 or (parent entity, contribution key) to Primary, More, or None, and may set
-`JoinFields`. L3 can suppress a contribution for the site. L4 cannot.
+`JoinFields` and an optional `Title`. `Title` is the site-specific rail /
+accordion label — keyed by RelatedEntityID or contribution key, so an
+OpenApp upgrade that renames "Payments" does not overwrite a local "Pmts".
+Blank / omitted `Title` keeps the L1 DisplayName. L3 can suppress a
+contribution for the site. L4 cannot.
 
 #### L4 — user overlay
 
@@ -545,6 +549,39 @@ Section mode bypasses the full-form resolver/toolbar/container — the section
 renders its own fields and the host saves the record directly. (This is the
 capability the legacy `EntityFormDialogComponent` exposed; the new host now
 supports it on every surface.)
+
+### 7c. Record Attachments & File Storage Linking
+
+MemberJunction provides first-class support for linked file attachments directly on entity records via the `<mj-form-toolbar>` paperclip button and the `<mj-record-attachments>` slide-in drawer.
+
+#### Enabling & Gating Attachments
+Attachments are enabled when:
+1. **Existing Record**: The record is persisted (`record.IsSaved === true`).
+2. **Entity Configuration**: `Entity.Configuration` allows attachments (`Attachments.Enabled !== false`).
+3. **Storage Subsystem Active**: At least one storage provider is active in `FileStorageEngineBase.Instance.Providers`.
+4. **Permissions**: The user has permissions on `MJ: Files` and `MJ: File Entity Record Links`.
+
+#### Entity-Level Configuration (`IEntityAttachmentsConfiguration`)
+Stored in `MJ: Entities.Configuration` (JSONType):
+
+```json
+{
+  "Attachments": {
+    "Enabled": true,
+    "MaxFileSizeBytes": 52428800,
+    "AllowedContentTypes": ["image/*", "application/pdf", ".docx"],
+    "DefaultStorageAccountID": "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+#### Capabilities & Features
+- **Paperclip Toolbar Button**: Displays real-time badge count (`5`) of linked files on the toolbar.
+- **Slide-in Drawer (`<mj-record-attachments>`)**: Resizable drawer with `UserInfoEngine` width and view mode persistence.
+- **Provider Filtering**: Filter attachments across cloud storage accounts (Azure Blob, AWS S3, Box, etc.).
+- **Rich Media Preview**: In-app previews for PDFs, Images, Audio, Video, Code/Text, and Office Documents.
+- **Drag & Drop Upload**: Direct upload pipeline linked into `MJ: File Entity Record Links`.
+- **Cancelable Event Hooks**: Full Before/After lifecycle (`BeforeUpload`, `BeforeDelete`, `BeforeUnlink`, `BeforeDownload`, `BeforePreview`, `BeforeReplace`).
 
 ---
 

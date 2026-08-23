@@ -78,7 +78,8 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Set up node
-        if: steps.check_migrations.outputs.has_migrations == 'true'
+        # Unconditional, unlike the migration-specific steps below: the CodeGen-tail check
+        # runs on every PR (see that step for why) and it needs node.
         uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -87,6 +88,48 @@ jobs:
           # With `cache: 'pnpm'` the post-job cache-save step fails the whole check with
           # "Path Validation Error: Path(s) specified in the action for caching do(es) not
           # exist" — after every real validation step has already passed.
+
+      - name: Check CodeGen tail matches committed migrations (#3737)
+        # Lives in THIS job rather than a workflow of its own, and is NOT gated on
+        # has_migrations. Both are deliberate:
+        #
+        # 1. `next-protect` requires exactly one context — `Check migrations`, i.e. this job.
+        #    This workflow carries no `paths:` filter precisely so that context always
+        #    reports. A separate paths-filtered workflow could never BE a required check: on
+        #    every PR it skipped, the required context would never arrive and the PR would sit
+        #    pending forever. Living in this job is what makes the guard a gate rather than a
+        #    decoration nobody is blocked by.
+        #
+        # 2. Ungated because this drift is not introduced only by migration PRs. A PR that
+        #    edits only a generated artifact, or only CodeGenLib — whose emitted shape the
+        #    guard's extractors are pinned to — can introduce or expose it. The guard needs no
+        #    database and no `pnpm install` and takes ~2s over 660+ migrations, so running it
+        #    always is cheaper than reasoning about when not to.
+        #
+        # `--compare-to` scopes FAILURE to what this branch introduces. Both of the guard's
+        # checks are whole-repo, so without it one bad merge onto the base branch would red
+        # every subsequent PR — and because this context is required, "red" there means
+        # "nobody can merge". Pre-existing drift is still surfaced, as a ::warning. The base
+        # worktree is built from the base tip resolved above — the same base the migration
+        # steps use, and deliberately not `pull_request.base.sha` (see that step's comment).
+        #
+        # The base tree is materialised ONLY when the head tree is actually dirty. A clean
+        # head has nothing to attribute, so on the green path — which is essentially every
+        # PR — this step is one ~2s sweep and never pays for the worktree (a full checkout,
+        # ~1.2 GB, dominated by the 566 MB of migrations). Exit 1 means drift and is the
+        # only code worth a second look; anything else (2 = missing or reshaped artifact)
+        # propagates immediately rather than being re-run against a base that cannot
+        # explain it.
+        run: |
+          set +e
+          node .github/scripts/check-codegen-tail.mjs
+          rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then exit 0; fi
+          if [ $rc -ne 1 ]; then exit $rc; fi
+          echo "Drift found — evaluating the base tree to scope it to this branch."
+          git worktree add --detach "$RUNNER_TEMP/codegen-tail-base" ${{ steps.base.outputs.sha }}
+          node .github/scripts/check-codegen-tail.mjs --compare-to="$RUNNER_TEMP/codegen-tail-base"
 
       - name: Get current version
         if: steps.check_migrations.outputs.has_migrations == 'true'

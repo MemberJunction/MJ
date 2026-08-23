@@ -16,6 +16,18 @@ let runViewResultQueue: Array<{ Success: boolean; Results: unknown[]; ErrorMessa
  */
 let runQueryResultQueue: Array<{ Success: boolean; Results: unknown[] | null; ErrorMessage?: string }> = [];
 
+/**
+ * Every RunView / RunViews param object, in call order. Lets a test assert on the SQL
+ * shape the engine asked for (ExtraFilter, OrderBy, MaxRows) rather than only its result.
+ */
+let runViewParamsLog: Array<Record<string, unknown>> = [];
+
+/**
+ * One entry per RunViews (plural) call, holding that call's param array. A batched
+ * peripheral load must appear here ONCE — a per-detail loop would push many entries.
+ */
+let runViewsBatchLog: Array<Array<Record<string, unknown>>> = [];
+
 const DEFAULT_RV_RESULT = { Success: true, Results: [] };
 const DEFAULT_RQ_RESULT = { Success: true, Results: [] };
 
@@ -93,8 +105,22 @@ vi.mock('@memberjunction/core', () => {
         },
         Metadata: MockMetadata,
         RunView: class MockRunView {
-            RunView() {
+            // ConversationEngine's windowed reads go through the provider-bound factory
+            // rather than `new RunView()`, so the mock must expose it.
+            static FromMetadataProvider(_provider: unknown) {
+                return new MockRunView();
+            }
+            RunView(params: Record<string, unknown>) {
+                runViewParamsLog.push(params);
                 return Promise.resolve(nextRunViewResult());
+            }
+            // Drains one queued result per param, so a batch's results stay positional.
+            RunViews(params: Array<Record<string, unknown>>) {
+                runViewsBatchLog.push(params);
+                for (const p of params) {
+                    runViewParamsLog.push(p);
+                }
+                return Promise.resolve(params.map(() => nextRunViewResult()));
             }
         },
         RunQuery: class MockRunQuery {
@@ -243,6 +269,10 @@ describe('ConversationEngine', () => {
         // Clear both queues
         runViewResultQueue = [];
         runQueryResultQueue = [];
+
+        // Clear the call logs the windowed-read tests assert against
+        runViewParamsLog = [];
+        runViewsBatchLog = [];
     });
 
     // ========================================================================
@@ -1097,6 +1127,365 @@ describe('ConversationEngine', () => {
             }, 'save');
 
             expect(engine.GetCachedDetails('conv-1')).toBeUndefined(); // next load re-queries
+        });
+    });
+
+    // ========================================================================
+    // LOAD DETAIL WINDOW (paged transcript read)
+    // ========================================================================
+    describe('LoadDetailWindow', () => {
+        /**
+         * Detail rows as the engine's fetch receives them: NEWEST FIRST, because the read is
+         * `Sequence DESC`. `LoadDetailWindow` reverses them, so pass sequences descending.
+         */
+        function createWindowRows(
+            sequences: number[],
+            overrides: Record<string, unknown> = {}
+        ): Array<Record<string, unknown>> {
+            return sequences.map(seq => ({
+                ID: `d-${seq}`,
+                ConversationID: 'conv-1',
+                Sequence: seq,
+                AgentSessionID: null,
+                Role: 'AI',
+                UserID: null,
+                ...overrides,
+            }));
+        }
+
+        /** The two reads every successful window makes before peripherals: page, then probe. */
+        function enqueuePageAndProbe(rows: Array<Record<string, unknown>>, hasMoreAbove: boolean) {
+            runViewResultQueue.push({ Success: true, Results: rows });
+            runViewResultQueue.push({
+                Success: true,
+                Results: hasMoreAbove ? [{ ID: 'older-row' }] : [],
+            });
+        }
+
+        it('returns the newest page in chronological order with its Sequence bounds', async () => {
+            // 10 of a notional 25 rows, newest-first as the DESC query returns them.
+            enqueuePageAndProbe(createWindowRows([25, 24, 23, 22, 21, 20, 19, 18, 17, 16]), true);
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toHaveLength(10);
+            // Reversed: the UI consumes oldest-to-newest.
+            expect(result.Details.map(d => d.Sequence)).toEqual([16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
+            expect(result.OldestSequence).toBe(16);
+            expect(result.NewestSequence).toBe(25);
+        });
+
+        it('reports HasMoreAbove from a one-row probe below the oldest loaded Sequence', async () => {
+            enqueuePageAndProbe(createWindowRows([20, 19, 18]), true);
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.HasMoreAbove).toBe(true);
+            const probe = runViewParamsLog[1];
+            expect(String(probe.ExtraFilter)).toContain('Sequence < 18');
+            expect(probe.MaxRows).toBe(1);
+            // A probe must never pay for entity hydration.
+            expect(probe.ResultType).toBe('simple');
+        });
+
+        it('reports HasMoreAbove false when the probe comes back empty', async () => {
+            enqueuePageAndProbe(createWindowRows([3, 2, 1]), false);
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.HasMoreAbove).toBe(false);
+        });
+
+        it('seeks on Sequence — never on the primary key — for the latest window', async () => {
+            enqueuePageAndProbe(createWindowRows([2, 1]), false);
+
+            await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            const fetch = runViewParamsLog[0];
+            expect(fetch.EntityName).toBe('MJ: Conversation Details');
+            expect(fetch.ExtraFilter).toBe(`ConversationID='conv-1'`);
+            expect(fetch.OrderBy).toBe('Sequence DESC');
+            expect(fetch.AfterKey).toBeUndefined();
+        });
+
+        it('treats BeforeSequence 0 as a real bound, not as "latest window"', async () => {
+            // `Sequence` defaults to 0, so very old conversations can genuinely hold row 0.
+            // The bound check must be `== null`, never falsy — `if (!before)` would turn a
+            // request for "everything below row 0" into a request for the newest page.
+            enqueuePageAndProbe(createWindowRows([]), false);
+
+            await engine.LoadDetailWindow(
+                { ConversationID: 'conv-1', BeforeSequence: 0 },
+                contextUser
+            );
+
+            expect(String(runViewParamsLog[0].ExtraFilter)).toContain('Sequence < 0');
+        });
+
+        it('probes below Sequence 0 when the oldest loaded row is row 0', async () => {
+            enqueuePageAndProbe(createWindowRows([2, 1, 0]), false);
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.OldestSequence).toBe(0);
+            expect(String(runViewParamsLog[1].ExtraFilter)).toContain('Sequence < 0');
+        });
+
+        it('bounds an older page with Sequence < BeforeSequence', async () => {
+            enqueuePageAndProbe(createWindowRows([15, 14, 13]), true);
+
+            await engine.LoadDetailWindow(
+                { ConversationID: 'conv-1', BeforeSequence: 16 },
+                contextUser
+            );
+
+            expect(String(runViewParamsLog[0].ExtraFilter)).toContain('Sequence < 16');
+        });
+
+        it('honors RawOverread, and defaults it to three times the page size', async () => {
+            enqueuePageAndProbe(createWindowRows([1]), false);
+            await engine.LoadDetailWindow(
+                { ConversationID: 'conv-1', RawOverread: 75 },
+                contextUser
+            );
+            expect(runViewParamsLog[0].MaxRows).toBe(75);
+
+            runViewParamsLog = [];
+            enqueuePageAndProbe(createWindowRows([1]), false);
+            await engine.LoadDetailWindow({ ConversationID: 'conv-1', PageSize: 10 }, contextUser);
+            // Over-read exists because a page of N rows can collapse to ONE session card.
+            expect(runViewParamsLog[0].MaxRows).toBe(30);
+        });
+
+        it('returns an empty window and does not throw when the row read fails', async () => {
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'boom' });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toEqual([]);
+            expect(result.HasMoreAbove).toBe(false);
+            expect(result.OldestSequence).toBeNull();
+            expect(result.NewestSequence).toBeNull();
+            expect(result.AgentRunsByDetailId.size).toBe(0);
+            // The flag is the whole point: an empty window from a FAILED read must not be
+            // mistaken for the start of the conversation by whoever holds the paging cursor.
+            expect(result.Failed).toBe(true);
+            expect(errorSpy).toHaveBeenCalled();
+        });
+
+        it('returns an empty window for a conversation with no rows', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toEqual([]);
+            expect(result.HasMoreAbove).toBe(false);
+            // No probe, no peripheral batch — nothing to load peripherals FOR.
+            expect(runViewsBatchLog).toHaveLength(0);
+        });
+
+        it('completes a realtime session the page landed part-way through', async () => {
+            // Newest-first; the LAST entry becomes the oldest row after the reversal.
+            runViewResultQueue.push({
+                Success: true,
+                Results: [
+                    ...createWindowRows([20, 19]),
+                    ...createWindowRows([18], { AgentSessionID: 'sess-a' }),
+                ],
+            });
+            // The session's remaining rows, also newest-first.
+            runViewResultQueue.push({
+                Success: true,
+                Results: createWindowRows([17, 16], { AgentSessionID: 'sess-a' }),
+            });
+            runViewResultQueue.push({ Success: true, Results: [] }); // probe
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            const expansion = runViewParamsLog[1];
+            expect(String(expansion.ExtraFilter)).toContain(`AgentSessionID='sess-a'`);
+            expect(String(expansion.ExtraFilter)).toContain('Sequence < 18');
+            // Bounded so one pathological session cannot drag in the whole conversation.
+            expect(expansion.MaxRows).toBe(200);
+
+            expect(result.Details.map(d => d.Sequence)).toEqual([16, 17, 18, 19, 20]);
+            expect(result.OldestSequence).toBe(16);
+        });
+
+        it('issues no expansion read when the oldest row is a normal message', async () => {
+            enqueuePageAndProbe(createWindowRows([20, 19, 18]), false);
+
+            await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            // Second call is the probe, not a session read.
+            expect(String(runViewParamsLog[1].ExtraFilter)).not.toContain('AgentSessionID');
+            expect(runViewParamsLog[1].MaxRows).toBe(1);
+        });
+
+        it('treats a whitespace-only session stamp as unstamped', async () => {
+            enqueuePageAndProbe(
+                [...createWindowRows([20]), ...createWindowRows([19], { AgentSessionID: '   ' })],
+                false
+            );
+
+            await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(String(runViewParamsLog[1].ExtraFilter)).not.toContain('AgentSessionID');
+        });
+
+        it('loads peripherals in ONE batch scoped to the window ids, not a per-row loop', async () => {
+            enqueuePageAndProbe(createWindowRows([2, 1]), false);
+
+            await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(runViewsBatchLog).toHaveLength(1);
+            const batch = runViewsBatchLog[0];
+            expect(batch.map(p => p.EntityName)).toEqual([
+                'MJ: AI Agent Runs',
+                'MJ: Conversation Detail Ratings',
+                'MJ: Conversation Detail Artifacts',
+            ]);
+            for (const params of batch) {
+                expect(String(params.ExtraFilter)).toContain(
+                    `ConversationDetailID IN ('d-1','d-2')`
+                );
+            }
+            // Mirrors GetConversationComplete — input artifacts are not rendered.
+            expect(String(batch[2].ExtraFilter)).toContain(`Direction='Output'`);
+        });
+
+        it('rebuilds artifact cards from the junction, version, and artifact rows', async () => {
+            enqueuePageAndProbe(createWindowRows([1]), false);
+            // Peripheral batch: agent runs, ratings, then one artifact junction row.
+            runViewResultQueue.push({ Success: true, Results: [] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{
+                    ID: 'j-1',
+                    ConversationDetailID: 'd-1',
+                    ArtifactVersionID: 'ver-1',
+                    Direction: 'Output',
+                }],
+            });
+            // Follow-up hops: the version, then its artifact.
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{
+                    ID: 'ver-1',
+                    ArtifactID: 'art-1',
+                    VersionNumber: 3,
+                    Name: 'v3',
+                    Description: 'third pass',
+                    __mj_CreatedAt: new Date('2026-01-02'),
+                }],
+            });
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{
+                    ID: 'art-1',
+                    Name: 'Sales Report',
+                    Type: 'Report',
+                    Description: 'Q1 numbers',
+                    Visibility: 'Public',
+                }],
+            });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            const artifacts = result.ArtifactsByDetailId.get('d-1');
+            expect(artifacts).toHaveLength(1);
+            expect(artifacts?.[0].ArtifactName).toBe('Sales Report');
+            expect(artifacts?.[0].ArtifactType).toBe('Report');
+            expect(artifacts?.[0].VersionNumber).toBe(3);
+            expect(artifacts?.[0].Visibility).toBe('Public');
+        });
+
+        it('drops an artifact whose version or artifact row is missing (INNER JOIN parity)', async () => {
+            enqueuePageAndProbe(createWindowRows([1]), false);
+            runViewResultQueue.push({ Success: true, Results: [] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{
+                    ID: 'j-1',
+                    ConversationDetailID: 'd-1',
+                    ArtifactVersionID: 'ver-missing',
+                    Direction: 'Output',
+                }],
+            });
+            runViewResultQueue.push({ Success: true, Results: [] }); // version not found
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.ArtifactsByDetailId.size).toBe(0);
+        });
+
+        it('keys agent runs by their conversation detail', async () => {
+            enqueuePageAndProbe(createWindowRows([2, 1]), false);
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createMockAgentRun({ ID: 'run-1', ConversationDetailID: 'd-2' })],
+            });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.AgentRunsByDetailId.get('d-2')).toBeDefined();
+            expect(result.AgentRunsByDetailId.has('d-1')).toBe(false);
+        });
+
+        it('does NOT populate the full-history detail cache', async () => {
+            // The invariant that protects agents: _detailCache is keyed by conversation id
+            // alone and GetAgentContextWindow reads it as COMPLETE history. A window written
+            // there would silently drop everything before the summary boundary.
+            enqueuePageAndProbe(createWindowRows([25, 24, 23]), true);
+
+            await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(engine.GetCachedDetails('conv-1')).toBeUndefined();
+            expect(engine.HasCachedDetails('conv-1')).toBe(false);
+        });
+
+        it('distinguishes an empty conversation from a failed read', async () => {
+            // Same rows (none), same HasMoreAbove (false) — `Failed` is the ONLY thing that
+            // separates "there is nothing here" from "we could not find out".
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toEqual([]);
+            expect(result.HasMoreAbove).toBe(false);
+            expect(result.Failed).toBe(false);
+        });
+
+        it('flags a failed older-rows probe while still returning the rows it read', async () => {
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            // The page read succeeds; only the probe fails. Its `false` is indistinguishable
+            // from a real "nothing older", so the rows are kept and the window is flagged.
+            runViewResultQueue.push({ Success: true, Results: createWindowRows([20, 19, 18]) });
+            runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'probe boom' });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toHaveLength(3);
+            expect(result.HasMoreAbove).toBe(false);
+            expect(result.Failed).toBe(true);
+            expect(errorSpy).toHaveBeenCalled();
+        });
+
+        it('does not flag a window whose PERIPHERALS failed — the transcript still renders', async () => {
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            enqueuePageAndProbe(createWindowRows([20, 19, 18]), true);
+            // Peripheral reads already degrade to empty maps by design. Flagging them would
+            // make the caller refuse a window it can perfectly well display.
+            runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'runs boom' });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toHaveLength(3);
+            expect(result.Failed).toBe(false);
+            errorSpy.mockRestore();
         });
     });
 

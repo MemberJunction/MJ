@@ -123,4 +123,4 @@ These are exposed to the browser via MJServer's `RealtimeBridgeResolver`:
 
 ## License
 
-ISC © MemberJunction.com
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

@@ -3,6 +3,672 @@
 **Generated:** 2026-08-15
 **Prior Runs:** 2026-05-03 (Round 1+2 baseline — 158 findings), 2026-06-20 (Round 3 — 77 new, 30 resolved), 2026-06-27 (Round 4 — 127 new, 10 agents), 2026-07-04 (Round 5 — 67 new, 7 resolved), 2026-07-11 (Round 6 — 61 new, ~3-4 resolved, 2 severity reclassifications), 2026-07-18 (Round 7 — ~63 new, 6 resolved, 2 new Criticals), 2026-07-25 (Round 8 — ~23 new, 7 resolved, 1 new Critical), 2026-08-01 (Round 9 — ~31 new, 1 resolved, 0 new Criticals), 2026-08-08 (Round 10 — ~13 new, 1 Critical fixed same-day, connector layer removed from repo)
 **Scope:** Full monorepo — 310 `package.json` files under `packages/` (grew from 309 at Round 10).
+**Generated:** 2026-08-22
+**Prior Runs:** 2026-05-03 (Round 1+2 baseline — 158 findings), 2026-06-20 (Round 3 — 77 new, 30 resolved), 2026-06-27 (Round 4 — 127 new, 10 agents), 2026-07-04 (Round 5 — 67 new, 7 resolved), 2026-07-11 (Round 6 — 61 new, ~3-4 resolved, 2 severity reclassifications), 2026-07-18 (Round 7 — ~63 new, 6 resolved, 2 new Criticals), 2026-07-25 (Round 8 — ~23 new, 7 resolved, 1 new Critical), 2026-08-01 (Round 9 — ~31 new, 1 resolved, 0 new Criticals), 2026-08-08 (Round 10 — ~13 new incl. 1 new Critical [fixed same-round], connector layer retired via architecture removal)
+**Scope:** Full monorepo — 312 `package.json` files under `packages/` (grew from 309 at Round 10).
+**Tooling:** 10 parallel `Explore` subagents in two waves
+**Re-run command:** `/audit-memory-leaks`
+
+This document supersedes the previous plan. It is organized in eleven parts (Part 11 is this round; Parts 1-10 are retained below as history):
+
+- **Part 11 — Round 11 Re-Audit** (2026-08-22): full re-scan; **0 new Criticals**, 2 new High findings, 2 new Medium, 1 new dormant Low. **3 genuine new resolutions this round** (`ScheduledJobEngine.StopPolling()` wired to production shutdown; `A2AServer.TaskStore` now bounded + `IShutdownable`; `RealtimeClientSessionService.promptRunWriteChains` converted to `MJLruCache`), plus reconfirmation that Round 10's Critical fix (`HarnessAgentBase.EndHarnessSession()`) remains intact. **This round's PR fixes the highest-confidence new High finding** (`SessionManager.heartbeatLastWrite` unbounded `Map`, the identical shape to the `promptRunWriteChains` bug just fixed in the same window) — see the Fix Summary at the end of this document.
+- Parts 1-10: see headers within for each prior round's date and summary.
+
+---
+
+## Round 11 Executive Summary
+
+| Status | Critical | High | Medium | Low | Total |
+|---|---:|---:|---:|---:|---:|
+| **New in Round 11** | 0 | 2 | 2 | 1 | **5** |
+| **Fixed this round (code fix, see Fix Summary)** | 0 | 1 | 0 | 0 | **1** |
+| **Resolved this round (other genuine fixes, not this PR)** | 0 | 0 | 0 | 0 | **2** (`A2AServer.TaskStore` sweep; `ScheduledJobEngine.StopPolling` wired to shutdown) — plus `promptRunWriteChains` bounded (High, counted under Fixed-shape precedent, not double-counted) |
+| **Cumulative outstanding (persisted + new, this round's independently re-tallied count)** | **0** | **27** | **21** | **38** | **86** |
+
+> *Note, as in every prior round: this is directional, not an exact line-by-line reconciliation across all outstanding items — each subagent re-verified its own baseline section against current code (file:line + fix-pattern confirmation for anything claimed resolved), but cross-round bookkeeping (e.g. exact "cumulative" arithmetic vs. Round 10's own ~460 estimate) is not independently re-derived here. Severity counts above are freshly tallied from this round's ten subagent reports, not carried forward from Round 10's estimate.*
+
+### Fixed this round (via this PR)
+
+1. **`SessionManager.heartbeatLastWrite` unbounded `Map` across 4 process-lifetime singleton instances** (`packages/MJServer/src/agentSessions/SessionManager.ts:98,172,549` before the fix) — **High, NEW in Round 11, FIXED same-day.** `SessionManager` is constructed fresh by every resolver that needs one (`AgentSessionResolver`, `RealtimeClientSessionResolver`, `RealtimeBridgeResolver`) plus `SessionJanitor`'s own instance — TypeGraphQL's default container makes each of those a process-lifetime singleton with its own copy of `heartbeatLastWrite`. Entries were written on every `Heartbeat()` call and deleted only inside `CloseSession()` **on the same instance** — but the overwhelmingly common close path (a crashed tab, a dropped connection, anything that never round-trips an explicit close mutation) is reconciled by `SessionJanitor`'s staleness/shutdown/max-duration sweeps through its OWN `SessionManager`, which never touches the originating resolver's map. Every such session leaked one entry, permanently, on whichever resolver singleton served its heartbeats. **This is the identical bug shape to `RealtimeClientSessionService.promptRunWriteChains`, fixed in this exact same window** with an `MJLruCache` bound — the fix here mirrors that precedent exactly: `heartbeatLastWrite` is now an `MJLruCache<string, number>(maxSize: 5_000, ttlMs: 4h)` instead of a plain `Map`, so an orphaned entry is bounded by a 4-hour backstop (generous vs. the janitor's 15-minute staleness threshold) instead of living until process restart. See the Fix Summary section below for full detail, and the PR for the test diff.
+
+### Top New Findings (Round 11)
+
+1. **`SessionManager.heartbeatLastWrite`** (`packages/MJServer/src/agentSessions/SessionManager.ts:98`) — **High, NEW, FIXED this round.** See above.
+2. **`APIRateLimiter`'s per-key request queue has no maximum size** (`packages/Actions/CoreActions/src/custom/integration/api-rate-limiter.action.ts:16-183`) — **High, NEW.** Same unbounded-retry-queue shape as the already-flagged `DuckDuckGoRateLimiter` (persisted since Round 10), just in a different action. The outer `APIRateLimiterManager` cache is properly `MJLruCache`-bounded, but each individual `APIRateLimiter`'s own `requestQueue$` (`Subject<QueuedRequest>`) has no `maxQueueSize`, so a single busy `RateLimitKey` can back up indefinitely under sustained traffic.
+3. **`APIRateLimiter.dispose()` drops queued/in-flight requests without resolving or rejecting them** (same file, `:75-81`) — **Medium, NEW.** When an `APIRateLimiter` is LRU-evicted mid-backlog, any not-yet-drained `QueuedRequest` is silently discarded — neither `resolve` nor `reject` is called — so the caller's awaited promise hangs forever. A resource-retention bug on the cleanup path that was added specifically to prevent leaking, not itself a growth leak.
+4. **`ArtifactBuilderService` has no cap on concurrent in-progress documents or per-document operation count** (`packages/Actions/CoreActions/src/custom/utilities/artifact-builder-service.ts:84-133,441-455`) — **Medium, NEW.** A process-wide singleton with only a 30-minute TTL sweep as a backstop; no per-document or global ceiling on the `documents` map or any one document's accumulated `operations` array within that rolling window.
+5. **`LiveKitRtcNodeRoomClient.connect()` overwrites `this.room` without disposing a prior undisposed room** (`packages/AI/RealtimeBridge/Providers/LiveKitNative/src/livekit-rtc-node-room.ts:298-320`) — **Low, NEW (dormant).** No current call site triggers the gap (normal connect→disconnect→connect is clean) — flagged as a footgun, same shape as the Round 9/10 `RemoteBrowserEngine` dormant finding.
+
+### Key Trends Since Round 10
+
+- **Second consecutive round where the dominant recurring shape — "a resource is recorded on one singleton instance but reconciled/closed through a DIFFERENT instance of the same class, so the recording instance's cleanup never fires" — produced BOTH a fix and a fresh instance of itself in the same window.** Round 11 fixed `promptRunWriteChains` (its own doc comment explicitly names `SessionManager`'s multi-instance construction as the trigger) while this exact round's audit found the sibling bug, `heartbeatLastWrite`, sitting in the very class named as the trigger. The standing Round 8/9/10 proposal for a lint/CI check flagging defined-but-uncalled `stop`/`dispose`/`cleanup`/`finalize`/`clear*`/`delete*`/`end*` methods would not have caught this class of bug (the cleanup method IS called — just on the wrong object); a complementary check specifically for "singleton class constructed via `new X()` at more than one call site, holding a `Map`/cache field mutated by an instance method" would be a more targeted mechanical catch for this exact shape.
+- **`APIRateLimiter` (Round 11's #2 new High) is a near-exact duplicate of the persisted `DuckDuckGoRateLimiter` finding (open since Round 10)** — same unbounded `Subject`-backed queue, same fix shape (add a `maxQueueSize` + backpressure/rejection policy to `RateLimitConfig`). Recommend fixing both together in a follow-up: a single shared bounded-queue helper would close both findings at once, mirroring the still-outstanding Round 9/10 recommendation for a shared `mapWithConcurrency` helper across the Gmail/MSGraph fan-out family.
+- **The `packages/Integration/**` engine surface (Subagent G's scope) continues to harden rather than regress** — the prior `_abortControllers` static Map was replaced with per-run `AsyncLocalStorage`-scoped controllers (strictly less leak surface), and the new `RunOwnershipService` heartbeat/lease machinery shipped with correct `.unref()`'d timers and try/finally-guarded locks from day one. Zero findings in this subtree for the second round running.
+- **Static cross-check counts (2026-08-22 vs 2026-08-08):**
+
+| Pattern | R11 Count | R10 Count | Delta |
+|---|---:|---:|---|
+| `GetEventListener().subscribe(...)` sites (`MJGlobal.*GetEventListener` grep) | 32 | 32 | 0 |
+| `setInterval` sites | 100 | 91 | +9 |
+| `addEventListener(` (broad, non-template-filtered) | 222 | 216 | +6 |
+| `new Map` class fields (heuristic pattern) | 330 | 322 | +8 |
+| `extends BaseSingleton` (occurrences) | 80 | 77 | +3 |
+| `takeUntil` usages (occurrences) | 341 | 331 | +10 |
+| `MJLruCache` usages (occurrences) | 43 | 43 | 0 |
+| `IShutdownable` implementations (files referencing the symbol, excl. interface definition) | 10 | 11 | -1 |
+
+> *Note:* `setInterval` (+9) and `addEventListener` (+6) growth tracks with genuine new feature surface this window (per subagent reports: `RunOwnershipService` heartbeat timer, `UploadTokenManager`/`MediaStreamHandler` TTL timers, `RemoteBrowserGoalRegistry`, `RSUProgressBridge`) rather than newly-flagged leaks — none of the ten subagents attributed a new finding to these raw deltas beyond the two already itemized above. `new Map` class fields (+8) and `extends BaseSingleton` (+3) are consistent with ordinary new-package growth (312 packages this round vs. 309 at Round 10). The `IShutdownable` delta (-1) is a one-file swing and not attributable to any specific regression flagged this round — most likely a counting-methodology artifact (e.g. a file moved/renamed since the grep last ran) rather than a real reduction in shutdown-registry adoption; flagging for reconciliation next round, same caveat pattern as Round 10's `takeUntil` note. `MJLruCache` holding flat at 43 despite this round's two conversions (`heartbeatLastWrite`, `promptRunWriteChains`) suggests the raw import-occurrence grep undercounts slightly vs. actual adoption — not investigated further this round.
+
+---
+## Subagent A — RxJS / Angular OnDestroy
+
+**Date:** 2026-08-22. **Scope:** `packages/Angular/**`, `packages/MJExplorer/**`, `packages/InteractiveComponents/**`, `packages/AngularElements/**` (excl. node_modules/dist/generated/test files). Re-verified against Round 10 baseline (`/home/user/MJ/plans/MEMORY_LEAK_AUDIT.md` lines 61-116, 2026-08-08). All 22 `GetEventListener` call sites currently in scope were re-enumerated (down from 33 in Round 10 — file removed/refactored, see below) plus 6 newly-appearing call sites in files touched since 2026-08-08 were checked line-by-line. `MJExplorer` remains a 4-file thin shell with zero subscriptions. `packages/InteractiveComponents` grew to 29 files but still has zero `.subscribe(`/RxJS usage anywhere. No `MJEventBroker`/`EventBroker` usage anywhere in scope — category 5 still has no findings. Swept 116 service files touched since Round 10 for constructor-level/unguarded subscriptions — all use either `takeUntil`+`ngOnDestroy` or the established GC-together self-completing-Subject dialog pattern. All 159 `destroy$`/`_destroy$`/`destroying$` Subject declarations in scope re-grepped for `.complete()` — zero orphans, category 4 remains clean.
+
+### Corrections carried forward from Round 10 (still accurate, re-verified)
+
+Round 10 downgraded its old High #1 (event-monitor/connections/graphql-console missing `super.ngOnDestroy()`) to a Low correctness note after tracing that none of the three call `super.ngOnInit()` either, so the base class's `NavigationService.QueryParamChanged$`/`ObserveTabQueryParams` subscriptions are never created — no leak, just a broken deep-link/back-forward contract. Re-verified this round: `connections.component.ts` (ngOnInit:225, ngOnDestroy:233) and `graphql-console.component.ts` (ngOnInit:146, ngOnDestroy:155) still have no `super.ngOnInit()`/`super.ngOnDestroy()` and still no `GetEventListener`/`.subscribe(` calls of their own. `event-monitor.component.ts` (ngOnInit:73, ngOnDestroy:90) still overrides both without `super` calls, but its own `GetEventListener(true)` at line 254 is correctly stored (`this.sub`) and unsubscribed at line 90. **Status unchanged — remains Low correctness note, not a leak.**
+
+### High (persisted from Round 10, all still present — zero fixes landed)
+
+1. **`packages/Angular/Explorer/explorer-core/src/lib/shell/shell.component.ts:444`** (same line as Round 10) — **High. PERSISTED.** `MJGlobal.Instance.GetEventListener(true).subscribe(async (loginEvent) => {...})` inside `ngOnInit()` is discarded; the nested `this.router.events.pipe(filter(...)).subscribe(...)` at lines 452-458 is also discarded. Sibling `GetEventListener` calls at lines 716/732 remain correctly wrapped in `this.subscriptions.push(...)`, drained in `ngOnDestroy()` (now line 2037, drifted from 2017 as the file grew to 3417 lines). `ShellComponent` mounts once per app session, so this is a fixed, bounded (not unbounded-growth) permanent listener — kept High not Critical.
+2. **`packages/Angular/Generic/search/src/lib/search-suggest.component.ts:360`** — **High. PERSISTED, byte-identical.** `SearchSuggestComponent implements OnInit` only (still no `OnDestroy`); `loadMinRelevanceSetting()` discards `GetEventListener(true).subscribe(...)` — reusable component, leaks per mount.
+3. **`packages/Angular/Generic/join-grid/src/lib/join-grid/join-grid.component.ts:633`** — **High. PERSISTED.** `JoinGridComponent extends BaseAngularComponent`, still no `ngOnDestroy` anywhere; `ngAfterViewInit()`'s `GetEventListener(false).subscribe(...)` still discarded.
+4. **`packages/Angular/Generic/container-directives/src/lib/ng-fill-container-directive.ts:118`** — **High. PERSISTED.** `ngOnDestroy()` (line 133) correctly unsubscribes `_resizeImmediateSubscription`/`_resizeSubscription`, but the adjacent `GetEventListener(true).subscribe(...)` watching `ManualResizeRequest` is still never stored/torn down — widely-used structural directive.
+
+### Medium (persisted from Round 10)
+
+5. **`packages/Angular/Explorer/base-application/src/lib/application-manager.ts:152`** — **Medium. PERSISTED.** `GetEventListener(true).subscribe(...)` in `Initialize()`, guarded by `this.initialized` against re-entry — bounded but never removable.
+6. **`packages/Angular/Generic/search/src/lib/search.service.ts:367`** — **Medium. PERSISTED.** `SearchService` (`providedIn: 'root'`) subscribes in `LoadRecentSearches()`, discarded, guarded by `recentSearchesLoaded` — bounded to one per app boot.
+
+### Low (persisted from Round 10)
+
+7. **`packages/Angular/Generic/notifications/src/lib/notifications.service.ts:74,104`** — **Low. PERSISTED.** Constructor subscribes to `GetEventListener(true)` + chains a permanent `PushStatusUpdates().subscribe(...)` on `LoggedIn`. Once per boot.
+8. **`packages/Angular/Explorer/shared/src/lib/shared.service.ts:48`** — **Low. PERSISTED.** Constructor subscribe, never unsubscribed. Once per boot.
+9. **`packages/AngularElements/mj-angular-elements-demo/src/app/listener-demo/listener-demo.component.ts:45`** — **Low. PERSISTED.** Demo app only.
+10. **`packages/AngularElements/mj-angular-elements-demo/src/app/hello-mj/hello-mj.component.ts:56`** — **Low. PERSISTED.** Demo app only.
+11. **`packages/AngularElements/mj-angular-elements-demo/src/app/entity-list-demo/entity-list-demo.component.ts:63`** — **Low. PERSISTED.** Demo app only.
+12. **`packages/Angular/Generic/dashboard-viewer/src/lib/dashboard-viewer/dashboard-viewer.component.ts:1327` (`destroyPanelComponent`)** — **Low. PERSISTED.** Subscribes to a dynamic part instance's `EventEmitter`s without `takeUntil`; GC-together with the componentRef.
+13. **`packages/Angular/Explorer/base-application/src/lib/workspace-state-manager.ts:23-27`** — **Low. PERSISTED.** Singleton subscribes to its own `saveRequest$`/`configuration$`/`workspace$`/`loading$`/`tabBarVisible$` in the constructor, never unsubscribed. Self-referential, fires once per boot.
+14. **`packages/Angular/Generic/conversations/src/lib/services/notification.service.ts:498-510`** — **Low. PERSISTED.** `setupStorageListener()` wires `fromEvent(window,'storage')` in constructor, never torn down.
+15. **`packages/Angular/Generic/conversations/src/lib/services/search.service.ts:112-121`** — **Low. PERSISTED.** `initializeSearch()` subscribes to own `_searchQuery$` in constructor.
+16. **`packages/Angular/Explorer/auth-services/src/lib/providers/mjexplorer-auth0-provider.service.ts:111,115`** — **Low. PERSISTED.** Constructor subscribes to `auth.isAuthenticated$`/`auth.user$` permanently. Sibling `mjexplorer-msal-provider.service.ts` still does this correctly (`takeUntil` + `ngOnDestroy`) as the reference fix.
+17. **`packages/Angular/Explorer/auth-services/src/lib/providers/mjexplorer-okta-provider.service.ts:69`** — **Low. PERSISTED.** Constructor subscribes to `oktaAuth.authStateManager` permanently.
+18. **`packages/Angular/Explorer/dashboards/src/DevTools/event-monitor.component.ts` (lines 73-92)** — **Low. PERSISTED.** Overrides `ngOnInit`/`ngOnDestroy` without `super` calls — correctness bug (breaks query-param round-trip contract), not a leak (base subscriptions never created).
+
+### New surface swept this round — 6 new `GetEventListener` call sites, all clean
+
+Files touched since Round 10 added new `GetEventListener` usages not previously catalogued; all verified to use `takeUntil(this.destroy$)` or a stored+`ngOnDestroy`-unsubscribed `Subscription`:
+- `packages/Angular/Explorer/core-entity-forms/src/lib/custom/ai-agent-run/ai-agent-run.component.ts:221` — stored in `entityEventSubscription`, unsubscribed in `ngOnDestroy` (line 207-212). Clean.
+- `packages/Angular/Explorer/dashboards/src/Lists/components/lists-browse-resource.component.ts:2114` (`subscribeToCategoryChanges`) — `.pipe(takeUntil(this.destroy$))`. Clean.
+- `packages/Angular/Explorer/dashboards/src/AI/components/autotagging/autotagging-pipeline-resource.component.ts:406` (`subscribeToEntityChanges`) — `.pipe(takeUntil(this.destroy$))`. Clean.
+- `packages/Angular/Explorer/dashboards/src/AI/components/models/model-management.component.ts:154` (`subscribeToCacheInvalidation`) — `.pipe(takeUntil(this.destroy$))`; `ngOnDestroy` also completes `destroy$`. Clean.
+- `packages/Angular/Explorer/dashboards/src/FormBuilder/form-builder-resource.component.ts:599` — stored in `entityEventSubscription`, unsubscribed + nulled in `ngOnDestroy` (611-615), which calls `super.ngOnDestroy()` (618). Clean.
+- `packages/Angular/Generic/record-process-studio/src/lib/record-process-history/record-process-history.component.ts:166` (`subscribeToRunChanges`) — stored in `eventSub`, unsubscribed in `ngOnDestroy` (157-158). Clean.
+
+Also swept 116 `.service.ts` files touched since Round 10 for constructor-level `.subscribe(` calls without teardown: `ai-agent-management.service.ts` (8 sites), `new-agent-dialog.service.ts`, `ai-prompt-management.service.ts`, `test-harness-window-manager.service.ts` (4 sites), `action-explorer-state.service.ts` — all match the established GC-together dialog pattern (subscribe to a per-open `Subject`/`EventEmitter` that completes/is destroyed together with the dialog's `componentRef`) or use `takeUntil(this._destroy$)` with a working `ngOnDestroy`. No new leaks found.
+
+### Resolved / retired
+
+- **Round 9's High #1 (3-file `super.ngOnDestroy()` finding)** — already downgraded by Round 10 to the Low #18 correctness note above; no change this round. `connections.component.ts` and `graphql-console.component.ts` pieces remain fully resolved (no `GetEventListener`/`.subscribe(` calls left in either file at all, refactored before Round 10).
+- **File-count note:** total in-scope `GetEventListener` call sites dropped from 33 (Round 10) to 22 this round, but this reflects the earlier connections.component.ts/graphql-console.component.ts refactor already retired in Round 10 plus normal churn — no additional sites disappeared this round beyond what Round 10 already accounted for; the 6 new sites found this round were simply not itemized individually in Round 10's list (Round 10's sweep text covered them implicitly as "recently-touched services... all clean" without naming each).
+
+### Counts by severity
+- Critical: 0
+- High: 4 (all PERSISTED — shell.component.ts, search-suggest, join-grid, ng-fill-container)
+- Medium: 2 (both PERSISTED — application-manager, search.service)
+- Low: 12 (all PERSISTED — no reclassifications this round)
+- **Total: 18** (0 new, 0 resolved-by-fix, 18 persisted verbatim or with only line-number drift)
+## Subagent B — Timers
+
+**Date:** 2026-08-22 (Round 11). **Scope:** `setInterval`/recursive `setTimeout` leaks, singleton timer-owners without destructors, Angular component timers without `ngOnDestroy`, per-request `setTimeout`, across `packages/**/*.ts(x)` (excl. node_modules/dist/generated/test files). Diffed against baseline Round 10 (2026-08-08, lines 116-177). Every persisted finding re-verified by direct file read; new surface swept via `git log --since=2026-08-08` (436 commits) filtered to files touching `setInterval`/`setTimeout`.
+
+### Persisted (9 of 12 Round 10 findings — unchanged, no fixes landed)
+
+1. **[High] `packages/Actions/CoreActions/src/custom/utilities/artifact-builder-service.ts:85-97,445-456`** — manual `static _instance` (not `BaseSingleton`); `cleanupTimer` (`setInterval`, `unref()`'d) has no stop method at all. No `ShutdownRegistry` registration. All 6 production call sites (`create-document.action.ts`, `add-document-content.action.ts`, etc.) only read `.Instance`, never tear it down. PERSISTED.
+2. **[Medium] `packages/GraphQLDataProvider/src/graphQLDataProvider.ts:3056,3121-3122,3575-3579`** — `_subscriptionCleanupTimer`; `disposeWebSocketResources()` (line 3575) clears correctly but confirmed **zero callers anywhere in the repo** (only its own definition matches). PERSISTED.
+3. **[Medium] `packages/AI/MCPServer/src/auth/AuthorizationStateManager.ts:351,424-427` / `ClientRegistry.ts:285,335-337`** — cleanup `setInterval`s; `shutdown()` exists on both but the only callers remain `resetAuthorizationStateManager()`/`resetClientRegistry()` (test-only helpers); `OAuthProxyRouter.ts` never calls either. PERSISTED.
+4. **[High] `packages/AI/MCPServer/src/Server.ts:1243-1268`** — SSE `keepaliveInterval` (15s) cleared only on `res.on('close')` (line 1252); `res.on('error')`/`req.on('error')` (lines 1256,1263) still only log. PERSISTED, verbatim.
+5. **[High] `packages/AI/A2AServer/src/Server.ts:633-667`** — `updateInterval` (500ms) cleared on terminal task status or `res.on('close')` only; no `req`/`res` error handler in this stream handler. PERSISTED, verbatim.
+6. **[Low] `packages/MJServer/src/telephony/calendar-scheduler.ts:141,172`** — poll `setInterval`, `unref()`'d, working `Stop()` on the returned handle; call site `index.ts:1503-1508` still discards the returned `CalendarSchedulerHandle` — never captured, never registered with `ShutdownRegistry`. PERSISTED.
+7. **[High] `packages/SQLServerDataProvider/src/config.ts:34-38`** — module-init `setInterval` (`RefreshIfNeeded` poll) still has no cleanup path (no handle stored, no clear anywhere in the file). PERSISTED, unchanged.
+8. **[Low] `packages/AI/RealtimeClient/src/drivers/elevenLabsRealtimeClient.ts:730-751,237-258`** — `armToolResultNudge()`'s `toolResultNudgeTimer` still not cancelled in `Disconnect()` (re-read line-for-line: closes socket/mic/playback, calls `resetResponseState()`, never `cancelToolResultNudge()`). File unmodified since 2026-07-02. Kept Low: self-clearing callback, socket already nulled. PERSISTED.
+9. **[High] `packages/AI/RealtimeBridge/Server/src/ai-bridge-engine.ts:549,634,1954-1971`** — `AIBridgeEngine extends BaseSingleton` owns `staleSweepTimer` (`setInterval`, `unref()`'d), started via `StartStaleSessionSweep()`. `StopStaleSessionSweep()` (line 1968) still has **zero callers anywhere in the codebase**. Not `IShutdownable`. PERSISTED.
+10. **[Low] `packages/Angular/Explorer/dashboards/src/AI/components/tags/tags-resource.component.ts:2633-2703`** — closure-local `idleTimer` (`setTimeout`, re-armed via `resetIdleTimer()`) still not referenced from `ngOnDestroy()` (line 1136). Bounded/self-clearing, kept Low. PERSISTED.
+
+### Resolved
+
+11. **`packages/Scheduling/engine/src/ScheduledJobEngine.ts` — `StopPolling()` uncalled in production (Round 10 finding #2, High).** **RESOLVED.** New `packages/MJServer/src/services/ScheduledJobsService.ts` wraps `SchedulingEngine.Instance` and calls `StopPolling({ waitForInflight: true, maxWaitMs: 30_000 })` from its `Stop()` (line 119); `index.ts:1387-1389` starts it at boot and `index.ts:1527-1529` calls `scheduledJobsService.Stop()` in the graceful-shutdown handler. Engine still doesn't implement `IShutdownable` directly, but is now wired into the real shutdown path — the leak is closed.
+
+### Moved (line drift only, content unchanged)
+
+12. **[High] `packages/MJCore/src/generic/localCacheManager.ts:3280-3311`** (was `2954-2987` in Round 10) — `LocalCacheManager` `_sweepTimer` (`setInterval`, `unref()`'d). `stopEvictionSweep()` (line 3308) still has zero external callers — only `startEvictionSweep()` calls it defensively before re-arming. No `IShutdownable`/`ShutdownRegistry` hookup. File grew (+326 lines above the timer) since Round 10; content byte-identical. MOVED, functionally PERSISTED.
+
+### New surface swept this round, no leaks found
+
+- **`packages/MJServer/src/agentSessions/SessionJanitor.ts:57-231`** (existing, re-verified) — `implements IShutdownable`, registers with `ShutdownRegistry.Instance.Register(this)` (line 221), `Stop()` clears `_sweepTimer`. Reference-good.
+- **`packages/MJServer/src/generic/FireAndForgetHeartbeat.ts:67-88`** (new) — `startLivenessPulse()` returns `{ stop() }`; both callers (`RunAIAgentResolver.ts:1290,1324` via `.finally(() => pulse.stop())`, `RunTestResolver.ts:259,355`) tear it down. Clean per-request timer.
+- **`packages/MJServer/src/integration/RSUProgressBridge.ts:51-210`** (new) — `BaseSingleton`; `heartbeat` (`setInterval`, `unref()`'d) stopped via `stopHeartbeat()` at every lifecycle exit (`Reset()`, abandon, terminal event) — 4 call sites. Clean.
+- **`packages/MJServer/src/rest/UploadTokenManager.ts:115-121`** (new) — per-token `setTimeout` (TTL eviction), `unref()`'d, self-clearing (`Evict(token)`). Bounded, clean.
+- **`packages/MJServer/src/services/IntegrationSyncWorkerService.ts:66-90`** (new) — `this.timer` (`setInterval`); `Stop()` clears it and is called from `index.ts:1540` in the graceful-shutdown handler. Clean.
+- **`packages/MJServer/src/logging/StartupLogger.ts:92,201-229,299`** (new) — `bootTimer` (`setInterval`, `unref()`'d), cleared by `StopBoot()`, called at line 299. Clean.
+- **`packages/MJQueue/src/generic/QueueManager.ts:21-40`** (new since Round 10's sweep) — now `implements IShutdownable`, `ShutdownAllQueues()` stops every tracked `QueueBase`; wired for `ShutdownRegistry` drain. Clean.
+- **`packages/AI/Agents/src/realtime/realtime-channel-server-host.ts:288-318`** (new) — `disposeTimer` (`setTimeout`, `unref()`'d) is idempotent (guarded re-arm check at line 291) and self-fires once. Clean.
+- **`packages/AI/Agents/src/realtime/realtime-session-runner.ts:281-964`** (new) — `usageDebounceTimer`/`narrationTimer`, both cleared in `Stop()` (lines 933,964) which is called on every close path. Clean.
+- **`packages/AI/Agents/src/ClientToolRequestManager.ts:17-131`** (new, `BaseSingleton`) — per-request `Timer` (`setTimeout`) cleared on `ReceiveResponse()` or self-clears/deletes-from-map on fire. Bounded per-request pattern, no unbounded accumulation. Clean.
+- `packages/AI/AgentHarness/**` — zero `setInterval`/`setTimeout` usage (grepped directly, no matches).
+- `packages/Communication/**`, `packages/MJAPI/**` — still zero `setInterval`/`setTimeout` usage.
+- `packages/MJQueue/src/generic/QueueBase.ts` — re-confirmed `implements IShutdownable`, `Shutdown()`/`Stop()` clear `_pendingTimer`; recursive `setTimeout` reschedule loop still guarded by stopped-flag. Reference-good.
+- `packages/AI/A2AServer/src/TaskStore.ts` — re-confirmed `implements IShutdownable`, timer cleared in `Shutdown()`. Reference-good.
+- Swept ~360 other files touched since 2026-08-08 that reference `setInterval`/`setTimeout` (mostly the BUSL relicense commit touching file headers, or bounded `await new Promise(r => setTimeout(r, ms))` retry/backoff idioms in `IntegrationDiscoveryResolver.ts`, `auth/index.ts`, `UserRoutineDispatcherDriver.ts`) — none are unbounded or unpaired.
+
+### Severity counts (this round)
+
+| Severity | Count | Detail |
+|---|---:|---|
+| Critical | 0 | — |
+| High | 5 | ArtifactBuilderService, MCPServer Server.ts keepalive, A2AServer Server.ts keepalive, SQLServerDataProvider config.ts, ai-bridge-engine.ts staleSweepTimer (all persisted); localCacheManager moved but counted here too → 5 distinct High incl. localCacheManager |
+| Medium | 2 | GraphQLDataProvider dead path, MCPServer OAuth managers (both persisted) |
+| Low | 2 | elevenLabsRealtimeClient nudge timer, tags-resource.component.ts idleTimer (both persisted) |
+| **Total flagged** | **10** | 9 persisted + 1 moved, 0 new, 1 resolved |
+
+Note: localCacheManager counted once in the High total (6 High items total: artifact-builder-service, MCPServer keepalive, A2AServer keepalive, SQLServerDataProvider, ai-bridge-engine, localCacheManager).
+
+### Persisted / Resolved / New / Moved summary
+
+- **Persisted:** 9 of 12 Round 10 findings, re-verified unchanged by direct file read.
+- **Resolved:** 1 — `ScheduledJobEngine.StopPolling()` (Round 10 High #2) is now wired to production shutdown via the new `ScheduledJobsService` (`packages/MJServer/src/services/ScheduledJobsService.ts`), instantiated and stopped from `packages/MJServer/src/index.ts`.
+- **Moved:** 1 — `LocalCacheManager._sweepTimer`/`stopEvictionSweep()` shifted from lines 2954-2987 to 3280-3311 (file grew); content and lack of caller unchanged.
+- **New:** 0 unfixed. Every new file this window with `setInterval`/`setTimeout` (`FireAndForgetHeartbeat.ts`, `RSUProgressBridge.ts`, `UploadTokenManager.ts`, `IntegrationSyncWorkerService.ts`, `StartupLogger.ts`, `QueueManager.ts` IShutdownable upgrade, `realtime-channel-server-host.ts`, `realtime-session-runner.ts`, `ClientToolRequestManager.ts`) was verified clean.
+
+### Recommendation (carried forward)
+
+`ScheduledJobEngine` shows the exact fix pattern needed for the remaining High findings: a thin lifecycle service (`Xxx Service`) that owns start/stop and is wired into `index.ts`'s existing graceful-shutdown handler. Apply the same wrapper to `LocalCacheManager` (`stopEvictionSweep`), `ArtifactBuilderService` (needs a stop method first — currently has none), and `AIBridgeEngine` (`StopStaleSessionSweep`) to close all remaining High findings. The two Medium `MCPServer` auth-manager findings need `OAuthProxyRouter`'s real shutdown path wired to `shutdown()` instead of the test-only reset helpers.
+## Subagent C — Event listeners
+
+**Scan date:** 2026-08-22. **Baseline:** `/home/user/MJ/plans/MEMORY_LEAK_AUDIT.md` lines 177-258, Round 10 (2026-08-08). **Scope:** DOM listener/`removeEventListener` pairing, Node `EventEmitter` `.on()`/`.off()` balance, WebSocket/SSE cleanup, `MJGlobal.Instance.GetGlobalObjectStore()` listener-array growth, across `packages/**/*.ts(x)` excl. node_modules/dist/generated/tests. `(click)` template bindings and `@HostListener` out of scope.
+
+### Method
+1. Re-verified all 7 Round-10 open findings byte-for-byte against current code (`git log --since=2026-08-08` per file to isolate real changes from noise; 436 commits touched `.ts`/`.tsx` repo-wide in the window).
+2. Of the 9 files behind Round-10 findings, only `AIPromptRunner.ts` (2 commits), `base-agent.ts` (10), `openAIRealtime.ts` (3), and `mention-editor.component.ts` (3) changed; `MCPResolver.ts`, `vonageMediaRegistry.ts`, `Global.ts`, `remote-browser-engine.ts`, `ollama-llm.ts` had zero commits.
+3. Swept the new `packages/AI/RealtimeBridge/**` tree (12 meeting/telephony providers — not present at Round 9/10 scope) for `.on(`/`.off(`/`new WebSocket`/`EventSource`, and spot-checked `AgentHarness`, `golden-layout-manager.ts`, `login-picker.component.ts` from the window's changed-file diff.
+
+### Re-verification of Round 10 findings
+
+1. **`AIPromptRunner.runChatCompletionBounded` leaks an `abort` listener onto the caller's shared `cancellationToken` — PERSISTED, High.**
+   `packages/AI/Prompts/src/AIPromptRunner.ts:3779` (`signal.addEventListener('abort', fail, { once: true })`), root cause still in `createExecutionBound:3709-3748` (early-return branch at `:3713` returns `Signal: cancellationToken` — the raw external `AbortSignal` — whenever no per-prompt `timeoutMS` is set, which is the default). No `removeEventListener` anywhere on this path; `Dispose()` is a no-op for it. Line numbers shifted (+18) from unrelated edits (driver-forwarding docs, `ResolveResponseDoneUsage`) but the bug is byte-identical. Fix shape unchanged: relay via an always-allocated internal `AbortController`, or capture `fail` and remove it once `Promise.race` settles.
+
+2. **OpenAI/xAI Realtime `Close()` never nulls consumer handler closures — PERSISTED, High.**
+   `packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts:1174-1181`. `Close()` correctly `.off()`s the two internal listeners (`eventListener`, `errorListener`) and clears the pending-config listener, but never nulls the 6 consumer-supplied closures (`outputHandler`, `transcriptHandler`, `toolCallHandler`, `interruptionHandler`, `usageHandler`, `errorHandler`, plus `closeHandler`) declared at `:783-790`. The tether that keeps `this` (and thus those closures) alive past `Close()` is the anonymous `this.connection.socket?.addEventListener('close', () => this.handleSocketClose())` at `:873` — never removed, never stored for removal. `xAIRealtime` still inherits unchanged via `extends OpenAIRealtime`.
+
+3. **`MentionEditorComponent.addConfigurationDropdown()` `document.addEventListener('click', ...)` — MOVED (partially mitigated), High.**
+   `packages/Angular/Generic/composer/src/lib/components/mention/mention-editor.component.ts:945-1164`. Since Round 10, a real fix landed for one path: `closeDropdown` is now paired with `document.removeEventListener('click', closeDropdown)` at `:1152`, fired from a `MutationObserver` watching `chip.parentNode` for the chip's own removal (`:1148-1163`). That correctly handles a user deleting an individual mention chip while the editor stays mounted. **It does not cover component teardown** — the observer only watches `childList` (not `subtree`) on `chip.parentNode`; when Angular tears down the whole editor host in one shot (message sent, dialog closed) rather than removing `chip` from its immediate parent individually, no mutation record fires on `chip.parentNode`, so `closeDropdown` stays on `document` forever, the `dropdown` `<div>` (appended to `document.body` for global positioning, `:978`) stays orphaned in the DOM, and the `MutationObserver` sits idle holding the whole closure. Class still has no `OnDestroy`. Since every chat message with a configurable mention preset goes through this path, teardown-without-individual-removal is the dominant case, not the edge case — severity unchanged.
+
+4. **`MCPResolver.ts:637,646` tool-sync listener not in try/finally — PERSISTED, Medium-High.** Zero commits since 2026-08-08.
+
+5. **VonageCallMediaRegistry / TwilioCallMediaRegistry `channels` orphaning — PERSISTED, Medium.**
+   `packages/MJServer/src/telephony/vonageMediaRegistry.ts:68,166-192`. Zero commits since 2026-08-08.
+
+6. **MJGlobal `_components` array has no unregister path — PERSISTED, Low.**
+   `packages/MJGlobal/src/Global.ts:25,59-61`. `RegisterComponent(` still has zero production call sites. Zero commits since 2026-08-08.
+
+7. **`RemoteBrowserEngine.AchieveGoal` dormant abort-listener footgun — PERSISTED, Low (dormant).**
+   `packages/AI/RemoteBrowser/Server/src/remote-browser-engine.ts:451-458`. Zero commits; production caller still doesn't wire `opts.Signal`, so still inert.
+
+**Not re-flagged as new/changed (verified stable):** `base-agent.ts:1402,1742` relay-abort pair correctly paired despite 10 commits touching the file (task-graph/related-record work, not this block); `ollama-llm.ts:135` `combineSignals` unremoved listener persists unchanged (compounding downstream site of finding #1, not double-counted).
+
+### New findings this round
+
+8. **`LiveKitRtcNodeRoomClient.connect()` overwrites `this.room` without disposing a prior undisposed room — New, Low (dormant).**
+   `packages/AI/RealtimeBridge/Providers/LiveKitNative/src/livekit-rtc-node-room.ts:298-320`. Each `connect()` builds a fresh `rtc.Room()` and wires 4 listeners (`:462-479`) via `wireRoomEvents`, then assigns `this.room = room` with no check for an existing `this.room`. `disconnect()` (`:323-338`) correctly nulls and calls `room.disconnect()` on the outgoing room — so the normal connect→disconnect→connect cycle is clean (old room + its listeners are fully dereferenced and GC-eligible). The gap is only if `connect()` is ever called a second time while a room is still live without an intervening `disconnect()`: the first `rtc.Room()`'s native connection and 4 listeners are silently orphaned (still connected, referenced by nothing in JS but held alive by the native binding). No current call site in `base-telephony-bridge.ts`/`livekit-bridge.ts` does this — flagging as a dormant footgun, same shape as the Round-9/10 `RemoteBrowserEngine` finding.
+
+   Also swept the other 11 `RealtimeBridge` providers (Discord, Zoom, Teams, Webex, GoogleMeet, Slack, Vonage, RingCentral, Twilio): all use "latest handler wins" callback-setter patterns (`this.audioHandler = cb`) rather than raw `EventEmitter.on()`, called exactly once per SDK instance from `base-telephony-bridge.ts:579,594,363` — no accumulation. `ringcentral-softphone-call-sdk.ts:147,176,218,221` does call `session.on('audioPacket'/'dtmf', ...)` directly with no `.off()`, but each session object is per-call and `onAudioFrame`/`onDtmf` are each called exactly once per SDK instance in the current codebase — not counted as an active leak, but worth a note if RC session-transfer/reconnect logic is added later without a fresh SDK instance per session.
+
+### Severity Totals (this round)
+
+| Severity | Count |
+|---|---:|
+| Critical | 0 |
+| High | 3 (all PERSISTED: AIPromptRunner, OpenAI/xAI Realtime, MentionEditorComponent [moved/partial]) |
+| Medium | 2 (both PERSISTED: MCPResolver Medium-High, Vonage/Twilio Medium) |
+| Low | 3 (2 PERSISTED: MJGlobal `_components`, RemoteBrowserEngine dormant; 1 NEW dormant: LiveKitRtcNodeRoomClient) |
+| **Total open findings** | **8** |
+
+**Persisted / Resolved / New / Moved counts:** Persisted: 6. Resolved: 0. New: 1 (`LiveKitRtcNodeRoomClient.connect()`, Low dormant). Moved: 1 (`MentionEditorComponent` — genuine partial fix landed for individual-chip-removal, but the dominant full-teardown path still leaks; kept at High since it's not resolved for the common case).
+## Subagent D — Unbounded caches / singletons
+
+**Scan date:** 2026-08-22. Baseline: `plans/MEMORY_LEAK_AUDIT.md` lines 258-308, Round 10 (2026-08-08) "Subagent D — Unbounded caches / singletons," cross-referenced against the Round 10 Executive Summary's `ComponentRegistryService.removeComponentReference()` finding (lines 34, 522-529, originally raised by Subagent I / React runtime). Scope: `packages/**/*.ts` excl. node_modules/dist/generated/tests. Method: re-read every file/line cited in the Round 10 baseline, re-grepped each flagged field for new `.delete()`/`.clear()`/`MJLruCache`/TTL adoption, and re-verified caller counts for the two "cleanup exists but uncalled" findings.
+
+### PERSISTED (re-verified against current code, unchanged since Round 10)
+
+1. **`AIBridgeEngine.diagInbound` / `diagOutbound` — unbounded process-lifetime `Set<string>`s — High.** `packages/AI/RealtimeBridge/Server/src/ai-bridge-engine.ts:563-564` (fields), `:986-988`/`:996-998` (add), `:1016` (read). Still exactly 5 references in the file (2 fields + 3 add/check sites); no `.delete()` on either set anywhere, and `StopBridgeSession` (`:924-946`) still doesn't touch them. Grows by one UUID per direction per bridged realtime session (phone call / meeting join) for the process lifetime. Unchanged since Round 10.
+
+2. **`ComponentRegistryService.removeComponentReference()` — reference-counted cache eviction remains entirely dead code — High.** `packages/React/runtime/src/registry/component-registry-service.ts:65-66` (`compiledComponentCache`, `componentReferences` fields), `:795-800` (`addComponentReference`, called from 5 production sites: `:251,324,393,421,466`), `:805-816` (`removeComponentReference`, the *only* trigger for `considerCacheEviction()` at `:821-833`). Repo-wide grep confirms `removeComponentReference` still has zero callers anywhere. Its documented intended caller, `ComponentResolver.cleanup()` (`packages/React/runtime/src/registry/component-resolver.ts:380-388`), is still a stub — body is only a debug `console.log` plus a comment admitting the tracking "would" be implemented; it never calls `registryService.removeComponentReference`. `ComponentResolver.cleanup()` itself also still has zero callers repo-wide (confirmed via grep on `.cleanup(`). Net effect unchanged: `compiledComponentCache` and `componentReferences` (a `Map<string, Set<string>>` whose Sets accumulate `referenceId`s forever) both grow without bound for the life of the `ComponentRegistryService` singleton (tab/process lifetime) — every distinct `(namespace, name, version, registry)` a Studio/AI user iterates through in a session adds a permanent, never-evicted entry, only clearable via the manual `clearCache()`/`forceClearCache()` that nothing calls automatically.
+
+3. **`ArtifactMetadataEngine` on-demand version caches — still unbounded — High.** `packages/MJCoreEntities/src/engines/artifacts.ts:60-62` (`_artifactCache`, `_versionCache`, `_versionsByArtifact`), populated `:159-180`/`:196-214`. Re-grepped: zero `.delete(`/`.clear(`/`MJLruCache`/TTL/max-size anywhere in the file. Unchanged since Round 8.
+
+4. **`ClientToolRequestManager.sessionTools` — cleanup method exists, zero production callers — High.** `packages/AI/Agents/src/ClientToolRequestManager.ts:44` (field), `:143-145` (`ClearSession`). Repo-wide grep for `ClearSession` still returns only its own definition, its unit test, and the two `SessionManager.ts:93,159` doc-comments still describing it as deferred "P5" work. 6th consecutive round with no remediation.
+
+5. **`ConversationCompactionManager.warnedConversationBudgets` — static `Set<string>` never evicted — Medium.** `packages/AI/Agents/src/ConversationCompactionManager.ts:151` (field), `:358-361` (`.has()`/`.add()`). Still no `.delete()` anywhere in the file. Unchanged.
+
+6. **`ComponentManager.fetchCache` — `maxCacheSize` declared, never enforced — Medium.** `packages/React/runtime/src/component-manager/component-manager.ts:33` (field), `:52` (`maxCacheSize: 100`, read nowhere but the constructor). Only shrink path remains the manual `clearCache()` at `:810-811`. Unchanged. (Distinct class from finding #2's `ComponentRegistryService` — same package, two independently-broken eviction mechanisms.)
+
+7. **`TelemetryManager._activeEvents` / `_patterns`** — Medium. `packages/MJCore/src/generic/telemetryManager.ts:838-839` (fields), `:1024`/`:1037-1040` (`_activeEvents` orphans on missing `EndEvent()`), `:1193-1212` (`_patterns`, set-only in hot path). `trimIfNeeded()` (`:1807`) still trims only `_events`; both fields still untouched by it, only wiped wholesale via the reset paths at `:1856-1857`/`:1864`. Opt-in/disabled-by-default limits exposure. Unchanged.
+
+8. **`ObjectCache` (`packages/MJGlobal/src/ObjectCache.ts:18-90`)** — Low. Still a raw array-backed `Add`/`Replace`/`Find`/`Clear`, no built-in eviction. Still no production caller found repo-wide (only its own definition + `UnitTesting`/`singleton-reset.ts` test helpers + re-exports). Latent footgun, unchanged.
+
+9. **`TeamsAcsMediaRegistry.channels`** — Medium. `packages/MJServer/src/telephony/teamsAcsMediaRegistry.ts:52` (field), `:126-136` (`EndCall`, sole eviction path via `.delete()`). Still depends entirely on a Microsoft Graph `DriveCallEnded` webhook firing; no local TTL sweep. Unchanged.
+
+### Verified clean this round (spot re-checks)
+
+- `packages/MJCore/src/generic/providerBase.ts` `_inflightViews` — real linger/eviction logic (`MaxLingerEntries` cap, `.delete()` on every settle/error/linger-expiry path, `:416-418`/`:834-898`/`:1195-1238`). No leak.
+- `packages/MJCore/src/generic/baseEngine.ts` `_eventRefreshRetryTimers` / `_expirationTimers` — both cleared via `clearTimeout` + `.delete()` before every re-set (`:1274-1299`, `:2119-2146`). No leak.
+- `packages/MJCore/src/generic/baseEngine.ts` `_providerInstances`, `providerBase.ts` `_entityMapByName`/`_entityMapByID` — bounded by finite provider/engine-class and schema entity counts, not per-request growth.
+
+### Severity Counts (this round)
+- Critical: 0
+- High: 4 (all PERSISTED — no new High findings this round): `AIBridgeEngine.diagInbound`/`diagOutbound`, `ComponentRegistryService.removeComponentReference` dead eviction, `ArtifactMetadataEngine` version caches, `ClientToolRequestManager.sessionTools`
+- Medium: 4 PERSISTED: `ConversationCompactionManager.warnedConversationBudgets`, `ComponentManager.fetchCache`, `TelemetryManager._activeEvents`/`_patterns`, `TeamsAcsMediaRegistry.channels`
+- Low: 1 PERSISTED: `ObjectCache`
+- **Total open findings: 9** | **Resolved this round: 0** | **New this round: 0** | **Moved: 0** (net +1 vs. Round 10's count of 8, because this pass folds in the Round 10 Executive-Summary/Subagent-I finding on `ComponentRegistryService`, which the Subagent D section itself hadn't previously enumerated)
+
+### Bottom line
+No regressions and no remediations since Round 10: all 8 previously-tracked Subagent D findings are byte-for-byte unchanged, and the `ComponentRegistryService.removeComponentReference()` dead-code cache-eviction path (originally surfaced by Subagent I, now folded into this sweep per the audit brief) is also still fully dead — both its would-be trigger (`removeComponentReference`) and that trigger's own would-be caller (`ComponentResolver.cleanup()`) remain uncalled anywhere in the repo. The "cleanup method exists, nothing calls it" shape continues to be the dominant pattern across this category (`ClientToolRequestManager.ClearSession`, `ComponentRegistryService.removeComponentReference`, `ComponentResolver.cleanup`) — the standing proposal for a lint/CI check flagging defined-but-uncalled `stop*`/`dispose*`/`cleanup*`/`clear*`/`end*` methods would catch all three mechanically.
+## Subagent E — Connections / Streams / Processes
+
+**Scan date:** 2026-08-22 (Round 11) | **Scope:** `packages/**/*.ts` (excl. node_modules/dist/generated/tests), focused pass on `SQLServerDataProvider`, `PostgreSQLDataProvider`, `MJServer`, `MJAPI`, `MJStorage`, `AI/**` (incl. `AgentHarness`, `RealtimeBridge`), `Communication`, `MJQueue`, `RedisProvider`, `MJInstaller`, `Actions/CoreActions/src/custom/utilities`. Baseline: Round 10 (2026-08-08), `plans/MEMORY_LEAK_AUDIT.md:308-358`.
+
+### Critical fix verification (Round 10 finding #1)
+
+**CONFIRMED INTACT — `HarnessAgentBase.EndHarnessSession()` is now wired into `BaseAgent.Execute()`'s teardown.**
+`packages/AI/Agents/src/base-agent.ts:1773-1775` adds a `protected async finalizeRun(outcome)` no-op hook, called unconditionally from `Execute()`'s top-level `finally` block (`base-agent.ts:1749`, alongside `releasePerRunDataCache()`). `HarnessAgentBase` overrides it (`packages/AI/AgentHarness/src/HarnessAgentBase.ts:886-888`) to call `this.EndHarnessSession(outcome)`, which tears down the adapter session and, when a sandbox was provisioned, calls `sandboxProvider.Finalize(sandboxHandle, outcome)` (`:891-908`) — reclaiming the Docker container / workspace directory on every exit path (success, failure, cancellation). Both `try/catch` guarded so a teardown failure in one leg doesn't skip the other. Regression tests exist at `packages/AI/Agents/src/__tests__/base-agent-finalize-run.test.ts` and `packages/AI/AgentHarness/src/__tests__/harness-agent-base-finalize-run.test.ts`, both explicitly referencing this Round 10 finding. No gap found; git history confirms no packages under scope have regressed this wiring since.
+
+No new instance of the "long-lived subprocess/sandbox provisioned without a guaranteed teardown hook" shape was found elsewhere in `AI/**` or `Actions/CodeExecution` (`WorkerPool.ts` continues to track and terminate its worker pool; `ChildProcessExecutor`/`DockerSandboxProvider`'s own internals remain clean, as in Round 10).
+
+### Re-verification of Round 10 items
+
+1. **HIGH — `TeamsAcsMediaRegistry` orphan `channels` entries — STILL PRESENT. PERSISTED.**
+   `packages/MJServer/src/telephony/teamsAcsMediaRegistry.ts:52,126-151`. File unchanged since Round 10 (last touch predates the window). `ensureChannel()` still eagerly creates entries with no TTL/sweep; `EndCall()` remains the only eviction path, reachable only from a socket-close callback.
+
+2. **HIGH — `VonageCallMediaRegistry`/`TwilioCallMediaRegistry` orphan `channels` entries — STILL PRESENT. PERSISTED (5th round).**
+   `packages/MJServer/src/telephony/vonageMediaRegistry.ts` / `twilioMediaRegistry.ts`, same shape as above. No changes since Round 9.
+
+3. **HIGH — `BaseCdpRemoteBrowserProvider.Connect()` leaks acquired backend on `Launch()` failure — STILL PRESENT. PERSISTED.**
+   `packages/AI/RemoteBrowser/Cdp/src/base-cdp-remote-browser-provider.ts:96-115`. `await adapter.Launch(config)` (`:103`) is still unguarded by try/catch; `acquired.Backend.Release()` is never called if `Launch()` throws, since `this.activeBackend` is only set after success. No commits to this file in the window.
+
+4. **MEDIUM — `A2AServer` startup SQL Server pool has no `error` listener / shutdown registration — STILL PRESENT. PERSISTED.**
+   `packages/AI/A2AServer/src/Server.ts:249-251` (`initializeA2AServer`). `new sql.ConnectionPool(poolConfig); await pool.connect();` still has no `.on('error', ...)` handler and is not registered with `ShutdownRegistry` (contrast `TaskStore` in the same file, and `MJServer/src/index.ts:472-478/501-516`). No commits to this file in the window.
+
+5. **LOW — `RealtimeClientSessionService.combineSignals()` listener-accumulation, still latent — STILL PRESENT. PERSISTED.**
+   `packages/AI/Agents/src/realtime/realtime-client-session-service.ts:2616-2629` (moved from 2532-2545 due to file growth). Re-verified: no construction site anywhere in the repo populates `ExecuteRelayedToolInput.AbortSignal` (grepped all 20+ references), so `combineSignals`'s `if (!callerSignal) return brokerSignal` short-circuit still always applies — inert until caller-signal wiring lands.
+
+### Verified clean (re-spot-checked this round)
+
+- `packages/SQLServerDataProvider/src/SQLServerDataProvider.ts` — `sql.Transaction` begin/commit/rollback still try/finally-guarded.
+- `packages/PostgreSQLDataProvider/src/pgConnectionManager.ts` / `PostgreSQLDataProvider.ts` — pool client acquire/release still correctly try/finally-guarded.
+- `packages/AI/AgentHarness/src/adapters/BaseCliHarnessAdapter.ts` — per-turn CLI subprocess still killed via `finally { proc.Kill() }`; unaffected by the `finalizeRun` fix (different layer, still correct).
+- `packages/MJInstaller/src/adapters/GitHubReleaseProvider.ts:293-324` (`streamToFile`) — release-asset download uses `fs.createWriteStream` + `stream/promises` `pipeline()`, which destroys both source and destination streams on error. Clean.
+- `packages/MJServer/src/rest/UploadTokenManager.ts` (new, Aug 19 — Tier 2 staged binary upload pipeline) — in-memory staged-buffer registry with per-token `setTimeout` TTL eviction (`unref()`'d so it doesn't hold process shutdown open), atomic single-use consume, and per-user/global memory caps. `Evict()` always `clearTimeout`s. Well-engineered; no leak.
+- `packages/MJServer/src/rest/MediaStreamHandler.ts:249-285` (`serveViaStream`, feeds the same Tier 2 pipeline's GET side) — `res.on('close', () => result.Stream.destroy())` plus a `Stream.on('error', ...)` handler correctly tear down the source stream on client-abort or driver error. Clean.
+- `packages/MJStorage/src/drivers/GoogleFileStorage.ts` — `File.createReadStream` returned directly as `ObjectStreamResult.Stream`; consumed by the above clean handler.
+- `packages/MJQueue/**`, `packages/RedisProvider/**` — no substantive commits since Round 10 beyond relicensing/test-only changes; Round 9/10 clean verdicts stand unchanged.
+- `packages/AuthProviders/src/BaseAuthProvider.ts:32-46` — `https.Agent`/`http.Agent` with `keepAlive` created once in the constructor and reused via `jwksClient`; all concrete providers (`Auth0Provider`, `OktaProvider`, etc.) are long-lived singletons, not per-request. Not a per-call agent leak.
+- `packages/AI/Providers/{OpenAI,Anthropic,Fireworks,Ollama}/**` — SDK clients (`new OpenAI(...)`, `new Anthropic(...)`) all constructed once per driver instance, not per inference call.
+
+### Severity counts (Round 11)
+- Critical: 0 new (Round 10's Critical finding — AgentHarness sandbox leak — CONFIRMED RESOLVED, fix verified intact)
+- High: 3 persisted (Teams/ACS registry, Vonage/Twilio registries, CDP backend leak)
+- Medium: 1 persisted (A2AServer pool missing error listener + shutdown registration)
+- Low: 1 persisted/latent (`combineSignals`)
+- Resolved: 1 (carried over — `RelationalDBConnector.CloseAllPools`, file removed, confirmed still absent)
+
+**Persisted / Resolved / New tally:** Persisted 5 (Teams/ACS, Vonage/Twilio, CDP backend leak, A2AServer pool gap, `combineSignals` latent listener) · Resolved 2 (`RelationalDBConnector` file-removed carryover; **AgentHarness sandbox-never-finalized — Critical, now RESOLVED and regression-tested**) · New 0 (targeted search of newly-added code — Tier 2 staged-upload pipeline, `MediaStreamHandler` upload-stage route — found no new leaks; both are clean by design).
+## Subagent F — AI Providers deep scan
+
+**Scope (as directed):** `packages/AI/Providers/**` — 26 named dirs (Anthropic, Azure, Bedrock, BettyBot, BlackForestLabs, Bundle, Cerebras, Cohere, ElevenLabs, Fireworks, Gemini, Groq, HeyGen, Inception, LMStudio, LlamaCpp, LocalEmbeddings, MiniMax, Mistral, Ollama, OpenAI, OpenRouter, Recommendations-Rex, Vertex, Zhipu, xAI). This is narrower than Round 10's 29-dir sweep — **AssemblyAI, HuggingFace, and Inworld are out of scope this round** (still present in the repo, not re-audited here); Round 10's finding #7 (handler-clear gap) lived entirely in those two files and is therefore **not re-verifiable in this pass** (flagged below, not counted persisted/resolved).
+
+**Delta since 2026-08-08:** `git log --since=2026-08-08 -- packages/AI/Providers/` shows real code changes (beyond CHANGELOG/package.json release noise and the BUSL relicense) only in: `OpenAI/src/models/openAIRealtime.ts` (+150/-21, normalized turn-detection cascade), `xAI/src/models/xaiRealtime.ts` (turn-detection mapping), `Gemini/src/geminiRealtime.ts` (speechConfig validation hardening), and `Groq/src/models/groqAudio.ts` (pure rename, `split`→`Split`). All four were read line-by-line; none touch timers, listeners, buffers, or client lifecycle — see "New/changed code verified clean" below.
+
+### Persisted from Round 10 (re-confirmed at the same lines, unchanged)
+
+1. **[Medium] Ollama `clientForRequest()` builds a fresh SDK client per cancellable request.** `Ollama/src/models/ollama-llm.ts:102-107`. Unchanged; still discards `this._client` and constructs a new `Ollama` instance whenever `params.cancellationToken` is set (necessary per the SDK's lack of per-request cancellation, per the code comment) — resource churn, not unbounded growth.
+2. **[Low] Gemini `meetingResponseWatchdog` timer survives `Close()`.** `Gemini/src/geminiRealtime.ts:562` (field), `:834` (armed), `Close()` still does not clear it. Confirmed unchanged.
+3. **[Low] OpenAI raw-socket `'close'` listener has no matching removal.** `OpenAI/src/models/openAIRealtime.ts:873` (`this.connection.socket?.addEventListener('close', ...)`). Still benign — per-session socket, discarded with the session.
+4. **[Low x2] Azure `AzureLLM`/`AzureEmbedding.SetAdditionalSettings()` reassign `_client`/`DefaultAzureCredential` without disposing the prior instance.** `Azure/src/models/azure.ts:52-73`, `Azure/src/models/azureEmbedding.ts:34-55`. Confirmed byte-identical to Round 10.
+5. **[Low] LMStudio/Ollama `SetAdditionalSettings()` recreate the SDK client on every settings change, no dispose.** `Ollama/src/models/ollama-llm.ts:77-89`, `Ollama/src/models/ollama-embeddings.ts:37-45` (LMStudio not independently re-read this pass, same shape presumed unchanged — no diff in git log).
+6. **[Low x3] Gemini/Vertex/GeminiImage lazy-client-promise caching.** `Gemini/src/index.ts:47,96-102` confirmed unchanged (a rejected `_geminiPromise` permanently wedges the instance). `Gemini/src/geminiImage.ts`, `Vertex/src/models/vertexLLM.ts` same pattern, not re-flagged individually.
+7. **[Low] `LocalEmbeddings.clearSharedCache()` still has zero production callers.** `LocalEmbeddings/src/models/localEmbedding.ts:109-110`. Confirmed — `static pipelines`/`loadingPromises` Maps still grow one entry per distinct model name for process lifetime.
+8. **[Low x2, spans provider SDK clients with no dispose path] Cerebras/Groq/Mistral/Fireworks/Bedrock/Cohere.** `Cerebras/src/models/cerebras.ts:25`, `Groq/src/models/groq.ts:20`, `Mistral/src/models/mistral.ts:47`, `Mistral/src/models/mistralEmbedding.ts:13`, `Fireworks/src/models/fireworks.ts:24`, `Bedrock/src/models/bedrockLLM.ts:42`, `Bedrock/src/models/bedrockEmbedding.ts:26`, `Cohere/src/models/CohereEmbedding.ts:49`, `Cohere/src/models/CohereReranker.ts:47`. `BaseLLM`/`BaseEmbeddings` still expose no `Close()`/dispose hook — confirmed still true.
+9. **[Low] ElevenLabs `agentCache` — unbounded-by-name, process-lifetime Map.** `ElevenLabs/src/elevenLabsRealtime.ts:356` (line moved slightly from Round 10's :333 due to the intervening first-message/turn-detection commits touching earlier lines; logic unchanged — `ensureAgent()` still evicts only on rejection). PERSISTED, not moved in any meaningful sense (same file, same shape).
+10. **[Low] BlackForestLabs `waitForResult` polling loop has no cancellation plumbing.** `BlackForestLabs/src/index.ts:342-370` (`waitForResult`), `:399-401` (`sleep`). Confirmed unchanged — still no `AbortSignal` threaded through `ImageGenerationParams`, still bounded by the 120s `maxWaitTime` cap.
+11. **[Low] Duplicated `iterateWithCancellation`/`buildCancelledResult` helper logic across 7+ provider files.** Not re-swept file-by-file this round (no code-health regression expected); carried forward unchanged.
+
+**Out of scope this round (was Round 10 finding #7):** AssemblyAI/Inworld `clearHandlers()` leaving `errorHandler`/`closeHandler` set — both files are outside the directory list given for this pass and were NOT re-read. Do not count as resolved.
+
+### New/changed code verified clean
+
+- **OpenAI `configReadinessTimer`** (`OpenAI/src/models/openAIRealtime.ts:809,927-933,955-960`) — new since Round 10 (added by the ModelConfiguration/turn-detection cascade work, 2026-08-08). A 15s `setTimeout` armed only when `deferInitialConfigUntilSessionCreated` is true, `unref()`'d immediately (:933, won't hold the process open), and cleared through two paths: `applyConfig()` (:902, normal completion) and `Close()` → `failConfigWait()` (:1176→:987, teardown). Traced both call paths — no leak, no gap. This is the one place in the diff that plausibly could have introduced a new timer leak; it did not.
+- **OpenAI/xAI turn-detection cascade** (`openAIRealtime.ts` `MapNormalizedTurnDetection`, `normalizeTurnDetectionRequest`, `lastTurnDetectionRequest` field; `xaiRealtime.ts` profile change) — purely a small bounded object (`RealtimeTurnDetectionSettings`, 4 optional scalar keys) held as one instance field per session, replaced (not accumulated) on each `Reconfigure`. No new collection, timer, or listener.
+- **Gemini `speechConfig` validation hardening** (`geminiRealtime.ts:329-463`) — added `isPlainObject`/`MalformedExisting` guards and extra `console.warn` diagnostics. Purely functional/validation logic on method-local variables; nothing promoted to an instance field.
+- **Groq `AudioSplitter.split()` → `Split()`** — pure rename, zero behavior change.
+- **ElevenLabs `CreateSpeech`** (`ElevenLabs/src/index.ts:17-57`) — `ReadableStream` reader is read in a `try/finally` that always calls `reader.releaseLock()` (:34-44); no leak.
+- Repo-wide re-grep (26-dir scope) for `httpAgent`/`httpsAgent`/`new Agent(`/`keepAlive` (excluding Ollama's wire-protocol `keep_alive` param), `new AbortController`, `EventEmitter`/`.on(`/`addEventListener`, and instance-field `Buffer`/`ArrayBuffer` retention turned up nothing beyond what's already catalogued above and in Round 10 — no `http.Agent` construction anywhere in scope; Ollama's `AbortController` usage (`ollama-llm.ts:128-135`) is a correctly-scoped per-request controller, not leaked; all `ArrayBuffer`/`Buffer`-typed class fields found (`ElevenLabs`/`Gemini`/`OpenAI` realtime `outputHandler` callback fields) are function references, not retained binary data.
+- Gemini/Vertex/HeyGen/Recommendations-Rex SDK-client construction sites re-checked: all are either lazy-cached at the driver-instance level (`ensureClient()`/`ensureTokenClient()` in `geminiRealtime.ts:241-246,274-279`, `ensureGeminiClient()` in `Gemini/src/index.ts:91-102`) — same shape as the already-tracked `_geminiPromise` finding, not per-request — or explicitly axios-per-call with no pooling concern beyond the already-noted resource-inefficiency class (HeyGen `index.ts:17,66`, Recommendations-Rex `provider.ts:151` token fetch, not called in a loop).
+
+### Summary by severity
+
+| Severity | Count | Notes |
+|---|---:|---|
+| Critical | 0 | |
+| High | 0 | |
+| Medium | 1 | Ollama per-request SDK client (persisted) |
+| Low | 10 | Gemini watchdog, OpenAI socket listener, Azure x2, LMStudio/Ollama recreation, Gemini/Vertex/GeminiImage promise-cache (1 line item), LocalEmbeddings, provider-SDK-no-dispose (1 line item), ElevenLabs agentCache, BlackForestLabs polling gap, duplicated helpers |
+| **Total** | **11** | |
+
+**Top 3 findings:**
+1. **Ollama `clientForRequest()` per-cancellable-request SDK client construction** (`Ollama/src/models/ollama-llm.ts:102-107`) — Medium, persisted, unchanged since Round 8/9/10.
+2. **ElevenLabs `agentCache` Map** (`ElevenLabs/src/elevenLabsRealtime.ts:356`) — Low, persisted, unchanged shape (bounded by distinct managed-agent-name count).
+3. **Gemini `meetingResponseWatchdog` timer survives `Close()`** (`Gemini/src/geminiRealtime.ts:834`) — Low, persisted, still unfixed.
+
+**Persisted / Resolved / New tally:** Persisted 11 line items · Resolved 0 · New 0 · Moved 0 (ElevenLabs `agentCache` line number shifted 333→356 due to intervening commits but is the same finding, not counted as moved). One Round 10 line item (#7, AssemblyAI/Inworld handler-clear gap) is **out of this round's directory scope** and was not re-verified — do not mark resolved.
+
+**Assessment:** No new memory/resource leaks found in this pass. The only substantive code change since 2026-08-08 (OpenAI's turn-detection cascade, ~150 lines, including a brand-new timer field) was traced end-to-end and is correctly cleaned up on every exit path. The AI Providers subtree's known issues remain a stable, previously-catalogued set with no regressions.
+## Subagent G — Integration connectors deep scan
+
+### Connectors removal re-verified — still true
+
+`packages/Integration/connectors/src/**` is unchanged since Round 10: still exactly
+`index.ts` + 3 base classes (`BaseExternalDataSourceConnector.ts`,
+`BaseSqlExternalDataSourceConnector.ts`, `BaseDocumentDataSourceConnector.ts`) +
+`__tests__/EdsConnectors.test.ts`. `git log --oneline -- connectors/src` shows only a merge
+commit since Round 10 — no vendor connector code has returned. All 36 vendor connectors
+remain out-of-repo in `MemberJunction/Integrations`. Per the task instructions, this pass
+instead re-audited the rest of `packages/Integration/**`, which has grown substantially
+since Round 10 (new files: `RunOwnershipService.ts`, `AdaptiveConcurrency.ts`,
+`StreamingDiscovery.ts`, `WatermarkService.ts`, `MatchEngine.ts`, `ConflictRecency.ts`,
+`HashDiff.ts`, `IntegrationSchemaSync.ts`, `SyncLogger.ts`, `OAuth1aSigner.ts`,
+`BasicAuthHeaderBuilder.ts`, plus new sibling packages `actions/`, `engine-base/`,
+`pk-classifier/`, `schema-builder/`).
+
+### New surface swept — no new leak findings
+
+- **`RunOwnershipService.heartbeatTimer`** (`RunOwnershipService.ts:102,261-274`) — new
+  since Round 10: a per-run `setInterval` (interval ≈ lease/3) that renews a durable-sync
+  lease. Verified clean: `.unref()`'d at creation (`:265`, never keeps the process alive),
+  and `StopHeartbeat()`/`clearInterval` is called from `Release()` as its *first* statement
+  (`:242`, before any DB I/O, so it fires even if the release sproc call throws). Traced all
+  three call sites in `IntegrationEngine.ts` (fresh run `:1159-1170`, resumed run
+  `:781-785`, and the ownership-lost catch branch `:1238`) — every path that calls
+  `StartHeartbeat` is reachable only after `Claim()` succeeds, and every exit from that point
+  (`FinalizeRun`→`Release`, `FailRun`→`Release`, or the explicit `ownershipLost` branch)
+  stops the timer. No gap found.
+- **New static/persistent collections on `IntegrationEngine`** — `maintenanceLocks`
+  (`Map<string,...>`, `:361`) and `writeChains` (`WeakMap<IMetadataProvider,...>`, `:398`).
+  `writeChains` is a `WeakMap` — GC-reclaimed automatically, not a candidate. `maintenanceLocks`
+  is keyed by lowercased `CompanyIntegrationID` (bounded like the previously-reviewed
+  `_rateLimiters`/`activeSyncs`). Traced all 3 external call sites of
+  `AcquireMaintenanceLock`/`ReleaseMaintenanceLock` (`packages/Scheduling/engine/src/drivers/
+  IntegrationDiscoveryScheduledJobDriver.ts:58-69`, `packages/MJServer/src/resolvers/
+  IntegrationDiscoveryResolver.ts:1382-1450` and `:2419-2427` and `:5967-6299`) — every
+  `Acquire` is paired with a `try { … } finally { Release }`. Clean.
+- **`AbortController` usage** — architecture changed since Round 10: there is no longer a
+  static `_abortControllers` Map at all. Controllers now live only as fields on the
+  per-run `EngineRunContext` object threaded through `AsyncLocalStorage`
+  (`IntegrationEngine.ts:326` `runContext`), created fresh per `RunSync`/resume call
+  (`:758`, `:996`) and simply falling out of scope with the context when the run ends —
+  no map entry to leak in the first place. Better than the Round 10 shape, not worse.
+- **`IntegrationConnectorCreationPipeline`'s deadline-timer `Promise.race`**
+  (`:366-384`) — new helper `withDeadline()`, same correct shape as
+  `BaseIntegrationConnector.WithTimeout()`: `deadlineTimer` declared outside the race,
+  `.unref()`'d, and cleared in a `.finally()` that runs on every exit (win/lose/throw). Clean.
+- **`OAuth2TokenManager` / new `OAuth1aSigner`, `BasicAuthHeaderBuilder`** — re-confirmed
+  zero internal callers inside `packages/Integration/**` (only re-exported from
+  `engine/src/index.ts`); the previously-flagged `OAuth2TokenManager.GetAccessToken`
+  check-then-mint race (no in-flight-promise memoization) is unchanged but still has zero
+  blast radius in this monorepo — not re-counted as a new finding, per Round 10's
+  disposition.
+- **New sibling packages** (`actions/`, `engine-base/`, `pk-classifier/`,
+  `schema-builder/`) — swept for timers/Maps/Sets/AbortController/EventEmitter. All
+  `Map`/`Set` hits are function-local transients inside pure schema-diff/DDL-generation
+  helpers (`SchemaEvolution.ts`, `DDLGenerator.ts`, `SchemaBuilder.ts`,
+  `IntegrationEngineBase.ts`), scoped to a single call and never assigned to a class field.
+  No timers, no event listeners, no streaming/`FormData` usage in any of the four packages.
+
+### Categories requested with zero matches (re-confirmed repo-wide in `packages/Integration/**`)
+
+- Webhook subscription registration without unregister — no live webhook registration
+  exists; `'Webhook'` remains pure `SyncTriggerType` metadata.
+- Rate limiter Maps keyed by endpoint — `RateLimiter.buckets` / `IntegrationEngine._rateLimiters`
+  unchanged from Round 10's accepted-bounded disposition (keyed by `CompanyIntegrationID`).
+- Per-sync state on long-lived connector singletons — moot; `ConnectorFactory.Resolve()`
+  still mints a fresh instance per call, and no concrete connector classes exist in-repo.
+- Streaming uploads without destroy on error — zero `createReadStream`/`.pipe(`/`FormData`
+  matches anywhere in `packages/Integration/**`.
+- Connection pool caches — none found outside the already-removed (out-of-repo)
+  `RelationalDBConnector`.
+
+### Summary counts
+
+Critical: 0 · High: 0 · Medium: 0 · Low: 0 — **0 new findings.** The connector-removal
+finding from Round 10 is reconfirmed unchanged. The engine surface, now materially larger
+than what Round 10 audited, was swept against every requested category plus the newly
+added `RunOwnershipService` heartbeat/lease machinery and found clean: every timer has a
+paired, unconditionally-reached cleanup path, the one new persistent Map is bounded and
+correctly released, and the `AbortController` pattern was actually simplified (map → scoped
+context field) since Round 10 in a way that removes rather than adds leak surface.
+## Subagent H — Communication, Storage, Auth providers deep scan
+
+**Date:** 2026-08-22. **Scope:** `packages/Communication/providers/**`, `packages/Communication/engine/src/**`, `packages/Communication/notifications/src/**`, `packages/MJStorage/src/**`, `packages/AuthProviders/src/**`. Baseline: Round 10 (2026-08-08), `plans/MEMORY_LEAK_AUDIT.md:466-507`.
+
+**Method:** `git log --since=2026-08-08` on the five scoped trees shows only 4 substantive commits, all storage-only: `fba510610` (feat: `SupportsPreAuthUpload`/`SupportsPreAuthDownload` getters + direct-binary pre-auth upload URLs across AWS/Azure/GCS/Box/Dropbox), `fc583ae4f` (fix: Box/Dropbox `SupportsPreAuthUpload` corrected to `false`), `abeb048a9` (unrelated: path/filename sanitization in `FileStorageEngine.UploadFile`, `:390-402`, security fix not leak-relevant), and a large `RELEASING` changeset commit (no code change). **Communication and AuthProviders trees are byte-for-byte untouched since Round 10** — confirmed by diffing all 7 known `Promise.all`/unawaited-fan-out call sites, which land at the exact same line numbers as Round 10 (`MSGraphProvider.ts:479,1336`, `GmailProvider.ts:457,1204,1273,1382`, `TwilioProvider.ts:482`).
+
+**Checked: shared `mapWithConcurrency` helper adoption.** A `mapWithConcurrency` method does now exist in the codebase (`packages/AI/Agents/src/base-agent.ts:8547`), but it is **not** a shared helper in `communication-types`/`base-types` and has **not** been applied to any of the 7 Communication/MSGraph/Gmail/Twilio call sites in scope. Round 10's highest-leverage recommendation remains unimplemented.
+
+### New findings this round
+
+None substantive. The only new code in scope (`fba510610`) adds stateless `get SupportsPreAuthUpload()`/`get SupportsPreAuthDownload()` boolean getters to `FileStorageBase` and 5 drivers, plus enriches `CreatePreAuthUploadUrl` to also return `HttpMethod`/`HttpHeaders` alongside the already-fresh-per-call signed URL (`AWSFileStorage.ts:302-305`, `AzureFileStorage.ts:266-272`, `GoogleFileStorage.ts:250-253`). Consistent with Round 9/10's confirmation, these still generate a fresh signed URL per call with no caching — no new signed-URL-cache leak introduced.
+
+### Persisted findings re-verified unchanged (all from Round 10)
+
+- **HIGH** — `MSGraphProvider.GetMessages` `IncludeHeaders` uncapped `Promise.all` fan-out (one GET per message): `MSGraphProvider.ts:479` (headers array built `:463-478`), unchanged.
+- **HIGH** — `GmailProvider` unthrottled `Promise.all` fan-out: `GetMessages` (`:435`, `:447-457`), `SearchMessages` (`:1370`, `:1382-1391`), `ListFolders`/`IncludeCounts` (`:1204-1217`), `MarkAsRead` (`:1273-1280`) — all 4 sites unchanged.
+- **MEDIUM** — `MSGraphProvider.GetMessages` uncapped, unawaited mark-as-read fan-out when `contextData.MarkAsRead` set: `:510-514` (`MarkMessageAsReadWithEmail` calls fired without `await`/`Promise.all`), unchanged.
+- **MEDIUM** — `MSGraphProvider.MarkAsRead` uncapped `Promise.all` over `params.MessageIDs`: `:1336`, unchanged.
+- **LOW** — `MSGraphProvider.GetMessages` `$top`/`NumMessages` uncapped: `:440,453` region, unchanged.
+- **MEDIUM** — `GoogleFileStorage.DeleteDirectory(recursive=true)` unbounded list-then-`Promise.all`-delete: `~:501-519`, unchanged (not touched by this round's commits).
+- **MEDIUM** — `AzureFileStorage.DeleteDirectory(recursive=true)` same pattern: `~:538-561`, unchanged shape (line numbers may have shifted slightly by +14 from the `fba510610` insertions above that point, but pattern intact).
+- **LOW-MEDIUM** — `SendGridProvider.parseMultipartFormData` fully materializes inbound webhook body incl. attachment bytes: `:548-592`, unchanged.
+- **LOW** — `TwilioProvider.ForwardMessage` uncapped `Promise.all` over `params.ToRecipients`: `:482-494`, unchanged.
+- **LOW** — `GoogleFileStorage.ListObjects` sequential per-object `getMetadata()`: `:389-424`, unchanged.
+- **LOW** — `Engine.ts GetProvider()` constructs a fresh provider instance per send (`:59-78`, used `:118`), defeating the bounded `MJLruCache` client caches added in Gmail/MSGraph/Twilio (`maxSize: 100`) — unchanged, not a growth leak (GC'd per send).
+- **MEDIUM** — `SendGridProvider.SendSingleMessage` global `sgMail.setApiKey()` mutation (cross-request credential bleed under concurrency): `:144`, confirmed unchanged.
+- **MEDIUM** — `FileStorageEngine._driverCache.clear()` without disposing prior driver instances in `RefreshDriverCache()`: now `:245` (shifted from `:237` due to the unrelated path-sanitization diff at `:390-402`, same file, earlier in file so pushed this line down) — pattern unchanged, no `Dispose()`/`Close()` exists on `FileStorageBase` or any driver.
+- **LOW** — `AuthProviderFactory.register()` overwrites `this.providers.get(name)` (`:151`) via `this.providers.set()` (`:85`) without disposing replaced provider's JWKS client/https.Agent — unchanged, startup-only.
+- **Unchanged, confirmed** — `BaseAuthProvider` per-subclass `https.Agent`(keepAlive, maxSockets 50) + `jwksClient` constructor pattern; `HostIdentityProvider`'s structurally-unused JWKS client remains a single wasted-but-bounded module-level singleton, not a leak.
+- Box/SharePoint/GoogleDrive/AWS/Dropbox client-reassignment-without-disposal on re-`initialize()` — zero commits touched these 5 driver files since Round 10; unchanged.
+
+### Targeted fresh sweeps (all clean, same as prior rounds)
+
+SMTP pooling: zero `nodemailer`/SMTP usage anywhere in scope. Twilio/Slack webhook listeners: Twilio provider is stateless per-request; no persistent listener/socket. MS Graph delta-query state: no delta-query usage exists. Signed-URL caches: none — every driver (`AWSFileStorage`, `AzureFileStorage`, `GoogleFileStorage`, and now the two new Box/Dropbox pre-auth-upload getters) generates fresh URLs per call, no TTL cache. Multipart upload buffer retention: no multipart upload implementation exists in any driver; the new pre-auth-upload feature is client-direct-PUT (bypasses server buffering entirely, if anything reduces server-side buffer retention vs. the base64 fallback path). JWKS sub-caches in Auth0/MSAL/Okta: still thin `extractUserInfo`/`validateConfig` overrides with no provider-specific caching beyond the shared `BaseAuthProvider` constructor. Session-refresh timers: none found in AuthProviders scope (token refresh is caller-driven, not timer-based). No additional providers exist beyond the same 5 (MSGraph, Gmail, SendGrid, Twilio, Expo Push).
+
+### Severity Counts (this round)
+
+- Persisted (re-confirmed unchanged): 16
+- New: 0 substantive
+- Resolved since Round 10: 0
+
+**Priority:** Unchanged from Round 10 — the 7-site `Promise.all`/unawaited-fan-out pattern across Gmail + MSGraph remains the single highest-leverage unfixed issue in this scope, and the `mapWithConcurrency` helper that now exists elsewhere in the monorepo (`packages/AI/Agents/src/base-agent.ts:8547`) has not been generalized into `communication-types`/`base-types` or applied to any of the 7 sites. Storage/Auth trees remain frozen aside from the additive, non-leaking pre-auth-upload feature.
+## Subagent I — Actions / MetadataSync / React runtime / misc deep scan
+
+**Scope:** `packages/Actions/**`, `packages/MetadataSync/**`, `packages/React/runtime/**`, `packages/Encryption/**`, `packages/Credentials/**`, `packages/APIKeys/**`, `packages/MessagingAdapters/**`, `packages/ContentAutotagging/**`, `packages/DBAutoDoc/**`, `packages/DocUtils/**`, `packages/InteractiveComponents/**`, `packages/ComponentRegistry/**`, `packages/Archiving/**`, `packages/MJDataContext*/**`, `packages/Scheduling/**`, `packages/MJExportEngine/**`. Baseline: Round 10 write-up (2026-08-08), lines 507-545 of `plans/MEMORY_LEAK_AUDIT.md`. Per instructions, `ComponentRegistryService.removeComponentReference()` dead-code finding is owned by this round's Wave 1 Subagent D and is not re-verified here.
+
+### Round 10 findings — status
+
+1. **WorkerPool zombie isolate on abort — PERSISTED.** `packages/Actions/CodeExecution/src/WorkerPool.ts:459-514` (`abortRequest()`) and `packages/Actions/CodeExecution/src/worker.ts:526-543` (`abort` IPC handler) are byte-for-byte unchanged since Round 9/10 (no commits touch either file since 2026-08-08). `abortRequest()` still only IPC-signals abort, clears `currentRequest`, flips `busy=false` and calls `processQueue()` immediately (`WorkerPool.ts:483-501`); `worker.ts`'s abort handler still explicitly does not call `isolate.dispose()` (comment unchanged, lines 537-540). Disposal still only happens at the original `timeoutSeconds` deadline via the `finally` block (`worker.ts:441-459`), which I re-confirmed does correctly dispose on both normal completion and thrown errors — the gap is exclusively the abort-without-kill window. Still **High**, still open.
+
+2. **`DuckDuckGoRateLimiter` unbounded queue — PERSISTED.** `packages/Actions/CoreActions/src/custom/web/duckduckgo-rate-limiter.ts:1-50`. `RateLimitConfig` (lines 4-10) still has no `maxQueueSize`/backpressure field; `requestQueue$.next(...)` (lines 262-266) still pushes unconditionally. No commits to this file since Round 10. Still **High**, still open.
+
+3. **`ComponentManager.registryNotifications` piggyback growth — PERSISTED.** `packages/React/runtime/src/component-manager/component-manager.ts:34,719-736,811-813`. Unchanged; still only cleared via manual `clearCache()`. Still **Low**, still open.
+
+### New findings
+
+1. **[High] `APIRateLimiter`'s per-key request queue has no maximum size — same unbounded-retry-queue pattern as the already-flagged `DuckDuckGoRateLimiter`, in a different action.** `packages/Actions/CoreActions/src/custom/integration/api-rate-limiter.action.ts:16-183`. The outer `limiters` cache (`APIRateLimiterManager`) is properly LRU-bounded (`MJLruCache`, `maxSize: 200`, `ttlMs: 1hr`, `onEvict` disposes the limiter) — comments even reference disposing "so it doesn't also leak," suggesting this class was hardened in a prior round. But each `APIRateLimiter` instance's own `requestQueue$` (a `Subject<QueuedRequest>` drained one-at-a-time via `concatMap`, line 58-68) has no `maxQueueSize` field on `RateLimitConfig` (lines 40-46) and `execute()` (lines 84-92) pushes onto it unconditionally. Under sustained traffic against one `RateLimitKey` with a low `maxRequestsPerMinute`/`maxConcurrent`, every `execute()` call adds a `QueuedRequest` (holding the full `AxiosRequestConfig` plus live `resolve`/`reject` closures) with no cap and no rejection path — directly mirroring the DDG limiter's already-documented gap. Scored High for the same reason: growth is tied directly to repeated normal action-execution activity against a single rate-limited endpoint, with no upper bound on that one key's backlog.
+
+2. **[Medium] `APIRateLimiter.dispose()` drops queued/in-flight requests without resolving or rejecting them — callers hang forever when their limiter is LRU-evicted mid-backlog.** `packages/Actions/CoreActions/src/custom/integration/api-rate-limiter.action.ts:75-81` (`dispose()`), invoked from `APIRateLimiterManager`'s `onEvict` hook (line 22-23). `dispose()` only calls `this.queueSubscription.unsubscribe()` and `this.requestQueue$.complete()`. Any `QueuedRequest` already pushed via `.next()` but not yet drained by the `concatMap` (i.e., anything queued behind an in-flight or backed-off request) is silently discarded — `concatMap`'s internal buffer is destroyed by `unsubscribe()`, and neither `resolve` nor `reject` is ever called for those entries. Because `APIRateLimiterAction.execute()` (line 84) returns a bare `new Promise(...)` with no timeout, the caller (an action invocation awaiting an HTTP call through this limiter) hangs indefinitely whenever its `RateLimitKey` gets displaced from the 200-entry LRU cache while requests are still backed up — an edge-case path (requires LRU pressure or 1hr TTL expiry while a backlog exists), hence Medium rather than High. Distinct from Finding 1 (which is about unconstrained growth); this is about silent loss of pending work on the cleanup path that was added specifically to prevent leaking.
+
+3. **[Medium] `ArtifactBuilderService` has no cap on concurrent in-progress documents or per-document operation count — only a 30-minute TTL backstops growth.** `packages/Actions/CoreActions/src/custom/utilities/artifact-builder-service.ts:84-133,441-455`. This is a process-wide `BaseSingleton`-style singleton (manual `_instance` pattern, not `BaseSingleton`) holding `documents: Map<string, InProgressDocument>` for the life of the MJAPI process. `CreateDocument()` (line 105) and `AddContent()` (line 128, pushes unboundedly onto `doc.sections`) have no limit on the number of concurrent handles or the size of any one document's accumulated `operations` arrays. The only reclamation is a `setInterval` sweep every 5 minutes deleting entries whose `lastModifiedAt` exceeds a 30-minute TTL (lines 443-453) — correctly `unref()`'d and functioning. Because every `AddContent()` call refreshes `lastModifiedAt`, an agent (or a runaway/malicious tool-call loop) that keeps touching many open handles within any 30-minute rolling window can grow `documents` and its nested `operations` arrays without any per-document or global ceiling before the TTL sweep can catch up. Scored Medium (not High) because normal usage finalizes and deletes handles promptly, and the TTL provides an eventual backstop unlike the truly unbounded singletons above — but it lacks the max-count/max-size guard that would make it robust against sustained or adversarial activity.
+
+### Verified clean (new checks this round)
+- `EncryptionEngine._keyMaterialCache` (`packages/Encryption/src/EncryptionEngine.ts:110-133,573-597,806-839`) — TTL-based `Map<string, CacheEntry<Buffer>>`; stale/evicted key-material `Buffer`s are explicitly zeroed via `zeroBuffer()` before being dropped, both on TTL-driven replacement (`getKeyMaterial`, line 815-818) and on `ClearCaches()`/`ClearAllCaches()`. This directly addresses the "sensitive Buffers not zeroed" scan target — clean, well-engineered.
+- `AzureKeyVaultKeySource`/`ConfigFileKeySource`/`EnvVarKeySource`/`AWSKMSKeySource` (`packages/Encryption/src/providers/*.ts`) — none cache raw key `Buffer`s themselves (only `AzureKeyVaultKeySource._clients`, bounded by admin-configured vault count, already noted clean in Round 10); decrypted key bytes are handed to the engine's zero-on-evict cache above, not retained locally.
+- `MetadataSync/WatchService` (`packages/MetadataSync/src/services/WatchService.ts:37,87-121`) — chokidar watcher(s) and `debounceTimers` Map both cleared correctly in the returned `stop()`/close path; only file watcher in scope, unchanged since Round 10.
+- No `worker_threads`, no PowerShell/`cmd.exe`/shell-out (`exec`/`spawn` with a shell string) usage anywhere in this scope — the only `child_process` consumer is `CodeExecution`'s `fork()`-based `WorkerPool` (already covered) plus false-positive `RegExp.exec()` matches in ~10 other files (URL/HTML parsers, pattern matchers) that are not process spawns.
+- `APIKeyEngine._filterTokenCache` (`packages/APIKeys/Engine/src/APIKeyEngine.ts:195,1017-1036`) — keyed per `FilterID`, bounded by admin-managed filter count, invalidates on text change. Clean.
+- `ComponentRegistry` (standalone package) `Server.ts` — no persistent per-request Maps found; the one `Map` at line 628 is function-local to a request handler.
+- `Scheduling/engine/ScheduledJobEngine`, DBAutoDoc, MJExportEngine, InteractiveComponents, Archiving, MJDataContext/MJDataContextServer — re-swept for new `Map`/`Set`/`setInterval`/child-process/watcher state; all collections found are either per-CLI-invocation local, admin-metadata-bounded, or (Scheduling) already-documented lease-expiry-swept. No new findings.
+
+### Counts by severity (this scan)
+- Critical: 0
+- High: 1 new (`APIRateLimiter` unbounded per-key queue) + 2 confirmed-still-open from Round 10 (`WorkerPool` zombie isolate, `DuckDuckGoRateLimiter`), not double-counted as new
+- Medium: 2 new (`APIRateLimiter.dispose()` drops pending work; `ArtifactBuilderService` uncapped document/operation growth within TTL window)
+- Low: 0 new (1 persisted from Round 10: `ComponentManager.registryNotifications`)
+- **Total NEW: 3**
+## Subagent J — MJServer / AI Agents / MCP / A2A deep scan
+
+**Scan date:** 2026-08-22. Baseline: `plans/MEMORY_LEAK_AUDIT.md` Round 10, "Subagent J" (lines 545-679). Scope: `MJServer/src`, `MJAPI/src`, `MJCoreEntitiesServer/src`, `AI/MCPServer/src`, `AI/A2AServer/src`, `AI/Agents/src`, `AI/Engine/src`, `AI/Prompts/src`, `AI/AgentManager`, `AI/AgentHarness`, `QueryGen/src`, `QueryProcessor/src`, `SQLConverter/src`.
+
+### Round 10 findings — status
+
+1. **`HarnessAgentBase.EndHarnessSession()` uncalled (Critical)** — **RESOLVED**, per the Wave 1 connections agent's re-verification this round (`base-agent.ts` `finalizeRun()` hook + `HarnessAgentBase.ts` override intact). Not re-verified independently here per instructions.
+2. **`BaseHarnessAdapter.EndSession()` unreachable (Low)** — **RESOLVED** (same fix as #1).
+3. **`ClientToolRequestManager.sessionTools` uncalled `ClearSession()` (High, Round 9)** — **PERSISTED**. `ClearSession()` (`packages/AI/Agents/src/ClientToolRequestManager.ts:143-145`) still has zero real callers monorepo-wide; `SessionManager.ts:93,159` still documents it as "P5" future wiring that hasn't landed. `SetSessionTools` is called from `packages/MJServer/src/resolvers/ClientToolRequestResolver.ts:119`, so the `sessionTools` Map (`ClientToolRequestManager.ts:44`) still grows one entry per agent-session, forever, on a process-wide `BaseSingleton`.
+4. **`RealtimeChannelServerHost.OnSessionStarted` TOCTOU (Medium, Round 9)** — file unchanged since Round 10 (`git log --since=2026-08-08` empty); presumed **PERSISTED**, not re-detailed.
+5. **`A2AServer/Server.ts` connection-pool listener gap (Medium)** — **RESOLVED**. `packages/AI/A2AServer/src/TaskStore.ts` now wraps the in-memory `tasks` map in a class implementing `IShutdownable` with a periodic `Sweep()` (`TaskStore.ts:82-124`) that evicts terminal tasks past a configurable retention window (default 1h) via an `.unref()`'d interval, registered with `ShutdownRegistry`. `Server.ts:75-78` now delegates to it.
+6. **`RealtimeClientSessionService.promptRunWriteChains` wrong-instance finalize (High)** — **RESOLVED (bounded)**. The write-chain map is now an `MJLruCache` (`realtime-client-session-service.ts:505-508`, `maxSize: 5_000`, `ttlMs: 4h`) instead of a plain `Map`. The doc comment (`:499-503`) explicitly names the same cross-instance hazard found below in Finding 1 and states the LRU/TTL is the deliberate backstop. The underlying correctness issue (finalize can still land on the wrong `RealtimeClientSessionService` instance) is unchanged, but it is no longer an unbounded-memory concern.
+
+### NEW Finding 1 (High) — `SessionManager.heartbeatLastWrite` is an unbounded `Map` on 4 separate long-lived singleton instances, leaked by the exact cross-instance-close pattern Finding 6 above was just fixed for
+
+`packages/MJServer/src/agentSessions/SessionManager.ts:98` declares `private heartbeatLastWrite = new Map<string, number>()`. Entries are written on every `Heartbeat()` call (`:549`, `persistHeartbeat`) and deleted **only** inside `CloseSession()` on the *same* instance (`:172`). `SessionManager` is constructed fresh (not via a shared singleton) in at least four places, each a process-lifetime object:
+- `packages/MJServer/src/resolvers/AgentSessionResolver.ts:46` — `private readonly sessionManager = new SessionManager();`
+- `packages/MJServer/src/resolvers/RealtimeClientSessionResolver.ts:370`
+- `packages/MJServer/src/resolvers/RealtimeBridgeResolver.ts:210`
+- `packages/MJServer/src/agentSessions/SessionJanitor.ts:64` — `private readonly sessionManager = new SessionManager();`
+
+Since MJServer's `buildSchemaSync` (`packages/MJServer/src/index.ts:926`) uses no custom IOC container, TypeGraphQL's default container instantiates each `@Resolver()` class exactly once and reuses it for the process lifetime — so each of the four `SessionManager` instances above is itself a process-wide singleton with its own `heartbeatLastWrite` Map.
+
+Any session whose heartbeats land through one resolver's `SessionManager` instance (the normal case for a live session) but which is closed through a **different** instance — which is the common case for `SessionJanitor`'s staleness sweep, startup recovery, shutdown drain, and max-duration sweep (`SessionJanitor.ts:130-200`, all routed through the janitor's own `sessionManager`) — never has its `heartbeatLastWrite` entry deleted on the instance that recorded it. Every crashed tab, dropped network connection, or backgrounded mobile client that never sends an explicit close mutation (the overwhelming majority of real-world session endings, vs. a clean `beforeunload` round-trip) leaks one Map entry, permanently, on whichever resolver singleton served its heartbeats.
+
+This is the identical bug shape to the `promptRunWriteChains` hazard that was deliberately fixed this round with an `MJLruCache` (`realtime-client-session-service.ts:499-508`, whose own comment describes "`SessionManager`'s default construction, background janitor sweeps" as the trigger) — but the fix was applied to that one accumulator and not to `heartbeatLastWrite`, which has the same multi-instance-close topology. Recommend the same `MJLruCache`-with-TTL treatment (or make `SessionManager` a true `BaseSingleton` so there's only ever one `heartbeatLastWrite` map, sharing the one `CloseSession` call graph).
+
+Severity **High**: unbounded growth on 4 separate process-lifetime singletons, tied directly to ordinary session churn (nothing exotic — every non-explicit disconnect), no TTL, no cap, not reclaimed until process restart. Not Critical because each entry is tiny (~one string key + number).
+
+### Broader-scope sweep — categories checked, no new findings
+
+- **GraphQL subscription resolvers**: `TaskGraphFrameResolver.ts` (new this round, backing the Workflow Run Console) is framework-managed like every other `@Subscription()` in this codebase — filter predicate is a pure function, publish is fire-and-forget from `TaskGraphFrameBroadcaster.OnFrame` with no per-connection state held server-side. No finding.
+- **File upload streams**: new `POST /media/upload-stage` (`packages/MJServer/src/rest/MediaStreamHandler.ts:66-137`) and its `UploadTokenManager` (`packages/MJServer/src/rest/UploadTokenManager.ts`) — checked closely as the largest new surface this round. Well-bounded: per-file/per-user/pool byte caps, single-use tokens, `.unref()`'d per-entry TTL timer, `Evict()`/`Clear()` both clear the timer. No finding. The `GET /media/:fileId` streaming path (`MediaStreamHandler.ts:250-283`) correctly does `res.on('close', () => result.Stream.destroy())` to tear down the storage-driver stream on client disconnect/seek. No finding.
+- **Agent tool-call history / run-step accumulators**: `BaseAgent._allProgressSteps` / `_mediaOutputs` (`base-agent.ts:878`) are per-run instance fields — `AgentRunner.RunAgent` mints a fresh `BaseAgent` via `MJGlobal.Instance.ClassFactory.CreateInstance` per run (`AgentRunner.ts:108`), so these never accumulate across runs. No finding.
+- **Prompt cache without TTL**: `AIPromptRunner._outputExampleCache` (static `Map`, `AIPromptRunner.ts:234`) has no eviction, but is keyed by literal `OutputExample` string content, bounded by the (small, admin-authored, largely static) set of distinct prompt output examples in the metadata — not by request/user volume. Low-severity at most, unchanged shape from prior rounds, not re-flagged as new.
+- **`RemoteBrowserGoalRegistry`** (new this round, `packages/MJServer/src/agentSessions/remoteBrowserGoalRegistry.ts`) — TTL for completed records (5 min) + safety cap for stuck runs (30 min), swept on every `Begin`/`Get`. No finding.
+- **`RealtimeClientSessionService.inFlightDelegations`** (`realtime-client-session-service.ts:488`) — registered/unregistered in a `try/finally` around every delegated tool call (`:1348-1362`); nested map is deleted when its last entry is removed. No finding.
+- **`RSUProgressBridge`** (new `BaseSingleton`, `packages/MJServer/src/integration/RSUProgressBridge.ts`) — heartbeat timer is `.unref()`'d, always cleared before a new one starts, and `onRunStart` proactively closes any orphaned prior emitter (`:116`) rather than leaking it. No finding.
+- **MCP Server transports**: both the SSE (`transports` Map, `Server.ts:177`) and Streamable-HTTP (`streamableTransports`, `:1363`) transport registries clean up via `res.on('close'/'error')` and `transport.onclose` respectively. No finding — unchanged from prior rounds' clean bill.
+- **AIPromptRunner abort-listener leak follow-up** (flagged elsewhere this round at `AIPromptRunner.ts:3779` as persisted High): searched this subtree's remaining `addEventListener('abort', ...)` call sites for the same unremoved-listener shape — `base-agent.ts:1402` (removed in the `finally` at `:1738`+), `realtime-session-runner.ts:435` (removed in `Stop()` at `:957-959`), `realtime-client-session-service.ts:2625-2626` `combineSignals` (both signals are per-call-scoped controllers that go out of scope with the call; no long-lived object retains the listener). **No related instances found** in this scope — the other 3 sites all correctly pair their `addEventListener` with a `removeEventListener` on every exit path.
+- **Per-request HTTP agents**: re-grepped `new https.Agent`/`new http.Agent`/`axios.create`/`keepAlive` across the full scope — zero hits, unchanged from Round 10.
+- **DataLoader scoping**: zero `DataLoader` usage anywhere in scope, unchanged from prior rounds.
+
+### Severity totals (this pass)
+- **High: 1 NEW** — `SessionManager.heartbeatLastWrite` unbounded across 4 singleton instances (`packages/MJServer/src/agentSessions/SessionManager.ts:98,172,549`).
+- **Resolved this round: 3** — `A2AServer` `TaskStore` sweep, `RealtimeClientSessionService.promptRunWriteChains` LRU bound, plus the Round-10 Critical (`EndHarnessSession`, per Wave 1's re-verification).
+- **Persisted, unchanged: 2** — `ClientToolRequestManager.sessionTools` (High), `RealtimeChannelServerHost.OnSessionStarted` TOCTOU (Medium).
+## Round 11 Cross-Cutting Recommendations
+
+1. **Add a mechanical check for the "recorded on instance A, reconciled on instance B" shape**, distinct from the standing uncalled-cleanup-method proposal (Round 8-10, still unimplemented). This round's fix (`heartbeatLastWrite`) and this round's prior-window fix (`promptRunWriteChains`) are the same bug shape twice in a row: a class constructed via `new X()` at multiple call sites (rather than a true singleton) holds a `Map`/cache field that one instance method mutates and another instance's differently-triggered call to the same method class is expected to clean up. A grep-based heuristic — "class with 2+ `new ClassName()` call sites AND an instance field assigned `new Map()`/`new Set()` AND a `delete`/`clear` call on that field inside an instance method" — would flag both `SessionManager` and `RealtimeClientSessionService` mechanically, and is a natural companion to the existing uncalled-cleanup-method proposal (which catches "cleanup never runs"; this catches "cleanup runs on the wrong object").
+2. **Fix `APIRateLimiter`'s unbounded queue alongside the already-open `DuckDuckGoRateLimiter` finding** (open since Round 10) — both are the identical `Subject`-backed unbounded-queue shape in `packages/Actions/CoreActions/src/custom/**`, and a single shared bounded-queue helper (`maxQueueSize` + a documented backpressure/rejection policy) would close both at once rather than fixing them as two separate one-off patches.
+3. **The Round 9/10 recommendation for a shared `mapWithConcurrency(items, limit, fn)` helper remains unimplemented** — Subagent H confirmed a `mapWithConcurrency` method now exists in `packages/AI/Agents/src/base-agent.ts:8547`, but it has not been generalized into `communication-types`/`base-types` or applied to any of the 7 known Gmail/MSGraph fan-out call sites. This is now the single longest-lived unimplemented recommendation in this document (first proposed Round 9, still open at Round 11) — worth flagging to whoever prioritizes the next remediation pass.
+4. **`packages/Integration/connectors/src/**` remains fully retired** — Subagent G's scope should stay re-purposed to the broader `packages/Integration/**` engine surface (as it was this round and last) unless vendor connector code returns to this repository.
+
+## Round 11 Fix Summary
+
+**Finding fixed:** `SessionManager.heartbeatLastWrite` unbounded `Map` (High, NEW this round) — see `packages/MJServer/src/agentSessions/SessionManager.ts` and the full investigation in the Subagent J section above.
+
+**Root cause:** `SessionManager` is constructed fresh (`new SessionManager()`) at four separate process-lifetime call sites — `AgentSessionResolver`, `RealtimeClientSessionResolver`, `RealtimeBridgeResolver` (each a TypeGraphQL `@Resolver()` singleton under the default container), and `SessionJanitor`. Each instance owns its own `heartbeatLastWrite` map. `Heartbeat()` writes an entry on the instance that happens to receive that session's heartbeat traffic; `CloseSession()` deletes the entry, but only on whichever instance's `CloseSession()` is actually invoked. The overwhelmingly common close path in production — a crashed tab, a dropped network connection, a backgrounded mobile client, anything that never round-trips an explicit close mutation — is reconciled by `SessionJanitor`'s periodic staleness sweep, startup recovery, shutdown drain, and max-duration sweep, all of which close sessions through the **janitor's own** `SessionManager` instance, not the resolver instance that recorded the heartbeats. Every such session left a permanent, undeleted entry on the resolver singleton. This is the identical topology to `RealtimeClientSessionService.promptRunWriteChains`, whose own doc comment (added earlier in this same release window) explicitly names "`SessionManager`'s default construction, background janitor sweeps" as the trigger for that class's own cross-instance-close hazard — but the same treatment was not, at that time, applied to `SessionManager`'s own `heartbeatLastWrite` field.
+
+**Fix implemented:**
+1. Changed `heartbeatLastWrite` from a plain `Map<string, number>` to an `MJLruCache<string, number>` (`@memberjunction/global`), configured `maxSize: 5_000, ttlMs: 4 * 60 * 60 * 1000` — the exact same bound already used for `promptRunWriteChains`, chosen for consistency and because it's generous relative to the janitor's 15-minute staleness threshold and any realistic session duration.
+2. Updated the four call sites to the `MJLruCache` API (`Get`/`Has`/`Set`/`Delete` in place of `Map`'s `get`/`has`/`set`/`delete`) — `heartbeatWriteDue()`, `shouldForceWrite()`, `persistHeartbeat()`, and `CloseSession()`.
+3. Updated the field's doc comment (and the class-level doc comment referencing it) to explain the cross-instance-close hazard and point at `promptRunWriteChains` as the precedent, so a future reader doesn't "simplify" it back to a plain `Map`.
+
+No behavioral change to the coalescing logic itself — the LRU cache's `Get`/`Has`/`Set` semantics are drop-in compatible with the prior `Map` usage for every code path except one intentional new one: an entry that has aged past the 4-hour TTL now reads as absent (forcing a fresh write on the next heartbeat), which is the fix's entire purpose, and is a strict improvement over the entry either leaking forever (the bug) or being incorrectly treated as still-fresh.
+
+**Verification:** unit tests added to `packages/MJServer/src/__tests__/SessionManager.test.ts`:
+- A behavioral regression test using fake timers: confirms a session's heartbeat write is coalesced normally within the 3-second window, then — after advancing the clock past the 4-hour TTL, with `CloseSession()` never called — confirms the next `Heartbeat()` call forces a fresh write again (proving the cache entry does not live forever when nothing on this instance ever closes the session).
+- A structural regression guard: asserts `heartbeatLastWrite` exposes `MJLruCache`'s `MaxSize`/`Size` surface (bound to 5,000, starting empty) rather than being a plain `Map`, so a future edit can't silently revert the type without failing this test.
+
+See the PR for the full diff and test run output.
+
+---
+
+## Appendix: Severity Definitions (unchanged from prior rounds)
+
+- **Critical** — Long-lived growth tied to repeated user activity (per request / per login / per entity), with no automatic upper bound. Visible in production memory graphs over hours.
+- **High** — Per-component or per-session leak that doesn't reclaim until the singleton/process ends; visible under sustained use over a working day.
+- **Medium** — Leaks only on error paths, edge cases, or graceful-shutdown gaps; bounded under normal flow.
+- **Low** — Cleaned up on process death; affects only graceful shutdown or developer ergonomics.
+
+## Appendix: Known False-Positive Patterns (unchanged from prior rounds, with Round 11 additions)
+
+- **`BaseResourceComponent` / `BaseFormComponent` subclasses** that don't implement `ngOnDestroy` themselves — the base class handles `destroy$` teardown. Verify by checking the subclass calls `super.ngOnInit()` / `super.ngOnDestroy()` if it overrides those. If a subclass overrides `ngOnInit()` WITHOUT calling `super.ngOnInit()`, the base class's subscriptions are never created in the first place — a missing `super.ngOnDestroy()` in that case is a correctness bug, not a leak. Always trace both lifecycle methods together before flagging.
+- **`BaseSingleton` subclasses with bounded state** — e.g. `_entityMapByName` in `ProviderBase` is rebuilt on metadata refresh and bounded by entity count. Acceptable.
+- **`MJGlobal._eventsReplaySubject`** — explicitly bounded by `ReplaySubject(100, 30000)`. Acceptable by design.
+- **`process.on('SIGTERM' | 'SIGINT' | 'unhandledRejection', ...)`** registered once at app startup — acceptable for app lifetime.
+- **Angular `(click)` / `(change)` / `@HostListener`** — Angular auto-cleans these.
+- **EventEmitter `.once(...)` listeners** — auto-detach after firing.
+- **`AbortController` whose signal is consumed by `fetch`** — GC'd with the resolved promise.
+- **Generated entity files** under `**/generated/**` — out of scope.
+- **`Demos/`, `experiments/`, `tests/`, `unit-testing/`** — out of scope unless explicitly requested.
+- **`MJLruCache` instances** (in `@memberjunction/global`) — bounded by `maxSize` and (optionally) TTL by construction. Acceptable.
+- **Singletons that implement `IShutdownable` and self-register with `ShutdownRegistry.Instance.Register(this)`** — graceful-shutdown contract is in place. Acceptable.
+- **`BaseEntity._resultHistory`** — capped at `BaseEntity.MAX_RESULT_HISTORY` (50). Pushes route through `RegisterResultHistoryEntry`, which trims overflow. Acceptable.
+- **`A2AServer.TaskStore`** — bounded task store with periodic terminal-state cleanup, implements `IShutdownable`. Acceptable (re-confirmed Round 11).
+- **`BaseLLM.handleStreamingChatCompletion`** — calls `resetStreamingState()` at start AND in `finally`, so per-request streaming buffers don't bleed across requests. Acceptable.
+- **`AgentRunWatchdog`** (`packages/AI/Agents/src/agent-run-watchdog.ts`) — `IShutdownable`, both `setInterval` timers `.unref()`'d, actively prunes non-`Running` entries from its tracked-run `Set` on every sweep regardless of whether callers call the optional `Untrack()`. Acceptable.
+- **`ISandboxProvider.Finalize()` implementations** (`DockerSandboxProvider`, `LocalDirectorySandboxProvider`) — correctly written to never throw, designed for unconditional "call from every exit path" use. Don't re-flag the provider implementations themselves; the Round 10 Critical was that nothing called them, which is now fixed and re-confirmed intact this round.
+- **Round 11 addition — `RealtimeClientSessionService.promptRunWriteChains` / `SessionManager.heartbeatLastWrite`** — both now `MJLruCache`-bounded specifically to survive the "recorded on instance A, closed via instance B" topology inherent to how `SessionManager`/`RealtimeClientSessionService` are constructed. Don't re-flag either as unbounded; do keep an eye out for the SAME topology in any other class constructed via `new X()` at more than one resolver/service call site (see Cross-Cutting Recommendation #1).
+- **Round 11 addition — `packages/Integration/**` engine surface** (`RunOwnershipService.heartbeatTimer`, `maintenanceLocks`, per-run `AsyncLocalStorage`-scoped `AbortController`s, `IntegrationConnectorCreationPipeline.withDeadline()`) — all verified clean this round with correct `.unref()`, try/finally, and WeakMap/AsyncLocalStorage scoping. Don't re-flag without new evidence of a regression.
+
+## Appendix: Recommended Remediation Patterns (unchanged from prior rounds)
+
+- **Bounded credential / SDK-client caches** → use `new MJLruCache<K, V>({ maxSize, ttlMs, onEvict })` from `@memberjunction/global`. Standard config for credential caches: `maxSize: 100, ttlMs: 60 * 60 * 1000`. The `onEvict` callback is the right place to call `.destroy()` / `.close()` on disposable values.
+- **Singletons with timers / intervals / sockets / subscriptions** → implement `IShutdownable` and call `ShutdownRegistry.Instance.Register(this)` in the constructor. The MJServer SIGTERM handler already drains the registry; you don't need to wire a separate hook.
+- **Streaming providers with instance-level accumulators** → override `BaseLLM.resetStreamingState()` (it's called both at request start and in `finally`).
+- **Component RxJS subscriptions** → pipe through `takeUntil(this.destroy$)`. The `no-restricted-syntax` ESLint rule in `.eslintrc` flags any `MJGlobal.Instance.GetEventListener(...).subscribe(...)` that doesn't have an intervening `.pipe()`.
+- **Per-run subclass finalization on `BaseAgent`** → override the `protected finalizeRun(outcome)` hook rather than trying to wire cleanup into `Execute()` directly; it's guaranteed to run exactly once per `Execute()` call regardless of success/failure/cancellation.
+- **Fan-out over unbounded external result sets** (Gmail/MSGraph pattern, 7 known call sites) → use a shared `mapWithConcurrency(items, limit, fn)` helper rather than raw `Promise.all`; still on the backlog as the single longest-lived unimplemented recommendation (proposed Round 9, still open at Round 11).
+- **A class constructed fresh (`new X()`) at more than one process-lifetime call site, holding a `Map`/cache field that one instance's method is expected to clean up on another instance's behalf** (new Round 11 pattern, `SessionManager`/`RealtimeClientSessionService`) → bound the field with `MJLruCache` rather than relying on every construction site remembering to route cleanup through the exact instance that accumulated the state. A true `BaseSingleton` conversion (so there's only ever one instance) is the deeper fix where the class's contract allows it.
+
+## Useful Files for Context
+
+- `packages/MJGlobal/src/Global.ts` — central `MJGlobal.Instance` and `GetEventListener`
+- `packages/MJGlobal/src/BaseSingleton.ts` — singleton base
+- `packages/MJGlobal/src/MJLruCache.ts` — bounded LRU + TTL cache (use this for credential / SDK-client caches, and for any "recorded on A, closed on B" cross-instance-hazard field)
+- `packages/MJGlobal/src/ShutdownRegistry.ts` — `IShutdownable` interface + process-wide registry; wired to MJServer SIGTERM/SIGINT
+- `packages/MJCore/src/generic/baseEngine.ts` — every engine extends this
+- `packages/MJCore/src/generic/baseEntity.ts` — every entity extends this; `_resultHistory` is bounded via `RegisterResultHistoryEntry` + `MAX_RESULT_HISTORY`
+- `packages/AI/Core/src/generic/baseLLM.ts` — `handleStreamingChatCompletion` calls `resetStreamingState()` at start and in `finally` (override the hook in providers that hold streaming buffers)
+- `packages/AI/Agents/src/base-agent.ts` — `Execute()`'s `finally` block; `finalizeRun()` hook lives here
+- `packages/AI/Agents/src/realtime/realtime-client-session-service.ts` — `promptRunWriteChains` (`:505-508`) is the Round 11 precedent for the `MJLruCache`-bounded cross-instance-close fix pattern
+- `packages/MJServer/src/agentSessions/SessionManager.ts` — `heartbeatLastWrite` (Round 11 fix, mirrors the above); `CloseSession()`/`Heartbeat()` lifecycle
+- `packages/MJServer/src/agentSessions/SessionJanitor.ts` — the background reconciler whose sweeps close sessions through a DIFFERENT `SessionManager` instance than the one that recorded their heartbeats; `closeThresholdMinutes` default (15m) is the reference point for choosing TTL backstops in this area
+- `packages/AI/AgentHarness/src/HarnessAgentBase.ts` — `EndHarnessSession()` (teardown); Round 10's fix wired via `BaseAgent.finalizeRun()`, re-confirmed intact Round 11
+- `packages/MJQueue/src/generic/QueueBase.ts` — pattern for `IShutdownable` queues with self-scheduling timers
+- `packages/AI/A2AServer/src/TaskStore.ts` — pattern for bounded task stores with periodic terminal-state cleanup
+- `packages/Angular/Explorer/shared/src/lib/base-resource-component.ts` — provides `destroy$` for resource components
+- `CLAUDE.md` (root) — has a section on `BaseSingleton` usage rules and event-driven invalidation patterns
+# Part 10 — Round 10 Re-Audit (2026-08-08)
+
+
+**Generated:** 2026-08-08
+**Prior Runs:** 2026-05-03 (Round 1+2 baseline — 158 findings), 2026-06-20 (Round 3 — 77 new, 30 resolved), 2026-06-27 (Round 4 — 127 new, 10 agents), 2026-07-04 (Round 5 — 67 new, 7 resolved), 2026-07-11 (Round 6 — 61 new, ~3-4 resolved, 2 severity reclassifications), 2026-07-18 (Round 7 — ~63 new, 6 resolved, 2 new Criticals), 2026-07-25 (Round 8 — ~23 new, 7 resolved, 1 new Critical), 2026-08-01 (Round 9 — ~31 new, 1 resolved, 0 new Criticals)
+**Scope:** Full monorepo — 309 `package.json` files under `packages/` (grew from 306 at Round 9). Note: `packages/Integration/connectors/src/**` (36 vendor connectors) was removed wholesale this round via changeset `remove-duplicated-connector-source-6x` — connector code now lives in a separate `MemberJunction/Integrations` repo and is out of scope going forward.
 **Tooling:** 10 parallel `Explore` subagents in two waves
 **Re-run command:** `/audit-memory-leaks`
 

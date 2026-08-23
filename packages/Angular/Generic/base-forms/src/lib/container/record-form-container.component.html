@@ -19,10 +19,14 @@
   [DirtyFieldNames]="EffectiveDirtyFieldNames"
   [ListCount]="ListCount"
   [TagCount]="TagCount"
+  [AttachmentCount]="AttachmentCount"
+  [AttachmentsAvailable]="AttachmentsAvailable"
+  [IsAttachmentsPanelOpen]="ShowAttachmentsPanel"
   [VersionCount]="VersionCount"
   [EntityInfo]="EffectiveEntityInfo"
   [Config]="EffectiveToolbarConfig"
   [IsSaving]="EffectiveIsSaving"
+  [IsRefreshing]="EffectiveIsRefreshing"
   [VisibleSectionCount]="VisibleSectionCount"
   [TotalSectionCount]="TotalSectionCount"
   [ExpandedSectionCount]="ExpandedSectionCount"
@@ -30,8 +34,12 @@
   [ShowEmptyFields]="EffectiveShowEmptyFields"
   [WidthMode]="EffectiveWidthMode"
   [HasCustomSectionOrder]="EffectiveHasCustomSectionOrder"
+  [ChromeLayout]="ChromeLayout"
   [Variants]="EffectiveVariants"
   [CurrentVariantID]="EffectiveCurrentVariantID"
+  [RegisteredItems]="EffectiveRegisteredToolbarItems"
+  [ItemOverrides]="EffectiveToolbarItemOverrides"
+  [FormComponent]="fc"
   (Navigate)="OnNavigate($event)"
   (EditModeChange)="OnEditModeChange($event)"
   (BeforeSave)="BeforeSave.emit($event)"
@@ -40,6 +48,8 @@
   (CancelRequested)="OnCancelRequested()"
   (BeforeDelete)="BeforeDelete.emit($event)"
   (DeleteRequested)="OnDeleteRequested()"
+  (BeforeRefresh)="BeforeRefresh.emit($event)"
+  (RefreshRequested)="OnRefreshRequested()"
   (FavoriteToggled)="OnFavoriteToggled()"
   (BeforeHistoryView)="BeforeHistoryView.emit($event)"
   (HistoryRequested)="OnHistoryRequested()"
@@ -47,6 +57,7 @@
   (ListManagementRequested)="OnListManagementRequested()"
   (ShowChangesRequested)="OnShowChangesRequested()"
   (CustomButtonClick)="CustomButtonClick.emit($event)"
+  (ToolbarItemClick)="ToolbarItemClick.emit($event)"
   (FilterChange)="OnFilterChange($event)"
   (ExpandAllRequested)="OnExpandAll()"
   (CollapseAllRequested)="OnCollapseAll()"
@@ -55,6 +66,7 @@
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
   (ManageSectionsRequested)="OnManageSections()"
   (TagsPanelToggled)="OnTagsPanelToggled()"
+  (AttachmentsPanelToggled)="OnAttachmentsPanelToggled()"
   (VariantPicked)="OnVariantPicked($event)">
 </mj-form-toolbar>
 }
@@ -76,12 +88,57 @@
          [class.mj-forms-layout--accordion]="ChromeLayout === 'accordion'"
          [class.mj-forms-layout--more]="IsChromeMoreActive">
       @if (ShowChromeRail) {
-        <nav class="mj-forms-chrome-rail" aria-label="Form sections">
+        <nav class="mj-forms-chrome-rail"
+             [class.is-collapsed]="ChromeRailCollapsed"
+             [class.is-resizing]="RailResizing"
+             [style.width.px]="ChromeRailCollapsed ? null : ChromeRailWidthPx"
+             [attr.aria-expanded]="!ChromeRailCollapsed"
+             aria-label="Form sections">
+          @if (ChromeRailCollapsed) {
+            <button type="button"
+                    class="mj-forms-chrome-rail-spine"
+                    (click)="OnChromeRailExpand()"
+                    [attr.aria-label]="'Show form sections — ' + ChromeActiveTitle"
+                    [title]="'Show sections — ' + ChromeActiveTitle">
+              <i [class]="ChromeActiveIcon"></i>
+              <span class="mj-forms-chrome-rail-spine-label"
+                    (mouseenter)="OnRailLabelHover($event, ChromeActiveTitle)">{{ ChromeActiveTitle }}</span>
+            </button>
+          } @else {
+            <div class="mj-forms-chrome-rail-resizer"
+                 role="separator"
+                 aria-orientation="vertical"
+                 [attr.aria-valuenow]="ChromeRailWidthPx"
+                 [attr.aria-valuemin]="RailWidthMin"
+                 [attr.aria-valuemax]="RailWidthMax"
+                 title="Drag to resize sections"
+                 (pointerdown)="OnRailResizeStart($event)"
+                 (pointermove)="OnRailResizeMove($event)"
+                 (pointerup)="OnRailResizeEnd()"
+                 (pointercancel)="OnRailResizeEnd()"></div>
+            <div class="mj-forms-chrome-rail-toolbar">
+              <button type="button"
+                      class="mj-forms-chrome-rail-pin"
+                      [class.is-pinned]="ChromeRailPinned"
+                      [attr.aria-pressed]="ChromeRailPinned"
+                      [title]="ChromeRailPinned ? 'Unpin sections — they hide after you switch' : 'Pin sections open'"
+                      (click)="OnChromeRailPinToggle()">
+                <i class="fa-solid fa-thumbtack"></i>
+              </button>
+              <button type="button"
+                      class="mj-forms-chrome-rail-collapse"
+                      title="Hide sections"
+                      aria-label="Hide form sections"
+                      (click)="OnChromeRailCollapse()">
+                <i class="fa-solid fa-angles-left"></i>
+              </button>
+            </div>
           @for (group of ChromeFirstClassGroups; track group.Key) {
             <div class="mj-forms-chrome-rail-item"
                  role="button"
                  tabindex="0"
                  [class.is-active]="ChromeActiveGroupKey === group.Key"
+                 [attr.aria-current]="ChromeActiveGroupKey === group.Key ? 'page' : null"
                  [class.is-drag-over]="RailDragOverKey === group.Key"
                  (click)="OnChromeGroupActivate(group.Key)"
                  (keydown.enter)="OnChromeGroupActivate(group.Key)"
@@ -100,7 +157,8 @@
                 </span>
               }
               <i [class]="group.Icon"></i>
-              <span class="mj-forms-chrome-rail-label">{{ group.Title }}</span>
+              <span class="mj-forms-chrome-rail-label"
+                    (mouseenter)="OnRailLabelHover($event, group.Title)">{{ group.Title }}</span>
               @let rowCount = ChromeGroupRowCount(group);
               @if (rowCount != null) {
                 <span class="mj-forms-chrome-rail-count"
@@ -118,7 +176,8 @@
                  (keydown.space)="$event.preventDefault(); OnMoreFolderToggle()">
               <span class="mj-forms-chrome-rail-handle is-spacer" aria-hidden="true"></span>
               <i [class]="MoreExpanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'"></i>
-              <span class="mj-forms-chrome-rail-label">{{ more.Title }}</span>
+              <span class="mj-forms-chrome-rail-label"
+                    (mouseenter)="OnRailLabelHover($event, more.Title)">{{ more.Title }}</span>
               <i class="fa-solid mj-forms-chrome-rail-more-toggle"
                  [class.fa-minus]="MoreExpanded"
                  [class.fa-plus]="!MoreExpanded"
@@ -131,6 +190,7 @@
                      role="button"
                      tabindex="0"
                      [class.is-active]="ChromeActiveGroupKey === child.Key"
+                     [attr.aria-current]="ChromeActiveGroupKey === child.Key ? 'page' : null"
                      [class.is-drag-over]="RailDragOverKey === child.Key"
                      (click)="OnChromeGroupActivate(child.Key)"
                      (keydown.enter)="OnChromeGroupActivate(child.Key)"
@@ -149,7 +209,8 @@
                     </span>
                   }
                   <i [class]="child.Icon"></i>
-                  <span class="mj-forms-chrome-rail-label">{{ child.Title }}</span>
+                  <span class="mj-forms-chrome-rail-label"
+                        (mouseenter)="OnRailLabelHover($event, child.Title)">{{ child.Title }}</span>
                   @let childCount = ChromeGroupRowCount(child);
                   @if (childCount != null) {
                     <span class="mj-forms-chrome-rail-count"
@@ -159,6 +220,7 @@
               }
               </div>
             }
+          }
           }
         </nav>
       }
@@ -263,6 +325,18 @@
     (RecordNavigate)="OnTagsRecordNavigate($event)"
     (WidthChanged)="OnTagsPanelWidthChanged($event)">
   </mj-record-tags>
+}
+
+<!-- ============================================
+     ATTACHMENTS PANEL (shown when attachments button clicked)
+     ============================================ -->
+@if (ShowAttachmentsPanel && AttachmentsAvailable && EffectiveRecord) {
+  <mj-record-attachments
+    [Record]="EffectiveRecord"
+    [Visible]="true"
+    (PanelClosed)="OnAttachmentsPanelClosed()"
+    (AttachmentCountChanged)="OnAttachmentCountChanged($event)">
+  </mj-record-attachments>
 }
 
 <!-- ============================================

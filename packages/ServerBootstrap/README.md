@@ -187,4 +187,4 @@ All the complexity is now encapsulated in this package and updated via NPM.
 
 ## License
 
-MIT
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

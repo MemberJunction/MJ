@@ -17,6 +17,7 @@ export * from './lib/types/form-types';
 export * from './lib/types/navigation-events';
 export * from './lib/types/toolbar-config';
 export * from './lib/types/form-events';
+export * from './lib/types/form-toolbar-item';
 export * from './lib/types/entity-form-config';
 
 // Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
@@ -42,6 +43,7 @@ export * from './lib/base-form-section-info';
 // State management
 export * from './lib/form-state.interface';
 export * from './lib/form-state.service';
+export * from './lib/form-record-refresh.coordinator';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';
@@ -75,3 +77,5 @@ export * from './lib/chrome/base-form-policy';
 export * from './lib/chrome/resolve-form-chrome';
 export * from './lib/chrome/load-form-chrome-rules';
 export * from './lib/chrome/form-chrome-coordinator.service';
+export * from './lib/chrome/form-chrome-rail-pref';
+export * from './lib/related-grid-height';

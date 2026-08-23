@@ -4,13 +4,14 @@ import {
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
+import { FormToolbarItemConfig, FormToolbarItemClickEventArgs } from '../types/form-toolbar-item';
 import { ResolveFormShowToolbar, ResolveFormToolbarConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormWidthMode } from '../types/form-types';
@@ -19,6 +20,7 @@ import { SectionManagerItem, ChromeMembershipChange } from '../section-manager/s
 import {
   BeforeSaveEventArgs,
   BeforeDeleteEventArgs,
+  BeforeRefreshEventArgs,
   BeforeCancelEventArgs,
   BeforeHistoryViewEventArgs,
   BeforeListManagementEventArgs,
@@ -34,13 +36,28 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
-import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder } from '../chrome/resolve-form-chrome';
+import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
+import {
+  ClampRailWidth,
+  FORM_CHROME_RAIL_PINNED_DEFAULT,
+  FORM_CHROME_RAIL_WIDTH_DEFAULT,
+  FORM_CHROME_RAIL_WIDTH_MAX,
+  FORM_CHROME_RAIL_WIDTH_MIN,
+  ParseRailPinnedSetting,
+  ParseRailWidthSetting,
+  SerializeRailPinnedSetting,
+  SerializeRailWidthSetting,
+  ShouldPersistChromeActiveGroup,
+} from '../chrome/form-chrome-rail-pref';
+import { ApplyClippedTitle } from '../chrome/clipped-title';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
+import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
  * Display shape for the variant picker. Kept minimal so the Generic
@@ -91,8 +108,10 @@ export interface VariantPickerItem {
   encapsulation: ViewEncapsulation.None,
   templateUrl: './record-form-container.component.html',
   styleUrls: ['./record-form-container.component.css'],
-  // FormSlotCoordinator + FormChromeCoordinator scoped per-container.
-  providers: [FormSlotCoordinator, FormChromeCoordinator],
+  // FormSlotCoordinator + FormChromeCoordinator + FormRecordRefreshCoordinator
+  // scoped per-container. `providers` (not viewProviders) so projected
+  // related-entity grids and slot-mounted panels can inject them.
+  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator],
 })
 export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
@@ -100,6 +119,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private notificationService = inject(MJNotificationService);
   private chrome = inject(FormChromeCoordinator);
   private slots = inject(FormSlotCoordinator);
+  private recordRefresh = inject(FormRecordRefreshCoordinator);
   private host = inject(ElementRef<HTMLElement>);
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
@@ -125,6 +145,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Number of tags on this record */
   TagCount = 0;
 
+  /** Controls visibility of attachments slide panel */
+  ShowAttachmentsPanel = false;
+
+  /** Number of attachments linked to this record */
+  AttachmentCount = 0;
+
   /** Number of tracked record change versions for this record */
   VersionCount = 0;
 
@@ -133,6 +159,23 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Controls visibility of section manager drawer */
   ShowSectionManager = false;
+
+  /**
+   * Persisted per entity. Pinned (default) keeps the left rail open.
+   * Unpinned auto-collapses after the user picks another section.
+   */
+  ChromeRailPinned = FORM_CHROME_RAIL_PINNED_DEFAULT;
+
+  /** Session-only: the rail is showing its items. Follows pin on load. */
+  private chromeRailExpanded = FORM_CHROME_RAIL_PINNED_DEFAULT;
+
+  /** Expanded rail width in px. Persisted per entity. */
+  ChromeRailWidthPx = FORM_CHROME_RAIL_WIDTH_DEFAULT;
+  readonly RailWidthMin = FORM_CHROME_RAIL_WIDTH_MIN;
+  readonly RailWidthMax = FORM_CHROME_RAIL_WIDTH_MAX;
+  RailResizing = false;
+  private railResizeStartX = 0;
+  private railResizeStartWidth = FORM_CHROME_RAIL_WIDTH_DEFAULT;
 
   // ---- Primary Inputs ----
 
@@ -158,7 +201,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   @Input() DirtyFieldNames: string[] = [];
   @Input() ListCount = 0;
   @Input() IsSaving = false;
+  @Input() IsRefreshing = false;
   @Input() ToolbarConfig: FormToolbarConfig = DEFAULT_TOOLBAR_CONFIG;
+  @Input() RegisteredToolbarItems: FormToolbarItemConfig[] = [];
+  @Input() ToolbarItemOverrides: ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null = null;
   @Input() WidthMode: FormWidthMode = 'centered';
 
   /**
@@ -207,6 +253,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Emitted when delete is confirmed (host app handles actual deletion) */
   @Output() DeleteRequested = new EventEmitter<void>();
 
+  /** Emitted BEFORE refresh - can be cancelled by setting event.Cancel = true */
+  @Output() BeforeRefresh = new EventEmitter<BeforeRefreshEventArgs>();
+
+  /** Emitted when refresh is requested (only in standalone mode) */
+  @Output() RefreshRequested = new EventEmitter<void>();
+
   /** Emitted when favorite toggle is requested */
   @Output() FavoriteToggled = new EventEmitter<void>();
 
@@ -227,6 +279,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Emitted when a custom toolbar button is clicked */
   @Output() CustomButtonClick = new EventEmitter<CustomToolbarButtonClickEventArgs>();
+
+  /** Emitted when any toolbar item (standard or custom) is clicked */
+  @Output() ToolbarItemClick = new EventEmitter<FormToolbarItemClickEventArgs>();
 
   /**
    * Emitted when the user chooses a different form variant from the picker.
@@ -250,7 +305,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- FormComponent accessor ----
 
   /** Typed accessor for the form component reference */
-  private get fc(): BaseFormComponent | null {
+  public get fc(): BaseFormComponent | null {
     return this.FormComponent;
   }
 
@@ -305,6 +360,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.IsSaving;
   }
 
+  get EffectiveIsRefreshing(): boolean {
+    return this.fc?.IsRefreshing ?? this.IsRefreshing;
+  }
+
   get EffectiveWidthMode(): FormWidthMode {
     if (this.fc?.getFormWidthMode) {
       return this.fc.getFormWidthMode();
@@ -330,6 +389,20 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   get EffectiveToolbarConfig(): FormToolbarConfig {
     return ResolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.fc?.Config);
+  }
+
+  get EffectiveRegisteredToolbarItems(): FormToolbarItemConfig[] {
+    if (this.fc?.RegisteredToolbarItems && this.fc.RegisteredToolbarItems.length > 0) {
+      return this.fc.RegisteredToolbarItems;
+    }
+    return this.RegisteredToolbarItems;
+  }
+
+  get EffectiveToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null {
+    if (this.fc?.ToolbarItemOverrides && this.fc.ToolbarItemOverrides.size > 0) {
+      return this.fc.ToolbarItemOverrides;
+    }
+    return this.ToolbarItemOverrides;
   }
 
   get EffectiveSearchFilter(): string {
@@ -407,7 +480,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get ChromeGroups(): FormChromeGroup[] {
-    const ordered = OrderChromeGroups(this.chrome.Spec.Groups, this.SectionManagerOrder);
+    const ordered = OrderChromeGroups(this.chrome.Spec.Groups, this.chromeRailOrder);
     const filter = this.EffectiveSearchFilter.toLowerCase().trim();
     if (!filter) return ordered;
     return ordered.filter((group) => this.groupMatchesSearch(group, filter));
@@ -427,7 +500,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const folder = this.ChromeMoreFolder;
     if (!folder) return [];
     const filter = this.EffectiveSearchFilter.toLowerCase().trim();
-    const orderedKeys = OrderMoreSectionKeys(folder.SectionKeys, this.SectionManagerOrder);
+    const orderedKeys = OrderMoreSectionKeys(folder.SectionKeys, this.chromeRailOrder);
     const items = orderedKeys.map((key) => this.moreItemFromKey(key));
     if (!filter) return items;
     return items.filter((item) => this.groupMatchesSearch(item, filter));
@@ -435,6 +508,38 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   get ChromeActiveGroupKey(): string | null {
     return this.chrome.ActiveGroupKey;
+  }
+
+  get ChromeActiveGroup(): FormChromeGroup | null {
+    const key = this.ChromeActiveGroupKey;
+    if (!key) {
+      return null;
+    }
+    return this.ChromeFirstClassGroups.find((group) => group.Key === key)
+      ?? this.ChromeMoreItems.find((item) => item.Key === key)
+      ?? null;
+  }
+
+  get ChromeActiveTitle(): string {
+    return this.ChromeActiveGroup?.Title || 'Sections';
+  }
+
+  get ChromeActiveIcon(): string {
+    return this.ChromeActiveGroup?.Icon || 'fa-solid fa-list';
+  }
+
+  /**
+   * True when the rail is the thin rotated strip. Search keeps the full
+   * list visible so matches stay clickable.
+   */
+  get ChromeRailCollapsed(): boolean {
+    if (!this.ShowChromeRail) {
+      return false;
+    }
+    if (this.EffectiveSearchFilter.trim()) {
+      return false;
+    }
+    return !this.chromeRailExpanded;
   }
 
   get IsChromeMoreActive(): boolean {
@@ -519,6 +624,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return [];
   }
 
+  /**
+   * Rail display order. `getSectionOrder()` falls back to generated
+   * `form.sections` — those keys match Details + baked related grids, not
+   * slot-mounted leads — so using that fallback parked Overview after
+   * Payments. Only a user-persisted custom order may override the resolver.
+   */
+  private get chromeRailOrder(): string[] {
+    return this.EffectiveHasCustomSectionOrder ? this.SectionManagerOrder : [];
+  }
+
   // ---- Lifecycle ----
 
   ngAfterContentInit(): void {
@@ -584,12 +699,64 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const before = new BeforeSectionActivateEventArgs(groupKey);
     this.BeforeSectionActivate.emit(before);
     if (before.Cancel) return;
+    const previous = this.chrome.ActiveGroupKey;
     this.chrome.SetActiveGroup(groupKey);
     this.expandActiveGroupSections(groupKey);
     this.applyChromeVisibility();
+    if (!this.ChromeRailPinned && previous !== groupKey) {
+      this.chromeRailExpanded = false;
+    }
     this.PersistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
     this.cdr.detectChanges();
+  }
+
+  public OnChromeRailExpand(): void {
+    this.chromeRailExpanded = true;
+    this.cdr.detectChanges();
+  }
+
+  public OnChromeRailCollapse(): void {
+    this.chromeRailExpanded = false;
+    this.cdr.detectChanges();
+  }
+
+  public OnChromeRailPinToggle(): void {
+    this.ChromeRailPinned = !this.ChromeRailPinned;
+    if (this.ChromeRailPinned) {
+      this.chromeRailExpanded = true;
+    }
+    this.PersistChromePrefs();
+    this.cdr.detectChanges();
+  }
+
+  public OnRailResizeStart(event: PointerEvent): void {
+    if (this.ChromeRailCollapsed) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.RailResizing = true;
+    this.railResizeStartX = event.clientX;
+    this.railResizeStartWidth = this.ChromeRailWidthPx;
+    (event.target as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  public OnRailResizeMove(event: PointerEvent): void {
+    if (!this.RailResizing) return;
+    const delta = event.clientX - this.railResizeStartX;
+    const signed = this.ChromeLayout === 'left-nav' ? delta : -delta;
+    this.ChromeRailWidthPx = ClampRailWidth(this.railResizeStartWidth + signed);
+    this.cdr.markForCheck();
+  }
+
+  public OnRailResizeEnd(): void {
+    if (!this.RailResizing) return;
+    this.RailResizing = false;
+    this.PersistChromePrefs();
+    this.cdr.detectChanges();
+  }
+
+  public OnRailLabelHover(event: MouseEvent, text: string): void {
+    ApplyClippedTitle(event.currentTarget as HTMLElement, text);
   }
 
   public RailDragOverKey: string | null = null;
@@ -638,12 +805,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!dragged || !target) return;
     if (!draggedMore && (dragged.IsMore || target.IsMore)) return;
     if (!!draggedMore !== !!targetMore) return;
-    const current = this.SectionManagerOrder;
-    const next = MoveChromeGroupInSectionOrder(
-      current.length > 0 ? current : groups.flatMap((g) => g.SectionKeys),
-      dragged,
-      target,
+    const defaultKeys = [
+      ...groups.filter((g) => !g.IsMore).flatMap((g) => g.SectionKeys),
+      ...moreItems.flatMap((g) => g.SectionKeys),
+    ];
+    const current = OverlayChromeSectionOrder(
+      defaultKeys,
+      this.EffectiveHasCustomSectionOrder ? this.SectionManagerOrder : [],
     );
+    const next = MoveChromeGroupInSectionOrder(current, dragged, target);
     if (this.fc?.setSectionOrder) {
       this.fc.setSectionOrder(next);
       this.cdr.detectChanges();
@@ -701,7 +871,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       HiddenSectionKeys: [...this.contributionHiddenSectionKeys()],
       ContributionSectionKeys: this.contributionSectionKeys(),
       ContributionChromeGroupByKey: this.contributionChromeGroupByKey(),
+      ContributionInclusionByKey: this.contributionInclusionByKey(),
+      ContributionSortKeyByKey: this.contributionSortKeyByKey(),
       ChromeRules: this.chromeRules,
+      IncludeUnbakedRelated: this.EffectiveShowRelatedEntities,
       Membership: {
         moreSectionKeys: this.fc?.getMoreSectionKeys?.() ?? [],
         firstClassSectionKeys: this.fc?.getFirstClassSectionKeys?.() ?? [],
@@ -763,9 +936,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   private moreItemFromKey(key: string): FormChromeGroup {
     const panel = this.allChromePanels().find((p) => p.SectionKey === key);
+    const override = this.chrome.Spec.TitleBySectionKey?.get(key);
     return {
       Key: key,
-      Title: HumanizeEntityTitle(panel?.SectionName || key),
+      Title: override || HumanizeEntityTitle(panel?.SectionName || key),
       Icon: panel?.Icon || 'fa-solid fa-table',
       SectionKeys: [key],
       IsMore: true,
@@ -800,7 +974,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       const titled = this.chrome.Spec.Groups.find(
         (g) => !g.IsMore && g.SectionKeys.length === 1 && g.SectionKeys[0] === panel.SectionKey,
       );
-      if (titled?.Title) {
+      const override = this.chrome.Spec.TitleBySectionKey?.get(panel.SectionKey);
+      if (override) {
+        panel.SectionName = override;
+      } else if (titled?.Title) {
         panel.SectionName = titled.Title;
       }
       if (claimed.has(panel.SectionKey)) {
@@ -853,45 +1030,62 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private contributionSectionKeys(): string[] {
-    const entityName = this.EffectiveEntityInfo?.Name;
-    if (!entityName) return [];
-    const keys: string[] = [];
-    for (const reg of CollectFormPanelRegistrations()) {
-      const meta = reg.Metadata;
-      if (!meta || meta.entity !== entityName) continue;
-      if (meta.contributionKey === 'header') continue;
-      if (meta.contributionKey) keys.push(meta.contributionKey);
-      if (meta.relatedEntity && meta.contributionKey) continue;
-      // Related claims use the widget SectionKey, which is usually the contributionKey
-      // or a short camel name matching the template (contactMethods, addresses).
-      if (meta.relatedEntity && !meta.contributionKey) {
-        const derived = meta.relatedEntity.split(':').pop()?.trim();
-        if (derived) {
-          keys.push(derived.charAt(0).toLowerCase() + derived.slice(1).replace(/\s+/g, ''));
-        }
-      }
-    }
-    return keys;
+    return this.contributionRegistrations().map((row) => row.Key);
   }
 
   private contributionChromeGroupByKey(): Map<string, 'details' | 'more'> {
-    const entityName = this.EffectiveEntityInfo?.Name;
     const map = new Map<string, 'details' | 'more'>();
-    if (!entityName) return map;
-    for (const reg of CollectFormPanelRegistrations()) {
-      const meta = reg.Metadata;
-      if (!meta || meta.entity !== entityName) continue;
-      if (meta.chromeGroup !== 'details' && meta.chromeGroup !== 'more') continue;
-      const key = meta.contributionKey
-        || (meta.relatedEntity
-          ? (meta.relatedEntity.split(':').pop()?.trim() ?? '')
-          : '');
-      if (!key) continue;
-      const sectionKey = meta.contributionKey
-        || (key.charAt(0).toLowerCase() + key.slice(1).replace(/\s+/g, ''));
-      map.set(sectionKey, meta.chromeGroup);
+    for (const row of this.contributionRegistrations()) {
+      if (row.ChromeGroup) map.set(row.Key, row.ChromeGroup);
     }
     return map;
+  }
+
+  private contributionInclusionByKey(): Map<string, FormInclusion> {
+    const map = new Map<string, FormInclusion>();
+    for (const row of this.contributionRegistrations()) {
+      if (row.Inclusion) map.set(row.Key, row.Inclusion);
+    }
+    return map;
+  }
+
+  private contributionSortKeyByKey(): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const row of this.contributionRegistrations()) {
+      if (row.SortKey != null) map.set(row.Key, row.SortKey);
+    }
+    return map;
+  }
+
+  /**
+   * Winning registration per contribution key (highest ClassFactory Priority).
+   * Headers are not rail sections.
+   */
+  private contributionRegistrations(): Array<{
+    Key: string;
+    Inclusion: FormInclusion | null;
+    SortKey: number | null;
+    ChromeGroup: 'details' | 'more' | null;
+  }> {
+    const entityName = this.EffectiveEntityInfo?.Name;
+    if (!entityName) return [];
+    const byKey = new Map<string, { Key: string; Inclusion: FormInclusion | null; SortKey: number | null; ChromeGroup: 'details' | 'more' | null; Priority: number }>();
+    const regs = [...CollectFormPanelRegistrations()].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
+    for (const reg of regs) {
+      const meta = reg.Metadata;
+      if (!meta || meta.entity !== entityName) continue;
+      if (meta.contributionKey === 'header') continue;
+      const key = contributionRailKey(meta);
+      if (!key) continue;
+      byKey.set(key, {
+        Key: key,
+        Inclusion: ReadRegisteredInclusion(meta.inclusion),
+        SortKey: typeof meta.sortKey === 'number' && Number.isFinite(meta.sortKey) ? meta.sortKey : null,
+        ChromeGroup: meta.chromeGroup === 'details' || meta.chromeGroup === 'more' ? meta.chromeGroup : null,
+        Priority: reg.Priority ?? 0,
+      });
+    }
+    return [...byKey.values()];
   }
 
   private contributionHiddenSectionKeys(): Set<string> {
@@ -998,15 +1192,24 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private RestoreChromePrefs(): void {
-    const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
-    if (group) this.chrome.ActiveGroupKey = group;
+    if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved)) {
+      const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
+      if (group) this.chrome.ActiveGroupKey = group;
+    }
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
     if (more === '0') this.chrome.MoreExpanded = false;
+    this.ChromeRailPinned = ParseRailPinnedSetting(
+      UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railPinned')),
+    );
+    this.ChromeRailWidthPx = ParseRailWidthSetting(
+      UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railWidth')),
+    );
+    this.chromeRailExpanded = this.ChromeRailPinned;
   }
 
   private PersistChromePrefs(): void {
-    if (this.chrome.ActiveGroupKey) {
+    if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved) && this.chrome.ActiveGroupKey) {
       UserInfoEngine.Instance.SetSettingDebounced(
         this.chromePrefKey('activeGroup'),
         this.chrome.ActiveGroupKey,
@@ -1015,6 +1218,14 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     UserInfoEngine.Instance.SetSettingDebounced(
       this.chromePrefKey('moreExpanded'),
       this.chrome.MoreExpanded ? '1' : '0',
+    );
+    UserInfoEngine.Instance.SetSettingDebounced(
+      this.chromePrefKey('railPinned'),
+      SerializeRailPinnedSetting(this.ChromeRailPinned),
+    );
+    UserInfoEngine.Instance.SetSettingDebounced(
+      this.chromePrefKey('railWidth'),
+      SerializeRailWidthSetting(this.ChromeRailWidthPx),
     );
   }
 
@@ -1028,6 +1239,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.fc) {
       this.fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
         this.LoadBadgeCounts();
+      });
+      this.fc.RecordRefreshed.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
+        this.OnFormRecordRefreshed(e.Record);
       });
     }
 
@@ -1057,8 +1271,22 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- Badge Count Loading ----
 
   /**
-   * Loads tag count and record change version count for toolbar badges.
-   * Both queries run in parallel for performance.
+   * Whether the attachments feature is available for the current record.
+   * True when record is saved and entity allows attachments (default true).
+   */
+  public get AttachmentsAvailable(): boolean {
+    const record = this.EffectiveRecord;
+    if (!record || !record.IsSaved) return false;
+    const entity = record.EntityInfo;
+    if (!entity) return false;
+    const config = entity.Configuration?.Attachments;
+    if (config?.Enabled === false) return false;
+    return true;
+  }
+
+  /**
+   * Loads tag count, attachment count, and record change version count for toolbar badges.
+   * All queries run in parallel for performance.
    */
   private badgeCountsLoaded = false;
 
@@ -1070,9 +1298,33 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     this.badgeCountsLoaded = true;
 
-    // Fire both queries in parallel — no await needed, they update state async
+    // Fire queries in parallel — no await needed, they update state async
     this.LoadTagCount(record);
     this.LoadVersionCount(record);
+    this.LoadAttachmentCount(record);
+  }
+
+  /**
+   * Queries the count of linked attachments for the current entity + record
+   * and updates the AttachmentCount badge on the toolbar.
+   */
+  private async LoadAttachmentCount(record: BaseEntity): Promise<void> {
+    if (!this.AttachmentsAvailable) return;
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<{ ID: string }>({
+        EntityName: 'MJ: File Entity Record Links',
+        Fields: ['ID'],
+        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
+        ResultType: 'simple'
+      });
+      if (result.Success) {
+        this.AttachmentCount = result.Results.length;
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Non-critical — badge just stays at 0
+    }
   }
 
   /**
@@ -1204,6 +1456,44 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   /**
+   * Refresh: delegate to FormComponent if available, otherwise re-emit.
+   * Badge reload + related-grid fan-out happen on `RecordRefreshed` so
+   * `host.Refresh()` (which calls `RefreshRecord()` directly) still notifies.
+   */
+  async OnRefreshRequested(): Promise<void> {
+    if (this.fc?.RefreshRecord) {
+      this.IsRefreshing = true;
+      this.cdr.markForCheck();
+
+      try {
+        await this.fc.RefreshRecord();
+      } finally {
+        await Promise.resolve();
+        this.ngZone.run(() => {
+          this.IsRefreshing = false;
+          this.cdr.markForCheck();
+        });
+      }
+    } else {
+      this.RefreshRequested.emit();
+    }
+  }
+
+  /**
+   * After the form reloads the parent record: refresh chrome that is not
+   * the record itself (badges, open history drawer) and broadcast to
+   * in-form listeners (related grids, IS-A panel, custom panels).
+   */
+  private OnFormRecordRefreshed(record: BaseEntity): void {
+    this.badgeCountsLoaded = false;
+    this.LoadBadgeCounts();
+    if (this.ShowRecordChanges && this.recordChangesDrawer) {
+      this.recordChangesDrawer.Refresh();
+    }
+    this.recordRefresh.Notify(record);
+  }
+
+  /**
    * Delete, Favorite, History, Lists, ShowChanges: always re-emit for host app.
    */
   OnDeleteRequested(): void {
@@ -1269,6 +1559,30 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnTagsPanelWidthChanged(width: number): void {
     this.TagsPanelWidth = width;
     UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.TAGS_WIDTH_KEY, String(width));
+  }
+
+  OnAttachmentsPanelToggled(): void {
+    this.ShowAttachmentsPanel = !this.ShowAttachmentsPanel;
+    this.cdr.detectChanges();
+  }
+
+  OnAttachmentsPanelClosed(): void {
+    this.ShowAttachmentsPanel = false;
+    this.cdr.detectChanges();
+
+    // Refresh attachment count — attachments may have been added/removed while panel was open
+    const record = this.EffectiveRecord;
+    if (record?.EntityInfo) {
+      this.LoadAttachmentCount(record);
+    }
+  }
+
+  /**
+   * Handles live attachment count updates from the attachments panel component.
+   */
+  OnAttachmentCountChanged(count: number): void {
+    this.AttachmentCount = count;
+    this.cdr.markForCheck();
   }
 
   OnTagsRecordNavigate(event: { EntityName: string; RecordID: string }): void {
@@ -1524,4 +1838,25 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.ShowSectionManager = false;
     this.cdr.markForCheck();
   }
+}
+
+function contributionRailKey(meta: FormPanelRegistrationMetadata): string | null {
+  if (meta.contributionKey?.trim()) {
+    return meta.contributionKey.trim();
+  }
+  if (!meta.relatedEntity) {
+    return null;
+  }
+  const derived = meta.relatedEntity.split(':').pop()?.trim();
+  if (!derived) {
+    return null;
+  }
+  return derived.charAt(0).toLowerCase() + derived.slice(1).replace(/\s+/g, '');
+}
+
+function ReadRegisteredInclusion(raw: FormInclusion | undefined): FormInclusion | null {
+  if (raw === 'Primary' || raw === 'More' || raw === 'None') {
+    return raw;
+  }
+  return null;
 }
