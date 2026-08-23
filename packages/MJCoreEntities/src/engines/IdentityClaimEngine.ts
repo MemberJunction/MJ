@@ -48,6 +48,10 @@ export abstract class BaseIdentityClaimDriver {
 
     /**
      * Called when a claim is redeemed by an authenticated user.
+     *
+     * **Idempotency Requirement**: Implementations of `OnClaim` must be safe to re-run
+     * (idempotent). If downstream provisioning fails or throws an exception, the engine
+     * automatically reverts the atomic CAS state back to 'Pending' so the customer can retry.
      */
     public abstract OnClaim(context: ClaimRedeemContext): Promise<ClaimResult>;
 
