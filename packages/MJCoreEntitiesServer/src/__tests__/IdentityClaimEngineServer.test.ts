@@ -10,7 +10,7 @@ import {
     type MJIdentityClaimEntity,
     type MJIdentityClaimTypeEntity
 } from '@memberjunction/core-entities';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 class MockDriver extends BaseIdentityClaimDriver {
@@ -134,13 +134,22 @@ function createMockClaimType(initial: Partial<MJIdentityClaimTypeEntity> = {}): 
 
 describe('IdentityClaimEngineServer', () => {
     let mockDriver: MockDriver;
+    /**
+     * RedeemClaim now REQUIRES a provider, and reads entities plus executes the CAS through it.
+     * GetEntityObject delegates to a real Metadata instance so the existing
+     * `vi.spyOn(Metadata.prototype, 'GetEntityObject')` stubs in each test keep working.
+     */
+    let testProvider: IMetadataProvider;
 
     beforeEach(() => {
         mockDriver = new MockDriver();
-        (Metadata as unknown as { Provider: unknown }).Provider = {
+        testProvider = {
             PlatformKey: 'sqlserver',
-            ExecuteSQL: vi.fn().mockResolvedValue([{ ID: 'claim-123' }])
-        };
+            ExecuteSQL: vi.fn().mockResolvedValue([{ ID: 'claim-123' }]),
+            Entities: [],
+            GetEntityObject: (entityName: string, user?: UserInfo) => new Metadata().GetEntityObject(entityName, user)
+        } as unknown as IMetadataProvider;
+        (Metadata as unknown as { Provider: unknown }).Provider = testProvider;
         vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByName').mockImplementation((name: string) => {
             if (name === 'TestClaim') {
                 return createMockClaimType({
@@ -238,7 +247,7 @@ describe('IdentityClaimEngineServer', () => {
 
         vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
 
-        const redeemResult = await engine.RedeemClaim('claim-123', createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }));
+        const redeemResult = await engine.RedeemClaim('claim-123', createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }), testProvider);
         expect(redeemResult.Success).toBe(true);
         expect(mockDriver.onClaimCalled).toBe(true);
         expect(mockClaim.Status).toBe('Claimed');
@@ -262,7 +271,7 @@ describe('IdentityClaimEngineServer', () => {
         getEntityObject.mockClear();
 
         const redeemingUser = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
-        const redeemResult = await engine.RedeemClaim('claim-123', redeemingUser);
+        const redeemResult = await engine.RedeemClaim('claim-123', redeemingUser, testProvider);
 
         expect(redeemResult.Success).toBe(true);
         // Row-level security applies to single-record loads, not just RunView. Loaded as the
@@ -286,7 +295,7 @@ describe('IdentityClaimEngineServer', () => {
             .mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
 
         const redeemingUser = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
-        const redeemResult = await engine.RedeemClaim('claim-123', redeemingUser);
+        const redeemResult = await engine.RedeemClaim('claim-123', redeemingUser, testProvider);
 
         expect(redeemResult.Success).toBe(true);
         expect(getEntityObject).toHaveBeenCalledWith('MJ: Identity Claims', redeemingUser);
@@ -308,6 +317,7 @@ describe('IdentityClaimEngineServer', () => {
         const redeemResult = await engine.RedeemClaim(
             'claim-123',
             createMockUser({ ID: 'user-456', Email: 'different@example.com' }),
+            testProvider,
             rawToken
         );
         expect(redeemResult.Success).toBe(true);
@@ -325,7 +335,8 @@ describe('IdentityClaimEngineServer', () => {
 
         const redeemResult = await engine.RedeemClaim(
             'claim-123',
-            createMockUser({ ID: 'user-456', Email: 'attacker@example.com' })
+            createMockUser({ ID: 'user-456', Email: 'attacker@example.com' }),
+            testProvider
         );
         expect(redeemResult.Success).toBe(false);
         expect(redeemResult.ErrorMessage).toContain('Authenticated user email does not match');
@@ -348,6 +359,7 @@ describe('IdentityClaimEngineServer', () => {
         const redeemResult = await engine.RedeemClaim(
             'claim-123',
             createMockUser({ ID: 'user-456', Email: 'attacker@example.com' }),
+            testProvider,
             'wrong-token'
         );
         expect(redeemResult.Success).toBe(false);
@@ -363,7 +375,7 @@ describe('IdentityClaimEngineServer', () => {
 
         vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
 
-        const redeemResult = await engine.RedeemClaim('claim-123', createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }));
+        const redeemResult = await engine.RedeemClaim('claim-123', createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }), testProvider);
         expect(redeemResult.Success).toBe(false);
         expect(redeemResult.ErrorMessage).toContain('Claim is no longer pending');
         expect(mockDriver.onClaimCalled).toBe(false);
@@ -378,7 +390,7 @@ describe('IdentityClaimEngineServer', () => {
 
         vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
 
-        const redeemResult = await engine.RedeemClaim('claim-123', createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }));
+        const redeemResult = await engine.RedeemClaim('claim-123', createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }), testProvider);
         expect(redeemResult.Success).toBe(false);
         expect(redeemResult.ErrorMessage).toContain('Claim has expired');
         expect(mockClaim.Status).toBe('Expired');
@@ -406,16 +418,15 @@ describe('IdentityClaimEngineServer', () => {
             return Promise.resolve([]);
         });
 
-        (Metadata as unknown as { Provider: unknown }).Provider = {
-            PlatformKey: 'sqlserver',
-            ExecuteSQL: mockExecuteSQL
-        };
+        // The CAS executes through the provider PASSED to RedeemClaim, not the process global —
+        // that is the point of the required-provider signature, so the mock goes here.
+        (testProvider as unknown as { ExecuteSQL: unknown }).ExecuteSQL = mockExecuteSQL;
 
         const user = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
 
         const [res1, res2] = await Promise.all([
-            engine.RedeemClaim('claim-concurrent-1', user),
-            engine.RedeemClaim('claim-concurrent-1', user)
+            engine.RedeemClaim('claim-concurrent-1', user, testProvider),
+            engine.RedeemClaim('claim-concurrent-1', user, testProvider)
         ]);
 
         const successCount = (res1.Success ? 1 : 0) + (res2.Success ? 1 : 0);
@@ -445,16 +456,14 @@ describe('IdentityClaimEngineServer', () => {
             return Promise.resolve([{ ID: 'claim-err-1' }]);
         });
 
-        (Metadata as unknown as { Provider: unknown }).Provider = {
-            PlatformKey: 'sqlserver',
-            ExecuteSQL: mockExecuteSQL
-        };
+        // CAS + revert both execute through the provider passed to RedeemClaim.
+        (testProvider as unknown as { ExecuteSQL: unknown }).ExecuteSQL = mockExecuteSQL;
 
         // Make driver throw
         mockDriver.OnClaim = vi.fn().mockRejectedValue(new Error('Transient downstream payment API timeout'));
 
         const user = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
-        const res = await engine.RedeemClaim('claim-err-1', user);
+        const res = await engine.RedeemClaim('claim-err-1', user, testProvider);
 
         expect(res.Success).toBe(false);
         expect(res.ErrorMessage).toContain('downstream payment API timeout');

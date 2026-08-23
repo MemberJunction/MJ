@@ -12,7 +12,7 @@
 
 import * as crypto from 'crypto';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, IRunViewProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     IdentityClaimEngine,
     BaseIdentityClaimDriver,
@@ -60,10 +60,35 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         return IdentityClaimEngine.Instance;
     }
 
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * The metadata provider this engine operates under.
+     *
+     * This class is a process-wide singleton (`BaseSingleton` keys on class name), so it cannot
+     * own a provider the way a `BaseEngine` subclass does — one instance serves every connection
+     * in the process. Callers that have a request-scoped provider should pass it explicitly to
+     * the method they are calling; this settable accessor exists for hosts that bind one at
+     * startup, and falls back to the global default only when nothing has been supplied.
+     *
+     * Same shape as `AIEngine.Provider` — which `QueryEngineServer` and `ComponentMetadataEngineServer`
+     * both cite as the pattern to follow — and structurally exempt from the multi-provider
+     * compliance scanner, so it needs no `global-provider-ok` suppression.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider) {
+        this._provider = value;
+    }
+
     /**
      * Ensures metadata is configured and loaded
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (provider) {
+            this._provider = provider;
+        }
         await this.Base.Config(forceRefresh, contextUser, provider);
     }
 
@@ -105,7 +130,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
      * Creates and saves an IdentityClaim record, sends an email notification via the MJ Communications
      * framework if configured, and executes the driver's OnCreate lifecycle method.
      */
-    public async CreateClaim(params: CreateClaimServerParams, contextUser?: UserInfo): Promise<MJIdentityClaimEntity> {
+    public async CreateClaim(params: CreateClaimServerParams, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJIdentityClaimEntity> {
         const normalizedEmail = this.NormalizeEmail(params.NormalizedEmail);
         if (!normalizedEmail) {
             throw new Error('NormalizedEmail is required to create an IdentityClaim');
@@ -122,7 +147,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             throw new Error(`IdentityClaimType not found for ${params.ClaimTypeName ?? params.ClaimTypeID}`);
         }
 
-        const md = new Metadata(); // global-provider-ok: server-side identity claim engine resolving entities under server default provider
+        const md = provider ?? this.Provider;
 
         // 2.2 Accept and normalize EntityID or EntityName
         let resolvedEntityID: string | null = null;
@@ -274,11 +299,14 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
     /**
      * Fetches all pending, unexpired claims for a normalized email address.
      */
-    public async GetPendingClaimsForEmail(email: string, contextUser?: UserInfo): Promise<MJIdentityClaimEntity[]> {
+    public async GetPendingClaimsForEmail(email: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJIdentityClaimEntity[]> {
         const normalizedEmail = this.NormalizeEmail(email);
         if (!normalizedEmail) return [];
 
-        const rv = new RunView();
+        // Reads must come from the same provider as everything else on this call path; a bare
+        // `new RunView()` resolves the SEPARATE global RunView provider slot, which the
+        // multi-provider compliance scanner does not even cover.
+        const rv = new RunView((provider ?? this.Provider) as unknown as IRunViewProvider);
         const escaped = normalizedEmail.replace(/'/g, "''");
         const result = await rv.RunView<MJIdentityClaimEntity>({
             EntityName: 'MJ: Identity Claims',
@@ -295,15 +323,23 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
     /**
      * Redeems a claim for an authenticated user, running the driver's OnClaim implementation.
      */
-    public async RedeemClaim(claimID: string, contextUser: UserInfo, token?: string): Promise<ClaimResult> {
+    public async RedeemClaim(claimID: string, contextUser: UserInfo, provider: IMetadataProvider, token?: string): Promise<ClaimResult> {
         if (!claimID) {
             return { Success: false, ErrorMessage: 'ClaimID is required' };
         }
         if (!contextUser || !contextUser.ID) {
             return { Success: false, ErrorMessage: 'Authenticated User is required to redeem a claim' };
         }
+        if (!provider) {
+            return { Success: false, ErrorMessage: 'A metadata provider is required to redeem a claim' };
+        }
 
-        const md = new Metadata(); // global-provider-ok: server-side identity claim engine resolving claims under server default provider
+        // `provider` is REQUIRED here, unlike the other methods on this engine, and deliberately
+        // so. Redemption reads a claim, reads a magic-link invite, and executes a raw CAS UPDATE —
+        // three operations that must all run against the SAME database. Accepting an optional
+        // provider would let a caller thread one into the entity reads while the CAS silently fell
+        // back to the process global, which is the bug this signature exists to make impossible.
+        const md = provider;
         // Read the claim under the system user rather than `contextUser`.
         //
         // Authorization for redemption is enforced below: the caller must either own the
@@ -436,9 +472,14 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
      * Executes atomic single-use Compare-And-Swap (CAS) state transition on the IdentityClaim record
      * from 'Pending' to 'Claimed'. Returns true iff this execution successfully transitioned the record.
      */
-    private async consumeClaimAtomic(claimID: string, userID: string, md: Metadata, contextUser?: UserInfo): Promise<boolean> {
+    private async consumeClaimAtomic(claimID: string, userID: string, md: IMetadataProvider, contextUser?: UserInfo): Promise<boolean> {
         try {
-            const provider = (Metadata.Provider || (Metadata as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined; // global-provider-ok: executing atomic CAS directly against server database provider
+            // Metadata (schema/table names) and SQL execution MUST come from the same provider.
+            // Previously the schema was resolved off `md` while ExecuteSQL was taken from the
+            // process global — identical objects in a single-provider process, but the moment a
+            // caller threads a provider the statement would be built for one database and run
+            // against another.
+            const provider = md as unknown as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined;
             if (!provider || typeof provider.ExecuteSQL !== 'function') {
                 LogError('consumeClaimAtomic: provider or ExecuteSQL not available for atomic CAS');
                 return false;
@@ -465,9 +506,10 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
     /**
      * Reverts an atomically consumed claim from 'Claimed' back to 'Pending' if driver execution fails.
      */
-    private async revertClaimAtomic(claimID: string, md: Metadata, contextUser?: UserInfo): Promise<boolean> {
+    private async revertClaimAtomic(claimID: string, md: IMetadataProvider, contextUser?: UserInfo): Promise<boolean> {
         try {
-            const provider = (Metadata.Provider || (Metadata as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined; // global-provider-ok: reverting atomic CAS on claim failure
+            // Same single-provider requirement as consumeClaimAtomic above.
+            const provider = md as unknown as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined;
             if (!provider || typeof provider.ExecuteSQL !== 'function') {
                 return false;
             }
@@ -495,10 +537,10 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
     /**
      * Revokes a pending claim and invokes the driver's OnRevoke lifecycle method.
      */
-    public async RevokeClaim(claimID: string, contextUser?: UserInfo): Promise<void> {
+    public async RevokeClaim(claimID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         if (!claimID) return;
 
-        const md = new Metadata(); // global-provider-ok: server-side identity claim engine resolving claims under server default provider
+        const md = provider ?? this.Provider;
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         const loaded = await claim.Load(claimID);
         if (!loaded || claim.Status === 'Revoked') return;

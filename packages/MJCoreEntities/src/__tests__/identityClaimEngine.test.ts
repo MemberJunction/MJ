@@ -54,6 +54,10 @@ vi.mock('@memberjunction/global', () => ({
 
 const mockClaimEntityInstance = new MockIdentityClaimEntity();
 
+const mockProviderToUse = {
+    GetEntityObject: vi.fn().mockImplementation(() => Promise.resolve(mockClaimEntityInstance))
+};
+
 vi.mock('@memberjunction/core', () => ({
     BaseEngine: class MockBaseEngine {
         private static _inst: unknown;
@@ -63,6 +67,15 @@ vi.mock('@memberjunction/core', () => ({
             return ctor._inst;
         }
         async Load(): Promise<void> {}
+        // The engine resolves entities through its own bound provider (data-access.md Rule #1)
+        // rather than `new Metadata()`, so the double has to expose one — same shape the other
+        // UserInfoEngine specs in this package use.
+        get ProviderToUse() {
+            return mockProviderToUse;
+        }
+        get RunViewProviderToUse() {
+            return mockProviderToUse;
+        }
     },
     RegisterForStartup: () => (target: unknown) => target,
     Metadata: class {

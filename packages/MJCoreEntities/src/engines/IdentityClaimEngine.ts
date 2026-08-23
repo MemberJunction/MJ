@@ -7,7 +7,7 @@
  * @module @memberjunction/core-entities/IdentityClaimEngine
  */
 
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup, Metadata, RunView } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup, RunView } from "@memberjunction/core";
 import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { MJIdentityClaimTypeEntity, MJIdentityClaimEntity } from "../generated/entity_subclasses";
 
@@ -193,7 +193,9 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
             throw new Error(`IdentityClaimType not found for ${params.ClaimTypeName ?? params.ClaimTypeID}`);
         }
 
-        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
+        // This class extends BaseEngine, so it already owns a provider — data-access.md Rule #1:
+        // "If a class instance already owns a provider … use this.ProviderToUse — never new Metadata()."
+        const md = this.ProviderToUse;
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         claim.NewRecord();
         claim.ClaimTypeID = claimType.ID;
@@ -231,7 +233,9 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
         const normalizedEmail = this.NormalizeEmail(email);
         if (!normalizedEmail) return [];
 
-        const rv = new RunView();
+        // Same provider as the rest of the engine; a bare `new RunView()` reads the separate
+        // global RunView provider slot instead of this engine's bound provider.
+        const rv = new RunView(this.RunViewProviderToUse);
         const escaped = normalizedEmail.replace(/'/g, "''");
         const result = await rv.RunView<MJIdentityClaimEntity>({
             EntityName: 'MJ: Identity Claims',
@@ -256,7 +260,9 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
             return { Success: false, ErrorMessage: 'Context user is required to redeem a claim' };
         }
 
-        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
+        // This class extends BaseEngine, so it already owns a provider — data-access.md Rule #1:
+        // "If a class instance already owns a provider … use this.ProviderToUse — never new Metadata()."
+        const md = this.ProviderToUse;
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         const loaded = await claim.Load(claimID);
         if (!loaded) {
@@ -327,7 +333,9 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
      * Revokes an existing claim.
      */
     public async RevokeClaim(claimID: string, contextUser?: UserInfo, reason?: string): Promise<void> {
-        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
+        // This class extends BaseEngine, so it already owns a provider — data-access.md Rule #1:
+        // "If a class instance already owns a provider … use this.ProviderToUse — never new Metadata()."
+        const md = this.ProviderToUse;
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         const loaded = await claim.Load(claimID);
         if (!loaded) {
