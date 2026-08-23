@@ -91,6 +91,22 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     }
 
     /**
+     * Re-read ONLY the IntegrationObject/IntegrationObjectField datasets, straight from the
+     * database. `RefreshItem` will not do here: it reloads through the local dataset cache —
+     * which is the very thing that goes stale when the catalog is edited by direct SQL, a
+     * sproc-based sync push, or another process (BaseEngine's auto-refresh only sees
+     * IN-PROCESS BaseEntity saves). Replacing the arrays is also what invalidates the memoised
+     * views: the per-object field index and the connectors' GetCachedFields memo both key on
+     * ARRAY IDENTITY, so they rebuild lazily on first read after the swap.
+     */
+    public async RefreshCatalog(contextUser?: UserInfo): Promise<void> {
+        for (const prop of ['_integrationObjects', '_integrationObjectFields']) {
+            const cfg = this.Configs.find(c => c.PropertyName === prop);
+            if (cfg) await this.LoadSingleConfig(cfg, (contextUser ?? this.ContextUser) as UserInfo, /*bypassCache*/ true);
+        }
+    }
+
+    /**
      * After all entities are loaded, wire up cross-references so callers
      * can navigate the object graph without extra lookups.
      */
