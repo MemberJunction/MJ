@@ -3475,6 +3475,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const orphans = allMaps.Rows.filter(m => !fetchedExternalIDs.has(m.ExternalSystemRecordID));
         if (orphans.length === 0) return;
 
+        // The sweep is a DELETE PATH and must answer to the same policy as every other delete.
+        // It used to call entity.Delete() unconditionally — its own warning text promised
+        // "archived/deleted" while the code only ever deleted, so a map configured SoftDelete
+        // (or DoNothing) had its rows physically removed by full syncs. DoNothing short-circuits
+        // the whole sweep: the policy says external deletions never touch MJ rows, and saying so
+        // once beats detecting the same "orphans" forever.
+        if (entityMap.DeleteBehavior === 'DoNothing') {
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'ORPHANS_POLICY_SKIPPED',
+                `${orphans.length} record(s) exist in MJ but were not returned by the external system on this ` +
+                `full sync. This map's DeleteBehavior is 'DoNothing', so none were touched.`,
+                { orphanCount: orphans.length },
+            );
+            return;
+        }
+
         console.log(`[IntegrationEngine] Orphan detection for ${entityMap.ExternalObjectName}: ${orphans.length} records in MJ not found in external system`);
         // Surface delete-detection in the structured stream (previously console-only). The orphan
         // COUNT is already in the run counts via RecordsDeleted, but a dedicated warning makes a
@@ -3483,7 +3500,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         logger?.warning(
             entityMap.ExternalObjectName ?? entityMap.ID,
             'ORPHANS_DETECTED',
-            `${orphans.length} record(s) exist in MJ but were not returned by the external system on this full sync — they will be archived/deleted (delete-detection). A large or unexpected count can indicate an incomplete upstream fetch, so review before trusting the deletions.`,
+            `${orphans.length} record(s) exist in MJ but were not returned by the external system on this full sync — ` +
+            `they will be ${entityMap.DeleteBehavior === 'SoftDelete' ? 'archived (SoftDelete)' : 'deleted'} and their record-map rows pruned (delete-detection). ` +
+            `A large or unexpected count can indicate an incomplete upstream fetch, so review before trusting the deletions.`,
             { orphanCount: orphans.length },
         );
 
@@ -3497,11 +3516,39 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(orphan.EntityRecordID, pkFields));
                 if (!loaded) {
                     console.log(`[IntegrationEngine] Orphan ${orphan.EntityRecordID} already deleted from MJ`);
+                    // The map row outlived its record. Nothing anywhere else deletes record-map
+                    // rows, so without this the same "orphan" is re-detected on EVERY subsequent
+                    // full sync and ORPHANS_DETECTED becomes a cumulative counter of history
+                    // rather than a signal about THIS run — observed live as a count that only
+                    // ever grew, sync after sync.
+                    await this.DeleteRecordMapRow(orphan.ID, contextUser);
+                    continue;
+                }
+                if (entityMap.DeleteBehavior === 'SoftDelete') {
+                    // Same archive shape as DeleteRecord's SoftDelete branch: the row stays,
+                    // marked Archived/tombstoned. The MAP row goes either way — the mapping's
+                    // job is done, and keeping it would re-detect this orphan forever.
+                    const fields = entity.Fields ?? [];
+                    const hasField = (n: string) => fields.some(f => f.Name === n);
+                    if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
+                    if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
+                    if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
+                    if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
+                    const archived = await entity.Save();
+                    if (archived) {
+                        result.RecordsDeleted++;
+                        await this.DeleteRecordMapRow(orphan.ID, contextUser);
+                        console.log(`[IntegrationEngine] Archived orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
+                    } else {
+                        const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
+                        console.warn(`[IntegrationEngine] Orphan archive blocked for ${entityMap.Entity} ${orphan.EntityRecordID} — ${reason}`);
+                    }
                     continue;
                 }
                 const deleted = await entity.Delete();
                 if (deleted) {
                     result.RecordsDeleted++;
+                    await this.DeleteRecordMapRow(orphan.ID, contextUser);
                     console.log(`[IntegrationEngine] Deleted orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
                 } else {
                     const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
@@ -3511,6 +3558,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.warn(`[IntegrationEngine] Orphan delete failed for ${entityMap.Entity} ${orphan.EntityRecordID}: ${msg}`);
             }
+        }
+    }
+
+    /**
+     * Removes one 'MJ: Company Integration Record Maps' row after delete-detection has handled
+     * its orphan (deleted, archived, or found already gone). A failure here is logged and
+     * swallowed: the orphan itself was handled, and the worst consequence of a surviving map
+     * row is one redundant re-detection on the next full sync.
+     */
+    private async DeleteRecordMapRow(mapRowID: string, contextUser: UserInfo): Promise<void> {
+        try {
+            const md = this.ProviderToUse;
+            const mapRow = await md.GetEntityObject('MJ: Company Integration Record Maps', contextUser);
+            const loaded = await mapRow.InnerLoad(CompositeKey.FromID(mapRowID));
+            if (!loaded) return;
+            const ok = await mapRow.Delete();
+            if (!ok) {
+                console.warn(`[IntegrationEngine] Record-map prune blocked for ${mapRowID} — ${mapRow.LatestResult?.CompleteMessage ?? 'unknown reason'}`);
+            }
+        } catch (err) {
+            console.warn(`[IntegrationEngine] Record-map prune failed for ${mapRowID}: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -4901,7 +4969,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegrationID: string,
         entityID: string,
         contextUser: UserInfo
-    ): Promise<{ Rows: Array<{ EntityRecordID: string; ExternalSystemRecordID: string }>; Complete: boolean; Error?: string }> {
+    ): Promise<{ Rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>; Complete: boolean; Error?: string }> {
         const PAGE_SIZE = IntegrationEngine.RecordMapPageSize;
         // Backstop only: at the default page size this is 50M mappings for one
         // (CompanyIntegration, Entity) pair. It exists so a provider that ignores the seek key
@@ -4910,7 +4978,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const filter = `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}'`;
 
         const rv = new RunView();
-        const rows: Array<{ EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        const rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }> = [];
         let afterID: string | undefined;
 
         for (let pageNo = 0; pageNo < MAX_PAGES; pageNo++) {
