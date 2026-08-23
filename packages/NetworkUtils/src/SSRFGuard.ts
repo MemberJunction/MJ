@@ -4,15 +4,17 @@ import { isIP } from "node:net";
 /**
  * SSRF (Server-Side Request Forgery) guard utilities.
  *
- * Server-side actions that fetch a caller-controlled URL are a read-SSRF risk: an attacker who can
- * invoke the action (via an AI agent, workflow, or API) could make the server request internal,
- * loopback, link-local, or cloud-metadata endpoints (e.g. `http://169.254.169.254/` — the IMDS
- * credentials endpoint) and read the response back. A scheme check alone does NOT prevent this, and
- * DNS rebinding + HTTP redirects defeat any naive hostname-string check.
+ * Any server-side code that fetches a caller-controlled URL is a read-SSRF risk: an attacker who can
+ * influence the URL (via an AI agent, an Action, a workflow, or an API parameter) could make the
+ * server request internal, loopback, link-local, or cloud-metadata endpoints (e.g.
+ * `http://169.254.169.254/` — the IMDS credentials endpoint) and read the response back. A scheme
+ * check alone does NOT prevent this, and DNS rebinding + HTTP redirects defeat any naive
+ * hostname-string check.
  *
  * This module resolves the hostname to ALL of its IP addresses and rejects the request if ANY of
  * them fall in a private/reserved range, and re-validates every redirect hop. It has no third-party
- * dependencies — only `node:dns` and `node:net`.
+ * dependencies — only `node:dns` and `node:net` — which is why it lives in this low-level package
+ * rather than in any one consumer.
  */
 
 /** Thrown when a URL is blocked because it resolves to a private or reserved address (or is malformed). */
@@ -186,7 +188,7 @@ function isBlockedIPv6Groups(groups: number[]): boolean {
  * Classifies a single resolved IP address (IPv4 or IPv6) as blocked or allowed.
  * Unparseable addresses are treated as blocked (fail closed).
  */
-export function isBlockedIPAddress(address: string): boolean {
+export function IsBlockedIPAddress(address: string): boolean {
     const family = isIP(address);
     if (family === 4) {
         const value = parseIPv4(address);
@@ -221,7 +223,7 @@ function stripIPv6Brackets(hostname: string): string {
  * @returns the parsed {@link URL} when it is safe to fetch.
  * @throws {SSRFError} if the URL is malformed, uses an unsupported scheme, or resolves to a blocked address.
  */
-export async function assertPublicUrl(rawUrl: string): Promise<URL> {
+export async function AssertPublicUrl(rawUrl: string): Promise<URL> {
     let parsed: URL;
     try {
         parsed = new URL(rawUrl);
@@ -240,7 +242,7 @@ export async function assertPublicUrl(rawUrl: string): Promise<URL> {
 
     const addresses = await resolveAllAddresses(hostname);
     for (const address of addresses) {
-        if (isBlockedIPAddress(address)) {
+        if (IsBlockedIPAddress(address)) {
             throw new SSRFError("URL resolves to a private or reserved address and was blocked");
         }
     }
@@ -270,37 +272,37 @@ async function resolveAllAddresses(hostname: string): Promise<string[]> {
 /** HTTP status codes that indicate a redirect carrying a `Location` header. */
 const REDIRECT_STATUS_CODES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
-/** Options accepted by {@link safeFetch} in addition to the standard `fetch` init. */
+/** Options accepted by {@link SafeFetch} in addition to the standard `fetch` init. */
 export type SafeFetchInit = RequestInit & {
     /** Maximum number of redirect hops to follow (each re-validated). Default: 5. */
-    maxRedirects?: number;
+    MaxRedirects?: number;
 };
 
 /**
  * A drop-in replacement for `fetch` that is safe against SSRF.
  *
- * It validates the target with {@link assertPublicUrl}, then fetches with automatic redirects
+ * It validates the target with {@link AssertPublicUrl}, then fetches with automatic redirects
  * DISABLED (`redirect: 'manual'`). When the response is a 3xx with a `Location` header, it resolves
- * the redirect target against the current URL, re-runs {@link assertPublicUrl} on it, and follows
- * the redirect manually — up to `maxRedirects` hops. Re-validating every hop is what closes the
+ * the redirect target against the current URL, re-runs {@link AssertPublicUrl} on it, and follows
+ * the redirect manually — up to `MaxRedirects` hops. Re-validating every hop is what closes the
  * redirect + DNS-rebinding bypass that a one-time hostname check would miss.
  *
  * @param rawUrl - the caller-controlled URL to fetch.
- * @param init - standard `fetch` init plus an optional `maxRedirects` (default 5).
+ * @param init - standard `fetch` init plus an optional `MaxRedirects` (default 5).
  * @returns the final {@link Response} after following any (validated) redirects.
  * @throws {SSRFError} if any hop's URL is blocked.
  * @throws {Error} if the redirect limit is exceeded.
  */
-export async function safeFetch(rawUrl: string, init?: SafeFetchInit): Promise<Response> {
-    const maxRedirects = init?.maxRedirects ?? 5;
-    const { maxRedirects: _ignored, ...fetchInit } = init ?? {};
+export async function SafeFetch(rawUrl: string, init?: SafeFetchInit): Promise<Response> {
+    const maxRedirects = init?.MaxRedirects ?? 5;
+    const { MaxRedirects: _ignored, ...fetchInit } = init ?? {};
 
     let currentUrl = rawUrl;
     let redirectCount = 0;
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
-        const validated = await assertPublicUrl(currentUrl);
+        const validated = await AssertPublicUrl(currentUrl);
         const response = await fetch(validated.href, { ...fetchInit, redirect: "manual" });
 
         if (!REDIRECT_STATUS_CODES.has(response.status)) {

@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { JSONParamHelper } from "../utilities/json-param-helper";
-import { safeFetch, SSRFError } from "../utilities/ssrf-guard";
+import { SafeFetch, SSRFError } from "@memberjunction/network-utils";
 
 /**
  * Action that executes GraphQL queries and mutations
@@ -139,7 +139,7 @@ export class GraphQLQueryAction extends BaseAction {
             // Make GraphQL request. The endpoint is caller-controlled, so route it through the
             // SSRF guard — private/loopback/link-local/reserved targets are blocked and each
             // redirect hop is re-validated.
-            const response = await safeFetch(endpoint, {
+            const response = await SafeFetch(endpoint, {
                 method: 'POST',
                 headers: requestHeaders,
                 body: JSON.stringify(requestBody),

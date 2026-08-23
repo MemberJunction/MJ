@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { safeFetch, SSRFError } from "../utilities/ssrf-guard";
+import { SafeFetch, SSRFError } from "@memberjunction/network-utils";
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
 import pdfParse from 'pdf-parse';
@@ -745,7 +745,7 @@ export class WebPageContentAction extends BaseAction {
             try {
                 // Route through the SSRF guard: the URL is caller-controlled, so private/loopback/
                 // link-local/reserved targets are blocked and every redirect hop is re-validated.
-                const response = await safeFetch(url, options);
+                const response = await SafeFetch(url, options);
 
                 // Retry on specific status codes that might be transient
                 if (attempt < maxRetries && this.shouldRetry(response.status)) {

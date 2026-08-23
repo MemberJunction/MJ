@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { JSONParamHelper } from "../utilities/json-param-helper";
-import { safeFetch, SSRFError } from "../utilities/ssrf-guard";
+import { SafeFetch, SSRFError } from "@memberjunction/network-utils";
 
 /** Authentication configuration accepted by the HTTP Request action. */
 interface HTTPAuthConfig {
@@ -25,7 +25,7 @@ interface HTTPRequestContext {
 /**
  * Action that makes HTTP requests with full control over headers, authentication, and request options.
  *
- * The target URL is caller-controlled, so it is routed through {@link safeFetch}, which blocks
+ * The target URL is caller-controlled, so it is routed through {@link SafeFetch}, which blocks
  * private/loopback/link-local/reserved addresses (including the cloud metadata endpoint) and
  * re-validates every redirect hop to defeat DNS-rebinding / redirect SSRF bypasses.
  *
@@ -117,12 +117,12 @@ export class HTTPRequestAction extends BaseAction {
                 }
             }
 
-            const response = await safeFetch(context.url.href, {
+            const response = await SafeFetch(context.url.href, {
                 method,
                 headers: context.headers,
                 body: context.body,
                 signal: AbortSignal.timeout(timeout),
-                maxRedirects: followRedirects ? maxRedirects : 0
+                MaxRedirects: followRedirects ? maxRedirects : 0
             });
 
             return await this.buildResult(params, response, responseType, String(url), method);
