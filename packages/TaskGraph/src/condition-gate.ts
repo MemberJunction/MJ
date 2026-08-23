@@ -295,8 +295,17 @@ export function IsDataAbsence(errorMessage: string | undefined): boolean {
  * the expression tripping over data that is not there, whatever operator it tripped over. So the
  * classification is inverted: name the broken-guard case, and treat the rest as absence. The
  * signature list above is kept as a fast path and as documentation of the shapes seen in the wild.
+ *
+ * **A POLICY REFUSAL is the second broken-guard shape.** `SafeExpressionEvaluator` refuses a
+ * construct outside its allowlist before it ever compiles, so the failure is not the expression
+ * meeting absent data — it is a guard this build will never run, on any input. That was nearly
+ * unreachable while the screen was a textual denylist that refused almost nothing; an AST allowlist
+ * makes it reachable for a graph already stored in the database, and without this signature such a
+ * graph would silently REROUTE — `drop`, with `TaskGraphDispatcher` logging a reason only on
+ * `hold`. Holding instead is the visible-and-recoverable reading this file argues for everywhere
+ * else: an upgrade stalls loudly rather than quietly taking a different path.
  */
 export function IsBrokenGuard(errorMessage: string | undefined): boolean {
     if (!errorMessage) return false;
-    return /is not defined|reference ?error|can't find variable/i.test(errorMessage);
+    return /is not defined|reference ?error|can't find variable|forbidden construct/i.test(errorMessage);
 }

@@ -6,7 +6,7 @@ import {
   AppLockGuardService as AppLockGuard
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
-import { LogError, Metadata, StartupManager, IMetadataProvider } from '@memberjunction/core';
+import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
@@ -115,6 +115,14 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
       componentRef.instance[hookName]();
     }
   }
+}
+
+function readNewRecordValuesQuery(queryParams: { [key: string]: string | string[] | undefined | null }): string | undefined {
+  const raw = queryParams[NEW_RECORD_VALUES_QUERY_PARAM] ?? queryParams['newRecordValues'];
+  if (raw == null) return undefined;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
 @Injectable({
@@ -246,6 +254,8 @@ export class ResourceResolver implements Resolve<void> {
           // /app/:appName/record/:entityName/:recordId
           const entityName = decodeURIComponent(param1);
           const recordId = param2;
+          const isNew = IsNewEntityRecordUrlId(recordId);
+          const newRecordValues = readNewRecordValuesQuery(route.queryParams);
 
           const entityInfo = md.EntityByName(entityName);
           if (!entityInfo) {
@@ -255,15 +265,17 @@ export class ResourceResolver implements Resolve<void> {
 
           this.tabService.OpenTab({
             ApplicationId: app.ID,
-            Title: `${entityName} - ${recordId}`,
+            Title: isNew ? `New ${entityName}` : `${entityName} - ${recordId}`,
             Configuration: {
               resourceType: RECORDS_RESOURCE_TYPE,
               Entity: entityName,
-              recordId: recordId,
+              recordId: isNew ? '' : recordId,
+              isNew: isNew || undefined,
+              NewRecordValues: newRecordValues,
               appName: appName,
               appId: app.ID
             },
-            ResourceRecordId: recordId,
+            ResourceRecordId: isNew ? '' : recordId,
             IsPinned: false
           });
           return;
@@ -491,6 +503,8 @@ export class ResourceResolver implements Resolve<void> {
       // /resource/record/:entityName/:recordId
       const entityName = decodeURIComponent(route.params['entityName']);
       const recordId = route.params['recordId'];
+      const isNew = IsNewEntityRecordUrlId(recordId);
+      const newRecordValues = readNewRecordValuesQuery(route.queryParams);
 
       const entityInfo = md.EntityByName(entityName);
       if (!entityInfo) {
@@ -501,13 +515,15 @@ export class ResourceResolver implements Resolve<void> {
       // Queue tab request via TabService
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
-        Title: `${entityName} - ${recordId}`,
+        Title: isNew ? `New ${entityName}` : `${entityName} - ${recordId}`,
         Configuration: {
           resourceType: RECORDS_RESOURCE_TYPE,
           Entity: entityName,
-          recordId: recordId
+          recordId: isNew ? '' : recordId,
+          isNew: isNew || undefined,
+          NewRecordValues: newRecordValues
         },
-        ResourceRecordId: recordId,
+        ResourceRecordId: isNew ? '' : recordId,
         IsPinned: false
       });
       return;

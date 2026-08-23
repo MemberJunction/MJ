@@ -49,6 +49,8 @@ export type {
   SQLValidationResult,
   IRSUCodeGenRunner,
   RSUPendingWork,
+  RSUObserverEvent,
+  RSUPipelineObserver,
 } from './RuntimeSchemaManager.js';
 
 // ─── Metrics & Observability ────────────────────────────────────────

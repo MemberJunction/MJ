@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/schema-engine",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction Schema Engine - generic, platform-aware DDL generation for any MJ consumer (integrations, agents, developers)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,10 +14,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/sql-dialect": "6.1.0-edge.2",
-    "@memberjunction/queue": "6.1.0-edge.2",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/sql-dialect": "6.1.0-edge.3",
+    "@memberjunction/queue": "6.1.0-edge.3",
     "@octokit/rest": "^21.1.1"
   },
   "devDependencies": {
@@ -30,5 +31,5 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "author": "MemberJunction.com",
-  "license": "ISC"
+  "license": "BUSL-1.1"
 }

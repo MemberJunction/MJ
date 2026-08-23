@@ -20,6 +20,7 @@ import type { MJEntityEntity, MJUserSettingEntity, MJUserViewEntity, MJQueryEnti
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys } from '@memberjunction/testing-integration';
 import { UniqueFilter } from '@memberjunction/testing-integration';
+import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck } from '@memberjunction/testing-integration';
 
@@ -27,6 +28,46 @@ const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
 
 /** The ordered server-cache bundle. Numeric order is intentional and load-bearing. */
+/**
+ * Asserts that a Name-ordered sequence really is ordered BY NAME, in the DATABASE's collation.
+ *
+ * Two separate properties have to hold and they are orthogonal — this is the trap:
+ *
+ *   · DIRECTION — that ASC and DESC differ, and are each other's reverse.
+ *   · COLUMN — that the ordering column is the one that was asked for.
+ *
+ * Reverse-equality alone proves only the first. It is invariant under substituting any other total
+ * order, so a product that resolved `Name ASC` to `ORDER BY ID` satisfies it perfectly — proven by
+ * mutating the provider's ORDER BY to `"ID"` and watching this bundle exit 0. The `localeCompare`
+ * predicate this replaced DID pin the column; it just pinned it with the WRONG collation (ICU,
+ * against a database sorting in glibc `en_US.utf8`, which disagree on names containing spaces).
+ *
+ * MIN/MAX are computed by the database, so they carry its collation for free — pinning the column
+ * without reintroducing the collation assumption that made the old oracle fail.
+ */
+async function assertOrderedByName(
+    rv: RunView,
+    params: Record<string, unknown>,
+    names: string[],
+    ctx: IntegrationCheckContext,
+    label: string,
+): Promise<void> {
+    Assert(names.length > 1, `${label}: need 2+ rows to prove ordering`);
+    const agg = await rv.RunView({
+        ...params,
+        Aggregates: [
+            { expression: 'MIN(Name)', alias: 'MinName' },
+            { expression: 'MAX(Name)', alias: 'MaxName' },
+        ],
+    } as Parameters<RunView['RunView']>[0], ctx.User);
+    Assert(agg.Success, `${label}: aggregate read failed: ${agg.ErrorMessage}`);
+    const min = agg.AggregateResults?.find(a => a.alias === 'MinName')?.value;
+    const max = agg.AggregateResults?.find(a => a.alias === 'MaxName')?.value;
+    Assert(min != null && max != null, `${label}: MIN/MAX aggregates unavailable — cannot pin the ordering column`);
+    AssertEqual(names[0], String(min), `${label}: first row must be the database's MIN(Name) — ordered by the wrong column?`);
+    AssertEqual(names[names.length - 1], String(max), `${label}: last row must be the database's MAX(Name) — ordered by the wrong column?`);
+}
+
 export const ServerCacheChecks: NamedCheck[] = [
     {
         Id: 'server-cache.S1',
@@ -284,13 +325,40 @@ export const ServerCacheChecks: NamedCheck[] = [
                 Fields: ['Name'],
                 ResultType: 'simple' as const
             };
-            const isSorted = (rows: Record<string, unknown>[]): boolean =>
-                rows.every((r, i) => i === 0 || String(rows[i - 1].Name).localeCompare(String(r.Name)) <= 0);
+            // Sortedness is asserted against the DATABASE's own collation, not JavaScript's.
+            // `localeCompare` is ICU; PostgreSQL here is glibc `en_US.utf8`, which ignores spaces
+            // at the primary level — so it orders 'MJ: Action Contexts' before
+            // 'MJ: Action Context Types' while `localeCompare` does the reverse. Both are correctly
+            // sorted; they simply disagree about what sorted MEANS. Asserting one collation against
+            // the other's output fails a database that did exactly what it was asked.
+            //
+            // The collation-free oracle: a DESC read of the same rows must be the exact reverse of
+            // the ASC read. That is independent of any collation, and it catches OrderBy being
+            // dropped from the cache fingerprint entirely. It is NOT stronger than a sortedness
+            // predicate, though — the two are orthogonal. Reverse-equality pins the DIRECTION and
+            // says nothing about the COLUMN, so `assertOrderedByName` below pins that separately,
+            // using database-computed MIN/MAX so no JavaScript collation is involved.
             const miss = await rv.RunView(params, ctx.User);
-            Assert(miss.Success && isSorted(miss.Results), 'miss-path results must be sorted by Name');
+            Assert(miss.Success, `miss-path failed: ${miss.ErrorMessage}`);
             const hit = await rv.RunView(params, ctx.User);
-            Assert(hit.Success && isSorted(hit.Results), 'hit-path results must be sorted by Name');
+            Assert(hit.Success, `hit-path failed: ${hit.ErrorMessage}`);
             AssertEqual(hit.Results.length, miss.Results.length, 'hit and miss row counts must match');
+            // The cache must return the SAME sequence, not merely the same rows.
+            AssertEqual(
+                hit.Results.map(r => String(r.Name)).join('\u0001'),
+                miss.Results.map(r => String(r.Name)).join('\u0001'),
+                'hit-path must return the miss-path ordering, row for row'
+            );
+            const descRes = await rv.RunView({ ...params, OrderBy: 'Name DESC' }, ctx.User);
+            Assert(descRes.Success, `desc read failed: ${descRes.ErrorMessage}`);
+            const ascNames = miss.Results.map(r => String(r.Name));
+            const descNames = descRes.Results.map(r => String(r.Name));
+            Assert(ascNames.length > 1, 'need 2+ rows to prove ordering');
+            Assert(new Set(ascNames).size === ascNames.length, 'precondition: Names must be distinct for reverse-equality');
+            AssertEqual(descNames.join('\u0001'), [...ascNames].reverse().join('\u0001'),
+                'DESC must be the exact reverse of ASC — OrderBy was not honored');
+            // …and that the order is by NAME, not merely by something.
+            await assertOrderedByName(rv, params, ascNames, ctx, 'S15');
         }
     },
     {
@@ -584,8 +652,23 @@ export const ServerCacheChecks: NamedCheck[] = [
             Assert(desc.Success, `desc failed: ${desc.ErrorMessage}`);
             AssertEqual(desc.Results.length, asc.Results.length, 'ASC and DESC must return the same row set');
             Assert(desc.Results.length > 1, 'need 2+ rows to prove ordering');
-            const isDescending = desc.Results.every((r, i) => i === 0 || String(desc.Results[i - 1].Name).localeCompare(String(r.Name)) >= 0);
-            Assert(isDescending, 'OrderBy cross-serve: DESC results were not descending — likely served the ASC-ordered slot');
+            // Reverse-equality rather than a `localeCompare` descending predicate: the database
+            // sorts in its OWN collation (glibc `en_US.utf8` on PostgreSQL, which ignores spaces at
+            // the primary level), and JavaScript's ICU comparison disagrees with it on names like
+            // 'MJ: Action Contexts' vs 'MJ: Action Context Types'. Asserting the JS collation
+            // against database-ordered rows fails a perfectly correct result. Comparing DESC to the
+            // reversed ASC is collation-free and tests the actual claim — that these are two
+            // independent cache slots — more directly than "is it descending" ever did.
+            const ascNames = asc.Results.map(r => String(r.Name));
+            Assert(new Set(ascNames).size === ascNames.length, 'precondition: Names must be distinct for reverse-equality');
+            AssertEqual(
+                desc.Results.map(r => String(r.Name)).join('\u0001'),
+                [...ascNames].reverse().join('\u0001'),
+                'OrderBy cross-serve: DESC was not the reverse of ASC — likely served the ASC-ordered slot'
+            );
+            await assertOrderedByName(
+                rv, { EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name'], ResultType: 'simple' },
+                ascNames, ctx, 'S27');
         }
     },
     {

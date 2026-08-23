@@ -35,6 +35,7 @@ import {
     FormatValidationErrors,
     NormalizeDependency,
     RankGraphNodes,
+    SanitizeInvocationEnvelope,
     ValidateTaskGraphSpec,
     type TaskGraphInvocationEnvelope,
     type TaskGraphSpec,
@@ -46,6 +47,7 @@ import {
 import { UUIDsEqual } from '@memberjunction/global';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
+import { KickTaskGraphDispatchers } from './task-graph-kick';
 
 /**
  * Normalizes a caller-supplied reinvoke depth to a safe cap seed.
@@ -86,6 +88,8 @@ export type TaskGraphSubmitContext = {
      * process that accepted the graph.
      */
     Invocation?: TaskGraphInvocationEnvelope;
+    /** Seed `$.debug` on the parent at insert. See `TaskGraphStartDebug`. */
+    Debug?: { paused?: boolean };
 };
 
 /**
@@ -212,6 +216,41 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
     } catch {
         return { ...DEFAULT_PARENT_METADATA };
     }
+}
+
+/**
+ * The JSON bag `persistParent` writes. Exported so start-paused is testable without a database —
+ * Pause-after-submit races the first dispatcher poll, so this bag is the only place `paused: true`
+ * is guaranteed to land before anyone claims.
+ */
+export function BuildTaskGraphParentInputPayload(args: {
+    continuation: TaskGraphParentMetadata['continuation'];
+    reinvokeDepth: number;
+    failureSemantics: NonNullable<TaskGraphParentMetadata['failureSemantics']>;
+    submittedByAgentRunID: string | null;
+    submittedByUserID: string | null;
+    invocation?: { data?: unknown; context?: unknown } | null;
+    startPaused?: boolean;
+}): Record<string, unknown> {
+    return {
+        continuation: args.continuation,
+        reinvokeDepth: args.reinvokeDepth,
+        failureSemantics: args.failureSemantics,
+        submittedByAgentRunID: args.submittedByAgentRunID,
+        submittedByUserID: args.submittedByUserID,
+        ...(args.invocation
+            ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
+            : {}),
+        ...(args.startPaused
+            ? {
+                debug: {
+                    paused: true,
+                    pausedReason: 'user' as const,
+                    pausedBy: args.submittedByUserID,
+                },
+            }
+            : {}),
+    };
 }
 
 /**
@@ -576,6 +615,7 @@ export class TaskGraphService {
                 `[TaskGraphService] Submitted "${spec.workflowName}": parent ${parentTaskID}, ${taskIDMap.size} task(s). ` +
                 `Awaiting dispatcher pickup.`,
             );
+            KickTaskGraphDispatchers();
             return { Success: true, ParentTaskID: parentTaskID, TaskIDMap: taskIDMap };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -971,8 +1011,9 @@ export class TaskGraphService {
                 TaskClaimStore.DebugField('$.debug.pausedBy', pausedBy ? { Kind: 'string', Value: pausedBy } : { Kind: 'null' }),
                 TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
                 TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'null' }),
             ],
-            Next: { ...current, paused: true, pausedBy, pausedReason: 'user', pausedAtTaskID: null, step: undefined },
+            Next: { ...current, paused: true, pausedBy, pausedReason: 'user', pausedAtTaskID: null, step: undefined, skipBreakpointTaskID: undefined },
         }));
     }
 
@@ -980,11 +1021,16 @@ export class TaskGraphService {
     public async ResumeGraph(parentTaskID: string, context: TaskGraphSubmitContext) {
         return this.writeDebugFields(parentTaskID, context, (current) => {
             const next: TaskGraphDebugState = { ...current };
+            // Continue from a breakpoint must run the stopped task. Stamping it here so the next
+            // poll does not re-hit the same still-eligible breakpoint without claiming.
+            const skip = current.pausedReason === 'breakpoint' ? current.pausedAtTaskID : null;
             delete next.paused;
             delete next.pausedBy;
             delete next.pausedReason;
             delete next.pausedAtTaskID;
             delete next.step;
+            if (skip) next.skipBreakpointTaskID = skip;
+            else delete next.skipBreakpointTaskID;
             return {
                 Fields: [
                     TaskClaimStore.DebugField('$.debug.paused', { Kind: 'null' }),
@@ -992,6 +1038,9 @@ export class TaskGraphService {
                     TaskClaimStore.DebugField('$.debug.pausedBy', { Kind: 'null' }),
                     TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
                     TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
+                    skip
+                        ? TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'string', Value: skip })
+                        : TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'null' }),
                 ],
                 Next: next,
             };
@@ -1365,18 +1414,34 @@ export class TaskGraphService {
         // dispatcher memory because the dispatcher that finishes a graph is frequently not the
         // process that accepted it — a restart, a second instance, or simply a long-running graph
         // all break that assumption. Anything the completion path needs has to be durable too.
-        parent.InputPayload = JSON.stringify({
+        // Done before the write, and reported: a value that silently left the envelope becomes a
+        // condition reading absent-data and taking the other branch, with nothing saying why.
+        const sanitized = SanitizeInvocationEnvelope(context.Invocation);
+        if (sanitized.DroppedPaths.length > 0) {
+            LogStatus(
+                `[TaskGraphService] Invocation envelope for '${spec.workflowName}' dropped ` +
+                `${sanitized.DroppedPaths.length} non-persistable value(s): ` +
+                `${sanitized.DroppedPaths.join(', ')}. Conditions referencing them will read as ` +
+                `absent data. Pass plain JSON values for anything a condition needs.`,
+            );
+        }
+        // Only written when the caller supplied one, so a graph with no invocation envelope
+        // carries no key at all rather than a misleading empty object. SANITIZED first: the
+        // agent's `context` is documented as possibly a class instance holding connections and
+        // credentials, and carrying it verbatim threw `Converting circular structure to JSON`
+        // on any context with a socket in it — killing the run at submit time — while a context
+        // that happened to serialize would have written its credentials to this row.
+        parent.InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             failureSemantics: spec.failureSemantics ?? 'block',
             submittedByAgentRunID: context.AgentRunID ?? null,
-            // Only written when the caller supplied one, so a graph with no invocation envelope
-            // carries no key at all rather than a misleading empty object.
-            ...(context.Invocation
-                ? { invocation: { data: context.Invocation.Data, context: context.Invocation.Context } }
-                : {}),
             submittedByUserID: context.ContextUser?.ID ?? null,
-        } satisfies TaskGraphParentMetadata);
+            invocation: sanitized.Envelope
+                ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
+                : null,
+            startPaused: context.Debug?.paused === true,
+        }));
         if (!(await parent.Save())) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }

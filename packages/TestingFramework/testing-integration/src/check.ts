@@ -60,6 +60,17 @@ export interface RlsFixture {
     EntityName: string;
     /** True iff discovery found two distinct users with DIFFERENT non-empty Read RLS clauses. */
     Usable: boolean;
+    /**
+     * The effective Read RLS clauses discovery actually compared to set `Usable` — UserA's and
+     * UserB's, in that order. Empty strings when `Usable` is false.
+     *
+     * Carried on the fixture rather than left to be re-derived by each check, because discovery runs
+     * ONCE per suite against the SERVER provider while client-transport checks hold a Network
+     * provider that does not reproduce these clauses (it returns empty for every user). A check that
+     * re-derived them there saw two identical clauses and reported a cache leak that did not exist.
+     */
+    ClauseA: string;
+    ClauseB: string;
     /** Why the fixture is unusable (for the skip note), when Usable is false. */
     Reason?: string;
     /**
@@ -386,6 +397,18 @@ export interface ConversationCompactionFixture {
     AgentRuns: Array<{ Delete(): Promise<boolean> }>;
     /** Tagged MJ: AI Agent Run Steps fixture rows (deleted first). */
     Steps: Array<{ Delete(): Promise<boolean> }>;
+    /**
+     * Rows the transcript-window checks create that REFERENCE a conversation detail —
+     * `MJ: Conversation Detail Artifacts` junctions. Deleted before the details they point at.
+     */
+    WindowJunctions: Array<{ Delete(): Promise<boolean> }>;
+    /**
+     * Rows the transcript-window checks create that details reference, or that the junctions
+     * reference — agent sessions, artifact versions, artifacts. Deleted LAST (after the
+     * details and conversations), in reverse insertion order so a version goes before its
+     * artifact.
+     */
+    WindowRoots: Array<{ Delete(): Promise<boolean> }>;
 }
 
 /**

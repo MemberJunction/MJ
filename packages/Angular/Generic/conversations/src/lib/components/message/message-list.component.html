@@ -18,6 +18,25 @@
     </div>
   }
 
+  <!-- Windowed transcript: older pages load when this scrolls into view (IntersectionObserver
+       in the component, not a scroll listener). Absent entirely once the top is reached. -->
+  @if (HasMoreAbove) {
+    <div #olderSentinel class="transcript-older-sentinel">
+      @if (IsLoadingOlder) {
+        <mj-loading text="Loading earlier messages…" size="small"></mj-loading>
+      } @else {
+        <span class="transcript-older-label">Earlier messages</span>
+      }
+    </div>
+  }
+
+  <!-- Height-holding stand-in for a timeline item that has been unmounted to keep the DOM
+       bounded. Declared here but rendered into #messageContainer at the item's own index,
+       so scroll geometry is unchanged. -->
+  <ng-template #spacerTemplate let-height="height">
+    <div class="transcript-spacer" [style.height.px]="height" aria-hidden="true"></div>
+  </ng-template>
+
   <ng-container #messageContainer></ng-container>
 
   @if (messages.length === 0 && showEmptyFill) {

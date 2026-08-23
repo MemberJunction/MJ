@@ -8,6 +8,23 @@ import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './
 import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
 
 /**
+ * Schemas whose entities should not appear as related-entity form tabs.
+ *
+ * `excludeSchemas` defaults include `__mj` so CodeGen does not emit core
+ * entity *files* into a downstream package. Those entities still exist at
+ * runtime via `@memberjunction/core-entities`, so filtering them here
+ * silently dropped core-entity tabs for every default config.
+ */
+function schemasExcludedFromGeneratedForms(): Set<string> {
+    const core = String(mjCoreSchema ?? '__mj').toLowerCase();
+    return new Set(
+        (configInfo.excludeSchemas || [])
+            .map(s => s.toLowerCase())
+            .filter(s => s !== core && s !== '__mj'),
+    );
+}
+
+/**
  * Represents metadata about an Angular form section that is generated for an entity
  */
 export class AngularFormSectionInfo {
@@ -858,9 +875,20 @@ ${indentedFormHTML}
         // can only have 0 or 1 records (disjoint subtypes), so a grid panel is redundant
         const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
 
+        const excludedSchemas = schemasExcludedFromGeneratedForms();
+
         // Sort related entities deterministically using the shared sort with cascading tiebreakers
         const sortedRelatedEntities = sortRelatedEntities(
-            entity.RelatedEntities.filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
+            entity.RelatedEntities.filter(re => {
+                if (!re.DisplayInForm || isaChildIDs.has(re.RelatedEntityID)) {
+                    return false;
+                }
+                const targetEntity = md.Entities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
+                if (targetEntity && excludedSchemas.has(targetEntity.SchemaName.toLowerCase())) {
+                    return false;
+                }
+                return true;
+            })
         );
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
@@ -964,14 +992,18 @@ ${componentCodeWithIndent}
             return tabs;
         }
 
+        const excludedSchemas = schemasExcludedFromGeneratedForms();
         let index = startIndex;
         for (const organicKey of organicKeys) {
             for (const relatedEntity of organicKey.RelatedEntities) {
+                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID));
+                if (re && excludedSchemas.has(re.SchemaName.toLowerCase())) {
+                    continue;
+                }
                 const tabName = relatedEntity.DisplayName || relatedEntity.RelatedEntity;
 
                 // Determine icon from the related entity
                 let iconClass = 'fa fa-link';
-                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID));
                 if (re && re.Icon && re.Icon.length > 0) {
                     iconClass = re.Icon;
                 }
@@ -987,7 +1019,7 @@ ${componentCodeWithIndent}
                 const template = `<mj-explorer-entity-data-grid
     [Params]="BuildOrganicKeyViewParamsByNames('${organicKey.Name.replace(/'/g, "\\'")}','${relatedEntity.RelatedEntity.replace(/'/g, "\\'")}')"
     [AllowLoad]="${allowLoadCheck}"
-    [ShowToolbar]="false"
+    [ShowToolbar]="true"
     (Navigate)="OnFormNavigate($event)"
     ${afterDataLoadEvent}
     >
@@ -1309,26 +1341,6 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
         return parts.join('\n');
       }
 
-      /**
-       * @deprecated Use innerCollapsiblePanelsHTML instead
-       * Generates the HTML for the tab strip containing all form sections
-       * @param additionalSections Array of field-based form sections
-       * @param relatedEntitySections Array of related entity sections
-       * @returns HTML string for the complete tab strip
-       */
-      protected innerTabStripHTML(additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-        // come up with the overall order by looking for the tabs that have DisplayLocation === 'Before Field Tabs' and put those, in sequence order
-        // ahead of the additionalSections, then do the additionalSections, and then do the relatedEntitySections
-        const relatedEntityBeforeFieldTabs = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
-        const relatedEntityAfterFieldTabs = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
-
-      return `                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    ${relatedEntityBeforeFieldTabs ? relatedEntityBeforeFieldTabs.map(s => s.TabCode).join('\n') : ''}
-                    ${additionalSections ? additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top).map(s => s.TabCode).join('\n               ') : ''}
-                    ${relatedEntityAfterFieldTabs ? relatedEntityAfterFieldTabs.map(s => s.TabCode).join('\n') : ''}
-                </mj-tabstrip>`
-      }
-      
       /**
        * Generates HTML without a splitter layout for entities without a top area
        * @param topArea HTML for the top area section (expected to be empty)

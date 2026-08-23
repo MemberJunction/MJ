@@ -29,6 +29,9 @@ mj-record-form-container {
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--mj-bg-page);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ============================================
@@ -40,6 +43,8 @@ mj-record-form-container {
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Widen max-width when ISA side panel is present */
@@ -60,6 +65,103 @@ mj-record-form-container {
   align-items: flex-start;
 }
 
+.mj-forms-panels-container:has(.mj-forms-layout--left-nav) {
+  padding: 16px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  /* Definite height = the scroll-area's client box. min-height: 100% alone
+     lets the column grow with content and never gives related grids a
+     containing-block height, so Height:auto (100%) on the grid collapses. */
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Centered left-nav keeps the form column at the same 920px as accordion,
+   plus the rail. Full-width still uses .mj-forms-panels--full-width. */
+.mj-forms-panels-container:has(.mj-forms-layout--left-nav):not(.mj-forms-panels--full-width) {
+  max-width: 1160px;
+}
+
+.mj-forms-layout-row.mj-forms-layout--left-nav {
+  flex: 1;
+  min-height: 0;
+  /* Wins over .mj-forms-layout-row { align-items: flex-start } so the
+     body column stretches to the rail / viewport instead of hugging content. */
+  align-items: stretch;
+  gap: 16px;
+}
+
+/* Left-nav: only the active rail item is in the body. Slot-mounted
+   panels never inject the container coordinator, so host classes set
+   from the container are the hide/show channel that always reaches them. */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-hidden,
+.mj-forms-layout--accordion mj-collapsible-panel.mj-chrome-hidden {
+  display: none;
+}
+
+/* Selected item: no accordion chrome — the rail is the header. */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-show .mj-forms-panel-header {
+  display: none;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-show .mj-forms-panel {
+  box-shadow: none;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-show .mj-forms-panel-body--collapsed {
+  max-height: none;
+  padding: 0;
+  opacity: 1;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-show .mj-forms-panel-content {
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show {
+  /* Content-sized (see RelatedGridHeightPx). Do not flex-fill leftover
+     column space — a form header above the grid can collapse that to 0. */
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+/* Accordion related panels use a 400px resizable box. Left-nav grids
+   set their own pixel height from row count (RelatedGridHeightPx). */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-content {
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+  resize: none;
+}
+
+.mj-forms-layout--left-nav .mj-forms-all-panels {
+  gap: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Details (field panels) can be taller than the viewport — scroll inside the
+   column. Related grids scroll inside AG Grid instead. */
+.mj-forms-layout--left-nav .mj-forms-all-panels:has(mj-collapsible-panel.mj-chrome-show:not(.mj-panel--related-entity)) {
+  overflow-y: auto;
+}
+
+.mj-forms-layout--left-nav .mj-forms-all-panels > *:not(mj-collapsible-panel.mj-panel--related-entity) {
+  flex-shrink: 0;
+}
+
+.mj-forms-layout--left-nav .biz-hero {
+  margin-bottom: 4px;
+}
+
 /* All panels in a single flex container — CSS order drives sequencing */
 .mj-forms-all-panels {
   display: flex;
@@ -70,8 +172,401 @@ mj-record-form-container {
 }
 
 /* Hide related entity panels in edit mode (variant host class on mj-collapsible-panel) */
-.mj-forms-panels--edit-mode .mj-panel--related-entity {
+.mj-forms-panels--edit-mode .mj-panel--related-entity,
+.mj-forms-panels--edit-mode .mj-forms-more-overflow {
   display: none;
+}
+
+/* Detail / More panels sort after the overflow footer */
+mj-collapsible-panel.mj-form-role-detail,
+mj-collapsible-panel.mj-form-role-more {
+  order: 8500;
+}
+
+.mj-forms-more-overflow {
+  order: 8400;
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--mj-border-subtle);
+}
+
+.mj-forms-more-overflow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mj-forms-more-overflow-toggle:hover {
+  color: var(--mj-text-secondary);
+}
+
+.mj-forms-more-overflow-label {
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-forms-more-overflow-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mj-text-disabled);
+  font-weight: var(--mj-font-normal);
+}
+
+.mj-forms-more-overflow-toggle .fa-chevron-right,
+.mj-forms-more-overflow-toggle .fa-chevron-down {
+  margin-left: auto;
+}
+
+.mj-forms-chrome-rail {
+  flex: 0 0 auto;
+  width: 200px;
+  max-width: 360px;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  align-self: stretch;
+  min-height: 0;
+  padding: 4px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+}
+
+.mj-forms-chrome-rail.is-resizing {
+  user-select: none;
+}
+
+.mj-forms-chrome-rail.is-collapsed {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  padding: 8px 0;
+  overflow: hidden;
+}
+
+.mj-forms-chrome-rail-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+
+.mj-forms-chrome-rail-resizer::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+}
+
+.mj-forms-chrome-rail:hover .mj-forms-chrome-rail-resizer::after,
+.mj-forms-chrome-rail.is-resizing .mj-forms-chrome-rail-resizer::after {
+  background: var(--mj-border-strong);
+}
+
+.mj-forms-layout--right-nav .mj-forms-chrome-rail-resizer {
+  right: auto;
+  left: -4px;
+}
+
+.mj-forms-chrome-rail-spine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mj-brand-primary);
+  cursor: pointer;
+}
+
+.mj-forms-chrome-rail-spine:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.mj-forms-chrome-rail-spine > i {
+  flex-shrink: 0;
+}
+
+.mj-forms-chrome-rail-spine-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.04em;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 100%;
+}
+
+.mj-forms-chrome-rail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 2px 4px 6px;
+}
+
+.mj-forms-chrome-rail-pin,
+.mj-forms-chrome-rail-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+}
+
+.mj-forms-chrome-rail-pin:hover,
+.mj-forms-chrome-rail-collapse:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.mj-forms-chrome-rail-pin:not(.is-pinned) i {
+  transform: rotate(45deg);
+}
+
+.mj-forms-chrome-rail-pin.is-pinned {
+  color: var(--mj-brand-primary);
+}
+
+.mj-forms-chrome-rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mj-forms-chrome-rail-item > i {
+  width: 1.15em;
+  flex-shrink: 0;
+  text-align: center;
+  color: inherit;
+}
+
+.mj-forms-chrome-rail-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.mj-forms-chrome-rail-item.is-active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-forms-chrome-rail-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--mj-brand-primary);
+}
+
+.mj-forms-chrome-rail-item.is-active .mj-forms-chrome-rail-label {
+  color: var(--mj-brand-primary);
+}
+
+.mj-forms-chrome-rail-item.is-drag-over {
+  outline: 1px dashed var(--mj-border-focus);
+  outline-offset: -1px;
+}
+
+.mj-forms-chrome-rail-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 18px;
+  margin-left: -4px;
+  color: var(--mj-text-muted);
+  cursor: grab;
+  opacity: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: opacity var(--mj-transition-base, 0.15s) ease;
+}
+
+.mj-forms-chrome-rail-item:hover .mj-forms-chrome-rail-handle,
+.mj-forms-chrome-rail-item.is-active .mj-forms-chrome-rail-handle {
+  opacity: 1;
+}
+
+.mj-forms-chrome-rail-handle.is-spacer {
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
+}
+
+.mj-forms-chrome-rail-handle:hover {
+  color: var(--mj-brand-primary);
+}
+
+.mj-forms-chrome-rail-handle:active {
+  cursor: grabbing;
+}
+
+.mj-forms-chrome-rail-item.is-more-folder {
+  position: relative;
+  margin-top: 14px;
+  padding-top: 14px;
+  color: var(--mj-text-muted);
+  border-radius: 0;
+}
+
+.mj-forms-chrome-rail-item.is-more-folder::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--mj-border-strong) 18%,
+    var(--mj-border-strong) 82%,
+    transparent 100%
+  );
+}
+
+.mj-forms-chrome-rail-item.is-more-folder:hover {
+  background: transparent;
+  color: var(--mj-text-secondary);
+}
+
+.mj-forms-chrome-rail-item.is-more-folder.is-expanded {
+  color: var(--mj-text-secondary);
+}
+
+.mj-forms-chrome-rail-more-toggle {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--mj-text-muted);
+}
+
+.mj-forms-chrome-rail-more-tree {
+  margin-left: 22px;
+  padding-left: 6px;
+  border-left: 1px solid var(--mj-border-subtle);
+}
+
+.mj-forms-chrome-rail-item.is-more-child {
+  padding-left: 8px;
+}
+
+.mj-forms-chrome-rail-count.is-zero {
+  opacity: 0.55;
+}
+
+.mj-forms-chrome-rail-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-forms-chrome-rail-count {
+  min-width: 1.25rem;
+  padding: 0 6px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-xs);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .mj-forms-layout--left-nav {
+    flex-direction: column;
+  }
+
+  .mj-forms-chrome-rail {
+    flex: 1 1 auto;
+    width: 100%;
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .mj-forms-chrome-rail-resizer {
+    display: none;
+  }
+
+  .mj-forms-chrome-rail.is-collapsed {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 36px;
+    padding: 0;
+  }
+
+  .mj-forms-chrome-rail-spine {
+    flex-direction: row;
+    padding: 0 12px;
+  }
+
+  .mj-forms-chrome-rail-spine-label {
+    writing-mode: horizontal-tb;
+    transform: none;
+    max-height: none;
+  }
+
+  .mj-forms-chrome-rail-toolbar {
+    width: 100%;
+  }
+
+  .mj-forms-chrome-rail-item {
+    width: auto;
+  }
 }
 
 /* ============================================

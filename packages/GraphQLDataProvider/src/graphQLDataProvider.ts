@@ -513,10 +513,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const d = await this.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
-            const u = this.ConvertBackToMJFields(d.CurrentUser);
-            const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
-            u.MJUserRoles_UserIDArray = roles;
-            const userInfo = new UserInfo(this, {...u, UserRoles: roles}); // need to pass in the UserRoles as a separate property that is what is expected here
+            const convertedUser = this.ConvertBackToMJFields(d.CurrentUser) as Record<string, unknown> & {
+                Roles?: Record<string, unknown>[];
+            };
+            const { Roles: rawRoles, ...userFields } = convertedUser;
+            const roles = (rawRoles ?? []).map((r: Record<string, unknown>) => this.ConvertBackToMJFields(r));
+            // Drop the transport `Roles` field so UserInfo only sees the converted UserRoles copy.
+            const userInfo = new UserInfo(this, {...userFields, UserRoles: roles});
 
             // Auto-stamp TenantContext from the batched CurrentUserTenantContext query.
             // The server serializes whatever TenantContext the middleware set.
@@ -539,10 +542,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
@@ -611,7 +614,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             StartRow: p.StartRow,
             ForceAuditLog: p.ForceAuditLog,
             AuditLogDescription: p.AuditLogDescription,
-            Enrichment: p.Enrichment
+            Enrichment: p.Enrichment,
+            DataSource: p.DataSource // forward so a batched DataSource:'Materialized' isn't silently downgraded to live
         }));
 
         const result = await this.ExecuteGQL(query, { input });
@@ -622,17 +626,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return [];
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment, DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject, $DataSource: String) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment, DataSource: $DataSource) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
 
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment; DataSource?: 'Live' | 'Materialized' } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -650,6 +654,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Enrichment !== undefined) {
             variables.Enrichment = Enrichment;
+        }
+        if (DataSource !== undefined) {
+            variables.DataSource = DataSource;
         }
 
         const result = await this.ExecuteGQL(query, variables);
@@ -658,17 +665,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment, DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject, $DataSource: String) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment, DataSource: $DataSource) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
 
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment; DataSource?: 'Live' | 'Materialized' } = { QueryName };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -686,6 +693,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Enrichment !== undefined) {
             variables.Enrichment = Enrichment;
+        }
+        if (DataSource !== undefined) {
+            variables.DataSource = DataSource;
         }
 
         const result = await this.ExecuteGQL(query, variables);
@@ -754,6 +764,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || null,
                     Enrichment: item.params.Enrichment || null,
+                    DataSource: item.params.DataSource || null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -916,6 +927,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // (server caching enabled) is unchanged.
                 if (params.BypassCache !== undefined)
                     innerParams.BypassCache = params.BypassCache;
+                // DataSource lets a caller opt into an entity's materialized snapshot ('Materialized')
+                // vs its live base view ('Live', default). Only forward when set so default is unchanged.
+                if (params.DataSource !== undefined)
+                    innerParams.DataSource = params.DataSource;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1088,6 +1103,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.BypassCache !== undefined) {
                         innerParam.BypassCache = param.BypassCache;
                     }
+                    if (param.DataSource !== undefined) {
+                        innerParam.DataSource = param.DataSource;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1209,6 +1227,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // response could carry them — but the request never asked. Every layer
                     // downstream looked correct while the caller got Success with no aggregates.
                     Aggregates: item.params.Aggregates ?? null,
+                    // DataSource MUST be forwarded here too (as on the InternalRunView/InternalRunViews maps):
+                    // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
+                    // downgrades a DataSource:'Materialized' request to a live read.
+                    DataSource: item.params.DataSource,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1391,7 +1413,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (params.Fields) {
             for (const kv of e.PrimaryKeys) {
                 if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
-                    fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                    fieldList.push(SharedFieldMapper.MapFieldName(kv.Name)); // always include the primary key fields; MapFieldName sanitizes a '__mj_'-prefixed PK (materialization surrogate) to '_mj__' to match the server GraphQL type field — a raw '__mj_' name makes the grid RunView query fail with "Cannot query field __mj_MaterializedRowID"
             }
 
             // now add any other fields that were passed in
@@ -1419,7 +1441,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // first make sure we have the primary key field in the view column list, always should, but make sure
                 for (const kv of e.PrimaryKeys) {
                     if (fieldList.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
-                        fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                        fieldList.push(SharedFieldMapper.MapFieldName(kv.Name)); // always include the primary key fields; MapFieldName sanitizes a '__mj_'-prefixed PK (materialization surrogate) to '_mj__' to match the server GraphQL type field — a raw '__mj_' name makes the grid RunView query fail with "Cannot query field __mj_MaterializedRowID"
                 }
 
                 // Now: include the fields that are part of the view definition
@@ -2007,7 +2029,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // build up the param string for the inner query call
                 if (pkeyInnerParamString.length > 0)
                     pkeyInnerParamString += ', ';
-                pkeyInnerParamString += `${field.CodeName}: $${field.CodeName}`;
+                // The GraphQL ARGUMENT name must match the server resolver's @Arg, which sanitizes a '__mj'-prefixed
+                // PK (the materialization surrogate '__mj_MaterializedRowID') to '_mj__…' because GraphQL forbids
+                // names starting with '__'. Mirror that here (same rule as the field-selection mapping below); the
+                // client-side VARIABLE name ($__mj_…) can keep the raw CodeName. Without this, loading a materialized
+                // entity record fails with "Unknown argument __mj_MaterializedRowID … did you mean _mj__…".
+                const pkeyGraphQLArgName = field.CodeName.startsWith('__mj_') ? field.CodeName.replace('__mj_', '_mj__') : field.CodeName;
+                pkeyInnerParamString += `${pkeyGraphQLArgName}: $${field.CodeName}`;
 
                 // build up the variables we are passing along to the query
                 if (field.TSType === EntityFieldTSType.Number) {
@@ -2105,9 +2133,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
+                // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match
+                // the server (same rule as the single-record Load). The client VARIABLE name keeps the raw CodeName.
+                // (Materialized entities are read-only virtual so no Delete resolver is generated — this is defense-in-depth.)
+                const pkGraphQLName = pk.CodeName.startsWith('__mj_') ? pk.CodeName.replace('__mj_', '_mj__') : pk.CodeName;
                 if (pkeyInnerParamString.length > 0)
                     pkeyInnerParamString += ', ';
-                pkeyInnerParamString += `${pk.CodeName}: $${pk.CodeName}`;
+                pkeyInnerParamString += `${pkGraphQLName}: $${pk.CodeName}`;
 
                 if (pkeyOuterParamString.length > 0)
                     pkeyOuterParamString += ', ';
@@ -2115,7 +2147,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 if (returnValues.length > 0)
                     returnValues += '\n                    ';
-                returnValues += `${pk.CodeName}`;
+                returnValues += `${pkGraphQLName}`;
             }
 
             mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop
@@ -2595,6 +2627,96 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Executes a GraphQL query/mutation with real upload progress tracking via XMLHttpRequest.
+     * Useful for large payload mutations such as file uploads where byte-level progress reporting is required.
+     */
+    public static async ExecuteGQLWithProgress<T = unknown>(
+        query: string,
+        variables: Record<string, unknown>,
+        onProgress?: (event: { loaded: number; total: number; percent: number }) => void,
+        refreshTokenIfNeeded: boolean = true
+    ): Promise<T> {
+        return GraphQLDataProvider.Instance.ExecuteGQLWithProgress<T>(query, variables, onProgress, refreshTokenIfNeeded);
+    }
+
+    /**
+     * Executes a GraphQL query/mutation with real upload progress tracking via XMLHttpRequest.
+     */
+    public async ExecuteGQLWithProgress<T = unknown>(
+        query: string,
+        variables: Record<string, unknown>,
+        onProgress?: (event: { loaded: number; total: number; percent: number }) => void,
+        refreshTokenIfNeeded: boolean = true
+    ): Promise<T> {
+        if (!this._configData?.URL) {
+            throw new Error('GraphQLDataProvider is not configured with a URL.');
+        }
+
+        const url = this._configData.URL;
+        const payload = JSON.stringify({ query, variables });
+
+        return new Promise<T>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+
+            if (this._sessionId) {
+                xhr.setRequestHeader('x-session-id', this._sessionId);
+            }
+            if (this._configData?.Token) {
+                xhr.setRequestHeader('authorization', 'Bearer ' + this._configData.Token);
+            }
+            if (this._configData?.MJAPIKey) {
+                xhr.setRequestHeader('x-mj-api-key', this._configData.MJAPIKey);
+            }
+            if (this._configData?.UserAPIKey) {
+                xhr.setRequestHeader('x-api-key', this._configData.UserAPIKey);
+            }
+            for (const [key, value] of this._dynamicHeaders) {
+                xhr.setRequestHeader(key, value);
+            }
+
+            if (xhr.upload && onProgress) {
+                xhr.upload.onprogress = (evt) => {
+                    if (evt.lengthComputable && evt.total > 0) {
+                        const percent = Math.min(100, Math.round((evt.loaded / evt.total) * 100));
+                        onProgress({ loaded: evt.loaded, total: evt.total, percent });
+                    }
+                };
+            }
+
+            xhr.onload = async () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const json = JSON.parse(xhr.responseText) as { data?: T; errors?: Array<{ message?: string; extensions?: { code?: string } }> };
+                        if (json.errors && json.errors.length > 0) {
+                            const error = json.errors[0];
+                            const code = error?.extensions?.code?.toUpperCase()?.trim();
+                            if (code === 'JWT_EXPIRED' && refreshTokenIfNeeded) {
+                                await this.RefreshToken();
+                                resolve(await this.ExecuteGQLWithProgress<T>(query, variables, onProgress, false));
+                                return;
+                            }
+                            reject(new Error(error.message || 'GraphQL Error'));
+                        } else {
+                            resolve(json.data as T);
+                        }
+                    } catch (err) {
+                        reject(err);
+                    }
+                } else {
+                    reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText}`));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during request'));
+            xhr.onabort = () => reject(new Error('Request aborted'));
+
+            xhr.send(payload);
+        });
+    }
+
+    /**
      * Executes the GQL query with the provided variables. If the token is expired, it will attempt to refresh the token and then re-execute the query. If the token is expired and the refresh fails, it will throw an error.
      * @param query 
      * @param variables 
@@ -2830,7 +2952,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        MJUserRoles_UserIDArray {
+        Roles {
             ${this.userRoleInfoString()}
         }
     }

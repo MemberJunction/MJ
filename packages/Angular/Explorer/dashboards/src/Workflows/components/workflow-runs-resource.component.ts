@@ -1,13 +1,20 @@
-import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener, OnDestroy } from '@angular/core';
-import { Subscription } from 'rxjs';
-import { CompositeKey, RunView, type IRemoteOperationProvider } from '@memberjunction/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener, OnDestroy, ViewChild } from '@angular/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJTaskDependencyEntity, MJTaskEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { ComputeTasksToBlock, type TaskGraphNode, type TaskGraphEdge } from '@memberjunction/ai-core-plus';
-import { GraphQLDataProvider, type TaskGraphFrameEvent } from '@memberjunction/graphql-dataprovider';
 import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
+import { TaskGraphDebuggerComponent, type TaskGraphRunFrame } from '@memberjunction/ng-task-graph-editor';
 import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
 import { WorkflowRunLayout } from './workflow-run-layout';
+import {
+    EmptyDebugState,
+    ParseWorkflowRunParentBag,
+    TryParseJsonObject,
+    type WorkflowRunDebugState,
+    type WorkflowRunInvocation,
+    type WorkflowStall,
+} from './workflow-run-debug-state';
 
 /** Below this the detail pane cannot hold a canvas AND a JSON pane side by side. */
 const STACK_INNER_BELOW_PX = 1100;
@@ -302,40 +309,71 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.SelectedStepID = null;
         this.SelectedSteps = [];
         this.SelectedDeps = [];
+        this.SelectedEdgeID = null;
+        this.InspectorMode = 'step';
+        this.resetEditors();
         this.detachFrames();
         this.ReplayPercent = null;
-        if (!closing && this.isLiveStatus(run.Status)) this.attachFrames(run.ID);
+        this.GraphSettled = false;
+        this.DebugState = EmptyDebugState();
+        this.Invocation = {};
+        // Frames are owned by <mj-task-graph-debugger>; it re-emits them for stall/engine chrome.
         this.publishAgentContext();
         this.cdr.markForCheck();
-        if (!closing) void this.loadSteps(run.ID);
+        if (!closing) {
+            void this.loadSteps(run.ID);
+            void this.loadDebugState(run.ID);
+        }
     }
 
     // ─── live console: frames ────────────────────────────────────────────────
     //
-    // The Explorer host owns the subscription — the widgets-layer run view only renders what it is
-    // handed, per the UI layering rule. Frames are ADVISORY: they trigger renders and reveal engine
-    // state (claims, gate verdicts, passes) that rows cannot; the widget's own row reads remain the
-    // truth, reconciled on attach and on settlement.
+    // <mj-task-graph-debugger> owns the frame subscription and re-emits each one. This host only
+    // listens for stall / engine-tick chrome. Frames are ADVISORY; the widget's row reads remain
+    // the truth, reconciled on settlement.
 
     /** The newest frame, bound straight into the run view for sub-second canvas updates. */
-    public LatestFrame: TaskGraphFrameEvent | null = null;
+    @ViewChild(TaskGraphDebuggerComponent) public GraphDebug: TaskGraphDebuggerComponent | undefined;
+
+    public LatestFrame: TaskGraphRunFrame | null = null;
     /** The engine's recent heartbeat ticks (`PassCompleted`), newest last. Bounded. */
-    public EngineTicks: TaskGraphFrameEvent[] = [];
+    public EngineTicks: TaskGraphRunFrame[] = [];
     /** Everything seen this session for the selected run, newest first. Bounded. */
-    public FrameLog: TaskGraphFrameEvent[] = [];
+    public FrameLog: TaskGraphRunFrame[] = [];
     /** Whether the selected run is paused (from `GraphPaused`/`GraphResumed` frames + verbs). */
     public DebugPaused = false;
+    /** Children are all terminal — the durable bag can still say paused after the last continue. */
+    public GraphSettled = false;
     /** A one-line diagnosis when the engine reports trouble — a lost worker, a held path. */
     public StallNotice: string | null = null;
+    /** Structured stall so a held edge can be answered, not just named. */
+    public Stall: WorkflowStall | null = null;
+    /** Durable debug state from the parent row — frames are advisory, this is the truth. */
+    public DebugState: WorkflowRunDebugState = EmptyDebugState();
+    /** Invocation `data`/`context` roots from the same parent bag (R3-3). */
+    public Invocation: WorkflowRunInvocation = {};
+    /** Selected path, when the person clicked an edge rather than a step. */
+    public SelectedEdgeID: string | null = null;
+    public InspectorMode: 'step' | 'edge' = 'step';
+    /** Force-complete confirmation + output editor. */
+    public ForceCompleteOpen = false;
+    public ForceCompleteJson = '{}';
+    public ForceCompleteName = '';
+    public ForceCompleteError: string | null = null;
+    /** Edit-input editor (Pending → UpdateTaskInput, Failed → RetryTask). */
+    public EditInputOpen = false;
+    public EditInputJson = '';
+    public EditInputError: string | null = null;
     /** True while a control verb round-trips, so the toolbar cannot double-fire. */
-    public ControlBusy = false;
+    public get ControlBusy(): boolean {
+        return this.GraphDebug?.Busy === true;
+    }
     /** Replay position for a settled run: 0–100 along its wall-clock span, or null for "now". */
     public ReplayPercent: number | null = null;
 
     /** Dependencies of the selected run's steps, for the what-if preview. */
     public SelectedDeps: MJTaskDependencyEntity[] = [];
 
-    private frameSub: Subscription | null = null;
     private static readonly FRAME_LOG_LIMIT = 250;
     private static readonly ENGINE_TICK_LIMIT = 10;
 
@@ -348,30 +386,14 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         return status === 'In Progress' || status === 'Running' || status === 'Pending';
     }
 
-    private attachFrames(parentTaskID: string): void {
-        const provider = this.ProviderToUse;
-        if (!(provider instanceof GraphQLDataProvider)) return; // frames are a GraphQL-transport capability
-        this.FrameLog = [];
-        this.EngineTicks = [];
-        this.StallNotice = null;
-        this.frameSub = provider.TaskGraphFrames(parentTaskID).subscribe({
-            next: (frame) => this.onFrame(frame),
-            // A dropped stream is not an error state for the console — the run view's poll is the
-            // safety net, and re-selecting the run re-subscribes.
-            error: () => { this.frameSub = null; },
-            complete: () => { this.frameSub = null; },
-        });
-    }
-
     private detachFrames(): void {
-        this.frameSub?.unsubscribe();
-        this.frameSub = null;
         this.LatestFrame = null;
         this.DebugPaused = false;
         this.StallNotice = null;
+        this.Stall = null;
     }
 
-    private onFrame(frame: TaskGraphFrameEvent): void {
+    public OnFrame(frame: TaskGraphRunFrame): void {
         this.LatestFrame = frame;
         this.FrameLog = [frame, ...this.FrameLog].slice(0, WorkflowRunsResourceComponent.FRAME_LOG_LIMIT);
 
@@ -381,32 +403,54 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                 break;
             case 'GraphPaused':
             case 'BreakpointHit':
+                if (this.GraphSettled) break; // bag can still say paused after the last step
                 this.DebugPaused = true;
+                if (this.SelectedRunID) void this.loadDebugState(this.SelectedRunID);
                 break;
             case 'GraphResumed':
                 this.DebugPaused = false;
+                if (this.SelectedRunID) void this.loadDebugState(this.SelectedRunID);
                 break;
             case 'ClaimChanged':
                 if (frame.claimEvent === 'heartbeat-lost') {
-                    this.StallNotice = `"${frame.taskName ?? 'A step'}" lost its worker — the engine will requeue it.`;
+                    this.setStall({
+                        kind: 'worker-lost',
+                        message: `"${frame.taskName ?? 'A step'}" lost its worker — the engine will requeue it.`,
+                        taskName: frame.taskName,
+                        taskID: frame.taskId,
+                    });
                 } else if (frame.claimEvent === 'reclaimed') {
-                    this.StallNotice = null; // the engine recovered it
+                    this.clearStall();
                 }
                 break;
             case 'GateDecision':
                 if (frame.verdict === 'held') {
-                    this.StallNotice = `"${frame.taskName ?? 'A step'}" is waiting on a path that can't be answered${frame.reason ? ` — ${frame.reason}` : ''}.`;
+                    this.setStall({
+                        kind: 'held',
+                        message: `"${frame.taskName ?? 'A step'}" is waiting on a path that can't be answered.`,
+                        taskName: frame.taskName,
+                        taskID: frame.taskId,
+                        edgeID: frame.edgeId,
+                        conditionText: frame.conditionText,
+                        reason: frame.reason,
+                    });
                 }
                 break;
             case 'StepRefused':
-                // The step press could not release anything yet. Said out loud rather than left as
-                // a button that appeared to do nothing — the allowance is still armed.
-                this.StallNotice = frame.reason ?? 'The step could not start yet; it stays queued.';
+                this.setStall({
+                    kind: 'step-refused',
+                    message: frame.reason ?? 'The step could not start yet; it stays queued.',
+                    reason: frame.reason,
+                });
                 break;
             case 'GraphSettled':
-                this.StallNotice = null;
+                this.markGraphSettled();
+                this.clearStall();
                 void this.loadData(); // the list row's status/duration just changed
-                if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+                if (this.SelectedRunID) {
+                    void this.loadSteps(this.SelectedRunID);
+                    void this.loadDebugState(this.SelectedRunID);
+                }
                 break;
             case 'TaskCompleted':
             case 'TaskFailed':
@@ -421,80 +465,232 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
 
     // ─── live console: control verbs ────────────────────────────────────────
     //
-    // Every verb is a Remote Operation — the typed control plane, same call an MCP caller or an
-    // Action would make. Pause/step are durable claim-gating state, so the effect lands within one
-    // dispatcher poll (~5s), announced back to us by `GraphPaused`/`GraphResumed` frames.
-
-    private async executeControl(operationKey: string, input: Record<string, unknown>): Promise<void> {
-        const provider = this.ProviderToUse as unknown as Partial<IRemoteOperationProvider>;
-        if (typeof provider.RouteOperation !== 'function') {
-            this.StallNotice = 'This connection cannot send workflow controls.';
-            this.cdr.markForCheck();
-            return;
-        }
-        this.ControlBusy = true;
-        this.cdr.markForCheck();
-        try {
-            const result = await provider.RouteOperation(operationKey, input, {});
-            const output = result?.Output as { success?: boolean; errorMessage?: string } | undefined;
-            if (!result?.Success || output?.success === false) {
-                this.StallNotice = output?.errorMessage ?? result?.ErrorMessage ?? 'The control could not be applied.';
-            }
-        } catch (e) {
-            this.StallNotice = e instanceof Error ? e.message : String(e);
-        } finally {
-            this.ControlBusy = false;
-            this.cdr.markForCheck();
-        }
-    }
+    // The drop-in debugger owns RouteOperation. These handlers just call its verbs.
 
     public async OnPauseRun(): Promise<void> {
-        if (!this.SelectedRunID) return;
-        await this.executeControl('TaskGraph.Pause', { parentTaskID: this.SelectedRunID });
-        this.DebugPaused = true; // optimistic; the GraphPaused frame confirms within a poll
+        await this.GraphDebug?.Pause();
+        this.DebugPaused = true;
         this.cdr.markForCheck();
     }
 
     public async OnResumeRun(): Promise<void> {
-        if (!this.SelectedRunID) return;
-        await this.executeControl('TaskGraph.Resume', { parentTaskID: this.SelectedRunID });
+        await this.GraphDebug?.Resume();
         this.DebugPaused = false;
         this.cdr.markForCheck();
     }
 
     public async OnStepRun(target: 'one' | 'wave'): Promise<void> {
-        if (!this.SelectedRunID) return;
-        await this.executeControl('TaskGraph.Step', { parentTaskID: this.SelectedRunID, target });
+        await this.GraphDebug?.Step(target);
     }
 
     public async OnCancelRun(): Promise<void> {
-        if (!this.SelectedRunID) return;
-        await this.executeControl('TaskGraph.Cancel', { parentTaskID: this.SelectedRunID });
+        await this.GraphDebug?.Cancel();
         await this.loadData();
     }
 
     public async OnSkipStep(step: WorkflowRunStep): Promise<void> {
-        await this.executeControl('TaskGraph.SkipTask', { taskID: step.ID });
+        await this.GraphDebug?.SkipTask(step.ID);
         if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
     }
 
     public async OnRetryStep(step: WorkflowRunStep): Promise<void> {
-        await this.executeControl('TaskGraph.RetryTask', { taskID: step.ID });
+        await this.GraphDebug?.RetryTask(step.ID);
         if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+    }
+
+    public async OnBreakpointToggled(event: { TaskID: string; Enabled: boolean }): Promise<void> {
+        await this.GraphDebug?.ToggleBreakpoint(event.TaskID, event.Enabled);
+    }
+
+    public async OnRemoveBreakpoint(taskID: string): Promise<void> {
+        await this.OnBreakpointToggled({ TaskID: taskID, Enabled: false });
+    }
+
+    public OnSelectBreakpoint(taskID: string): void {
+        const step = this.SelectedSteps.find((s) => UUIDsEqual(s.ID, taskID));
+        if (step) this.OnSelectStep(step);
+        else {
+            this.SelectedStepID = taskID;
+            this.InspectorMode = 'step';
+            if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
+            this.cdr.markForCheck();
+        }
+    }
+
+    public async OnOverrideEdge(edgeID: string, verdict: 'true' | 'false' | null): Promise<void> {
+        await this.GraphDebug?.OverrideEdge(edgeID, verdict);
+        if (verdict != null) this.clearStall();
+    }
+
+    public OnGraphConnectionSelected(event: { EdgeID: string | null; FromTaskID: string; ToTaskID: string }): void {
+        if (!event.EdgeID) return;
+        this.SelectedEdgeID = event.EdgeID;
+        this.InspectorMode = 'edge';
+        if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
+        this.cdr.markForCheck();
+    }
+
+    public get SelectedEdge(): MJTaskDependencyEntity | null {
+        if (!this.SelectedEdgeID) return null;
+        return this.SelectedDeps.find((d) => UUIDsEqual(d.ID, this.SelectedEdgeID!)) ?? null;
+    }
+
+    public get SelectedEdgeIsConditional(): boolean {
+        return !!this.SelectedEdge?.Condition?.trim();
+    }
+
+    public get SelectedEdgeOverride(): 'true' | 'false' | null {
+        if (!this.SelectedEdgeID) return null;
+        return this.GraphDebug?.GetEdgeOverride(this.SelectedEdgeID) ?? null;
+    }
+
+    public get SelectedEdgeFromName(): string {
+        const edge = this.SelectedEdge;
+        if (!edge) return '';
+        return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, edge.DependsOnTaskID))?.Name ?? 'upstream';
+    }
+
+    public get SelectedEdgeToName(): string {
+        const edge = this.SelectedEdge;
+        if (!edge) return '';
+        return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, edge.TaskID))?.Name ?? 'downstream';
+    }
+
+    public StepName(taskID: string): string {
+        return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, taskID))?.Name ?? 'a step';
+    }
+
+    public HasBreakpoint(taskID: string): boolean {
+        return this.GraphDebug?.HasBreakpoint(taskID) ?? false;
+    }
+
+    /** Live or paused — the VS Code bar is how you drive it, including a start-paused debug. */
+    public CanDriveRun(run: { Status: string }): boolean {
+        if (this.IsRunSettled(run)) return false;
+        return run.Status === 'In Progress' || run.Status === 'Running' || run.Status === 'Pending' || this.DebugPaused;
+    }
+
+    public IsRunSettled(run: { Status: string }): boolean {
+        return this.GraphSettled
+            || run.Status === 'Complete'
+            || run.Status === 'Failed'
+            || run.Status === 'Cancelled';
+    }
+
+    public OnCanvasSettled(): void {
+        this.markGraphSettled();
+        this.cdr.markForCheck();
+    }
+
+    private markGraphSettled(): void {
+        this.GraphSettled = true;
+        this.DebugPaused = false;
+        this.DebugState = { ...this.DebugState, paused: false, pausedAtTaskID: null };
+    }
+
+    public StepPayload(step: WorkflowRunStep, field: 'InputPayload' | 'OutputPayload'): string | null {
+        const value = step.Record[field];
+        if (typeof value === 'string') return value;
+        if (value == null) return null;
+        return JSON.stringify(value);
+    }
+
+    public OnBreakpointCheckbox(step: WorkflowRunStep, event: Event): void {
+        const target = event.target;
+        const enabled = target instanceof HTMLInputElement && target.checked;
+        void this.OnBreakpointToggled({ TaskID: step.ID, Enabled: enabled });
+    }
+
+    public CanForceComplete(step: WorkflowRunStep): boolean {
+        if (this.isHumanStep(step)) return false;
+        return step.Status === 'Pending' || step.Status === 'Failed' || step.Status === 'Blocked';
+    }
+
+    public CanEditInput(step: WorkflowRunStep): boolean {
+        return step.Status === 'Pending' || step.Status === 'Failed';
+    }
+
+    public OpenForceComplete(step: WorkflowRunStep): void {
+        this.ForceCompleteOpen = true;
+        this.ForceCompleteJson = this.prettyJson(step.Record['OutputPayload']) || '{}';
+        this.ForceCompleteName = '';
+        this.ForceCompleteError = null;
+        this.EditInputOpen = false;
+        this.cdr.markForCheck();
+    }
+
+    public OpenEditInput(step: WorkflowRunStep): void {
+        this.EditInputOpen = true;
+        this.EditInputJson = this.prettyJson(step.Record['InputPayload']) || '{}';
+        this.EditInputError = null;
+        this.ForceCompleteOpen = false;
+        this.cdr.markForCheck();
+    }
+
+    public async SubmitForceComplete(step: WorkflowRunStep): Promise<void> {
+        if (this.ForceCompleteName.trim() !== step.Name) {
+            this.ForceCompleteError = 'Type the step name exactly to confirm.';
+            this.cdr.markForCheck();
+            return;
+        }
+        const parsed = TryParseJsonObject(this.ForceCompleteJson);
+        if (!parsed.ok) {
+            this.ForceCompleteError = parsed.error;
+            this.cdr.markForCheck();
+            return;
+        }
+        this.ForceCompleteError = null;
+        const ok = await this.GraphDebug?.ForceCompleteTask(step.ID, parsed.value);
+        if (ok) {
+            this.ForceCompleteOpen = false;
+            if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+        }
+    }
+
+    public async SubmitEditInput(step: WorkflowRunStep): Promise<void> {
+        const parsed = TryParseJsonObject(this.EditInputJson);
+        if (!parsed.ok) {
+            this.EditInputError = parsed.error;
+            this.cdr.markForCheck();
+            return;
+        }
+        this.EditInputError = null;
+        const ok = step.Status === 'Failed'
+            ? await this.GraphDebug?.RetryTask(step.ID, parsed.value)
+            : await this.GraphDebug?.UpdateTaskInput(step.ID, parsed.value);
+        if (ok) {
+            this.EditInputOpen = false;
+            if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+        }
+    }
+
+    public get InvocationJson(): string {
+        return JSON.stringify(
+            ParseJSONRecursive(
+                { data: this.Invocation.data ?? null, context: this.Invocation.context ?? null },
+                JSON_PARSE_OPTIONS,
+            ),
+            null,
+            2,
+        );
+    }
+
+    public get HasInvocation(): boolean {
+        return this.Invocation.data != null || this.Invocation.context != null;
     }
 
     // ─── live console: inspector data ───────────────────────────────────────
 
     /** The newest claim event seen for the selected step, if any. */
-    public get SelectedStepClaim(): TaskGraphFrameEvent | null {
+    public get SelectedStepClaim(): TaskGraphRunFrame | null {
         if (!this.SelectedStepID) return null;
         return this.FrameLog.find((f) => f.kind === 'ClaimChanged' && UUIDsEqual(f.taskId ?? '', this.SelectedStepID!)) ?? null;
     }
 
     /** Latest verdict per path into/out of the selected step — "why did this branch run". */
-    public get SelectedStepVerdicts(): TaskGraphFrameEvent[] {
+    public get SelectedStepVerdicts(): TaskGraphRunFrame[] {
         if (!this.SelectedStepID) return [];
-        const byEdge = new Map<string, TaskGraphFrameEvent>();
+        const byEdge = new Map<string, TaskGraphRunFrame>();
         // FrameLog is newest-first, so the first sighting per edge is the latest verdict.
         for (const f of this.FrameLog) {
             if (f.kind !== 'GateDecision' || !f.edgeId) continue;
@@ -505,7 +701,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     }
 
     /** What the selected step's runner last said it was doing. */
-    public get SelectedStepProgress(): TaskGraphFrameEvent | null {
+    public get SelectedStepProgress(): TaskGraphRunFrame | null {
         if (!this.SelectedStepID) return null;
         return this.FrameLog.find((f) => f.kind === 'NodeProgress' && UUIDsEqual(f.taskId ?? '', this.SelectedStepID!)) ?? null;
     }
@@ -611,6 +807,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     /** A node was clicked on the canvas — show that step's JSON. */
     public OnGraphNodeSelected(event: { TaskID: string }): void {
         this.SelectedStepID = event.TaskID;
+        this.InspectorMode = 'step';
         // Asking to see a step is asking for the panel. Leaving it closed would make the click look
         // like it did nothing.
         if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
@@ -619,6 +816,8 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
 
     public OnSelectStep(step: WorkflowRunStep): void {
         this.SelectedStepID = UUIDsEqual(this.SelectedStepID ?? '', step.ID) ? null : step.ID;
+        this.InspectorMode = 'step';
+        this.resetEditors();
         this.cdr.markForCheck();
     }
 
@@ -684,6 +883,76 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     public OnOpenAgentRun(run: WorkflowRunRow): void {
         if (!run.AgentRunID) return;
         this.navigationService.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(run.AgentRunID));
+    }
+
+    private async loadDebugState(parentTaskID: string): Promise<void> {
+        try {
+            const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJTaskEntity>({
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ID='${parentTaskID}'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            });
+            if (!UUIDsEqual(this.SelectedRunID ?? '', parentTaskID)) return;
+            const parent = result.Success ? result.Results?.[0] : undefined;
+            const bag = ParseWorkflowRunParentBag(parent?.InputPayload);
+            this.Invocation = bag.invocation;
+            // Settled trumps the durable bag: $.debug.paused can still be true after the last
+            // continue, and painting that as "paused here" hides that the run is over.
+            if (this.GraphSettled) {
+                this.DebugState = { ...bag.debug, paused: false, pausedAtTaskID: null };
+                this.DebugPaused = false;
+            } else {
+                this.DebugState = bag.debug;
+                this.DebugPaused = bag.debug.paused;
+            }
+        } catch {
+            // A failed parent read leaves the last known debug state; frames remain the safety net.
+        }
+        this.cdr.markForCheck();
+    }
+
+    private setStall(stall: WorkflowStall): void {
+        this.Stall = stall;
+        this.StallNotice = stall.message;
+    }
+
+    private clearStall(): void {
+        this.Stall = null;
+        this.StallNotice = null;
+    }
+
+    public OnDismissStall(): void {
+        this.clearStall();
+        this.cdr.markForCheck();
+    }
+
+    private resetEditors(): void {
+        this.ForceCompleteOpen = false;
+        this.ForceCompleteError = null;
+        this.EditInputOpen = false;
+        this.EditInputError = null;
+    }
+
+    private isHumanStep(step: WorkflowRunStep): boolean {
+        const userID = step.Record['UserID'];
+        return typeof userID === 'string' && userID.trim().length > 0;
+    }
+
+    private prettyJson(value: unknown): string {
+        if (value == null || value === '') return '';
+        if (typeof value === 'string') {
+            try {
+                return JSON.stringify(JSON.parse(value), null, 2);
+            } catch {
+                return value;
+            }
+        }
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch {
+            return '';
+        }
     }
 
     /**

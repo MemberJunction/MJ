@@ -166,8 +166,8 @@ describe('GenerateRelatedRecordCollections — emission', () => {
         // silently-authoritative source of truth for values that already have columns.
         const relationship = withConfig({
             Name: 'Lines',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...({ RelatedEntity: 'WRONG: Entity', RelatedEntityJoinField: 'WrongField' } as any),
+            // Keys the config type deliberately does not declare — the point of the test.
+            ...({ RelatedEntity: 'WRONG: Entity', RelatedEntityJoinField: 'WrongField' } as unknown as Partial<RelatedRecordCollectionConfig>),
         });
         const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(makeEntity([relationship]));
 
