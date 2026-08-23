@@ -133,6 +133,32 @@ Abstract base class for all job drivers. Provides:
 |--------|----------|-------------|
 | `AgentScheduledJobDriver` | Agent | Executes AI agents with configurable conversations and payloads |
 | `ActionScheduledJobDriver` | Action | Executes MJ Actions with static or SQL-based parameter values |
+| `RecordProcessScheduledJobDriver` | Run Record Process | Runs a `MJ: Record Processes` definition over its scoped record set |
+| `IntegrationSyncScheduledJobDriver` | Integration Sync | Runs an integration's sync on a schedule |
+| `IntegrationDiscoveryScheduledJobDriver` | Integration Discovery | Discovers new integration entities on a schedule |
+| `UserRoutineDispatcherDriver` | User Routine Dispatcher | Dispatches due user routines |
+| `AgentRunSweepScheduledJobDriver` | Agent Run Sweep | Force-fails agent runs orphaned by a dead process |
+| `ActionLogRetentionScheduledJobDriver` | Action Log Retention | Purges expired `MJ: Action Execution Logs` rows, bounded per run |
+
+#### Action Log Retention
+
+`Action.RetentionPeriod` (days; `NULL` = indefinite) is stamped onto each execution-log row **when the
+run starts**, so retention is decided at write time — editing an action's retention changes what is
+kept going forward rather than retroactively deleting history written under the previous policy.
+
+This driver enforces it. It is opt-in like the sweep: shipping the job type activates nothing until
+someone creates a `MJ: Scheduled Job` of it with a cron expression.
+
+```json
+{ "DefaultRetentionDays": 90, "MaxDeletesPerRun": 5000 }
+```
+
+Both fields are optional. Omitting `DefaultRetentionDays` means rows with **no** retention are kept
+indefinitely — `NULL` is what the schema calls indefinite, and a purge job that invented a lifetime
+for it would destroy history with nothing left to notice by. `MaxDeletesPerRun` defaults to 5000 so a
+first run against a long-neglected table cannot become an unbounded transaction; the run drains
+oldest-first over successive runs and reports `ReachedCap: true` when it stopped at the ceiling rather
+than because it was finished.
 
 ### CronExpressionHelper
 
@@ -278,4 +304,4 @@ The engine loads the job list ONCE at `StartPolling` time. Runtime changes to th
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.

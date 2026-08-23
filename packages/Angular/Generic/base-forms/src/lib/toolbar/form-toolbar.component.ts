@@ -1,14 +1,20 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck, OnInit, OnDestroy } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
+import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs, ResolvedToolbarItem } from '../types/form-toolbar-item';
+import { IsAccordionFormChrome } from '../chrome/form-chrome';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from '../isa-related-panel/isa-hierarchy-utils';
 import { FormWidthMode, FormContext } from '../types/form-types';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 import {
   BeforeSaveEventArgs,
   BeforeDeleteEventArgs,
+  BeforeRefreshEventArgs,
   BeforeCancelEventArgs,
   BeforeHistoryViewEventArgs,
   BeforeListManagementEventArgs,
@@ -45,8 +51,10 @@ import {
   templateUrl: './form-toolbar.component.html',
   styleUrls: ['./form-toolbar.component.css']
 })
-export class MjFormToolbarComponent extends BaseAngularComponent implements DoCheck {
+export class MjFormToolbarComponent extends BaseAngularComponent implements DoCheck, OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
+  private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+  private destroy$ = new Subject<void>();
 
   // ---- Deprecated form reference (backward compat) ----
 
@@ -98,6 +106,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Whether the tags panel is currently open */
   @Input() IsTagsPanelOpen = false;
 
+  /** Number of attachments linked to this record */
+  @Input() AttachmentCount = 0;
+
+  /** Whether the attachments feature is available for this record */
+  @Input() AttachmentsAvailable = false;
+
+  /** Whether the attachments panel is currently open */
+  @Input() IsAttachmentsPanelOpen = false;
+
   /** Number of record change versions for this record (displayed as "vN" badge on history button) */
   @Input() VersionCount = 0;
 
@@ -110,6 +127,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Whether to show the toolbar in a saving/loading state */
   @Input() IsSaving = false;
 
+  /** Whether a refresh from database operation is currently in progress */
+  @Input() IsRefreshing = false;
+
   // Section controls inputs
   @Input() VisibleSectionCount = 0;
   @Input() TotalSectionCount = 0;
@@ -118,6 +138,16 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   @Input() ShowEmptyFields = false;
   @Input() WidthMode: FormWidthMode = 'centered';
   @Input() HasCustomSectionOrder = false;
+
+  /**
+   * Form chrome layout. Expand/collapse-all only render for accordion.
+   * Left-nav and right-nav show one section at a time.
+   */
+  @Input() ChromeLayout: 'accordion' | 'left-nav' | 'right-nav' = 'accordion';
+
+  get ShowExpandCollapseAll(): boolean {
+    return this.Config.ShowExpandCollapseAllButtons && IsAccordionFormChrome(this.ChromeLayout);
+  }
 
   /** Optional template for additional toolbar actions */
   @Input() AdditionalActionsTemplate: TemplateRef<unknown> | null = null;
@@ -135,10 +165,22 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    */
   @Input() Variants: Array<{ ID: string; Label: string; Scope: 'User' | 'Role' | 'Global'; Status: 'Active' | 'Pending' | 'Inactive' }> = [];
 
+  /** Dynamic toolbar items registered by FormComponent or BaseFormPanels */
+  @Input() RegisteredItems: FormToolbarItemConfig[] = [];
+
+  /** Toolbar item property overrides */
+  @Input() ItemOverrides: ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null = null;
+
+  /** Reference to the form component instance for event payloads */
+  @Input() FormComponent: unknown = null;
+
   /** The currently-applied variant ID, or null when the Default form is active. */
   @Input() CurrentVariantID: string | null = null;
 
   // ---- Outputs ----
+
+  /** Emitted when any toolbar item (standard or custom) is clicked */
+  @Output() ToolbarItemClick = new EventEmitter<FormToolbarItemClickEventArgs>();
 
   /** Emitted for all navigation actions (record links, hierarchy clicks, etc.) */
   @Output() Navigate = new EventEmitter<FormNavigationEvent>();
@@ -164,6 +206,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Request to delete the current record */
   @Output() DeleteRequested = new EventEmitter<void>();
 
+  /** Emitted BEFORE refresh - can be cancelled by setting event.Cancel = true */
+  @Output() BeforeRefresh = new EventEmitter<BeforeRefreshEventArgs>();
+
+  /** Request to refresh the current record from the database */
+  @Output() RefreshRequested = new EventEmitter<void>();
+
   /** Request to toggle favorite status */
   @Output() FavoriteToggled = new EventEmitter<void>();
 
@@ -181,6 +229,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Emitted when the Tags button is clicked */
   @Output() TagsPanelToggled = new EventEmitter<void>();
+
+  /** Emitted when the Attachments button is clicked */
+  @Output() AttachmentsPanelToggled = new EventEmitter<void>();
 
   /** Request to show dirty field changes */
   @Output() ShowChangesRequested = new EventEmitter<void>();
@@ -214,6 +265,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   private _chainsLoading = false;
 
   // ---- Lifecycle ----
+
+  ngOnInit(): void {
+    this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.InvalidateHierarchy();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
 
   ngDoCheck(): void {
     if (this._formRef) {
@@ -365,6 +427,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   // ---- Descendant Chain Computation ----
 
   /**
+   * Force a recompute of the IS-A descendant breadcrumb. Needed after
+   * in-place record refresh because the Record object identity does not
+   * change, so {@link CheckDescendantChains} would otherwise skip.
+   */
+  public InvalidateHierarchy(): void {
+    this._lastRecordForChains = null;
+    this.ComputeDescendantChains();
+    this.cdr.markForCheck();
+  }
+
+  /**
    * Check if descendant chains need recomputation (called from DoCheck).
    * Only triggers async computation when the record identity changes.
    */
@@ -501,6 +574,18 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.cdr.markForCheck();
   }
 
+  OnRefresh(): void {
+    if (this.IsRefreshing || this.IsSaving) return;
+
+    // Emit Before event - handler can cancel by setting event.Cancel = true
+    const beforeEvent = new BeforeRefreshEventArgs();
+    this.BeforeRefresh.emit(beforeEvent);
+    if (beforeEvent.Cancel) return;
+
+    if (this.DispatchToFormRef('RefreshRecord')) return;
+    this.RefreshRequested.emit();
+  }
+
   OnFavoriteToggle(): void {
     if (this.DispatchToFormRef('OnFavoriteToggled')) return;
     this.FavoriteToggled.emit();
@@ -531,6 +616,11 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.TagsPanelToggled.emit();
   }
 
+  OnAttachmentsPanel(): void {
+    if (this.DispatchToFormRef('HandleAttachmentsPanel')) return;
+    this.AttachmentsPanelToggled.emit();
+  }
+
   OnCustomButtonClick(button: CustomToolbarButton): void {
     if (button.Disabled) return;
 
@@ -538,6 +628,332 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       ButtonKey: button.Key,
       Button: button
     });
+  }
+
+  /**
+   * Resolves all standard and custom toolbar items into their active runtime state,
+   * evaluated against the current Record and EditMode.
+   */
+  public get ResolvedToolbarItems(): ResolvedToolbarItem[] {
+    const rawItems: FormToolbarItemConfig[] = [];
+
+    // 1. Standard Built-in Items
+    rawItems.push(
+      {
+        Key: 'edit',
+        Text: '',
+        Description: 'Edit this Record',
+        Icon: 'fa-solid fa-pen-to-square',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 10,
+        Visible: this.Config.ShowEditButton && this.UserCanEdit,
+        Disabled: false,
+      },
+      {
+        Key: 'delete',
+        Text: '',
+        Description: 'Delete this Record',
+        Icon: 'fa-regular fa-trash-can',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 20,
+        Visible: this.Config.ShowDeleteButton && this.UserCanDelete,
+        Disabled: false,
+      },
+      {
+        Key: 'refresh',
+        Text: '',
+        Description: 'Refresh record from database',
+        Icon: 'fa-solid fa-arrows-rotate',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 25,
+        Visible: this.Config.ShowRefreshButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: this.IsSaving || this.IsRefreshing,
+        IsLoading: this.IsRefreshing,
+      },
+      {
+        Key: 'favorite',
+        Text: '',
+        Description: this.IsFavorite ? 'Remove Favorite' : 'Make Favorite',
+        Icon: this.IsFavorite ? 'fa-solid fa-star mj-icon--favorite' : 'fa-regular fa-star',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 30,
+        Visible: this.Config.ShowFavoriteButton && this.FavoriteInitDone,
+        Disabled: false,
+      },
+      {
+        Key: 'history',
+        Text: '',
+        Description: this.VersionCount > 0 ? `${this.VersionCount} version(s) tracked` : 'Record Changes',
+        Icon: 'fa-regular fa-clock',
+        Badge: this.VersionCount > 0 ? `v${this.VersionCount}` : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 40,
+        Visible: this.Config.ShowHistoryButton && this.TracksChanges,
+        Disabled: false,
+      },
+      {
+        Key: 'list',
+        Text: '',
+        Description: this.ListCount > 0 ? `Member of ${this.ListCount} list(s)` : 'Add to a list',
+        Icon: 'fa-regular fa-bookmark',
+        Badge: this.ListCount > 0 ? this.ListCount : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 50,
+        Visible: this.Config.ShowListButton,
+        Disabled: false,
+      },
+      {
+        Key: 'tags',
+        Text: '',
+        Description: this.TagCount > 0 ? `${this.TagCount} tag(s)` : 'View tags',
+        Icon: 'fa-solid fa-tags',
+        Badge: this.TagCount > 0 ? this.TagCount : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 60,
+        Visible: this.Config.ShowTagsButton,
+        Disabled: false,
+      },
+      {
+        Key: 'attachments',
+        Text: '',
+        Description: this.AttachmentCount > 0 ? `${this.AttachmentCount} attachment${this.AttachmentCount === 1 ? '' : 's'}` : 'Attachments',
+        Icon: 'fa-solid fa-paperclip',
+        Badge: this.AttachmentCount > 0 ? this.AttachmentCount : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 70,
+        Visible: this.Config.ShowAttachmentsButton && this.AttachmentsAvailable,
+        Disabled: false,
+        CssClass: this.IsAttachmentsPanelOpen ? 'active' : '',
+      }
+    );
+
+    // 2. Legacy Custom Buttons from Config.CustomButtons (if not already registered dynamically)
+    if (this.Config.CustomButtons && this.Config.CustomButtons.length > 0) {
+      for (const cb of this.Config.CustomButtons) {
+        if (!this.RegisteredItems.some(r => r.Key === cb.Key)) {
+          rawItems.push({
+            Key: cb.Key,
+            Text: cb.Name || '',
+            Description: cb.Description || '',
+            Icon: cb.Icon || '',
+            Variant: 'default',
+            Mode: 'read',
+            Placement: 'actions',
+            Order: 100,
+            Visible: cb.Visible !== false,
+            Disabled: cb.Disabled || false,
+            CssClass: cb.CssClass || '',
+          });
+        }
+      }
+    }
+
+    // 3. Dynamically Registered Items (from BaseFormComponent / BaseFormPanel)
+    if (this.RegisteredItems && this.RegisteredItems.length > 0) {
+      for (const item of this.RegisteredItems) {
+        const existingIdx = rawItems.findIndex(r => r.Key === item.Key);
+        if (existingIdx >= 0) {
+          rawItems[existingIdx] = { ...rawItems[existingIdx], ...item };
+        } else {
+          rawItems.push({ ...item });
+        }
+      }
+    }
+
+    // 4. Resolve states, evaluate predicates, apply overrides
+    const resolved: ResolvedToolbarItem[] = [];
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'favorite', 'history', 'list', 'tags', 'attachments']);
+
+    for (const item of rawItems) {
+      const overrides = this.ItemOverrides?.get(item.Key);
+      const merged: FormToolbarItemConfig = overrides ? { ...item, ...overrides } : item;
+
+      // Mode check
+      const mode = merged.Mode ?? 'read';
+      if (mode === 'read' && this.EditMode) continue;
+      if (mode === 'edit' && !this.EditMode) continue;
+
+      // Visibility evaluation
+      let visible = true;
+      if (typeof merged.Visible === 'function') {
+        try {
+          visible = merged.Visible(this.Record, this.EditMode);
+        } catch {
+          visible = false;
+        }
+      } else if (typeof merged.Visible === 'boolean') {
+        visible = merged.Visible;
+      }
+      if (!visible) continue;
+
+      // Disabled evaluation
+      let disabled = false;
+      let disabledReason: string | undefined;
+      if (typeof merged.Disabled === 'function') {
+        try {
+          const res = merged.Disabled(this.Record, this.EditMode);
+          if (typeof res === 'string') {
+            disabled = true;
+            disabledReason = res;
+          } else {
+            disabled = !!res;
+          }
+        } catch {
+          disabled = true;
+        }
+      } else if (typeof merged.Disabled === 'string') {
+        disabled = true;
+        disabledReason = merged.Disabled;
+      } else if (typeof merged.Disabled === 'boolean') {
+        disabled = merged.Disabled;
+      }
+
+      // Loading evaluation
+      let isLoading = false;
+      if (typeof merged.IsLoading === 'function') {
+        try {
+          isLoading = merged.IsLoading(this.Record, this.EditMode);
+        } catch {
+          isLoading = false;
+        }
+      } else if (typeof merged.IsLoading === 'boolean') {
+        isLoading = merged.IsLoading;
+      }
+
+      // Badge evaluation
+      let badge: string | number | undefined;
+      if (typeof merged.Badge === 'function') {
+        try {
+          const b = merged.Badge(this.Record);
+          badge = b != null ? b : undefined;
+        } catch {
+          badge = undefined;
+        }
+      } else if (merged.Badge != null) {
+        badge = merged.Badge;
+      }
+
+      const description = disabled && disabledReason ? disabledReason : (merged.Description ?? '');
+
+      resolved.push({
+        Key: merged.Key,
+        Text: merged.Text ?? '',
+        Description: description,
+        Icon: merged.Icon ?? '',
+        Variant: merged.Variant ?? 'default',
+        Mode: mode,
+        Placement: merged.Placement ?? 'actions',
+        Order: merged.Order ?? 100,
+        Visible: true,
+        Disabled: disabled,
+        DisabledReason: disabledReason,
+        Badge: badge,
+        IsLoading: isLoading,
+        CssClass: merged.CssClass ?? '',
+        IsStandard: standardKeys.has(merged.Key),
+        Config: merged,
+      });
+    }
+
+    return resolved.sort((a, b) => a.Order - b.Order);
+  }
+
+  public get ResolvedActionItems(): ResolvedToolbarItem[] {
+    return this.ResolvedToolbarItems.filter(item => item.Placement === 'actions');
+  }
+
+  public get ResolvedEditBeforeSaveItems(): ResolvedToolbarItem[] {
+    return this.ResolvedActionItems.filter(item => (item.Order ?? 100) < 50);
+  }
+
+  public get ResolvedEditAfterSaveItems(): ResolvedToolbarItem[] {
+    return this.ResolvedActionItems.filter(item => (item.Order ?? 100) >= 50);
+  }
+
+  public get ResolvedRightItems(): ResolvedToolbarItem[] {
+    return this.ResolvedToolbarItems.filter(item => item.Placement === 'right');
+  }
+
+  public async OnToolbarItemClick(item: ResolvedToolbarItem, event: MouseEvent): Promise<void> {
+    if (item.Disabled || item.IsLoading) {
+      return;
+    }
+
+    const clickArgs: FormToolbarItemClickEventArgs = {
+      ItemKey: item.Key,
+      Item: item.Config,
+      Record: this.Record,
+      EditMode: this.EditMode,
+      FormComponent: this.FormComponent,
+      Cancel: false
+    };
+
+    if (item.IsStandard) {
+      switch (item.Key) {
+        case 'edit':
+          this.OnEdit();
+          break;
+        case 'delete':
+          this.OnDeleteClick();
+          break;
+        case 'refresh':
+          this.OnRefresh();
+          break;
+        case 'favorite':
+          this.OnFavoriteToggle();
+          break;
+        case 'history':
+          this.OnHistory();
+          break;
+        case 'list':
+          this.OnListManagement();
+          break;
+        case 'tags':
+          this.OnTagsPanel();
+          break;
+        case 'attachments':
+          this.OnAttachmentsPanel();
+          break;
+      }
+    }
+
+    this.ToolbarItemClick.emit(clickArgs);
+    this.CustomButtonClick.emit({
+      ButtonKey: item.Key,
+      Button: {
+        Key: item.Key,
+        Name: item.Text,
+        Description: item.Description,
+        Icon: item.Icon,
+        Visible: item.Visible,
+        Disabled: item.Disabled,
+        CssClass: item.CssClass
+      }
+    });
+
+    if (!clickArgs.Cancel && item.Config.OnClick) {
+      try {
+        await item.Config.OnClick(clickArgs);
+      } catch (err) {
+        console.error(`[FormToolbar] Error executing OnClick for toolbar item '${item.Key}':`, err);
+      }
+    }
   }
 
   OnShowChanges(): void {

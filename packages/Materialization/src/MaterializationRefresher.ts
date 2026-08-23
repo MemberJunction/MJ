@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter, RunView } from '@memberjunction/core';
 import { MJMaterializedResultEntity, MJQueryEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, ResolveSingleEntityResourceTarget, UUIDsEqual } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
-import { GetDialect } from '@memberjunction/sql-dialect';
+import { GetDialect, DatabasePlatform } from '@memberjunction/sql-dialect';
 
 /**
  * Synthetic surrogate key column name for query-materialized tables. MUST match CodeGenLib's
@@ -44,8 +44,7 @@ export interface ISQLExecutor {
      * as `@p0,@p1,…` on SQL Server (`request.input('p'+i)`) and `$1,$2,…` on PostgreSQL (node-pg values) —
      * both MJ data providers accept this shape. Omit it for plain (DDL / no-value) statements.
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ExecuteSQL<T = any>(sql: string, parameters?: unknown): Promise<T[]>;
+    ExecuteSQL<T = unknown>(sql: string, parameters?: unknown): Promise<T[]>;
     /** Database platform of the executing provider ('sqlserver' | 'postgresql'); absent => treated as SQL Server. */
     PlatformKey?: string;
 }
@@ -88,6 +87,64 @@ export class MaterializationRefresher {
         return ranIncremental ? (current ?? 0) + 1 : 0;
     }
 
+    /** A plain, unquoted SQL identifier: leading letter/underscore, then letters/digits/underscores. */
+    private static readonly SAFE_SQL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+    /** Cached API-key row-filter targets for this refresher; `null` = not yet enumerated (see
+     *  {@link loadAPIKeyRowFilterTargets}). `'unknown'` is a LOADED state meaning "assume restricted". */
+    private _apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown' | null = null;
+
+    /**
+     * Guards the schema/table/view identifiers that get interpolated into materialization DDL/DML — names
+     * read from the *writable* `MJ: Materialized Results` metadata row. A materialization's names are always
+     * CodeName-derived (`materialized_<CodeName>`, schema `__mj`), so a legitimate row always passes. The
+     * assertion exists so a tampered metadata row can never drive the privileged refresh job's
+     * `EXEC(...)` / `sp_rename` / `CREATE VIEW` / `RENAME TO` statements to run arbitrary DDL: a value that
+     * matches {@link SAFE_SQL_IDENTIFIER} cannot contain `]`, `"`, or `'`, so this one check closes BOTH the
+     * identifier-quoting and the T-SQL string-literal injection surfaces the swap builders would otherwise
+     * expose. Fails closed — throws (→ the refresh is reported as failed) rather than emitting a suspect
+     * statement. This is the refresh-path complement to the mint-path dialect quoting.
+     */
+    private static assertSafeObjectNames(schema: string, tableName: string, viewName: string): void {
+        for (const [role, value] of [['schema', schema], ['table', tableName], ['view', viewName]] as const) {
+            if (!MaterializationRefresher.isSafeObjectName(value)) {
+                throw new Error(`Unsafe materialization ${role} identifier ${JSON.stringify(value)} — expected a plain SQL identifier (^[A-Za-z_][A-Za-z0-9_]*$); refusing to build DDL.`);
+            }
+        }
+    }
+
+    /**
+     * Non-throwing form of the identifier check. Needed by callers on the FAILURE path, which is precisely
+     * where {@link assertSafeObjectNames} may have just thrown — those callers must be able to re-check and
+     * decline quietly rather than re-enter (or bypass) the assertion that already rejected the value.
+     * @internal exposed for unit testing; not part of the supported surface.
+     */
+    public static isSafeObjectName(value: string): boolean {
+        return typeof value === 'string' && MaterializationRefresher.SAFE_SQL_IDENTIFIER.test(value);
+    }
+
+    /**
+     * Resolves the SQL that the READ path would execute for `queryId` on the engine we are refreshing against,
+     * so the snapshot is built from the same statement live serves. Mirrors the read path's
+     * `QueryInfo.GetPlatformSQL(PlatformKey)`, whose precedence is: `MJ: Query SQLs` child row for the platform
+     * → legacy PlatformVariants → base SQL.
+     *
+     * `GetPlatformSQL` lives on the metadata `QueryInfo`, not on the generated `MJQueryEntity`, so the variant
+     * is resolved through the provider's query metadata. Falls back to the entity's own SQL when the query
+     * isn't present in that metadata (e.g. a provider whose cache hasn't loaded it), which reproduces exactly
+     * the previous behavior rather than failing the refresh.
+     *
+     * @returns the platform-resolved SQL, or null when neither source yields a non-empty statement.
+     * @internal exposed for unit testing; not part of the supported surface.
+     */
+    public static resolvePlatformQuerySQL(provider: IMetadataProvider, queryId: string, entitySql: string | null, isPostgres: boolean): string | null {
+        const platform: DatabasePlatform = isPostgres ? 'postgresql' : 'sqlserver';
+        const info = provider.Queries?.find((q) => UUIDsEqual(q.ID, queryId));
+        const resolved = info ? info.GetPlatformSQL(platform) : null;
+        const chosen = resolved && resolved.trim().length > 0 ? resolved : entitySql;
+        return chosen && chosen.trim().length > 0 ? chosen : null;
+    }
+
     /**
      * Builds the ordered SQL statements for a SQL Server full rebuild with atomic swap (plan §11.2).
      * Pure (no IO) so the swap sequence is unit-testable. Each returned string runs as its own batch.
@@ -108,6 +165,7 @@ export class MaterializationRefresher {
         shadowName?: string;
     }): string[] {
         const { schema, tableName, viewName, sourceSelect, surrogateColumn, hashKeyColumns } = opts;
+        MaterializationRefresher.assertSafeObjectNames(schema, tableName, viewName);
         const shadow = opts.shadowName ?? `${tableName}__shadow`;
         const obj = (n: string) => `[${schema}].[${n}]`;
         // Surrogate: a stable HASH of the key columns (Phase 3 — keyed/aggregation materializations, the
@@ -150,7 +208,11 @@ export class MaterializationRefresher {
                 `  EXEC sp_rename '${schema}.${shadow}', '${tableName}';\n` +
                 `  EXEC('CREATE OR ALTER VIEW ${obj(viewName)} AS SELECT * FROM ${obj(tableName)}');\n` +
                 indexLine +
-                `COMMIT TRANSACTION;`,
+                // Restore the connection default after the swap. SET options persist for the SESSION and the
+                // pool hands this same physical connection to unrelated requests, which would otherwise
+                // silently inherit XACT_ABORT ON — converting their recoverable statement-level errors into
+                // full transaction aborts, far from anything to do with materialization.
+                `COMMIT TRANSACTION;\nSET XACT_ABORT OFF;`,
         ];
     }
 
@@ -182,6 +244,7 @@ export class MaterializationRefresher {
         shadowName?: string;
     }): string[] {
         const { schema, tableName, viewName, sourceSelect, surrogateColumn, hashKeyColumns } = opts;
+        MaterializationRefresher.assertSafeObjectNames(schema, tableName, viewName);
         const shadow = opts.shadowName ?? `${tableName}__shadow`;
         const obj = (n: string) => `${schema}."${n}"`;
         // Surrogate: a stable HASH of the key columns (Phase 3 keyed/aggregation materializations) when
@@ -259,6 +322,13 @@ export class MaterializationRefresher {
                 return { Success: false, ErrorMessage: `Materialization ${matResult.ID} is ${matResult.Status} — refusing to refresh (resolve/re-enable it first to clear the status).` };
             }
 
+            // Security: schema/table/view names are interpolated into refresh DDL (EXEC / sp_rename / CREATE VIEW
+            // / RENAME TO) and originate from the WRITABLE `MJ: Materialized Results` row. Validate them as plain
+            // SQL identifiers BEFORE any statement is built (all builders — full/incremental/external — dispatch
+            // from here), so a tampered row can never drive the privileged refresh job to run arbitrary DDL. The
+            // throw is caught below and reported as a refresh failure.
+            MaterializationRefresher.assertSafeObjectNames(matResult.SchemaName, matResult.TableName, matResult.ViewName);
+
             const exec = provider as unknown as ISQLExecutor;
             const isPostgres = exec.PlatformKey === 'postgresql';
 
@@ -288,8 +358,12 @@ export class MaterializationRefresher {
                 // The CodeGen mint/drift gates also cover this, but they run only per codegen pass; this runtime
                 // refusal closes the window between an entity gaining RLS and the next codegen run, during which
                 // the scheduled sweep would otherwise keep refilling the mirror with the now-protected rows.
-                if (MaterializationRefresher.entityHasReadRLS(externalEntity)) {
-                    return await this.failRefresh(matResult, provider, options, `Refusing to refresh base-view materialization of external RLS-protected entity "${externalEntity.Name}": a local mirror would expose rows the live path refuses under RLS.`);
+                // Both fence layers, not just role RLS: an entity fenced ONLY by an API-key row filter is just
+                // as unsafe to mirror, and checking only the role layer would leave this window open for it —
+                // the very window this gate exists to close. Symmetric with CodeGen's mint/drift gates.
+                const apiKeyTargets = await this.loadAPIKeyRowFilterTargets(provider, contextUser);
+                if (MaterializationRefresher.entityHasRowLevelRestriction(externalEntity, apiKeyTargets)) {
+                    return await this.failRefresh(matResult, provider, options, `Refusing to refresh base-view materialization of external row-restricted entity "${externalEntity.Name}" (role RLS and/or an API-key row filter): a local mirror would expose rows the live path refuses.`);
                 }
                 const ext = await this.rebuildFromExternalEntity(matResult, externalEntity, exec, isPostgres, contextUser, provider, runShadowName);
                 if (!ext.Success) return await this.failRefresh(matResult, provider, options, ext.ErrorMessage ?? `External entity rebuild failed for materialization ${matResult.ID}`);
@@ -394,6 +468,13 @@ export class MaterializationRefresher {
             // shadow is renamed INTO the canonical name, so there's nothing to drop.) Never let a cleanup error
             // mask the original failure. `exec`/`isPostgres` are re-derived because they're scoped to the try.
             await this.dropShadowTableBestEffort(provider, matResult.SchemaName, runShadowName);
+            // A batch that aborted mid-swap never reached its trailing `SET XACT_ABORT OFF`. Best-effort reset
+            // (no-op on PG, which has no such setting). Note this is a genuine BEST effort, not a guarantee:
+            // the pool hands out any idle connection, so this may well reset a different one than the batch
+            // poisoned. Harmless either way — OFF is the connection default, so resetting an innocent
+            // connection is a no-op. The trailing OFF inside each batch is the load-bearing half, since only
+            // that one is guaranteed to run on the same connection.
+            await this.resetXactAbortBestEffort(provider);
             return await this.failRefresh(matResult, provider, options, msg);
         }
     }
@@ -403,7 +484,31 @@ export class MaterializationRefresher {
      * a crashed/failed rebuild leaves no orphan). Uses IF EXISTS so it's a no-op when the shadow was never
      * created or was already renamed into the canonical table on success.
      */
+    /**
+     * Restores `XACT_ABORT` to the connection default after a failed refresh, swallowing any error. SQL Server
+     * only — PostgreSQL has no equivalent session setting, so this is a no-op there. Needed because a batch
+     * that aborts mid-swap never reaches the trailing `SET XACT_ABORT OFF` in its own statement list.
+     */
+    private async resetXactAbortBestEffort(provider: IMetadataProvider): Promise<void> {
+        try {
+            const exec = provider as unknown as ISQLExecutor;
+            if (exec.PlatformKey === 'postgresql') return;
+            await exec.ExecuteSQL('SET XACT_ABORT OFF');
+        } catch (resetErr) {
+            LogError(`MaterializationRefresher: best-effort XACT_ABORT reset failed (ignored): ${resetErr instanceof Error ? resetErr.message : String(resetErr)}`);
+        }
+    }
+
     private async dropShadowTableBestEffort(provider: IMetadataProvider, schema: string, shadowName: string): Promise<void> {
+        // Fail CLOSED. This runs from the RefreshOne catch block — which is exactly where
+        // assertSafeObjectNames may have just REJECTED these very names. Interpolating them here would let the
+        // guard's own rejection be the thing that routes a tampered SchemaName into privileged DDL, inverting
+        // the guarantee the guard exists to provide. Re-check and decline instead; declining drops nothing
+        // real, because the assertion fires before any shadow table could have been created.
+        if (!MaterializationRefresher.isSafeObjectName(schema) || !MaterializationRefresher.isSafeObjectName(shadowName)) {
+            LogError(`MaterializationRefresher: refusing best-effort shadow cleanup — unsafe identifier(s) schema=${JSON.stringify(schema)} shadow=${JSON.stringify(shadowName)}. No shadow table can exist under these names.`);
+            return;
+        }
         try {
             const exec = provider as unknown as ISQLExecutor;
             const isPostgres = exec.PlatformKey === 'postgresql';
@@ -589,7 +694,7 @@ export class MaterializationRefresher {
                 : MaterializationRefresher.buildDirtyGroupRecomputeStatementsSQLServer(opts);
             const batch = isPostgres
                 ? `BEGIN;\n${dg.join(';\n')};\nCOMMIT;`
-                : `SET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${dg.join(';\n')};\nCOMMIT TRANSACTION;`;
+                : `SET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${dg.join(';\n')};\nCOMMIT TRANSACTION;\nSET XACT_ABORT OFF;`;
             await exec.ExecuteSQL(batch);
         }
 
@@ -732,6 +837,76 @@ export class MaterializationRefresher {
     }
 
     /**
+     * The composite row-restriction test the Leak-1 gate uses: role RLS **or** an API-key row filter.
+     *
+     * {@link entityHasReadRLS} covers only the ROLE layer. `EntityInfo`'s equivalent role-only accessor is
+     * deprecated precisely because it omits API-key row filters, so a gate built on it alone judges an
+     * entity fenced only by a key filter to be unrestricted. CodeGen's mint and drift gates compose both
+     * layers; this is the runtime half, kept deliberately symmetric with them.
+     *
+     * @param apiKeyRowFilterTargets lowercased entity names carrying an API-key row filter, or `'unknown'`
+     *        when that layer could not be enumerated — in which case every entity is treated as restricted,
+     *        because refusing to refresh is recoverable and mirroring restricted rows is not.
+     */
+    public static entityHasRowLevelRestriction(entity: EntityInfo, apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown'): boolean {
+        if (MaterializationRefresher.entityHasReadRLS(entity)) return true;
+        if (apiKeyRowFilterTargets === 'unknown') return true;
+        return apiKeyRowFilterTargets.has((entity.Name ?? '').trim().toLowerCase());
+    }
+
+    /**
+     * Enumerates the entities carrying an API-key row filter, cached for this refresher's lifetime (the gate
+     * runs per materialization; the fence changes far more slowly than a sweep).
+     *
+     * Mirrors CodeGen's enumeration contract exactly, because it shares the rule rather than restating it:
+     * entity NAMES normalized by {@link ResolveSingleEntityResourceTarget}, taken from the `ResourcePattern`
+     * of scope rows that carry a `RowFilterID`. A pattern that function cannot resolve to one exact entity
+     * collapses the WHOLE set to `'unknown'`, since a rule we cannot map may well name the entity we are
+     * about to mirror. Any read failure does the same.
+     */
+    private async loadAPIKeyRowFilterTargets(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReadonlySet<string> | 'unknown'> {
+        if (this._apiKeyRowFilterTargets !== null) return this._apiKeyRowFilterTargets;
+        try {
+            const targets = new Set<string>();
+            const rv = RunView.FromMetadataProvider(provider);
+            for (const entityName of ['MJ: API Key Scopes', 'MJ: API Application Scopes']) {
+                // Skip a scope entity that has no RowFilterID field — the same guard CodeGen's enumeration
+                // makes with an INFORMATION_SCHEMA probe, expressed here in the metadata the refresher already
+                // has. Without it, a database predating that column fails the filtered read, which collapses
+                // the set to 'unknown' and stops EVERY external base-view refresh until someone migrates. The
+                // column's absence means the key-filter layer cannot exist there, so contributing nothing is
+                // correct rather than fail-open.
+                const scopeEntity = provider.EntityByName(entityName);
+                if (!scopeEntity || !scopeEntity.Fields.some((f) => f.Name === 'RowFilterID')) continue;
+                const res = await rv.RunView<{ ResourcePattern: string | null }>(
+                    { EntityName: entityName, Fields: ['ResourcePattern'], ExtraFilter: 'RowFilterID IS NOT NULL', ResultType: 'simple' },
+                    contextUser,
+                );
+                if (!res.Success) throw new Error(`${entityName}: ${res.ErrorMessage}`);
+                for (const row of res.Results ?? []) {
+                    const pattern = (row.ResourcePattern ?? '').trim();
+                    // SHARED with CodeGen's identical gate (ResolveSingleEntityResourceTarget in
+                    // @memberjunction/global) rather than copied. These two enumerations must agree exactly —
+                    // a copy that drifts open in either one silently re-opens the leak the other closes, and
+                    // nothing in the build would catch the divergence.
+                    const target = ResolveSingleEntityResourceTarget(pattern);
+                    if (target === null) {
+                        LogError(`MaterializationRefresher: an API-key scope rule with a row filter has an unmappable ResourcePattern ("${pattern}") — it cannot be resolved to one entity, so EVERY entity is treated as row-restricted for refresh (fail closed). Fix the rule to name one exact entity.`);
+                        this._apiKeyRowFilterTargets = 'unknown';
+                        return this._apiKeyRowFilterTargets;
+                    }
+                    targets.add(target);
+                }
+            }
+            this._apiKeyRowFilterTargets = targets;
+        } catch (err) {
+            LogError(`MaterializationRefresher: API-key row-filter enumeration FAILED — every entity is treated as row-restricted for refresh (fail closed): ${err instanceof Error ? err.message : String(err)}`);
+            this._apiKeyRowFilterTargets = 'unknown';
+        }
+        return this._apiKeyRowFilterTargets;
+    }
+
+    /**
      * Resolves the source SELECT a refresh rebuilds from: the source entity's base view (base-view case)
      * or the stored Query's SQL (query case). Returns null when the source can't be resolved.
      */
@@ -748,7 +923,10 @@ export class MaterializationRefresher {
         // query with its row-filter WHERE predicate(s) removed — is persisted on the row at
         // materialization time; the refresh rebuilds it broad and the filter is re-applied at read
         // (ExtraFilter on the materialized VE). Unparameterized queries use the static query SQL.
-        if (!matResult.SourceQueryID) return null;
+        // The MR<->Query link lives in the MaterializedResultQuery join table (no SourceQueryID column).
+        // Reuse the preloaded query's ID when RefreshOne already resolved it; otherwise look it up via the join.
+        const sourceQueryId = preloadedQuery ? preloadedQuery.ID : await this.resolveSourceQueryId(matResult, provider, contextUser);
+        if (!sourceQueryId) return null;
         let rawSql: string | null;
         if (matResult.ParamMode === 'RowFilterBroad') {
             rawSql = matResult.BroadSQL && matResult.BroadSQL.trim().length > 0 ? matResult.BroadSQL : null;
@@ -757,9 +935,16 @@ export class MaterializationRefresher {
             let query = preloadedQuery;
             if (!query) {
                 query = await provider.GetEntityObject<MJQueryEntity>('MJ: Queries', contextUser);
-                await query.Load(matResult.SourceQueryID);
+                await query.Load(sourceQueryId);
             }
-            rawSql = query.SQL && query.SQL.trim().length > 0 ? query.SQL : null;
+            // Snapshot the SAME statement the READ path executes. Reads resolve SQL via
+            // QueryInfo.GetPlatformSQL(PlatformKey) (GenericDatabaseProvider's ORDER BY gate and its query
+            // execution both do), which prefers a per-platform `MJ: Query SQLs` variant over the base SQL.
+            // Snapshotting the base `SQL` instead means a query carrying a variant for THIS engine is
+            // materialized from a different statement than the one live serves — either a hard refresh
+            // failure every cycle, or (worse) a snapshot whose contents silently disagree with live, which
+            // is precisely the invariant materialization exists to preserve.
+            rawSql = MaterializationRefresher.resolvePlatformQuerySQL(provider, sourceQueryId, query.SQL, isPostgres);
         }
         // Strip a top-level ORDER BY before this SELECT is wrapped in a derived table by the rebuild
         // (SELECT … INTO shadow FROM (<sql>) AS src): SQL Server rejects ORDER BY inside a derived table /
@@ -919,14 +1104,36 @@ export class MaterializationRefresher {
      * when it's a LOCAL query. The caller reuses this same loaded `query` to build the local source SELECT
      * (no second Load). Returns null when the source isn't a stored Query.
      */
+    /**
+     * Resolve a materialization's source Query ID via the `MJ: Materialized Result Queries` join table.
+     * The MR<->Query link lives in that join table (there is no MaterializedResult.SourceQueryID column —
+     * the direct FK formed a circular dependency). Returns null when the materialization has no linked query.
+     */
+    private async resolveSourceQueryId(matResult: MJMaterializedResultEntity, provider: IMetadataProvider, contextUser: UserInfo): Promise<string | null> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const res = await rv.RunView<{ QueryID: string }>(
+            {
+                EntityName: 'MJ: Materialized Result Queries',
+                ExtraFilter: `MaterializedResultID='${matResult.ID}'`,
+                Fields: ['QueryID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        return res.Success && res.Results.length > 0 ? res.Results[0].QueryID : null;
+    }
+
     private async resolveSourceQuery(
         matResult: MJMaterializedResultEntity,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<{ query: MJQueryEntity; externalSql: string | null } | null> {
-        if (matResult.SourceType !== 'Query' || !matResult.SourceQueryID) return null;
+        if (matResult.SourceType !== 'Query') return null;
+        const sourceQueryId = await this.resolveSourceQueryId(matResult, provider, contextUser);
+        if (!sourceQueryId) return null;
         const query = await provider.GetEntityObject<MJQueryEntity>('MJ: Queries', contextUser);
-        await query.Load(matResult.SourceQueryID);
+        await query.Load(sourceQueryId);
         if (!query.ExternalDataSourceID) return { query, externalSql: null };
         const sql = matResult.ParamMode === 'RowFilterBroad' ? (matResult.BroadSQL ?? '') : (query.SQL ?? '');
         return { query, externalSql: sql.trim().length > 0 ? sql : null };
@@ -970,6 +1177,16 @@ export class MaterializationRefresher {
         // feeding PG-native names in would double-convert everything down to `text` (broken sorts/joins).
         const surrogate = MATERIALIZATION_SURROGATE_COLUMN;
         const dataColNames = [...new Set(rawRows.flatMap((r) => Object.keys(r)))];
+        // A zero-row result carries NO column information, so the rebuild below would emit a shadow table
+        // holding only the surrogate, then DROP the canonical table and rename that one-column shell into its
+        // place — permanently breaking every read of the minted entity ("Invalid column name") while reporting
+        // Success. Refuse instead: the existing snapshot is left intact and serving (at worst slightly stale),
+        // and failRefresh advances NextRefreshAt so this backs off to its cadence and stays visible in the log.
+        // The alternative (truncate-in-place to preserve the shape) is the nicer semantic for a legitimately
+        // empty source, but it cannot be done safely without first proving the canonical table's shape here.
+        if (rawRows.length === 0) {
+            return { Success: false, ErrorMessage: `External query '${query.Name}' returned zero rows, so the snapshot's column shape cannot be determined. Refusing to rebuild — the existing snapshot is preserved rather than replaced with an empty, unreadable table.` };
+        }
         // Refuse if the external result already has a column named like the surrogate — prepending ours
         // would emit a duplicate column and the CREATE TABLE / INSERT would fail on every refresh. (Parity
         // with the local path's analyzeQueryForMaterialization shadow-check; here it's a runtime guard.)
@@ -1136,7 +1353,11 @@ export class MaterializationRefresher {
                       // table can't overflow the 128-char sysname limit and roll back the swap — matches
                       // buildFullRebuildStatementsSQLServer.
                       (surrogateColumn ? `  CREATE UNIQUE INDEX [UQ_MJ_Materialized_Surrogate] ON ${obj(tableName)} (${q(surrogateColumn)});\n` : '') +
-                      `COMMIT TRANSACTION;`,
+                      // Restore the connection default after the swap. SET options persist for the SESSION and the
+                // pool hands this same physical connection to unrelated requests, which would otherwise
+                // silently inherit XACT_ABORT ON — converting their recoverable statement-level errors into
+                // full transaction aborts, far from anything to do with materialization.
+                `COMMIT TRANSACTION;\nSET XACT_ABORT OFF;`,
               ];
 
         return { preStatements, insertBatches, postStatements };

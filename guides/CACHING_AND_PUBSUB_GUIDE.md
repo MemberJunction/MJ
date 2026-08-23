@@ -639,6 +639,9 @@ Each implementation handles serialization for its medium internally — callers 
 | `BrowserLocalStorageProvider` | JSON-serialized internally | `Date` → ISO string; `Map`/`Set` → plain objects |
 | `RedisLocalStorageProvider` | JSON-serialized internally | Same JSON limitations as localStorage |
 | `InMemoryLocalStorageProvider` | Native references (no copy) | Full identity preserved |
+| `MMKVStorageProvider` (React Native) | JSON-serialized internally | Same JSON limitations as localStorage |
+
+> ⚠️ "Native references (no copy)" has a correctness consequence, not just a performance one — the store and its callers share the same objects. See [Cached rows are IMMUTABLE](#-cached-rows-are-immutable--never-mutate-a-runview-result-in-place) below.
 
 **Why this matters**: IndexedDB's structured clone is implemented in browser-native C++ — significantly faster than JS-level `JSON.parse`/`JSON.stringify`. For cache-heavy workloads (engine warm load, dashboard refreshes) this is a measurable win. The previous string-based interface forced a sandwich of `JSON.stringify` (write) + `JSON.parse` (read) that we no longer pay for IDB-backed cache hits.
 
@@ -652,6 +655,75 @@ const cached = await provider.GetItem<CachedRunViewData>(fp, 'RunViewCache');
 ```
 
 **Class instances lose their prototype on retrieval** across all providers. Store the underlying data shape (e.g. via `entity.GetAll()` for `BaseEntity`) — methods aren't preserved by structured clone or JSON.
+
+### 🚨 Cached rows are IMMUTABLE — never mutate a RunView result in place
+
+**Treat every row from a `RunView`/`RunViews`/`RunQuery` result as read-only unless you created it yourself.** If you need to change a row, derive a copy first:
+
+```typescript
+// ✅ CORRECT — transform onto copies
+result.Results = result.Results.map(r => transform({ ...r }));
+const sorted = [...result.Results].sort(byName);      // copy, then sort
+
+// ❌ WRONG — mutates rows and/or the array the cache holds
+for (const r of result.Results) transform(r);
+result.Results.sort(byName);                          // sort() mutates in place
+```
+
+**Why**: `ResultType: 'simple'` rows are handed out **by reference** whenever the active storage provider shares references (see the `SharesReferences` table below) — which is the default on MJAPI. The exposure runs in *both* directions:
+
+- **Cache hit** — `ProviderBase` returns `cached.results` itself (the stored array and its rows), not a copy.
+- **Cache miss** — `PostRunView` stores the array it is about to return, so the cache and the caller hold the same objects from that moment on.
+
+So an in-place mutation edits **process-wide** state. This shipped as a P1: `ResolverBase` renamed `__mj_CreatedAt` → the GraphQL transport alias `_mj__CreatedAt` in place, rewriting the live cache so every later read — including non-GraphQL server code — received rows that `BaseEntity.SetMany` rejects, until the process restarted.
+
+`ResultType: 'entity_object'` results are exempt: the transformation builds a new array of fresh `BaseEntity` instances.
+
+#### The `SharesReferences` contract
+
+`ILocalStorageProvider` declares an optional `readonly SharesReferences?: boolean` saying whether it hands back live references.
+
+**Always declare it** in a new provider — it documents the isolation semantics at the implementation site. It is optional only so that introducing this contract could not break existing external implementations at compile time, and omitting it is *not* an opt-out: when the property is absent, `LocalCacheManager` **measures** the provider once at initialization — it stores a sentinel object, reads it back, and compares identity. Identity preserved ⇒ live references ⇒ freeze armed. So a provider written before this contract existed still gets the correct protection instead of silently losing it to a falsy default. If the probe cannot complete (a backing store that isn't ready at init), it defaults to `false` and logs — i.e. it fails **open**, leaving the freeze disarmed. That matches pre-freeze behavior rather than immobilizing rows for a provider it could not classify, but be clear about the trade: an unclassifiable provider gets no protection, so declare the property rather than relying on the probe.
+
+The decision follows the provider across a swap. MJAPI initializes the cache on the in-memory provider during engine loading and calls `SetStorageProvider(redis)` later, once Redis connects — two providers with opposite semantics in one process — so the answer is re-resolved on every swap, and a provider that *declares* the property is re-read live on each write.
+
+| Provider | `SharesReferences` | Why |
+|---|---|---|
+| `InMemoryLocalStorageProvider` | `true` | `Map` holds the object itself — **MJAPI's default** |
+| `BrowserStorageProviderBase` | `true` | in-memory fallback tier |
+| `BrowserLocalStorageProvider` | `typeof localStorage === 'undefined'` | JSON round-trip isolates; `true` only in its in-memory fallback |
+| `BrowserIndexedDBStorageProvider` | `false` | structured clone; never defers to the in-memory base |
+| `RedisLocalStorageProvider` | `false` | JSON over the wire |
+| `MMKVStorageProvider` | `false` | JSON into MMKV |
+
+#### Enforcement: deep-freeze on write
+
+When (and only when) the provider reports `SharesReferences`, `LocalCacheManager` **deep-freezes** each payload as it is stored — the rows, their nested values, and the array itself. Mutations then throw a `TypeError` at the offending line instead of silently corrupting shared state, and cache **hits cost nothing extra** (the freeze is a one-time per-write cost, amortized over every subsequent hit).
+
+Freezing is applied at both write funnels — `SetRunViewResult` / `SetRunQueryResult` and `storeCachedResults` (the in-place upsert/remove maintenance path, which bypasses `SetRunViewResult` entirely). It is deliberately applied *after* the write gates, so a result the cache declines to store stays fully owned and mutable by its caller.
+
+Serializing providers are skipped: their stored data is already isolated, and freezing would only immobilize the caller's own rows for no safety gain (this is what keeps browser code that decorates rows working unchanged).
+
+The **runtime freeze is the enforcement** — the cache result types (`CachedRunViewData.results`, `CachedRunViewResult.results`, `GetRunQueryResult`'s return) stay ordinary mutable arrays, documented as shared-and-frozen rather than marked `readonly`. A `readonly` marker there was tried and reverted: it forced casts at every transport boundary and would have been a compile break for existing downstream code that reads cache entries, without adding protection the freeze does not already provide.
+
+Two things are deliberately **not** frozen, because they were never shared:
+
+- **`Fields` requests.** A request that names fields is served by projecting the cached full-width superset down to the caller's shape, which builds fresh per-caller row objects. Those belong to the caller and stay mutable. The projection has an allocation-free fast path for the case where the requested list covers every stored key, but it is taken only on unfrozen (DB-miss) input — against frozen cache rows the copy is made anyway, so a `Fields` caller never receives immutable rows just because their field list happened to be exhaustive.
+- **`ProviderInternalScaffolding` slots.** Pass `{ ProviderInternalScaffolding: true }` as `SetRunViewResult`'s `options` to declare a slot whose only consumer is the provider that wrote it. The freeze protects *consumers* from corrupting rows they were handed; it buys nothing for single-owner rows, and it breaks owners that legitimately use them as scratch space.
+
+  The one current use is **metadata bootstrap**, and it is scoped to the **`MJ_Metadata` dataset only** at the single dataset-item write site: the provider's own metadata assembly mutates those rows in place by design — `PostProcessEntityMetadata` sorts the entity array and attaches child collections (`EntityFields`, `EntityPermissions`, `EntityFieldValues`, …) onto each row, and `GetAllMetadata`'s Applications assembly writes onto Application rows. With those rows frozen, `GetAllMetadata()` throws `Cannot assign to read only property '0'` and the process boots with **no metadata at all**. The flag is persisted on the cache entry and carried forward through in-place slot maintenance, so a later save event cannot silently re-freeze the slot.
+
+  **Every other dataset's cached rows ARE frozen** — `GetDatasetByName` is a public API (`BaseEngine.Load` hands `item.Results`, the live cached arrays, to every engine subclass), so those slots are ordinary shared state. If an engine needs to sort or decorate dataset rows, it must copy first, like any other cache consumer.
+
+  **Do not reach for this flag to avoid fixing a mutation.** If the rows reach anything but the writing provider, the mutator must copy first.
+
+Three accepted residuals the freeze cannot cover:
+
+- **Binary payloads** (`Buffer` / TypedArray / `ArrayBuffer` — e.g. `varbinary` columns): the JS spec makes `Object.freeze` **throw** on a non-empty view, so the deep-freeze skips them — and a freeze failure of any kind degrades to a logged, unfrozen store rather than failing the write path.
+- **`Date` internal slots**: a frozen `Date` still accepts `setHours()` and friends.
+- **Sloppy-mode consumers**: the `TypeError` is strict-mode behavior; non-strict code gets a silent no-op write instead. The cache is protected either way — only the loudness differs.
+
+**If you hit `TypeError: Cannot assign to read only property` on a RunView row**, you have found a real pre-existing corruption bug, not a regression — fix it by copying before mutating, as `ResolverBase` does. This applies inside **`PostRunView` data hooks / middleware** too: on the server they receive the frozen rows on every cache miss, so modify by reassigning onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`) or by returning a new result — never by writing into rows.
 
 ### Batched reads (`GetItems`)
 
@@ -980,6 +1052,10 @@ The processing order in `PostRunView` / `PostRunViews` is:
 3. **Run post-hooks** via `RunPostRunViewHooks()`
 
 On cache read, `TransformSimpleObjectToEntityObject()` is called to restore BaseEntity instances from the cached plain objects when `ResultType === 'entity_object'`.
+
+**Cache hits run the post-hooks too.** `PostRunView` is the OUTPUT half of the data-hook enforcement seam (masking / audit), and hooks receive `contextUser` — so masking is *per-user* while a cache slot is *shared across users*. Applying it once at write time, on behalf of a reader who has not arrived yet, is not possible; a hit that skips the chain returns rows the miss path would have masked. Every path that serves view rows therefore runs it: the miss path, both cache-hit paths, the mixed batch, and the client smart-cache path.
+
+Note the ordering consequence for hook authors: because step 1 caches *before* step 3 runs, a hook that mutated rows in place used to write through into the cached objects. That is what made cached reads *appear* masked, and it wrote one user's masking decision into a slot shared with everyone else. Freeze-on-write stops it — which is why hooks must modify by mapping onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`) or by returning a new result. On a cache hit the result *wrapper* is freshly built per read, so reassigning `.Results` on it never reaches the cache.
 
 ### Real-Time Array Updates (Event Handling)
 

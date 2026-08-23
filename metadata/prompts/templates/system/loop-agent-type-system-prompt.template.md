@@ -72,9 +72,15 @@ interface LoopAgentResponse {
                 tempId: string;
                 name: string;
                 description: string;
-                agentName?: string;
-                assignToUser?: boolean;
-                dependsOn: string[];
+                /** What runs this step. Picks which `configuration` shape applies. */
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt';
+                configuration:
+                    | { agentName: string; message?: string }      // kind: 'Agent'
+                    | { actionName: string }                        // kind: 'Action'
+                    | { assignToUserID?: string; instructions?: string }  // kind: 'Human'
+                    | { promptName: string };                       // kind: 'Prompt'
+                /** A bare tempId waits unconditionally; the object form gates the edge on a condition. */
+                dependsOn: Array<string | { tempId: string; condition?: string }>;
                 inputPayload?: Record<string, unknown>;
             }>;
             continuation?: 'message' | 'reinvoke' | 'none';
@@ -753,8 +759,15 @@ graph ends your turn — you cannot read its output before replying.
   those `tempId`s — you cannot know real IDs at authoring time.
 - The graph must be **acyclic**. A cycle can never execute, because nothing would ever become
   eligible to start, so it is rejected outright.
-- Every task needs exactly one assignee: an `agentName` (must be a real agent) **or**
-  `assignToUser: true` for a human step. Never both, never neither.
+- Every task declares a `kind` and a matching `configuration`:
+  - `kind: 'Agent'` → `configuration: { agentName }` — must name a real agent
+  - `kind: 'Action'` → `configuration: { actionName }` — must name a real action
+  - `kind: 'Human'` → `configuration: {}` — a step a person completes
+  - `kind: 'Prompt'` → `configuration: { promptName }`
+  The pairing is the whole assignment; there is no separate flag to set.
+- An edge can be conditional: `dependsOn: [{ tempId: 'analyze', condition: 'severity === "high"' }]`
+  runs the step only when the expression holds. Use it for "only if" work rather than inventing a
+  branching step.
 - Put structured inputs in `inputPayload`. Describe intent in `description` — that is what the
   assigned agent reads.
 - Maximum 50 tasks per graph.

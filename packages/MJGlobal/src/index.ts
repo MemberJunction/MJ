@@ -10,6 +10,7 @@ export * from './ShutdownRegistry'
 export * from './DeepDiff'
 export * from './ClassUtils'
 export * from './util/PatternUtils';
+export * from './util/ResourcePatternUtils';
 export * from './util/UUIDUtils';
 export * from './util/CronUtils';
 export * from './util/SerializationUtils';
@@ -20,6 +21,7 @@ export * from './fieldRules'
 export * from './SQLExpressionValidator'
 export * from './warningManager'
 export * from './EncryptionUtils'
+export * from './TokenEndpointErrors'
 export * from './KeyedSerialTaskQueue'
 
 // NOTE: TelemetryManager has moved to @memberjunction/core

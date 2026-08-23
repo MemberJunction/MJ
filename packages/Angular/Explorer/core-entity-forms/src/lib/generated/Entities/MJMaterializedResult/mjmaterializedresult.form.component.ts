@@ -17,7 +17,7 @@ export class MJMaterializedResultFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false }
+            { sectionKey: 'mJMaterializedResultQueries', sectionName: 'Materialized Result Queries', isExpanded: false }
         ]);
     }
 }

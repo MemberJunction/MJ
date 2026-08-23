@@ -20,6 +20,7 @@ import { RunView, RunViewParams, IsMaterializedDataSource } from "../views/runVi
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
+import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 
 
 
@@ -215,7 +216,16 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
             }
         }
         if (allKept) {
-            return rows;
+            // ...but only when handing the input back is safe. A `Fields` request is documented
+            // to yield a per-caller row set the caller may mutate, and full coverage is not a
+            // narrower promise than partial coverage — it just happens to project to the same
+            // shape. Frozen input means `rows` is the cache's shared array, so returning it here
+            // would quietly hand a Fields caller immutable rows and break that contract for the
+            // one field list that covers everything. Fall through to the copy path in that case;
+            // unfrozen input (the DB-miss path) keeps the allocation-free fast path.
+            if (!Object.isFrozen(rows)) {
+                return rows;
+            }
         }
     }
 
@@ -244,6 +254,22 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
  * Subclasses must implement abstract methods for provider-specific operations.
  */
 export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider, IRemoteOperationProvider {
+    /**
+     * Whether this provider can execute a multi-record unit of work atomically, in-process.
+     *
+     * Defaults to `false` — the correct answer for every provider that is not talking directly to a
+     * database, most importantly the client-side `GraphQLDataProvider`. `DatabaseProviderBase`
+     * overrides this to `true` and supplies {@link DatabaseProviderBase.BeginEntityTransaction}.
+     *
+     * `BaseEntity` reads this to decide whether a multi-node save graph runs locally inside a
+     * transaction or is routed to the server as a single unit of work. Defaulting to `false` is the
+     * safe direction: a provider that has not opted in never has non-atomic work mistaken for
+     * atomic work.
+     */
+    public get SupportsEntityTransactions(): boolean {
+        return false;
+    }
+
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -352,18 +378,36 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     private _lingerInvalidationWired = false;
 
+    // ── Write-invalidation fan-out (process-wide, not per-instance) ────
     /**
-     * Lazily subscribes (once per provider instance) to BaseEntity events so
-     * in-flight/lingered RunView entries touching a written entity are dropped.
-     * Deleting an IN-FLIGHT entry is deliberate: late joiners must not share a
-     * query that may have read pre-commit data; the original caller still gets
-     * its own result, and the orphaned promise's stash step no-ops safely.
+     * Every live provider instance that has opted into write-invalidation, held via
+     * `WeakRef` so registering here never keeps a provider (and everything it
+     * references — connection pool, entity metadata, `_inflightViews`) reachable.
+     * Short-lived providers (one per GraphQL request, one per durable task-graph
+     * task execution — see `MJServer/context.ts` and `TaskGraphProviderFactory`)
+     * become eligible for GC as soon as the request/task finishes; dead refs are
+     * pruned lazily the next time an entity event fires.
      */
-    private ensureInflightViewInvalidation(): void {
-        if (this._lingerInvalidationWired) {
+    private static _invalidationTargets = new Set<WeakRef<ProviderBase>>();
+
+    /** Guards {@link ensureStaticInvalidationSubscription} to wire the bus listener at most once per process. */
+    private static _staticInvalidationWired = false;
+
+    /**
+     * Subscribes exactly ONCE per process (not once per provider instance) to BaseEntity
+     * events and fans each one out to every still-live registered provider. This is what
+     * keeps the number of `MJGlobal` event-bus subscribers constant regardless of how many
+     * short-lived provider instances get created — subscribing per-instance (the prior
+     * implementation) permanently pinned one subscription per instance on the process-wide
+     * `Subject`, which never releases subscribers on its own, so a fresh provider minted on
+     * every GraphQL request (or every durable task-graph task) leaked its entire object graph
+     * forever.
+     */
+    private static ensureStaticInvalidationSubscription(): void {
+        if (ProviderBase._staticInvalidationWired) {
             return;
         }
-        this._lingerInvalidationWired = true;
+        ProviderBase._staticInvalidationWired = true;
         MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
             if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) {
                 return;
@@ -376,10 +420,36 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 return;
             }
             const entityName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
-            if (entityName) {
-                this.invalidateInflightViewsForEntity(entityName);
+            if (!entityName) {
+                return;
+            }
+            for (const ref of ProviderBase._invalidationTargets) {
+                const instance = ref.deref();
+                if (!instance) {
+                    // Provider was GC'd since it registered — prune the dead ref instead of
+                    // letting the registry grow forever with entries that resolve to nothing.
+                    ProviderBase._invalidationTargets.delete(ref);
+                    continue;
+                }
+                instance.invalidateInflightViewsForEntity(entityName);
             }
         });
+    }
+
+    /**
+     * Lazily registers this instance (once per provider instance) for write-invalidation
+     * of in-flight/lingered RunView entries touching a written entity. Deleting an IN-FLIGHT
+     * entry is deliberate: late joiners must not share a query that may have read pre-commit
+     * data; the original caller still gets its own result, and the orphaned promise's stash
+     * step no-ops safely.
+     */
+    private ensureInflightViewInvalidation(): void {
+        if (this._lingerInvalidationWired) {
+            return;
+        }
+        this._lingerInvalidationWired = true;
+        ProviderBase.ensureStaticInvalidationSubscription();
+        ProviderBase._invalidationTargets.add(new WeakRef(this));
     }
 
     /**
@@ -739,6 +809,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Cache hit — transform and return directly
                 LogStatusEx({ message: `  ✅ [Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`, verboseOnly: true });
                 await this.TransformSimpleObjectToEntityObject(params, preResult.cachedResult, contextUser);
+                await this.ApplyPostRunViewHooksToCacheHit(params, preResult.cachedResult, contextUser);
                 TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                     cacheHit: true,
                     cacheStatus: preResult.cacheStatus,
@@ -756,6 +827,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Cache miss — execute query, then post-process (stores in cache)
             LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
             const result = await this.InternalRunView<T>(params, contextUser);
+            // PostRunView copies any hook-supplied replacement onto `result` in place, so this
+            // reference reflects the hook chain's output.
             await this.PostRunView(result, params, preResult, contextUser);
             return result;
         }
@@ -898,6 +971,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 batchSize: params.length,
                 totalResultCount: totalResults
             });
+            // allCached ⇒ every param produced a hit and was pushed in order (PreRunViews only
+            // pushes a null placeholder on the path that clears allCached), so index i of
+            // cachedResults corresponds to params[i].
+            for (let i = 0; i < preResult.cachedResults.length; i++) {
+                await this.ApplyPostRunViewHooksToCacheHit(params[i], preResult.cachedResults[i], contextUser);
+            }
             return preResult.cachedResults as RunViewResult<T>[];
         }
 
@@ -1247,6 +1326,38 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             param.ResultType !== 'count_only' &&
             (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
             this.IsServerCacheAllowedForEntity(param);
+    }
+
+    /** True when the entity is a CodeGen materialized-query wrapper (materialized_vw*) whose snapshot is
+     * refreshed out-of-band — the same one IsServerCacheAllowedForEntity excludes from the server cache. */
+    protected isMaterializedWrapperEntity(param: RunViewParams): boolean {
+        if (!param.EntityName) {
+            return false;
+        }
+        const entity = this.EntityByName(param.EntityName);
+        return !!(entity?.VirtualEntity && entity.BaseView && entity.BaseView.toLowerCase().startsWith('materialized_vw'));
+    }
+
+    /**
+     * Write-side eligibility for the smart-cache-check (stamped) path. On the trusting SERVER this is
+     * exactly runViewCacheEligible — the server cache is kept fresh by BaseEntity events, so a
+     * server-cache-disallowed entity must never be slotted. On a CLIENT the slot is instead written with
+     * a maxUpdatedAt stamp and DB-revalidated per request, so the server Trust/event gate does NOT apply:
+     * a server-cache-disallowed entity (Trust=0 'MJ: Audit Logs', Record Changes, other caching-disabled)
+     * is still safely client-cacheable when stamped — folding runViewCacheEligible's server gate onto this
+     * path regressed that (integration check client-cache.C12). Materialized reads stay excluded on both
+     * (the out-of-band snapshot swap the stamp can't observe).
+     */
+    protected runViewCacheEligibleForWrite(param: RunViewParams): boolean {
+        if (this.TrustLocalCacheCompletely) {
+            return this.runViewCacheEligible(param);
+        }
+        return !param.BypassCache &&
+            !param.AfterKey &&
+            !IsMaterializedDataSource(param.DataSource) &&
+            param.ResultType !== 'count_only' &&
+            param.CacheLocal === true &&
+            !this.isMaterializedWrapperEntity(param);
     }
 
     /**
@@ -1864,6 +1975,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     QueryID: cached.queryId ?? params.QueryID ?? '',
                     QueryName: params.QueryName ?? '',
                     Success: true,
+                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                    // rows) while the outbound Results is mutable — the runtime freeze is the
+                    // enforcement. Same cast as the RunView hit paths above.
                     Results: cached.results as RunQueryResult['Results'],
                     RowCount: cached.results.length,
                     TotalRowCount: cached.rowCount ?? cached.results.length,
@@ -2312,7 +2426,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
-                // Filter cached results to only the caller's requested fields (if specified)
+                // These rows are the cache's shared, deep-frozen objects — the runtime freeze is
+                // what stops a consumer from corrupting the cache. Anything that needs to
+                // transform them must map onto copies.
                 let results = cached.results;
                 if (callerRequestedFields && params.ResultType !== 'entity_object') {
                     results = ProjectRowsToFields(results, callerRequestedFields);
@@ -2480,7 +2596,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
-                    // Filter cached results to caller's requested fields (if specified and not entity_object)
+                    // Shared, deep-frozen cache rows — same contract as the single-view hit path.
                     let results = cached.results;
                     if (callerFields && param.ResultType !== 'entity_object') {
                         results = ProjectRowsToFields(results, callerFields);
@@ -2577,7 +2693,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // BaseEntity event), count_only, AfterKey, BypassCache, cache-disallowed entities. On a client
             // (!TrustLocalCacheCompletely) runViewCacheEligible already implies CacheLocal===true, so this is
             // strictly a tightening — normal cacheable slots are unaffected.
-            if (this.runViewCacheEligible(param) && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && LocalCacheManager.Instance.IsInitialized) {
                 cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
             }
         }
@@ -2781,7 +2897,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Apply differential update to cache (runViewCacheEligible, not raw CacheLocal — see the
             // cacheable-gate note in prepareSmartCacheCheckParams; keeps Materialized/count_only/etc. out).
-            if (this.runViewCacheEligible(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
                 const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
                     fingerprint,
                     param,
@@ -2848,7 +2964,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Update the local cache with fresh data (don't await - fire and forget for performance).
             // runViewCacheEligible, not raw CacheLocal — see the cacheable-gate note; a first-time
             // Materialized read reaches this 'stale' branch with fresh data and would otherwise be cached.
-            if (this.runViewCacheEligible(param) && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = this.clientCacheFingerprint(param);
                 // Note: We don't await here to avoid blocking the response
                 // Cache update happens in background
@@ -3015,8 +3131,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
 
-        // Run registered PostRunView hooks (e.g., data masking, audit logging)
-        result = await this.RunPostRunViewHooks(params, result, contextUser);
+        // Run registered PostRunView hooks (e.g., data masking, audit logging).
+        //
+        // A hook may RETURN a replacement result rather than mutating the one it was handed —
+        // that is what `PostRunViewHook`'s signature promises, and it is the only option left
+        // now that cached rows are frozen. Reassigning the local `result` would drop it on the
+        // floor, because RunView returns the reference IT holds. Copy the replacement's fields
+        // onto that reference instead, so the caller observes the hook's changes without
+        // PostRunView having to change its return type (which would break external
+        // subclasses that override it).
+        const hooked = await this.RunPostRunViewHooks(params, result, contextUser);
+        if (hooked && hooked !== result) {
+            Object.assign(result, hooked);
+        }
 
         // Register OnDataChanged callback if provided and we have a fingerprint
         if (params.OnDataChanged && preResult.fingerprint) {
@@ -3197,6 +3324,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             result = await hook(params, result, contextUser);
         }
         return result;
+    }
+
+    /**
+     * Applies the PostRunView hook chain to a result that was served from cache, mutating
+     * `result` in place so the caller's reference reflects the chain's output.
+     *
+     * ## Why cache hits must run the hooks
+     * PostRunView is the OUTPUT half of the enforcement seam (data masking / audit). Hooks
+     * receive `contextUser`, so masking is PER-USER, while the cache slot is shared across
+     * users — there is no correct way to apply masking once at write time on behalf of a
+     * reader who has not arrived yet. A hit that skips the chain therefore returns rows the
+     * miss path would have masked.
+     *
+     * This previously appeared to work by accident: PostRunView writes the cache BEFORE
+     * running the hooks, so a hook that masked rows in place was writing through into the
+     * cached objects — which both made later hits look masked and baked one user's masking
+     * decision into a shared slot. Freeze-on-write removes that write-through, which is what
+     * makes running the chain here necessary rather than merely tidier.
+     *
+     * ## Why mutating `result` in place is safe
+     * Cache-hit results are FRESH wrapper objects built per hit by PreRunView/PreRunViews —
+     * only `.Results` points at shared cache state. A hook that returns a replacement (the
+     * required pattern now that rows are frozen) is copied onto that per-hit wrapper, so it
+     * can never write back into the cache.
+     *
+     * ## Why the guard
+     * `GetDataHooks` is a memoized store read (~30ns), but `await`-ing the async chain costs
+     * a microtask (~750ns) — comparable to the entire cache lookup this rides on. The
+     * overwhelmingly common case is zero registered hooks, so check first and skip the await.
+     */
+    protected async ApplyPostRunViewHooksToCacheHit(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<void> {
+        if (GetDataHooks<PostRunViewHook>('PostRunView').length === 0) {
+            return;
+        }
+        const hooked = await this.RunPostRunViewHooks(params, result, contextUser);
+        if (hooked && hooked !== result) {
+            Object.assign(result, hooked);
+        }
     }
 
     /**
@@ -3587,9 +3752,200 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - The user context for permissions
      */
     protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
+        // Mutually exclusive with the entity branch below: entity objects get real types from
+        // BaseEntity's Get/Set conversion, so normalization applies only to non-entity results.
+        this.NormalizeSimpleRowTypes(param, result);
+
         if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0) {
             result.Results = await TransformSimpleObjectToEntityObject(this, param.EntityName, result.Results, contextUser);
+
+            // Opt-in batched child loading: ONE query per named collection across the whole result
+            // set, not one per row. Companion eager loading is deliberately kept out of
+            // LoadFromData() (which is the per-row path above) precisely so that populating children
+            // for a view cannot degrade into N+1 — see relatedRecordBatchLoader.ts.
+            if (param.IncludeRelatedRecords?.length) {
+                await LoadRelatedRecordsBatched(
+                    result.Results as BaseEntity[],
+                    param.IncludeRelatedRecords,
+                    this,
+                    contextUser,
+                );
+            }
         }
+    }
+
+    /**
+     * Normalizes non-entity (`'simple'`) result rows so `Date` and numeric columns hold real
+     * `Date`s and `number`s on EVERY tier, matching what the generated entity types declare.
+     *
+     * ## Why this is unconditional
+     *
+     * Before this existed, the value a simple read returned for a `DATETIME` column depended on
+     * where the code happened to run: a fresh server-side query yields real `Date` objects (the
+     * driver parses them and `AdjustDatetimeFields` timezone-adjusts them), a server-side Redis
+     * cache hit yields ISO strings (`JSON.parse` with no reviver), and a browser client over
+     * GraphQL yields ISO strings (rows are `JSON.stringify`'d on the wire). Same call, three
+     * shapes. MJ's contract is a unified programming interface on both sides of the wire, so the
+     * one representation the platform's own generated types declare — `Date` — is enforced here,
+     * at the one choke point every provider's RunView pipeline flows through.
+     *
+     * ## What it does NOT do
+     *
+     * It makes date and number VALUES match the generated types; it does not make a caller's `T`
+     * honest in general. A `Status` column typed as a closed union still holds whatever string the
+     * database held, and plain rows never have entity methods. If you need the type to be fully
+     * true, use `ResultType: 'entity_object'`.
+     *
+     * ## Cost and cache safety
+     *
+     * The field-key lists are computed once per view from `EntityInfo`, not per cell. Rows already
+     * in the right shape — the common server-side case, where the driver returned `Date`s — are
+     * detected and the ORIGINAL array is kept untouched: same array identity, same row objects,
+     * zero copying. A row is shallow-copied only when a cell actually converts, and that copy is
+     * load-bearing: on a cache hit the rows handed back can be the cache's OWN objects (the
+     * in-memory server store holds them by reference), so converting in place would write `Date`s
+     * into the cache entry itself and corrupt it for serialization and for later readers.
+     *
+     * Per-cell rules:
+     * - `Date` instances pass through untouched, so the pass is idempotent on every path.
+     * - `NULL`/`undefined` cells are left alone rather than becoming epoch-1970 dates.
+     * - An unparseable value is left as-is rather than written as `Invalid Date`, which renders
+     *   as that literal string and destroys the evidence of what the database actually held.
+     * - An integer string outside `Number.MAX_SAFE_INTEGER` stays a string: the PostgreSQL
+     *   provider deliberately returns unsafe-range BIGINTs as strings to avoid precision loss,
+     *   and `Number('9007199254740993')` "succeeds" while silently corrupting the value.
+     *
+     * View-based runs (`ViewID`/`ViewName` with neither `EntityName` nor a loaded `ViewEntity`)
+     * skip normalization: resolving the entity would take an async User Views read this late in
+     * the pipeline. Pass `EntityName` alongside the view identifier to get normalized rows.
+     */
+    protected NormalizeSimpleRowTypes(param: RunViewParams, result: RunViewResult): void {
+        if (param.ResultType === 'entity_object' || param.ResultType === 'count_only') {
+            return;
+        }
+        if (!result?.Success || !result.Results?.length) {
+            return;
+        }
+
+        const entity = this.resolveEntityForNormalization(param);
+        if (!entity) {
+            // An unresolvable entity name is already a failed query elsewhere; normalization is
+            // not the place to raise it, and guessing field types would be worse than raw rows.
+            return;
+        }
+
+        // Once per view, not once per cell. Each entry lists the row keys one field can appear
+        // under: the batch transport keys rows by Name, the singular transport adds CodeName.
+        const dateKeys = this.normalizationKeys(entity, EntityFieldTSType.Date);
+        const numberKeys = this.normalizationKeys(entity, EntityFieldTSType.Number);
+        if (!dateKeys.length && !numberKeys.length) {
+            return;
+        }
+
+        let anyRowChanged = false;
+        const normalized = (result.Results as Array<Record<string, unknown>>).map(row => {
+            const converted = this.normalizeSimpleRow(row, dateKeys, numberKeys);
+            if (converted) {
+                anyRowChanged = true;
+                return converted;
+            }
+            return row;
+        });
+        if (anyRowChanged) {
+            result.Results = normalized;
+        }
+    }
+
+    /**
+     * Resolves the {@link EntityInfo} normalization should read field types from, using only
+     * synchronously available information on the params.
+     */
+    private resolveEntityForNormalization(param: RunViewParams): EntityInfo | undefined {
+        if (param.EntityName) {
+            return this.EntityByName(param.EntityName);
+        }
+        if (param.ViewEntity) {
+            // Weak typing mirrors RunView.GetEntityNameFromRunViewParams: MJCore cannot import
+            // the core-entities UserView subclass without creating a circular dependency.
+            const entityID: string | null = param.ViewEntity.Get('EntityID');
+            return entityID ? this.EntityByID(entityID) : undefined;
+        }
+        return undefined;
+    }
+
+    /**
+     * The row keys each field of the given TSType can appear under, one entry per field.
+     */
+    private normalizationKeys(entity: EntityInfo, tsType: EntityFieldTSType): string[][] {
+        return entity.Fields
+            .filter(f => f.TSType === tsType)
+            .map(f => (f.CodeName && f.CodeName !== f.Name ? [f.Name, f.CodeName] : [f.Name]));
+    }
+
+    /**
+     * Returns a converted shallow copy of the row, or null when no cell needed converting —
+     * so untouched rows keep their identity and cached rows are never written to.
+     */
+    private normalizeSimpleRow(
+        row: Record<string, unknown>,
+        dateKeys: string[][],
+        numberKeys: string[][],
+    ): Record<string, unknown> | null {
+        if (!row || typeof row !== 'object') {
+            return null;
+        }
+        let copy: Record<string, unknown> | null = null;
+        for (const keys of dateKeys) {
+            for (const key of keys) {
+                const date = this.parseDateCell((copy ?? row)[key]);
+                if (date) {
+                    copy = copy ?? { ...row };
+                    copy[key] = date;
+                }
+            }
+        }
+        for (const keys of numberKeys) {
+            for (const key of keys) {
+                const num = this.parseNumericCell((copy ?? row)[key]);
+                if (num !== null) {
+                    copy = copy ?? { ...row };
+                    copy[key] = num;
+                }
+            }
+        }
+        return copy;
+    }
+
+    /**
+     * A real Date for a convertible cell, or null to leave the cell untouched. Existing Date
+     * instances, NULLs, and unparseable values all return null — see the per-cell rules on
+     * {@link NormalizeSimpleRowTypes}.
+     */
+    private parseDateCell(value: unknown): Date | null {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return null;
+        }
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    /**
+     * A number for a convertible string cell, or null to leave the cell untouched.
+     */
+    private parseNumericCell(value: unknown): number | null {
+        if (typeof value !== 'string' || value.trim() === '') {
+            return null;
+        }
+        const num = Number(value);
+        if (!Number.isFinite(num)) {
+            return null;
+        }
+        // An integer string beyond the safe range is a deliberate driver choice (PostgreSQL
+        // returns unsafe BIGINTs as strings): converting would silently corrupt the value.
+        if (Number.isInteger(num) && !Number.isSafeInteger(num)) {
+            return null;
+        }
+        return num;
     }
 
     /**
@@ -4336,6 +4692,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                     // Initialize IS-A parent entity composition chain before any data operations
                     await newObject.InitializeParentEntity();
+                    // Construct declared embedded peers (no NewRecord/Load yet) so NewRecord()
+                    // can provision required FKs synchronously and Load() can fill them.
+                    await newObject.InitializeEmbeddedRecords();
 
                     if (actualLoadKey) {
                         // Load existing record

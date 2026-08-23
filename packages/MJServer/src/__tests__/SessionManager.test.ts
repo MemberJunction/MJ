@@ -43,7 +43,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 // --- Partial mock: control ONLY UserCache.GetSystemUser (the scoped-anonymous elevation seam,
 //     issue #3371); everything else in the data provider stays real ---
 const getSystemUserMock = vi.fn<[], UserInfo | undefined>();
-vi.mock('@memberjunction/sqlserver-dataprovider', async (importOriginal) => {
+vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     return {
         ...actual,
@@ -458,6 +458,61 @@ describe('SessionManager.Heartbeat', () => {
         const ok = await mgr.Heartbeat('session-1', makeUser(), provider);
         expect(ok).toBe(false);
         expect(session.Save).not.toHaveBeenCalled();
+    });
+});
+
+describe('SessionManager.Heartbeat — bounded heartbeatLastWrite (Round 11 memory-leak fix)', () => {
+    // Regression coverage: heartbeatLastWrite used to be a plain, unbounded `Map`. SessionManager
+    // is constructed fresh by every resolver that needs one (AgentSessionResolver,
+    // RealtimeClientSessionResolver, RealtimeBridgeResolver) plus SessionJanitor's own instance, so
+    // each is itself a process-lifetime singleton with its own copy of the map. A session's
+    // heartbeats land through one resolver's instance, but the overwhelmingly common close path —
+    // a crashed tab, a dropped connection, anything that never round-trips an explicit close
+    // mutation — is reconciled by SessionJanitor's sweeps through ITS OWN SessionManager, which
+    // never touches the originating instance's map, so the entry was never deleted. The fix bounds
+    // the map with MJLruCache(maxSize 5_000, ttlMs 4h) so that scenario is capped instead of
+    // growing forever.
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('forces a fresh write once the 4h TTL elapses, even though CloseSession never ran on this instance', async () => {
+        const session = makeSessionEntity({ ID: 'session-ttl', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+        const user = makeUser();
+
+        const first = await mgr.Heartbeat('session-ttl', user, provider);
+        expect(first).toBe(true);
+        expect(session.Save).toHaveBeenCalledTimes(1);
+
+        // Still within the coalescing window — no second write.
+        const second = await mgr.Heartbeat('session-ttl', user, provider);
+        expect(second).toBe(true);
+        expect(session.Save).toHaveBeenCalledTimes(1);
+
+        // Advance past the cache's 4h TTL backstop (well beyond the 3s coalescing window too).
+        vi.advanceTimersByTime(4 * 60 * 60 * 1000 + 1);
+
+        const third = await mgr.Heartbeat('session-ttl', user, provider);
+        expect(third).toBe(true);
+        // The TTL-expired entry forces a write again, exactly as a never-before-seen session would —
+        // proving the cache entry does not live forever when nothing on this instance ever calls
+        // CloseSession for it.
+        expect(session.Save).toHaveBeenCalledTimes(2);
+    });
+
+    it('is backed by a bounded MJLruCache, not a plain unbounded Map (structural regression guard)', () => {
+        const mgr = new SessionManager();
+        const internal = (mgr as unknown as { heartbeatLastWrite: { MaxSize: number; Size: number } })
+            .heartbeatLastWrite;
+        expect(internal.MaxSize).toBe(5_000);
+        expect(internal.Size).toBe(0);
     });
 });
 

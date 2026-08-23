@@ -305,8 +305,8 @@ export interface ClassifyItemGridRow {
     EmbeddingStatus: string;
     TaggingStatus: string;
     UpdatedAt: string;
-    /** Raw ISO timestamp used for sorting (the grid renders UpdatedAt formatted). */
-    UpdatedAtRaw: string;
+    /** Epoch-ms timestamp used for sorting (the grid renders UpdatedAt formatted); 0 when absent. */
+    UpdatedAtRaw: number;
 }
 
 /**

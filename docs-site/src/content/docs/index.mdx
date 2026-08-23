@@ -1,20 +1,22 @@
 ---
 title: MemberJunction
-description: The open-source, AI-native data platform. Unify your data, add intelligence, and build AI-native apps on top of it.
+description: The AI-native data platform. Unify your data, add intelligence, and build AI-native apps on top of it.
 template: splash
 editUrl: false
 ---
 
 import InstallBlock from '../../components/InstallBlock.astro';
 import LandingFooter from '../../components/LandingFooter.astro';
+import { documentedLine } from '../../lib/documented-line.mjs';
+import { licenseShort, sourceModel } from '../../lib/license-line.mjs';
 
 <div class="mjd-landing">
 
 <section class="mjd-hero">
   <div class="mjd-pills">
-    <span class="mjd-pill mjd-pill--accent">v5.x</span>
-    <span class="mjd-pill">Open Source</span>
-    <span class="mjd-pill">ISC License</span>
+    <span class="mjd-pill mjd-pill--accent">{documentedLine}</span>
+    <span class="mjd-pill">{sourceModel}</span>
+    <span class="mjd-pill">{licenseShort}</span>
   </div>
 
   <h1 class="mjd-title">MemberJunction</h1>
@@ -22,7 +24,7 @@ import LandingFooter from '../../components/LandingFooter.astro';
   {/* Keep each text run on ONE line with its tag. MDX parses a multi-line child
       as markdown and wraps it in its own <p>, which nests <p> inside <p> and the
       browser then splits the pair apart, collapsing the styled element to 0 width. */}
-  <p class="mjd-tagline">The open-source, AI-native data platform. Unify your data. Add intelligence. Build AI-native apps on top of it.</p>
+  <p class="mjd-tagline">The AI-native data platform. Unify your data. Add intelligence. Build AI-native apps on top of it.</p>
 
   <p class="mjd-subtagline">MemberJunction is downloadable computer software for data integration, management, and AI-native application development. Download and install it on your own infrastructure, free.</p>
 

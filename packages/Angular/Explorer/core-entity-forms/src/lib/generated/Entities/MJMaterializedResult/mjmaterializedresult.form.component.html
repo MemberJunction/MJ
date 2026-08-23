@@ -28,15 +28,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="SourceQueryID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="SourceEntityID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -191,6 +182,22 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="RefreshesSinceFullRebuild"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ReadFilterSpec"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -204,22 +211,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RefreshesSinceFullRebuild"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ReadFilterSpec"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -229,25 +220,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Queries Section -->
+    <!-- Materialized Result Queries Section -->
     <mj-collapsible-panel
-        SectionKey="mJQueries"
-        SectionName="Queries"
-        Icon="fa-solid fa-clipboard-question"
+        SectionKey="mJMaterializedResultQueries"
+        SectionName="Materialized Result Queries"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJQueries')"
+        [BadgeCount]="GetSectionRowCount('mJMaterializedResultQueries')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Queries','MaterializedResultID')"
-                [NewRecordValues]="NewRecordValues('MJ: Queries')"
-                [AllowLoad]="IsSectionExpanded('mJQueries')"
-                [ShowToolbar]="false"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Result Queries','MaterializedResultID')"
+                [NewRecordValues]="NewRecordValues('MJ: Materialized Result Queries','MaterializedResultID')"
+                [AllowLoad]="IsSectionExpanded('mJMaterializedResultQueries')"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJQueries', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultQueries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

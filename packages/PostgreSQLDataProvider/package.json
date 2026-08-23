@@ -1,7 +1,8 @@
 {
   "name": "@memberjunction/postgresql-dataprovider",
+  "license": "BUSL-1.1",
   "type": "module",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: PostgreSQL Data Provider",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,12 +21,12 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/ai-vectordb": "6.1.0-edge.0",
-    "@memberjunction/core": "6.1.0-edge.0",
-    "@memberjunction/generic-database-provider": "6.1.0-edge.0",
-    "@memberjunction/global": "6.1.0-edge.0",
-    "@memberjunction/query-processor": "6.1.0-edge.0",
-    "@memberjunction/sql-dialect": "6.1.0-edge.0",
+    "@memberjunction/ai-vectordb": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/query-processor": "6.1.0-edge.3",
+    "@memberjunction/sql-dialect": "6.1.0-edge.3",
     "pg": "^8.13.3"
   },
   "devDependencies": {

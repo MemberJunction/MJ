@@ -1,5 +1,212 @@
 # Change Log - @memberjunction/cli
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 64bc5dc: New `mj dev workspace` command set: generates the four parent files of the multi-repo Open App dev workspace (`pnpm-workspace.yaml`, `.npmrc`, `package.json`, `turbo.json`) reproducing the manual setup it replaces, with sibling-repo member detection (+ include/exclude), an opt-out `pnpm install` step, a `status` subcommand, and never-overwrite-silently protection (`--force` writes `.bak` backups). App registration into a running host is deliberately out of scope for this MVP.
+
+  Generation also writes a `.mj-dev-workspace.json` sentinel manifest at the parent — the `generatedBy` marker, the files written, and the member repo names, with no timestamp so regenerating an unchanged workspace is byte-identical. `mj dev workspace clean` uses it as proof of ownership: it removes exactly the workspace residue (the four files, the sentinel, `pnpm-lock.yaml`, `node_modules`) and refuses to touch a parent whose sentinel is missing or not ours unless given `--force`, so a hand-made workspace can't be torn down by accident. `--dry-run` lists what would go without deleting, `.bak` backups are always kept, absent paths are reported as already gone rather than failing, and `status` now reports whether a sentinel is present.
+
+  All three commands bind `--dir` to the `MJ_DEV_WORKSPACE_DIR` environment variable, so a shell that exports it once can drive generate/status/clean without repeating the path; an explicit `--dir` still wins, and `status` reports which of flag, environment, or default supplied the directory it used.
+
+  `mj dev usage` joins the progressive-disclosure surface: `dev` now appears in `mj usage`, and the tier-2 command documents each dev command's flags, examples, and runtime expectations — including the rules an agent would otherwise have to guess (the parent must be a plain directory rather than a git repo root, how members are detected, what the sentinel gates, and that a shell declares its own auth-SDK peers). Because the dev commands are plain oclif commands that must stay bootstrap-free rather than `BaseCLIPlugin` plugins, `@memberjunction/cli-core` gains `CLIPluginRegistry.RegisterUsage()` so a command shipping inside the CLI can declare usage without being plugin-backed; plugin-declared usage still wins on a key collision.
+
+  The generated `.npmrc` carries no `public-hoist-pattern[]` block. The 78-entry hoist set the manual setup carried was written for the npm-hoisted era; an attribution audit of all 78 entries against the monorepo found none that still needs hoisting — every package an MJ library imports is declared by that library, and every third-party peer relationship in the set is satisfied by a real declaration, because pnpm's strict layout forced those fixes during the pnpm conversion. The only residue is the auth SDK family, which MJ correctly exposes as `peerDependencies` of `@memberjunction/ng-auth-services` because the choice of provider belongs to the shell; the command now prints that as guidance instead of hoisting the whole family.
+
+- dec0349: New `mj dev workspace doctor`: a read-only health check for a generated cross-repo workspace that prints PASS/WARN/FAIL/SKIP per check and exits non-zero on any failure — including a one-copy census of the parent package store that fails when more than one version of `@angular/core`, `@angular/common`, `@angular/compiler`, `rxjs`, `zone.js`, `@memberjunction/core` or `@memberjunction/global` is installed.
+- e5063c5: `mj dev workspace`: generate member globs from each member's own `pnpm-workspace.yaml` instead of a hardcoded `packages/*`. Fixes the silent split-registry failure where MJ's 42 nested globs (248 packages) fell out of the generated workspace and resolved from npm (#3795). Positive globs must be packages-rooted; negation guards are always kept and re-prefixed; a member whose workspace file yields no packages-rooted globs now triggers a loud warning instead of a silent `packages/*` fallback.
+- beae186: Follow-up to the Open App client bootstrap fix: number the generated namespace-import aliases off their position in `OPEN_APP_CLIENT_MODULES` rather than off the entry index, so the declared aliases and the array contents share one counter by construction. They agreed before, but nothing pinned that — and any skew between the two emits an array element naming a variable that was never declared, which surfaces as a TS2304 in the host app's build rather than a CLI test failure. Adds regression tests for mixed enabled/disabled entry sets and the all-disabled case, and records in the emitter's docs that the `globalThis` anchor is a deliberate variant of (not the same mechanism as) the `CLASS_REGISTRATIONS` array-spread anchor, and that a package declaring `"sideEffects": false` while self-registering classes is the underlying false declaration this block defends against.
+- Updated dependencies [834f8d7]
+- Updated dependencies [5ef97ff]
+- Updated dependencies [407f2f7]
+- Updated dependencies [64bc5dc]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [49f3592]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [a788e27]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [2e2879e]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [2741d46]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/codegen-lib@6.1.0-edge.3
+  - @memberjunction/cli-core@6.1.0-edge.3
+  - @memberjunction/installer@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/metadata-sync@6.1.0-edge.3
+  - @memberjunction/ai-cli@6.1.0-edge.3
+  - @memberjunction/sql-converter@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/testing-cli@6.1.0-edge.3
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.3
+  - @memberjunction/open-app-engine@6.1.0-edge.3
+  - @memberjunction/db-auto-doc@6.1.0-edge.3
+  - @memberjunction/query-gen@6.1.0-edge.3
+  - @memberjunction/config@6.1.0-edge.3
+  - @memberjunction/sqlglot-ts@6.1.0-edge.3
+  - @memberjunction/standards@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [d430fa5]
+- Updated dependencies [c49a34a]
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [6bb2e1f]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [aa4fbe9]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/codegen-lib@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/open-app-engine@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-cli@6.1.0-edge.2
+  - @memberjunction/metadata-sync@6.1.0-edge.2
+  - @memberjunction/query-gen@6.1.0-edge.2
+  - @memberjunction/testing-cli@6.1.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.2
+  - @memberjunction/db-auto-doc@6.1.0-edge.2
+  - @memberjunction/cli-core@6.1.0-edge.2
+  - @memberjunction/config@6.1.0-edge.2
+  - @memberjunction/installer@6.1.0-edge.2
+  - @memberjunction/sql-converter@6.1.0-edge.2
+  - @memberjunction/sqlglot-ts@6.1.0-edge.2
+  - @memberjunction/standards@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/open-app-engine@6.1.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.1
+  - @memberjunction/standards@6.1.0-edge.1
+  - @memberjunction/ai-cli@6.1.0-edge.1
+  - @memberjunction/codegen-lib@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/db-auto-doc@6.1.0-edge.1
+  - @memberjunction/metadata-sync@6.1.0-edge.1
+  - @memberjunction/query-gen@6.1.0-edge.1
+  - @memberjunction/testing-cli@6.1.0-edge.1
+  - @memberjunction/cli-core@6.1.0-edge.1
+  - @memberjunction/config@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/installer@6.1.0-edge.1
+  - @memberjunction/sql-converter@6.1.0-edge.1
+  - @memberjunction/sqlglot-ts@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

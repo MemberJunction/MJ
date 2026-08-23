@@ -1,5 +1,329 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 8c9ed6f: Find-agent actions (Find Candidate Agents / Find Best Agent) now search in **hybrid** mode
+  (semantic + lexical) so agents the daily vector sync hasn't embedded yet are still
+  discoverable, and Agent Manager now loads existing agent specs by calling the **Load Agent
+  Spec** action directly instead of delegating to the Flow-based **Agent Spec Loader**
+  sub-agent (which the runtime refuses — a Flow agent cannot run as a sub-agent). The Load
+  Agent Spec action's `AgentSpec` output is now the complete spec (truncation applies only to
+  the human-readable message), so loading and re-saving an agent no longer risks overwriting
+  its sub-agents' prompt templates.
+
+  Scope of the hybrid change — it **narrows** the vector-sync staleness window, it does not
+  close it:
+  - The window affects **updates to already-vectorized agents**, not only new ones. An agent
+    whose name or description was edited keeps matching the old text in semantic search until
+    the next daily sync re-embeds it.
+  - The lexical fallback matches only when the search text appears **verbatim as a substring**
+    of the agent's name/other searchable field (it is not tokenized). A short query like
+    `"invoice"` finds `"Invoice Reconciler"`; a full task description generally will not.
+
+- 3b6be0b: Give web-research agents a second search provider ahead of the Google Custom Search shutdown.
+
+  Google's Custom Search JSON API is closed to new customers and is discontinued on 2027-01-01, and
+  every agent that searched the web was bound to that one action. Perplexity Search already shipped in
+  CoreActions but was unusable and unreachable: its default model, `llama-3.1-sonar-small-128k-online`,
+  was retired by Perplexity in February 2025, and no agent or skill was granted the action.
+  - Default the Perplexity Search action to `sonar`, and document the current model family
+    (`sonar`, `sonar-pro`, `sonar-reasoning-pro`, `sonar-deep-research`) in the action and its
+    Action Param metadata. A new test pins the default and fails on any `llama-3.1-sonar-*`
+    identifier, so a retired model copied from an old example breaks the build rather than the
+    runtime.
+  - Grant `Perplexity Search` alongside `Google Custom Search` to all 11 agent-action bindings across
+    the Research Agent, Sage, Agent Manager and the core agents, plus the Web Research skill.
+  - Update the Web Research skill and the research/Sage prompt templates to treat web search as
+    provider-agnostic: prefer Perplexity, fall back when one provider reports a missing API key, since
+    a deployment may credential only one.
+  - Document the provider choice and the Custom Search end-of-life in the CoreActions README and the
+    `config.ts` schema comments.
+
+  No behavior changes for deployments that have Custom Search access — configuring both providers is
+  supported, and the Google path is untouched.
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [d4a5b4c]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [2875f6f]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [b6416f4]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ae2baef]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/ai-agents@6.1.0-edge.3
+  - @memberjunction/content-autotagging@6.1.0-edge.3
+  - @memberjunction/core-entities-server@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/ai-vector-sync@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/react-linter@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+  - @memberjunction/search-engine@6.1.0-edge.3
+  - @memberjunction/ai-agent-manager@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/clustering-engine@6.1.0-edge.3
+  - @memberjunction/ai-mcp-client@6.1.0-edge.3
+  - @memberjunction/ai-betty-bot@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/code-execution@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+  - @memberjunction/communication-types@6.1.0-edge.3
+  - @memberjunction/communication-engine@6.1.0-edge.3
+  - @memberjunction/external-change-detection@6.1.0-edge.3
+  - @memberjunction/lists@6.1.0-edge.3
+  - @memberjunction/record-set-processor-base@6.1.0-edge.3
+  - @memberjunction/record-set-processor@6.1.0-edge.3
+  - @memberjunction/esignature@6.1.0-edge.3
+  - @memberjunction/geo-core@6.1.0-edge.3
+  - @memberjunction/interactive-component-types@6.1.0-edge.3
+  - @memberjunction/lists-base@6.1.0-edge.3
+  - @memberjunction/export-engine@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- ca4feb4: Workflow cost becomes a projection of the run tree, and a graph now runs in the order it was drawn.
+
+  **Cost is the tree, not arithmetic beside it.** `AIAgentRun`'s four `…Rollup` columns are now written from `SumAgentRunTreeCost(LoadAgentRunTree(runID))` at settlement — one basis (per-node own spend), prompt-aware through `Configuration.runtime.promptRunID`, and structurally incapable of disagreeing with what the run viewer shows. The previous per-child loop filtered on `AgentRunID`, so every Prompt step's spend was absent, and mixed a descendant-inclusive number with an own-spend one. The tree now also carries the prompt/completion token split so all four columns share a basis. Writing the sum back makes the column an _output_ of the tree, which is non-circular only because the query reads own cost and never a rollup — stated in the query header and pinned by a test that plants an absurd rollup on a real run. When the tree cannot be summed (load failure, depth cap, graph not reachable), the columns are **cleared** rather than left holding a stale total from an earlier settlement.
+
+  **A loop's passes exist.** The run tree reaches nested work through six relationships and a loop iteration was none of them, so a `While` that spent real money across three passes reported one childless node with no cost. The dispatcher now records one entry per pass (`ITaskStepRuntime.iterations`) and the tree expands them into nodes. On a real workflow this moved `TotalCostRollup` from `0.00049725` to `0.00555375` — the loop had been spent and not counted.
+
+  **A graph is dispatched only once its edges exist.** Children and dependencies are now written in one transaction. Previously a poll could land between the two writes, see tasks with no prerequisites, and claim the whole graph at once — observed running a closing branch before the draft it was meant to judge existed, then reporting Complete.
+
+  **Steps see their payload.** A step with no input mapping fell back to the raw input instead of the merged payload, so a Prompt step — which declares no mapping by design — rendered `{{ _CURRENT_PAYLOAD }}` as `{}` and wrote from an empty brief. Separately, a step with no output mapping _replaced_ the payload with its own output rather than merging; for a loop, whose output is a summary, that discarded everything the iterations had established and made a downstream `payload.x === true` edge unreachable.
+
+  **An output mapping that names a parameter the step never returns now says so** (`unmapped`), naming what the step did return, instead of skipping in silence.
+
+  **Human steps**: a cancelled request re-raises instead of stalling forever; cancelling a graph withdraws its open requests instead of leaving them in someone's inbox; cross-user `assignToUserID` is refused at submission rather than silently reassigned to the submitter; and a step can declare `expiresInHours`, which finally makes the existing expiry machinery reachable.
+
+  **Web Search** captured each result with a non-greedy match that stopped at the first nested `</div>`, cutting the snippet out of every result — ten well-formed hits carrying no content. Results are now sliced between block starts, and an all-snippets-empty parse is reported rather than returned silently.
+
+  **Testing**: a bundle whose every check is gated out now records an explicit skip naming the flag that would run it, instead of reporting PASS with zero checks executed.
+
+- Updated dependencies [71817db]
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/search-engine@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/ai-agents@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/actions@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/core-entities-server@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/ai-agent-manager@6.1.0-edge.2
+  - @memberjunction/integration-engine@6.1.0-edge.2
+  - @memberjunction/ai-mcp-client@6.1.0-edge.2
+  - @memberjunction/storage@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/clustering-engine@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/ai-vector-sync@6.1.0-edge.2
+  - @memberjunction/communication-types@6.1.0-edge.2
+  - @memberjunction/communication-engine@6.1.0-edge.2
+  - @memberjunction/content-autotagging@6.1.0-edge.2
+  - @memberjunction/external-change-detection@6.1.0-edge.2
+  - @memberjunction/lists@6.1.0-edge.2
+  - @memberjunction/react-linter@6.1.0-edge.2
+  - @memberjunction/record-set-processor@6.1.0-edge.2
+  - @memberjunction/esignature@6.1.0-edge.2
+  - @memberjunction/geo-core@6.1.0-edge.2
+  - @memberjunction/ai-betty-bot@6.1.0-edge.2
+  - @memberjunction/code-execution@6.1.0-edge.2
+  - @memberjunction/record-set-processor-base@6.1.0-edge.2
+  - @memberjunction/interactive-component-types@6.1.0-edge.2
+  - @memberjunction/lists-base@6.1.0-edge.2
+  - @memberjunction/export-engine@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/actions@6.1.0-edge.1
+  - @memberjunction/storage@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-agents@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/content-autotagging@6.1.0-edge.1
+  - @memberjunction/ai-agent-manager@6.1.0-edge.1
+  - @memberjunction/record-set-processor@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/search-engine@6.1.0-edge.1
+  - @memberjunction/esignature@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/clustering-engine@6.1.0-edge.1
+  - @memberjunction/ai-mcp-client@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/ai-vector-sync@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/code-execution@6.1.0-edge.1
+  - @memberjunction/communication-types@6.1.0-edge.1
+  - @memberjunction/communication-engine@6.1.0-edge.1
+  - @memberjunction/external-change-detection@6.1.0-edge.1
+  - @memberjunction/integration-engine@6.1.0-edge.1
+  - @memberjunction/interactive-component-types@6.1.0-edge.1
+  - @memberjunction/lists@6.1.0-edge.1
+  - @memberjunction/core-entities-server@6.1.0-edge.1
+  - @memberjunction/react-linter@6.1.0-edge.1
+  - @memberjunction/record-set-processor-base@6.1.0-edge.1
+  - @memberjunction/geo-core@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/ai-betty-bot@6.1.0-edge.1
+  - @memberjunction/lists-base@6.1.0-edge.1
+  - @memberjunction/export-engine@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

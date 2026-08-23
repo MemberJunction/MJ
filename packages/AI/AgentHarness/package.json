@@ -1,8 +1,8 @@
 {
   "name": "@memberjunction/ai-agent-harness",
   "type": "module",
-  "version": "6.1.0-edge.0",
-  "description": "MemberJunction: External Agent Harness integration \u2014 run Claude Code, Codex, OpenCode, Gemini CLI or Pi as the reasoning substrate for an MJ agent",
+  "version": "6.1.0-edge.3",
+  "description": "MemberJunction: External Agent Harness integration — run Claude Code, Codex, OpenCode, Gemini CLI or Pi as the reasoning substrate for an MJ agent",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -14,15 +14,15 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.0",
-    "@memberjunction/ai-agents": "6.1.0-edge.0",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.0",
-    "@memberjunction/core": "6.1.0-edge.0",
-    "@memberjunction/core-entities": "6.1.0-edge.0",
-    "@memberjunction/global": "6.1.0-edge.0",
-    "@memberjunction/templates": "6.1.0-edge.0"
+    "@memberjunction/ai": "6.1.0-edge.3",
+    "@memberjunction/ai-agents": "6.1.0-edge.3",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/templates": "6.1.0-edge.3"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

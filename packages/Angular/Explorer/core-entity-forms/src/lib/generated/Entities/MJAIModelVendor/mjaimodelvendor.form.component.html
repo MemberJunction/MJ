@@ -150,6 +150,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ModelConfiguration"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -199,9 +207,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Credential Bindings','AIModelVendorID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Credential Bindings')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Credential Bindings','AIModelVendorID')"
                 [AllowLoad]="IsSectionExpanded('mJAICredentialBindings')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAICredentialBindings', $event.totalRowCount)"
                 >

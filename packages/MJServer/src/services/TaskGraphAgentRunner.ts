@@ -15,7 +15,8 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { LogError } from '@memberjunction/core';
-import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
 
 export class TaskGraphAgentRunner implements TaskAgentRunner {
@@ -30,6 +31,14 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 agent,
                 conversationMessages: [{ role: ChatMessageRole.user, content: this.buildPrompt(params) }],
                 contextUser: params.ContextUser,
+                // Inherited from the graph, so a graph this run goes on to emit is one hop deeper
+                // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
+                continuationDepth: params.ContinuationDepth ?? 0,
+                parentRun: await this.loadSubmittingRun(params),
+                // The bridge from the agent's own progress stream up to graph-level observers: the
+                // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
+                // running Agent step shows "what it is doing right now" on the workflow canvas.
+                onProgress: this.bridgeProgress(params),
             });
 
             const success = result?.success === true;
@@ -43,6 +52,54 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`[TaskGraphAgentRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
+        }
+    }
+
+    /**
+     * Adapts the agent framework's progress callback onto the dispatcher's plain sink.
+     *
+     * Undefined when nobody is listening, so the agent run pays nothing for observability it is not
+     * providing. Never throws — a progress announcement must not be able to fail the step.
+     */
+    private bridgeProgress(params: TaskAgentRunParams): AgentExecutionProgressCallback | undefined {
+        const sink = params.OnProgress;
+        if (!sink) return undefined;
+        return (progress) => {
+            try {
+                sink(progress.message, progress.percentage);
+            } catch {
+                // The dispatcher's sink already guards itself; this is belt over braces.
+            }
+        };
+    }
+
+    /**
+     * The run that submitted this graph, as the entity `RunAgent` wants for `parentRun`.
+     *
+     * **Why this link is worth a load.** It sets `ParentRunID` on the spawned run, which turns a
+     * workflow's total cost into one indexed sum over `RootParentRunID` rather than a walk of the
+     * graph, and gives the run a "started by" trail someone can follow back. Without it every
+     * dispatched run looks like it began from nowhere.
+     *
+     * Undefined — never a throw — when there is no submitting run or it cannot be read. A graph
+     * submitted by a schedule, by MCP, or by a person genuinely has no parent run, and failing the
+     * step because its provenance is unavailable would trade real work for a bookkeeping detail.
+     */
+    private async loadSubmittingRun(params: TaskAgentRunParams): Promise<MJAIAgentRunEntityExtended | undefined> {
+        if (!params.SubmittingAgentRunID) return undefined;
+        try {
+            const run = await params.Provider.GetEntityObject<MJAIAgentRunEntityExtended>(
+                'MJ: AI Agent Runs',
+                params.ContextUser,
+            );
+            return (await run.Load(params.SubmittingAgentRunID)) ? run : undefined;
+        } catch (e) {
+            LogError(
+                `[TaskGraphAgentRunner] Task ${params.TaskID}: submitting run ` +
+                `${params.SubmittingAgentRunID} could not be loaded; the spawned run will have no ` +
+                `parent link. ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return undefined;
         }
     }
 

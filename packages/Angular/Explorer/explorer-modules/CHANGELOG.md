@@ -1,5 +1,63 @@
 # @memberjunction/ng-explorer-modules
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [e7f1f88]
+- Updated dependencies [deea1a3]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [815b9bc]
+- Updated dependencies [05865ea]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [47930ef]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [63ea273]
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.3
+  - @memberjunction/ng-shared@6.1.0-edge.3
+  - @memberjunction/ng-explorer-core@6.1.0-edge.3
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.3
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.3
+  - @memberjunction/ng-container-directives@6.1.0-edge.3
+  - @memberjunction/ng-link-directives@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [8de5f7e]
+- Updated dependencies [9a29da4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [768980d]
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.2
+  - @memberjunction/ng-explorer-core@6.1.0-edge.2
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.2
+  - @memberjunction/ng-shared@6.1.0-edge.2
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.2
+  - @memberjunction/ng-container-directives@6.1.0-edge.2
+  - @memberjunction/ng-link-directives@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-container-directives@6.1.0-edge.1
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.1
+  - @memberjunction/ng-explorer-core@6.1.0-edge.1
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.1
+  - @memberjunction/ng-link-directives@6.1.0-edge.1
+  - @memberjunction/ng-shared@6.1.0-edge.1
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

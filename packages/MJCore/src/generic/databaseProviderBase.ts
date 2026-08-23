@@ -6,10 +6,11 @@ import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDu
 import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
+import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -160,6 +161,97 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public get IsInTransaction(): boolean {
         return false;
+    }
+
+    /**
+     * The provider's current transaction nesting depth, for subclasses that track one.
+     *
+     * Distinct from {@link IsInTransaction}, which some providers deliberately leave `false` so
+     * that `RunMaybeSerial` keeps fanning out — SQL Server most notably. This accessor exists so
+     * the entity-transaction machinery can still see real nesting on those providers: it feeds
+     * {@link EntityTransactionScope.IsNested} and the out-of-order settle detection in
+     * {@link BeginEntityTransaction}. Defaults to 0 for providers that do not track depth.
+     */
+    protected get CurrentTransactionDepth(): number {
+        return 0;
+    }
+
+    /**
+     * Database providers execute multi-record units of work atomically, in-process.
+     *
+     * @see ProviderBase.SupportsEntityTransactions for why the base default is `false`.
+     */
+    public override get SupportsEntityTransactions(): boolean {
+        return true;
+    }
+
+    /**
+     * Begins a transaction scope, or joins one already in flight on this provider.
+     *
+     * This is the single transaction primitive for all multi-record entity work — IS-A parent
+     * chains, composite save graphs and hand-written application cascades. It delegates to the
+     * provider's existing depth-counted {@link BeginTransaction} / {@link CommitTransaction} /
+     * {@link RollbackTransaction}, which already implement the join semantics: the outermost call
+     * issues a physical `BEGIN`, nested calls create savepoints, and only the outermost commit
+     * commits for real.
+     *
+     * Routing IS-A through here is what closed the torn-write bug described in
+     * {@link EntityTransactionScope} — the previous `BeginISATransaction()` opened a *second*
+     * physical transaction on the same pool, blind to any transaction the caller had already
+     * started.
+     *
+     * The returned scope is **settle-once**: the first `Commit()` or `Rollback()` wins and later
+     * calls are no-ops, so `try { ...; Commit() } catch { Rollback() }` is safe even when the work
+     * already unwound its own scope.
+     *
+     * @returns A scope bound to this provider's ambient transaction.
+     */
+    public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
+        // Capture nesting BEFORE beginning: once BeginTransaction() returns we are, by definition,
+        // in a transaction, so asking afterwards would always answer "nested". IsInTransaction is
+        // not enough on its own — SQL Server deliberately leaves it false (so RunMaybeSerial keeps
+        // fanning out), which made every scope on the flagship provider report IsNested === false
+        // even when joining. The depth accessor sees the truth on providers that track it.
+        const isNested = this.IsInTransaction || this.CurrentTransactionDepth > 0;
+        await this.BeginTransaction();
+        const depthAtBegin = this.CurrentTransactionDepth;
+
+        let settled = false;
+        const settle = async (commit: boolean): Promise<void> => {
+            if (settled) {
+                return; // settle-once: the first outcome wins
+            }
+            settled = true;
+            // Out-of-order settle detection. Depth pairing is strictly LIFO: a scope must settle
+            // while the provider sits at the depth its own begin produced. A mismatch means two
+            // units of work interleaved their scopes on ONE provider instance — concurrent
+            // transactional saves on a shared provider — so this commit/rollback is about to
+            // settle the WRONG savepoint, silently entangling both units' writes in one physical
+            // transaction. That corruption otherwise has no witness at all, so be loud about it.
+            // (Providers that do not track depth report 0/0 and never trip this.)
+            const depthNow = this.CurrentTransactionDepth;
+            if (depthAtBegin > 0 && depthNow !== depthAtBegin) {
+                LogError(
+                    `EntityTransactionScope settled out of order on ${this.constructor.name}: the scope began at ` +
+                    `transaction depth ${depthAtBegin} but the provider is now at depth ${depthNow}. Two ` +
+                    `transactional units of work are interleaving on one provider instance, so their writes share ` +
+                    `one physical transaction and a rollback by either can silently undo the other's committed ` +
+                    `work. Do not run concurrent transactional saves on a shared provider instance — use ` +
+                    `per-request providers (as MJServer does) or serialize the units of work.`,
+                );
+            }
+            if (commit) {
+                await this.CommitTransaction();
+            } else {
+                await this.RollbackTransaction();
+            }
+        };
+
+        return {
+            IsNested: isNested,
+            Commit: () => settle(true),
+            Rollback: () => settle(false),
+        };
     }
 
     /**
@@ -874,8 +966,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         // ISA overlapping-subtype record-change propagation is DB-agnostic: if the save SQL
         // generation populated `overlappingChangeData` in extraData and the entity tracks
         // record changes across multiple subtypes, fan the change record out to siblings.
-        // The provider-specific transaction handle (if any) is passed through opaquely
-        // via `connectionSource`; each provider treats it as its native type downstream.
+        //
+        // No explicit `connectionSource` is supplied: the sibling writes must land in the same
+        // transaction as the save that triggered them, and that is exactly what happens by default
+        // — every ExecuteSQL call without an explicit source runs on the provider's ambient
+        // transaction, which BeginEntityTransaction() opened (or joined) for this unit of work.
         const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
             | { changesJSON: string; changesDescription: string }
             | undefined;
@@ -884,14 +979,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entity.EntityInfo.AllowMultipleSubtypes &&
             entity.EntityInfo.TrackRecordChanges
         ) {
-            const transaction = entity.ProviderTransaction;
             await this.PropagateRecordChangesToSiblings(
                 entity.EntityInfo,
                 overlappingChangeData,
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
-                transaction ? { connectionSource: transaction } : undefined,
             );
         }
         return null;
@@ -980,9 +1073,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns true if the clause is safe, false if it contains forbidden patterns
      */
     protected ValidateUserProvidedSQLClause(clause: string): boolean {
-        // Remove string literals to avoid false positives
-        const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
-        const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
+        // Remove string literals to avoid false positives.
+        //
+        // 🚨 SECURITY: this uses the SHARED stripper in @memberjunction/global. It must match how
+        // SQL Server / PostgreSQL actually parse literals — see StripSQLStringLiterals for the full
+        // rationale and the backslash-escape bypass it exists to prevent. Do NOT inline a regex here;
+        // an inline copy is exactly how this screen and SQLExpressionValidator drifted apart before.
+        const clauseWithoutStrings = StripSQLStringLiterals(clause);
         const lowerClause = clauseWithoutStrings.toLowerCase();
 
         const forbiddenPatterns: RegExp[] = [
@@ -1463,7 +1560,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     }
                 }
             } else {
-                return entity; // nothing to save
+                return entity.GetAll(); // nothing to save
             }
         } catch (e) {
             this.OnResumeRefresh();
@@ -1733,13 +1830,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param baseType The operation type
      * @param before True for before-hooks, false for after-hooks
      * @param user The acting user
+     * @param originatingEntityActionIDs Entity Actions that caused this save/delete, from
+     *        `EntitySaveOptions.OriginatingEntityActionIDs`. After-hooks skip them, so an action
+     *        writing back on the record that triggered it does not re-fire itself.
      * @returns Array of action results (empty by default)
      */
     protected async HandleEntityActions(
         _entity: BaseEntity,
         _baseType: 'save' | 'delete' | 'validate',
         _before: boolean,
-        _user: UserInfo
+        _user: UserInfo,
+        _originatingEntityActionIDs?: string[]
     ): Promise<{ Success: boolean; Message?: string }[]> {
         return [];
     }

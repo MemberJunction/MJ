@@ -1,5 +1,336 @@
 # @memberjunction/core-entities-server
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- d4a5b4c: Content vectorization: make colocated vector stores usable, and stop ignoring an index's declared dimensions
+
+  A colocated vector provider (`SQLServerVectorDatabase`, pgvector) keeps vectors in the application's own
+  database. It has no credentials to present, and it needs the active data-provider connection handed to it
+  before use. The ContentSource pipeline honored neither, so a colocated store could be **searched** but
+  never **written** — and it failed in a way that pointed somewhere else entirely: `CreateIndex` logged
+  `"requires a host connection"` and continued, then vectorization died later on a vector-database cache
+  miss, which reads like bad metadata rather than a missing wire-up.
+
+  Four changes, in two places that both create provider instances:
+  - **`AutotagBaseEngine.createVectorDBInstance`** now instantiates first, calls `TryWireColocatedHost`, and
+    only then requires an API key — for providers that actually need one (`!SupportsColocatedQuery &&
+RequiresAPIKey`). The old order could not work: whether a provider is colocated is not knowable until it
+    exists. A non-empty sentinel is passed to the constructor because `VectorDBBase` rejects an empty key
+    outright and colocated providers do not override it, so `''` would throw for precisely the keyless case.
+  - **`MJVectorIndexEntityServer.getVectorDBInstance`** gets the same treatment. This is the site that runs
+    on `VectorIndex.Save()`, so without it the provider index is never created regardless of the above.
+  - **`AutotagBaseEngine.createEmbeddingInstance`** drops its pre-flight key check, matching the decision
+    already documented in the EntityDocument pipeline: an empty key is legitimate for local-only drivers
+    (`LocalEmbedding` runs ONNX in-process and defends itself with `super(apiKey || 'local')`), and a cloud
+    driver that genuinely needs one raises a real provider-level auth error, which is more actionable than a
+    guard here. Gating up front made local embedding models unusable from this pipeline.
+  - **`MJVectorIndexEntityServer.resolveDimensions`** now honors the index's own `Dimensions` column instead
+    of returning a hardcoded 1536. This was a latent bug with real consequences on any store that enforces
+    width: a colocated SQL Server index is a `VECTOR(n)` column, so a 384-dimension model got a
+    `VECTOR(1536)` table and every insert was rejected.
+
+  **Behaviour change worth noting before upgrading:** a `MJ: Vector Indexes` record whose `Dimensions`
+  differs from 1536 will now have its provider index created at the stated width. That is the intent — the
+  column exists to be honored, and the embedding call already honored it — but an index created earlier at
+  1536 will not match, and wants recreating.
+
+  Verified end to end against SQL Server 2025 with local embeddings: two content sources differing only in
+  whether they declare `VectorEntityName`, both vectorized through the real pipeline into a real colocated
+  index. Before these changes the pipeline could not reach that state at all.
+
+  Both entries are `minor` rather than `patch` because the bump level is evaluated per branch and this branch
+  also changes `metadata/` — see `.claude/rules/changesets.md`. The changes here are code only.
+
+- 9cd81ca: Integration apply path: stop record-map write amplification, surface pagination violations, and stop blocking the connection wizard on a schema refresh.
+
+  `MJ: Company Integration Record Maps` is the highest-volume table the sync path writes — one row per external record ever mapped, re-touched every sync — and unlike its run-log siblings it still shipped with `TrackRecordChanges = 1`, so every mapping upsert also wrote a `RecordChange` row and doubled a sync's write volume. Nothing reads that history: the mapping row is the current state, and operators audit a sync through the per-run artifact stream. Change tracking is now off for that entity; existing history rows are left in place. Separately, a connector returning an oversized batch (a pagination-contract violation) is now reported rather than absorbed silently, and `IntegrationUpdateConnection` can launch its schema refresh without waiting on it.
+
+  `MJCompanyIntegrationEntityServer` gains `SuppressActivationSchemaRefresh`, a transient opt-out that stops the activation (`IsActive` false→true) schema refresh from running inside `Save()` when the caller is going to run it itself. `IntegrationCreateConnection` sets it for `awaitSchemaRefresh: false`, which makes that flag actually non-blocking on create — previously the Save-side refresh ran first and awaited, so the mutation paid a full live introspect regardless — and moves the introspect after the connection test, so a connection rejected by that test is rolled back without having written IntegrationObject rows. Default false, so every other activation path is unchanged.
+
+  `IntegrationConnectorCreationPipeline.Run()` now honours a caller-supplied `RunID` even when it coalesces onto an already-running or just-completed run for the same CompanyIntegration. Previously the supplied ID was silently discarded, so a caller that had already handed it to a client as "the run to tail" left that client polling a run directory that was never created — `IntegrationTailRunEvents` answering "Run not found" forever, which is indistinguishable from "hasn't started yet". A coalesced call now publishes a terminal alias run under the requested ID that mirrors the served run's outcome and names it, so the ID is always tailable.
+
+### Patch Changes
+
+- 2875f6f: Stop running a live source introspection inside `CompanyIntegration.Save()`
+
+  `MJCompanyIntegrationEntityServer` no longer overrides `Save()` to fire
+  `IntegrationConnectorCreationPipeline` on an `IsActive false→true` transition.
+  That hook made an unbounded scan of the customer's source a side effect of
+  writing a row — it ran for any writer of that transition, inside the caller's
+  HTTP request, and on the create path it ran before the credential had been
+  tested.
+
+  Discovery is now something a caller asks for:
+  - `IntegrationCreateConnection` creates the row inactive and activates it only
+    after the credential test, so the scan can never run against a password that
+    is about to be rejected and rolled back.
+  - `IntegrationReactivateConnection` gains a `runSchemaRefresh` argument
+    (default `true`, matching the previous behaviour) so the refresh is visible
+    in the API and can be declined.
+  - `runSchemaRefreshPipeline` now takes the `IntegrationEngine` maintenance lock,
+    which the other pipeline call sites already held, and supplies the
+    SoftPKClassifier LLM callback the save hook used to provide.
+
+  `MJCompanyIntegrationEntityServer.RunSchemaRefreshPipeline()` is public for
+  callers that want the old behaviour explicitly.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [a788e27]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [2741d46]
+- Updated dependencies [2741d46]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/scheduling-engine@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/sql-converter@6.1.0-edge.3
+  - @memberjunction/sql-parser@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/tag-engine@6.1.0-edge.3
+  - @memberjunction/ai-vectordb@6.1.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/doc-utils@6.1.0-edge.3
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.3
+  - @memberjunction/predictive-studio-core@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 59def38: The entity-action substrate finishes what its schema has been promising. Seven pieces, all of which
+  share a failure shape: a column, a flag or a field that read as configured and did nothing.
+
+  **Action Filters now actually prevent execution.** `RunAction`'s filter-refusal branch built its
+  result, logged it, and then fell through to run the action anyway — there was no `return`. Every
+  Action Filter has therefore recorded that it prevented something while preventing nothing, since the
+  mechanism shipped. The refusal row is why it went unnoticed: the observable said "prevented" and the
+  side effect happened regardless, so #3606's claim that filters fail closed described evaluation,
+  which landed, rather than enforcement, which did not. **Anyone relying on an Action Filter to gate an
+  action has been getting the action anyway; after this it stops, which is the configured behaviour but
+  a visible change.** A prevented run still writes a log row, deliberately — an operator should be able
+  to see that a filter refused rather than wonder why nothing happened — so its `Message` is now an
+  exported constant, since that is the only thing distinguishing a prevented run from an executed one.
+
+  **Transition filters.** An entity action could see a record's current state and nothing else, so
+  "when Status _becomes_ Approved" was indistinguishable from "when Status _is_ Approved" — which is
+  true on every subsequent save too. `EntityChangeContext` now carries both sides of the save to where
+  filters run, built from `EntityField.OldValue`, which `BaseEntity` has tracked all along and simply
+  never carried anywhere. Filter code gets `DidFieldChange`, `DidFieldChangeToValue`, `OldValues` and
+  `NewValues` on `ActionFilterContext`. A create reports no changes, because a record whose Status
+  started at Approved did not _become_ anything. Comparison is loose across the string boundary
+  metadata forces, so a configured `'1'` matches a numeric `1` rather than silently never matching.
+
+  The capture happens as the first statement of `HandleEntityActions`, deliberately before its first
+  `await`: After-hooks are fire-and-forget, and the moment that method yields, the save completes and
+  reloads the entity, resetting every `OldValue`. Reading `IsCreate` from that same synchronous
+  snapshot also closes a latent bug — `entity.IsSaved` was previously read _after_ an await, so a
+  create whose save finalized in that window dispatched as `AfterUpdate`.
+
+  **Two filter-substrate fixes fall out of using it for real.** `EntityActionFilter.Status` was never
+  consulted, so a `Disabled` binding still gated — and filters fail closed, so that was not an inert
+  row but a permanent block whose only symptom is a trigger that quietly stopped firing. And a binding
+  pointing at an unresolvable filter used to reach the evaluator as `undefined` and throw there:
+  fail-closed by accident, with no usable reason logged. It now returns a failed result naming the
+  filter.
+
+  **Workflow triggers accept a filter.** `ValidateWorkflowSpec` refused `WorkflowEntityEventTrigger.filter`
+  outright because the contract to honor it did not exist. It now reconciles onto an owned
+  `ActionFilter` bound through `EntityActionFilter` — the additive path — and validates that the
+  expression parses, because filters fail closed and a syntax error is not a loud failure, it is a
+  trigger that silently never fires.
+
+  **Record Process on-change triggers.** `OnChangeEnabled` has described itself as running "per-record
+  on save via an owned Entity Action" since the column shipped, and `OnChangeFilter` promised to
+  "compile into the owned Entity Action Filter". Neither owned anything. Saving a Record Process now
+  reconciles that binding, matching ownership on the `RecordProcessID` param — `Run Record Process` is
+  one shared action, so matching on entity + action alone would let a second process silently repoint
+  the first one's trigger. `OnChangeFilter` compiles through the same builder workflow triggers use, so
+  one expression vocabulary covers both surfaces.
+
+  **Durable `After*` dispatch (D14).** After-hooks are fire-and-forget, so a process dying mid-flight
+  loses the action with nothing to retry it. `EntityAction.RunMode = 'Durable'` routes the dispatch to
+  the task-graph substrate as a single-node durable graph — the claim protocol, restart recovery and
+  orphan reclaim that already exist there — rather than adding a third async substrate. Opt-in per
+  binding, because it costs a Task row, a dispatcher hop, and params persisted at rest. When no
+  submitter is registered or submission fails, the work runs **inline**: `Durable` asks for the work to
+  be harder to lose, so dropping it would make opting in less reliable than leaving it off. New
+  `Task.ActionID` widens the assignment exclusivity to three ways, and `TaskGraphSpecNode.actionName`
+  joins `agentName`/`assignToUser`.
+
+  Durability replaces _execution_, not _dispatch_: `RunActionParams.DeferExecution` is called by
+  `RunAction` in place of running the action, after validation and filters have passed, so a durable
+  binding is gated by exactly what an inline one is gated by. Submitting at dispatch time instead —
+  which is where this first landed — would have fired a scoped durable trigger for every record of the
+  entity and a filtered one on every save.
+
+  **Execution-log retention.** `Action.RetentionPeriod` and `ActionExecutionLog.RetentionPeriod` shipped
+  with descriptions and no reader anywhere in the codebase; the log grew forever while the schema
+  claimed otherwise. Retention is now stamped onto each row when the run starts — decided at write
+  time, so editing an action's retention is a going-forward change rather than a retroactive deletion —
+  and a new opt-in `Action Log Retention` scheduled job purges expired rows oldest-first, bounded per
+  run, reporting when it stopped at its ceiling rather than because it was finished.
+
+  **The `Validate` invocation hole.** `EntityActionInvocationValidate` overrode single-record invocation
+  with a near-copy that had drifted into a strict subset: no scope resolution (so a binding narrowed to
+  one record ran `Validate` against every record of the entity) and no provenance (so a whole-record
+  parameter was logged raw, ignoring the binding's `LogValue` rows). The override is deleted; the class
+  inherits, which is what keeps both facts true for `Validate` permanently rather than until the copies
+  drift again.
+
+  **The `RunEntityAction` null contract.** `null` means the action did not run — the binding is scoped
+  and this record falls outside it. `HandleEntityActions` guarded for it; the GraphQL resolver did not,
+  so an out-of-scope binding surfaced to clients as a server error. The signature now says so and the
+  resolver reports it as the ordinary outcome it is.
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/scheduling-engine@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/integration-engine@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.2
+  - @memberjunction/tag-engine@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/doc-utils@6.1.0-edge.2
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.2
+  - @memberjunction/ai-vectordb@6.1.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.2
+  - @memberjunction/predictive-studio-core@6.1.0-edge.2
+  - @memberjunction/sql-converter@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+  - @memberjunction/sql-parser@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/scheduling-engine@6.1.0-edge.1
+  - @memberjunction/ai-vectordb@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/tag-engine@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/doc-utils@6.1.0-edge.1
+  - @memberjunction/integration-engine@6.1.0-edge.1
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/predictive-studio-core@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-converter@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+  - @memberjunction/sql-parser@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

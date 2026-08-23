@@ -1,5 +1,33 @@
 # @memberjunction/ng-kanban
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- c83f0d3: Gantt and Kanban emit double-click so host surfaces can open the underlying entity record without fighting DHTMLX's default lightbox.
+- Updated dependencies [834f8d7]
+- Updated dependencies [cefc302]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1bd9674]
+  - @memberjunction/global@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [080f4cd]
+- Updated dependencies [48ff99f]
+- Updated dependencies [de343b5]
+  - @memberjunction/global@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+  - @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

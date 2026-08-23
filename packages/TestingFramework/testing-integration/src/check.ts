@@ -60,6 +60,17 @@ export interface RlsFixture {
     EntityName: string;
     /** True iff discovery found two distinct users with DIFFERENT non-empty Read RLS clauses. */
     Usable: boolean;
+    /**
+     * The effective Read RLS clauses discovery actually compared to set `Usable` — UserA's and
+     * UserB's, in that order. Empty strings when `Usable` is false.
+     *
+     * Carried on the fixture rather than left to be re-derived by each check, because discovery runs
+     * ONCE per suite against the SERVER provider while client-transport checks hold a Network
+     * provider that does not reproduce these clauses (it returns empty for every user). A check that
+     * re-derived them there saw two identical clauses and reported a cache leak that did not exist.
+     */
+    ClauseA: string;
+    ClauseB: string;
     /** Why the fixture is unusable (for the skip note), when Usable is false. */
     Reason?: string;
     /**
@@ -231,6 +242,33 @@ export interface EntityWritesFixture {
 }
 
 /**
+ * Shared accumulator fixture for the `entity-graph-client` bundle (client transport, mutating).
+ *
+ * Setup creates nothing — it only resolves the two ids the checks need to reference, so a
+ * deterministic-only run writes no rows at all. Each mutating check appends what it created, and
+ * Teardown sweeps FK-safe: `AgentPromptIds` before `AgentIds`, since a prompt row references its
+ * agent.
+ */
+export interface EntityGraphClientFixture {
+    /** Unique per-run name prefix stamped on every fixture agent. */
+    Prefix: string;
+    /**
+     * Two DISTINCT existing `MJ: AI Prompts` ids — the required FK on every child row the bundle
+     * stages. Two, not one, because `UQ_AIAgentPrompt_Agent_Prompt_Config` is unique on
+     * (AgentID, PromptID, ConfigurationID): staging the same prompt twice on one agent would fail
+     * the constraint rather than the behavior under test.
+     */
+    PromptIDs: string[];
+    /** An existing `MJ: AI Agent Types` id, when one exists. Optional on the schema, and leaving it
+     *  unset also skips the server subclass's TypeConfiguration validation, which is not under test. */
+    AgentTypeID?: string;
+    /** Every `MJ: AI Agents` row the bundle created, in creation order. */
+    AgentIds: string[];
+    /** Every `MJ: AI Agent Prompts` row the bundle created, in creation order. */
+    AgentPromptIds: string[];
+}
+
+/**
  * Shared fixture for the `open-app-teardown` bundle: the throwaway `__mj` metadata rows seeded for the
  * teardown scenario (a used app's SchemaInfo/Entity/EntityField + a blocking RecordChange + a link-less
  * nav Application), reused by OAT1/OAT2 and removed in FK-safe order in teardown.
@@ -359,6 +397,18 @@ export interface ConversationCompactionFixture {
     AgentRuns: Array<{ Delete(): Promise<boolean> }>;
     /** Tagged MJ: AI Agent Run Steps fixture rows (deleted first). */
     Steps: Array<{ Delete(): Promise<boolean> }>;
+    /**
+     * Rows the transcript-window checks create that REFERENCE a conversation detail —
+     * `MJ: Conversation Detail Artifacts` junctions. Deleted before the details they point at.
+     */
+    WindowJunctions: Array<{ Delete(): Promise<boolean> }>;
+    /**
+     * Rows the transcript-window checks create that details reference, or that the junctions
+     * reference — agent sessions, artifact versions, artifacts. Deleted LAST (after the
+     * details and conversations), in reverse insertion order so a version goes before its
+     * artifact.
+     */
+    WindowRoots: Array<{ Delete(): Promise<boolean> }>;
 }
 
 /**
@@ -496,6 +546,8 @@ export interface IntegrationCheckContext {
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
     /** Shared fixture for the `entity-writes` bundle (client transport, mutating). */
     EntityWritesFixture?: EntityWritesFixture;
+    /** Accumulator fixture for the `entity-graph-client` bundle (client transport, mutating). */
+    EntityGraphClientFixture?: EntityGraphClientFixture;
     /** Shared fixture for the `transaction-groups` bundle (client transport, mutating). */
     TransactionGroupsFixture?: TransactionGroupsFixture;
     /** Shared fixture for the `user-routines` bundle. */

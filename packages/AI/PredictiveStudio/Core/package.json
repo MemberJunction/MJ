@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/predictive-studio-core",
   "type": "module",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: Predictive Studio core type contracts (pipeline specs, sidecar contract, feature-step DAG, modeling plan)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
     "zod": "^3.25.0"
   },

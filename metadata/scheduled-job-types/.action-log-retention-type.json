@@ -1,0 +1,20 @@
+[
+  {
+    "entity": "MJ: Scheduled Job Types",
+    "fields": {
+      "Name": "Action Log Retention",
+      "Description": "Purges expired MJ: Action Execution Logs rows, bounded per run. Retention is decided when the log row is written — StartActionLog stamps RetentionPeriod from the action's own setting — so editing an action's retention changes what is kept going forward rather than retroactively deleting history. A row with no retention is kept indefinitely unless DefaultRetentionDays is configured here. Optional Configuration: { \"DefaultRetentionDays\": <number>, \"MaxDeletesPerRun\": <number> }; MaxDeletesPerRun defaults to 5000, so a first run against a long-neglected table cannot become an unbounded transaction — it drains oldest-first over successive runs.",
+      "DriverClass": "ActionLogRetentionScheduledJobDriver",
+      "DomainRunEntity": "MJ: Action Execution Logs",
+      "DomainRunEntityFKey": null,
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "450EA449-F204-45AC-981C-CAF55CBF3C86"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T22:50:44.315Z",
+      "checksum": "a782fa5390f092de91d9c72a17350a0f042f89a776ee914bf4961601c20c6f10"
+    }
+  }
+]

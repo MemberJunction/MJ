@@ -3,7 +3,7 @@ import { LogError } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 @ObjectType()
 class EntityPermissionResult {

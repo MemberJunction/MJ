@@ -135,7 +135,11 @@ export class AIAgentPermissionHelper {
                 isOwner: false
             };
         } catch (error) {
-            LogError(error, 'Error getting effective permissions for agent');
+            // The second parameter of LogError is a log FILE NAME, not context. Passing the message
+            // there wrote a file called "Error getting effective permissions for agent" into the
+            // process working directory on every failure, and the message itself never reached the
+            // log — so a permission check that failed closed left no trace anyone would look at.
+            LogError(`Error getting effective permissions for agent: ${error instanceof Error ? error.message : String(error)}`);
             // Fail closed - deny all permissions on error
             return {
                 canView: false,

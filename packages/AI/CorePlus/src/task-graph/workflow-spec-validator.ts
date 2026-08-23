@@ -13,12 +13,17 @@
  */
 import { FormatValidationErrors, ValidateTaskGraphSpec } from './task-graph-validator';
 import {
+    ENTITY_INVOCATION_TYPES,
+    IsAfterInvocationType,
+    NormalizeInvocationType,
     NormalizeTriggers,
     TriggerKey,
+    WORKFLOW_TRIGGER_INVOCATION_TYPES,
     type WorkflowSpec,
     type WorkflowSpecValidationError,
     type WorkflowSpecValidationResult,
 } from './workflow-spec';
+import { IsChangeFilterParseable } from '@memberjunction/actions-base';
 
 /**
  * Validates a workflow's structure and its triggers.
@@ -68,6 +73,46 @@ export function ValidateWorkflowSpec(spec: WorkflowSpec): WorkflowSpecValidation
                         Message: 'An entity-change trigger needs to say which change fires it (Create, Update, or Delete).',
                         TriggerIndex: index,
                     });
+                } else {
+                    const resolved = NormalizeInvocationType(trigger.invocationType);
+                    if (!resolved) {
+                        // Caught here rather than at save: a trigger bound to a nonexistent invocation
+                        // type persists happily and then never fires, which is undebuggable from the UI.
+                        errors.push({
+                            Code: 'UnknownInvocationType',
+                            Message:
+                                `"${trigger.invocationType}" is not a change this platform fires. Use Create, Update or Delete — ` +
+                                `or name one exactly: ${ENTITY_INVOCATION_TYPES.join(', ')}.`,
+                            TriggerIndex: index,
+                        });
+                    } else if (!IsAfterInvocationType(resolved)) {
+                        // Refused, not merely discouraged. `Validate` and `Before*` run inside the save
+                        // — synchronously, in the held transaction, able to abort it — so a workflow
+                        // bound there puts an unbounded agent run in the middle of a user's save.
+                        errors.push({
+                            Code: 'UnsupportedInvocationType',
+                            Message:
+                                `A workflow cannot run during "${resolved}" — that runs inside the save itself and would ` +
+                                `hold it open. Use one of: ${WORKFLOW_TRIGGER_INVOCATION_TYPES.join(', ')}.`,
+                            TriggerIndex: index,
+                        });
+                    }
+                }
+                if (trigger.filter?.trim()) {
+                    // Checked here rather than at persist time on purpose. Filters fail closed at
+                    // runtime, so an expression that does not parse becomes a trigger that silently
+                    // never fires — indistinguishable, from the author's seat, from a workflow that
+                    // simply has nothing to do.
+                    const parse = IsChangeFilterParseable(trigger.filter);
+                    if (!parse.Parseable) {
+                        errors.push({
+                            Code: 'InvalidFilter',
+                            Message:
+                                `The trigger's filter is not a valid expression (${parse.Message}). It must be a JavaScript ` +
+                                `boolean expression — for example: DidFieldChangeToValue('Status', 'Approved').`,
+                            TriggerIndex: index,
+                        });
+                    }
                 }
                 if (trigger.scopeRecordID && !trigger.scopeEntityName) {
                     // A record ID without its entity is unresolvable — IDs are only unique within an

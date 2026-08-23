@@ -1,5 +1,38 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [6ecfaa0]
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/ng-container-directives@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@6.1.0-edge.2
+- @memberjunction/ng-ui-components@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: One look and one keyboard contract for MJ's tab strips.
+  - **`ng-ui-components`** ships the shared `.mj-tabs*` tab chrome as a global stylesheet (`dist/lib/tabs/tabs.scss`) and `mjTabList`, the ARIA tabs keyboard directive: roving tabindex (one Tab stop per strip), Arrow/Home/End navigation with focus-follows-selection, Enter/Space activation, Delete/Backspace close, hidden-tab skipping, and editable-content passthrough. `mj-workspace-tab-strip` now renders the shared chrome, puts `role="tab"` on the focusable element, and folds unsaved/rejected state into each tab's accessible name. An active tab's border and top accent line follow its STATUS color (brand primary for an ordinary tab, warning when rejected, success when complete) via the `--mj-tab-accent` custom property, overridable per host. Touch devices get hold-to-drag reordering (400ms, the platform idiom) so a horizontal swipe scrolls an overflowing tab list instead of grabbing a tab; a new `AllowReorder` input (strip + card) disables reordering entirely for hosts where every touch gesture should scroll. **Standalone hosts (anything not running inside MJ Explorer's `explorer-app` shell — e.g. the BizApps apps) must add `@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';` to their global stylesheet or tab strips render unstyled.**
+  - **`ng-tabstrip`** adopts the same chrome and directive (new dependency on `ng-ui-components`): tokens replace the legacy `--gray-*` styling that never adapted to dark mode, tabs gain full keyboard support plus `aria-controls`/`tabpanel` linkage, and the close button is Font Awesome. **Behavioral change:** the strip and its tab bodies now size to content instead of hardcoding viewport height (`calc(100vh - …)`) — hosts that relied on the old fixed-height, internally-scrolling body should set a height on their own container. Overflow scrolling is native (`scrollLeft`) rather than the old offset animation. `FillWidth`/`FillHeight` inputs are deprecated no-ops. The package's stale "DEPRECATED — use Kendo" notice is gone.
+  - **`ng-core-entity-forms`**: the Entity Actions form's Filters grid gets an explicit `[Height]` now that its tab body no longer imposes viewport height.
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/ng-container-directives@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

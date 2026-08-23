@@ -91,8 +91,12 @@ export function formatOracleResult(result: OracleResult, indent: string = ''): s
  * @returns Formatted text output
  */
 export function formatTestSummary(result: TestRunResult, indent: string = ''): string {
-    const status = result.status === 'Passed' ? '✓' : '✗';
-    return `${indent}${status} ${result.testName}: ${(result.score * 100).toFixed(1)}% (${result.passedChecks}/${result.totalChecks})`;
+    const status = result.status === 'Passed' ? '✓' : result.status === 'Skipped' ? '−' : '✗';
+    const skipped = result.skippedChecks ? `, ${result.skippedChecks} skipped` : '';
+    if (result.status === 'Skipped') {
+        return `${indent}${status} ${result.testName}: SKIPPED (not executed)`;
+    }
+    return `${indent}${status} ${result.testName}: ${(result.score * 100).toFixed(1)}% (${result.passedChecks}/${result.totalChecks}${skipped})`;
 }
 
 /**
@@ -133,7 +137,7 @@ export function formatTestRunResultAsMarkdown(result: TestRunResult): string {
     const lines: string[] = [];
 
     lines.push(`# Test: ${result.testName}\n`);
-    lines.push(`**Status:** ${result.status === 'Passed' ? '✅ Passed' : '❌ Failed'}`);
+    lines.push(`**Status:** ${result.status === 'Passed' ? '✅ Passed' : result.status === 'Skipped' ? '⏭️ Skipped (not executed)' : `❌ ${result.status}`}`);
     lines.push(`**Score:** ${(result.score * 100).toFixed(1)}%`);
     lines.push(`**Checks:** ${result.passedChecks}/${result.totalChecks} passed`);
     lines.push(`**Duration:** ${formatDuration(result.durationMs)}`);
@@ -176,7 +180,7 @@ export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): stri
         lines.push('|------|--------|-------|--------|');
 
         for (const test of result.testResults) {
-            const status = test.status === 'Passed' ? '✅' : '❌';
+            const status = test.status === 'Passed' ? '✅' : test.status === 'Skipped' ? '⏭️ Skipped' : '❌';
             const score = `${(test.score * 100).toFixed(1)}%`;
             const checks = `${test.passedChecks}/${test.totalChecks}`;
             lines.push(`| ${test.testName} | ${status} | ${score} | ${checks} |`);
@@ -261,6 +265,7 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
     totalTests: number;
     passedTests: number;
     failedTests: number;
+    skippedTests: number;
     passRate: number;
     averageScore: number;
     totalDuration: number;
@@ -270,22 +275,27 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
 } {
     const totalTests = results.length;
     const passedTests = results.filter(r => r.status === 'Passed').length;
-    const failedTests = totalTests - passedTests;
-    const passRate = totalTests > 0 ? passedTests / totalTests : 0;
+    const skippedTests = results.filter(r => r.status === 'Skipped').length;
+    // Failures are HARD statuses only; a skipped test never executed, so it is neither passed nor
+    // failed. Rates and averages are taken over the EXECUTED set so skips don't drag the score to 0.
+    const failedTests = results.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
+    const executed = results.filter(r => r.status !== 'Skipped');
+    const passRate = executed.length > 0 ? passedTests / executed.length : 0;
 
-    const totalScore = results.reduce((sum, r) => sum + r.score, 0);
-    const averageScore = totalTests > 0 ? totalScore / totalTests : 0;
+    const totalScore = executed.reduce((sum, r) => sum + r.score, 0);
+    const averageScore = executed.length > 0 ? totalScore / executed.length : 0;
 
     const totalDuration = results.reduce((sum, r) => sum + r.durationMs, 0);
     const totalCost = results.reduce((sum, r) => sum + r.totalCost, 0);
 
-    const avgDuration = totalTests > 0 ? totalDuration / totalTests : 0;
-    const avgCost = totalTests > 0 ? totalCost / totalTests : 0;
+    const avgDuration = executed.length > 0 ? totalDuration / executed.length : 0;
+    const avgCost = executed.length > 0 ? totalCost / executed.length : 0;
 
     return {
         totalTests,
         passedTests,
         failedTests,
+        skippedTests,
         passRate,
         averageScore,
         totalDuration,

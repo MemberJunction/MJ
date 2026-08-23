@@ -37,9 +37,38 @@ import type { TaskGraphSpec } from './task-graph-spec';
 export type WorkflowEntityEventTrigger = {
     type: 'EntityEvent';
     entityName: string;
-    /** `Create` | `Update` | `Delete` — matched against the Entity Action invocation type. */
+    /**
+     * When it fires. Either a platform invocation-type name (`AfterCreate`, `AfterUpdate`,
+     * `AfterDelete`) or the shorthand `Create` / `Update` / `Delete`, which
+     * {@link NormalizeInvocationType} resolves to the **After** form.
+     *
+     * **Only the After forms are accepted here**, and the reason is not stylistic. `Validate` and
+     * `Before*` run *inside* the save — synchronously, inside the held transaction, with the power
+     * to veto it. A workflow bound there would put an unbounded agent run in the middle of a user's
+     * save. Nobody asking for "when an invoice changes, do X" is asking for that, and the friendlier
+     * an authoring API is, the less it should let someone reach that hazard by accident.
+     */
     invocationType: string;
-    /** Optional predicate, in the same grammar edge conditions use. */
+    /**
+     * Optional predicate narrowing which changes fire the trigger.
+     *
+     * A **JavaScript boolean expression** evaluated against the change, reconciled onto an
+     * `ActionFilter` row bound to the trigger's own binding. The names in scope are the ones an
+     * Action Filter always has, plus the change contract:
+     *
+     * - `DidFieldChange('Status')` — the field's value actually differs across this save
+     * - `DidFieldChangeToValue('Status', 'Approved')` — *and* its new value is that one
+     * - `OldValues` / `NewValues` — both sides, by field name
+     * - `ActionFilterContext` — the full context, for anything the shorthands do not cover
+     *
+     * Write the transition, not the state: `Status === 'Approved'` is true on every subsequent save
+     * too, whereas `DidFieldChangeToValue('Status','Approved')` fires once, when it becomes that.
+     *
+     * Evaluation is **fail-closed** — a predicate that throws prevents the run rather than allowing
+     * it, because a workflow runs an agent and over-firing costs real money. The expression is
+     * syntax-checked at validation time so that failure surfaces while authoring, not as a trigger
+     * that silently never fires.
+     */
     filter?: string;
     /** Narrow to one entity's records. */
     scopeEntityName?: string;
@@ -103,6 +132,9 @@ export type WorkflowSpecValidationError = {
         | 'UnknownTriggerType'
         | 'MissingEntityName'
         | 'MissingInvocationType'
+        | 'UnknownInvocationType'
+        | 'UnsupportedInvocationType'
+        | 'InvalidFilter'
         | 'MissingCron'
         | 'DuplicateTrigger'
         | 'ScopeWithoutEntity';
@@ -115,6 +147,66 @@ export type WorkflowSpecValidationResult = {
     Valid: boolean;
     Errors: WorkflowSpecValidationError[];
 };
+
+/**
+ * Entity-action invocation types the platform actually fires.
+ *
+ * Derived from `GenericDatabaseProvider.HandleEntityActions`, which composes them as
+ * `Validate` or `<Before|After><Create|Update|Delete>`. Restating them here rather than importing
+ * is deliberate — this module is dependency-free — but it means a change there is a change here,
+ * which the integration tier pins.
+ */
+export const ENTITY_INVOCATION_TYPES = [
+    'Validate',
+    'BeforeCreate', 'AfterCreate',
+    'BeforeUpdate', 'AfterUpdate',
+    'BeforeDelete', 'AfterDelete',
+] as const;
+
+export type EntityInvocationType = typeof ENTITY_INVOCATION_TYPES[number];
+
+/**
+ * The invocation types a workflow trigger may bind to.
+ *
+ * The After forms only. `Validate` and `Before*` are part of the save itself — synchronous, inside
+ * the transaction, able to abort it — so binding an agent run there means an unbounded LLM call
+ * holding a user's save open. That hazard should not be one field away in the friendliest API the
+ * program exposes. Everything a workflow legitimately wants ("when an invoice changes, do X") is an
+ * After.
+ */
+export const WORKFLOW_TRIGGER_INVOCATION_TYPES = ['AfterCreate', 'AfterUpdate', 'AfterDelete'] as const;
+
+export type WorkflowTriggerInvocationType = typeof WORKFLOW_TRIGGER_INVOCATION_TYPES[number];
+
+/** True when an invocation type runs after the save has committed, rather than inside it. */
+export function IsAfterInvocationType(type: EntityInvocationType): type is WorkflowTriggerInvocationType {
+    return (WORKFLOW_TRIGGER_INVOCATION_TYPES as readonly string[]).includes(type);
+}
+
+/** Shorthand an author is likely to write, resolved to the safe (After) form. */
+const INVOCATION_SHORTHAND: Record<string, EntityInvocationType> = {
+    create: 'AfterCreate',
+    update: 'AfterUpdate',
+    delete: 'AfterDelete',
+    validate: 'Validate',
+};
+
+/**
+ * Resolves a trigger's `invocationType` to a name the platform will match.
+ *
+ * Returns null for anything unrecognized rather than guessing: a trigger bound to an invocation type
+ * that does not exist is a workflow that never fires, and silently picking a nearby one would be
+ * worse — it would fire at a moment the author did not ask for.
+ */
+export function NormalizeInvocationType(raw: string): EntityInvocationType | null {
+    const trimmed = raw?.trim();
+    if (!trimmed) return null;
+
+    const exact = ENTITY_INVOCATION_TYPES.find((t) => t.toLowerCase() === trimmed.toLowerCase());
+    if (exact) return exact;
+
+    return INVOCATION_SHORTHAND[trimmed.toLowerCase()] ?? null;
+}
 
 /** Normalizes an absent/empty trigger list to the explicit on-demand case. */
 export function NormalizeTriggers(spec: WorkflowSpec): WorkflowTrigger[] {
@@ -145,3 +237,4 @@ export function TriggerKey(trigger: WorkflowTrigger): string {
 export function IsWorkflowLive(spec: WorkflowSpec): boolean {
     return spec.status === 'Active';
 }
+

@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -13,10 +13,11 @@ import {
 import { configInfo, mj_core_schema } from '../../../Config/config';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
-import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
+    UserCache,
 } from '@memberjunction/generic-database-provider';
 import {
     POSTGRESQL_PROCEDURE_PARAM_LIMIT,
@@ -60,14 +61,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      * wires up `PostgreSQLDataProvider`, registers it as the active provider,
      * and loads the audit user.
      *
-     * **User-loading asymmetry** — SQL Server uses `UserCache.Instance.Refresh(pool)`
-     * which is hard-typed to `mssql.ConnectionPool` in `@memberjunction/sqlserver-dataprovider`.
-     * Refactoring it to be cross-platform would touch that package's public
-     * API; until then PG hand-queries `vwUsers`/`vwUserRoles` here. Same
-     * audit-user semantics (find Owner, else first user), just a different
-     * load path. Tracked for follow-up: unify behind a platform-agnostic
-     * cache that takes a `CodeGenConnection`.
-     *
      * **Env var resolution** — PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME /
      * PG_PASSWORD now flow through `configInfo.{dbHost,dbPort,dbDatabase,codeGenLogin,codeGenPassword}`
      * via `DEFAULT_CODEGEN_CONFIG` (see `Config/config.ts`). The provider just
@@ -96,18 +89,9 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 
         const conn = new PostgreSQLCodeGenConnection(pool);
 
-        const usersResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUsers"');
-        const rolesResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUserRoles"');
-
-        const userInfos: UserInfo[] = usersResult.recordset.map((user: Record<string, unknown>) => {
-            (user as Record<string, unknown>).UserRoles = rolesResult.recordset.filter(
-                (role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string),
-            );
-            return new UserInfo(provider, user);
-        });
-
-        const userMatch = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? userInfos[0];
+        await UserCache.Instance.Refresh(provider);
+        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
+        const currentUser = userMatch ?? UserCache.Users[0];
         if (!currentUser) {
             throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
         }
@@ -1130,7 +1114,243 @@ WHERE ${ftsColName} IS NULL;
      * the parent FK upward, capped at 100 levels to prevent infinite loops. Returns the
      * root record's primary key value.
      */
+    // ─── RECURSIVE HIERARCHY FUNCTIONS ──────────────────────────────────
+
+    /**
+     * Generates a PostgreSQL function returning a table of hierarchy metadata
+     * (RootID, Depth, Path, IsLeaf, ChildCount) for a self-referencing foreign key.
+     */
+    generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getHierarchyMetaFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- HIERARCHY METADATA FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_record_id ${primaryKeyType},
+    p_parent_id ${primaryKeyType}
+) RETURNS TABLE (
+    "RootID" ${primaryKeyType},
+    "Depth" INTEGER,
+    "Path" TEXT,
+    "IsLeaf" BOOLEAN,
+    "ChildCount" INTEGER
+) AS $$
+    WITH RECURSIVE cte_ancestors AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS depth,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_record_id
+
+        UNION ALL
+
+        SELECT
+            p.${pgDialect.QuoteIdentifier(primaryKey)},
+            p.${pgDialect.QuoteIdentifier(fieldName)},
+            c.depth + 1 AS depth,
+            '/' || p.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || c.path AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} p
+        INNER JOIN
+            cte_ancestors c ON p.${pgDialect.QuoteIdentifier(primaryKey)} = c.${pgDialect.QuoteIdentifier(fieldName)}
+        WHERE
+            c.depth < 100
+    )
+    SELECT
+        a.${pgDialect.QuoteIdentifier(primaryKey)} AS "RootID",
+        (SELECT MAX(depth) FROM cte_ancestors)::INTEGER AS "Depth",
+        (SELECT path FROM cte_ancestors ORDER BY depth DESC LIMIT 1)::TEXT AS "Path",
+        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id))::BOOLEAN AS "IsLeaf",
+        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id) AS "ChildCount"
+    FROM
+        cte_ancestors a
+    WHERE
+        a.${pgDialect.QuoteIdentifier(fieldName)} IS NULL OR p_parent_id IS NULL
+    ORDER BY
+        a.depth DESC
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    /**
+     * Generates a PostgreSQL table-valued function returning all descendant records of a root node.
+     */
+    generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getDescendantsFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- DESCENDANTS FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_root_id ${primaryKeyType},
+    p_max_depth INTEGER DEFAULT NULL
+) RETURNS TABLE (
+    "ID" ${primaryKeyType},
+    "Depth" INTEGER,
+    "Path" TEXT,
+    "IsLeaf" BOOLEAN,
+    "ChildCount" INTEGER
+) AS $$
+    WITH RECURSIVE cte_descendants AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS relative_depth,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_root_id
+
+        UNION ALL
+
+        SELECT
+            c.${pgDialect.QuoteIdentifier(primaryKey)},
+            c.${pgDialect.QuoteIdentifier(fieldName)},
+            p.relative_depth + 1 AS relative_depth,
+            p.path || c.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} c
+        INNER JOIN
+            cte_descendants p ON c.${pgDialect.QuoteIdentifier(fieldName)} = p.${pgDialect.QuoteIdentifier(primaryKey)}
+        WHERE
+            (p_max_depth IS NULL OR p.relative_depth < p_max_depth)
+            AND p.relative_depth < 100
+    )
+    SELECT
+        d.${pgDialect.QuoteIdentifier(primaryKey)} AS "ID",
+        d.relative_depth AS "Depth",
+        d.path AS "Path",
+        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = d.${pgDialect.QuoteIdentifier(primaryKey)}))::BOOLEAN AS "IsLeaf",
+        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = d.${pgDialect.QuoteIdentifier(primaryKey)}) AS "ChildCount"
+    FROM
+        cte_descendants d;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    /**
+     * Generates a PostgreSQL table-valued function returning all ancestors of a node walking upward.
+     */
+    generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getAncestorsFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- ANCESTORS FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_record_id ${primaryKeyType}
+) RETURNS TABLE (
+    "ID" ${primaryKeyType},
+    "LevelUp" INTEGER,
+    "Path" TEXT
+) AS $$
+    WITH RECURSIVE cte_ancestors AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS level_up,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_record_id
+
+        UNION ALL
+
+        SELECT
+            p.${pgDialect.QuoteIdentifier(primaryKey)},
+            p.${pgDialect.QuoteIdentifier(fieldName)},
+            c.level_up + 1 AS level_up,
+            '/' || p.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || c.path AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} p
+        INNER JOIN
+            cte_ancestors c ON p.${pgDialect.QuoteIdentifier(primaryKey)} = c.${pgDialect.QuoteIdentifier(fieldName)}
+        WHERE
+            c.level_up < 100
+    )
+    SELECT
+        a.${pgDialect.QuoteIdentifier(primaryKey)} AS "ID",
+        a.level_up AS "LevelUp",
+        a.path AS "Path"
+    FROM
+        cte_ancestors a;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    public getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_hierarchy_meta`;
+    }
+
+    public getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_descendants`;
+    }
+
+    public getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_ancestors`;
+    }
+
+    /** @inheritdoc */
+    generateHierarchyFieldSelect(_entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const rootFieldName = `Root${field.Name}`;
+        const depthFieldName = `${field.Name}Depth`;
+        const pathFieldName = `${field.Name}Path`;
+        const isLeafFieldName = `${field.Name}IsLeaf`;
+        const childCountFieldName = `${field.Name}ChildCount`;
+        return `${alias}."RootID" AS ${pgDialect.QuoteIdentifier(rootFieldName)},
+    ${alias}."Depth" AS ${pgDialect.QuoteIdentifier(depthFieldName)},
+    ${alias}."Path" AS ${pgDialect.QuoteIdentifier(pathFieldName)},
+    ${alias}."IsLeaf" AS ${pgDialect.QuoteIdentifier(isLeafFieldName)},
+    ${alias}."ChildCount" AS ${pgDialect.QuoteIdentifier(childCountFieldName)}`;
+    }
+
+    /**
+     * Generates a `LEFT JOIN LATERAL` clause that invokes the hierarchy metadata function
+     * for a self-referencing field.
+     */
+    generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const fnName = this.getHierarchyMetaFunctionName(entity, field);
+        const tableAlias = entity.BaseTableCodeName.charAt(0).toLowerCase();
+        return `LEFT JOIN LATERAL ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(${tableAlias}.${pgDialect.QuoteIdentifier(entity.FirstPrimaryKey.Name)}, ${tableAlias}.${pgDialect.QuoteIdentifier(field.Name)}) AS ${alias} ON true`;
+    }
+
+    /**
+     * Generates a PostgreSQL function that recursively calculates the root record ID for a
+     * self-referencing foreign key.
+     */
     generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
         const fieldName = field.Name;
@@ -1193,7 +1413,7 @@ $$ LANGUAGE sql STABLE;
      * function`. The snake_case scalar form is codegen's own naming space and
      * is consistent with how downstream views are emitted.
      */
-    private getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+    public getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
         return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_root_id`;
     }
 
@@ -1527,9 +1747,21 @@ END $$;
     // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
 
     /** @inheritdoc */
-    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[]): string {
+    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[], discardResult?: boolean): string {
         const qualifiedName = pgDialect.QuoteSchema(schema, routineName);
         const paramList = params.join(', ');
+        if (discardResult) {
+            // `SELECT * FROM routine(...)` is not universally valid on PostgreSQL: a function
+            // declared `RETURNS SETOF record` — which spDeleteEntityWithCoreDependencies is — is
+            // rejected with "a column definition list is required for functions returning record",
+            // and a work-performing routine has no column list to supply. PERFORM runs the function
+            // and discards whatever it returns, which is exactly what these callers want.
+            //
+            // Left broken, this fails in a way that points somewhere else entirely: the
+            // entity-pruning pass throws per entity, CodeGen logs "Error removing metadata for
+            // entity undefined" and continues, and the run reports success having pruned nothing.
+            return `DO $$ BEGIN PERFORM ${qualifiedName}(${paramList}); END $$`;
+        }
         return `SELECT * FROM ${qualifiedName}(${paramList})`;
     }
 
@@ -1732,111 +1964,17 @@ $if_view_exists$;
     // ─── METADATA MANAGEMENT: SQL QUOTING ────────────────────────────
 
     /**
-     * SQL keywords that should NOT be quoted even when they match PascalCase patterns.
-     */
-    private static readonly _SQL_KEYWORDS = new Set([
-        // DML/DDL keywords
-        'SELECT', 'INSERT', 'INTO', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'NOT',
-        'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'ON', 'AS', 'SET',
-        'VALUES', 'NULL', 'LIKE', 'IN', 'EXISTS', 'BETWEEN', 'CASE', 'WHEN', 'THEN',
-        'ELSE', 'END', 'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION',
-        'ALL', 'CREATE', 'ALTER', 'DROP', 'TABLE', 'INDEX', 'VIEW', 'EXEC', 'DECLARE',
-        'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'TRUE', 'FALSE', 'IS', 'ASC', 'DESC',
-        'DISTINCT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CONSTRAINT', 'DEFAULT',
-        'IF', 'OBJECT', 'TOP', 'WITH', 'OVER', 'PARTITION', 'ROW_NUMBER', 'RANK',
-        'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE', 'ROWS', 'RANGE',
-        'PRECEDING', 'FOLLOWING', 'UNBOUNDED', 'CURRENT', 'ROW', 'FETCH', 'NEXT', 'ONLY',
-        'SCHEMA', 'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'TRIGGER', 'FUNCTION', 'PROCEDURE',
-        'RETURNS', 'RETURN', 'EXECUTE', 'CALL', 'RAISE', 'NOTICE', 'EXCEPTION', 'PERFORM',
-        'GRANT', 'REVOKE', 'TO', 'USAGE', 'PRIVILEGES', 'OWNER',
-        // DDL sub-keywords
-        'ADD', 'COLUMN', 'DO', 'RENAME', 'COMMENT', 'UNIQUE', 'CHECK',
-        'CONFLICT', 'NOTHING', 'EXCLUDED', 'ZONE', 'AT', 'FOR', 'EACH', 'OF',
-        'BEFORE', 'AFTER', 'INSTEAD', 'USING', 'ANY', 'SOME',
-        'ENABLE', 'DISABLE', 'GENERATED', 'ALWAYS', 'IDENTITY',
-        'SECURITY', 'DEFINER', 'INVOKER', 'FORCE', 'COPY',
-        'TEMPORARY', 'TEMP', 'RECURSIVE', 'MATERIALIZED', 'CONCURRENTLY',
-        // PL/pgSQL control flow
-        'NEW', 'OLD', 'FOUND', 'LOOP', 'WHILE', 'EXIT', 'CONTINUE',
-        'ELSIF', 'ELSEIF', 'STRICT',
-        // Transaction / constraint control (used by SET CONSTRAINTS ALL IMMEDIATE
-        // emitted before ALTER TABLE so deferred trigger events flush). Without
-        // CONSTRAINTS / IMMEDIATE / DEFERRED in the keyword set, the tokenizer
-        // double-quotes them as identifiers and PG rejects the resulting SQL.
-        'CONSTRAINTS', 'IMMEDIATE', 'DEFERRED', 'SAVEPOINT', 'RELEASE',
-        // SQL Server types
-        'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
-        'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',
-        'BIT', 'INT', 'TEXT', 'NTEXT', 'IMAGE', 'BINARY', 'VARBINARY', 'CHAR', 'NCHAR',
-        'XML', 'GEOGRAPHY', 'GEOMETRY', 'HIERARCHYID', 'SQL_VARIANT', 'SYSNAME',
-        'NEWSEQUENTIALID', 'NEWID', 'GETUTCDATE', 'GETDATE', 'SYSDATETIMEOFFSET',
-        'OBJECT_ID', 'SCOPE_IDENTITY',
-        // Aggregate / scalar functions
-        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
-        'LEN', 'LENGTH', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
-        'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
-        'LEFT', 'RIGHT', 'POSITION', 'OVERLAY', 'EXTRACT', 'GREATEST', 'LEAST',
-        'DATEADD', 'DATEDIFF', 'DATEPART', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE',
-        'SECOND', 'NOW', 'CURRENT_TIMESTAMP',
-        // PostgreSQL specific
-        'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'UUID', 'JSONB', 'JSON', 'ARRAY', 'TIMESTAMPTZ',
-        'TIMESTAMP', 'DATE', 'TIME', 'INTERVAL', 'CITEXT', 'INET', 'MACADDR',
-        'GEN_RANDOM_UUID', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TO_NUMBER',
-        'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
-        'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',
-        'INOUT', 'OUT', 'VARIADIC', 'PARALLEL', 'SAFE', 'UNSAFE',
-        // information_schema column names
-        'TABLE_SCHEMA', 'TABLE_NAME', 'TABLE_CATALOG', 'COLUMN_NAME', 'DATA_TYPE',
-        'IS_NULLABLE', 'COLUMN_DEFAULT', 'CHARACTER_MAXIMUM_LENGTH', 'NUMERIC_PRECISION',
-        'NUMERIC_SCALE', 'ORDINAL_POSITION', 'COLUMN_COMMENT',
-        // MJ SQL constructs
-        'INFORMATION_SCHEMA', 'COLUMNS', 'TABLES', 'ROUTINES',
-    ]);
-
-    /**
      * Quotes mixed-case identifiers in a SQL string for PostgreSQL compatibility.
-     * Uses a tokenizer approach to skip string literals, already-quoted identifiers,
-     * dollar-quoted blocks, and SQL keywords. Any remaining PascalCase word gets
-     * double-quoted to preserve case.
+     *
+     * The tokenizer lives in `@memberjunction/sql-dialect` and is shared with
+     * `PostgreSQLDataProvider.autoQuoteIdentifiers`, so codegen-time and runtime SQL are
+     * quoted by one implementation rather than two hand-synced copies. See
+     * {@link AutoQuotePostgreSQLIdentifiers} for the quoting rule and its rationale.
+     *
+     * @inheritdoc
      */
     quoteSQLForExecution(sql: string): string {
-        const result: string[] = [];
-        let i = 0;
-        const len = sql.length;
-
-        while (i < len) {
-            const ch = sql[i];
-
-            if (ch === "'") {
-                i = this.skipSingleQuotedString(sql, i, len, result);
-                continue;
-            }
-            if (ch === '$') {
-                i = this.skipDollarQuotedBlock(sql, i, len, result);
-                continue;
-            }
-            if (ch === '"') {
-                i = this.skipDoubleQuotedIdentifier(sql, i, len, result);
-                continue;
-            }
-            if (ch === '[') {
-                i = this.skipBracketedIdentifier(sql, i, len, result);
-                continue;
-            }
-            if (ch === '@') {
-                i = this.skipAtParameter(sql, i, len, result);
-                continue;
-            }
-            if (/[a-zA-Z_]/.test(ch)) {
-                i = this.processWord(sql, i, len, result);
-                continue;
-            }
-
-            result.push(ch);
-            i++;
-        }
-
-        return result.join('');
+        return AutoQuotePostgreSQLIdentifiers(sql);
     }
 
     // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
@@ -2010,6 +2148,18 @@ WHERE p.prokind IN ('f', 'p')
                 f.RelatedEntityID != null && UUIDsEqual(f.RelatedEntityID, entity.ID)
             );
             for (const field of recursiveFKs) {
+                const metaSQL = this.generateHierarchyMetaFunction(entity, field);
+                if (metaSQL && metaSQL.trim().length > 0) {
+                    await client.query(metaSQL);
+                }
+                const descSQL = this.generateDescendantsFunction(entity, field);
+                if (descSQL && descSQL.trim().length > 0) {
+                    await client.query(descSQL);
+                }
+                const ancSQL = this.generateAncestorsFunction(entity, field);
+                if (ancSQL && ancSQL.trim().length > 0) {
+                    await client.query(ancSQL);
+                }
                 const fnSQL = this.generateRootIDFunction(entity, field);
                 if (fnSQL && fnSQL.trim().length > 0) {
                     await client.query(fnSQL);
@@ -2529,99 +2679,6 @@ WHERE p.prokind IN ('f', 'p')
       AND indexname = '${indexName}'`;
     }
 
-    // ─── TOKENIZER HELPERS (for quoteSQLForExecution) ────────────────
-
-    /** Skips a single-quoted string literal, handling escaped quotes ('') */
-    private skipSingleQuotedString(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len) {
-            if (sql[j] === "'" && j + 1 < len && sql[j + 1] === "'") {
-                j += 2;
-            } else if (sql[j] === "'") {
-                j++;
-                break;
-            } else {
-                j++;
-            }
-        }
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Skips a dollar-quoted block ($$ ... $$ or $tag$ ... $tag$) */
-    private skipDollarQuotedBlock(sql: string, start: number, len: number, result: string[]): number {
-        let tagEnd = start + 1;
-        if (tagEnd < len && sql[tagEnd] === '$') {
-            // Simple $$ tag
-            tagEnd = start + 2;
-        } else {
-            // Look for $identifier$ pattern
-            while (tagEnd < len && /[a-zA-Z0-9_]/.test(sql[tagEnd])) tagEnd++;
-            if (tagEnd < len && sql[tagEnd] === '$') {
-                tagEnd++;
-            } else {
-                // Not a dollar-quote, just a $ character
-                result.push(sql[start]);
-                return start + 1;
-            }
-        }
-        const tag = sql.substring(start, tagEnd);
-        const closePos = sql.indexOf(tag, tagEnd);
-        if (closePos !== -1) {
-            const blockEnd = closePos + tag.length;
-            result.push(sql.substring(start, blockEnd));
-            return blockEnd;
-        }
-        // No closing tag found, pass through rest of string
-        result.push(sql.substring(start));
-        return len;
-    }
-
-    /** Skips an already double-quoted identifier */
-    private skipDoubleQuotedIdentifier(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && sql[j] !== '"') j++;
-        if (j < len) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Skips a square-bracketed identifier (SQL Server style) */
-    private skipBracketedIdentifier(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && sql[j] !== ']') j++;
-        if (j < len) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Skips an @-prefixed parameter */
-    private skipAtParameter(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Processes a word token - quotes it if it's a PascalCase identifier, not a keyword */
-    private processWord(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
-        const word = sql.substring(start, j);
-
-        const isKeyword = PostgreSQLCodeGenProvider._SQL_KEYWORDS.has(word.toUpperCase());
-        const startsUpper = /^[A-Z]/.test(word);
-        const isAllLower = word === word.toLowerCase();
-        const isMJInternal = word.startsWith('__mj_');
-
-        if (!isKeyword && !isAllLower && !isMJInternal && startsUpper) {
-            result.push(pgDialect.QuoteIdentifier(word));
-        } else {
-            result.push(word);
-        }
-        return j;
-    }
-
     // ─── COMPLEX SQL GENERATION HELPERS ──────────────────────────────
 
     /**
@@ -2665,6 +2722,10 @@ numbered_rows AS (
    SELECT
       sf."EntityID",
       COALESCE(ms."MaxSequence", 0) + 100000 + sf."Sequence" AS "Sequence",
+      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
+      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
+      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
+      sf."Sequence" AS "SourceOrdinal",
       sf."FieldName",
       sf."Description",
       sf."Type",

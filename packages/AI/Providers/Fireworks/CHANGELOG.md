@@ -1,5 +1,38 @@
 # @memberjunction/ai-fireworks
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [cefc302]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1bd9674]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [de343b5]
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- @memberjunction/ai@6.1.0-edge.1
+- @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

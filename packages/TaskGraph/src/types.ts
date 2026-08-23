@@ -22,6 +22,16 @@ export type ProviderFactory = {
 };
 
 /**
+ * How a runner reports progress inside one task body.
+ *
+ * A plain callback rather than an observer object because a runner should not need to know frames
+ * exist: it says what it is doing, and the dispatcher decides whether anyone is listening, how often
+ * to announce it, and in what shape. MUST NOT throw or block — the dispatcher wraps it, but a
+ * runner's own use should treat it as commentary, never a step of the work.
+ */
+export type TaskRunProgressCallback = (message: string, percent?: number) => void;
+
+/**
  * Runs one agent for one task node.
  *
  * Abstracted rather than taking `AgentRunner` directly so the dispatcher can be unit-tested without
@@ -32,10 +42,298 @@ export type TaskAgentRunner = {
     RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult>;
 };
 
+/** Everything running one action for one task node needs. */
+export type TaskActionRunParams = {
+    TaskID: string;
+    ActionID: string;
+    /** Structured input from `Task.InputPayload` — for durable entity-action dispatch, the redacted params. */
+    InputPayload: unknown;
+    /** Outputs of this node's satisfied prerequisites, in the same shape agent nodes receive. */
+    DependencyOutputs: Map<string, unknown>;
+    Provider: IMetadataProvider;
+    ContextUser: UserInfo;
+    /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
+    OnProgress?: TaskRunProgressCallback;
+};
+
+/** The outcome of one action node. */
+export type TaskActionRunResult = {
+    Success: boolean;
+    Output?: unknown;
+    ErrorMessage?: string;
+    /**
+     * The `MJ: Action Execution Logs` row this run produced.
+     *
+     * Carried so the step can record it, which is what lets a workflow's action offer "view the
+     * execution log" the way an ordinary agent run step does. Optional because a runner that
+     * cannot produce one is limited, not broken.
+     */
+    ActionLogID?: string;
+};
+
+/**
+ * Runs one action for one task node.
+ *
+ * The third execution shape, beside agents and people. Abstracted for the same reason
+ * {@link TaskAgentRunner} is: the dispatcher must stay unit-testable without standing up the action
+ * engine, and this package must not import it — `@memberjunction/actions` depends on the entity
+ * layer this one also builds on, and reaching for it here would make every consumer of durable
+ * execution load the action engine too.
+ *
+ * **A host with no action runner is not broken, it is limited.** Action nodes stay Pending on it,
+ * which is visible in the Tasks UI, rather than being marked failed — a task nobody in this
+ * deployment can run is not the same as a task that ran and did not work.
+ */
+export type TaskActionRunner = {
+    RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult>;
+};
+
+/** Everything running one prompt for one task node needs. */
+export type TaskPromptRunParams = {
+    TaskID: string;
+    PromptID: string;
+    /** Structured input from `Task.InputPayload`, after the node's input mapping. */
+    InputPayload: unknown;
+    /** Outputs of this node's satisfied prerequisites, in the same shape agent nodes receive. */
+    DependencyOutputs: Map<string, unknown>;
+    /** Template parameters declared on the node's configuration. */
+    TemplateParameters?: Record<string, string>;
+    Provider: IMetadataProvider;
+    ContextUser: UserInfo;
+    /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
+    OnProgress?: TaskRunProgressCallback;
+};
+
+/** The outcome of one prompt node. */
+export type TaskPromptRunResult = {
+    Success: boolean;
+    /** The parsed JSON response, deep-merged into the payload by the dispatcher. */
+    Output?: unknown;
+    ErrorMessage?: string;
+    /** The `MJ: AI Prompt Runs` row, for provenance. */
+    PromptRunID?: string;
+    /**
+     * Set when the prompt asked to end the workflow and say something to a person.
+     *
+     * A prompt is the one node kind that can decide the workflow is *done* — it is the only one
+     * doing open-ended reasoning. The dispatcher honours it by skipping the remaining tasks and
+     * settling the parent Complete with this message, rather than treating an early finish as an
+     * abandoned graph.
+     */
+    ChatMessage?: string;
+};
+
+/**
+ * Runs one prompt for one task node.
+ *
+ * The fourth execution shape, and abstracted for the same reason as the others: this package must
+ * stay unit-testable without standing up the AI engine, and must not import it — the prompt runner
+ * lives in MJServer where the engine already does.
+ *
+ * **A host with no prompt runner is limited, not broken.** Prompt nodes stay Pending and visible,
+ * exactly like action nodes without an action runner.
+ */
+export type TaskPromptRunner = {
+    RunPromptForTask(params: TaskPromptRunParams): Promise<TaskPromptRunResult>;
+};
+
+/** What happened to a task or a graph, as a closed set a consumer can branch on. */
+export type TaskGraphFrameKind =
+    /** A task was claimed by an instance and is about to run. */
+    | 'TaskStarted'
+    /** A task finished successfully. */
+    | 'TaskCompleted'
+    /** A task failed. `ErrorMessage` says why. */
+    | 'TaskFailed'
+    /** A task was blocked because a prerequisite failed or became unreachable. */
+    | 'TaskBlocked'
+    /**
+     * A task was NOT TAKEN because another branch of an exclusive fan-out won.
+     *
+     * Distinct from `TaskBlocked` on purpose: blocked means something went wrong upstream and the
+     * viewer should look for a cause; skipped means the workflow chose a different route and there
+     * is nothing to investigate. Rendering them the same would send people hunting for bugs that do
+     * not exist.
+     */
+    | 'TaskSkipped'
+    /** A human task became actionable and is waiting on its assignee. */
+    | 'TaskAwaitingHuman'
+    /** Every node has reached a terminal state; `Status` is the graph's rolled-up outcome. */
+    | 'GraphSettled'
+    /**
+     * A gating edge's verdict changed — satisfied, not taken, or held.
+     *
+     * Emitted on CHANGE, not on every poll (the dispatcher re-resolves edges each pass, and an
+     * unqualified emission would repeat every few seconds for as long as the graph is live, exactly
+     * the flood `logUnevaluableConditionOnce` exists to prevent in the log). This frame is what lets
+     * a viewer answer "why did this branch run?" — and what makes a permanent hold visible the
+     * moment it happens instead of after a forensic query.
+     */
+    | 'GateDecision'
+    /**
+     * A task's claim changed hands or state — claimed, heartbeat lost, reclaimed.
+     *
+     * The R2-1 defect class ("a crashed worker's task wedges the graph forever with zero
+     * diagnostics") becomes a red badge instead of an invisible fact precisely because this frame
+     * exists.
+     */
+    | 'ClaimChanged'
+    /**
+     * One dispatch pass finished for this graph — the engine's heartbeat.
+     *
+     * Carries the pass's counts (eligible / held / claimed / in flight). A run that is stuck is a
+     * strip of these ticking with nothing moving, which is the honest visual of a stall.
+     */
+    | 'PassCompleted'
+    /** The graph was paused — by a person or by a breakpoint. Nothing new will be claimed. */
+    | 'GraphPaused'
+    /** The graph was resumed; claiming continues normally. */
+    | 'GraphResumed'
+    /**
+     * An eligible task carried a breakpoint, so the graph paused BEFORE the task was claimed.
+     * `TaskID` names the task the run is now parked in front of.
+     */
+    | 'BreakpointHit'
+    /**
+     * A step allowance could not release anything on this pass — the named work is already running,
+     * or this host has no runner for it. The allowance is NOT spent, and `Reason` says so.
+     *
+     * Exists because the alternative is the worst shape a control can have: the button reports
+     * nothing, the allowance is gone, and the run does not move.
+     */
+    | 'StepRefused'
+    /**
+     * A runner reported progress inside one task — message and optional percentage.
+     *
+     * The bridge from node-level execution (an agent run's own progress stream) up to graph-level
+     * observers, rate-limited by the dispatcher so a chatty runner cannot flood the topic.
+     */
+    | 'NodeProgress';
+
+/**
+ * One thing that happened, addressed by the graph it happened in.
+ *
+ * **Addressed by `ParentTaskID`, deliberately not by session.** A durable graph outlives the tab
+ * that submitted it — it may be started by a schedule with no session at all, and a user who
+ * refreshes mid-run should still see the rest. Keying on the graph means "watch this workflow run"
+ * works for anyone permitted to read it, whenever they arrive.
+ *
+ * Frames are **semantic, not cache invalidations**: a consumer renders "step 3 of 7 running" from
+ * the frame itself rather than re-reading rows and diffing them to guess what changed.
+ */
+export type TaskGraphFrame = {
+    Kind: TaskGraphFrameKind;
+    /** The graph this happened in — the subscription key. */
+    ParentTaskID: string;
+    /**
+     * Who the graph belongs to, from the parent's durable metadata.
+     *
+     * Carried on the frame rather than looked up by the consumer because a consumer's delivery
+     * filter runs per frame and synchronously — a database round trip there would make watching a
+     * run cost more than running it. Absent means the graph predates ownership being recorded, and
+     * a consumer that authorizes on it should fail closed rather than broadcast.
+     */
+    OwnerUserID?: string | null;
+    /** The node it happened to. Absent on `GraphSettled`, which is about the graph itself. */
+    TaskID?: string;
+    /** Node name, so a consumer can label the frame without loading the row. */
+    TaskName?: string;
+    /** The task's (or, for `GraphSettled`, the graph's) status after the event. */
+    Status?: string;
+    /** Failure detail on `TaskFailed`. */
+    ErrorMessage?: string;
+    /** For a human task, who it is waiting on. */
+    AssignedUserID?: string;
+    /** How many nodes have reached a terminal state, and out of how many. */
+    CompletedCount?: number;
+    TotalCount?: number;
+
+    // ── GateDecision ────────────────────────────────────────────────────────
+    /** The `MJ: Task Dependencies` row the verdict is about. */
+    EdgeID?: string;
+    /** The edge's origin task. `TaskID` above is the edge's target. */
+    DependsOnTaskID?: string;
+    /** What the gate decided: the edge is open, the branch was not taken, or it cannot be answered yet. */
+    Verdict?: 'satisfied' | 'notTaken' | 'held';
+    /** The condition text, so a viewer can show WHY without loading the row. */
+    ConditionText?: string;
+    /** Human-readable detail: the hold reason, the override applied, or who paused the graph. */
+    Reason?: string;
+
+    // ── ClaimChanged ────────────────────────────────────────────────────────
+    /** What happened to the claim. */
+    ClaimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    /** The dispatcher instance holding (or losing) the claim. */
+    ClaimedBy?: string;
+    /** When the claim lapses unless extended, ISO 8601. */
+    ClaimExpiresAt?: string;
+
+    // ── PassCompleted ───────────────────────────────────────────────────────
+    /** Monotonic per-instance pass counter, so a viewer can order and gap-detect ticks. */
+    PassNumber?: number;
+    /** Tasks whose prerequisites were satisfied this pass. */
+    EligibleCount?: number;
+    /** Tasks held by an unanswerable condition or undecided fork. */
+    HeldCount?: number;
+    /** Tasks this instance claimed on this pass, for THIS graph. */
+    ClaimedCount?: number;
+    /**
+     * Tasks this INSTANCE is executing right now, across every graph it is working — not this
+     * graph's in-flight count.
+     *
+     * Named for what it measures because the two readings differ and a viewer cannot tell them
+     * apart: it is the dispatcher's own load against `MaxConcurrentTasks`, which is what explains a
+     * graph whose steps are ready but not starting. A per-graph count would answer a different
+     * question (and is visible anyway as the steps rendered running on the canvas).
+     */
+    InstanceInFlightCount?: number;
+
+    // ── NodeProgress ────────────────────────────────────────────────────────
+    /** What the runner says it is doing. */
+    ProgressMessage?: string;
+    /** 0–100 when the runner can quantify it. */
+    ProgressPercent?: number;
+};
+
+/**
+ * Receives dispatcher lifecycle frames.
+ *
+ * Optional, and a host that supplies none loses nothing but visibility — the dispatcher's behavior
+ * is identical either way. Abstracted for the same reason execution and continuation are: publishing
+ * to subscribers is a transport concern, and this package must not acquire a dependency on the
+ * transport layer to gain observability.
+ *
+ * Implementations MUST NOT throw and MUST NOT block: a frame is an announcement about work, never a
+ * step of it, so a broken observer must not be able to stall or fail a graph.
+ */
+export type TaskGraphObserver = {
+    OnFrame(frame: TaskGraphFrame): void;
+};
+
 /** Everything an executor needs to run a single task node. */
 export type TaskAgentRunParams = {
     /** The task row being executed. */
     TaskID: string;
+    /**
+     * The agent run that submitted this graph, when there was one.
+     *
+     * Becomes the spawned run's `ParentRunID`, which is what makes a workflow's total cost a single
+     * indexed sum over `RootParentRunID` instead of a walk. Null for a graph nobody's run submitted
+     * — a schedule, MCP, or a person — and that is a real case, not a missing value.
+     *
+     * Note this is a run→run link: the task graph sits BETWEEN the two conceptually but cannot be
+     * the parent, because the column points at a run. The graph is recovered through
+     * `Task.AgentRunID` and `Task.ParentID`.
+     */
+    SubmittingAgentRunID?: string | null;
+    /**
+     * How many continuation hops led to this run, from the graph's own metadata.
+     *
+     * Carried so the chain is BOUNDED. A flow that dispatches a graph containing itself recurses
+     * forever otherwise: each spawned run starts at depth zero, so `MAX_REINVOKE_DEPTH` compares
+     * against a permanent zero and never fires. The cap exists; this is what feeds it.
+     */
+    ContinuationDepth?: number;
     /** Agent assigned to the task. */
     AgentID: string;
     /** Parsed `Task.InputPayload`, if any. */
@@ -46,6 +344,8 @@ export type TaskAgentRunParams = {
     Provider: IMetadataProvider;
     /** User the work runs as. */
     ContextUser: UserInfo;
+    /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
+    OnProgress?: TaskRunProgressCallback;
 };
 
 /** Outcome of running one task node. */
@@ -114,6 +414,13 @@ export type TaskGraphDispatcherConfig = {
      * Identifies this dispatcher instance in `Task.ClaimedBy`. Must be stable for the process
      * lifetime and distinct per instance — it is what lets reconciliation tell "my orphaned work"
      * from "another instance's live work".
+     *
+     * **Distinctness is a correctness requirement, not a nicety** (C2). Every ownership guard in the
+     * claim protocol compares against this value, so two instances sharing one defeats all of them
+     * at once: A's heartbeat renews B's lease, and A's stale terminal write lands over B's live
+     * execution. Host+pid is NOT sufficient — `HOSTNAME` is unexported to child processes under
+     * systemd and pm2, and a containerised process is routinely pid 1 — which is why the server's
+     * default appends real entropy.
      */
     InstanceID: string;
 
@@ -133,6 +440,17 @@ export type TaskGraphDispatcherConfig = {
     /** Maximum tasks executed concurrently by this instance. */
     MaxConcurrentTasks: number;
 
+    /**
+     * How often to look for claimable work.
+     *
+     * Five seconds is the right production default — a graph's steps are agent runs measured in
+     * seconds to minutes, so polling faster buys latency nobody perceives and costs a query per
+     * instance per tick. It is configurable rather than fixed because the correct value genuinely
+     * differs by host: a test harness driving a graph to completion should not wait five seconds per
+     * node, and a deployment running many short tasks may want tighter latency.
+     */
+    PollIntervalSeconds: number;
+
     /** How often the reconciliation sweep runs. */
     ReconciliationIntervalSeconds: number;
 };
@@ -142,6 +460,7 @@ export const DEFAULT_DISPATCHER_CONFIG: Omit<TaskGraphDispatcherConfig, 'Instanc
     ClaimTTLSeconds: 300,
     HeartbeatIntervalSeconds: 60,
     MaxConcurrentTasks: 5,
+    PollIntervalSeconds: 5,
     ReconciliationIntervalSeconds: 120,
 };
 

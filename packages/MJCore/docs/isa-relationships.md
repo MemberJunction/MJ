@@ -1,5 +1,12 @@
 # IS-A Type Relationships in MemberJunction
 
+> **Not what you want?** IS-A is *vertical* — one logical record spread across parent and child
+> tables sharing a primary key. For a header plus N rows that carry a foreign key back to it (order
+> lines, an action's parameters), see [Related-Record Collections](./related-record-collections.md).
+> For an owner-held 1:1 such as `Deal.OrderID`, see [Embedded Records](./embedded-records.md).
+> MJCore reserves the word **child** for IS-A subtypes; FK dependents that point at you are
+> **related records**; a peer you point at is an **embedded record**.
+
 > **Package**: [@memberjunction/core](../readme.md)
 > **Related Guides**: [Virtual Entities](./virtual-entities.md) | [RunQuery Pagination](./runquery-pagination.md)
 > **Related Packages**: [@memberjunction/codegen-lib](../../CodeGenLib/README.md) | [@memberjunction/sqlserver-dataprovider](../../SQLServerDataProvider/README.md) | [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) | [@memberjunction/ng-core-entity-forms](../../Angular/Explorer/core-entity-forms/README.md)
@@ -325,18 +332,17 @@ sequenceDiagram
     participant DB as SQL Server
 
     App->>W: Save()
-    W->>Prov: BeginISATransaction()
-    Prov-->>W: Transaction object
-    W->>W: PropagateTransactionToParents()
+    W->>Prov: BeginEntityTransaction()
+    Prov-->>W: Scope (new transaction, or joins one already in flight)
 
     W->>P: Save({ IsParentEntitySave: true })
-    P->>Prov: Save(ProductEntity) [uses shared transaction]
+    P->>Prov: Save(ProductEntity) [uses ambient transaction]
     Prov->>DB: EXEC spCreateProduct / spUpdateProduct
     DB-->>Prov: Result
     Prov-->>P: Success
 
     W->>M: Save({ IsParentEntitySave: true })
-    M->>Prov: Save(MeetingEntity) [uses shared transaction]
+    M->>Prov: Save(MeetingEntity) [uses ambient transaction]
     Prov->>DB: EXEC spCreateMeeting / spUpdateMeeting
     DB-->>Prov: Result
     Prov-->>M: Success
@@ -345,14 +351,42 @@ sequenceDiagram
     Prov->>DB: EXEC spCreateWebinar / spUpdateWebinar
     DB-->>Prov: Result
 
-    W->>Prov: CommitISATransaction()
-    Prov->>DB: COMMIT TRANSACTION
+    W->>Prov: scope.Commit()
+    Prov->>DB: COMMIT TRANSACTION (only if outermost)
     W-->>App: true (success)
 ```
 
 **Save order:** Parent → ... → Child (Product first, then Meeting, then Webinar)
 
 **On failure:** The entire transaction is rolled back — no partial saves.
+
+> ### ⚠️ Transaction handling changed in 6.2
+>
+> IS-A chains previously called a dedicated provider trio — `BeginISATransaction()` /
+> `CommitISATransaction()` / `RollbackISATransaction()` — and propagated the resulting handle down
+> the parent chain via `PropagateTransactionToParents()`.
+>
+> **The problem:** `BeginISATransaction()` opened a *brand-new physical transaction on the pool* with
+> no depth awareness, while `DatabaseProviderBase.BeginTransaction()` — used by every hand-written
+> application cascade — is depth-counted and savepoint-aware. The two were blind to each other. An
+> IS-A entity saved inside an application transaction therefore wrote into **two independent
+> transactions**; rolling one back left the other committed, and nothing raised an error.
+>
+> **The fix:** IS-A now calls the same `BeginEntityTransaction()` everything else does. The provider
+> arbitrates — starting a physical transaction or joining one already in flight as a savepoint — so
+> participants stay ignorant of each other *and* end up in one transaction. Because the ambient
+> transaction is picked up automatically by any `ExecuteSQL` call with no explicit
+> `connectionSource`, there is nothing left to propagate.
+>
+> **🚨 Removed, not deprecated.** 6.x LTS had not shipped, so the old surface was deleted outright
+> rather than carried as debt: the three `*ISATransaction` provider methods,
+> `BaseEntity.ProviderTransaction`, and `BaseEntity.PropagateTransactionToParents()` are all gone.
+> Nothing set the handle after the unification, and the provider reads that consumed it were already
+> dead — an `ExecuteSQL` call with no explicit `connectionSource` picks up the ambient transaction,
+> which is exactly what the scope opens. Callers that hand-managed a handle should open a scope
+> instead: `BeginEntityTransaction()`, or `RunInEntityTransaction(provider, work)`.
+>
+> See [Transactions, Batching & Entity Graphs](../../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
 
 ### Delete Orchestration
 
@@ -365,7 +399,7 @@ sequenceDiagram
     participant DB as SQL Server
 
     App->>W: Delete()
-    W->>W: BeginISATransaction()
+    W->>W: BeginEntityTransaction()
 
     W->>DB: DELETE from Webinar (own row first)
     DB-->>W: Success
@@ -603,16 +637,22 @@ You never set the ID yourself — that shared key IS the relationship.
 
 ### SQLServerDataProvider
 
-Implements IS-A transaction methods:
+IS-A uses the **shared** entity transaction primitive, not an IS-A-specific one:
 
 ```typescript
-// These methods create independent SQL Server transactions
-async BeginISATransaction(): Promise<sql.Transaction>
-async CommitISATransaction(txn: sql.Transaction): Promise<void>
-async RollbackISATransaction(txn: sql.Transaction): Promise<void>
+// Inherited from DatabaseProviderBase; delegates to the provider's depth-counted
+// BeginTransaction / CommitTransaction / RollbackTransaction.
+async BeginEntityTransaction(): Promise<EntityTransactionScope>
 ```
 
-The transaction is propagated to each entity in the chain via `entity.ProviderTransaction`, ensuring all SPs execute within the same database transaction.
+The scope either starts a physical transaction or joins one already in flight (as a `SAVE
+TRANSACTION` savepoint). Every stored-procedure call in the chain then runs inside it automatically,
+because `ExecuteSQL` picks up the provider's ambient transaction whenever no explicit
+`connectionSource` is supplied — so no handle has to be propagated along the chain.
+
+The deprecated `BeginISATransaction` / `CommitISATransaction` / `RollbackISATransaction` trio still
+exists on the provider for external callers, but MJ core no longer calls it. See the 6.2 note under
+[Save Orchestration](#save-orchestration) for why it was retired.
 
 ### GraphQLDataProvider (Client-Side)
 

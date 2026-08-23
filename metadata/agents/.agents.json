@@ -99,6 +99,20 @@
             "lastModified": "2026-03-26T22:05:20.166Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "86C17097-6AE5-49AA-85BD-219475209C5F"
+          },
+          "sync": {
+            "lastModified": "2026-08-20T22:30:09.133Z",
+            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+          }
         }
       ]
     },
@@ -225,6 +239,20 @@
             "lastModified": "2026-03-26T22:05:20.309Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EE1105BD-90BC-4809-9835-1FA7A09F3CFA"
+          },
+          "sync": {
+            "lastModified": "2026-08-20T22:30:09.154Z",
+            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+          }
         }
       ]
     },
@@ -245,7 +273,7 @@
       "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
-      "IconClass": "fa-solid fa-chart-diagram"
+      "IconClass": "fa-solid fa-diagram-project"
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [],
@@ -271,7 +299,7 @@
               "SearchTerms": "number fun fact"
             },
             "ActionOutputMapping": {
-              "SearchResults": "loopResults[index]"
+              "Items": "loopResults[]"
             },
             "Status": "Active",
             "PositionX": -1260,
@@ -283,8 +311,8 @@
             "ID": "DBA4B3D9-19A3-4ECE-9F35-BC1B127CD045"
           },
           "sync": {
-            "lastModified": "2026-06-26T21:32:06.375Z",
-            "checksum": "adb170417851637ecd5936ca6a6ed0f91cd6f749941c33916c5a2841c3338d9b"
+            "lastModified": "2026-08-11T22:50:43.478Z",
+            "checksum": "eae05d20534f24b721747aac535609d74f62208f97a939a9645ea4f2656653ea"
           }
         },
         {
@@ -517,6 +545,20 @@
             "lastModified": "2026-03-26T22:05:20.506Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "990A4AE4-68EC-4512-ADE8-5870D24ABB03"
+          },
+          "sync": {
+            "lastModified": "2026-08-20T22:30:09.186Z",
+            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+          }
         }
       ]
     },
@@ -524,8 +566,8 @@
       "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
     },
     "sync": {
-      "lastModified": "2026-06-26T21:32:06.300Z",
-      "checksum": "2265f074256e4a0fc80212bd4c549cbeaa9f6893e2dc3132d75fd509fe985a4c"
+      "lastModified": "2026-08-20T22:30:09.106Z",
+      "checksum": "2a0b3ea8e311a9d4c5eedbf0fb1c406f5d9302d5459ff52d380f1845abed8d65"
     }
   },
   {
@@ -627,6 +669,20 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:20.648Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "67C18238-9098-4739-B876-66752DC62A91"
+                },
+                "sync": {
+                  "lastModified": "2026-08-20T22:30:09.211Z",
+                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
@@ -789,6 +845,20 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4C091053-1930-4699-84DF-05EAFD4A1611"
+                },
+                "sync": {
+                  "lastModified": "2026-08-20T22:30:09.230Z",
+                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
                   "ActionID": "@lookup:MJ: Actions.Name=Text Analyzer",
                   "Status": "Active"
                 },
@@ -899,6 +969,20 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:20.827Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "778700FB-C6C6-44FA-B078-7ABB876DBEBE"
+                },
+                "sync": {
+                  "lastModified": "2026-08-20T22:30:09.247Z",
+                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
@@ -1172,7 +1256,7 @@
       "ID": "265E1D42-966E-41CD-BEA6-748C73482C20"
     },
     "sync": {
-      "lastModified": "2026-08-07T05:49:48.586Z",
+      "lastModified": "2026-08-07T23:58:27.996Z",
       "checksum": "578856dc8be0002249a3530a1a1a344f136bf0342a060a2de5172f011be84b50"
     },
     "relatedEntities": {
@@ -1188,7 +1272,7 @@
             "ID": "C8D5B3E9-4F27-4E81-9A63-2D1F8C5B7A04"
           },
           "sync": {
-            "lastModified": "2026-08-07T05:49:48.653Z",
+            "lastModified": "2026-08-07T23:58:28.055Z",
             "checksum": "f3909f82ad0c6241466dc00bd5bff922af9bef1e89f19e23934df7b853086294"
           }
         }

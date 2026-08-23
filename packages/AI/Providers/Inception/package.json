@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-inception",
   "type": "module",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction Wrapper for Inception Labs (Mercury diffusion LLM family)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,15 +14,15 @@
     "test": "vitest run"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.0",
-    "@memberjunction/ai-openai": "6.1.0-edge.0",
-    "@memberjunction/global": "6.1.0-edge.0",
+    "@memberjunction/ai": "6.1.0-edge.3",
+    "@memberjunction/ai-openai": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
     "openai": "6.18.0"
   },
   "repository": {

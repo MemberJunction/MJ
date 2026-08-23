@@ -1,5 +1,171 @@
 # Change Log - @memberjunction/actions-base
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/code-execution@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 59def38: The entity-action substrate finishes what its schema has been promising. Seven pieces, all of which
+  share a failure shape: a column, a flag or a field that read as configured and did nothing.
+
+  **Action Filters now actually prevent execution.** `RunAction`'s filter-refusal branch built its
+  result, logged it, and then fell through to run the action anyway — there was no `return`. Every
+  Action Filter has therefore recorded that it prevented something while preventing nothing, since the
+  mechanism shipped. The refusal row is why it went unnoticed: the observable said "prevented" and the
+  side effect happened regardless, so #3606's claim that filters fail closed described evaluation,
+  which landed, rather than enforcement, which did not. **Anyone relying on an Action Filter to gate an
+  action has been getting the action anyway; after this it stops, which is the configured behaviour but
+  a visible change.** A prevented run still writes a log row, deliberately — an operator should be able
+  to see that a filter refused rather than wonder why nothing happened — so its `Message` is now an
+  exported constant, since that is the only thing distinguishing a prevented run from an executed one.
+
+  **Transition filters.** An entity action could see a record's current state and nothing else, so
+  "when Status _becomes_ Approved" was indistinguishable from "when Status _is_ Approved" — which is
+  true on every subsequent save too. `EntityChangeContext` now carries both sides of the save to where
+  filters run, built from `EntityField.OldValue`, which `BaseEntity` has tracked all along and simply
+  never carried anywhere. Filter code gets `DidFieldChange`, `DidFieldChangeToValue`, `OldValues` and
+  `NewValues` on `ActionFilterContext`. A create reports no changes, because a record whose Status
+  started at Approved did not _become_ anything. Comparison is loose across the string boundary
+  metadata forces, so a configured `'1'` matches a numeric `1` rather than silently never matching.
+
+  The capture happens as the first statement of `HandleEntityActions`, deliberately before its first
+  `await`: After-hooks are fire-and-forget, and the moment that method yields, the save completes and
+  reloads the entity, resetting every `OldValue`. Reading `IsCreate` from that same synchronous
+  snapshot also closes a latent bug — `entity.IsSaved` was previously read _after_ an await, so a
+  create whose save finalized in that window dispatched as `AfterUpdate`.
+
+  **Two filter-substrate fixes fall out of using it for real.** `EntityActionFilter.Status` was never
+  consulted, so a `Disabled` binding still gated — and filters fail closed, so that was not an inert
+  row but a permanent block whose only symptom is a trigger that quietly stopped firing. And a binding
+  pointing at an unresolvable filter used to reach the evaluator as `undefined` and throw there:
+  fail-closed by accident, with no usable reason logged. It now returns a failed result naming the
+  filter.
+
+  **Workflow triggers accept a filter.** `ValidateWorkflowSpec` refused `WorkflowEntityEventTrigger.filter`
+  outright because the contract to honor it did not exist. It now reconciles onto an owned
+  `ActionFilter` bound through `EntityActionFilter` — the additive path — and validates that the
+  expression parses, because filters fail closed and a syntax error is not a loud failure, it is a
+  trigger that silently never fires.
+
+  **Record Process on-change triggers.** `OnChangeEnabled` has described itself as running "per-record
+  on save via an owned Entity Action" since the column shipped, and `OnChangeFilter` promised to
+  "compile into the owned Entity Action Filter". Neither owned anything. Saving a Record Process now
+  reconciles that binding, matching ownership on the `RecordProcessID` param — `Run Record Process` is
+  one shared action, so matching on entity + action alone would let a second process silently repoint
+  the first one's trigger. `OnChangeFilter` compiles through the same builder workflow triggers use, so
+  one expression vocabulary covers both surfaces.
+
+  **Durable `After*` dispatch (D14).** After-hooks are fire-and-forget, so a process dying mid-flight
+  loses the action with nothing to retry it. `EntityAction.RunMode = 'Durable'` routes the dispatch to
+  the task-graph substrate as a single-node durable graph — the claim protocol, restart recovery and
+  orphan reclaim that already exist there — rather than adding a third async substrate. Opt-in per
+  binding, because it costs a Task row, a dispatcher hop, and params persisted at rest. When no
+  submitter is registered or submission fails, the work runs **inline**: `Durable` asks for the work to
+  be harder to lose, so dropping it would make opting in less reliable than leaving it off. New
+  `Task.ActionID` widens the assignment exclusivity to three ways, and `TaskGraphSpecNode.actionName`
+  joins `agentName`/`assignToUser`.
+
+  Durability replaces _execution_, not _dispatch_: `RunActionParams.DeferExecution` is called by
+  `RunAction` in place of running the action, after validation and filters have passed, so a durable
+  binding is gated by exactly what an inline one is gated by. Submitting at dispatch time instead —
+  which is where this first landed — would have fired a scoped durable trigger for every record of the
+  entity and a filtered one on every save.
+
+  **Execution-log retention.** `Action.RetentionPeriod` and `ActionExecutionLog.RetentionPeriod` shipped
+  with descriptions and no reader anywhere in the codebase; the log grew forever while the schema
+  claimed otherwise. Retention is now stamped onto each row when the run starts — decided at write
+  time, so editing an action's retention is a going-forward change rather than a retroactive deletion —
+  and a new opt-in `Action Log Retention` scheduled job purges expired rows oldest-first, bounded per
+  run, reporting when it stopped at its ceiling rather than because it was finished.
+
+  **The `Validate` invocation hole.** `EntityActionInvocationValidate` overrode single-record invocation
+  with a near-copy that had drifted into a strict subset: no scope resolution (so a binding narrowed to
+  one record ran `Validate` against every record of the entity) and no provenance (so a whole-record
+  parameter was logged raw, ignoring the binding's `LogValue` rows). The override is deleted; the class
+  inherits, which is what keeps both facts true for `Validate` permanently rather than until the copies
+  drift again.
+
+  **The `RunEntityAction` null contract.** `null` means the action did not run — the binding is scoped
+  and this record falls outside it. `HandleEntityActions` guarded for it; the GraphQL resolver did not,
+  so an out-of-scope binding surfaced to clients as a server error. The signature now says so and the
+  resolver reports it as the ordinary outcome it is.
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/code-execution@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/code-execution@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Minor Changes

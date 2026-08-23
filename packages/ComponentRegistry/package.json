@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/component-registry-server",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: Component Registry Server API Implementation",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,13 +21,13 @@
     "dist"
   ],
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.0",
-    "@memberjunction/global": "6.1.0-edge.0",
-    "@memberjunction/core-entities": "6.1.0-edge.0",
-    "@memberjunction/interactive-component-types": "6.1.0-edge.0",
-    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.0",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/interactive-component-types": "6.1.0-edge.3",
+    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.3",
     "@types/express": "^5.0.6",
     "express": "^5.2.1",
     "cors": "^2.8.6",

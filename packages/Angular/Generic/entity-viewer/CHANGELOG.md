@@ -1,5 +1,140 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 6ecfaa0: Relationship `UI.sortKey` orders first-class related rail items after Details. Hug-height related grids use a top-aligned inline empty state. Left-nav labels cap at 200px and show the full title on hover.
+
+### Patch Changes
+
+- b46330e: Skip ClassFactory.CreateInstance when a view-type DriverClass has no registered descriptor. Seeded rows like TagCloudViewType no longer dump a fallback warning at Explorer boot.
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ng-base-types@6.1.0-edge.3
+  - @memberjunction/ng-notifications@6.1.0-edge.3
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.3
+  - @memberjunction/ng-list-management@6.1.0-edge.3
+  - @memberjunction/ng-map-view@6.1.0-edge.3
+  - @memberjunction/ng-record-changes@6.1.0-edge.3
+  - @memberjunction/ng-shared-generic@6.1.0-edge.3
+  - @memberjunction/ng-filter-builder@6.1.0-edge.3
+  - @memberjunction/ng-timeline@6.1.0-edge.3
+  - @memberjunction/ng-export-service@6.1.0-edge.3
+  - @memberjunction/ng-pagination@6.1.0-edge.3
+  - @memberjunction/export-engine@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.2
+  - @memberjunction/ng-list-management@6.1.0-edge.2
+  - @memberjunction/ng-map-view@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ng-record-changes@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/ng-filter-builder@6.1.0-edge.2
+  - @memberjunction/ng-timeline@6.1.0-edge.2
+  - @memberjunction/ng-export-service@6.1.0-edge.2
+  - @memberjunction/ng-ui-components@6.1.0-edge.2
+  - @memberjunction/ng-pagination@6.1.0-edge.2
+  - @memberjunction/export-engine@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: UI capabilities hoisted from the BizApps accounting app (battle-tested there against live data):
+  - **`mj-left-nav` desktop collapse (opt-in):** `[Collapsible]` + two-way `[(Collapsed)]` + `CollapsedWidth` render a locked-position double-angle toggle chip and an icons-only collapsed strip — labels visually hidden but kept in the a11y tree, section labels folded to divider lines, badges docked on the icon corner, per-item tooltips auto-enabled (`IconOnly` also available standalone for externally-narrowed rails). Consumer owns/persists the state; deliberately no hover-to-peek. Richer rail content is handled rather than assumed away: tree sections fold to their top level while collapsed (with a top-level item standing in as active — `aria-current="true"` — for an active descendant, and `ExpandedIds` untouched so the tree returns intact on expand), icon-less items render a label monogram instead of collapsing to a blank hit-target, and the whole collapsed behavior is viewport-gated to match its ≥701px styling, so a persisted `Collapsed` never follows the user into the ≤700px drawer.
+  - **New `mj-workspace-card` + `mj-workspace-tab-strip` + `MJWorkspaceTabStore`:** the workspace pattern — browser-style draft tabs (open/switch/drag-reorder/close, dirty-dot, rejected/complete states) over a pure, exhaustively unit-tested tab state machine, wrapped in a slotted card frame (identity band, scrolling body, opt-in standardized confirm/draft/discard footer). Plus `mjTip`, a delayed non-interactive truncation tooltip.
+  - **`mj-entity-data-grid`:** new `[FillWidth]` input appends an inert trailing filler column so row banding reaches the container edge without stretching real columns; `width: 'auto'` + `maxWidth` column configs now actually map to AG Grid flex sizing (previously silently ignored) and survive saved-grid-state restores; `computeFieldsList` exported from `record.util` and now takes the host's column list, so a page that declares `[Columns]` gets those fields SELECTed instead of rendering empty cells — including columns declared `visible: false`, which stay in the column model and can be re-shown, and with names resolved to the entity's own casing so a differently-cased column is never requested twice.
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.1
+  - @memberjunction/ng-export-service@6.1.0-edge.1
+  - @memberjunction/ng-filter-builder@6.1.0-edge.1
+  - @memberjunction/ng-list-management@6.1.0-edge.1
+  - @memberjunction/ng-map-view@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-pagination@6.1.0-edge.1
+  - @memberjunction/ng-record-changes@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/ng-timeline@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/export-engine@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

@@ -41,7 +41,7 @@ content-free) and a **content** package (private, never published) — and there
   │   @memberjunction/testing-integration     │   │  @memberjunction/integration-test-suite  │
   │   (published — FRAMEWORK ONLY)            │   │  (private: true — MJ's OWN test content) │
   │                                           │   │                                          │
-  │  IntegrationCheckRegistry (BaseSingleton) │◀──┤  src/checks/  · 52 bundles · ~365 checks │
+  │  IntegrationCheckRegistry (BaseSingleton) │◀──┤  src/checks/  · 83 bundles · 612 checks  │
   │  NamedCheck / BundleLifecycle contracts   │   │  src/index.ts barrel (side-effect-       │
   │  bootstrap  (server / client / PostgreSQL)│   │    imports every bundle → registers all) │
   │  InstrumentedLocalStorageProvider         │   │  src/__tests__/  count table + parity    │
@@ -204,11 +204,14 @@ Every check (and every metadata Test) belongs to a **tier**
 gate is honored identically everywhere. Gating exists at two granularities:
 
 - **Whole-test**: a metadata Test's `Configuration.tier` (or an explicit `requiresEnv` env-var
-  override). When gated off, the driver **skips-as-Passed** with one `gate` oracle whose
-  message reads `Skipped: <VAR> not set (tier '<tier>')`.
+  override). When gated off, the driver reports a real **`Skipped`** status with one `gate`
+  oracle whose message reads `Skipped: <VAR> not set (tier '<tier>')`. A skipped test is
+  visible in every summary (`X passed / Y failed / Z skipped`) and never counts as passed —
+  but it doesn't fail the suite either.
 - **Per-check**: `RequiresMutation` / `RequiresLiveModel` flags on individual `NamedCheck`s
   inside an otherwise-deterministic bundle (e.g. the save/delete invalidation checks in the
-  server-cache bundle). A bundle selector can also opt mutation checks in declaratively via
+  server-cache bundle). Gated-off checks are recorded as skipped oracle entries (never
+  silently dropped). A bundle selector can also opt mutation checks in declaratively via
   `config.runMutationTests: true`, independent of env.
 
 Adjacent gates outside the tier enum: the Predictive Studio *flow* rigs
@@ -236,11 +239,14 @@ metadata-driven end to end:
 MJ: Test Types ──▶ "Integration Test"  { DriverClass: "IntegrationTestDriver", Status: Active }
       │                                  metadata/test-types/.integration-test-type.json  (normal metadata — inert type def)
       ▼
-MJ: Tests ───────▶ IT01…IT66            Configuration selects bundles + tier + transport
+MJ: Tests ───────▶ IT01…IT83            Configuration selects bundles + tier + transport
       │                                  metadata-optional/integration-test/tests/integration/.IT*.json
       ▼
 MJ: Test Suites ─▶ "Integration Tests"  (parent — 0 members; running it errors, exit 1)
-                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT52, IT64–IT66  (52 members, the blocking tier)
+                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT52, IT64–IT83  (68 members, the blocking tier;
+                   │                                        ORDERING INVARIANT: server-transport members seq 1–48, client seq 49–68 —
+                   │                                        the first client bundle rebinds the global provider (#3251), so a server
+                   │                                        member sequenced after any client member hard-errors)
                    └─ "Integration Tests — Live Model"      IT16–IT19, IT53–IT63  (15 members)
                                          metadata-optional/integration-test/test-suites/.integration-suite.json
       ▼
@@ -255,7 +261,8 @@ TestType's `DriverClass` via the ClassFactory
 [`IntegrationTestDriver`](../packages/TestingFramework/testing-integration/src/IntegrationTestDriver.ts):
 
 1. parses the Test's `Configuration` (below);
-2. applies the whole-test tier gate (skip-as-Passed when gated);
+2. applies the whole-test tier gate (a real **`Skipped`** result when gated — visible in the
+   suite summary as `X passed / Y failed / Z skipped`, never reported as `Passed`);
 3. infers/uses the transport and obtains the instrumented provider stack (the one the CLI
    installed first-caller, or a self-bootstrap in a dedicated process — with the fail-fast
    host check from §2.3);
@@ -319,7 +326,7 @@ strategies together:
 - **Discovery** (`discoverRlsFixture`) — finds two users with *different* effective RLS
   predicates from the live user cache + provider RLS filters. Nothing is created, so teardown
   is a no-op; on databases with only RLS-exempt admins the dependent checks degrade to
-  skip-as-pass with a note.
+  skipped-with-a-note (surfaced in the skip count, never counted as passed).
 - **Seeded, purpose-built users** — these live in the **optional sibling root
   `metadata-optional/integration-test/`, NOT the default-pushed `metadata/` tree**, so the synthetic
   `IsActive` accounts never land in a production DB that only syncs `metadata/`:
@@ -331,7 +338,7 @@ strategies together:
   caller's own UserID via the `UI: Own AI Agent Runs` RLS filter) — genuinely non-exempt users
   for the deterministic multi-user isolation checks. `it-nogrant@integration.test` has no roles
   at all — the negative check that a user with no grant is served no rows (cached or not).
-  When the seed isn't pushed, those checks skip-as-pass.
+  When the seed isn't pushed, those checks report Skipped (visible in the skip count).
 
 ---
 
@@ -374,7 +381,7 @@ configured.
 ### 3.2 The whole tier
 
 ```bash
-npm run test:integration                      # deterministic suite (gated checks skip-as-pass)
+npm run test:integration                      # deterministic suite (gated checks report Skipped)
 RUN_MUTATION_TESTS=1 npm run test:integration # + mutation-gated checks inside the bundles
 ```
 
@@ -501,14 +508,19 @@ metadata dirs, and the workflow itself; also `workflow_dispatch`). The job:
    `mj sync push --dir=metadata --ci` (the default metadata, including the inert Integration
    Test TestType) **and** `mj sync push --dir=metadata-optional/integration-test --ci` (the IT
    tests, suites, and RLS fixtures — the metadata `mj test` dispatches from);
-4. verifies the RLS fixture users actually landed (a silent no-op seed would let the strongest
-   checks skip-as-pass while the gate stays green);
+4. verifies the RLS fixture users actually landed (a silent no-op seed would leave the
+   strongest checks Skipped while the gate stays green — the hard verification plus the
+   visible skip count both guard that);
 5. `npm run test:integration` — the deterministic suite via `mj test`, pass/fail on its exit
    code.
 
-`PS_INTEGRATION` and `RUN_AGENT_TESTS` are deliberately unset in CI (no token cost, no
-flakiness) and no MJAPI is up, so **the deterministic tier is the gate** and client-transport
-tests are parked/skipped.
+`PS_INTEGRATION` stays unset and `RUN_AGENT_TESTS` is pinned to `0` in the PR lane (live-model
+is default-ON per `tiers.ts`, so the pin is explicit — no token cost, no flakiness). The lane
+**boots MJAPI** against the provisioned DB with a per-run `MJ_API_KEY`, so the client-transport
+members execute rather than skipping. Anything still gated (Predictive Studio; mutation checks
+outside the nightly lane) reports a real `Skipped` status in the summary. Scheduled lanes cover
+the rest: nightly `RUN_MUTATION_TESTS=1` + the cross-server Redis rig; weekly Live Model
+(gated on the `INTEGRATION_LIVE_MODEL_KEYS` secret).
 
 ---
 
@@ -812,9 +824,9 @@ sidecar-dependent scripts (`cross-server-invalidation-tests.ts`, `agent-memory-t
 | Path | What |
 |---|---|
 | [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The **framework** (published): driver, registry, check contracts, bootstraps, tiers, instrumented cache |
-| [`packages/TestingFramework/integration-test-suite/`](../packages/TestingFramework/integration-test-suite/) | The **content** (private, never published): all 30 check bundles, their unit tests, and the standalone rigs |
+| [`packages/TestingFramework/integration-test-suite/`](../packages/TestingFramework/integration-test-suite/) | The **content** (private, never published): all 81 check bundles, their unit tests, and the standalone rigs |
 | [`metadata/test-types/.integration-test-type.json`](../metadata/test-types/.integration-test-type.json) | The `Integration Test` TestType — an inert type definition, kept in the normal `metadata/` tree |
-| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT66 Tests (67 records), the suite hierarchy, the seeded RLS test users/role/permission, AND the synthetic AI stack the live tier drives (14 `IT: *` agents, 14 prompts, 42 model bindings, a skill, a search scope). One push seeds 242 records. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
+| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT83 Tests (83 records), the suite hierarchy, the seeded RLS test users/role/permission, AND the synthetic AI stack the live tier drives (14 `IT: *` agents, 14 prompts, 42 model bindings, a skill, a search scope). Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
 | `mj.config.cjs` → `testing.checkModules` | The runtime seam that loads the private suite package (or a consumer's own check packages) into `mj test` |
 | [`packages/TestingFramework/Engine/`](../packages/TestingFramework/Engine/) | `TestEngine`, `BaseTestDriver`, suite fixture lifecycle |
 | [`packages/TestingFramework/CLI/`](../packages/TestingFramework/CLI/) | `mj test run` / `suite` / `list` / `validate` / `history` |

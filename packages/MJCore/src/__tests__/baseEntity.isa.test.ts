@@ -11,6 +11,7 @@
  * Uses a concrete BaseEntity subclass with mock EntityInfo.
  */
 
+import { WarningManager } from '@memberjunction/global';
 import { BaseEntity } from '../generic/baseEntity';
 import { EntityInfo, EntityPermissionType } from '../generic/entityInfo';
 import { Metadata } from '../generic/metadata';
@@ -357,21 +358,11 @@ describe('BaseEntity.ISAParentEntity', () => {
     });
 });
 
-// ─── ProviderTransaction ───────────────────────────────────────────────────
-
-describe('BaseEntity.ProviderTransaction', () => {
-    it('defaults to null', () => {
-        const entity = createEntity(productEntityInfo);
-        expect(entity.ProviderTransaction).toBeNull();
-    });
-
-    it('can be set and retrieved', () => {
-        const entity = createEntity(productEntityInfo);
-        const mockTx = { id: 'mock-transaction' };
-        entity.ProviderTransaction = mockTx;
-        expect(entity.ProviderTransaction).toBe(mockTx);
-    });
-});
+// NOTE: `BaseEntity.ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.
+// IS-A chains no longer carry a per-entity transaction handle — they run inside the provider's
+// ambient transaction, obtained via `BeginEntityTransaction()`, which every ExecuteSQL call picks up
+// automatically when no explicit `connectionSource` is supplied. Coverage for the replacement lives
+// in `entityTransactionScope.test.ts`.
 
 // ─── GetAll ────────────────────────────────────────────────────────────────
 
@@ -397,6 +388,33 @@ describe('BaseEntity.GetAll for IS-A', () => {
         expect(allData['MaxAttendees']).toBe(50);
         expect(allData['Name']).toBe('Test Product');
         expect(allData['Price']).toBe(29.99);
+    });
+});
+
+describe('BaseEntity.LoadFromData IS-A parent hydrate', () => {
+    it('does not warn that child-only view columns are missing on the parent', async () => {
+        const productParent = createEntity(productEntityInfo);
+        productParent.NewRecord();
+        const meetingEntity = createEntity(meetingEntityInfo);
+        meetingEntity.NewRecord();
+        meetingEntity.SetTestParentEntity(productParent);
+        meetingEntity.SetTestParentFieldNames(meetingEntityInfo.ParentEntityFieldNames);
+
+        const spy = vi.spyOn(WarningManager.Instance, 'RecordFieldNotFoundWarning');
+        await meetingEntity.LoadFromData({
+            ID: '11111111-1111-1111-1111-111111111111',
+            Name: 'Annual Conference',
+            Price: 250,
+            StartTime: '2027-04-15T09:00:00Z',
+            MaxAttendees: 400,
+            CompanyCode: 'BCP',
+        });
+
+        const parentMissing = spy.mock.calls.filter((call) => call[0] === productEntityInfo.Name);
+        expect(parentMissing).toEqual([]);
+        expect(productParent.Get('Name')).toBe('Annual Conference');
+        expect(meetingEntity.Get('MaxAttendees')).toBe(400);
+        spy.mockRestore();
     });
 });
 

@@ -1,5 +1,303 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- d4a5b4c: Content vectorization: make colocated vector stores usable, and stop ignoring an index's declared dimensions
+
+  A colocated vector provider (`SQLServerVectorDatabase`, pgvector) keeps vectors in the application's own
+  database. It has no credentials to present, and it needs the active data-provider connection handed to it
+  before use. The ContentSource pipeline honored neither, so a colocated store could be **searched** but
+  never **written** — and it failed in a way that pointed somewhere else entirely: `CreateIndex` logged
+  `"requires a host connection"` and continued, then vectorization died later on a vector-database cache
+  miss, which reads like bad metadata rather than a missing wire-up.
+
+  Four changes, in two places that both create provider instances:
+  - **`AutotagBaseEngine.createVectorDBInstance`** now instantiates first, calls `TryWireColocatedHost`, and
+    only then requires an API key — for providers that actually need one (`!SupportsColocatedQuery &&
+RequiresAPIKey`). The old order could not work: whether a provider is colocated is not knowable until it
+    exists. A non-empty sentinel is passed to the constructor because `VectorDBBase` rejects an empty key
+    outright and colocated providers do not override it, so `''` would throw for precisely the keyless case.
+  - **`MJVectorIndexEntityServer.getVectorDBInstance`** gets the same treatment. This is the site that runs
+    on `VectorIndex.Save()`, so without it the provider index is never created regardless of the above.
+  - **`AutotagBaseEngine.createEmbeddingInstance`** drops its pre-flight key check, matching the decision
+    already documented in the EntityDocument pipeline: an empty key is legitimate for local-only drivers
+    (`LocalEmbedding` runs ONNX in-process and defends itself with `super(apiKey || 'local')`), and a cloud
+    driver that genuinely needs one raises a real provider-level auth error, which is more actionable than a
+    guard here. Gating up front made local embedding models unusable from this pipeline.
+  - **`MJVectorIndexEntityServer.resolveDimensions`** now honors the index's own `Dimensions` column instead
+    of returning a hardcoded 1536. This was a latent bug with real consequences on any store that enforces
+    width: a colocated SQL Server index is a `VECTOR(n)` column, so a 384-dimension model got a
+    `VECTOR(1536)` table and every insert was rejected.
+
+  **Behaviour change worth noting before upgrading:** a `MJ: Vector Indexes` record whose `Dimensions`
+  differs from 1536 will now have its provider index created at the stated width. That is the intent — the
+  column exists to be honored, and the embedding call already honored it — but an index created earlier at
+  1536 will not match, and wants recreating.
+
+  Verified end to end against SQL Server 2025 with local embeddings: two content sources differing only in
+  whether they declare `VectorEntityName`, both vectorized through the real pipeline into a real colocated
+  index. Before these changes the pipeline could not reach that state at all.
+
+  Both entries are `minor` rather than `patch` because the bump level is evaluated per branch and this branch
+  also changes `metadata/` — see `.claude/rules/changesets.md`. The changes here are code only.
+
+- ae2baef: Content vectors: declare the entity on the content source, and let `explicit` omit the per-vector key
+
+  Minor rather than patch on both: this adds a property to the `ContentSource.Configuration` JSONType, so
+  it changes metadata rather than code alone.
+
+  `VectorSearchProvider` could attribute a match two ways: an `Entity` key in the vector's own metadata,
+  or an Entity Document targeting the index. Neither covers the ContentSource pipeline running
+  `fieldStrategy: 'explicit'`, where metadata carries only the configured fields — `ContentSourceID` is
+  present, the identity keys are not — and where the caller may not use Entity Documents at all.
+
+  That gap is not cosmetic. `SearchEngine.filterEntityResults` groups results by `EntityName` and
+  resolves each group with `EntityByName()` to evaluate CanRead and row-level security. An unresolvable
+  name yields no `EntityInfo`, the method returns before admitting the group, and **the results are
+  silently discarded** — `Residual permission filter removed N result(s)` is the only trace.
+
+  A content source can now declare what its vectors are, via `VectorEntityName` on its `Configuration`
+  JSON — the same place every other per-source vector knob already lives (`EnableVectorization`,
+  `VectorIDStrategy`, `ChunkTextStorage`, `VectorMetadata`). When a match omits `Entity`, its
+  `ContentSourceID` resolves through `KnowledgeHubMetadataEngine.GetContentSourceByID()` — an O(1) lookup
+  against an already-cached collection — to that declaration.
+
+  **The declaration is validated before it is trusted, twice.** Whatever it resolves to becomes the
+  entity whose CanRead and row-level security `filterEntityResults` evaluates, and that method never
+  checks the matched record ids belong to it. So the name must (a) resolve in metadata — an unresolvable
+  name would otherwise silently delete a source's results rather than mislabel them — and (b) be one of
+  `MJ: Content Items` / `MJ: Content Item Chunks`, or an IS-A subtype of one. Without (b) an arbitrary
+  entity name in a writable configuration blob would decide which permissions apply. The canonical name
+  from metadata is what gets used, so casing and whitespace cannot fork the grouping.
+
+  Two properties worth calling out, because they are why this sits where it does rather than being
+  inferred from somewhere else:
+  - **Per match, not per index.** One vector index can serve many content sources, so an index-wide
+    answer is wrong as soon as a second source shares the index. `ContentSourceID` travels on the vector.
+  - **Declared, not guessed** — and validated, per above. Since attribution decides _which_ entity's
+    permissions are evaluated, an inferred or unchecked name would put the wrong object's rules in front
+    of the records — worse than no attribution, which merely drops them.
+
+  Declaring it per source also lets a source name an **ISA extension** instead of the base entity it
+  inherits from. That distinction is a security one: row-level security typically lives on the
+  extension, so a hardcoded or index-wide base-entity name evaluates the wrong entity's RLS.
+
+  Resolution order is most-specific-first: the match's own `Entity` key, then its content source's
+  declaration, then the index's Entity Documents, then `'Unknown'` as before. A source that declares
+  nothing — or declares something that fails validation — is simply absent from the lookup, so its matches
+  behave exactly as they do today.
+
+  Also fixed, both pre-existing:
+  - `convertMatches` applied the resolved fallback with `??` while the "does this match need one" test is
+    falsy, so an `Entity: ''` resolved a name and then discarded it — the result was dropped with the
+    resolution already paid for.
+  - `convertMatches` had the same `??` on `RecordID`, so a producer writing `RecordID: ''` shipped an empty
+    record id instead of falling through to the vector's own id — dropped by the permission filter on an
+    `IN ('')`, or returned as a result that cannot be opened.
+
+  `extractDisplayTitle` is deliberately left reading `meta['Entity']` rather than the resolved name, with a
+  comment saying so. It looks like an oversight and is not: when the metadata carries no name fields it
+  falls through to `` `${fallbackEntity} Record` ``, and that string is the sentinel
+  `SearchEnricher.resolveRecordNames` matches to replace the title with the live name from the database.
+  Feeding the resolved entity in makes the name-field branch succeed off the embedding-time snapshot, the
+  sentinel never forms, and a renamed record shows a stale title until it is re-embedded.
+
+  Failures decline rather than guess, and each declines narrowly: a source whose `Configuration` will not
+  parse is skipped on its own (one guard per source, not one around the batch, so a single bad blob cannot
+  downgrade every match after it to a different entity's permissions), and a `KnowledgeHubMetadataEngine`
+  load that is **permission-constrained** declines explicitly instead of reading its empty collections as
+  "nothing declared" — otherwise attribution would silently depend on who was searching.
+
+  **Attribution failure is now audible.** A batch containing matches that no step could name logs the
+  count, the index, a sample of vector ids, and the three ways to fix it — once per index per batch, and
+  only when it happens. Before this, such matches were discarded by `filterEntityResults` with no log on
+  that path at all; the sole trace was the aggregate `Residual permission filter removed N result(s)`,
+  whose wording blames incomplete provider push-down. So the one signal a deployment got pointed away from
+  the cause, which is why "vectors are in the index and never surface" was undiagnosable.
+
+  **And the write side can now drop the key.** With a declaration in place, `'explicit'` genuinely omits
+  `Entity` and writes `ContentSourceID` instead — the source becomes the single place the answer lives
+  rather than a string repeated on every vector. Previously the key could not be removed by configuration
+  at all on this pipeline: it is written _before_ the `explicit` early return (the EntityDocument pipeline
+  has it the other way around), and there is no `IncludeEntity` toggle beside `IncludeEntityIcon` /
+  `IncludeUpdatedAt` / `IncludeTags` / `IncludeText`.
+
+  The declaration is validated where it is written, not only where it is read. It must resolve in
+  metadata, and it must name `MJ: Content Item Chunks` or an IS-A subtype — because omission requires
+  `'alwaysChunk'`, which makes every vector a chunk row whose id is a chunk key. A name that fails either
+  check keeps the `Entity` key and logs once per run. This fails _safe_ rather than closed, and
+  deliberately so: the reader can only refuse a bad declaration after the fact, by which point the vectors
+  carry no entity at all, so correcting the configuration would not recover them without a re-embed.
+
+  Omission is therefore gated on all four of `'explicit'`, a declaration resolving to the chunk entity,
+  `ChunkTextStorage: 'alwaysChunk'` and `VectorIDStrategy: 'recordId'`, with
+  `ContentSourceID` then written unconditionally. Each condition keeps the guarantee that every vector
+  carries either `Entity` or a key that resolves to a declared entity:
+  - **`'mixed'`** emits ContentItem-level vectors for single-chunk items and ContentItemChunk-level vectors
+    for the rest — two entities from one source, which one declaration cannot describe.
+  - **`'hash'`** leaves no recoverable record id, since `'explicit'` drops `RecordID` too and the vector's
+    own id is a digest rather than the row's. Attribution would succeed and then hand search an id that
+    resolves against no row — the same disappearance, one step later.
+  - **Other field strategies** document a populated metadata set; dropping a key their consumers are told
+    is always present would be a behavior change for them.
+
+  Anything else keeps writing `Entity` exactly as before, and existing vectors are untouched — they keep
+  resolving through their stored key (resolution step 1), so no re-index is required.
+
+  Integration coverage comes with it: `IT — content-vectorization` gains CV7 (a declaring source omits
+  `Entity`, promotes `ContentSourceID`, and its vector id is the chunk row's PK) and CV8 (three refusal
+  paths — no opt-in, an unresolvable name, and a declaration naming the item entity — each keep the key).
+
+  No schema change and no migration. It does add a property to the `ContentSource.Configuration` JSONType,
+  so `mj sync push` + `mj codegen` are needed before the typed accessor exists; until then both sides read
+  it through a locally-declared interface that is deleted at that point. Behaviour is unchanged for callers
+  whose matches carry `Entity` metadata and for any index resolving through an Entity Document.
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/ai-vector-sync@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/tag-engine@6.1.0-edge.3
+  - @memberjunction/tag-engine-base@6.1.0-edge.3
+  - @memberjunction/ai-segmentation@6.1.0-edge.3
+  - @memberjunction/ai-vectors@6.1.0-edge.3
+  - @memberjunction/ai-vectordb@6.1.0-edge.3
+  - @memberjunction/templates@6.1.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/storage@6.1.0-edge.2
+  - @memberjunction/tag-engine@6.1.0-edge.2
+  - @memberjunction/tag-engine-base@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/ai-segmentation@6.1.0-edge.2
+  - @memberjunction/ai-vectors@6.1.0-edge.2
+  - @memberjunction/ai-vector-sync@6.1.0-edge.2
+  - @memberjunction/templates@6.1.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.2
+  - @memberjunction/ai-vectordb@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Content vectorization: generic field-path resolution for provider directives, Pinecone namespace hardening, and autotag action flag coercion
+  - **New `VectorDBBase.GetSourceRecordFieldPaths(providerConfig)`** — a vector-DB driver declares which source-record field paths (plain or single-hop dotted, e.g. `'ContentSourceID.OrganizationID'`) its `ProviderConfig` needs. Default: none. Calling pipelines resolve the declared paths and hand `BuildProviderDirectives` an enriched record; what a path's value MEANS (a namespace, a shard key, a routing region...) is entirely the driver's business — the framework stays generic.
+  - **New `FieldPathResolver`** (`@memberjunction/content-autotagging`) — resolves those declared paths for a batch of `BaseEntity` records. A single-hop path's first segment is validated as a foreign key on the root entity via `EntityInfo` metadata; the related record is loaded and, when the related entity is an IS-A parent type, its child-type row (shared PK) is loaded and merged over it — so a field that physically lives on an IS-A extension entity resolves without any config ever naming that entity. Batched (one `IN (...)` load per entity per pass, not per record) and per-pass cached; consults `BaseEngineRegistry.TryGetCachedRecords` first, so a hop through an already-cached entity (e.g. `ContentSource` via `KnowledgeHubMetadataEngine`) costs zero queries.
+  - **`BuildProviderDirectives` may now throw to reject a record.** `AutotagBaseEngine` converts a throw into a per-record failure — the item/chunk is marked `Failed` (purge: left `Pending`) and the rest of the batch proceeds — across all three call sites: live vectorization, the `EmbedPendingChunks` backfill, and `PurgeDeletedChunks`.
+  - **Pinecone now fails closed on an unresolvable configured namespace.** `PineconeDatabase.BuildProviderDirectives` throws when `namespaceField` is configured but the record has no usable value, instead of returning `{}` — which previously routed the vector into the index's default namespace, silently breaching the tenant wall namespacing exists to build.
+  - **Fix: Pinecone deletes are now namespace-aware.** `DeleteRecord` / `DeleteRecords` route through the per-record `providerTemporaryDirectives.namespace` (grouped, mirroring `CreateRecords`) instead of always deleting from the default namespace — previously a namespaced vector's delete silently no-opped (Pinecone reports success deleting IDs that don't exist in a given namespace). Also fixes both methods calling `index.deleteOne` / `deleteMany` without `await`, so a failed delete could report success.
+  - **Fix: `AutotagAndVectorizeContentAction` flag params accept string values.** `Autotag` / `Vectorize` / `ForceReprocess` / `Purge` / `EmbedPendingChunks` now accept `"1"` / `"true"` / `"yes"` via a new `flagIsSet()` helper — the generic `RunAction` GraphQL mutation types every param as a string, so a caller passing `Value: "1"` previously failed the action's strict `=== 1` check and the phase silently no-op'd with no error.
+
+  Note: if a `VectorIndex.ProviderConfig` already has `namespaceField` set, any content item whose namespace value was previously unresolvable was silently landing in the default Pinecone namespace. After this change those records fail closed (marked `Failed` / left `Pending`) instead of writing there. Worth checking for any such records once this ships.
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/storage@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/ai-vectordb@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/tag-engine@6.1.0-edge.1
+  - @memberjunction/tag-engine-base@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/ai-segmentation@6.1.0-edge.1
+  - @memberjunction/ai-vectors@6.1.0-edge.1
+  - @memberjunction/ai-vector-sync@6.1.0-edge.1
+  - @memberjunction/templates@6.1.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

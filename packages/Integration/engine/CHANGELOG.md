@@ -1,5 +1,228 @@
 # @memberjunction/integration-engine
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 711c208: Durable sync runs: lease/fence run ownership, DB-backed cancellation and progress, and an opt-in worker mode.
+
+  A sync run is now owned by exactly one process for the life of its lease. `MJ: RSU Pending Work` records the queue, and each run carries an owner token, lease expiry, heartbeat, and fence token, so a stalled or killed process releases its work instead of stranding it, and a resumed process cannot write through a newer owner's fence. Cancellation and progress move through the database rather than in-process state, so either is observable and actionable from any process. The engine no longer shares a single provider across concurrent runs — each run carries its own through an `AsyncLocalStorage` context — and run history is pruned to `MJ_INTEGRATION_MAX_RUNS_PER_CI`.
+
+  RSU post-restart work moves the same way: `RuntimeSchemaManager` now registers it as `MJ: RSU Pending Work` rows instead of `.rsu_pending` files that were deleted as they were read, so a crash mid-consumption leaves visible, resumable work rather than losing it silently. Registration failures are reported on the pipeline result — a migration whose post-restart work never persisted no longer reports success, since the restart discards that work.
+
+  **Additive on the public API.** Reading progress and requesting cancellation now hit the database, which cannot be done from a synchronous method, so they ship under new names: `IntegrationEngine.GetSyncProgressAsync()` and `IntegrationEngine.CancelSyncAsync()`. The three published statics they supersede — `GetSyncProgress`, `CancelSync`, `GetAllSyncProgress` — keep their exact original signatures so a consumer taking this minor upgrade still compiles. They are marked `@deprecated` and are no longer functional, because the in-process map they read no longer exists; each logs once naming its replacement, and each returns the value that previously meant "nothing to report" (`undefined`, `false`, empty map) rather than pretending to have succeeded.
+
+  `RuntimeSchemaManager`'s pending-work entry points follow the same rule, since it too is exported from a published package. `ReadAndClearPendingWork()` keeps its zero-argument signature, warns once, and returns an empty array. `WritePendingWork(data)` keeps compiling — its new `contextUser` parameter is optional — but the one-argument form throws rather than returning a fabricated ID, because a durability queue that silently discards work is worse than one that fails loudly. Both replacements, `ReadPendingWork()` and `WritePendingWork(data, contextUser)`, are named in the messages.
+
+  **One caveat on "additive", for TypeScript consumers.** The paragraph above concerns the deprecated statics. The `Status` value list itself is a different matter: it widens from five values to seven (`Queued`, `Cancelled`), and CodeGen turns a CHECK constraint into a literal union. Widening a union a consumer _reads_ is source-breaking in two patterns — assigning `run.Status` into a narrower hand-written type, and an exhaustive `switch` with no `default` and a declared return type. That is not hypothetical: the Integration dashboard in this repo carried two hand-copied `Status` unions and both had already fallen behind `Queued`. Consumers on those patterns will need one edit; the fix in both cases is to derive the type from the entity (`MJCompanyIntegrationRunEntity['Status']`) rather than restate it, which is what this PR does to the dashboard.
+
+  **Two behaviour changes that are not compile breaks but are observable.** A cancelled run now reports `Cancelled` rather than `Failed`, so anything keyed on `Status='Failed'` — external dashboards, alerts, error-rate SLOs — will report fewer errors than before. And cancellation is now resumable, so "cancel, then re-run to re-pull" no longer re-fetches the window before the cancel point; that needs an explicit full sync.
+
+  **`Cancelled` is now a run status.** `CK_CompanyIntegrationRun_Status` gains it alongside `Queued`, so a deliberately-stopped run records itself instead of being finalized as `Failed` with an explanatory `ErrorLog` — which meant every health, cadence, and error-rate consumer booked operator cancellations as errors unless it string-matched that text. `RunOwnershipService.Release` now takes a `TerminalRunStatus` (`Extract`-ed from the entity's own union, so the terminal subset can never drift from the CHECK constraint), and the Integration dashboard's status colours, icons, activity filter and KPIs handle both new values — its two hand-copied status unions are replaced with indexed access to the entity, which is also how they had already fallen behind `Queued`.
+
+  **A cancelled sync no longer repeats its work on resume.** Stopping mid-fetch logged `— saving watermark`, but only keyset connectors actually persisted a position; a watermark-based connector saved nothing, so the next incremental re-fetched everything back to the last clean run. Measured on a 2,000-record source cancelled at 1,400: the following incremental processed 1,750 records (resuming from 250) where it now processes 600. The max watermark seen is persisted whenever whole batches completed and no page was skipped — never wall-clock `now`, since partial coverage must not advance past the point actually reached, and never when a page was skipped, because that leaves a hole behind the watermark.
+
+  **Sync options survive a process death.** The run row now records its options (the shape `EnqueueSync` already wrote), and `ResumeOrphanedSyncs` reads them back, so an adopted run finishes what was asked for. Previously the resume rebuilt config from the `CompanyIntegration` alone: a `FullSync` that lost its owner resumed as an _incremental_, re-fetched nothing, and reported `Success` — the opposite of why a full sync is requested. The resumed run also reports its real trigger type rather than a hardcoded `Scheduled`.
+
+  The worker's startup line moves from verbose-only to standard log level. `Stop()` already logged at standard level, so logs showed a worker stopping that never started, and there was no way to confirm from logs that a process was in worker mode.
+
+- 9cd81ca: Integration apply path: stop record-map write amplification, surface pagination violations, and stop blocking the connection wizard on a schema refresh.
+
+  `MJ: Company Integration Record Maps` is the highest-volume table the sync path writes — one row per external record ever mapped, re-touched every sync — and unlike its run-log siblings it still shipped with `TrackRecordChanges = 1`, so every mapping upsert also wrote a `RecordChange` row and doubled a sync's write volume. Nothing reads that history: the mapping row is the current state, and operators audit a sync through the per-run artifact stream. Change tracking is now off for that entity; existing history rows are left in place. Separately, a connector returning an oversized batch (a pagination-contract violation) is now reported rather than absorbed silently, and `IntegrationUpdateConnection` can launch its schema refresh without waiting on it.
+
+  `MJCompanyIntegrationEntityServer` gains `SuppressActivationSchemaRefresh`, a transient opt-out that stops the activation (`IsActive` false→true) schema refresh from running inside `Save()` when the caller is going to run it itself. `IntegrationCreateConnection` sets it for `awaitSchemaRefresh: false`, which makes that flag actually non-blocking on create — previously the Save-side refresh ran first and awaited, so the mutation paid a full live introspect regardless — and moves the introspect after the connection test, so a connection rejected by that test is rolled back without having written IntegrationObject rows. Default false, so every other activation path is unchanged.
+
+  `IntegrationConnectorCreationPipeline.Run()` now honours a caller-supplied `RunID` even when it coalesces onto an already-running or just-completed run for the same CompanyIntegration. Previously the supplied ID was silently discarded, so a caller that had already handed it to a client as "the run to tail" left that client polling a run directory that was never created — `IntegrationTailRunEvents` answering "Run not found" forever, which is indistinguishable from "hasn't started yet". A coalesced call now publishes a terminal alias run under the requested ID that mirrors the served run's outcome and names it, so the ID is always tailable.
+
+### Patch Changes
+
+- 2003cd3: Make the `FetchChanges` per-page timeout configurable instead of a hard-coded 30s.
+
+  `IntegrationEngine` previously wrapped every `FetchChanges` call in `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs` (30s) with no way to change it. That punished the connectors that need it most: a connector that fans out one request per parent record does `BatchSize` requests inside a single `FetchChanges` call, so its page time scales with batch size and with however much concurrency the adaptive controller currently allows. Once a page exceeded 30s the timeout fired and `WithRetry` re-ran the _same_ page, paying the full cost again, until the retry budget was spent and the object ended with an incomplete result set.
+
+  Two new resolution sources, checked before the framework default:
+  - `CompanyIntegration.Configuration` → `{"fetchTimeoutMs": 120000}` — per-deployment, no code change. Settable and readable as a typed `FetchTimeoutMs` field on the `IntegrationSetSyncConfig` / `IntegrationGetSyncConfig` GraphQL surface, alongside the concurrency, rate-limit and discovery-budget knobs it sits with in that JSON.
+  - `BaseIntegrationConnector.FetchChangesTimeoutMs` — a connector declares its own default (`null` keeps the framework's 30s).
+
+  Precedence, highest first: `Configuration.fetchTimeoutMs` → `connector.FetchChangesTimeoutMs` → `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs`. **Both** override sources go through the same guard: non-numeric, non-finite and non-positive values are rejected and fall through to the next source. That matters for the connector source in particular — its declared type is `number | null`, so `0`, a negative, or the `NaN` you get from `Number(process.env.UNSET)` are all type-legal, and `setTimeout` coerces every one of them to ~1ms rather than erroring, which would silently time out every page. Resolution happens once per entity map.
+
+  Fully backward compatible — with neither source set, behavior is byte-identical to before. `FetchChangesTimeoutMs` is additive to the `BaseIntegrationConnector` public surface, and `patch` is still the right level: every MJ package shares one `fixed` group, so `minor` is reserved for branches that change the database (a migration, or `metadata/**` that becomes one at release). This branch changes neither.
+
+  Separately, an **unskippable fetch failure no longer completes silently.** When a persistent error hits a page the engine cannot page past (cursor paging, or the page-skip budget spent), the object stops with an incomplete result set — and previously reported nothing, so an object whose very first page failed was indistinguishable from a clean "nothing changed" run. It now emits a structured `FETCH_ABORTED_INCOMPLETE` warning on the run-event stream **and** records a `Warning`-severity entry in `CompanyIntegrationRun.ErrorLog`, so the condition survives in queryable run history rather than only in a pod-local artifact. The run's `Status` is deliberately unchanged (`Success` unless a record actually errored): the watermark is held, so the unfetched window is retried next run — this is a warning, not a failed run.
+
+- bb79505: Tell a connector when it is being sampled, so a discovery sample cannot silently become an exhaustive walk.
+
+  Discovery needs a corpus, not a corpus of everything: ~50 records is enough to infer columns, types, string widths and a provable primary key. `DiscoverFieldsViaFetch` already knows that and already computes a budget — but it hands that budget to the code CONSUMING the record stream, and the consumer only regains control BETWEEN `FetchChanges` calls. Nothing was ever passed to the connector, and `FetchContext` had no field for it, so a connector could not honour a budget even if it wanted to. It had no way to know it was being sampled rather than synced.
+
+  That is survivable while one `FetchChanges` is one HTTP page — the consumer stops after 50 records and the gap never shows. It is not survivable for a parent-scoped object, where a single call fans out internally into one request per parent: control does not come back until every parent has been walked, so there is nothing for the consumer to interrupt. Observed live 2026-08-12: a Totara discovery spent 28 minutes inside one `FetchChanges`, walked every parent, and returned `rows=0` — half an hour of correct, pointless work to collect a sample it could never have found there.
+
+  `FetchContext` gains three optional fields, set by `DiscoverySampleRecordStream`:
+  - `IsDiscoverySample` — this call exists to characterise the shape of the data, not to move it.
+  - `SampleTargetRecords` — stop once this many records have been collected.
+  - `DeadlineMs` — epoch ms after which the connector should stop and return what it has.
+
+  `SampleTargetRecords` is deliberately the primary stop and `DeadlineMs` only the backstop. A child object yields records only through its parents, so capping the number of parents visited would be wrong — if the first three courses have no enrolments you genuinely must keep walking to find fifty rows. Counting records stops the walk the moment it has enough, at whatever parent that happens to be; the deadline exists for the other case, parents that will never yield anything, where no record count is ever reached and only the clock can end it.
+
+  No behaviour change on its own: every field is optional and a connector that ignores them behaves exactly as before. `DiscoverySampleRecordStream` gains an optional trailing `deadlineMs` parameter, so existing overrides keep compiling unchanged.
+
+- 52490a7: Discovery now honours the `discoveryMaxRecords` setting it already exposed.
+
+  `DiscoverFieldsViaFetch` resolves three budgets from per-connection Configuration, falling back to env then a default. Two of them read Configuration. `maxRecords` did not — the read was simply absent from the line:
+
+  ```ts
+  timeBudgetMs = opts ?? cfgInt(cfg.discoveryTimeBudgetMs) ?? env ?? default   // wired
+  batchSize    = opts ?? cfgInt(cfg.discoveryBatchSize)    ?? env ?? default   // wired
+  maxRecords   = opts ??              (nothing)            ?? env ?? default   // not wired
+  ```
+
+  Everything around it worked: `discoveryMaxRecords` is declared in the config type, documented in the comment directly above as a per-connection knob, accepted and persisted by `IntegrationSetSyncConfig`, returned by `IntegrationGetSyncConfig`, and surfaced in the product as a "Max records" settings field. The value saved and was read back correctly — nothing ever used it.
+
+  The effect was that the one discovery budget an operator actually wants to lower for a slow source was the only one that could not be changed without an app setting and a process restart, while its two siblings were settable from the UI.
+
+  Precedence now matches the other two: explicit opts > per-connection Configuration > operator env > default. No default changed.
+
+- 5b30129: Stop one hung discovery from making a connector permanently unrefreshable.
+
+  `Run()` coalesces concurrent callers for the same CompanyIntegration onto a single promise, and removes the map entry in a `finally` — which only fires when that promise SETTLES. A run that hangs therefore owned its slot forever, and every later refresh took the `if (inFlight) return inFlight` path and attached to a promise that would never resolve. No new run started, no `run.start` was emitted, nothing reached the workspace log: from the outside the request simply vanished.
+
+  That is the whole explanation for behaviour that read as random for two days. A fresh process discovers in ~4 minutes; one hang poisons the slot; every attempt after it hangs; restarting the workspace clears the in-memory map and it appears fixed — until the next hang. Observed live 2026-08-12: a run frozen at `EventCount 5` with healthy runs on either side of it, and a customer pressing Re-check to no effect and no log output.
+
+  Coalescing is correct for concurrent callers, but it is only safe if runs terminate, and nothing guarantees that. The entry now carries its start time and expires after `IN_FLIGHT_MAX_AGE_MS` (20 minutes): past that a caller stops trusting it and runs fresh, logging the discard. This does not stop the stalled work — a promise is not cancellable — it stops one hang from costing every future attempt.
+
+  The `finally` now clears the slot only if it still holds _this_ run's promise, so a run settling after it was evicted cannot drop a newer run's entry.
+
+- d29d6b9: Stop retrying the engine's own `FetchChanges` timeout — it multiplied load on sources that were already too slow.
+
+  `WithTimeout` is a `Promise.race` with no cancellation: when the budget expires it rejects, but the wrapped operation **keeps running**. `ClassifyError` maps the timeout to `NETWORK_TIMEOUT` and `IsRetryableError` treats that as transient, so the fetch path retried it — up to `MaxAttempts: 3`.
+
+  For a connector that fans out one request per parent record inside a single `FetchChanges` call, that meant attempt 1 timed out with its requests still in flight, ~1s later attempt 2 issued a _second_ full page of vendor requests overlapping the first, and ~2s later a third overlapped both. Up to **3× the concurrent load on a source that could not finish the work once** — a reliable way to earn a genuine 429, which _does_ back the adaptive limiter off. And the retry could never have succeeded on its merits: the same work under the same budget exceeds it again.
+
+  `WithTimeout` now rejects with a new exported `OperationTimeoutError` (same message text, so `ClassifyError`, logging and the run-event stream are unchanged), and the fetch retry predicate excludes it by `instanceof`. The exclusion is deliberately identity-based rather than dropping `NETWORK_TIMEOUT` from `IsRetryableError`: `ClassifyError` folds `econnreset` in under that same code, and a reset socket genuinely is worth retrying. A vendor's own "gateway timeout" also stays retryable — only a budget _this engine_ set is treated as terminal.
+
+  A page that exceeds its budget now fails once and lets the object end incomplete, which surfaces as the `FETCH_ABORTED_INCOMPLETE` run-event warning rather than after three full-cost attempts. Deployments that need a longer budget raise `Configuration.fetchTimeoutMs` or the connector's `FetchChangesTimeoutMs`, which is what those knobs are for.
+
+  Also corrects a comment on `BaseIntegrationConnector.FetchChangesTimeoutMs` that described a timeout→concurrency-cut spiral. Only `RATE_LIMIT_EXCEEDED` feeds the adaptive limiter; a timeout never cut concurrency directly.
+
+- af4bd79: Report a sub-minute connector-run deadline in seconds rather than rounding to
+  minutes, and add the first test coverage for `RunDeadlineMs`.
+
+  `RunDeadlineMs` is a public option and a caller may pass seconds, where rounding
+  produced "the run deadline of 0min" — which reads as a pipeline bug rather than
+  the limit the caller asked for. The 45min default is unaffected.
+
+  The three new tests pin what a live run against a real database proved: a stage
+  that never returns is failed _and_ writes `result.json` (the point of the
+  deadline, since a run is reported in-flight precisely when that file is absent),
+  the label renders in seconds, and `0` means "no deadline" rather than "already
+  expired".
+
+- f315e44: Give the connector-creation pipeline a whole-run deadline, so a hung stage fails instead of running forever.
+
+  Every other budget in this system bounds something _inside_ a stage, and none of them can preempt an `await` that never settles. A connector's `outOfTime()` is only checked between requests; an HTTP abort signal governs only its own request; the discovery sample budget is spent by the code reading the stream. There is always one more layer able to stall — and when one does, the pipeline waits on it forever.
+
+  Forever is literal. `complete()` and `fail()` are the only writers of `result.json`, and both sit inside the try/catch around the stages, so a stage that never returns reaches neither. Since `isInFlight` is computed as "result.json is absent", the run then reports itself running for the rest of time: no client can learn otherwise, no retry clears it, and the customer is left with a spinner over work that stopped being observable.
+
+  Observed live 2026-08-12, three times on one connector — ConnectionTest completing in ~1s, Introspect starting, and the event stream flat for ten minutes and counting, against a reference run that finished the entire pipeline in 3m53s.
+
+  Stages are now raced against `RunDeadlineMs` (default 45 minutes; 0 disables). This does **not** stop the stalled work — a promise is not cancellable, so it keeps running until the process ends — it stops _waiting_ on it. The run fails honestly, writes its artifact, and becomes retryable. A reported failure you can act on beats silence you cannot.
+
+  The default is deliberately far above any healthy run, so it only ever fires on work that has genuinely stopped rather than work that is merely large.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/integration-engine-base@6.1.0-edge.3
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.3
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- de343b5: Stop error diagnostics from carrying credentials into the log.
+
+  **GraphQL transport.** `graphql-request`'s `ClientError` serialises the originating request — variables included — into its own `message` at construction, and V8 then embeds that message in `stack`. A mutation carrying a secret therefore holds it in three places on the error at once, and `ExecuteGQL` logged the object directly before calling `LogError(e)`, which stringifies it and re-emits the same payload. Redacting `request.variables` on a copy reaches none of that; spreading the error to redact it also drops `message` and `stack`, since both are non-enumerable on `Error`.
+
+  New `SanitizeGraphQLError` builds a fresh diagnostic object from an allowlist of safe fields instead — re-deriving the message from `response.errors[0]` and stripping the header line off `stack` — so a change to the upstream error shape cannot silently widen what is logged. Response status, GraphQL errors, error code, query text and stack frames are all preserved; only values are withheld, and the log gains the variables' _shape_ (key names and value types, never values) so a redacted failure stays diagnosable. The caught error is never mutated, so JWT-expiry handling and every caller of the rethrown error are unaffected.
+
+  `GraphQLProviderConfigData.LogVariableValues` (default `false`) opts in to logging values during development, mirroring the server's existing `loggingSettings.graphql.logVariables` tier.
+
+  **OAuth2 token endpoints.** A token endpoint is the one call where a credential arrives in a response _body_. Five sites echoed that body into an `Error` message: the Integration and Actions OAuth2 managers, the MCP client's `TokenManager` and `ClientRegistration`, and the SharePoint storage driver's token refresh. RFC 6749 §5.2 says an error response carries no token, which makes this look safe — but token endpoints routinely echo the failing request back, and that request carries `client_secret` and the refresh token. The Integration site was reached on HTTP 200 as well, whenever the token sat somewhere its parser did not look, in which case the echoed body _was_ the access token.
+
+  New `describeTokenEndpointFailure` in `@memberjunction/global`, shared by all five, surfaces only `error` and `error_description` and withholds everything else, including bodies that fail to parse.
+
+  No API removals and no behaviour change for callers: the only observable differences are the contents of log lines and the text of token-endpoint error messages.
+
+- Updated dependencies [255d506]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/integration-engine-base@6.1.0-edge.2
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.2
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/integration-engine-base@6.1.0-edge.1
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.1
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

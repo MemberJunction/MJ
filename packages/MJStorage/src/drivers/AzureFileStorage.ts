@@ -63,8 +63,12 @@ export class AzureFileStorage extends FileStorageBase {
   /** The name of this storage provider, used in error messages */
   protected readonly providerName = 'Azure Blob Storage';
 
+  // The SDK clients below use definite-assignment (`!`): they are wired up either in the
+  // constructor (when env/config credentials are present) or later in initialize() (when
+  // an enterprise deployment supplies decrypted DB credentials). Guard use with IsConfigured.
+
   /** Azure Storage SharedKeyCredential for authentication */
-  private _sharedKeyCredential: StorageSharedKeyCredential;
+  private _sharedKeyCredential!: StorageSharedKeyCredential;
 
   /** The Azure Storage container name */
   private _container: string;
@@ -73,34 +77,40 @@ export class AzureFileStorage extends FileStorageBase {
   private _azureAccountName: string;
 
   /** ContainerClient for the specified container */
-  private _containerClient: ContainerClient;
+  private _containerClient!: ContainerClient;
 
   /** BlobServiceClient for the Azure Storage account */
-  private _blobServiceClient: BlobServiceClient;
+  private _blobServiceClient!: BlobServiceClient;
 
   /**
    * Creates a new instance of AzureFileStorage.
    *
-   * Initializes the connection to Azure Blob Storage using environment variables.
-   * Throws an error if any required environment variables are missing.
+   * Credentials are OPTIONAL at construction time. A simple deployment supplies them via
+   * env vars (`STORAGE_AZURE_*`) or mj.config; an enterprise/multi-tenant deployment supplies
+   * them later through {@link initialize} with decrypted DB credentials — and
+   * `initializeDriverWithAccountCredentials` constructs the driver FIRST, then initializes it.
+   * Requiring env vars here would throw before initialize() can run, breaking the DB-credential
+   * path. So absent config is tolerated: the SDK clients are wired up only once account name +
+   * key are available (here, or later in initialize()). Use is guarded by {@link IsConfigured}.
    */
   constructor() {
     super();
 
-    // Try to get config from centralized configuration
+    // Read from centralized config, falling back to env vars — WITHOUT `.required()`, so a
+    // DB-credential deployment (which initializes after construction) doesn't throw here.
     const config = getProviderConfig('azure');
+    this._container = config?.defaultContainer || env.get('STORAGE_AZURE_CONTAINER').asString() || '';
+    this._azureAccountName = config?.accountName || env.get('STORAGE_AZURE_ACCOUNT_NAME').asString() || '';
+    const accountKey = config?.accountKey || env.get('STORAGE_AZURE_ACCOUNT_KEY').asString() || '';
 
-    // Extract values from config, fall back to env vars
-    this._container = config?.defaultContainer || env.get('STORAGE_AZURE_CONTAINER').required().asString();
-    this._azureAccountName = config?.accountName || env.get('STORAGE_AZURE_ACCOUNT_NAME').required().asString();
-    const accountKey = config?.accountKey || env.get('STORAGE_AZURE_ACCOUNT_KEY').required().asString();
-
-    this._sharedKeyCredential = new StorageSharedKeyCredential(this._azureAccountName, accountKey);
-
-    const blobServiceUrl = `https://${this._azureAccountName}.blob.core.windows.net`;
-    this._blobServiceClient = new BlobServiceClient(blobServiceUrl, this._sharedKeyCredential);
-
-    this._containerClient = this._blobServiceClient.getContainerClient(this._container);
+    // Only wire up the Azure SDK clients if credentials are present now; otherwise a later
+    // initialize(config) call builds them from DB credentials.
+    if (this._azureAccountName && accountKey) {
+      this._sharedKeyCredential = new StorageSharedKeyCredential(this._azureAccountName, accountKey);
+      const blobServiceUrl = `https://${this._azureAccountName}.blob.core.windows.net`;
+      this._blobServiceClient = new BlobServiceClient(blobServiceUrl, this._sharedKeyCredential);
+      this._containerClient = this._blobServiceClient.getContainerClient(this._container);
+    }
   }
 
   /**
@@ -256,7 +266,11 @@ export class AzureFileStorage extends FileStorageBase {
     const queryString = sasToken[0] === '?' ? sasToken : `?${sasToken}`;
     const UploadUrl = `https://${this._azureAccountName}.blob.core.windows.net/${this._container}/${objectName}${queryString}`;
 
-    return Promise.resolve({ UploadUrl });
+    return Promise.resolve({
+      UploadUrl,
+      HttpMethod: 'PUT',
+      HttpHeaders: { 'x-ms-blob-type': 'BlockBlob' },
+    });
   }
 
   /**
@@ -686,6 +700,14 @@ export class AzureFileStorage extends FileStorageBase {
    * Azure Blob Storage supports ranged streaming via `BlobClient.download(offset, count)`.
    */
   public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthUpload(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
     return true;
   }
 

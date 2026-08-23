@@ -1,6 +1,6 @@
 import {
   Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy,
-  ChangeDetectorRef, ViewEncapsulation, ChangeDetectionStrategy, HostListener
+  ChangeDetectorRef, ElementRef, ViewEncapsulation, ChangeDetectionStrategy, HostListener
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { FFlowComponent, FCanvasComponent, FZoomDirective, FCreateConnectionEvent,
@@ -11,7 +11,9 @@ import {
   FlowNodeMovedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent,
   FlowSelectionChangedEvent,
   FlowCanvasClickEvent, FlowPosition, FlowLayoutDirection,
-  FlowContextMenuTarget, FlowContextMenuAction
+  FlowContextMenuTarget, FlowContextMenuAction, FlowContextMenuItem,
+  FlowBeforeContextMenuEventArgs, FlowAfterContextMenuActionEventArgs,
+  FlowToolbarAlign, FlowToolbarVisibility,
 } from '../interfaces/flow-types';
 import { FlowStateService } from '../services/flow-state.service';
 import { FlowLayoutService } from '../services/flow-layout.service';
@@ -51,22 +53,32 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Input() ShowPalette = true;
   @Input() ShowGrid = true;
   @Input() ShowStatusBar = true;
+  /**
+   * Legacy on/off. `false` forces the toolbar fully off (no recover tab). Prefer
+   * `ToolbarVisibility` when the host wants shown / minimized / hidden with a way back.
+   */
   @Input() ShowToolbar = true;
+  /** Full bar, a restore chip, or a recover tab. Ignored when `ShowToolbar` is false. */
+  @Input() ToolbarVisibility: FlowToolbarVisibility = 'shown';
+  /** Left / center / right along the top of the canvas. */
+  @Input() ToolbarAlign: FlowToolbarAlign = 'center';
   @Input() ShowLegend = true;
   @Input() GridSize = 20;
   @Input() AutoLayoutDirection: FlowLayoutDirection = 'vertical';
   /** Background color for connection labels */
-  @Input() ConnectionLabelBackground = '#fffef5';
+  // Design tokens, not literals — the canvas renders on both themes, and a near-white pill on a
+  // dark canvas made the least important element the most visually dominant thing on screen.
+  @Input() ConnectionLabelBackground = 'var(--mj-bg-surface)';
   /** Border color for connection labels */
-  @Input() ConnectionLabelBorderColor = '#cbd5e1';
+  @Input() ConnectionLabelBorderColor = 'var(--mj-border-default)';
   /** Text color for connection labels */
-  @Input() ConnectionLabelTextColor = '#334155';
+  @Input() ConnectionLabelTextColor = 'var(--mj-text-secondary)';
 
   /** Title for the canvas empty-state overlay — depends on read-only mode. */
   public get EmptyStateTitle(): string {
     return this.ReadOnly
       ? 'No steps defined for this flow'
-      : 'Drag steps from the palette to start building your flow';
+      : 'Click a step in the palette — or drag one onto the canvas — to start building your flow';
   }
 
   // ── Outputs ─────────────────────────────────────────────────
@@ -84,19 +96,42 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Output() ConnectionsChanged = new EventEmitter<FlowConnection[]>();
   @Output() NodeEditRequested = new EventEmitter<FlowNode>();
   @Output() ConnectionEditRequested = new EventEmitter<FlowConnection>();
+  /** Host may replace `Items` or `Cancel` the menu. Debug attaches here — the canvas stays blind. */
+  @Output() BeforeContextMenu = new EventEmitter<FlowBeforeContextMenuEventArgs>();
+  @Output() AfterContextMenuAction = new EventEmitter<FlowAfterContextMenuActionEventArgs>();
   @Output() GridToggled = new EventEmitter<boolean>();
   @Output() MinimapToggled = new EventEmitter<boolean>();
   @Output() LegendToggled = new EventEmitter<boolean>();
+  /** The person changed shown / minimized / hidden from the canvas chrome. */
+  @Output() ToolbarVisibilityChanged = new EventEmitter<FlowToolbarVisibility>();
+
+  /** What the template actually paints — `ShowToolbar === false` is a hard hide. */
+  public get EffectiveToolbarVisibility(): FlowToolbarVisibility {
+    return this.ShowToolbar ? this.ToolbarVisibility : 'hidden';
+  }
+
+  public SetToolbarVisibility(next: FlowToolbarVisibility): void {
+    if (!this.ShowToolbar) return;
+    if (this.ToolbarVisibility === next) return;
+    this.ToolbarVisibility = next;
+    this.ToolbarVisibilityChanged.emit(next);
+  }
 
   // ── View Children ───────────────────────────────────────────
   @ViewChild(FFlowComponent) protected fFlow: FFlowComponent | undefined;
   @ViewChild(FCanvasComponent) protected fCanvas: FCanvasComponent | undefined;
   @ViewChild('fZoomRef') protected fZoom: FZoomDirective | undefined;
+  @ViewChild('canvasArea') protected canvasArea: ElementRef<HTMLElement> | undefined;
 
   // ── Internal State ──────────────────────────────────────────
   protected zoomLevel = 100;
   protected canvasPosition = { x: 0, y: 0 };
   protected canvasScale = 1;
+  /** After the first auto-fit, later fLoaded events must not snap the viewport back. */
+  private hasAutoFitted = false;
+  /** True once the person zooms or pans — remounts restore this viewport instead of fitting. */
+  private viewportOwnedByUser = false;
+  private applyingProgrammaticViewport = false;
   protected selectedNodeIDs: string[] = [];
   protected selectedConnectionIDs: string[] = [];
   protected panMode = false;
@@ -113,10 +148,17 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   protected contextMenuTargetType: FlowContextMenuTarget = 'node';
   protected contextMenuNode: FlowNode | null = null;
   protected contextMenuConnection: FlowConnection | null = null;
+  protected contextMenuItems: FlowContextMenuItem[] = [];
 
   private destroy$ = new Subject<void>();
   private initialized = false;
   private lastConnectionClickTime = 0;
+
+  /** How many click-placed nodes are cascaded before the offset wraps back to the viewport centre. */
+  private static readonly CLICK_CASCADE_STEPS = 6;
+  /** Pixels (canvas units) each cascaded click-placed node is offset by. */
+  private static readonly CLICK_CASCADE_OFFSET = 40;
+  private clickPlacementIndex = 0;
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -139,11 +181,15 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Fit all nodes within the viewport */
   ZoomToFit(): void {
+    this.applyingProgrammaticViewport = true;
     this.fCanvas?.fitToScreen({ x: 150, y: 150 }, true);
+    this.hasAutoFitted = true;
+    queueMicrotask(() => { this.applyingProgrammaticViewport = false; });
   }
 
   /** Zoom in one step */
   ZoomIn(): void {
+    this.viewportOwnedByUser = true;
     if (this.fZoom) {
       this.fZoom.zoomIn();
     } else {
@@ -155,6 +201,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Zoom out one step */
   ZoomOut(): void {
+    this.viewportOwnedByUser = true;
     if (this.fZoom) {
       this.fZoom.zoomOut();
     } else {
@@ -223,7 +270,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   /** Update a connection's visual properties in-place (label, color, style, etc.) */
-  UpdateConnection(connId: string, changes: Partial<Pick<FlowConnection, 'Label' | 'LabelIcon' | 'LabelIconColor' | 'LabelDetail' | 'Color' | 'Style' | 'Animated'>>): void {
+  UpdateConnection(connId: string, changes: Partial<Pick<FlowConnection, 'Label' | 'LabelIcon' | 'LabelIconColor' | 'LabelDetail' | 'Color' | 'StrokeWidth' | 'Style' | 'Animated'>>): void {
     const conn = this.Connections.find(c => UUIDsEqual(c.ID, connId));
     if (!conn) return;
     Object.assign(conn, changes);
@@ -306,9 +353,13 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Called when Foblex flow finishes loading */
   protected onFlowLoaded(): void {
-    if (this.Nodes.length > 0) {
-      setTimeout(() => this.ZoomToFit(), 200);
+    if (this.Nodes.length === 0) return;
+    if (this.viewportOwnedByUser || this.hasAutoFitted) {
+      this.restoreViewport();
+      return;
     }
+    this.hasAutoFitted = true;
+    setTimeout(() => this.ZoomToFit(), 200);
   }
 
   /** Canvas zoom/pan changed */
@@ -316,6 +367,14 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     this.canvasPosition = event.position;
     this.canvasScale = event.scale;
     this.updateZoomLevel(event.scale);
+    if (!this.applyingProgrammaticViewport) this.viewportOwnedByUser = true;
+  }
+
+  private restoreViewport(): void {
+    if (!this.fCanvas) return;
+    this.applyingProgrammaticViewport = true;
+    this.fCanvas.setScale(this.canvasScale);
+    queueMicrotask(() => { this.applyingProgrammaticViewport = false; });
   }
 
   /** User drew a new connection */
@@ -417,11 +476,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** External item dropped from palette */
   protected onCreateNode(event: FCreateNodeEvent): void {
-    if (this.ReadOnly) return;
-    this.pushUndoState();
-
-    const nodeType = event.data as string;
-    const config = this.NodeTypes.find(nt => nt.Type === nodeType);
+    const config = this.NodeTypes.find(nt => nt.Type === (event.data as string));
     if (!config) return;
 
     // event.rect is already normalized to canvas coordinates by Foblex's
@@ -429,13 +484,47 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     // Do NOT pass it through getPositionInFlow() again — that double-normalizes
     // and places the node far from the actual drop point.
     // Use the center of the preview rect (≈ cursor position at drop time).
-    const dropPosition: FlowPosition = {
+    this.addNodeFromPalette(config, {
       X: event.rect.x + event.rect.width / 2,
       Y: event.rect.y + event.rect.height / 2
-    };
+    });
+  }
 
+  /**
+   * A palette entry was clicked (or activated from the keyboard) rather than dragged.
+   *
+   * Deliberately routed into the SAME `addNodeFromPalette` the drop path uses. A separate
+   * click-only creation path would be a second way for a node to come into existence, and the two
+   * would drift — which is exactly the failure this fixes, one level up.
+   */
+  protected onPaletteNodeTypeActivated(config: FlowNodeTypeConfig): void {
+    this.addNodeFromPalette(config, this.nextClickDropPosition());
+  }
+
+  /** The one place a palette-originated node is created and announced. */
+  private addNodeFromPalette(config: FlowNodeTypeConfig, dropPosition: FlowPosition): void {
+    if (this.ReadOnly) return;
+    this.pushUndoState();
     const newNode = this.createDefaultNode(config, dropPosition);
     this.NodeAdded.emit({ Node: newNode, DropPosition: dropPosition });
+  }
+
+  /**
+   * Where a clicked step lands: the middle of what the author is currently looking at, cascaded so
+   * consecutive clicks don't bury each other under one box.
+   *
+   * A click carries no coordinates, so *some* position has to be invented. The viewport centre is
+   * the only choice that is guaranteed on screen at any zoom or pan — placing at the canvas origin
+   * would drop steps off-screen the moment the author has scrolled anywhere.
+   */
+  private nextClickDropPosition(): FlowPosition {
+    const rect = this.canvasArea?.nativeElement.getBoundingClientRect();
+    const scale = this.canvasScale || 1;
+    const centerX = ((rect?.width ?? 800) / 2 - this.canvasPosition.x) / scale;
+    const centerY = ((rect?.height ?? 600) / 2 - this.canvasPosition.y) / scale;
+
+    const step = (this.clickPlacementIndex++ % FlowEditorComponent.CLICK_CASCADE_STEPS) * FlowEditorComponent.CLICK_CASCADE_OFFSET;
+    return { X: Math.round(centerX + step), Y: Math.round(centerY + step) };
   }
 
   /** Selection changed in Foblex */
@@ -522,10 +611,9 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   // ── Context Menu ───────────────────────────────────────────
 
   protected onNodeContextMenu(event: MouseEvent, node: FlowNode): void {
-    if (this.ReadOnly) return;
     event.preventDefault();
     event.stopPropagation();
-    this.showContextMenu(event, 'node', node, null);
+    this.openContextMenu(event, 'node', node, null);
   }
 
   /** Direct click on a connection — ensures ConnectionSelected fires reliably */
@@ -541,29 +629,40 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   protected onConnectionContextMenu(event: MouseEvent, conn: FlowConnection): void {
-    if (this.ReadOnly) return;
     event.preventDefault();
     event.stopPropagation();
-    this.showContextMenu(event, 'connection', null, conn);
+    this.openContextMenu(event, 'connection', null, conn);
   }
 
   protected onContextMenuAction(action: FlowContextMenuAction): void {
+    // Capture the target BEFORE closing: hideContextMenu() nulls contextMenuNode and
+    // contextMenuConnection, so reading them afterwards found nothing and every branch below fell
+    // through — the menu closed and neither Remove nor Edit did anything, for nodes or connections.
+    const targetType = this.contextMenuTargetType;
+    const node = this.contextMenuNode;
+    const connection = this.contextMenuConnection;
+
     this.hideContextMenu();
 
-    if (action === 'edit') {
-      if (this.contextMenuTargetType === 'node' && this.contextMenuNode) {
-        this.NodeEditRequested.emit(this.contextMenuNode);
-      } else if (this.contextMenuTargetType === 'connection' && this.contextMenuConnection) {
-        this.ConnectionEditRequested.emit(this.contextMenuConnection);
+    if (!this.ReadOnly && action === 'edit') {
+      if (targetType === 'node' && node) {
+        this.NodeEditRequested.emit(node);
+      } else if (targetType === 'connection' && connection) {
+        this.ConnectionEditRequested.emit(connection);
       }
-    } else if (action === 'remove') {
-      this.pushUndoState();
-      if (this.contextMenuTargetType === 'node' && this.contextMenuNode) {
-        this.removeNodeById(this.contextMenuNode.ID);
-      } else if (this.contextMenuTargetType === 'connection' && this.contextMenuConnection) {
-        this.removeConnectionById(this.contextMenuConnection.ID);
+    } else if (!this.ReadOnly && action === 'remove') {
+      if (targetType === 'node' && node) {
+        this.pushUndoState();
+        this.removeNodeById(node.ID);
+      } else if (targetType === 'connection' && connection) {
+        this.pushUndoState();
+        this.removeConnectionById(connection.ID);
       }
     }
+
+    this.AfterContextMenuAction.emit(
+      new FlowAfterContextMenuActionEventArgs(action, targetType, node, connection),
+    );
   }
 
   @HostListener('document:click')
@@ -573,15 +672,21 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     }
   }
 
-  private showContextMenu(
+  private openContextMenu(
     event: MouseEvent,
     targetType: FlowContextMenuTarget,
     node: FlowNode | null,
     connection: FlowConnection | null
   ): void {
+    const defaults = this.ReadOnly ? [] : defaultContextMenuItems(targetType);
+    const before = new FlowBeforeContextMenuEventArgs(targetType, node, connection, event, defaults);
+    this.BeforeContextMenu.emit(before);
+    if (before.Cancel || before.Items.length === 0) return;
+
     this.contextMenuTargetType = targetType;
     this.contextMenuNode = node;
     this.contextMenuConnection = connection;
+    this.contextMenuItems = before.Items;
     this.contextMenuX = event.clientX;
     this.contextMenuY = event.clientY;
     this.contextMenuVisible = true;
@@ -786,4 +891,12 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   private generateId(): string {
     return 'flow-' + Math.random().toString(36).substring(2, 11);
   }
+}
+
+function defaultContextMenuItems(target: FlowContextMenuTarget): FlowContextMenuItem[] {
+    const noun = target === 'node' ? 'Node' : 'Connection';
+    return [
+        { ID: 'edit', Label: `Edit ${noun}`, Icon: 'fa-pen-to-square' },
+        { ID: 'remove', Label: `Remove ${noun}`, Icon: 'fa-trash-can', Danger: true },
+    ];
 }

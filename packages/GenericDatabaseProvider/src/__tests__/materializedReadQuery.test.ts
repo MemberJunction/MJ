@@ -2,6 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 
 /**
+ * The `spec` shape `buildMaterializedReadQuery` declares, derived from the real signature so it cannot drift.
+ * Lets the malformed-input tests double-cast deliberately-bad fixtures against the true parameter type instead
+ * of reaching for `any`.
+ */
+type MaterializedReadSpec = Parameters<typeof GenericDatabaseProvider.buildMaterializedReadQuery>[0]['spec'];
+
+/**
  * Phase 2 (plan §5): the PURE materialized-read query builder — the injection-safe, faithfulness-critical
  * core of parameterized RowFilterBroad read-time injection. Every caller value is BOUND (never in the SQL
  * string); ANY condition that would diverge from the live query returns null (→ caller runs live).
@@ -23,7 +30,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 isPostgres: false,
             });
             expect(plan).not.toBeNull();
-            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] = ?');
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] = ? ORDER BY [__mj_MaterializedRowID]');
             expect(plan!.parameters).toEqual(['Active']);
         });
 
@@ -34,7 +41,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { status: 'Active' },
                 isPostgres: true,
             });
-            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" = $1');
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" = $1 ORDER BY "__mj_MaterializedRowID"');
             expect(plan!.parameters).toEqual(['Active']);
         });
     });
@@ -48,7 +55,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                     paramValues: { c: 42 },
                     isPostgres: false,
                 });
-                expect(plan!.sql).toBe(`SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [ChapterID] ${op} ?`);
+                expect(plan!.sql).toBe(`SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [ChapterID] ${op} ? ORDER BY [__mj_MaterializedRowID]`);
                 expect(plan!.parameters).toEqual([42]);
             });
         }
@@ -62,7 +69,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { statuses: ['A', 'B', 'C'] },
                 isPostgres: false,
             });
-            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?, ?)');
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?, ?) ORDER BY [__mj_MaterializedRowID]');
             expect(plan!.parameters).toEqual(['A', 'B', 'C']);
         });
 
@@ -73,7 +80,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { statuses: ['X', 'Y'] },
                 isPostgres: true,
             });
-            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" NOT IN ($1, $2)');
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" NOT IN ($1, $2) ORDER BY "__mj_MaterializedRowID"');
             expect(plan!.parameters).toEqual(['X', 'Y']);
         });
     });
@@ -89,7 +96,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { minChapter: 10, statuses: ['A', 'B'] },
                 isPostgres: true,
             });
-            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "ChapterID" >= $1 AND "Status" IN ($2, $3)');
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "ChapterID" >= $1 AND "Status" IN ($2, $3) ORDER BY "__mj_MaterializedRowID"');
             expect(plan!.parameters).toEqual([10, 'A', 'B']);
         });
 
@@ -129,7 +136,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { statuses: ["a", "b') OR 1=1 --"] },
                 isPostgres: false,
             });
-            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?)');
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?) ORDER BY [__mj_MaterializedRowID]');
             expect(plan!.parameters).toEqual(['a', "b') OR 1=1 --"]);
         });
     });
@@ -144,7 +151,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { p: 1 },
                 isPostgres: false,
             });
-            expect(plan!.sql).toBe('SELECT [Wei]]rd] FROM [__mj].[v] WHERE [Wei]]rd] = ?');
+            expect(plan!.sql).toBe('SELECT [Wei]]rd] FROM [__mj].[v] WHERE [Wei]]rd] = ? ORDER BY [__mj_MaterializedRowID]');
         });
 
         it('PostgreSQL escapes `"` in a column name', () => {
@@ -156,7 +163,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { p: 1 },
                 isPostgres: true,
             });
-            expect(plan!.sql).toBe('SELECT "Wei""rd" FROM "__mj"."v" WHERE "Wei""rd" = $1');
+            expect(plan!.sql).toBe('SELECT "Wei""rd" FROM "__mj"."v" WHERE "Wei""rd" = $1 ORDER BY "__mj_MaterializedRowID"');
         });
     });
 
@@ -197,7 +204,11 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
         });
 
         it('a malformed spec element (missing/non-string column, operator, or paramName) → null, never throws', () => {
-            const bad = [
+            // Deliberately malformed specs — the whole point is that they VIOLATE the declared spec shape, so
+            // they are typed as `unknown[][]` and reach the call through the sanctioned double-cast. That keeps
+            // the call typed against the real signature while still exercising the runtime guard that must
+            // reject bad persisted metadata rather than throw.
+            const bad: unknown[][] = [
                 [{ operator: '=', paramName: 'status', kind: 'scalar' }],            // missing column
                 [{ column: 'Status', paramName: 'status', kind: 'scalar' }],         // missing operator
                 [{ column: 'Status', operator: '=', kind: 'scalar' }],               // missing paramName
@@ -205,8 +216,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 [null],                                                              // null element
             ];
             for (const s of bad) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                expect(build({ ...base, spec: s as any, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
+                expect(build({ ...base, spec: s as unknown as MaterializedReadSpec, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
             }
         });
     });
@@ -258,9 +268,10 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
             expect(mk('1', true)!.parameters).toEqual([false]);
         });
 
-        it('date: binds the UTC ISO string (live\'s new Date(v).toISOString()), NOT the naive input', () => {
+        it('date (SQL Server): binds the UTC value as a zone-less ISO string (strips Z — datetime2 rejects it)', () => {
             // Explicit-offset input → deterministic UTC shift regardless of the test runner\'s timezone. Binding the
-            // naive input would fail this — which is the divergence bug this locks out.
+            // naive input would fail this — which is the divergence bug this locks out. SQL Server rejects the ISO
+            // 'Z' zone suffix for datetime2 (error 241), so the value is bound WITHOUT it — same UTC wall-clock.
             const plan = build({
                 ...base,
                 spec: [{ column: 'Status', operator: '>=', paramName: 'since', kind: 'scalar' }],
@@ -268,8 +279,19 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramTypes: { since: 'date' },
                 isPostgres: false,
             });
-            expect(plan!.parameters).toEqual(['2026-01-14T19:00:00.000Z']);
+            expect(plan!.parameters).toEqual(['2026-01-14T19:00:00.000']);
             expect(typeof plan!.parameters[0]).toBe('string');
+        });
+
+        it('date (PostgreSQL): binds the UTC ISO string WITH the Z suffix (timestamptz accepts it)', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: '>=', paramName: 'since', kind: 'scalar' }],
+                paramValues: { since: '2026-01-15T00:00:00+05:00' },
+                paramTypes: { since: 'date' },
+                isPostgres: true,
+            });
+            expect(plan!.parameters).toEqual(['2026-01-14T19:00:00.000Z']);
         });
 
         it('date: an unparseable value → null (live)', () => {

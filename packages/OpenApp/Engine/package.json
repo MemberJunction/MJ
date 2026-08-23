@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/open-app-engine",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: MJ Open App Engine - packaging, distribution, and installation system for MJ Open Apps.",
   "type": "module",
   "main": "dist/index.js",
@@ -14,16 +14,21 @@
     "test": "vitest run"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.0",
-    "@memberjunction/core-entities": "6.1.0-edge.0",
-    "@memberjunction/global": "6.1.0-edge.0",
-    "@memberjunction/sql-dialect": "6.1.0-edge.0",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/sql-dialect": "6.1.0-edge.3",
     "@octokit/rest": "^21.1.1",
     "semver": "^7.7.1",
     "simple-git": "^3.27.0",
     "zod": "^3.25.0"
+  },
+  "optionalDependencies": {
+    "@memberjunction/skyway-core": "^0.6.2",
+    "@memberjunction/skyway-postgres": "^0.6.2",
+    "@memberjunction/skyway-sqlserver": "^0.6.2"
   },
   "devDependencies": {
     "@types/semver": "^7.5.8",

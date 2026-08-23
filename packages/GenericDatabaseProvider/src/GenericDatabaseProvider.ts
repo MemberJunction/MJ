@@ -56,6 +56,7 @@ import {
     IMetadataProvider,
     UserInfo,
     LocalCacheManager,
+    CachedRunViewResult,
     LogError,
     LogStatus,
     LogStatusEx,
@@ -99,8 +100,8 @@ import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
-import { EntityActionEngineServer } from '@memberjunction/actions';
-import { ActionResult } from '@memberjunction/actions-base';
+import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
+import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -448,17 +449,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Handles entity actions (non-AI) for save, delete, or validate operations.
      * Uses EntityActionEngineServer to discover and run active actions.
+     *
+     * **After-hooks run under `EntityActionDispatchGuard`; before-hooks and Validate do not.**
+     * The guard suppresses an action re-entering itself on the same record (the enrich-and-write-back
+     * loop) and coalesces a burst of saves into one pending rerun. Neither belongs on the
+     * synchronous half of the pipeline: `Validate` and `Before*` participate in the save and can
+     * abort it, so skipping one would let a record through that should have been refused, and
+     * deferring one would decide the save's outcome after it had already happened.
+     *
+     * **An After-hook binding may also ask to run durably** (`EntityAction.RunMode = 'Durable'`).
+     * After-hooks are dispatched fire-and-forget, so a process that dies mid-flight loses the work
+     * with nothing to retry it; durable dispatch hands it to the task-graph substrate instead (D14).
+     * `Validate` and `Before*` ignore RunMode entirely — deferring work that decides whether the
+     * save succeeds is not a durability improvement, it is a different feature.
      */
     protected override async HandleEntityActions(
         entity: BaseEntity,
         baseType: 'save' | 'delete' | 'validate',
         before: boolean,
         user: UserInfo,
+        originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
+        // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
+        // reloads the entity — resetting every field's OldValue to its new value. A change context
+        // built any later would report that nothing changed. Everything below this line may yield;
+        // nothing above it does.
+        const entityChange = BuildEntityChangeContext(entity);
         try {
             const engine = EntityActionEngineServer.Instance;
             await engine.Config(false, user);
-            const newRecord = entity.IsSaved ? false : true;
+            const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
             const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
@@ -467,19 +488,44 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return [];
             }
 
+            // Only the after-hooks are guarded — they are the fire-and-forget half, and the only
+            // half an action's own write-back can re-enter.
+            const guarded = baseType !== 'validate' && !before;
             const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
             const results: ActionResult[] = [];
             for (const a of activeActions) {
-                const result = await engine.RunEntityAction({
-                    EntityAction: a,
-                    EntityObject: entity,
-                    InvocationType: invocationTypeEntity,
-                    ContextUser: user,
-                });
-                // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
-                // outside it — the action never ran, so there is no result to report.
-                if (result) {
-                    results.push(result);
+                if (guarded && originatingEntityActionIDs?.some((id) => UUIDsEqual(id, a.ID))) {
+                    // The caller declared this save IS this action's write-back. Used by work that
+                    // detached from the async context the guard tracks — see
+                    // EntitySaveOptions.OriginatingEntityActionIDs.
+                    continue;
+                }
+
+                const runOnce = async () => {
+                    // Durability is NOT decided here. A binding's RunMode is honoured inside the
+                    // invocation path, after its scope check and its filters — deciding it at this
+                    // level would hand the work over before either gate ran.
+                    const result = await engine.RunEntityAction({
+                        EntityAction: a,
+                        EntityObject: entity,
+                        InvocationType: invocationTypeEntity,
+                        ContextUser: user,
+                        EntityChange: entityChange,
+                    });
+                    // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
+                    // outside it — the action never ran, so there is no result to report.
+                    if (result) {
+                        results.push(result);
+                    }
+                };
+
+                if (guarded) {
+                    await EntityActionDispatchGuard.Instance.Dispatch(
+                        BuildEntityActionDispatchKey(a.ID, entity.EntityInfo.ID, entity.PrimaryKey.ToString()),
+                        runOnce,
+                    );
+                } else {
+                    await runOnce();
                 }
             }
             return results;
@@ -565,7 +611,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<void> {
         if (options.SkipEntityActions !== true)
-            await this.HandleEntityActions(entity, 'save', true, user);
+            await this.HandleEntityActions(entity, 'save', true, user, options.OriginatingEntityActionIDs);
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
 
@@ -585,7 +631,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (options.SkipEntityAIActions !== true)
             this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
         if (options.SkipEntityActions !== true)
-            this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+            this.HandleEntityActions(entity, 'save', false, user, options.OriginatingEntityActionIDs); // NO AWAIT INTENTIONALLY
     }
 
     protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<Record<string, unknown> | null> {
@@ -614,13 +660,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             entity.EntityInfo.AllowMultipleSubtypes &&
             entity.EntityInfo.TrackRecordChanges
         )
+            // No explicit connectionSource: sibling writes must land in the same transaction as the
+            // save that triggered them, which is what happens by default — ExecuteSQL runs on the
+            // provider's ambient transaction when no source is given.
             ? this.PropagateRecordChangesToSiblings(
                 entity.EntityInfo,
                 overlappingChangeData,
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
-                entity.ProviderTransaction ? { connectionSource: entity.ProviderTransaction } : undefined,
             )
             : null;
 
@@ -649,14 +697,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {
         if (false === options?.SkipEntityActions)
-            await this.HandleEntityActions(entity, 'delete', true, user);
+            await this.HandleEntityActions(entity, 'delete', true, user, options?.OriginatingEntityActionIDs);
         if (false === options?.SkipEntityAIActions)
             await this.HandleEntityAIActions(entity, 'delete', true, user);
     }
 
     protected override OnAfterDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): void {
         if (false === options?.SkipEntityActions)
-            this.HandleEntityActions(entity, 'delete', false, user);
+            this.HandleEntityActions(entity, 'delete', false, user, options?.OriginatingEntityActionIDs);
         if (false === options?.SkipEntityAIActions)
             this.HandleEntityAIActions(entity, 'delete', false, user);
 
@@ -1256,19 +1304,64 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return this.GetEffectiveBaseView(entityInfo, params);
         }
         const rv = new RunView(this);
-        const res = await rv.RunView<{ Status: string }>(
+        const res = await rv.RunView<{ Status: string; ViewName: string | null }>(
             {
                 EntityName: 'MJ: Materialized Results',
                 ExtraFilter: `SourceType='EntityBaseView' AND SourceEntityID='${entityInfo.ID}'`, // entityInfo.ID: trusted metadata PK
-                Fields: ['Status'],
+                Fields: ['Status', 'ViewName'],
                 ResultType: 'simple',
                 MaxRows: 1,
                 BypassCache: true,
             },
             contextUser,
         );
-        const active = res.Success && res.Results?.length > 0 && res.Results[0].Status === 'Active';
-        return active ? `materialized_vw${entityInfo.CodeName}` : entityInfo.BaseView;
+        // A FAILED lookup must not masquerade as "no materialization exists" — see MaterializationLookupFailed
+        // for why the two must stay distinguishable. Falling back to the LIVE base view is correct in BOTH
+        // cases; only the silence was the defect.
+        if (this.MaterializationLookupFailed(res, `entity "${entityInfo.Name}" (base-view materialization status)`)) {
+            return entityInfo.BaseView;
+        }
+        const row = res.Results?.length > 0 ? res.Results[0] : null;
+        if (row?.Status !== 'Active') return entityInfo.BaseView;
+        // Use the AUTHORITATIVE wrapper-view name persisted on the row rather than re-deriving
+        // materialized_vw<CodeName>: the row's ViewName is what the mint/migration actually created, so it stays
+        // correct for a migration-provided (non-conventionally-named) view or an entity renamed since mint (whose
+        // current CodeName no longer matches the view). Matches how the query path reads ViewName from the row.
+        // Fall back to the convention only if the row somehow lacks a ViewName. (SchemaName stays the entity's —
+        // base-view materialization always mints into the source entity's own schema.)
+        return row.ViewName?.trim() || `materialized_vw${entityInfo.CodeName}`;
+    }
+
+    /**
+     * Reports whether a materialization-metadata `RunView` FAILED, logging the failure when it did.
+     *
+     * Every materialization read path falls back to LIVE data when it cannot confirm an Active snapshot, and
+     * that fallback is correct — live data is always right, materialization is a transparent optimization,
+     * never a correctness dependency. The defect this guards is the **silence**: `RunView` signals an
+     * authorization or query failure through `Success === false` rather than by throwing, so collapsing a
+     * failure into the same branch as the legitimate "no materialization row exists" case makes the two
+     * indistinguishable to operator and caller alike.
+     *
+     * That matters because read access to the materialization entities is role-gated (`CanRead` is granted
+     * only to the UI / Developer / Integration roles). A user on a restricted role — including MJ's
+     * magic-link / external-access pattern — therefore has every one of these lookups fail, and so
+     * permanently reads LIVE data for every `DataSource:'Materialized'` request, while an admin issuing the
+     * identical request is served the snapshot. Two users, different data, no error surfaced to either.
+     * Logging leaves the safe fallback intact but makes the divergence diagnosable.
+     *
+     * @param result the `RunView` result to inspect (structurally a `RunViewResult`).
+     * @param context human-readable description of what was being resolved, for the log message.
+     * @returns `true` if the lookup failed and the caller should take its live-data fallback; `false` otherwise.
+     */
+    protected MaterializationLookupFailed(result: { Success: boolean; ErrorMessage: string }, context: string): boolean {
+        if (result.Success) return false;
+        LogError(
+            `GenericDatabaseProvider: materialization metadata lookup failed for ${context} — falling back to LIVE data. ` +
+                `The fallback is safe (live data is always correct), but the snapshot will NEVER be served for this caller. ` +
+                `The most likely cause is the current user's roles lacking CanRead on the materialization entities. ` +
+                `Error: ${result.ErrorMessage || 'unknown error'}`,
+        );
+        return true;
     }
 
     /**
@@ -1690,13 +1783,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // caller's OrderBy — BuildKeysetSeekClause already validated that any caller-provided
             // OrderBy referenced the PK and we use the resolved direction.
             let rawOrderBy: string;
+            let orderByIsPkFallback = false;
             if (usingKeyset) {
                 rawOrderBy = `${keysetPkColumnName} ${keysetDirection}`;
             } else {
                 rawOrderBy = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
+                if (rawOrderBy.trim().length === 0 && maxRowsForQuery > 0 && entityInfo.FirstPrimaryKey) {
+                    // ── DETERMINISM FALLBACK ──
+                    // A row-LIMITED query with no ORDER BY returns an ARBITRARY subset: `TOP N` /
+                    // `LIMIT N` without an ordering is undefined by definition, and the engine is
+                    // free to return different rows run to run (or between two runs of the *same*
+                    // walk). Order by the PK so "the first N rows" means something.
+                    //
+                    // This is what broke keyset (AfterKey) pagination end to end. Page 1 of a walk
+                    // has no cursor yet, so `usingKeyset` is false and it landed here unordered,
+                    // while page 2+ force `ORDER BY <pk>` + `<pk> > @afterKey`. The two pages were
+                    // ordered differently, so a walk both RE-RETURNED page-1 rows and could silently
+                    // MISS others. Reproduced as 4 duplicates in an 8-row page (IT25 V10).
+                    //
+                    // OFFSET pagination already had exactly this fallback (see the pagination block
+                    // below); it was simply never applied to the TOP/LIMIT path. Same PK, so a
+                    // keyset walk's page 1 now agrees with every later page.
+                    rawOrderBy = this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name);
+                    orderByIsPkFallback = true;
+                }
             }
             const orderBy: string = rawOrderBy.length > 0
-                ? (usingKeyset ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
+                ? (usingKeyset || orderByIsPkFallback ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
 
             // View run logging (SQL Server-specific, others return null)
@@ -1712,16 +1825,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     viewSQL = logResult.executeViewSQL;
                     userViewRunID = logResult.runID;
                 } else if (orderBy.length > 0) {
-                    if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                    if (!usingKeyset && !orderByIsPkFallback && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
             } else if (orderBy.length > 0) {
-                if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                if (!usingKeyset && !orderByIsPkFallback && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                 viewSQL += ` ORDER BY ${orderBy}`;
             }
 
             // ── Pagination / Non-paginated limit ──
             if (usingPagination && entityInfo.FirstPrimaryKey) {
+                // Belt-and-braces: the determinism fallback above already supplies ORDER BY <PK>
+                // for every row-limited query (pagination included), so `orderBy` is normally
+                // non-empty here. Kept because OFFSET/FETCH is a hard SYNTAX error without an
+                // ORDER BY — if the fallback above is ever narrowed, this must still hold.
                 if (!orderBy) {
                     viewSQL += ` ORDER BY ${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)}`;
                 }
@@ -1993,7 +2110,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         rawSafeTerm: string,
     ): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
-            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+            // Function replacement: the term is end-user input, so `$&`/`` $` ``/`$'`/`$$`
+            // in it must be data, not splice directives. See issue #3171.
+            return field.UserSearchParamFormatAPI.replace('{0}', () => rawSafeTerm);
         }
         if (!this.isTextSearchableType(field)) return '';
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
@@ -2070,7 +2189,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                             if (innerViewEntity) {
                                 const innerWhere = await this.RenderViewWhereClause(innerViewEntity, user, stack);
                                 const innerSQL = `SELECT ${this.QuoteIdentifier(innerViewEntity.ViewEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerViewEntity.ViewEntityInfo.SchemaName, innerViewEntity.ViewEntityInfo.BaseView)} WHERE (${innerWhere})`;
-                                sWhere = sWhere.replace(match, innerSQL);
+                                // Function replacement — `innerSQL` is generated SQL that can
+                                // legitimately contain `$`. See issue #3171.
+                                sWhere = sWhere.replace(match, () => innerSQL);
                             } else throw new Error(`View ID ${variableValue} not found in metadata`);
                         } else {
                             throw new Error(`Unknown variable ${variableName} as part of template match ${match} in view where clause`);
@@ -2247,7 +2368,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: CachedRunViewResult }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -2313,7 +2434,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: CachedRunViewResult }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -2691,7 +2812,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         index: number,
         entityLabel: string,
         contextUser?: UserInfo,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: CachedRunViewResult } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
@@ -2715,13 +2836,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] },
+        serverCached: CachedRunViewResult,
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         // The server cache stores the full-width superset — project down to the
         // caller's requested fields (∪ PK) before returning, exactly like the
         // ProviderBase hit path. Serving unprojected rows here previously leaked
         // whatever shape happened to be cached to every subsequent caller.
+        //
+        // `serverCached.results` are the cache's shared, deep-frozen rows — the runtime freeze
+        // is what actually protects the cache. See ProviderBase's hit path.
         const results = callerFields
             ? ProjectRowsToFields(serverCached.results as Record<string, unknown>[], callerFields)
             : serverCached.results;
@@ -2733,8 +2857,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
             // Carry aggregates through (B40-family, 4th drop). The server slot stores them and
             // GetRunViewResult returns them, but this serve-leg's inline serverCached type omitted
-            // the field, so TypeScript could not flag the drop. Both callers (noCacheStatus + stale)
-            // now widen their type to match, so the field flows.
+            // the field, so TypeScript could not flag the drop. Both legs now share the canonical
+            // CachedRunViewResult type, so a future field can no longer be silently dropped here.
             aggregateResults: serverCached.aggregateResults,
         };
     }
@@ -3146,7 +3270,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const row = rows[0];
                     results.set(index, {
                         success: true,
-                        rowCount: Number(row['RowCount']),
+                        // Both spellings accepted. The shipped `CacheValidationSQL` field description tells authors
+                        // to return `TotalRows`, while this has only ever read `RowCount` — so a query written
+                        // from the documentation yields `Number(undefined)` = NaN, `NaN !== NaN` makes the slot
+                        // never validate, and NaN is then written back into the client's cache entry where `??`
+                        // cannot clear it. Silent, permanent degradation to always-refetch, with no error.
+                        rowCount: Number(row['RowCount'] ?? row['TotalRows']),
                         maxUpdatedAt: row['MaxUpdatedAt'] ? new Date(String(row['MaxUpdatedAt'])).toISOString() : undefined,
                     });
                 } else {
@@ -3218,6 +3347,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         '=', '!=', '<>', '<', '>', '<=', '>=', 'IN', 'NOT IN',
     ]);
 
+    /**
+     * The stable surrogate row-id column every materialized snapshot table carries (CodeGenLib's
+     * `MATERIALIZATION_SURROGATE_COLUMN`). Duplicated here (not imported) for the same reason as the operator
+     * set above — the provider must not depend on dev-time CodeGenLib. The wrapper view exposes it (`SELECT *`),
+     * so ordering by it gives paged materialized reads a deterministic, refresh-stable order (see
+     * {@link buildMaterializedReadQuery}).
+     */
+    private static readonly MATERIALIZED_SURROGATE_ORDER_COLUMN = '__mj_MaterializedRowID';
+
     /** Quotes a SQL identifier for the target engine (SQL Server `[x]`, PostgreSQL `"x"`), escaping the closer. */
     private static quoteMaterializedIdentifier(name: string, isPostgres: boolean): string {
         return isPostgres ? `"${name.replace(/"/g, '""')}"` : `[${name.replace(/]/g, ']]')}]`;
@@ -3242,6 +3380,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * pagination under StartRow/MaxRows — is preserved) rather than from the unordered snapshot. Parse failure or
      * an un-reasoned statement shape returns `true` (refuse-to-live: treat unknown as ordered rather than risk
      * serving mis-ordered pages). Mirrors MaterializationRefresher.stripTopLevelOrderBy's AST detection.
+     *
+     * @internal Materialized-read ordering-fidelity gate — NOT part of this package's supported public API;
+     * `static` only so it can be unit-tested. Do not call from outside `@memberjunction/generic-database-provider`.
      */
     public static queryHasTopLevelOrderBy(sql: string, platformKey: string | undefined): boolean {
         if (!sql || sql.trim().length === 0) return false;
@@ -3313,7 +3454,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         const cols = outputColumns.map((c) => q(c)).join(', ');
-        const sql = `SELECT ${cols} FROM ${q(schemaName)}.${q(viewName)} WHERE ${predicates.join(' AND ')}`;
+        // Deterministic page order. A materialized read carries no user ORDER BY (an ordered source query falls
+        // back to live), so without an explicit order the paging engine would append `ORDER BY (SELECT NULL)` and
+        // successive pages could skip or duplicate rows whenever the execution plan differs between calls. The
+        // snapshot's stable surrogate row-id — exposed by the wrapper view and unchanged between refreshes — gives
+        // a total, refresh-stable order; it need not appear in the SELECT list to be an ORDER BY target, and
+        // buildDataSQL detects this ORDER BY and pages against it instead of the dialect default.
+        const orderBy = q(GenericDatabaseProvider.MATERIALIZED_SURROGATE_ORDER_COLUMN);
+        const sql = `SELECT ${cols} FROM ${q(schemaName)}.${q(viewName)} WHERE ${predicates.join(' AND ')} ORDER BY ${orderBy}`;
         return { sql, parameters };
     }
 
@@ -3349,7 +3497,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
             case 'date': {
                 const d = value instanceof Date ? value : new Date(String(value));
-                return Number.isNaN(d.getTime()) ? { ok: false } : { ok: true, value: d.toISOString() };
+                if (Number.isNaN(d.getTime())) return { ok: false };
+                const iso = d.toISOString();
+                // SQL Server rejects the ISO 'Z' zone suffix for datetime2/datetime (error 241 — 'Z' is valid only
+                // for datetimeoffset), so binding it would throw and force a fallback to live. Strip it for SS: the
+                // value is already the UTC moment and a zone-less ISO string binds as that same datetime2 wall-clock,
+                // matching the live path's rendered literal (no row divergence). PostgreSQL's timestamptz accepts
+                // 'Z', so keep it there.
+                return { ok: true, value: isPostgres ? iso : iso.replace(/Z$/, '') };
             }
             case 'string':
                 return { ok: true, value: String(value) };
@@ -3372,7 +3527,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<{ sql: string; parameters: unknown[] } | null> {
         if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
         if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
-        const matId = query.MaterializedResultID;
+        // The query<->materialization link lives in the MaterializedResultQuery join table — there is no
+        // Query.MaterializedResultID column (that direct FK, paired with MaterializedResult.SourceQueryID,
+        // formed a circular dependency). Resolve this query's materialization via the join; absent → live.
+        // query.ID is our own metadata UUID (never caller input), so it is safe to interpolate.
+        const linkRv = new RunView(this);
+        const linkRes = await linkRv.RunView<{ MaterializedResultID: string }>(
+            {
+                EntityName: 'MJ: Materialized Result Queries',
+                ExtraFilter: `QueryID='${query.ID}'`,
+                Fields: ['MaterializedResultID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        // Same failure-vs-absence distinction as the base-view path: a permission/query failure here would
+        // otherwise be indistinguishable from "this query is not materialized", silently pinning the caller to
+        // live data forever. Still fall back to live (correct either way) — just not silently.
+        if (this.MaterializationLookupFailed(linkRes, `query "${query.Name}" (materialization join lookup)`)) return null;
+        if (!linkRes.Results || linkRes.Results.length === 0) return null; // query not materialized → live
+        const matId = linkRes.Results[0].MaterializedResultID;
         if (!matId) return null;                                       // query not materialized → live
         // Ordering fidelity: buildMaterializedReadQuery emits no ORDER BY, and the snapshot was built with the
         // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER
@@ -3402,7 +3577,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             },
             contextUser,
         );
-        if (!res.Success || !res.Results || res.Results.length === 0) return null;
+        if (this.MaterializationLookupFailed(res, `query "${query.Name}" (materialization metadata)`)) return null;
+        if (!res.Results || res.Results.length === 0) return null;
         const mat = res.Results[0];
         if (mat.Status !== 'Active') return null;                 // Building / DriftHold / stale → live
         if (mat.ParamMode !== 'RowFilterBroad') return null;      // None / PerValueCache → live (this path only serves Bucket 1)
@@ -3473,26 +3649,52 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // live-rendered SQL), so a fallback below runs the live path unchanged.
                 try {
                     const materializedSQL = matPlan.sql;
-                    const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
-                    const paginated = this.applyQueryPagination(timing.result, params);
-                    let rows = paginated.paginatedResult;
+                    // SQL-level paging parity with the live path: when the caller requested a page, wrap the
+                    // materialized read with OFFSET/FETCH (SQL Server) / LIMIT-OFFSET (PostgreSQL) plus a parallel
+                    // COUNT — via the same QueryPagingEngine the live path uses — so only the requested page is
+                    // pulled from the snapshot. Without this the whole (potentially multi-million-row) filtered
+                    // snapshot was loaded into Node and sliced in memory, defeating the large-dataset case
+                    // materialization targets. The bound row-filter parameters (matPlan.parameters) are preserved
+                    // in both the data and count SQL; StartRow/MaxRows are inlined by WrapWithPaging. The materialized
+                    // read carries an explicit `ORDER BY <surrogate row-id>` (buildMaterializedReadQuery), so paging
+                    // is deterministic and refresh-stable across pages rather than relying on the dialect default
+                    // order. No cache layer — materialized reads bypass the query cache by design. When no page is
+                    // requested, keep the full-load path.
+                    const matUseSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+                    let rows: Record<string, unknown>[];
+                    let matTotalRowCount: number;
+                    let matExecutionTime: number;
+                    if (matUseSQLPaging) {
+                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, params.StartRow!, params.MaxRows!, this.PlatformKey as DatabasePlatform);
+                        const start = Date.now();
+                        const [dataResult, countResult] = await Promise.all([
+                            this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, matPlan.parameters, undefined, contextUser),
+                            this.ExecuteSQL<{ TotalRowCount: number }>(paging.CountSQL, matPlan.parameters, undefined, contextUser),
+                        ]);
+                        matExecutionTime = Date.now() - start;
+                        rows = dataResult ?? [];
+                        matTotalRowCount = countResult?.[0]?.TotalRowCount != null ? Number(countResult[0].TotalRowCount) : rows.length;
+                    } else {
+                        const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
+                        matExecutionTime = timing.executionTime;
+                        const paginated = this.applyQueryPagination(timing.result, params);
+                        rows = paginated.paginatedResult;
+                        matTotalRowCount = paginated.totalRowCount;
+                    }
                     if (params.Enrichment?.EnricherKey) {
                         rows = await this.enrichQueryResults(rows, params, query, contextUser);
                     }
-                    this.auditQueryExecution(query, params, materializedSQL, rows.length, paginated.totalRowCount, timing.executionTime, contextUser);
-                    // Report PageNumber/PageSize consistently with the live path when the caller requested paging
-                    // (the materialized branch paginates in memory, but the reported metadata must match live).
-                    const matPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+                    this.auditQueryExecution(query, params, materializedSQL, rows.length, matTotalRowCount, matExecutionTime, contextUser);
                     return {
                         Success: true,
                         QueryID: query.ID,
                         QueryName: query.Name,
                         Results: rows,
                         RowCount: rows.length,
-                        TotalRowCount: paginated.totalRowCount,
-                        PageNumber: matPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
-                        PageSize: matPaging ? params.MaxRows! : undefined,
-                        ExecutionTime: timing.executionTime,
+                        TotalRowCount: matTotalRowCount,
+                        PageNumber: matUseSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                        PageSize: matUseSQLPaging ? params.MaxRows! : undefined,
+                        ExecutionTime: matExecutionTime,
                         ErrorMessage: '',
                         AppliedParameters: appliedParameters,
                         RenderedSQL: materializedSQL,
@@ -3804,6 +4006,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     QueryID: cached.queryId ?? query.ID,
                     QueryName: query.Name,
                     Success: true,
+                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                    // rows) while the outbound Results is mutable — the runtime freeze is the
+                    // enforcement. Same cast as the RunView hit paths in ProviderBase.
                     Results: cached.results as RunQueryResult['Results'],
                     RowCount: cached.results.length,
                     TotalRowCount: cached.rowCount ?? cached.results.length,
@@ -4407,13 +4612,42 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private renderRLSProjectionValue(field: EntityFieldInfo, val: unknown): string {
         if (val == null) {
-            const sqlType = field.SQLFullType;
-            if (!sqlType || sqlType.trim().length === 0) {
+            // Metadata records field types in SQL Server's vocabulary, so interpolating one raw
+            // emits `CAST(NULL AS uniqueidentifier)` on PostgreSQL, where that type does not exist.
+            // The statement throws — and because this is the RLS post-image gate, the caller gets a
+            // type error in place of the row-scope rejection it was testing for: an authorization
+            // decision surfacing as a SQL fault. Translate through the dialect, the same mapping
+            // CodeGen and the converter use.
+            //
+            // Map from `field.Type` (the BASE type), NOT `field.SQLFullType`, which already has the
+            // length formatted in as `nvarchar(50)`. `MapDataTypeToString` looks the base type up
+            // and returns anything unrecognized UNCHANGED, so a full type string maps to itself and
+            // the translation silently no-ops. `uniqueidentifier` carries no length and so maps
+            // correctly either way — which is precisely how a half-fixed version of this passes a
+            // spot check and still emits `CAST(NULL AS nvarchar(50))` on the very next field.
+            const baseType = field.Type;
+            if (!baseType || baseType.trim().length === 0) {
                 throw new Error(
                     `Cannot build RLS post-image projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
                 );
             }
-            return `CAST(NULL AS ${sqlType})`;
+            // `field.Length` is the SYSTEM (byte) length from `sys.columns`, but
+            // `MapDataTypeToString` takes a CHARACTER count — `RuntimeSchemaManager` calls it as
+            // `('NVARCHAR', 200)` meaning 200 characters. `SQLFullType` knows the difference and
+            // halves it for the n-types; passing the raw byte length instead DOUBLES every
+            // `nvarchar`/`nchar` width. That is not cosmetic: SQL Server caps `NVARCHAR` at 4000,
+            // and 119 fields in a stock database — including the shipped
+            // `MJ: Conversation Detail Attachments.FileName` at 8000 — exceed it once doubled, so
+            // the CAST becomes illegal and the RLS post-image gate throws on SQL SERVER: the exact
+            // failure this change set out to remove from PostgreSQL, relocated to the primary
+            // platform. `MaxLength` does the halving, but flattens the `-1` MAX sentinel to 0, so
+            // the sentinel is passed through explicitly.
+            const charLength = field.Length === -1 ? -1 : field.MaxLength;
+            // `getDialect()` is nullable on this base. Falling back to `SQLFullType` — the exact
+            // string this used to emit — keeps SQL Server, whose vocabulary that already is,
+            // byte-identical to its previous behaviour.
+            const mapped = this.getDialect()?.MapDataTypeToString(baseType, charLength, field.Precision, field.Scale);
+            return `CAST(NULL AS ${mapped ?? field.SQLFullType})`;
         }
         if (typeof val === 'boolean') {
             return val ? '1' : '0';
@@ -4543,7 +4777,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -4585,7 +4821,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fp = cacheAvailable
                 ? cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 )
                 : '';
             uncachedFingerprints.push(fp);
@@ -4630,7 +4868,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt, undefined, undefined, this);
+                // ProviderInternalScaffolding — for the MJ_Metadata dataset ONLY. Those rows are
+                // consumed by this provider's own assembly steps, which mutate them in place by
+                // design: PostProcessEntityMetadata sorts the entity array and attaches child
+                // collections onto each entity/field row, and GetAllMetadata's Applications
+                // assembly writes ApplicationEntities/ApplicationSettings onto Application rows.
+                // Freezing them makes metadata bootstrap throw and the process starts blind.
+                //
+                // Every OTHER dataset is served to arbitrary consumers (BaseEngine.Load hands
+                // item.Results — these very arrays — to every engine subclass), so those slots
+                // must stay under the defensive deep-freeze like any RunView result.
+                const isMetadataScaffolding = datasetName === ProviderBase._mjMetadataDatasetName;
+                await cache.SetRunViewResult(
+                    uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt,
+                    undefined, undefined, this, undefined,
+                    isMetadataScaffolding ? { ProviderInternalScaffolding: true } : undefined
+                );
             }
 
             sqlResults.push({
@@ -4762,7 +5015,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -4913,9 +5168,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Key namespace for a dataset item's cached rows.
+     *
+     * Dataset items are cached through the same fingerprint builder ordinary RunViews use, with
+     * only `{ EntityName, ExtraFilter }` — and every shipped item has a NULL `WhereClause`, so
+     * without this segment a dataset item and a plain unfiltered read of the same entity produce
+     * an IDENTICAL key and share one slot. That leaks the `MJ_Metadata` scaffolding exemption
+     * (deliberately unfrozen rows) to ordinary callers of `MJ: Entities` / `MJ: Entity Fields`,
+     * and lets an ordinary read repopulate an evicted slot FROZEN, which then breaks the next
+     * metadata refresh.
+     *
+     * Keyed by dataset + item code so two items over the same entity also stay distinct.
+     * Callers must use this on the read, the write-through, and the status paths alike — the
+     * three must agree or dataset reads stop finding dataset writes.
+     */
+    protected datasetCacheSegment(datasetName: string, itemCode: string): string {
+        return `${datasetName}/${itemCode}`;
+    }
+
+    /**
      * Computes the latest update date for a dataset item from its result rows and dataset metadata.
      * Used by both the cache-hit and cache-miss paths in GetDatasetByName.
-     * @param rows - The result rows (from cache or SQL)
+     * @param rows - The result rows (from cache or SQL). `readonly` because cache-hit callers
+     *               pass the cache's shared, frozen rows; this method only scans them.
      * @param dateFieldToCheck - The field name to scan for latest date
      * @param item - The dataset item metadata row (contains DatasetItemUpdatedAt, DatasetUpdatedAt)
      * @returns The latest date across all rows and dataset metadata

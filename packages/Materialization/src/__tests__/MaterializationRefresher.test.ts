@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { EntityInfo } from '@memberjunction/core';
 import { MaterializationRefresher, MATERIALIZATION_SURROGATE_COLUMN, FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES, WATERMARK_SAFETY_OVERLAP_MS } from '../MaterializationRefresher';
 
 /**
@@ -28,7 +29,12 @@ describe('MaterializationRefresher.buildFullRebuildStatementsSQLServer', () => {
             const swap = stmts[2];
             expect(swap.startsWith('SET XACT_ABORT ON;')).toBe(true); // rolls back on mid-swap error (no orphaned tran)
             expect(swap).toContain('BEGIN TRANSACTION;');
-            expect(swap.trim().endsWith('COMMIT TRANSACTION;')).toBe(true);
+            // The batch commits and THEN restores the connection default: SET options persist for the session,
+            // and the pool reuses this physical connection for unrelated requests, which would otherwise
+            // inherit XACT_ABORT ON and see their recoverable statement errors escalate to transaction aborts.
+            expect(swap).toContain('COMMIT TRANSACTION;');
+            expect(swap.trim().endsWith('SET XACT_ABORT OFF;')).toBe(true);
+            expect(swap.indexOf('COMMIT TRANSACTION;')).toBeLessThan(swap.indexOf('SET XACT_ABORT OFF;'));
             expect(swap).toContain('DROP TABLE [__mj].[materialized_Demo]');
             expect(swap).toContain("EXEC sp_rename '__mj.materialized_Demo__shadow', 'materialized_Demo'");
             // CREATE VIEW runs via EXEC() (must be sole statement of its batch) and points at the canonical name
@@ -83,6 +89,39 @@ describe('MaterializationRefresher.buildFullRebuildStatementsSQLServer', () => {
  * PG counterpart of the full-rebuild + atomic-swap builder (plan §11.2). Pure logic; live PG
  * behavior is a gated integration follow-up. PG quoting: schema bare, object double-quoted.
  */
+describe('MaterializationRefresher — DDL identifier safety (injection guard)', () => {
+    // The swap builders interpolate schema/table/view names — read from the WRITABLE `MJ: Materialized Results`
+    // row — into EXEC / sp_rename / CREATE VIEW / RENAME TO. A name that is not a plain SQL identifier must be
+    // refused BEFORE any statement is built, so a tampered metadata row cannot make the privileged refresh job
+    // run arbitrary DDL. A valid identifier can contain none of `]`, `"`, `'`, so one check closes every surface.
+    const safe = {
+        schema: '__mj',
+        tableName: 'materialized_Demo',
+        viewName: 'materialized_vwDemo',
+        sourceSelect: 'SELECT 1 AS X',
+        surrogateColumn: '__mj_MaterializedRowID',
+    };
+    const evilNames = [
+        'Demo]; DROP TABLE [Users',    // breaks out of a [ ] identifier
+        "Demo'; DROP TABLE Users--",   // breaks out of an EXEC('...') / sp_rename '...' literal
+        'Demo" ; DROP TABLE Users',    // breaks out of a "..." identifier (PostgreSQL)
+        'has space',
+        '',
+    ];
+    for (const evil of evilNames) {
+        it(`SQL Server refuses a non-identifier table name: ${JSON.stringify(evil)}`, () => {
+            expect(() => MaterializationRefresher.buildFullRebuildStatementsSQLServer({ ...safe, tableName: evil })).toThrow(/Unsafe materialization/);
+        });
+        it(`PostgreSQL refuses a non-identifier view name: ${JSON.stringify(evil)}`, () => {
+            expect(() => MaterializationRefresher.buildFullRebuildStatementsPostgreSQL({ ...safe, viewName: evil })).toThrow(/Unsafe materialization/);
+        });
+    }
+    it('accepts legitimate CodeName-derived names on both engines', () => {
+        expect(() => MaterializationRefresher.buildFullRebuildStatementsSQLServer(safe)).not.toThrow();
+        expect(() => MaterializationRefresher.buildFullRebuildStatementsPostgreSQL(safe)).not.toThrow();
+    });
+});
+
 describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => {
     const base = { schema: '__mj', tableName: 'materialized_demo', viewName: 'materialized_vw_demo' };
 
@@ -743,9 +782,10 @@ describe('MaterializationRefresher.applyWatermarkSafetyOverlap (commit-skew safe
  * RLS the same way CodeGenLib does — any permission with a non-empty, non-whitespace ReadRLSFilterID.
  */
 describe('MaterializationRefresher.entityHasReadRLS (Leak-1 runtime gate detector)', () => {
-    // Structural stub of the only EntityInfo surface the detector reads.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ent = (perms: Array<{ ReadRLSFilterID?: string | null }>): any => ({ Name: 'Ext', Permissions: perms });
+    // Structural stub of the only EntityInfo surface the detector reads (it touches nothing but .Permissions);
+    // the sanctioned double-cast keeps the test typed against the real signature without a full EntityInfo.
+    const ent = (perms: Array<{ ReadRLSFilterID?: string | null }>): EntityInfo =>
+        ({ Name: 'Ext', Permissions: perms }) as unknown as EntityInfo;
 
     it('is TRUE when any permission carries a non-empty ReadRLSFilterID', () => {
         expect(MaterializationRefresher.entityHasReadRLS(ent([{}, { ReadRLSFilterID: 'rls-1' }]))).toBe(true);
@@ -763,3 +803,123 @@ describe('MaterializationRefresher.entityHasReadRLS (Leak-1 runtime gate detecto
         expect(MaterializationRefresher.entityHasReadRLS(ent([]))).toBe(false);
     });
 });
+
+/**
+ * Review finding (fail-open DDL guard): assertSafeObjectNames throws on a tampered SchemaName, but the
+ * RefreshOne catch block then handed that SAME rejected name to the best-effort shadow cleanup, which
+ * interpolated it raw into DROP TABLE / OBJECT_ID. The guard's own rejection was the thing that routed the
+ * payload into privileged DDL. isSafeObjectName is the non-throwing re-check that makes the cleanup path
+ * decline instead.
+ */
+describe('MaterializationRefresher.isSafeObjectName (fail-closed re-check for the failure path)', () => {
+    it('accepts the plain identifiers a legitimate materialization always uses', () => {
+        for (const ok of ['__mj', 'materialized_Demo', 'materialized_vwDemo', '_x', 'A1_b2']) {
+            expect(MaterializationRefresher.isSafeObjectName(ok)).toBe(true);
+        }
+    });
+
+    it('REFUSES the injection payload from the finding, and every quoting escape it relies on', () => {
+        // The exact payload: a tampered SchemaName that closes the bracket and appends its own statement.
+        expect(MaterializationRefresher.isSafeObjectName(`x']; DROP TABLE __mj.Entity--`)).toBe(false);
+        // The individual characters that would break out of [..] / ".." / '..' quoting.
+        for (const bad of [`a]b`, `a"b`, `a'b`, `a;b`, `a b`, `a-b`, `a.b`, `1abc`, '']) {
+            expect(MaterializationRefresher.isSafeObjectName(bad)).toBe(false);
+        }
+    });
+
+    it('REFUSES non-string input rather than coercing it', () => {
+        // Values arrive from a writable metadata row, so a null/undefined column must not pass the check.
+        expect(MaterializationRefresher.isSafeObjectName(null as unknown as string)).toBe(false);
+        expect(MaterializationRefresher.isSafeObjectName(undefined as unknown as string)).toBe(false);
+    });
+});
+
+/**
+ * Review finding (snapshot/live divergence): the refresher snapshotted `query.SQL` while every read path
+ * executes `QueryInfo.GetPlatformSQL(PlatformKey)`. A query carrying a per-platform variant was therefore
+ * materialized from a different statement than the one live serves.
+ */
+describe('MaterializationRefresher.resolvePlatformQuerySQL (snapshot the statement the read path runs)', () => {
+    const QID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
+    /** Minimal provider stub: only `.Queries` is read, and only `.ID` / `.GetPlatformSQL` off each entry. */
+    const providerWith = (queries: Array<{ ID: string; GetPlatformSQL: (p: string) => string }>) =>
+        ({ Queries: queries }) as unknown as Parameters<typeof MaterializationRefresher.resolvePlatformQuerySQL>[0];
+
+    const variantQuery = (id: string) => ({
+        ID: id,
+        GetPlatformSQL: (p: string) => (p === 'postgresql' ? 'SELECT pg_variant' : 'SELECT ss_variant'),
+    });
+
+    it('prefers the platform variant over the base SQL, per engine', () => {
+        const p = providerWith([variantQuery(QID)]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', true)).toBe('SELECT pg_variant');
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT ss_variant');
+    });
+
+    it('matches the query through UUIDsEqual, so platform resolution survives cross-platform ID casing', () => {
+        // SQL Server returns UUIDs uppercase and PostgreSQL lowercase; a `===` match would silently miss here
+        // and fall back to the base SQL — reintroducing the very divergence this resolves.
+        const p = providerWith([variantQuery(QID.toLowerCase())]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID.toUpperCase(), 'SELECT base', false)).toBe('SELECT ss_variant');
+    });
+
+    it('falls back to the entity SQL when the query is absent from provider metadata (previous behavior)', () => {
+        const p = providerWith([]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT base');
+    });
+
+    it('falls back to the entity SQL when the resolved variant is empty/whitespace', () => {
+        const p = providerWith([{ ID: QID, GetPlatformSQL: () => '   ' }]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT base');
+    });
+
+    it('returns null when neither source yields a usable statement', () => {
+        const p = providerWith([{ ID: QID, GetPlatformSQL: () => '' }]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, null, false)).toBeNull();
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, '  ', false)).toBeNull();
+    });
+});
+
+/**
+ * Review finding (fail-open RLS gate), runtime half. The Leak-1 gate exists specifically to close the window
+ * between an entity gaining a row restriction and the next CodeGen run, during which the sweep would keep
+ * refilling the mirror. Checking only the ROLE layer left that window open for an entity fenced solely by an
+ * API-key row filter — so the gate now composes both layers, symmetric with CodeGen's mint/drift gates.
+ */
+describe('MaterializationRefresher.entityHasRowLevelRestriction (both fence layers)', () => {
+    const ent = (name: string, perms: Array<{ ReadRLSFilterID?: string | null }> = []): EntityInfo =>
+        ({ Name: name, Permissions: perms }) as unknown as EntityInfo;
+
+    it('is TRUE on role RLS alone, regardless of the key layer', () => {
+        const e = ent('Orders', [{ ReadRLSFilterID: 'rls-1' }]);
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(e, new Set())).toBe(true);
+    });
+
+    it('is TRUE on an API-key row filter alone — the case the role-only check missed', () => {
+        // No ReadRLSFilterID anywhere: the old gate judged this unrestricted and kept refilling the mirror.
+        const e = ent('Orders');
+        expect(MaterializationRefresher.entityHasReadRLS(e)).toBe(false);
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(e, new Set(['orders']))).toBe(true);
+    });
+
+    it('matches the key layer case- and whitespace-insensitively (targets are normalized names)', () => {
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(ent('  OrDeRs '), new Set(['orders']))).toBe(true);
+    });
+
+    it('FAILS CLOSED when the key layer could not be enumerated', () => {
+        // 'unknown' means we cannot prove the fence is empty. Refusing to refresh is recoverable and loud;
+        // mirroring restricted rows is neither.
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(ent('Anything'), 'unknown')).toBe(true);
+    });
+
+    it('is FALSE only when BOTH layers are proven empty for this entity', () => {
+        const e = ent('Orders', [{ ReadRLSFilterID: null }, {}]);
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(e, new Set(['customers']))).toBe(false);
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(e, new Set())).toBe(false);
+    });
+});
+
+// The ResourcePattern mappability rule this refresher's enumeration depends on lives in
+// @memberjunction/global (ResolveSingleEntityResourceTarget), shared verbatim with CodeGen's identical
+// gate rather than restated here, and is tested against the real implementation in
+// packages/MJGlobal/src/__tests__/ResourcePatternUtils.test.ts.

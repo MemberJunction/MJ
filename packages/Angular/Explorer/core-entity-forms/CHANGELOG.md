@@ -1,5 +1,463 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- e7f1f88: Two defects a dispatched workflow hit end to end — one that killed the run, one that misreported it.
+
+  **The invocation envelope could not be written down.** R3-3 carried `ExecuteAgentParams.context` into the parent task's `InputPayload` verbatim. That parameter is documented as possibly a class instance holding "external service credentials or connection information", so the first real agent run whose context held a socket died at submit time with `Converting circular structure to JSON --> starting at object with constructor 'Socket'` — before any step executed. Had it serialized instead, those credentials would have been written to a row that outlives the run. `SanitizeInvocationEnvelope` now reduces the envelope to what is safe to persist at the durable boundary, so every submission path is covered: JSON data survives (primitives, arrays, plain objects, `Date`, anything with `toJSON`), while class instances, functions, sockets and cycles are refused **and reported by path** — a value that silently vanished is a condition reading absent-data and taking a branch nobody can explain later.
+
+  **Three agents referenced Font Awesome Pro glyphs** (`fa-chart-diagram`, `fa-shield-check`, `fa-chart-mixed`), which render as nothing in the free 6.5.2 build Explorer loads — an empty icon square rather than a missing-icon indicator, since an absent glyph is silently invisible. Swapped for free equivalents in `metadata/agents`. Betty and Skip keep their `mj-icon-*` classes, which are intentional custom styling.
+
+  **A dispatched workflow reported itself finished while it was still running.** The run-tree query joins the submit step to the graph it produced, so one workflow arrives as two rows whose statuses disagree: the step's describes the _submission_ (`Completed` in ~300ms, correctly), while its title names the _graph_, which is still going. The result was "Task Graph: X — Completed" sitting above steps that had not run, contradicting the page header's own "PAUSED / Workflow still running". The timeline now renders the pair as one row that keeps the step's identity — so selection and deep links still resolve — and takes its status and timing from the graph, with submit latency preserved in the subtitle. A failed or in-flight submission keeps its own row, since there is then no graph to inherit from and the submission is the whole story; an unrecognized shape declines to collapse rather than guessing.
+
+  **Action and agent icons, resolved without a hop.** `get-agent-run-tree.sql` now returns `ActionID` and `AgentID` for the nodes that have them — read by joining back to the task (and, for a loop's passes, to the execution log they expanded from), the same way `LoopMode` already is, so none of the CTE's six members change. That removes the join a consumer would otherwise make and fixes the real defect: the same action rendered as two different generic glyphs depending on which arm of the query produced its row, because a graph step and a loop pass arrive by different paths. A task carries its `ActionID` whether or not it ran, so a **skipped** branch can now show which action it would have run — something the execution log can never say, since no log exists for work that did not happen. A `ForEach` keeps its loop icon rather than the icon of the action it repeats.
+
+- 06ccfb2: Add Entity.Configuration and EntityRelationship.Configuration JSONType bags (IEntityConfiguration / IEntityRelationshipConfiguration) as the tenant-editable default for generated-form chrome. NULL keeps today's accordion. CodeGen emits typed ConfigurationObject accessors.
+- 95fc3e6: Ship generated-form chrome: a budgeted related-role ranker (not all-in-More), accordion More as a quiet overflow footer (not a fake panel), left-nav More folder, user move in/out of More via Manage Sections, Layout auto / left-nav, optional BaseFormPolicy, and Entity / Entity Relationship visualization. Metadata JSONType bags on Entity / EntityRelationship.Configuration back the ranker.
+- 47930ef: Add reusable generic `@memberjunction/ng-graph-view` Angular component with physics force relaxation, circular layouts, zoom/pan controls, search filtering, and cancelable Before/After event suite. Add modern hero headers and 4-card overview mini-dashboards for AIAgentCategories, Conversations, Employees, Companies, and Users in `@memberjunction/ng-core-entity-forms`.
+- 7300953: Query & Entity Materialization — snapshot a stored Query's result (or an entity's base view) into a physical table that IS its own read-only entity, refreshed on a schedule with an atomic wrapper-view swap. Base-view (entity) materialization is cross-engine (SQL Server + PostgreSQL); query materialization runs on SQL Server today and becomes cross-engine once the pre-existing `spCreateVirtualEntity` support proc is ported to PostgreSQL (tracked with the broader PG parity effort). The refresh SQL and read path are cross-engine on both.
+  - **New `@memberjunction/materialization`** package: the refresh engine (`MaterializationRefresher`) — full-rebuild (shadow table + atomic view swap), `DirtyGroupRecompute` and MERGE-upsert `Incremental` strategies for keyed aggregations, combined-key `SHA2_256` surrogate hashing, and the advisory `MaterializationFreshness` mixed-freshness inspector.
+  - **CodeGen** (`codegen-lib`): materializes flagged stored Queries + entity base views (cross-engine DDL, wrapper view, read-only Virtual Entity minting, migration-reuse detection); parameterization (row-filter → materialize-broad + read-time predicate); aggregation-key auto-detection; RLS-downgrade gate; and `DriftHold` flag-and-hold drift detection.
+  - **Read path**: `RunViewParams.DataSource: 'Live' | 'Materialized'` (`core`) routed by `GenericDatabaseProvider.GetEffectiveBaseView`, plumbed through the GraphQL layer (`server`, `graphql-dataprovider`).
+  - **Scheduling** (`scheduling-engine`): `MaterializationRefreshScheduledJobDriver` sweeps due materializations (skips `Disabled`/`DriftHold`).
+  - **`core-entities` / `ng-core-entity-forms`**: generated `MJ: Materialized Results` + `MJ: Materialized Result Queries` (join) entities + `Query.IsMaterialized` + forms. The MR↔Query link lives in the `MaterializedResultQuery` join table — there is no `MaterializedResult.SourceQueryID` / `Query.MaterializedResultID` FK — avoiding the circular dependency of the direct-FK design.
+
+  See `plans/query-entity-materialization.md` for the full design.
+
+- 63ea273: A workflow run now draws what happened, and the Runs surface remembers how you arranged it.
+
+  **Edges could never bind.** Every task-graph node declared canvas ports literally named `in` and
+  `out`, and the canvas resolves a connection by looking its port ids up in one flat, graph-wide
+  namespace — so no connection could say which node's port it meant, and a workflow drew its boxes
+  with no edges at all. Nothing errored: an unresolvable port is just a connection with nowhere to
+  attach. Port ids are now scoped to their node (`InputPortID` / `OutputPortID`), matching the
+  convention the Flow Agent editor has always used.
+
+  **A declined branch was reported as `Pending`.** `NormalizeRuntimeState` falls back to `Pending` for
+  any status it does not recognise, and it did not recognise `Skipped` — so a branch the workflow
+  chose not to take reached the canvas as "still waiting to run". The node drew as an ordinary pending
+  step, its edges drew as live routes, and `IsRuntimeSettled` could never report a graph containing one
+  as finished, so a host polling on it polled a completed run forever. `Skipped` is now carried
+  through and counts as terminal.
+
+  With those two fixed, run mode draws **only the path taken**: edges touching a declined step are
+  omitted (both ends — an edge leaving a skipped step is as untravelled as one entering it) and the
+  step is hatched and struck through, in the same visual language the run timeline already uses.
+  Design mode still draws every edge, because there is no route yet — the graph is all the routes that
+  _could_ be taken, which is exactly what an author is arranging.
+
+  **The agent run's Workflow tab now shows the run, not the plan.** It rendered the recorded
+  `TaskGraphSpec` on a bare canvas with no runtime, so every branch appeared to have run. It uses the
+  same `mj-task-graph-run-view` the Workflows app does, falling back to the spec view only for a
+  constant-folded graph that never reached the dispatcher — where a plan is the honest thing to draw.
+
+  **Layout.** `FlowNodeStatus` gains `skipped` (deliberately not folded into `disabled`: disabled means
+  "cannot run", skipped means "the graph went the other way"). `ShowLegend` and `ShowToolbar` are
+  separately controllable, defaulting legend-off / toolbar-on in run views — the legend explains
+  authoring vocabulary a run does not need, while the toolbar is how a person navigates the picture.
+  `LegendToggled` is forwarded so a host can persist the choice rather than adding a second control.
+  The run view's height chain was also broken: `Height` sat on the canvas and resolved against an
+  auto-height ancestor, so `100%` meant nothing; it now governs the widget and the canvas flexes.
+
+  **Workflows → Runs** gains resizable, per-user-persisted panes (list | detail, and canvas | step
+  record inside it), with the step record moved beside the canvas rather than in a strip below it.
+  Sizes are stored separately from openness, so closing and reopening returns a pane to the width you
+  dragged it to. Preferences go through `UserInfoEngine`, never `localStorage`.
+
+### Patch Changes
+
+- deea1a3: Unstick the DOM unit specs that fail under the M5 joined pnpm workspace. Two physical copies of @angular/core / @codemirror/state (parent store vs MJ store) made CodeMirror throw on EditorState.create, AgGrid crash with firstCreatePass of null, angular-split inject() hit NG0203, and bootstrap constructor inject() fail the same way. The specs now skip those host libraries (toolbar-only CodeMirror init, AgGrid/as-split stubs) and bootstrap inlines Angular through Vite so Analog and TestBed share one copy.
+- 815b9bc: feat(storage,core,forms): ephemeral staged binary upload pipeline, polymorphic related collections, and file record viewer
+  - **Storage & Server**:
+    - Implement Tier 2 ephemeral staged raw binary upload pipeline (UploadTokenManager, POST /media/upload-stage, CreateUploadStageToken mutation, UploadStorageFile token consumption).
+    - Add single-use cryptographic token security, user identity ownership binding, automated TTL eviction, and memory bounds.
+    - Sanitize paths/filenames and add X-Content-Type-Options: nosniff to /media endpoints.
+  - **Core & ORM**:
+    - Add support for polymorphic IS-A subtypes in RelatedRecordCollection and dirty state preservation across relationship chains.
+    - Support IEntityConfiguration and entity hierarchy traversal.
+  - **Angular & UI**:
+    - Add 3-tier upload pipeline in RecordAttachmentsComponent with real-time wire progress.
+    - Add dedicated MJ: Files custom record viewer form component in ng-core-entity-forms.
+    - Add attachment count badges to base form container and toolbar.
+    - Add ResizeObserver lifecycle handling to Gantt chart and OpenNewEntityRecord in SharedService.
+
+- 05865ea: feat(angular): introduce `@memberjunction/ng-hierarchy-tree` visual hierarchy component and wire 15 core entity form hierarchy panels
+  - **`@memberjunction/ng-hierarchy-tree`**: Reusable D3-based interactive visual hierarchy and taxonomy tree component with smooth pan/zoom, dynamic primary key metadata extraction, real-time path search and ancestor branch auto-expansion, subtree focus, cancelable lifecycle events, and `--mj-*` design token theming.
+  - **`@memberjunction/ng-core-entity-forms`**: Adds 15 visual hierarchy form panels in the `after-related` slot for self-referencing and category entities in MJ Core (`AI Agent Categories`, `AI Prompt Categories`, `Action Categories`, `Dashboard Categories`, `Query Categories`, `Tags`, `Projects`, `Content Items`, `File Categories`, `List Categories`, `Record Process Categories`, `Skills`, `Template Categories`, `Test Suites`, `User View Categories`).
+  - **`@memberjunction/ng-gantt`**: Polish host height layout on `MJGanttChartComponent`.
+
+- be0bdb2: Follow-up hardening for Query & Entity Materialization (#3735). Each item below fails toward doing the
+  wrong thing rather than doing nothing, so none of them surface as an error in normal operation.
+
+  **Row-restriction gates read both fence layers.** MJ enforces row restrictions in two AND-composed
+  layers — role RLS and API-key row filters — and the mint, drift and runtime Leak-1 gates each re-derived
+  a role-only predicate inline. An entity fenced _only_ by an API-key row filter therefore read as
+  unrestricted; because the mint gives the materialized entity a NEW EntityID, the key's EntityID-keyed
+  binding stops matching it, and the principal is served a full unscoped snapshot of rows it cannot read
+  live. All gates now compose both layers, and an unproven layer counts as restricted.
+
+  **Lost provenance is now drift.** Deleting a source query cascade-deletes the `MaterializedResultQuery`
+  join row while the snapshot, the minted entity and its read grants all survive — which silently disarmed
+  both the RLS re-check and the read-grant re-narrow, leaving the unscoped snapshot serving indefinitely.
+  It now revokes read and holds.
+
+  **A zero-row external query no longer destroys the snapshot.** Columns are derived from the returned
+  rows, so an empty result built a surrogate-only shadow, dropped the canonical table and renamed that
+  shell into its place — every subsequent read failing on a missing column while the refresh reported
+  success. An empty result now refuses the rebuild and leaves the existing snapshot serving.
+
+  **The refresher snapshots the statement the read path executes.** Reads resolve SQL through
+  `GetPlatformSQL(PlatformKey)`; the refresher snapshotted the base `SQL`, so a query carrying a
+  per-platform variant was materialized from a different statement than live serves.
+
+  **`XACT_ABORT` no longer escapes onto the pooled connection.** The swap, recompute and dirty-group
+  batches each set it ON and never restored it. SET options persist for the session, so unrelated requests
+  handed the same physical connection inherited it — turning their recoverable statement-level errors into
+  full transaction aborts, far from anything to do with materialization.
+
+  **The DDL identifier guard no longer opens on its own failure.** `assertSafeObjectNames` throws on a
+  tampered `SchemaName`, but the failure path then passed that same rejected name to the best-effort shadow
+  cleanup, which interpolated it raw into `DROP TABLE`/`OBJECT_ID`. The cleanup now re-checks and declines.
+
+  **Two analyzers that produced silently wrong rows.** A `UNION`/`EXCEPT`/`INTERSECT` parses to a single
+  `select` root whose `groupby` and `columns` describe only the first branch, so a set operation yielded an
+  aggregation key covering one branch and the incremental MERGE collided both branches on the same hash.
+  And a row-filter predicate was bound to an output column by bare name, which cannot tell `o.Status` from
+  `c.Status` across a join, nor an alias from the column it rebinds.
+
+  **Missing manifest registrations.** Neither new `@RegisterClass` class was in the pre-built manifests, so
+  a bundled MJAPI tree-shook both away: the refresh driver never resolved, nothing was ever refreshed, and
+  `Status` stayed `Active` while the read paths served mint-time data forever.
+
+  **Read-routing distinguishes a failed lookup from "not materialized".** Only three roles hold `CanRead`
+  on `MJ: Materialized Results`, so a restricted user silently got live data for every materialized request
+  while an admin got the snapshot. The live fallback is correct and unchanged; the silence was the defect.
+
+  **Note on coverage.** The predicate-binding proof and the join-qualifier requirement are deliberately
+  conservative and will refuse shapes that previously qualified: a row-filter query whose predicate or
+  projection is unqualified across a join now stays live-only, and an aggregation over a join with an
+  unqualified `GROUP BY` loses its incremental key and falls back to `FullRebuild`. Both refusals are
+  logged with the specific reason. Falling back to live is always correct — but a query that silently gets
+  slower is easier to diagnose knowing this changed.
+
+- b46330e: feat(codegen,core): full-stack recursive foreign key support with automated TVF suites, base view projections, and hierarchy traversal APIs
+  - **Database / TVF Suite**: CodeGen automatically emits 4 table-valued functions per recursive self-referencing foreign key on both SQL Server (T-SQL) and PostgreSQL (PL/pgSQL):
+    - `fn<Table><Field>_GetHierarchyMeta` (computes `RootID`, `Depth`, materialized `Path`, `IsLeaf`, and `ChildCount`)
+    - `fn<Table><Field>_GetDescendants` (full subtree retrieval with cycle detection)
+    - `fn<Table><Field>_GetAncestors` (materialized path-based ancestor retrieval)
+    - `fn<Table><Field>_GetRootID` (top-level root resolver)
+  - **Base View Projections**: Every base view (`vw<Entities>`) automatically joins the hierarchy metadata via lateral joins (`OUTER APPLY` in SQL Server, `LEFT JOIN LATERAL` in PostgreSQL), projecting `[Root<Field>]`, `[<Field>Depth]`, `[<Field>Path]`, `[<Field>IsLeaf]`, and `[<Field>ChildCount]`.
+  - **`BaseEntity` & Generated Subclasses**:
+    - `BaseEntity` in `@memberjunction/core` provides generic hierarchy traversal methods `GetDescendants<T>()`, `GetAncestors<T>()`, and `GetChildren<T>()` with automated `ParentID` and recursive FK resolution.
+    - CodeGen generates strongly-typed convenience methods (`entity.GetDescendants()`, `entity.GetAncestors()`, `entity.GetChildren()`) on all generated entity subclasses with self-referencing foreign keys.
+  - **Documentation**: Added comprehensive architectural documentation in [`guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`](guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md) and cross-referenced in package READMEs.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [a2e4e09]
+- Updated dependencies [199eb2b]
+- Updated dependencies [7a71c96]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [deea1a3]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [69f2bf2]
+- Updated dependencies [05865ea]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [ac6755c]
+- Updated dependencies [73c853b]
+- Updated dependencies [051e0ff]
+- Updated dependencies [142cf2a]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [e635378]
+- Updated dependencies [26046d8]
+- Updated dependencies [cefc302]
+- Updated dependencies [44ac084]
+- Updated dependencies [1f4af2b]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [6e98173]
+- Updated dependencies [0869c24]
+- Updated dependencies [aa9006b]
+- Updated dependencies [a76cf28]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [2e2879e]
+- Updated dependencies [9b6fb5b]
+- Updated dependencies [b46330e]
+- Updated dependencies [2a0262d]
+- Updated dependencies [6ef741e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [b46330e]
+- Updated dependencies [4b1257f]
+- Updated dependencies [63ea273]
+- Updated dependencies [1be0f14]
+- Updated dependencies [6cd337d]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ng-base-forms@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.3
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.3
+  - @memberjunction/ng-flow-editor@6.1.0-edge.3
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.3
+  - @memberjunction/ng-code-editor@6.1.0-edge.3
+  - @memberjunction/ng-base-types@6.1.0-edge.3
+  - @memberjunction/ng-shared@6.1.0-edge.3
+  - @memberjunction/ng-notifications@6.1.0-edge.3
+  - @memberjunction/ng-hierarchy-tree@6.1.0-edge.3
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.3
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/ng-base-application@6.1.0-edge.3
+  - @memberjunction/ng-testing@6.1.0-edge.3
+  - @memberjunction/ng-action-gallery@6.1.0-edge.3
+  - @memberjunction/ng-actions@6.1.0-edge.3
+  - @memberjunction/ng-agents@6.1.0-edge.3
+  - @memberjunction/ng-deep-diff@6.1.0-edge.3
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.3
+  - @memberjunction/ng-join-grid@6.1.0-edge.3
+  - @memberjunction/ng-list-management@6.1.0-edge.3
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.3
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.3
+  - @memberjunction/ng-search@6.1.0-edge.3
+  - @memberjunction/ng-shared-generic@6.1.0-edge.3
+  - @memberjunction/ng-trees@6.1.0-edge.3
+  - @memberjunction/ng-versions@6.1.0-edge.3
+  - @memberjunction/templates-base-types@6.1.0-edge.3
+  - @memberjunction/ng-link-directives@6.1.0-edge.3
+  - @memberjunction/ng-timeline@6.1.0-edge.3
+  - @memberjunction/ng-tabstrip@6.1.0-edge.3
+  - @memberjunction/ng-markdown@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 9a29da4: Retire the Workflows app; make the Flow agent form first-class.
+
+  The Workflows app owned no storage — a workflow's WHAT is a Flow agent and there is no `Workflow` table — so it was a second list of rows the AI app already listed, fronted by a canvas that duplicated the Flow agent editor and had no Save path at all. Removed, and replaced by making the agent record answer what the app was implicitly about.
+
+  **`@memberjunction/ng-core-entity-forms`** — the AI Agents form is now tabbed: the agent type's designer (any type declaring a `UIFormSectionKey`), Details (the existing accordion set, unchanged), and Invocations. The designer pane is hidden with CSS rather than removed from the DOM, so unsaved canvas edits and canvas viewport state survive a tab switch. The default tab is the first that exists, so a Flow agent opens on its diagram.
+
+  **`@memberjunction/ng-agents`** — new `<mj-agent-invocations>`: a read-only index of every automated pathway that invokes an agent (Scheduled Jobs, User Routines, Entity Action bindings, Record Processes, sub-agent steps and relationships, `ExposeAsAction`). Answers "what runs this when I'm not looking?", which no surface could previously answer from the agent's side.
+
+  **`@memberjunction/ai-core-plus`** — `AgentSpec.Status` and `AgentStep.StepType` now derive from their entity fields instead of restating them. Both had drifted: `Status` declared `'Inactive'`, which `AIAgent.Status` has never accepted, so any caller setting it wrote a value the CHECK constraint rejects; `StepType` omitted `ForEach` and `While`, making loops executable but unauthorable. `AgentStep` gains `LoopBodyType` and `Configuration`, and the action mapping fields now admit the object form that callers already pass.
+
+  **`@memberjunction/ai-agent-manager`** — `AgentSpecSync` round-trips loop fields; new pure `ValidateLoopStep` catches a loop that saves cleanly and then iterates zero times; the Architect's status validator accepts `Disabled` rather than the invalid `Inactive`, and `WorkflowAgentWriter` maps Draft/Paused workflows to `Disabled`.
+
+  **`@memberjunction/ai-mcp-server`** — the `List_Agents` status filter no longer offers `Inactive`, which could never match a row.
+
+  **`@memberjunction/ng-dashboards`** — the Workflows dashboard, its module, its resource component and its `ng-task-graph-editor` dependency are removed. `mj-task-graph-editor` itself is unchanged and keeps its read-only consumers.
+
+  The `Workflow.Draft` / `Workflow.Save` / `Workflow.Validate` Remote Operations are deliberately kept — they are the agent- and MCP-facing contract and matter more now that creation is conversational.
+
+  A migration removes the Workflows Application row from existing databases (idempotent; a no-op on a clean install). The Architect prompt template change requires `mj sync push` to take effect.
+
+### Patch Changes
+
+- 8de5f7e: Let a host form own the flow editor's save, and fix the canvas context menu.
+
+  **The flow was never part of the agent form's save.** `InternalSaveRecord` persisted templates, prompts and the agent row; steps and paths were written only by the flow editor's own Save button. That gave one record two save buttons with two failure modes — the form could succeed while the flow failed, leaving an agent that looked saved and step edits that were gone.
+
+  `BaseFormSectionComponent` gains an opt-in contract so a section that owns an editor can join the host's transaction: `HasPendingChanges`, `ContributeToSave(transactionGroup)` and `OnHostSaveCompleted()`. All three are no-ops by default, so existing sections are unaffected. `BaseFormComponent.HasAdditionalUnsavedChanges` (default `false`) feeds the container's `EffectiveIsDirty`, so a form holding unsaved editor state no longer reports itself clean — previously the navigate-away guard would discard those edits without asking.
+
+  `FlowAgentEditorComponent` splits `Save()` into `QueueSaveInto(transactionGroup)` (queue only, caller submits) plus `MarkSaved()`, and exposes `HasUnsavedChanges`. Two new inputs: **`ShowSaveControls`** (default `false`) hides the editor's own Save / Edit / Cancel and its unsaved indicator, for hosts that own persistence — a host that turns it on is declaring it owns its own save; and `CanvasTitle` (`null` hides the toolbar title) for hosts whose chrome already names the record.
+
+  **Context menu fix:** `onContextMenuAction` closed the menu before reading its target, and closing nulls the stored node/connection. Every branch then tested those now-null fields and fell through, so right-click **Remove and Edit both did nothing** — for nodes and connections alike, with the menu closing on click making it look like the action had been taken. The target is now captured before the menu closes, and the undo entry is pushed only once a target is confirmed, so a no-op action no longer leaves a phantom step in the undo stack. Covered by 7 regression tests, 6 of which fail against the old ordering.
+
+- ca4feb4: Workflow cost becomes a projection of the run tree, and a graph now runs in the order it was drawn.
+
+  **Cost is the tree, not arithmetic beside it.** `AIAgentRun`'s four `…Rollup` columns are now written from `SumAgentRunTreeCost(LoadAgentRunTree(runID))` at settlement — one basis (per-node own spend), prompt-aware through `Configuration.runtime.promptRunID`, and structurally incapable of disagreeing with what the run viewer shows. The previous per-child loop filtered on `AgentRunID`, so every Prompt step's spend was absent, and mixed a descendant-inclusive number with an own-spend one. The tree now also carries the prompt/completion token split so all four columns share a basis. Writing the sum back makes the column an _output_ of the tree, which is non-circular only because the query reads own cost and never a rollup — stated in the query header and pinned by a test that plants an absurd rollup on a real run. When the tree cannot be summed (load failure, depth cap, graph not reachable), the columns are **cleared** rather than left holding a stale total from an earlier settlement.
+
+  **A loop's passes exist.** The run tree reaches nested work through six relationships and a loop iteration was none of them, so a `While` that spent real money across three passes reported one childless node with no cost. The dispatcher now records one entry per pass (`ITaskStepRuntime.iterations`) and the tree expands them into nodes. On a real workflow this moved `TotalCostRollup` from `0.00049725` to `0.00555375` — the loop had been spent and not counted.
+
+  **A graph is dispatched only once its edges exist.** Children and dependencies are now written in one transaction. Previously a poll could land between the two writes, see tasks with no prerequisites, and claim the whole graph at once — observed running a closing branch before the draft it was meant to judge existed, then reporting Complete.
+
+  **Steps see their payload.** A step with no input mapping fell back to the raw input instead of the merged payload, so a Prompt step — which declares no mapping by design — rendered `{{ _CURRENT_PAYLOAD }}` as `{}` and wrote from an empty brief. Separately, a step with no output mapping _replaced_ the payload with its own output rather than merging; for a loop, whose output is a summary, that discarded everything the iterations had established and made a downstream `payload.x === true` edge unreachable.
+
+  **An output mapping that names a parameter the step never returns now says so** (`unmapped`), naming what the step did return, instead of skipping in silence.
+
+  **Human steps**: a cancelled request re-raises instead of stalling forever; cancelling a graph withdraws its open requests instead of leaving them in someone's inbox; cross-user `assignToUserID` is refused at submission rather than silently reassigned to the submitter; and a step can declare `expiresInHours`, which finally makes the existing expiry machinery reachable.
+
+  **Web Search** captured each result with a non-greedy match that stopped at the first nested `</div>`, cutting the snippet out of every result — ten well-formed hits carrying no content. Results are now sliced between block starts, and an all-snippets-empty parse is reported rather than returned silently.
+
+  **Testing**: a bundle whose every check is gated out now records an explicit skip naming the flag that would run it, instead of reporting PASS with zero checks executed.
+
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [8de5f7e]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/ng-base-forms@6.1.0-edge.2
+  - @memberjunction/ng-flow-editor@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/ng-agents@6.1.0-edge.2
+  - @memberjunction/ng-base-application@6.1.0-edge.2
+  - @memberjunction/ng-shared@6.1.0-edge.2
+  - @memberjunction/ng-testing@6.1.0-edge.2
+  - @memberjunction/ng-action-gallery@6.1.0-edge.2
+  - @memberjunction/ng-actions@6.1.0-edge.2
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-code-editor@6.1.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.2
+  - @memberjunction/ng-join-grid@6.1.0-edge.2
+  - @memberjunction/ng-list-management@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.2
+  - @memberjunction/ng-search@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.2
+  - @memberjunction/ng-trees@6.1.0-edge.2
+  - @memberjunction/ng-versions@6.1.0-edge.2
+  - @memberjunction/templates-base-types@6.1.0-edge.2
+  - @memberjunction/ng-deep-diff@6.1.0-edge.2
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.2
+  - @memberjunction/ng-link-directives@6.1.0-edge.2
+  - @memberjunction/ng-timeline@6.1.0-edge.2
+  - @memberjunction/ng-tabstrip@6.1.0-edge.2
+  - @memberjunction/ng-markdown@6.1.0-edge.2
+  - @memberjunction/ng-ui-components@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+- 394d276: Phase 5 continued — the two **Save as Workflow** surfaces deferred out of Phase 4 (D17). Phase 4 shipped the converter; these are where a person actually reaches it.
+
+  **Agent Run admin — a Workflow tab on the `TaskGraph` run step.** Phase 3 writes that step for _every_ emitted graph, dispatched or constant-folded, which is what makes a folded single-node graph just as promotable as a dispatched one — the point of recording the fold rather than letting it vanish. The tab opens by default on a `TaskGraph` step, because that step's whole content _is_ the graph and opening on the JSON would bury the one thing it exists to show. A folded graph says so, so the reader sees _why_ it never reached the dispatcher instead of inferring it.
+
+  **ng-conversations — a plan card.** The moment this serves: an agent breaks a request into steps, the work runs, it was good, and today that is where it ends — the decomposition was ephemeral, so the next person who wants the same thing asks an agent to invent it again. Save is offered only once the work has **settled**; offering it mid-run invites saving a shape that may yet change under a retry or a failure routing down a recovery branch. The card starts collapsed, because it sits inline in a thread and must not dominate it.
+
+  **Both render through the same `TaskGraphSpec` component the editor uses**, in `ReadOnly` mode. A second, simpler renderer for chat would be a second thing that can disagree with the canvas about what a graph means — which is the exact class of divergence this whole program has been removing.
+
+  **Save is intent only** on both surfaces. Neither persists agents; the host converts and writes through `AgentSpecSync`, keeping the one place that writes an agent the one place that writes an agent.
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- 394d276: One look and one keyboard contract for MJ's tab strips.
+  - **`ng-ui-components`** ships the shared `.mj-tabs*` tab chrome as a global stylesheet (`dist/lib/tabs/tabs.scss`) and `mjTabList`, the ARIA tabs keyboard directive: roving tabindex (one Tab stop per strip), Arrow/Home/End navigation with focus-follows-selection, Enter/Space activation, Delete/Backspace close, hidden-tab skipping, and editable-content passthrough. `mj-workspace-tab-strip` now renders the shared chrome, puts `role="tab"` on the focusable element, and folds unsaved/rejected state into each tab's accessible name. An active tab's border and top accent line follow its STATUS color (brand primary for an ordinary tab, warning when rejected, success when complete) via the `--mj-tab-accent` custom property, overridable per host. Touch devices get hold-to-drag reordering (400ms, the platform idiom) so a horizontal swipe scrolls an overflowing tab list instead of grabbing a tab; a new `AllowReorder` input (strip + card) disables reordering entirely for hosts where every touch gesture should scroll. **Standalone hosts (anything not running inside MJ Explorer's `explorer-app` shell — e.g. the BizApps apps) must add `@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';` to their global stylesheet or tab strips render unstyled.**
+  - **`ng-tabstrip`** adopts the same chrome and directive (new dependency on `ng-ui-components`): tokens replace the legacy `--gray-*` styling that never adapted to dark mode, tabs gain full keyboard support plus `aria-controls`/`tabpanel` linkage, and the close button is Font Awesome. **Behavioral change:** the strip and its tab bodies now size to content instead of hardcoding viewport height (`calc(100vh - …)`) — hosts that relied on the old fixed-height, internally-scrolling body should set a height on their own container. Overflow scrolling is native (`scrollLeft`) rather than the old offset animation. `FillWidth`/`FillHeight` inputs are deprecated no-ops. The package's stale "DEPRECATED — use Kendo" notice is gone.
+  - **`ng-core-entity-forms`**: the Entity Actions form's Filters grid gets an explicit `[Height]` now that its tab body no longer imposes viewport height.
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-action-gallery@6.1.0-edge.1
+  - @memberjunction/ng-actions@6.1.0-edge.1
+  - @memberjunction/ng-agents@6.1.0-edge.1
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.1
+  - @memberjunction/ng-base-application@6.1.0-edge.1
+  - @memberjunction/ng-base-forms@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-code-editor@6.1.0-edge.1
+  - @memberjunction/ng-deep-diff@6.1.0-edge.1
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.1
+  - @memberjunction/ng-flow-editor@6.1.0-edge.1
+  - @memberjunction/ng-join-grid@6.1.0-edge.1
+  - @memberjunction/ng-link-directives@6.1.0-edge.1
+  - @memberjunction/ng-list-management@6.1.0-edge.1
+  - @memberjunction/ng-markdown@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.1
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.1
+  - @memberjunction/ng-search@6.1.0-edge.1
+  - @memberjunction/ng-shared@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/ng-tabstrip@6.1.0-edge.1
+  - @memberjunction/ng-testing@6.1.0-edge.1
+  - @memberjunction/ng-timeline@6.1.0-edge.1
+  - @memberjunction/ng-trees@6.1.0-edge.1
+  - @memberjunction/ng-versions@6.1.0-edge.1
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/templates-base-types@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

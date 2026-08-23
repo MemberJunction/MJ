@@ -985,6 +985,20 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentAgentHierarchy?: string[];
     /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
+
+    /**
+     * How many task-graph continuations led to this run, persisted to
+     * `AIAgentRun.ContinuationDepth`.
+     *
+     * Set only by the continuation deliverer when a finished graph restarts its submitting agent.
+     * Any graph this run subsequently submits inherits the value, which is what allows
+     * `MAX_REINVOKE_DEPTH` to bound a graph-reinvokes-agent-emits-graph chain — before this existed
+     * the depth restarted at zero on every hop and the cap could never fire.
+     *
+     * Distinct from `parentDepth`, which measures sub-agent nesting inside a single turn. A
+     * continuation is a NEW top-level turn caused by work that already completed.
+     */
+    continuationDepth?: number;
     /**
      * Optional parent step counts from root to immediate parent agent.
      * Used to build hierarchical step display (e.g., "2.1.3" for nested agents).
@@ -1133,6 +1147,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * @since 5.44.0
      */
     planMode?: boolean;
+
+    /**
+     * When this run submits a task graph, seed `$.debug` on the parent at insert.
+     * `paused: true` is start-paused — nothing is claimed until Resume/Step.
+     * Must travel with the submit; Pause-after-submit races the first dispatcher poll.
+     */
+    taskGraphDebug?: { paused?: boolean };
 
     /**
      * Skills the caller (typically an end user via a `/skill-name` mention in the composer)

@@ -301,7 +301,10 @@ export abstract class SemanticValidator {
     // Replace template variables
     for (const [key, value] of Object.entries(vars)) {
       const regex = new RegExp(`\\{${key}\\}`, 'g');
-      message = message.replace(regex, String(value));
+      // Function replacement: `value` is user component data, so `$&`/`` $` ``/`$'`/`$$`
+      // in it would otherwise be expanded into the diagnostic. See issue #3171.
+      const replacement = String(value);
+      message = message.replace(regex, () => replacement);
     }
 
     return message;

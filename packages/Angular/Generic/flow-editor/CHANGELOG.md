@@ -1,5 +1,170 @@
 # @memberjunction/ng-flow-editor
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 63ea273: A workflow run now draws what happened, and the Runs surface remembers how you arranged it.
+
+  **Edges could never bind.** Every task-graph node declared canvas ports literally named `in` and
+  `out`, and the canvas resolves a connection by looking its port ids up in one flat, graph-wide
+  namespace — so no connection could say which node's port it meant, and a workflow drew its boxes
+  with no edges at all. Nothing errored: an unresolvable port is just a connection with nowhere to
+  attach. Port ids are now scoped to their node (`InputPortID` / `OutputPortID`), matching the
+  convention the Flow Agent editor has always used.
+
+  **A declined branch was reported as `Pending`.** `NormalizeRuntimeState` falls back to `Pending` for
+  any status it does not recognise, and it did not recognise `Skipped` — so a branch the workflow
+  chose not to take reached the canvas as "still waiting to run". The node drew as an ordinary pending
+  step, its edges drew as live routes, and `IsRuntimeSettled` could never report a graph containing one
+  as finished, so a host polling on it polled a completed run forever. `Skipped` is now carried
+  through and counts as terminal.
+
+  With those two fixed, run mode draws **only the path taken**: edges touching a declined step are
+  omitted (both ends — an edge leaving a skipped step is as untravelled as one entering it) and the
+  step is hatched and struck through, in the same visual language the run timeline already uses.
+  Design mode still draws every edge, because there is no route yet — the graph is all the routes that
+  _could_ be taken, which is exactly what an author is arranging.
+
+  **The agent run's Workflow tab now shows the run, not the plan.** It rendered the recorded
+  `TaskGraphSpec` on a bare canvas with no runtime, so every branch appeared to have run. It uses the
+  same `mj-task-graph-run-view` the Workflows app does, falling back to the spec view only for a
+  constant-folded graph that never reached the dispatcher — where a plan is the honest thing to draw.
+
+  **Layout.** `FlowNodeStatus` gains `skipped` (deliberately not folded into `disabled`: disabled means
+  "cannot run", skipped means "the graph went the other way"). `ShowLegend` and `ShowToolbar` are
+  separately controllable, defaulting legend-off / toolbar-on in run views — the legend explains
+  authoring vocabulary a run does not need, while the toolbar is how a person navigates the picture.
+  `LegendToggled` is forwarded so a host can persist the choice rather than adding a second control.
+  The run view's height chain was also broken: `Height` sat on the canvas and resolved against an
+  auto-height ancestor, so `100%` meant nothing; it now governs the widget and the canvas flexes.
+
+  **Workflows → Runs** gains resizable, per-user-persisted panes (list | detail, and canvas | step
+  record inside it), with the step record moved beside the canvas rather than in a strip below it.
+  Sizes are stored separately from openness, so closing and reopening returns a pane to the width you
+  dragged it to. Preferences go through `UserInfoEngine`, never `localStorage`.
+
+### Patch Changes
+
+- 199eb2b: Debug a Flow agent from the Agent form Run dialog. Debug starts the graph paused at Submit (`$.debug.paused` on the parent row — Pause-after-submit races the dispatcher). The harness and Runs console share a VS Code-style icon toolbar and a red-circle breakpoint toggle. The invocation-envelope sanitizer from #3783 is preserved.
+- f80bdb7: Drop-in `mj-task-graph-debugger` wrap, Continue-from-breakpoint actually claims the stopped step, dispatcher kick on Submit, and run-view paint for queued / running / traveled edges plus a left data pane.
+- 1be0f14: The workflow canvas fills the space it is given instead of sitting at 400px.
+
+  Two broken links in one height chain, both of which fail silently — CSS does not report a percentage
+  height that had nothing to resolve against, it just computes `auto`.
+
+  `FlowEditorComponent` and `TaskGraphEditorComponent` are custom elements with no `:host` rule, so
+  their host boxes were `display: inline` with automatic height. The `height: 100%` on each component's
+  root element therefore resolved against an auto-height parent — which means `auto` — and
+  `.mj-flow-editor` fell through to its `min-height: 400px` floor. The canvas was pinned at 400px no
+  matter how much room its pane had. Both hosts now declare `display: block; height: 100%`, which is
+  safe for callers that don't give them a box: it resolves to `auto` there and the floor takes over
+  exactly as before.
+
+  The Workflows Runs detail pane had the same defect one level up: `.wfr-detail` is a flex column
+  inside a split area with no height of its own, so the canvas below it — `flex: 1 1 auto` of an
+  auto-height parent — got its intrinsic size and left dead space beneath.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [deea1a3]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ng-code-editor@6.1.0-edge.3
+  - @memberjunction/ng-base-types@6.1.0-edge.3
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/ng-shared-generic@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 8de5f7e: Let a host form own the flow editor's save, and fix the canvas context menu.
+
+  **The flow was never part of the agent form's save.** `InternalSaveRecord` persisted templates, prompts and the agent row; steps and paths were written only by the flow editor's own Save button. That gave one record two save buttons with two failure modes — the form could succeed while the flow failed, leaving an agent that looked saved and step edits that were gone.
+
+  `BaseFormSectionComponent` gains an opt-in contract so a section that owns an editor can join the host's transaction: `HasPendingChanges`, `ContributeToSave(transactionGroup)` and `OnHostSaveCompleted()`. All three are no-ops by default, so existing sections are unaffected. `BaseFormComponent.HasAdditionalUnsavedChanges` (default `false`) feeds the container's `EffectiveIsDirty`, so a form holding unsaved editor state no longer reports itself clean — previously the navigate-away guard would discard those edits without asking.
+
+  `FlowAgentEditorComponent` splits `Save()` into `QueueSaveInto(transactionGroup)` (queue only, caller submits) plus `MarkSaved()`, and exposes `HasUnsavedChanges`. Two new inputs: **`ShowSaveControls`** (default `false`) hides the editor's own Save / Edit / Cancel and its unsaved indicator, for hosts that own persistence — a host that turns it on is declaring it owns its own save; and `CanvasTitle` (`null` hides the toolbar title) for hosts whose chrome already names the record.
+
+  **Context menu fix:** `onContextMenuAction` closed the menu before reading its target, and closing nulls the stored node/connection. Every branch then tested those now-null fields and fell through, so right-click **Remove and Edit both did nothing** — for nodes and connections alike, with the menu closing on click making it look like the action had been taken. The target is now captured before the menu closes, and the undo entry is pushed only once a target is confirmed, so a no-op action no longer leaves a phantom step in the undo stack. Covered by 7 regression tests, 6 of which fail against the old ordering.
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-code-editor@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/ng-ui-components@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-code-editor@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

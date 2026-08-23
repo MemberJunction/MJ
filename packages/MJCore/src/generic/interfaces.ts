@@ -10,6 +10,7 @@ import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { EntityTransactionScope } from "./entityTransactionScope";
 
 /**
  * Base configuration class for data providers.
@@ -259,24 +260,35 @@ export interface IEntityDataProvider {
     FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
 
     /**
-     * Begin an independent provider-level transaction for IS-A chain orchestration.
-     * Returns a provider-specific transaction object (e.g., sql.Transaction for SQLServer).
-     * Separate from the provider's internal transaction management (TransactionGroup system).
-     * Optional — client-side providers (GraphQL) do not implement this.
+     * Whether this provider can execute a multi-record unit of work atomically, in-process.
+     *
+     * `true` for server-side database providers (`DatabaseProviderBase` and subclasses); `false`
+     * for client-side providers such as `GraphQLDataProvider`, which have no local transaction to
+     * begin. `BaseEntity` reads this to decide whether to run a multi-node save graph locally or
+     * route the whole unit of work to the server — see
+     * `guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`.
+     *
+     * Optional on the interface so that external `IMetadataProvider` implementations are not broken
+     * by its introduction; `ProviderBase` supplies a concrete `false` default, so every provider in
+     * this repository answers it.
      */
-    BeginISATransaction?(): Promise<unknown>;
+    readonly SupportsEntityTransactions?: boolean;
 
     /**
-     * Commit an IS-A chain transaction.
-     * @param txn The transaction object returned from BeginISATransaction()
+     * Begins a provider-arbitrated transaction scope, or joins one already in flight.
+     *
+     * This is the single transaction primitive for **all** multi-record entity work — IS-A parent
+     * chains, composite graph saves and hand-written application cascades alike. Participants never
+     * ask whether someone else already opened a transaction; the provider arbitrates. See
+     * {@link EntityTransactionScope} for the full rationale, including the torn-write bug that the
+     * previous IS-A-specific trio caused.
+     *
+     * Only implemented where {@link SupportsEntityTransactions} is `true`.
+     *
+     * @returns A settle-once scope. Always pair with `Commit()` / `Rollback()`, or use
+     *          `RunInEntityTransaction()` which does that for you.
      */
-    CommitISATransaction?(txn: unknown): Promise<void>;
-
-    /**
-     * Rollback an IS-A chain transaction.
-     * @param txn The transaction object returned from BeginISATransaction()
-     */
-    RollbackISATransaction?(txn: unknown): Promise<void>;
+    BeginEntityTransaction?(): Promise<EntityTransactionScope>;
 }
 
 /**
@@ -353,6 +365,44 @@ export class EntitySaveOptions {
      * Only set when IsParentEntitySave is true.
      */
     ISAActiveChildEntityName?: string;
+
+    /**
+     * Persist owner-held embeds (and other non-collection companions) but skip
+     * {@link RelatedRecordCollection} nodes.
+     *
+     * Use this when the caller will write the collections itself after preparing them
+     * (pricing, expansion, sequence). The graph executor's recursion guard is private
+     * on {@link BaseEntity} — it is not a caller-facing "header-only" switch.
+     */
+    SkipRelatedCollections?: boolean = false;
+    /**
+     * Cycle guard: keys of the records already being persisted higher up in this unit of work.
+     *
+     * Set by the graph executor and threaded down through each child's `Save()` — that hop is why
+     * it lives on the options rather than staying inside the plan. A **self-referential** collection
+     * (`SubAgents` on `MJ: AI Agents` via `ParentID`, say) can otherwise recurse until the call
+     * stack dies, which surfaces as an unattributable crash instead of a fixable error.
+     *
+     * Not something callers set. Its lifetime is exactly one unit of work, which is deliberate — a
+     * process-global would be shared across concurrent requests and would report cycles that are
+     * really just two requests touching the same record at once.
+     */
+    GraphVisited?: Set<string>;
+    /**
+     * IDs of the Entity Actions that caused this save — set by code writing back on behalf of one.
+     * Those actions will not be re-fired by this save's after-save hooks.
+     *
+     * This is the loop-breaker for enrich-and-write-back automations: an action running on
+     * `AfterUpdate` that stores its result on the same record would otherwise re-trigger itself
+     * forever. In-process that is detected automatically (the dispatch guard tracks origin through
+     * the async call tree), so this exists for work that has **detached** — a task graph executed
+     * later by the durable dispatcher, a queued job — where the ambient origin is long gone and the
+     * write-back is otherwise indistinguishable from a user's edit.
+     *
+     * Only after-save invocations are skipped. `Validate` and `Before*` still run: whether a record
+     * is legal does not depend on who is saving it.
+     */
+    OriginatingEntityActionIDs?: string[];
 }
 
 /**
@@ -383,6 +433,19 @@ export class EntityDeleteOptions {
      * then cascades deletion to its parent.
      */
     IsParentEntityDelete?: boolean = false;
+
+    /**
+     * Cycle guard for the delete graph. Delete-path counterpart of
+     * {@link EntitySaveOptions.GraphVisited}; see that member for why it is carried on the options.
+     */
+    GraphVisited?: Set<string>;
+    /**
+     * IDs of the Entity Actions that caused this delete — set by code deleting on behalf of one, so
+     * those actions are not re-fired by this delete's after-delete hooks.
+     *
+     * @see EntitySaveOptions.OriginatingEntityActionIDs for the full rationale.
+     */
+    OriginatingEntityActionIDs?: string[];
 }
 
 /**
@@ -427,6 +490,36 @@ export class EntityRecordNameResult  {
  * When category is not provided, use a default category (e.g., 'default' or 'general').
  */
 export interface ILocalStorageProvider {
+    /**
+     * Whether this provider stores and returns **live object references** rather than
+     * serialized copies.
+     *
+     * - `true` — no serialization boundary. `SetItem(k, v)` retains `v` itself and
+     *   `GetItem(k)` hands the very same object back, so the store and every caller
+     *   share memory (e.g. the `Map`-based in-memory providers).
+     * - `false` — a serialization / structured-clone boundary isolates stored data from
+     *   live objects in both directions (IndexedDB, localStorage, Redis, MMKV).
+     *
+     * **Why callers care**: {@link ILocalStorageProvider} implementations are
+     * interchangeable, but this one property changes the *ownership* semantics of
+     * everything stored. `LocalCacheManager` reads it to decide whether it must
+     * deep-freeze row data at write time — without a freeze, a reference-sharing
+     * provider lets any consumer that mutates a returned row silently corrupt the
+     * process-wide cache. (That is a bug that actually shipped: a GraphQL resolver
+     * renamed `__mj_CreatedAt` to its transport alias in place, rewriting the live
+     * cache for every later reader.) Serializing providers were never exposed to this,
+     * so they opt out and keep handing back freely-mutable copies.
+     *
+     * **Optional, but always declare it.** Omitting it is not a way to opt out of the
+     * contract: when it is `undefined`, `LocalCacheManager` MEASURES the provider at
+     * initialization instead — it stores a sentinel object, reads it back, and compares
+     * identity. Declaring the value skips that probe and documents intent at the
+     * implementation site, which is why every in-repo provider declares it. It is
+     * optional purely so that adding this contract does not break existing external
+     * implementations at compile time.
+     */
+    readonly SharesReferences?: boolean;
+
     /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:

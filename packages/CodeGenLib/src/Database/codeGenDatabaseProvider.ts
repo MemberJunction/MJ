@@ -546,7 +546,66 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;
 
-    // ─── RECURSIVE FUNCTIONS (ROOT ID) ───────────────────────────────────
+    // ─── RECURSIVE FUNCTIONS (HIERARCHY & ROOT ID) ──────────────────────
+
+    /**
+     * Generates a recursive hierarchy metadata function for a self-referencing FK field.
+     * Computes RootID, Depth, Path, IsLeaf, and ChildCount.
+     * SQL Server: inline TVF with recursive CTE + OUTER APPLY in view.
+     * PostgreSQL: table-valued function with recursive CTE + LEFT JOIN LATERAL in view.
+     */
+    abstract generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+
+    /**
+     * Generates a TVF for querying all descendants of an arbitrary root node with optional max depth limit.
+     * `fn<Table><FieldName>_GetDescendants(@RootID, @MaxDepth)`
+     */
+    abstract generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+
+    /**
+     * Generates a TVF for querying all ancestors of an arbitrary node walking upward to the top-level root.
+     * `fn<Table><FieldName>_GetAncestors(@RecordID)`
+     */
+    abstract generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+
+    /**
+     * Generates the SELECT expressions for hierarchy fields in a base view.
+     * Projects: Root<Field>, <Field>Depth, <Field>Path, <Field>IsLeaf, <Field>ChildCount.
+     */
+    abstract generateHierarchyFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+
+    /**
+     * Generates the JOIN clause for the hierarchy metadata function in a base view.
+     */
+    abstract generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+
+    /**
+     * Produces the canonical database function name for the hierarchy metadata helper function.
+     */
+    getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
+    }
+
+    /**
+     * Produces the canonical database function name for the descendants traversal helper function.
+     */
+    getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn${entity.BaseTable}${field.Name}_GetDescendants`;
+    }
+
+    /**
+     * Produces the canonical database function name for the ancestors traversal helper function.
+     */
+    getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn${entity.BaseTable}${field.Name}_GetAncestors`;
+    }
+
+    /**
+     * Produces the canonical database function name for the root ID helper function.
+     */
+    getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn${entity.BaseTable}${field.Name}_GetRootID`;
+    }
 
     /**
      * Generates a recursive root-ID function for a self-referencing FK field.
@@ -1003,8 +1062,13 @@ export abstract class CodeGenDatabaseProvider {
      *              for PostgreSQL they become positional arguments.
      * @param paramNames Optional parameter names for SQL Server's `@Name=value` syntax.
      *                   Ignored on PostgreSQL.
+     * @param discardResult Set for routines whose rows the caller never reads. PostgreSQL needs to
+     *                   know: its default `SELECT * FROM routine(...)` form is rejected outright for
+     *                   a function returning `SETOF record` ("a column definition list is required
+     *                   for functions returning record"), and a routine that only performs work has
+     *                   no column list to give. SQL Server's `EXEC` is unaffected and ignores this.
      */
-    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[]): string;
+    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string;
 
     // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
 

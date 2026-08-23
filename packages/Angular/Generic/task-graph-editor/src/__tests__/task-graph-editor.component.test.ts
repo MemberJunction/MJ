@@ -13,7 +13,8 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TaskGraphEditorComponent } from '../lib/task-graph-editor.component';
-import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
+import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
+import { SpecToConnections, SpecToNodes } from '../lib/task-graph-canvas-adapter';
 import type {
     AfterDependencyAddedEventArgs,
     AfterTaskAddedEventArgs,
@@ -25,7 +26,7 @@ import type {
 } from '../lib/task-graph-editor-events';
 
 const task = (over: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode => ({
-    tempId: 'a', name: 'A', description: 'does a', agentName: 'Sage', dependsOn: [], ...over,
+    tempId: 'a', name: 'A', description: 'does a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [], ...over,
 });
 
 const spec = (over: Partial<TaskGraphSpec> = {}): TaskGraphSpec => ({
@@ -252,14 +253,14 @@ describe('TaskGraphEditorComponent', () => {
             // inside Explorer, a downstream app, or an embedded panel.
             const seen: string[] = [];
             c.AgentOpenRequested.subscribe((a) => seen.push(a.AgentName));
-            c.RequestAgentOpen(task({ agentName: 'Query Builder' }));
+            c.RequestAgentOpen(task({ kind: 'Agent' as const, configuration: { agentName: 'Query Builder' } }));
             expect(seen).toEqual(['Query Builder']);
         });
 
         it('does not ask to open an agent for a human task', () => {
             let emitted = 0;
             c.AgentOpenRequested.subscribe(() => emitted++);
-            c.RequestAgentOpen(task({ agentName: undefined, assignToUser: true }));
+            c.RequestAgentOpen(task({ kind: 'Human' as const, configuration: {} }));
             expect(emitted).toBe(0);
         });
 
@@ -282,5 +283,99 @@ describe('TaskGraphEditorComponent', () => {
             c.OnNodeRemoved(c.Nodes[0]);
             expect(c.Spec!.tasks).toHaveLength(1);
         });
+    });
+});
+
+/**
+ * Port identity, and why edges vanished.
+ *
+ * The canvas resolves a connection by looking its `fOutputId` / `fInputId` up among ALL registered
+ * ports — one flat namespace for the whole graph. Every node used to declare ports literally called
+ * `in` and `out`, so no connection could name which node's port it meant, and a workflow drew its
+ * boxes with no edges at all. Nothing errored: an unresolvable port is just a connection with
+ * nowhere to attach.
+ */
+describe('canvas ports are scoped to their node', () => {
+    const spec: TaskGraphSpec = {
+        workflowName: 'W',
+        reasoning: '',
+        tasks: [
+            TaskNode.Action({ tempId: 'a', name: 'A', description: '', dependsOn: [] }, { actionName: 'X' }),
+            TaskNode.Action({ tempId: 'b', name: 'B', description: '', dependsOn: ['a'] }, { actionName: 'Y' }),
+        ],
+    };
+
+    it('gives no two nodes the same port id', () => {
+        const ids = SpecToNodes(spec).flatMap((n) => n.Ports.map((p) => p.ID));
+        expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it('points a connection at ports that actually exist on its endpoints', () => {
+        const nodes = SpecToNodes(spec);
+        const [conn] = SpecToConnections(spec);
+        const source = nodes.find((n) => n.ID === conn.SourceNodeID)!;
+        const target = nodes.find((n) => n.ID === conn.TargetNodeID)!;
+
+        expect(source.Ports.map((p) => p.ID)).toContain(conn.SourcePortID);
+        expect(target.Ports.map((p) => p.ID)).toContain(conn.TargetPortID);
+    });
+
+    it('does not reuse one endpoint id for both ends', () => {
+        const [conn] = SpecToConnections(spec);
+        expect(conn.SourcePortID).not.toBe(conn.TargetPortID);
+    });
+});
+
+/**
+ * A branch the workflow declined must not read like a route it followed.
+ *
+ * `Skipped` was absent from the runtime-state union entirely, so it fell through to the default
+ * rendering and a not-taken step drew as an ordinary node with an ordinary edge into it — which is
+ * how a conditional workflow looks like it ran every branch.
+ */
+describe('routes the workflow did not take', () => {
+    const branching: TaskGraphSpec = {
+        workflowName: 'W',
+        reasoning: '',
+        tasks: [
+            TaskNode.Action({ tempId: 'start', name: 'Start', description: '', dependsOn: [] }, { actionName: 'X' }),
+            TaskNode.Action({ tempId: 'taken', name: 'Taken', description: '', dependsOn: ['start'] }, { actionName: 'Y' }),
+            TaskNode.Action({ tempId: 'not-taken', name: 'Not taken', description: '', dependsOn: ['start'] }, { actionName: 'Z' }),
+        ],
+    };
+    const runtime = { start: 'Complete', taken: 'Complete', 'not-taken': 'Skipped' } as const;
+
+    it('draws no edge into a step the workflow declined', () => {
+        expect(SpecToConnections(branching, runtime).some((c) => c.TargetNodeID === 'not-taken')).toBe(false);
+    });
+
+    it('draws no edge OUT of a declined step either', () => {
+        // An edge leaving a skipped step is as untravelled as one entering it — checking only the
+        // target would leave half of every abandoned branch drawn as though it had carried something.
+        const withDownstream: TaskGraphSpec = {
+            ...branching,
+            tasks: [
+                ...branching.tasks,
+                TaskNode.Action({ tempId: 'after', name: 'After', description: '', dependsOn: ['not-taken'] }, { actionName: 'Q' }),
+            ],
+        };
+        const conns = SpecToConnections(withDownstream, { ...runtime, after: 'Pending' });
+        expect(conns.some((c) => c.SourceNodeID === 'not-taken')).toBe(false);
+    });
+
+    it('keeps the edges along the route that WAS taken', () => {
+        expect(SpecToConnections(branching, runtime).some((c) => c.TargetNodeID === 'taken')).toBe(true);
+    });
+
+    it('gives a skipped step its own node status, not the default one', () => {
+        const nodes = SpecToNodes(branching, runtime);
+        expect(nodes.find((n) => n.ID === 'not-taken')?.Status).toBe('skipped');
+        expect(nodes.find((n) => n.ID === 'taken')?.Status).toBe('success');
+    });
+
+    it('DESIGN mode keeps every edge — there is no route yet, only routes that could be taken', () => {
+        // The same graph with no runtime is what an author is arranging; hiding a branch there would
+        // hide part of what they are building.
+        expect(SpecToConnections(branching)).toHaveLength(2);
     });
 });
