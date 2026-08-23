@@ -44,6 +44,7 @@ export * from './engines/GeoDataEngine';
 export * from './engines/PermissionEngine';
 export * from './engines/AuditLogTypeEngine';
 export * from './engines/ResourceTypeEngine';
+export * from './engines/IdentityClaimEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
