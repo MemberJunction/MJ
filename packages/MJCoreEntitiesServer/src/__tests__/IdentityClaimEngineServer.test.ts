@@ -134,6 +134,7 @@ describe('IdentityClaimEngineServer', () => {
 
     beforeEach(() => {
         mockDriver = new MockDriver();
+        (Metadata as unknown as { Provider: unknown }).Provider = undefined;
         vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByName').mockImplementation((name: string) => {
             if (name === 'TestClaim') {
                 return createMockClaimType({
@@ -351,13 +352,10 @@ describe('IdentityClaimEngineServer', () => {
             return Promise.resolve([]);
         });
 
-        Object.defineProperty(Metadata.prototype, 'Provider', {
-            get: () => ({
-                PlatformKey: 'sqlserver',
-                ExecuteSQL: mockExecuteSQL
-            }),
-            configurable: true
-        });
+        (Metadata as unknown as { Provider: unknown }).Provider = {
+            PlatformKey: 'sqlserver',
+            ExecuteSQL: mockExecuteSQL
+        };
 
         const user = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
 

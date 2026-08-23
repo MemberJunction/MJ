@@ -402,7 +402,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
      */
     private async consumeClaimAtomic(claimID: string, userID: string, md: Metadata, contextUser?: UserInfo): Promise<boolean> {
         try {
-            const provider = (md.Provider || (md as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined;
+            const provider = (Metadata.Provider || (Metadata as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined;
             if (!provider || typeof provider.ExecuteSQL !== 'function') {
                 // If in an environment without direct ExecuteSQL mock, fallback to true
                 return true;
