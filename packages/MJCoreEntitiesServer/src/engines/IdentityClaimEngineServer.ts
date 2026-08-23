@@ -404,8 +404,8 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         try {
             const provider = (Metadata.Provider || (Metadata as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined; // global-provider-ok: executing atomic CAS directly against server database provider
             if (!provider || typeof provider.ExecuteSQL !== 'function') {
-                // If in an environment without direct ExecuteSQL mock, fallback to true
-                return true;
+                LogError('consumeClaimAtomic: provider or ExecuteSQL not available for atomic CAS');
+                return false;
             }
 
             const entityInfo = md.Entities?.find(e => e.Name === 'MJ: Identity Claims');

@@ -24,8 +24,8 @@ CREATE TABLE [${flyway:defaultSchema}].[IdentityClaimType] (
     [Configuration]          NVARCHAR(MAX)    NULL,
     [DefaultExpirationDays]  INT              NOT NULL CONSTRAINT [DF_IdentityClaimType_DefaultExpirationDays] DEFAULT (30),
     [IsActive]               BIT              NOT NULL CONSTRAINT [DF_IdentityClaimType_IsActive] DEFAULT (1),
-    [__mj_CreatedAt]         DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_IdentityClaimType___mj_CreatedAt] DEFAULT (sysdatetimeoffset()),
-    [__mj_UpdatedAt]         DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_IdentityClaimType___mj_UpdatedAt] DEFAULT (sysdatetimeoffset()),
+    [__mj_CreatedAt]         DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_IdentityClaimType___mj_CreatedAt] DEFAULT (SYSUTCDATETIME()),
+    [__mj_UpdatedAt]         DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_IdentityClaimType___mj_UpdatedAt] DEFAULT (SYSUTCDATETIME()),
 
     CONSTRAINT [PK_IdentityClaimType] PRIMARY KEY CLUSTERED ([ID]),
     CONSTRAINT [UQ_IdentityClaimType_Name] UNIQUE ([Name])
@@ -45,8 +45,8 @@ CREATE TABLE [${flyway:defaultSchema}].[IdentityClaim] (
     [ClaimedByUserID]        UNIQUEIDENTIFIER NULL,
     [MagicLinkInviteID]      UNIQUEIDENTIFIER NULL,
     [MetadataJSON]           NVARCHAR(MAX)    NULL,
-    [__mj_CreatedAt]         DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_IdentityClaim___mj_CreatedAt] DEFAULT (sysdatetimeoffset()),
-    [__mj_UpdatedAt]         DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_IdentityClaim___mj_UpdatedAt] DEFAULT (sysdatetimeoffset()),
+    [__mj_CreatedAt]         DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_IdentityClaim___mj_CreatedAt] DEFAULT (SYSUTCDATETIME()),
+    [__mj_UpdatedAt]         DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_IdentityClaim___mj_UpdatedAt] DEFAULT (SYSUTCDATETIME()),
 
     CONSTRAINT [PK_IdentityClaim] PRIMARY KEY CLUSTERED ([ID]),
     CONSTRAINT [FK_IdentityClaim_ClaimType] FOREIGN KEY ([ClaimTypeID])

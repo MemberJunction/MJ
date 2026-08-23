@@ -15,6 +15,7 @@ import { Metadata, type UserInfo } from '@memberjunction/core';
 class MockDriver extends BaseIdentityClaimDriver {
     public onCreateCalled = false;
     public onClaimCalled = false;
+    public onClaimCallCount = 0;
     public onRevokeCalled = false;
     public onExpireCalled = false;
     public shouldFail = false;
@@ -25,6 +26,7 @@ class MockDriver extends BaseIdentityClaimDriver {
 
     public async OnClaim(context: ClaimRedeemContext): Promise<ClaimResult> {
         this.onClaimCalled = true;
+        this.onClaimCallCount++;
         if (this.shouldFail) {
             return { Success: false, ErrorMessage: 'Driver execution failed' };
         }
@@ -134,7 +136,10 @@ describe('IdentityClaimEngineServer', () => {
 
     beforeEach(() => {
         mockDriver = new MockDriver();
-        (Metadata as unknown as { Provider: unknown }).Provider = undefined;
+        (Metadata as unknown as { Provider: unknown }).Provider = {
+            PlatformKey: 'sqlserver',
+            ExecuteSQL: vi.fn().mockResolvedValue([{ ID: 'claim-123' }])
+        };
         vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByName').mockImplementation((name: string) => {
             if (name === 'TestClaim') {
                 return createMockClaimType({
@@ -366,7 +371,8 @@ describe('IdentityClaimEngineServer', () => {
 
         const successCount = (res1.Success ? 1 : 0) + (res2.Success ? 1 : 0);
         expect(successCount).toBe(1);
-        expect(mockDriver.onClaimCalled).toBe(true);
+        expect(mockExecuteSQL.mock.calls[0][0]).toContain("[Status] = 'Pending'");
+        expect(mockDriver.onClaimCallCount).toBe(1);
     });
 
     it('should revoke a claim and invoke driver OnRevoke', async () => {
