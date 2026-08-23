@@ -6,7 +6,7 @@ on:
     branches: [next]
     paths:
       - 'package.json'
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
       - 'packages/**'
       - 'vitest.*'
       # A change to ONLY a root tsconfig must trigger the workflow — package tsconfigs extend the
@@ -27,6 +27,13 @@ on:
       # entry a PR editing only the gate script runs neither the gate nor its own
       # vitest suite — the one change that most needs both.
       - '.github/scripts/check-dynamic-replace.mjs'
+      # The browser-manifest server-leakage gate runs in this workflow (see that step).
+      # The two guarded manifests are listed too: a PR that edits ONLY a generated manifest
+      # is exactly the shape that can introduce a leak, and neither path is under packages/**
+      # in a way the affected-package filter would select.
+      - '.github/scripts/check-browser-manifest-leakage.mjs'
+      - 'packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts'
+      - 'packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts'
       # The DOM-spec guards/gates run in this workflow too.
       - 'scripts/check-dom-spec-placement.mjs'
       - 'scripts/check-spec-antipatterns.mjs'
@@ -208,6 +215,18 @@ jobs:
           PR_BASE_REF: ${{ github.base_ref || 'next' }}
         run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
 
+      # Browser class-registration manifest server-leakage gate. A server-only package reaching
+      # `ng-bootstrap` / `ng-bootstrap-lite` breaks the Angular bundle with esbuild
+      # `Could not resolve "crypto"`, and only on a COLD build — warm HMR hides it, so the
+      # developer who introduces it usually cannot see it. Codifies the hand-run grep that
+      # packages/Angular/Bootstrap/CLAUDE.md used to ask contributors to remember.
+      #
+      # Unconditional, unlike the freshness gate below: leakage is introduced on PRs, and PR
+      # runs are exactly where the freshness gate is skipped. Reads four committed files, no
+      # build, no node_modules — costs milliseconds, so it sits with the other pure-file guards.
+      - name: Browser manifest server-leakage gate
+        run: node .github/scripts/check-browser-manifest-leakage.mjs
+
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
       #    depends on them (turbo's `...[ref]` package-dependency selection).
@@ -215,7 +234,7 @@ jobs:
       #    vitest/tsconfig, this workflow) can affect every package but lives in no package
       #    dir, so turbo's filter would select nothing — fall back to the FULL suite there.
       #    (Root package.json matters: editing `workspaces` globs or root `scripts` reshapes
-      #    the whole build without necessarily touching package-lock.json.)
+      #    the whole build without necessarily touching pnpm-lock.yaml.)
       #  - push to next / schedule / manual dispatch: always FULL (the backstop).
       - name: Determine test scope
         run: |
@@ -223,7 +242,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "${{ github.base_ref }}"
             CHANGED="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
-            if echo "$CHANGED" | grep -qE '^(package\.json|package-lock\.json|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
+            if echo "$CHANGED" | grep -qE '^(package\.json|pnpm-lock\.yaml|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
               echo "Root/global change detected — running the FULL suite."
             else
               FILTER="--filter=...[origin/${{ github.base_ref }}]"
@@ -263,6 +282,16 @@ jobs:
             npx turbo run test:types
             npm test -- --concurrency=4
           fi
+
+      # Re-run leakage AFTER the build regenerated the manifests, and BEFORE the freshness
+      # gate below. Ordering is deliberate: a PR can introduce a poisoned dependency edge while
+      # leaving the committed manifest stale-but-clean, so the pre-build pass goes green. Once
+      # `pnpm run build` has regenerated them, the leak is visible — but the freshness gate
+      # exits 1 on ANY diff, so if it ran first the developer would see an opaque "manifest is
+      # stale" message instead of "a server package leaked in".
+      - name: Browser manifest server-leakage gate (regenerated)
+        if: env.TURBO_FILTER == ''
+        run: node .github/scripts/check-browser-manifest-leakage.mjs
 
       # Class-registration manifest freshness gate. The committed manifests (the anti-tree-
       # shaking import lists wiring 100+ packages of @RegisterClass classes) demonstrably go
