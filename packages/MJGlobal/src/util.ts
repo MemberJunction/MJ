@@ -15,35 +15,32 @@ export interface GlobalObjectStore {
      * because it is possible that a given class might have copies of its code in multiple paths in a deployed application. This approach ensures that no matter how many code copies might exist, there is only one instance of the object in question by using the Global Object Store.
  * @returns
  */
+let __globalObjectStore: GlobalObjectStore | null | undefined = undefined;
+
 export function GetGlobalObjectStore(): GlobalObjectStore | null {
-    try    {
-        // we might be running in a browser, in that case, we use the window object for our global stuff
-        if (window)
-            return window as unknown as GlobalObjectStore;
-        else {
-            // if we get here, we don't have a window object, so try the global object (node environment)
-            // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-            if (global)
-                return global as unknown as GlobalObjectStore;
-            else
-                return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-        }
+    /**
+     * Memoised, and probed with `typeof`.
+     *
+     * The previous shape was `if (window)` inside a try/catch. In Node, `window` is an
+     * UNDECLARED identifier, so that line THROWS a ReferenceError on every single call and the
+     * catch falls through to `global` — correct answer, pathological path. This function sits
+     * under ClassFactory and BaseEngine hot paths, and building + unwinding that exception was
+     * measured at several percent of a busy server process. `typeof window` is the one probe
+     * that is legal on an undeclared identifier, and the environment does not change after
+     * startup, so the answer is computed once.
+     */
+    if (__globalObjectStore !== undefined) return __globalObjectStore;
+    if (typeof window !== 'undefined') {
+        __globalObjectStore = window as unknown as GlobalObjectStore;
+    } else if (typeof global !== 'undefined') {
+        __globalObjectStore = global as unknown as GlobalObjectStore;
+    } else {
+        // neither browser nor node (e.g. an exotic test sandbox) — callers already handle null
+        __globalObjectStore = null;
     }
-    catch (e) {
-        try {
-            // if we get here, we don't have a window object, so try the global object (node environment)
-            if (global)
-                return global as unknown as GlobalObjectStore;
-            else
-                return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-        }
-        catch (e) {
-            // if we get here, we don't have a global object either, so we're not running in a browser or node, so we're probably running in a unit test
-            // in that case, we don't have a provider saved, return null, we need to be either in node or a browser
-            return null;
-        }
-    }
+    return __globalObjectStore;
 }
+
 
 /**
  * This utility function will copy all scalar and array properties from an object to a new object and return the new object.
