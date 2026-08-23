@@ -189,7 +189,7 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
             throw new Error(`IdentityClaimType not found for ${params.ClaimTypeName ?? params.ClaimTypeID}`);
         }
 
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         claim.NewRecord();
         claim.ClaimTypeID = claimType.ID;
@@ -252,7 +252,7 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
             return { Success: false, ErrorMessage: 'Context user is required to redeem a claim' };
         }
 
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         const loaded = await claim.Load(claimID);
         if (!loaded) {
@@ -323,7 +323,7 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
      * Revokes an existing claim.
      */
     public async RevokeClaim(claimID: string, contextUser?: UserInfo, reason?: string): Promise<void> {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         const loaded = await claim.Load(claimID);
         if (!loaded) {

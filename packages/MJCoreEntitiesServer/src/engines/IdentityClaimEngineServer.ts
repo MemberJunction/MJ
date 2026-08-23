@@ -121,7 +121,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             throw new Error(`IdentityClaimType not found for ${params.ClaimTypeName ?? params.ClaimTypeID}`);
         }
 
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: server-side identity claim engine resolving entities under server default provider
 
         // 2.2 Accept and normalize EntityID or EntityName
         let resolvedEntityID: string | null = null;
@@ -302,7 +302,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             return { Success: false, ErrorMessage: 'Authenticated User is required to redeem a claim' };
         }
 
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: server-side identity claim engine resolving claims under server default provider
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         const loaded = await claim.Load(claimID);
         if (!loaded) {
@@ -402,7 +402,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
      */
     private async consumeClaimAtomic(claimID: string, userID: string, md: Metadata, contextUser?: UserInfo): Promise<boolean> {
         try {
-            const provider = (Metadata.Provider || (Metadata as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined;
+            const provider = (Metadata.Provider || (Metadata as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined; // global-provider-ok: executing atomic CAS directly against server database provider
             if (!provider || typeof provider.ExecuteSQL !== 'function') {
                 // If in an environment without direct ExecuteSQL mock, fallback to true
                 return true;
@@ -432,7 +432,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
     public async RevokeClaim(claimID: string, contextUser?: UserInfo): Promise<void> {
         if (!claimID) return;
 
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: server-side identity claim engine resolving claims under server default provider
         const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
         const loaded = await claim.Load(claimID);
         if (!loaded || claim.Status === 'Revoked') return;
