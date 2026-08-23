@@ -56,6 +56,7 @@ import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -2338,6 +2339,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     private buildSourceSchemaFromPersistedRows(
         integrationID: string,
         requestedNames?: string[],
+        warningsOut?: string[],
     ): SourceSchemaInfo {
         const engine = IntegrationEngineBase.Instance;
         // ACTIVE-only materialization: an object/field a given tenant doesn't expose is marked
@@ -2356,10 +2358,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         for (const io of ios) ioByID.set(io.ID, io.Name);
 
         const result: SourceSchemaInfo = { Objects: [] };
+        const fieldsByObjectName: Record<string, Array<{ Name: string; Status: string | null }>> = {};
         for (const io of ios) {
             if (filter && !filter.has(io.Name.toLowerCase())) continue;
             // Active fields only — an inactive (source-absent / deactivated) field is not materialized.
-            const iofs = engine.GetIntegrationObjectFields(io.ID).filter(iof => iof.Status === 'Active');
+            const allFields = engine.GetIntegrationObjectFields(io.ID);
+            const iofs = allFields.filter(iof => iof.Status === 'Active');
+            // Remember what this object declared, active or not — the caller's warning collector
+            // turns the difference into the one message that explains a column that never appeared.
+            if (warningsOut) fieldsByObjectName[io.Name] = allFields.map(f => ({ Name: f.Name, Status: f.Status }));
 
             const fields = iofs.map(iof => {
                 const targetIOName = iof.RelatedIntegrationObjectID
@@ -2399,6 +2406,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     })),
                 IncrementalWatermarkField: io.IncrementalWatermarkField ?? undefined,
             });
+        }
+
+        // Declared-but-inactive rows this rebuild left out. The caller decides what to do with the
+        // strings (the apply path puts them on its Warnings); computing them costs nothing when no
+        // collector was passed, since the field lists above are only gathered then.
+        if (warningsOut) {
+            warningsOut.push(...ComputeInactiveRowWarnings({
+                RequestedNames: requestedNames ?? null,
+                AllObjects: engine.GetIntegrationObjectsByIntegrationID(integrationID)
+                    .map(io => ({ Name: io.Name, Status: io.Status })),
+                FieldsByObjectName: fieldsByObjectName,
+            }));
         }
         return result;
     }
@@ -3365,15 +3384,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // the Phase 0 v5.39.x Save hook.  Fall back to live IntrospectSchema only
             // for direct-API callers bypassing the wizard (empty IO cache).
             const requestedNames = new Set(objects.map(o => o.SourceObjectName));
+            // Declared rows this apply will leave out (deactivated objects/fields) — surfaced on the
+            // mutation's Warnings so a column that never appears has a stated reason.
+            const inactiveWarnings: string[] = [];
             let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(
                 companyIntegration.IntegrationID,
                 Array.from(requestedNames),
+                inactiveWarnings,
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[IntegrationApplySchema] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
                 const introspect = connector.IntrospectSchema.bind(connector) as
                     (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
                 sourceSchema = await introspect(companyIntegration, user);
+                // The persisted rows are not what gets materialized on this path, so anything they
+                // said about deactivated rows describes a schema this apply is not using.
+                inactiveWarnings.length = 0;
             } else {
                 console.log(
                     `[IntegrationApplySchema] Reusing ${sourceSchema.Objects.length} persisted IOs for ${companyIntegration.Integration} ` +
@@ -3408,6 +3434,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 SkipGitCommit: skipGitCommit,
                 SkipRestart: skipRestart,
             });
+            if (inactiveWarnings.length > 0) SchemaOutput.Warnings.unshift(...inactiveWarnings);
 
             return {
                 Success: PipelineResult.Success,
@@ -4116,6 +4143,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // Intacct AND silently dropped selections when the second pass returned
         // fewer objects than the first (rate limits, transient errors).
         let sourceSchema: SourceSchemaInfo;
+        // Declared rows this apply will silently leave out (deactivated objects/fields). Collected
+        // during the rebuild and surfaced on the apply's Warnings, alongside the schema-limit ones.
+        const inactiveWarnings: string[] = [];
         if (prefetchedSourceSchema) {
             sourceSchema = prefetchedSourceSchema;
         } else {
@@ -4123,12 +4153,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             sourceSchema = this.buildSourceSchemaFromPersistedRows(
                 companyIntegration.IntegrationID,
                 requestedNamesForReuse,
+                inactiveWarnings,
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[buildSchemaForConnector] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
                 const introspect = connector.IntrospectSchema.bind(connector) as
                     (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
                 sourceSchema = await introspect(companyIntegration, user);
+                // The persisted rows are not what gets materialized on this path, so anything they
+                // said about deactivated rows describes a schema this apply is not using.
+                inactiveWarnings.length = 0;
             } else {
                 console.log(
                     `[buildSchemaForConnector] Reusing ${sourceSchema.Objects.length} persisted IOs for ${companyIntegration.Integration} ` +
@@ -4171,8 +4205,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
         const builder = new SchemaBuilder();
         const schemaOutput = builder.BuildSchema(input);
-        // Surface the auto-disabled over-wide objects (if any) in the apply's Warnings → CLI output.
+        // Surface the auto-disabled over-wide objects (if any) in the apply's Warnings → CLI output,
+        // together with the declared-but-deactivated rows this apply left out.
         if (limitWarnings.length > 0) schemaOutput.Warnings.unshift(...limitWarnings);
+        if (inactiveWarnings.length > 0) schemaOutput.Warnings.unshift(...inactiveWarnings);
 
         if (schemaOutput.Errors.length > 0) {
             throw new Error(`Schema generation failed: ${schemaOutput.Errors.join('; ')}`);

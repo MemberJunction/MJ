@@ -312,6 +312,14 @@ export interface PersistSchemaResult {
    */
   ObjectMergeLog: ObjectMergeLog[];
   FieldMergeLog: FieldMergeLog[];
+  /**
+   * Names of the objects, and `Object.Field` for the fields, that phase 3 DEACTIVATED because an
+   * authoritative discovery did not observe them. Previously this was a console line and nothing
+   * else, so a declared field disappearing from every subsequent apply had no trace the caller
+   * could surface. Empty unless `DeactivateAbsent` ran.
+   */
+  ObjectsDeactivated: string[];
+  FieldsDeactivated: string[];
 }
 
 /**
@@ -368,6 +376,8 @@ export class IntegrationSchemaSync {
       FieldsUpdated: 0,
       ObjectMergeLog: [],
       FieldMergeLog: [],
+      ObjectsDeactivated: [],
+      FieldsDeactivated: [],
     };
 
     // §D — NO runtime FK-from-stream inference. Foreign keys come ONLY from (a) declared metadata
@@ -498,7 +508,7 @@ export class IntegrationSchemaSync {
         const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', ContextUser);
         if (await obj.InnerLoad(CompositeKey.FromID(id))) {
           obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
-          if (await obj.Save()) deactivated++;
+          if (await obj.Save()) { deactivated++; result.ObjectsDeactivated.push(obj.Name); }
           else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom object ${id}: ${obj.LatestResult?.CompleteMessage ?? 'unknown'}`);
         }
       }
@@ -507,7 +517,11 @@ export class IntegrationSchemaSync {
         const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
         if (await f.InnerLoad(CompositeKey.FromID(id))) {
           f.Status = 'Disabled'; // deactivate, never delete
-          if (await f.Save()) fieldsDeactivated++;
+          if (await f.Save()) {
+            fieldsDeactivated++;
+            const owner = engine.GetIntegrationObjectByID(f.IntegrationObjectID)?.Name ?? f.IntegrationObjectID;
+            result.FieldsDeactivated.push(`${owner}.${f.Name}`);
+          }
           else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom field ${id}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`);
         }
       }
