@@ -1,0 +1,5 @@
+---
+"@memberjunction/server": patch
+---
+
+Custom-column promotion is one RSU pass, and an interrupted spread is no longer a dead end. `PromoteForSync` used to run the full RSU pipeline (migrate + CodeGen + compile) once per entity — a sync touching N entities with candidates paid N passes where `RunPipelineBatch` exists to pay one; it now plans all entities first, runs one batch (one lock, one CodeGen, one compile, one restart signal), refreshes provider metadata once, then finishes each entity whose DDL landed (a failed migration leaves its entity captured for retry without stopping the others). Separately, a run interrupted between ADD COLUMN and the value spread used to leave rows carrying the value only in the overflow JSON forever — the column and field map existed, so the terminate check skipped the key as done, and capture had stopped because the key was no longer unmapped. Such keys are now spread-recovery work items: no DDL, no metadata writes, never surfaced as UI candidates or counted as columns added — they only finish the backfill, and the spread is idempotent (writes only still-unset destinations), so recovery converges to a read-only pass.

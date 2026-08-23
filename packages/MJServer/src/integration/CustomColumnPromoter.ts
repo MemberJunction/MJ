@@ -62,7 +62,7 @@ interface PersistedCustomKeyCandidate {
 }
 import type { BaseEntity } from '@memberjunction/core';
 import { DDLGenerator, type TargetColumnConfig, type DatabasePlatform } from '@memberjunction/integration-schema-builder';
-import { RuntimeSchemaManager, type RSUPipelineInput } from '@memberjunction/schema-engine';
+import { RuntimeSchemaManager, type RSUPipelineInput, type RSUPipelineResult } from '@memberjunction/schema-engine';
 import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -92,6 +92,15 @@ interface WorkItem {
     needsColumn: boolean;
     /** No active field map for this source key → needs one (covers the partial-promotion crash window). */
     needsFieldMap: boolean;
+    /**
+     * Column AND field map already exist, but rows may still hold the value only in the overflow
+     * JSON — a run interrupted between ADD COLUMN and the value spread leaves exactly this state,
+     * and nothing else ever finishes it: the key is no longer "unmapped" so capture stops, and the
+     * old terminate check skipped it as done. A spread-recovery item re-runs ONLY the backfill
+     * (no DDL, no metadata writes); the idempotent spread settles it to a no-op once every row is
+     * filled. Never surfaced as a UI candidate and never counted as a column added.
+     */
+    recoverSpread?: boolean;
 }
 
 /** Registers the post-sync custom-column promotion hook on the IntegrationEngine singleton. */
@@ -165,68 +174,95 @@ export class IntegrationCustomColumnPromoter {
         const integrationID = await this.resolveIntegrationID(companyIntegrationID);
         if (!integrationID) return NOT_PROMOTED;
 
-        const columnsAdded: Array<{ EntityName: string; ColumnName: string }> = [];
+        // ── PHASE 1: PLAN — build every entity's work list + its RSU input; run NO pipeline. ──
+        // The old shape ran the FULL RSU pipeline per entity — a sync touching N entities with
+        // candidates paid N CodeGen + compile passes where the batch API exists precisely to pay
+        // one. Plan everything first, then promote once.
+        interface EntityPlan {
+            entityName: string;
+            entityInfo: EntityInfo;
+            entityMap: { ID: string; ExternalObjectName: string };
+            work: WorkItem[];
+            /** Index of this entity's input in the RSU batch; -1 when it needs no DDL. */
+            batchIndex: number;
+        }
+        const plans: EntityPlan[] = [];
+        const batchInputs: RSUPipelineInput[] = [];
         for (const entityName of syncedEntityNames) {
             try {
-                const added = await this.promoteEntity(companyIntegrationID, integrationID, entityName, customKeyStats?.[entityName]);
-                columnsAdded.push(...added);
+                const planned = await this.planWorkForEntity(companyIntegrationID, entityName, customKeyStats?.[entityName]);
+                if (!planned || planned.work.length === 0) continue; // no overflow / no entity map / already converged
+                const { entityInfo, entityMap } = planned;
+                let work = planned.work;
+                // M4a: bound schema churn per pass — the remainder stays captured and promotes next sync.
+                if (work.length > MAX_PROMOTIONS_PER_PASS) {
+                    LogStatus(`[CustomColumnPromoter] ${work.length} candidates on ${entityName}; promoting ${MAX_PROMOTIONS_PER_PASS} this pass, ${work.length - MAX_PROMOTIONS_PER_PASS} deferred to next sync.`);
+                    work = work.slice(0, MAX_PROMOTIONS_PER_PASS);
+                }
+                const newColumns = work.filter(w => w.needsColumn);
+                const plan: EntityPlan = { entityName, entityInfo, entityMap, work, batchIndex: -1 };
+                if (newColumns.length > 0) {
+                    plan.batchIndex = batchInputs.length;
+                    batchInputs.push(this.buildSchemaInput(entityInfo, newColumns));
+                }
+                plans.push(plan);
+            } catch (err) {
+                // One entity's planning failure must not abort the others, and never the sync.
+                LogError(`[CustomColumnPromoter] Planning failed for entity '${entityName}': ${this.msg(err)}`);
+            }
+        }
+        if (plans.length === 0) return NOT_PROMOTED;
+
+        // ── PHASE 2: ONE batched RSU pass for ALL entities' ADD COLUMN migrations. ──
+        // RunPipelineBatch runs every migration under one lock, then ONE CodeGen + compile +
+        // restart + git commit. Each input carries the same SkipRestart/SkipGitCommit the
+        // per-entity path set, so the batch honours the same restart semantics — one restart
+        // signal at the end when applicable, never N.
+        let batchResults: RSUPipelineResult[] = [];
+        if (batchInputs.length > 0) {
+            const batch = await RuntimeSchemaManager.Instance.RunPipelineBatch(batchInputs);
+            batchResults = batch.Results ?? [];
+            // M3: make the freshly-created EntityFields + regenerated sprocs visible in-process
+            // ONCE for the whole batch. CRITICAL: the spread below builds sproc calls from this
+            // metadata; without the refresh, row.Save() uses the STALE field list that predates
+            // the column add and mismatches the regenerated sproc → "Error executing SQL".
+            try { await this.provider.Refresh(); } catch (err) { LogError(`[CustomColumnPromoter] post-batch Refresh failed: ${this.msg(err)}`); }
+        }
+
+        // ── PHASE 3: IOF rows + field maps + value spread for every entity whose DDL landed. ──
+        const columnsAdded: Array<{ EntityName: string; ColumnName: string }> = [];
+        for (const plan of plans) {
+            try {
+                if (plan.batchIndex >= 0) {
+                    const res = batchResults[plan.batchIndex];
+                    if (!res || !res.Success) {
+                        // DDL failed — leave everything captured; retry next promote (no partial commit lost).
+                        LogError(`[CustomColumnPromoter] RSU ADD COLUMN failed on ${plan.entityInfo.Name}: ${res?.ErrorMessage ?? res?.ErrorStep ?? 'unknown'} — leaving ${plan.entityName} captured for retry.`);
+                        continue;
+                    }
+                }
+                await this.createIntegrationObjectFields(integrationID, plan.entityMap.ExternalObjectName, plan.work);
+                await this.createFieldMaps(plan.entityMap.ID, plan.work.filter(w => w.needsFieldMap));
+                const refreshedEntityInfo = this.provider.EntityByName(plan.entityName) ?? plan.entityInfo;
+                await this.spreadAndRebaseline(plan.entityName, plan.entityMap.ID, refreshedEntityInfo, plan.work);
+                // recoverSpread items add no column/metadata — they only finish an interrupted
+                // backfill, so they don't count as "columns added" (keeps SchemaUpdatePending honest).
+                const added = plan.work.filter(w => !w.recoverSpread);
+                LogStatus(`[CustomColumnPromoter] Promoted/recovered ${plan.work.length} custom column(s) on ${plan.entityName}: ${plan.work.map(w => w.columnName).join(', ')}`);
+                columnsAdded.push(...added.map(w => ({ EntityName: plan.entityName, ColumnName: w.columnName })));
             } catch (err) {
                 // One entity's promotion failure must not abort the others, and never the sync.
-                LogError(`[CustomColumnPromoter] Promotion failed for entity '${entityName}': ${this.msg(err)}`);
+                LogError(`[CustomColumnPromoter] Promotion failed for entity '${plan.entityName}': ${this.msg(err)}`);
             }
         }
 
         const promoted = columnsAdded.length > 0;
-        if (promoted) {
-            // Make the freshly-created EntityFields visible in-process for the next sync's mapping.
-            try { await this.provider.Refresh(); } catch (err) { LogError(`[CustomColumnPromoter] provider.Refresh failed: ${this.msg(err)}`); }
-        }
         return { Promoted: promoted, ColumnsAdded: columnsAdded, SchemaUpdatePending: promoted };
-    }
-
-    /** Gate → plan → promote for a single target entity. Returns the columns it added. */
-    private async promoteEntity(
-        companyIntegrationID: string,
-        integrationID: string,
-        entityName: string,
-        inRunStats?: CustomKeyStat[],
-    ): Promise<Array<{ EntityName: string; ColumnName: string }>> {
-        const planned = await this.planWorkForEntity(companyIntegrationID, entityName, inRunStats);
-        if (!planned || planned.work.length === 0) return []; // no overflow / no entity map / already converged
-        const { entityInfo, entityMap } = planned;
-        let work = planned.work;
-
-        // M4a: bound schema churn per pass — the remainder stays captured and promotes next sync.
-        if (work.length > MAX_PROMOTIONS_PER_PASS) {
-            LogStatus(`[CustomColumnPromoter] ${work.length} candidates on ${entityName}; promoting ${MAX_PROMOTIONS_PER_PASS} this pass, ${work.length - MAX_PROMOTIONS_PER_PASS} deferred to next sync.`);
-            work = work.slice(0, MAX_PROMOTIONS_PER_PASS);
-        }
-
-        // 4. PROMOTE: ADD COLUMN+CodeGen (only the keys that need a column) → IOF rows → field maps → spread.
-        const newColumns = work.filter(w => w.needsColumn);
-        if (newColumns.length > 0 && !await this.applySchemaChange(entityInfo, newColumns)) {
-            return []; // DDL failed — leave everything captured; retry next sync (no partial commit lost)
-        }
-        await this.createIntegrationObjectFields(integrationID, entityMap.ExternalObjectName, work);
-        await this.createFieldMaps(entityMap.ID, work.filter(w => w.needsFieldMap));
-        // M3: spread staged values into the real columns + re-baseline the content hash.
-        // CRITICAL: refresh metadata FIRST. applySchemaChange just added the columns AND had RSU
-        // regenerate the spUpdate sproc to include them — but the running provider's in-memory entity
-        // metadata still predates the column add (the Refresh at the top ran before it). Without this,
-        // the spread's row.Save() builds a sproc call from the STALE field list that doesn't match the
-        // regenerated sproc → "Error executing SQL" (the spread-save failures). Re-loading metadata
-        // here aligns the entity's field set with the new DB sproc so the backfill saves succeed.
-        try { await this.provider.Refresh(); } catch (err) { LogError(`[CustomColumnPromoter] pre-spread Refresh failed: ${this.msg(err)}`); }
-        const refreshedEntityInfo = this.provider.EntityByName(entityName) ?? entityInfo;
-        await this.spreadAndRebaseline(entityName, entityMap.ID, refreshedEntityInfo, work);
-
-        LogStatus(`[CustomColumnPromoter] Promoted/recovered ${work.length} custom column(s) on ${entityName}: ${work.map(w => w.columnName).join(', ')}`);
-        return work.map(w => ({ EntityName: entityName, ColumnName: w.columnName }));
     }
 
     /**
      * Dry-run of GATE → scan → PLAN → resolve-work for ONE entity, WITHOUT applying any schema change.
-     * Shared by {@link promoteEntity} (which then PROMOTES the work) and {@link ListCandidates} (which only
+     * Shared by {@link PromoteForSync} (phase 1, which then batch-PROMOTES the work) and {@link ListCandidates} (which only
      * reports it). Returns null when the entity has no overflow column / no captured customs / no entity map.
      * Because the work list is computed live (overflow keys minus already-column-and-mapped), re-running is
      * inherently deduped — a concurrent discovery that already promoted a key yields no work item for it.
@@ -284,7 +320,9 @@ export class IntegrationCustomColumnPromoter {
     ): Promise<Array<{ EntityName: string; SourceKey: string; ColumnName: string; InferredType: string; NeedsColumn: boolean }>> {
         const planned = await this.planWorkForEntity(companyIntegrationID, entityName);
         if (!planned) return [];
-        return planned.work.map(w => ({
+        // recoverSpread items are not "new columns found" — they are an internal backfill-recovery
+        // signal (column + field map already exist), so they must not surface as UI candidates.
+        return planned.work.filter(w => !w.recoverSpread).map(w => ({
             EntityName: entityName,
             SourceKey: w.sourceKey,
             ColumnName: w.columnName,
@@ -410,7 +448,13 @@ export class IntegrationCustomColumnPromoter {
             const existingCol = existingByLower.get(sanitizeColumnName(candidate.Key).toLowerCase());
             const hasColumn = !!existingCol;
             const hasFieldMap = fieldMapSources.has(candidate.Key.toLowerCase());
-            if (hasColumn && hasFieldMap) continue; // terminated — nothing to do
+            if (hasColumn && hasFieldMap) {
+                // Schema + mapping are terminated — but see WorkItem.recoverSpread: an interrupted
+                // spread leaves rows carrying the value only in overflow, and this was the one exit
+                // that made that state permanent. Keep it as a spread-recovery item instead.
+                items.push({ candidate, sourceKey: candidate.Key, columnName: existingCol!, needsColumn: false, needsFieldMap: false, recoverSpread: true });
+                continue;
+            }
             const columnName = existingCol ?? this.uniqueColumnName(sanitizeColumnName(candidate.Key), taken);
             if (!hasColumn) taken.add(columnName.toLowerCase());
             items.push({ candidate, sourceKey: candidate.Key, columnName, needsColumn: !hasColumn, needsFieldMap: !hasFieldMap });
@@ -440,8 +484,12 @@ export class IntegrationCustomColumnPromoter {
         return `${base}_${Date.now() % 100000}`; // pathological fallback (never expected)
     }
 
-    /** Generates ADD COLUMN DDL for the new columns and runs it through RSU (CodeGen reflects them). */
-    private async applySchemaChange(entityInfo: EntityInfo, named: WorkItem[]): Promise<boolean> {
+    /**
+     * Builds the RSUPipelineInput (ADD COLUMN DDL) for one entity's new columns — pure, runs NO
+     * pipeline. PromoteForSync collects these across all entities and runs ONE RunPipelineBatch so
+     * the whole promote is a single CodeGen/compile/restart pass.
+     */
+    private buildSchemaInput(entityInfo: EntityInfo, named: WorkItem[]): RSUPipelineInput {
         const platform = this.dbProvider.PlatformKey as DatabasePlatform;
         const ddl = new DDLGenerator();
         const statements = named.map(n =>
@@ -452,7 +500,7 @@ export class IntegrationCustomColumnPromoter {
                 platform,
             ),
         );
-        const input: RSUPipelineInput = {
+        return {
             MigrationSQL: statements.join('\n'),
             Description: `Promote ${named.length} custom column(s) on ${entityInfo.Name}`,
             AffectedTables: [`${entityInfo.SchemaName}.${entityInfo.BaseTable}`],
@@ -461,11 +509,6 @@ export class IntegrationCustomColumnPromoter {
             SkipRestart: true,
             SkipGitCommit: true,
         };
-        const result = await RuntimeSchemaManager.Instance.RunPipeline(input);
-        if (!result.Success) {
-            LogError(`[CustomColumnPromoter] RSU ADD COLUMN failed on ${entityInfo.Name}: ${result.ErrorMessage ?? result.ErrorStep ?? 'unknown'}`);
-        }
-        return result.Success;
     }
 
     /** Builds a per-platform TargetColumnConfig from a planned candidate. */
@@ -618,8 +661,15 @@ export class IntegrationCustomColumnPromoter {
         let changed = false;
         for (const n of named) {
             if (Object.prototype.hasOwnProperty.call(overflow, n.sourceKey)) {
-                row.Set(n.columnName, overflow[n.sourceKey]);
-                changed = true;
+                // Idempotent spread: only write when the destination is still unset. A freshly-added
+                // column is null on first spread (so it fills); an already-backfilled column is left
+                // alone, so a re-run after an interrupted spread finishes the gap without rewriting
+                // settled rows — the recoverSpread path converges to a read-only pass.
+                const current = row.Get(n.columnName);
+                if (current === null || current === undefined) {
+                    row.Set(n.columnName, overflow[n.sourceKey]);
+                    changed = true;
+                }
             }
         }
         if (!changed) return;
