@@ -66,13 +66,35 @@ CREATE NONCLUSTERED INDEX [IX_IdentityClaim_NormalizedEmail_Status]
     INCLUDE ([ClaimTypeID], [EntityID], [RecordID], [ExpiresAt]);
 GO
 
-CREATE NONCLUSTERED INDEX [IX_IdentityClaim_ClaimTypeID_Status]
-    ON [${flyway:defaultSchema}].[IdentityClaim]([ClaimTypeID], [Status]);
+-- -------------------------------------------------------------------------------------
+-- Core Default IdentityClaimType Seeds
+-- -------------------------------------------------------------------------------------
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[IdentityClaimType] WHERE [Name] = N'EntitlementGrant')
+BEGIN
+    INSERT INTO [${flyway:defaultSchema}].[IdentityClaimType] ([ID], [Name], [Description], [DriverClass], [DefaultExpirationDays], [IsActive])
+    VALUES ('A138A77E-81C5-45C7-B91F-C1198A6F0110', N'EntitlementGrant', N'Entitlement grant claim for purchased or allocated passes, tickets, and subscriptions.', N'EntitlementGrantClaimDriver', 30, 1);
+END
 GO
 
-CREATE NONCLUSTERED INDEX [IX_IdentityClaim_MagicLinkInviteID]
-    ON [${flyway:defaultSchema}].[IdentityClaim]([MagicLinkInviteID])
-    WHERE [MagicLinkInviteID] IS NOT NULL;
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[IdentityClaimType] WHERE [Name] = N'MagicLink')
+BEGIN
+    INSERT INTO [${flyway:defaultSchema}].[IdentityClaimType] ([ID], [Name], [Description], [DriverClass], [DefaultExpirationDays], [IsActive])
+    VALUES ('B249B88F-92D6-46D8-CA20-D22A9B701221', N'MagicLink', N'Single-use magic link email claim for account linking and verification.', N'MagicLinkClaimDriver', 7, 1);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[IdentityClaimType] WHERE [Name] = N'PersonAccountLink')
+BEGIN
+    INSERT INTO [${flyway:defaultSchema}].[IdentityClaimType] ([ID], [Name], [Description], [DriverClass], [DefaultExpirationDays], [IsActive])
+    VALUES ('C35AC990-A3E7-47E9-DB31-E33BA0812332', N'PersonAccountLink', N'Associates guest purchase Person and entity records with authenticated User account.', N'PersonAccountLinkClaimDriver', 30, 1);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[IdentityClaimType] WHERE [Name] = N'GuestOrder')
+BEGIN
+    INSERT INTO [${flyway:defaultSchema}].[IdentityClaimType] ([ID], [Name], [Description], [DriverClass], [DefaultExpirationDays], [IsActive])
+    VALUES ('D46BD001-B4F8-48FA-EC42-F44CB1923443', N'GuestOrder', N'General guest order claim for linking order records upon login or email verification.', N'BaseIdentityClaimDriver', 30, 1);
+END
 GO
 
 -- -------------------------------------------------------------------------------------

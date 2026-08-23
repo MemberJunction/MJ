@@ -392,7 +392,20 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             RedemptionToken: token
         };
 
-        const result = await driver.OnClaim(redeemContext);
+        let result: ClaimResult;
+        try {
+            result = await driver.OnClaim(redeemContext);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`[IdentityClaimEngineServer] driver.OnClaim threw exception for claim ${claim.ID}: ${msg}`);
+            result = { Success: false, ErrorMessage: `Claim driver execution failed: ${msg}` };
+        }
+
+        // If driver failed, un-consume the claim back to 'Pending' so transient failure doesn't permanently burn the claim
+        if (!result.Success) {
+            await this.revertClaimAtomic(claim.ID, md, contextUser);
+        }
+
         return result;
     }
 
@@ -422,6 +435,36 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [claimID, userID], { isMutation: true }, contextUser);
             return Array.isArray(rows) && rows.length === 1;
         } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Reverts an atomically consumed claim from 'Claimed' back to 'Pending' if driver execution fails.
+     */
+    private async revertClaimAtomic(claimID: string, md: Metadata, contextUser?: UserInfo): Promise<boolean> {
+        try {
+            const provider = (Metadata.Provider || (Metadata as unknown as { Provider: unknown }).Provider) as { PlatformKey?: string; ExecuteSQL?: <T>(sql: string, params: unknown[], options?: unknown, user?: unknown) => Promise<T[]> } | undefined; // global-provider-ok: reverting atomic CAS on claim failure
+            if (!provider || typeof provider.ExecuteSQL !== 'function') {
+                return false;
+            }
+
+            const entityInfo = md.Entities?.find(e => e.Name === 'MJ: Identity Claims');
+            const schemaName = entityInfo?.SchemaName ?? '__mj';
+            const tableName = entityInfo?.BaseTable ?? 'IdentityClaim';
+
+            const isPg = provider.PlatformKey === 'postgresql';
+            const table = isPg ? `${schemaName}.${tableName}` : `[${schemaName}].[${tableName}]`;
+
+            const sql = isPg
+                ? `UPDATE ${table} SET "Status" = 'Pending', "ClaimedAt" = NULL, "ClaimedByUserID" = NULL WHERE "ID" = $1 AND "Status" = 'Claimed' RETURNING "ID";`
+                : `DECLARE @reverted TABLE (ID UNIQUEIDENTIFIER); UPDATE ${table} SET [Status] = 'Pending', [ClaimedAt] = NULL, [ClaimedByUserID] = NULL OUTPUT INSERTED.ID INTO @reverted WHERE [ID] = @p0 AND [Status] = 'Claimed'; SELECT ID FROM @reverted;`;
+
+            const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [claimID], { isMutation: true }, contextUser);
+            return Array.isArray(rows) && rows.length === 1;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`[IdentityClaimEngineServer] revertClaimAtomic failed for claim ${claimID}: ${msg}`);
             return false;
         }
     }

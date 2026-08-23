@@ -375,6 +375,45 @@ describe('IdentityClaimEngineServer', () => {
         expect(mockDriver.onClaimCallCount).toBe(1);
     });
 
+    it('should catch driver exceptions, un-consume the claim back to Pending, and return clean failure', async () => {
+        const engine = IdentityClaimEngineServer.Instance;
+        const mockClaim = createMockClaim({
+            ID: 'claim-err-1',
+            NormalizedEmail: 'claimant@example.com'
+        });
+
+        vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+
+        const mockExecuteSQL = vi.fn().mockImplementation((sql: string) => {
+            if (sql.includes("[Status] = 'Claimed'") && sql.includes("[Status] = 'Pending'")) {
+                // Initial CAS consume
+                return Promise.resolve([{ ID: 'claim-err-1' }]);
+            }
+            if (sql.includes("[Status] = 'Pending'") && sql.includes("[Status] = 'Claimed'")) {
+                // Revert un-consume
+                return Promise.resolve([{ ID: 'claim-err-1' }]);
+            }
+            return Promise.resolve([{ ID: 'claim-err-1' }]);
+        });
+
+        (Metadata as unknown as { Provider: unknown }).Provider = {
+            PlatformKey: 'sqlserver',
+            ExecuteSQL: mockExecuteSQL
+        };
+
+        // Make driver throw
+        mockDriver.OnClaim = vi.fn().mockRejectedValue(new Error('Transient downstream payment API timeout'));
+
+        const user = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
+        const res = await engine.RedeemClaim('claim-err-1', user);
+
+        expect(res.Success).toBe(false);
+        expect(res.ErrorMessage).toContain('downstream payment API timeout');
+        // Verify revert SQL was executed
+        const revertCall = mockExecuteSQL.mock.calls.find(c => c[0].includes("[Status] = 'Pending'") && c[0].includes("[Status] = 'Claimed'"));
+        expect(revertCall).toBeDefined();
+    });
+
     it('should revoke a claim and invoke driver OnRevoke', async () => {
         const engine = IdentityClaimEngineServer.Instance;
         const mockClaim = createMockClaim({
