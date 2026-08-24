@@ -504,4 +504,4 @@ See [/plans/interactive-forms/phase-2-runtime-loop.md](../../plans/interactive-f
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

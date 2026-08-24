@@ -18,6 +18,7 @@
     "credential-categories",
     "credential-types",
     "authentication-providers",
+    "identity-claim-types",
     "resource-types",
     "search-providers",
     "search-scopes",

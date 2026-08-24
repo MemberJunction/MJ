@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/materialization",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: runtime engine that refreshes materialized query/entity results — full rebuild into a shadow table with an atomic wrapper-view swap. Invoked by the scheduled-job refresh driver (and reusable by a manual 'refresh now' path).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,13 +14,13 @@
     "test": "vitest run"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/sql-dialect": "6.1.0-edge.2",
-    "@memberjunction/sql-parser": "6.1.0-edge.2"
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/sql-dialect": "6.1.0-edge.3",
+    "@memberjunction/sql-parser": "6.1.0-edge.3"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
