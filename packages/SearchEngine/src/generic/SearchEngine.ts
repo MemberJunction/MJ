@@ -985,6 +985,39 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
                 this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
             ]);
+            // A SUPPLIED PRINCIPAL THAT DID NOT LOAD IS A REFUSAL, not an absent principal. The
+            // gates below sit behind `if (agent)` / `if (skill)`, so a deleted or mistyped id would
+            // otherwise skip them entirely and the explanation would report whatever the user's own
+            // grants give — while the action refuses the same input with INVALID_PARAM /
+            // MISSING_AGENT_CONTEXT. That is the drift this mirroring exists to remove.
+            if (input.AIAgentID && !agent) {
+                return {
+                    Allowed: false, Level: 'None', Source: 'PrincipalNotActivatable',
+                    Reason: `Agent '${input.AIAgentID}' could not be loaded, so it cannot act as a `
+                          + 'search principal; a real search would be refused.',
+                    Principals: principals,
+                };
+            }
+            if (input.AISkillID && !skill) {
+                return {
+                    Allowed: false, Level: 'None', Source: 'PrincipalNotActivatable',
+                    Reason: `Skill '${input.AISkillID}' could not be loaded, so it cannot act as a `
+                          + 'search principal; a real search would be refused.',
+                    Principals: principals,
+                };
+            }
+            // A skill is judged RELATIVE TO an agent (GetSkillsForAgent), and a real search always
+            // has a calling agent. Asked about a skill with no agent, say that plainly instead of
+            // reporting "not activatable by this agent" when the caller never named one.
+            if (input.AISkillID && !input.AIAgentID) {
+                return {
+                    Allowed: false, Level: 'None', Source: 'PrincipalNotActivatable',
+                    Reason: 'A skill principal is judged relative to the calling agent, so AIAgentID '
+                          + 'is required alongside AISkillID; a real search always has one.',
+                    Principals: principals,
+                };
+            }
+
             // MIRROR THE ACTION'S PRINCIPAL GATES, so a preview cannot promise what the search
             // would refuse. The agent first: AgentUnscopedAll grants Search on any scope as a
             // fallback "when the user has no per-scope grant", and agent permissions are open by
@@ -998,7 +1031,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     return {
                         Allowed: false,
                         Level: 'None',
-                        Source: 'NoGrant',
+                        Source: 'PrincipalNotActivatable',
                         Reason: `Agent '${agent.Name}' is not runnable by this user, so it cannot act `
                               + 'as a search principal; a real search would be refused.',
                         Principals: principals,
@@ -1024,7 +1057,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     return {
                         Allowed: false,
                         Level: 'None',
-                        Source: 'NoGrant',
+                        Source: 'PrincipalNotActivatable',
                         Reason: `Skill '${skill.Name}' is not activatable by this agent for this user, `
                               + 'so it cannot act as a search principal; a real search would be refused.',
                         Principals: principals,

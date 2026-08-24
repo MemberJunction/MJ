@@ -368,16 +368,20 @@ describe('ScopedSearchAction', () => {
             if (gateArgs) expect(gateArgs.Skill).toBeNull();
         });
 
-        it('threads AISkillID onto SearchParams so the expansion query can bind it', async () => {
+        it('threads the LOADED skill id onto SearchParams, not the caller\'s string', async () => {
+            // The expansion query binds this, and SearchEngine's cacheKey includes it. Threading the
+            // caller's spelling would log two casings of one id across a single search's Forbidden
+            // rows and split the result cache between them, so the loaded entity's id is used.
             loadedAgentStub.SearchScopeAccess = 'All';
             const action = new ScopedSearchAction();
             const result = await run(action, mkParams([
                 { Name: 'Query', Value: 'q' },
                 { Name: 'AgentID', Value: 'agent-1' },
-                { Name: 'AISkillID', Value: SKILL_UUID }
+                { Name: 'AISkillID', Value: SKILL_UUID.toUpperCase() }
             ]));
             expect(result.Success).toBe(true);
-            expect(searchSpy.mock.calls[0][0].AISkillID).toBe(SKILL_UUID);
+            expect(searchSpy.mock.calls[0][0].AISkillID).toBe(loadedSkillStub.ID);
+            expect(searchSpy.mock.calls[0][0].AISkillID).not.toBe(SKILL_UUID.toUpperCase());
         });
 
         it('hands the loaded skill to the permission gate, so its own SearchScopeAccess applies', async () => {

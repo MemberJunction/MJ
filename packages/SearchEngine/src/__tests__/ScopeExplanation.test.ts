@@ -260,10 +260,38 @@ describe('explain mirrors the action\'s skill gate', () => {
         const out = await new EntitlementProbe().Explain(
             { AIAgentID: 'agent-1', AISkillID: 'skill-1' }, USER);
         expect(out.Allowed).toBe(false);
-        expect(out.Source).toBe('NoGrant');
+        // A distinct Source, not 'NoGrant'. 'NoGrant' means "no applicable row found"; an audit
+        // reader could not otherwise tell a principal rejection from an absent grant.
+        expect(out.Source).toBe('PrincipalNotActivatable');
         expect(out.Reason).toContain('not activatable');
         // and it still records what was asked for, so the denial is diagnosable
         expect(out.Principals.SkillID).toBe('skill-1');
+    });
+
+    it('refuses a principal id that will not load, as the action does', async () => {
+        // The gates sit behind `if (agent)` / `if (skill)`, so a null principal used to skip them
+        // and the explanation reported whatever the user's own grants gave — while the action
+        // refuses the same input outright. That is the drift this mirroring exists to remove.
+        class NullLoadProbe extends SearchEngine {
+            protected override async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
+            ): Promise<T | null> { return null; }
+            public Explain(input: { AIAgentID?: string; AISkillID?: string }, user: UserInfo) {
+                return this.explainEntitlement('scope-1', input, user);
+            }
+        }
+        const out = await new NullLoadProbe().Explain({ AIAgentID: 'agent-1' }, USER);
+        expect(out.Allowed).toBe(false);
+        expect(out.Source).toBe('PrincipalNotActivatable');
+        expect(out.Reason).toContain('could not be loaded');
+    });
+
+    it('says a skill needs an agent, rather than blaming an agent nobody supplied', async () => {
+        // GetSkillsForAgent(null) returns [], so a skill-only explain used to come back
+        // "not activatable by this agent" with no agent anywhere in the input.
+        const out = await new EntitlementProbe().Explain({ AISkillID: 'skill-1' }, USER);
+        expect(out.Allowed).toBe(false);
+        expect(out.Source).toBe('PrincipalNotActivatable');
+        expect(out.Reason).toContain('AIAgentID is required');
     });
 
     it('reports an agent the user cannot run as DENIED', async () => {

@@ -201,6 +201,27 @@ export class ScopedSearchAction extends BaseAction {
                     // widens that signature later.
                     agent as Parameters<typeof AIEngineBase.Instance.GetSkillsForAgent>[0],
                     params.ContextUser);
+                // ORDER MATTERS: the activation gate runs FIRST. loadSkill loads any skill row
+                // regardless of permission, so checking SearchScopeAccess before establishing that
+                // the caller may wield the skill would disclose a skill's configuration — and its
+                // Name, via the message — to a caller probing arbitrary ids. In an agent flow that
+                // caller is the model. Establish entitlement, then talk about the skill.
+                const mayRunSkill = activatable.some(s => UUIDsEqual(s.ID, skill!.ID));
+                if (!mayRunSkill) {
+                    await SearchEngine.Instance.LogForbiddenSearch({
+                        Query: query,
+                        ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
+                        FailureReason: `Skill '${skill.Name}' is not activatable by agent '${agent.Name}' for this user, so it cannot act as a search principal.`,
+                        StartTime: startTime,
+                        ContextUser: params.ContextUser,
+                        AIAgentID: agent.ID,
+                        AISkillID: skill.ID,
+                    });
+                    return this.createErrorResult(
+                        `Forbidden: skill '${skill.Name}' is not available to you on this agent.`,
+                        'ACCESS_DENIED');
+                }
+
                 // SearchScopeAccess='None' is a VETO, and it must be enforced structurally rather
                 // than only inside ResolveEffectivePermission. resolveScope() already does exactly
                 // this for the agent, and for the same reason: the resolver is reached only once a
@@ -222,26 +243,16 @@ export class ScopedSearchAction extends BaseAction {
                         `Forbidden: skill '${skill.Name}' has SearchScopeAccess='None'.`, 'ACCESS_DENIED');
                 }
 
-                const mayRunSkill = activatable.some(s => UUIDsEqual(s.ID, skill!.ID));
-                if (!mayRunSkill) {
-                    await SearchEngine.Instance.LogForbiddenSearch({
-                        Query: query,
-                        ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
-                        FailureReason: `Skill '${skill.Name}' is not activatable by agent '${agent.Name}' for this user, so it cannot act as a search principal.`,
-                        StartTime: startTime,
-                        ContextUser: params.ContextUser,
-                        AIAgentID: agent.ID,
-                        AISkillID: skill.ID,
-                    });
-                    return this.createErrorResult(
-                        `Forbidden: skill '${skill.Name}' is not available to you on this agent.`,
-                        'ACCESS_DENIED');
-                }
             }
 
             // 2. Resolve scope (agent-side SearchScopeAccess gate, with denial logging)
             await SearchEngineBase.Instance.Config(false, params.ContextUser);
-            const scopeOutcome = await this.resolveAndLogScope(agent, query, requestedScopeID, params, startTime, aiSkillID);
+            // skill?.ID, not the raw caller string. By here the skill is loaded and validated, and
+            // every other Forbidden row logs the entity's id — passing the caller's casing produces
+            // two spellings of the same id across one search's log rows, and SearchEngine's cacheKey
+            // treats them as different cache entries.
+            const scopeOutcome = await this.resolveAndLogScope(
+                agent, query, requestedScopeID, params, startTime, skill?.ID ?? undefined);
             if ('result' in scopeOutcome) return scopeOutcome.result;
             const { scope, scopeID } = scopeOutcome;
 
@@ -271,7 +282,7 @@ export class ScopedSearchAction extends BaseAction {
             const exec = await this.runSearch({
                 query, maxResults, minScore, scopeID, agent,
                 contextUser: params.ContextUser, streamingMode,
-                primaryScopeRecordID, secondaryScopes, aiSkillID,
+                primaryScopeRecordID, secondaryScopes, aiSkillID: skill?.ID ?? undefined,
             });
             if ('result' in exec) return exec.result;
 
@@ -411,10 +422,19 @@ export class ScopedSearchAction extends BaseAction {
                 verboseOnly: true,
                 isVerboseEnabled: IsVerboseLoggingEnabled
             });
-            // ACCESS_DENIED is reserved for agent-side denials so calling code
-            // can distinguish "the agent isn't permitted to use this scope"
-            // from "the user isn't permitted".
-            const isAgentDenial = verdict.Source === 'AgentNone' || verdict.Source === 'AgentAssignedNotListed';
+            // ACCESS_DENIED is reserved for PRINCIPAL-side denials so calling code can distinguish
+            // "the principal isn't permitted to use this scope" from "the user isn't permitted".
+            //
+            // The skill arms belong here as much as the agent ones: SkillNone and
+            // SkillAssignedNotListed are structurally identical to their agent counterparts, and
+            // this PR makes them reachable for the first time. Left out, the same configuration
+            // classifies differently depending on which principal carries it — and the skill veto
+            // would even be inconsistent with ITSELF, since SearchScopeAccess='None' caught
+            // structurally above returns ACCESS_DENIED while the same value reached through the
+            // resolver would return PERMISSION_DENIED.
+            const isPrincipalDenial =
+                verdict.Source === 'AgentNone' || verdict.Source === 'AgentAssignedNotListed'
+                || verdict.Source === 'SkillNone' || verdict.Source === 'SkillAssignedNotListed';
             await SearchEngine.Instance.LogForbiddenSearch({
                 Query: query,
                 ScopeIDs: [scopeID],
@@ -428,7 +448,7 @@ export class ScopedSearchAction extends BaseAction {
             });
             return this.createErrorResult(
                 `Forbidden: ${verdict.Reason}`,
-                isAgentDenial ? 'ACCESS_DENIED' : 'PERMISSION_DENIED'
+                isPrincipalDenial ? 'ACCESS_DENIED' : 'PERMISSION_DENIED'
             );
         }
         // Read level grants metadata visibility but not search execution.

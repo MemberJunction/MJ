@@ -1,6 +1,6 @@
 ---
 "@memberjunction/core-actions": minor
-"@memberjunction/search-engine": patch
+"@memberjunction/search-engine": minor
 ---
 
 **Scoped Search now carries the skill principal — and judges it.**
@@ -55,6 +55,11 @@ permitted an unbounded search. `SearchScopeAccess='None'` is now checked where t
 exactly as `resolveScope` already does for the agent, and a skill that cannot be judged at all
 (no scope resolved) is refused rather than allowed to ride an unscoped search. Callers passing no
 skill are unaffected, which is every caller that existed before this input.
+
+**`SearchScopePermissionSource` gains `'PrincipalNotActivatable'`** — hence `minor` rather than
+`patch` on `search-engine`. `'NoGrant'` documents itself as "no applicable row found", so reporting a
+principal REJECTION with it left `ScopeDecisionJSON` and audit readers unable to tell the two apart.
+Additive; nothing switches exhaustively on the type.
 
 **`ExplainScope` mirrors both gates** (`@memberjunction/search-engine`). It already loaded the skill
 principal and applied its rules, so without this a preview would report `SkillUnscopedAll` as a grant

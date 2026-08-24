@@ -22,6 +22,7 @@ export type SearchScopePermissionSource =
     | 'SkillUnscopedAll'           // Skill's SearchScopeAccess = 'All' overrides per-scope rules
     | 'SkillNone'                  // Skill's SearchScopeAccess = 'None' rejects regardless of user grants
     | 'SkillAssignedNotListed'     // Skill's SearchScopeAccess = 'Assigned' and this scope is not in its assigned list
+    | 'PrincipalNotActivatable'    // A supplied agent/skill principal the caller may not wield, or that would not load
     | 'NoGrant';                   // No applicable row found
 
 export interface EffectivePermission {
