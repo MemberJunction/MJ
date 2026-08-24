@@ -935,8 +935,13 @@ describe('ClassFactory', () => {
       for (let i = 0; i < 40; i++) {
         factory.TryCreateInstance<NoisyBase>(NoisyBase, `Entity${i}.Field${i}`);
       }
-      // Far fewer describes than probes: only the reports that actually got emitted.
-      expect(describeSpy.mock.calls.length).toBeLessThan(40);
+      // Exactly the reports that actually got emitted, and no more. MAX_FALLBACK_REPORTS_PER_BASE
+      // is 3: seen 1-3 clear the cap and carry a distinct logKey each, so all three describe;
+      // seen 4 prints the suppression notice and returns; seen 5-40 return on the cap. Pinning
+      // the exact number is the point — a loose bound like `< 40` would still pass with the
+      // laziness broken for 39 of the 40 probes, which is what this test exists to catch. It
+      // also guards the cap itself against a silent change.
+      expect(describeSpy).toHaveBeenCalledTimes(3);
       describeSpy.mockRestore();
     });
 

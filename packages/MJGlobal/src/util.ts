@@ -28,9 +28,16 @@ export function GetGlobalObjectStore(): GlobalObjectStore | null {
      * measured at several percent of a busy server process. `typeof window` is the one probe
      * that is legal on an undeclared identifier, and the environment does not change after
      * startup, so the answer is computed once.
+     *
+     * The `&& window` is not redundant with the `typeof` guard: it keeps the one input where the
+     * two differ. `typeof null === 'object'`, so a DECLARED-but-null `window` — which SSR shims
+     * in the wild do produce — would pass a bare `typeof` check and get memoised as the store,
+     * where `if (window)` had correctly fallen through to `global`. Nothing in this repo does
+     * that today; the guard is here because MJ is embedded by callers whose environment we do
+     * not control, and because memoising the wrong answer is unrecoverable for the process.
      */
     if (__globalObjectStore !== undefined) return __globalObjectStore;
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && window) {
         __globalObjectStore = window as unknown as GlobalObjectStore;
     } else if (typeof global !== 'undefined') {
         __globalObjectStore = global as unknown as GlobalObjectStore;
