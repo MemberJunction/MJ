@@ -93,7 +93,7 @@ async function loadOneCollectionBatched(
     const result = await provider.RunView<BaseEntity>(
         {
             EntityName: template.RelatedEntityName,
-            ExtraFilter: `${foreignKey} IN (${parentKeys.map(k => `'${escapeSQLLiteral(k)}'`).join(',')})`,
+            ExtraFilter: `${foreignKey} IN (${parentKeys.map(k => `'${EscapeSQLString(k)}'`).join(',')})`,
             OrderBy: template.OrderByClause,
             ResultType: 'entity_object',
         },
@@ -180,8 +180,3 @@ function collectParentKeys(parents: BaseEntity[]): string[] {
 function normalizeKey(value: unknown): string {
     return String(value ?? '').trim().toLowerCase();
 }
-
-/**
- * Escapes a value for safe inclusion in a single-quoted SQL literal.
- */
-const escapeSQLLiteral = EscapeSQLString;

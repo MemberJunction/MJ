@@ -65,6 +65,16 @@ export interface DateRange {
  * Service for searching across conversations, messages, and artifacts
  * Provides debounced search with result ranking and filtering
  */
+/**
+ * NOTE ON `LIKE` ESCAPING
+ *
+ * The predicates below interpolate the user's query into `LIKE '%…%'` via `EscapeSQLString`, which
+ * neutralises quotes but NOT LIKE metacharacters — `%`, `_` and `[` in a search term are still
+ * treated as wildcards rather than literal text. That is this service's long-standing search
+ * behaviour, so it is left as-is deliberately; changing it would change what users' searches match.
+ * If literal matching is wanted, escape the metacharacters and append `ESCAPE '\\'` (see
+ * `escapeLikeValue()` in `@memberjunction/core`, `generic/runQuerySQLFilterImplementations.ts`).
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -201,7 +211,7 @@ export class SearchService {
     const lowerQuery = query.toLowerCase();
 
     let filter = `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`;
-    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+    filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
       filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
@@ -243,7 +253,7 @@ export class SearchService {
 
     // First get conversations in this environment
     let filter = `ConversationID IN (SELECT ID FROM vwConversations WHERE EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0))`;
-    filter += ` AND LOWER(Message) LIKE '%${this.escapeSQL(lowerQuery)}%'`;
+    filter += ` AND LOWER(Message) LIKE '%${EscapeSQLString(lowerQuery)}%'`;
     filter += ` AND (HiddenToUser IS NULL OR HiddenToUser=0)`;
 
     if (dateRange.start) {
@@ -287,7 +297,7 @@ export class SearchService {
 
     // Search artifacts directly by name and description
     let filter = `EnvironmentID='${environmentId}'`;
-    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+    filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
       filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
@@ -370,7 +380,7 @@ export class SearchService {
 
     let filter = `EnvironmentID='${environmentId}'`;
     filter += ` AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
-    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+    filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
       filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
@@ -430,7 +440,7 @@ export class SearchService {
       )
     ))`;
 
-    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+    filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
       filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
@@ -630,13 +640,6 @@ export class SearchService {
   private truncateText(text: string, maxLength: number): string {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
-  }
-
-  /**
-   * Escape SQL special characters
-   */
-  private escapeSQL(value: string): string {
-    return EscapeSQLString(value);
   }
 
   /**

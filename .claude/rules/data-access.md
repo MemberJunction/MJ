@@ -190,11 +190,10 @@ const results = await rv.RunView<TemplateContentEntity>({
 const entities = results.Results; // No casting needed!
 ```
 
-### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — ALWAYS use `EscapeSQLString`
+### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — use `EscapeSQLString`
 
-- **NEVER use manual inline string replace or regex** like `.replace(/'/g, "''")` when interpolating dynamic values into SQL text, `ExtraFilter`, or query predicates.
-- **ALWAYS import `EscapeSQLString` from `@memberjunction/global`** to safely escape string literals (e.g. emails, titles, names, search terms, user input).
-- **Why**: Plain inline `.replace(/'/g, "''")` is error-prone, crashes or misbehaves on `null`/`undefined`, fails to strip null bytes (`\0`), and creates divergent ad-hoc sanitization throughout the codebase. `EscapeSQLString` provides standardized ANSI quote doubling and null-byte elimination with null-safety.
+- **NEVER hand-roll `.replace(/'/g, "''")`** when interpolating a dynamic value into SQL text, `ExtraFilter`, or a query predicate. Import `EscapeSQLString` from `@memberjunction/global` instead.
+- **Why**: ad-hoc inline escaping is error-prone, throws on `null`/`undefined`, leaves null bytes (`\0`) in place, and spawns divergent sanitizers across the codebase. `EscapeSQLString` gives you ANSI quote doubling plus null-byte stripping in one audited place.
 
 ```typescript
 import { EscapeSQLString } from '@memberjunction/global';
@@ -205,6 +204,18 @@ const filter = `Email = '${EscapeSQLString(user.Email?.trim().toLowerCase())}'`;
 // ❌ WRONG — fragile manual regex
 const filter = `Email = '${user.Email.replace(/'/g, "''")}'`;
 ```
+
+#### Three things `EscapeSQLString` does **not** do
+
+It escapes **string literals** and nothing else. Quote doubling is the wrong tool — or an insufficient one — in these three cases:
+
+| Context | Why quote doubling is not enough | Use instead |
+|---|---|---|
+| `LIKE` patterns | `%`, `_` and `[` stay live as wildcards, so a user searching for `%` still matches every row | Escape the wildcards too and pair the clause with `ESCAPE '\'`. Reference implementations: `escapeLikeValue()` in [`packages/MJCore/src/generic/runQuerySQLFilterImplementations.ts`](../../packages/MJCore/src/generic/runQuerySQLFilterImplementations.ts) (platform-aware) and `GenericDatabaseProvider.escapeLikeTerm()` |
+| Identifiers — table, column, schema names | Identifiers are quoted with brackets or double quotes, never single quotes, so escaping `'` protects nothing | `ValidateIdentifier()` from `@memberjunction/schema-engine` |
+| A value that must not be missing | `EscapeSQLString(undefined)` returns `''`, so the predicate silently degrades to `Field = ''` and matches nothing instead of failing loudly | Validate the value before building the filter — the escaper will not fail for you |
+
+This is the standard for **new and changed code**. Ad-hoc escaping still exists in packages that have not been migrated; convert those as you touch them rather than in one sweep.
 
 ### RunView Error Handling
 **Important**: RunView does NOT throw exceptions when it fails. Instead, it returns a result object with `Success` and `ErrorMessage` properties:

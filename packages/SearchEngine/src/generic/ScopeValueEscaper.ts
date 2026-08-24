@@ -29,6 +29,8 @@
  * @module @memberjunction/search-engine
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
+
 /**
  * The filter dialect a lane consumes, which determines how a value must be escaped.
  *
@@ -37,8 +39,6 @@
  * protect it.
  */
 export type ScopeLaneKind = 'sql' | 'odata' | 'json' | 'filter_by' | 'esdsl' | 'path' | 'none';
-
-import { EscapeSQLString } from '@memberjunction/global';
 
 /**
  * Escape a value for a single-quoted **T-SQL** literal.

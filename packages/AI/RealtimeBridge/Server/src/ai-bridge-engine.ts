@@ -1987,8 +1987,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns The number of orphaned bridges closed.
      */
     public async ReconcileOrphans(contextUser: UserInfo, provider: IMetadataProvider): Promise<number> {
-        const prefix = this.escapeSql(this.hostIdentity.GetHostNamePrefix());
-        const current = this.escapeSql(this.hostIdentity.GetHostInstanceID());
+        const prefix = EscapeSQLString(this.hostIdentity.GetHostNamePrefix());
+        const current = EscapeSQLString(this.hostIdentity.GetHostInstanceID());
         const filter =
             `Status IN ('Connecting','Connected') ` +
             `AND HostInstanceID LIKE '${prefix}%' ` +
@@ -2287,10 +2287,5 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             }
         }
         return saved;
-    }
-
-    /** Escapes single quotes for safe embedding inside an `ExtraFilter` literal. */
-    private escapeSql(value: string): string {
-        return EscapeSQLString(value);
     }
 }

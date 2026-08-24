@@ -325,8 +325,8 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Entities',
             ExtraFilter:
-                `(Name = '${escapeSqlLiteral(entityName)}' OR BaseTable = '${escapeSqlLiteral(tableName)}') ` +
-                `AND SchemaName = '${escapeSqlLiteral(schemaName)}'`,
+                `(Name = '${EscapeSQLString(entityName)}' OR BaseTable = '${EscapeSQLString(tableName)}') ` +
+                `AND SchemaName = '${EscapeSQLString(schemaName)}'`,
             Fields: ['ID'],
             ResultType: 'simple',
         });
@@ -398,7 +398,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
         // Find entities owned by this user
         const ownerResult = await rv.RunView<SettingsRow>({
             EntityName: 'MJ: Entity Settings',
-            ExtraFilter: `Name = '${UDT_SETTINGS.OWNER_KEY}' AND Value = '${escapeSqlLiteral(userId)}'`,
+            ExtraFilter: `Name = '${UDT_SETTINGS.OWNER_KEY}' AND Value = '${EscapeSQLString(userId)}'`,
             Fields: ['EntityID', 'Value'],
             ResultType: 'simple',
         });
@@ -437,7 +437,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
             ExtraFilter: (
                 `EntityID = '${escapeSqlId(entityId)}' ` +
                 `AND Name = '${UDT_SETTINGS.OWNER_KEY}' ` +
-                `AND Value = '${escapeSqlLiteral(userId)}'`
+                `AND Value = '${EscapeSQLString(userId)}'`
             ),
             Fields: ['EntityID', 'Value'],
             ResultType: 'simple',
@@ -485,6 +485,3 @@ function buildInFilter(column: string, ids: string[]): string {
 function escapeSqlId(id: string): string {
     return id.replace(/[^a-zA-Z0-9-]/g, '');
 }
-
-/** Escape a string value for safe embedding in a SQL single-quoted literal. */
-const escapeSqlLiteral = EscapeSQLString;

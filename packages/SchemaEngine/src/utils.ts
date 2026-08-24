@@ -14,5 +14,11 @@ export function ValidateIdentifier(name: string, kind: string): void {
   }
 }
 
-/** Escapes single quotes in a string for use in SQL string literals. */
-export const EscapeSqlString = EscapeSQLString;
+/**
+ * Escapes single quotes in a string for use in SQL string literals.
+ *
+ * @deprecated Import `EscapeSQLString` from `@memberjunction/global` instead — it is the one
+ * canonical escaper. This alias remains only so external callers do not break; it will be
+ * removed in the next major. For identifiers use {@link ValidateIdentifier}, not this.
+ */
+export const EscapeSqlString = (value: string | null | undefined): string => EscapeSQLString(value);
