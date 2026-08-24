@@ -7,8 +7,8 @@
  * @module @memberjunction/core-entities/IdentityClaimEngine
  */
 
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup, Metadata, RunView } from "@memberjunction/core";
-import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup } from "@memberjunction/core";
+import { MJGlobal } from "@memberjunction/global";
 import { MJIdentityClaimTypeEntity, MJIdentityClaimEntity } from "../generated/entity_subclasses";
 
 /**
@@ -91,7 +91,22 @@ export interface CreateClaimParams {
 }
 
 /**
- * IdentityClaimEngine provides centralized caching and lifecycle management for Identity Claims.
+ * Client + server metadata cache and shared contracts for Identity Claims.
+ *
+ * This class holds only what is safe and useful in *any* host: the `IdentityClaimType` cache,
+ * type lookups, driver resolution via `ClassFactory`, and email normalization. It deliberately
+ * does **not** implement the claim lifecycle.
+ *
+ * Claim creation, redemption and revocation live exclusively on `IdentityClaimEngineServer`
+ * (`@memberjunction/core-entities-server`), which contains an instance of this class and proxies
+ * the cached members. Those operations depend on capabilities that only exist server-side:
+ * high-entropy token generation and SHA-256 hashing, a timing-safe token comparison, an atomic
+ * compare-and-swap issued as raw SQL, and email dispatch through MJ Communications. A browser
+ * copy cannot perform any of them, and a second, weaker implementation of a security-critical
+ * operation living in a package that server code also imports is a hazard rather than a
+ * convenience.
+ *
+ * Same containment split as `AIEngineBase` / `AIEngine`.
  */
 @RegisterForStartup()
 export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
@@ -171,192 +186,5 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
     public NormalizeEmail(email: string): string {
         if (!email) return '';
         return email.trim().toLowerCase();
-    }
-
-    /**
-     * Creates and saves a new IdentityClaim record, invoking the driver's OnCreate hook.
-     */
-    public async CreateClaim(params: CreateClaimParams, contextUser?: UserInfo): Promise<MJIdentityClaimEntity> {
-        const normalizedEmail = this.NormalizeEmail(params.NormalizedEmail);
-        if (!normalizedEmail) {
-            throw new Error('NormalizedEmail is required to create an IdentityClaim');
-        }
-
-        let claimType: MJIdentityClaimTypeEntity | undefined;
-        if (params.ClaimTypeID) {
-            claimType = this.GetClaimTypeByID(params.ClaimTypeID);
-        } else if (params.ClaimTypeName) {
-            claimType = this.GetClaimTypeByName(params.ClaimTypeName);
-        }
-
-        if (!claimType) {
-            throw new Error(`IdentityClaimType not found for ${params.ClaimTypeName ?? params.ClaimTypeID}`);
-        }
-
-        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
-        const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
-        claim.NewRecord();
-        claim.ClaimTypeID = claimType.ID;
-        claim.NormalizedEmail = normalizedEmail;
-        claim.EntityID = params.EntityID ?? null;
-        claim.RecordID = params.RecordID ?? null;
-        claim.PayloadJSON = params.Payload ? JSON.stringify(params.Payload) : null;
-        claim.Status = 'Pending';
-
-        const days = params.ExpiresInDays ?? claimType.DefaultExpirationDays ?? 30;
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + days);
-        claim.ExpiresAt = expiresAt;
-
-        claim.MagicLinkInviteID = params.MagicLinkInviteID ?? null;
-        claim.MetadataJSON = params.Metadata ? JSON.stringify(params.Metadata) : null;
-
-        const saved = await claim.Save();
-        if (!saved) {
-            throw new Error(`Failed to save IdentityClaim: ${claim.LatestResult?.Message ?? 'Unknown error'}`);
-        }
-
-        const driver = this.GetDriverInstance(claimType);
-        if (driver) {
-            await driver.OnCreate({ Claim: claim, User: contextUser });
-        }
-
-        return claim;
-    }
-
-    /**
-     * Fetches all pending, unexpired claims for a normalized email address.
-     */
-    public async GetPendingClaimsForEmail(email: string, contextUser?: UserInfo): Promise<MJIdentityClaimEntity[]> {
-        const normalizedEmail = this.NormalizeEmail(email);
-        if (!normalizedEmail) return [];
-
-        const rv = new RunView();
-        const escaped = normalizedEmail.replace(/'/g, "''");
-        const result = await rv.RunView<MJIdentityClaimEntity>({
-            EntityName: 'MJ: Identity Claims',
-            ExtraFilter: `NormalizedEmail = '${escaped}' AND Status = 'Pending' AND ExpiresAt > GETUTCDATE()`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (result.Success && result.Results) {
-            return result.Results;
-        }
-        return [];
-    }
-
-    /**
-     * Redeems a claim for an authenticated user, running the driver's OnClaim implementation.
-     */
-    public async RedeemClaim(claimID: string, contextUser: UserInfo, token?: string): Promise<ClaimResult> {
-        if (!claimID) {
-            return { Success: false, ErrorMessage: 'ClaimID is required' };
-        }
-        if (!contextUser) {
-            return { Success: false, ErrorMessage: 'Context user is required to redeem a claim' };
-        }
-
-        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
-        const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
-        const loaded = await claim.Load(claimID);
-        if (!loaded) {
-            return { Success: false, ErrorMessage: `IdentityClaim with ID ${claimID} not found` };
-        }
-
-        if (claim.Status !== 'Pending') {
-            return { Success: false, ErrorMessage: `IdentityClaim is not in Pending status (current status: ${claim.Status})` };
-        }
-
-        if (new Date(claim.ExpiresAt) <= new Date()) {
-            claim.Status = 'Expired';
-            await claim.Save();
-            const claimType = this.GetClaimTypeByID(claim.ClaimTypeID);
-            if (claimType) {
-                const driver = this.GetDriverInstance(claimType);
-                if (driver) {
-                    await driver.OnExpire({ Claim: claim, User: contextUser });
-                }
-            }
-            return { Success: false, ErrorMessage: 'IdentityClaim has expired' };
-        }
-
-        const claimType = this.GetClaimTypeByID(claim.ClaimTypeID);
-        if (!claimType) {
-            return { Success: false, ErrorMessage: `IdentityClaimType ${claim.ClaimTypeID} not found` };
-        }
-
-        const driver = this.GetDriverInstance(claimType);
-        if (!driver) {
-            return { Success: false, ErrorMessage: `No driver registered for claim type ${claimType.Name} (${claimType.DriverClass})` };
-        }
-
-        const result = await driver.OnClaim({
-            Claim: claim,
-            User: contextUser,
-            RedemptionToken: token
-        });
-
-        if (result.Success) {
-            claim.Status = 'Claimed';
-            claim.ClaimedAt = new Date();
-            claim.ClaimedByUserID = contextUser.ID;
-            const saved = await claim.Save();
-            if (!saved) {
-                return { Success: false, ErrorMessage: `Driver succeeded but failed to update Claim status: ${claim.LatestResult?.Message}` };
-            }
-        }
-
-        return result;
-    }
-
-    /**
-     * Discovers all pending claims matching the authenticated user's email address and redeems them.
-     */
-    public async AutoClaimForUser(user: UserInfo): Promise<ClaimResult[]> {
-        if (!user || !user.Email) return [];
-        const claims = await this.GetPendingClaimsForEmail(user.Email, user);
-        const results: ClaimResult[] = [];
-        for (const claim of claims) {
-            const res = await this.RedeemClaim(claim.ID, user);
-            results.push(res);
-        }
-        return results;
-    }
-
-    /**
-     * Revokes an existing claim.
-     */
-    public async RevokeClaim(claimID: string, contextUser?: UserInfo, reason?: string): Promise<void> {
-        const md = new Metadata(); // global-provider-ok: client-side identity claim engine resolving claims under default provider
-        const claim = await md.GetEntityObject<MJIdentityClaimEntity>('MJ: Identity Claims', contextUser);
-        const loaded = await claim.Load(claimID);
-        if (!loaded) {
-            throw new Error(`IdentityClaim with ID ${claimID} not found`);
-        }
-
-        if (claim.Status === 'Claimed') {
-            throw new Error(`Cannot revoke an already claimed IdentityClaim`);
-        }
-
-        claim.Status = 'Revoked';
-        if (reason && claim.MetadataJSON) {
-            try {
-                const meta = JSON.parse(claim.MetadataJSON) as Record<string, unknown>;
-                meta.RevocationReason = reason;
-                claim.MetadataJSON = JSON.stringify(meta);
-            } catch {
-                // Ignore parse errors
-            }
-        }
-
-        await claim.Save();
-
-        const claimType = this.GetClaimTypeByID(claim.ClaimTypeID);
-        if (claimType) {
-            const driver = this.GetDriverInstance(claimType);
-            if (driver) {
-                await driver.OnRevoke({ Claim: claim, User: contextUser });
-            }
-        }
     }
 }
