@@ -274,6 +274,41 @@ describe('explain mirrors the action\'s skill gate', () => {
         agentPermsSpy.mockResolvedValue({ canView: true, canRun: true, canEdit: false, canDelete: false, isOwner: false });
     });
 
+    it('does not bind a refused principal into dimension resolution', async () => {
+        // deriveServerValue binds Principals.SkillID into server-authored SQL. Explaining with a
+        // skill the gate just refused must not parameterise that query with it — the action refuses
+        // outright rather than "continuing with a null skill", and the preview must not be laxer.
+        skillsForAgentSpy.mockReturnValue([]);          // skill is NOT activatable -> denied
+        const seen: Array<{ AgentID: string | null; SkillID: string | null }> = [];
+        const scope = scopeWith(null);
+
+        class BindProbe extends SearchEngine {
+            protected override get Base() {
+                return { GetScopeBundle: () => ({ Scope: scope, ExternalIndexes: [], Entities: [], StorageAccounts: [] }),
+                         GetActiveScopeByID: () => scope } as unknown as ReturnType<() => never>;
+            }
+            protected override get dimensionResolver() {
+                return { Resolve: async (a: { Principals?: { AgentID: string | null; SkillID: string | null } }) => {
+                    seen.push(a.Principals ?? { AgentID: null, SkillID: null });
+                    return { Context: {}, Provenance: [], Diagnostics: [] };
+                } } as unknown as ReturnType<() => never>;
+            }
+            protected override async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
+                _entityName: string, id: string | null | undefined
+            ): Promise<T | null> {
+                return id ? ({ ID: id, Name: id } as unknown as T) : null;
+            }
+        }
+
+        const out = await new BindProbe().ExplainScope(
+            { ScopeIDs: ['scope-1'], AIAgentID: 'agent-1', AISkillID: 'skill-1' }, USER);
+        expect(seen).toHaveLength(1);
+        expect(seen[0].SkillID).toBeNull();
+        expect(seen[0].AgentID).toBeNull();
+        expect(out[0].Diagnostics.join(' ')).toContain('NOT bound into dimension resolution');
+        skillsForAgentSpy.mockReturnValue([{ ID: 'skill-1', Name: 'Test Skill' }]);
+    });
+
     it('lets an activatable skill through to the permission resolver', async () => {
         skillsForAgentSpy.mockReturnValue([{ ID: 'skill-1', Name: 'Test Skill' }]);
         const out = await new EntitlementProbe().Explain(

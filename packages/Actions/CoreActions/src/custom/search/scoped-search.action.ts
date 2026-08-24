@@ -39,6 +39,9 @@ interface FormattedSearchResult {
     RawMetadata?: string;
 }
 
+/** Strict UUID shape for the skill principal — it is caller-supplied and binds into a query. */
+const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * `__Scoped_Search` — scope-aware universal search for AI agents.
  *
@@ -103,9 +106,6 @@ interface FormattedSearchResult {
  * }
  * ```
  */
-/** Strict UUID shape for the skill principal — it is caller-supplied and binds into a query. */
-const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 @RegisterClass(BaseAction, "__Scoped_Search")
 export class ScopedSearchAction extends BaseAction {
 
@@ -194,10 +194,34 @@ export class ScopedSearchAction extends BaseAction {
                 // The deny arms (SkillNone, SkillAssignedNotListed) would be safe unchecked; the
                 // grant arm is not, and both read the same field.
                 const activatable = AIEngineBase.Instance.GetSkillsForAgent(
-                    // ClassFactory hands back the extended subclass at runtime; the narrower static
-                    // type here is only what loadAgent declares. The call reads ID and AcceptsSkills.
+                    // The signature asks for MJAIAgentEntityExtended, but the body reads only
+                    // `agent.ID` and `agent.AcceptsSkills`, both of which are on the base entity —
+                    // so the requirement is over-specified rather than unmet. Derived from
+                    // Parameters<> rather than naming a type, so it cannot drift if MJ narrows or
+                    // widens that signature later.
                     agent as Parameters<typeof AIEngineBase.Instance.GetSkillsForAgent>[0],
                     params.ContextUser);
+                // SearchScopeAccess='None' is a VETO, and it must be enforced structurally rather
+                // than only inside ResolveEffectivePermission. resolveScope() already does exactly
+                // this for the agent, and for the same reason: the resolver is reached only once a
+                // scope has resolved, and `resolveScopeAll` yields `GlobalScope?.ID` — undefined on
+                // any installation with no IsGlobal scope row. On that path the gate below is
+                // skipped entirely while runSearch still threads AISkillID, so a skill documented
+                // and tested as a veto would have silently permitted an unbounded search.
+                if (skill.SearchScopeAccess === 'None') {
+                    await SearchEngine.Instance.LogForbiddenSearch({
+                        Query: query,
+                        ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
+                        FailureReason: `Skill '${skill.Name}' has SearchScopeAccess='None' and cannot steer a scoped search.`,
+                        StartTime: startTime,
+                        ContextUser: params.ContextUser,
+                        AIAgentID: agent.ID,
+                        AISkillID: skill.ID,
+                    });
+                    return this.createErrorResult(
+                        `Forbidden: skill '${skill.Name}' has SearchScopeAccess='None'.`, 'ACCESS_DENIED');
+                }
+
                 const mayRunSkill = activatable.some(s => UUIDsEqual(s.ID, skill!.ID));
                 if (!mayRunSkill) {
                     await SearchEngine.Instance.LogForbiddenSearch({
@@ -351,7 +375,26 @@ export class ScopedSearchAction extends BaseAction {
         params: RunActionParams,
         startTime: number,
     ): Promise<ActionResultSimple | null> {
-        if (!scopeID) return null;
+        if (!scopeID) {
+            // No scope resolved, so there is nothing for the per-scope rules to judge. Unchanged for
+            // every caller that passes no skill — which is every caller that existed before this
+            // input. But a skill principal is threaded into SearchParams regardless, so letting one
+            // through here would run an unscoped search carrying a principal whose own
+            // SearchScopeAccess ('Assigned' without this scope listed) was never evaluated.
+            if (!skill) return null;
+            await SearchEngine.Instance.LogForbiddenSearch({
+                Query: query,
+                ScopeIDs: undefined,
+                FailureReason: `No search scope resolved, so skill '${skill.Name}' cannot be judged; refusing rather than searching unscoped with an unjudged principal.`,
+                StartTime: startTime,
+                ContextUser: params.ContextUser,
+                AIAgentID: agent.ID,
+                AISkillID: skill.ID,
+            });
+            return this.createErrorResult(
+                `Forbidden: no search scope resolved, so skill '${skill.Name}' cannot be judged.`,
+                'ACCESS_DENIED');
+        }
         const permResolver = GetSearchScopePermissionResolver();
         const verdict = await permResolver.ResolveEffectivePermission({
             User: params.ContextUser,

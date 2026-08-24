@@ -47,10 +47,21 @@ rather than introduced here, but shipping a skill gate while leaving the agent u
 an odd place to stop. Blast radius is scope-level, not row-level — results still pass
 `filterByPermissions` and RLS — but a scope IS the content bound.
 
+**The veto is enforced structurally, not only through the resolver.** `enforceUserPermission` returns
+early when no scope resolved, and `resolveScopeAll` yields `GlobalScope?.ID` — `undefined` on any
+installation with no `IsGlobal` scope row. On that path the per-scope gate never ran while
+`AISkillID` was still threaded into `SearchParams`, so a skill documented as a veto would have
+permitted an unbounded search. `SearchScopeAccess='None'` is now checked where the skill is resolved,
+exactly as `resolveScope` already does for the agent, and a skill that cannot be judged at all
+(no scope resolved) is refused rather than allowed to ride an unscoped search. Callers passing no
+skill are unaffected, which is every caller that existed before this input.
+
 **`ExplainScope` mirrors both gates** (`@memberjunction/search-engine`). It already loaded the skill
 principal and applied its rules, so without this a preview would report `SkillUnscopedAll` as a grant
 while the real search refused — the preview-vs-enforcement drift that file already carries a regression
-test about. Both paths now judge both principals on identical terms.
+test about. Both paths now judge both principals on identical terms, and a principal the entitlement step refused
+is no longer bound into dimension resolution — `deriveServerValue` parameterises server-authored SQL
+with it, which is the thing the action refuses outright rather than continuing with.
 
 On containment, stated accurately: an expansion query is server-authored SQL, but MJ renders query
 parameters through Nunjucks with `autoescape: false` and escaping is opt-in (`| sqlString`, or a

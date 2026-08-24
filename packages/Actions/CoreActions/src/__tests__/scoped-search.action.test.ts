@@ -73,7 +73,9 @@ vi.mock('@memberjunction/search-engine', () => ({
 // Mock SearchEngineBase cache
 const getAgentScopesSpy = vi.fn();
 const getActiveScopeByIDSpy = vi.fn();
-const globalScopeStub = { ID: 'global-id', Name: 'Global', IsGlobal: true } as unknown;
+// `let`, not `const`: an installation with no IsGlobal scope row is a real configuration, and it is
+// the one where resolveScopeAll yields an undefined scopeID.
+let globalScopeStub: unknown = { ID: 'global-id', Name: 'Global', IsGlobal: true };
 
 vi.mock('@memberjunction/core-entities', () => ({
     SearchEngineBase: {
@@ -348,6 +350,8 @@ describe('ScopedSearchAction', () => {
             loadedSkillStub.Load = async () => true;
             skillMayRunSpy.mockReturnValue([{ ID: 'skill-1' }]);
             agentMayRunSpy.mockResolvedValue(true);
+            loadedSkillStub.SearchScopeAccess = 'All';
+            globalScopeStub = { ID: 'global-id', Name: 'Global', IsGlobal: true };
         });
 
         it('leaves the principal unset and passes Skill: null when the input is omitted', async () => {
@@ -434,6 +438,62 @@ describe('ScopedSearchAction', () => {
             expect(logForbiddenSpy).toHaveBeenCalled();
             const row = logForbiddenSpy.mock.calls.at(-1)?.[0] as { AISkillID?: string };
             expect(row.AISkillID).toBe('skill-1');
+        });
+
+        it("refuses a skill whose SearchScopeAccess is 'None', the documented veto", async () => {
+            loadedSkillStub.SearchScopeAccess = 'None';
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'AISkillID', Value: SKILL_UUID }
+            ]));
+            expect(result.ResultCode).toBe('ACCESS_DENIED');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it("  and still refuses it when no scope resolves, where the gate never runs", async () => {
+            // resolveScopeAll returns GlobalScope?.ID. With no IsGlobal row that is undefined, and
+            // enforceUserPermission used to return null on it — so the veto was skipped while
+            // AISkillID was threaded into SearchParams anyway.
+            loadedSkillStub.SearchScopeAccess = 'None';
+            loadedAgentStub.SearchScopeAccess = 'All';
+            globalScopeStub = undefined;
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'AISkillID', Value: SKILL_UUID }
+            ]));
+            expect(result.ResultCode).toBe('ACCESS_DENIED');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('  and refuses any skill it cannot judge, not only the None case', async () => {
+            loadedSkillStub.SearchScopeAccess = 'Assigned';
+            loadedAgentStub.SearchScopeAccess = 'All';
+            globalScopeStub = undefined;
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'AISkillID', Value: SKILL_UUID }
+            ]));
+            expect(result.ResultCode).toBe('ACCESS_DENIED');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('  but a caller passing NO skill is unaffected, as before this input existed', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            globalScopeStub = undefined;
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' }
+            ]));
+            expect(result.Success).toBe(true);
+            expect(searchSpy).toHaveBeenCalled();
         });
 
         it('refuses a skill that will not load, instead of searching with it unjudged', async () => {

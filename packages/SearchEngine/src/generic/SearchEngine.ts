@@ -907,11 +907,26 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         let effectiveContext: SearchContext | undefined;
         let dimensionFailure: string | null = null;
         try {
+            // DO NOT BIND A PRINCIPAL THE ENTITLEMENT STEP JUST REFUSED. `deriveServerValue` binds
+            // `Principals.SkillID` (and AgentID) into a dimension's expansion query, so resolving
+            // with the caller's principals after `explainEntitlement` denied them would run
+            // server-authored SQL parameterised by an ID that failed its gate — the exact thing the
+            // action refuses with INVALID_PARAM rather than "continuing with a null skill". The
+            // dimension explanation is still produced, just for an unprincipled search, and the
+            // diagnostic says so rather than leaving the reader to assume the principals applied.
+            const principalsJudged = entitlement.Allowed;
+            if (!principalsJudged && (input.AIAgentID || input.AISkillID)) {
+                diagnostics.push(
+                    'principals were NOT bound into dimension resolution: entitlement denied them, '
+                    + 'so the bound below is the one an unprincipled search would see.');
+            }
             const resolved = await this.dimensionResolver.Resolve({
                 Scope: scope,
                 CallerContext: input.SearchContext,
                 ContextUser: contextUser,
-                Principals: this.principalsFrom(input),
+                Principals: principalsJudged
+                    ? this.principalsFrom(input)
+                    : { AgentID: null, SkillID: null },
             });
             dimensions = resolved.Provenance;
             diagnostics.push(...resolved.Diagnostics);
@@ -951,8 +966,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         };
     }
 
-    /** Resolve entitlement for the dry run, including the skill and tenant principals. */
-    /** `protected`, like {@link principalsFrom}, so a test can drive it without weak-typed casts. */
+    /** Resolve entitlement for the dry run, including the skill and tenant principals. *
+     * `protected`, like {@link principalsFrom}, so a test can drive it without weak-typed casts.
+     */
     protected async explainEntitlement(
         scopeID: string,
         input: ExplainScopeInput,
@@ -999,6 +1015,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // what a real search would do: a search always has a calling agent.
             if (skill) {
                 await AIEngine.Instance.Config(false, contextUser);
+                // Cast derived from Parameters<> rather than naming MJAIAgentEntityExtended: the
+                // body reads only `agent.ID` and `agent.AcceptsSkills`, both on the base entity, so
+                // the signature is over-specified — and a derived cast cannot drift if it changes.
                 const activatable = AIEngine.Instance.GetSkillsForAgent(
                     agent as Parameters<typeof AIEngine.Instance.GetSkillsForAgent>[0], contextUser);
                 if (!activatable.some(s => UUIDsEqual(s.ID, skill.ID))) {
@@ -1042,8 +1061,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
     }
 
-    /** Load an agent or skill principal by ID; null when no ID was supplied. */
-    /** `protected` so a test can substitute principal loading; see {@link explainEntitlement}. */
+    /** Load an agent or skill principal by ID; null when no ID was supplied. *
+     * `protected` so a test can substitute principal loading; see {@link explainEntitlement}.
+     */
     protected async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
         entityName: string,
         id: string | null | undefined,
