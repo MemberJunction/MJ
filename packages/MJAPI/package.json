@@ -36,7 +36,6 @@
     "@memberjunction/server-bootstrap": "6.1.0-edge.3",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.3",
     "@memberjunction/templates": "6.1.0-edge.3",
-    "axios": "^1.13.4",
     "class-validator": "^0.14.3",
     "mj_generatedactions": "1.0.0",
     "mj_generatedentities": "1.0.0"
