@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { JotFormBaseAction } from '../jotform-base.action';
+import { JotFormBaseAction, JotFormEnvelope } from '../jotform-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -99,14 +99,14 @@ export class CreateJotFormAction extends JotFormBaseAction {
                 };
             }
 
-            const response = await this.getAxiosInstance(apiToken, region).post('/user/forms', null, {
-                params: {
+            const response = await this.getHttpClient(apiToken, region).Post<JotFormEnvelope<{ id: string; title?: string }>>('/user/forms', null, {
+                Query: {
                     apiKey: apiToken,
                     ...this.flattenFormData(formData)
                 }
             });
 
-            const createdForm = response.data.content;
+            const createdForm = response.Data.content;
 
             const formUrl = `https://form.jotform.com/${createdForm.id}`;
             const adminUrl = `https://www.jotform.com/build/${createdForm.id}`;

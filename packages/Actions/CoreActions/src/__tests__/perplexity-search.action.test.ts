@@ -31,11 +31,9 @@ vi.mock('@memberjunction/actions', () => ({
 
 const postMock = vi.fn();
 
-vi.mock('axios', () => ({
-    default: {
-        post: (...args: unknown[]) => postMock(...args),
-        isAxiosError: () => false,
-    },
+vi.mock('@memberjunction/network-utils', () => ({
+    HttpPost: (...args: unknown[]) => postMock(...args),
+    IsHttpError: () => false,
 }));
 
 const getApiIntegrationsConfigMock = vi.fn();
@@ -69,7 +67,9 @@ describe('PerplexitySearchAction', () => {
     beforeEach(() => {
         postMock.mockReset();
         postMock.mockResolvedValue({
-            data: {
+            Status: 200,
+            Headers: {},
+            Data: {
                 choices: [{ message: { content: 'a grounded answer' }, finish_reason: 'stop' }],
                 citations: ['https://example.com/source'],
                 usage: { total_tokens: 42 },

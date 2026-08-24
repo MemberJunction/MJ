@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, MediaFile } from '../../base/base-social.action';
 import { UserInfo, LogStatus, LogError } from '@memberjunction/core';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, HttpGet, IsHttpError } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -9,6 +9,13 @@ import { BaseAction } from '@memberjunction/actions';
  * Handles Instagram Graph API and Basic Display API authentication and common functionality.
  * Instagram uses Facebook's Graph API infrastructure.
  */
+/** Instagram uses Facebook's OAuth: the long-lived token exchange response. */
+interface InstagramTokenResponse {
+    access_token: string;
+    token_type?: string;
+    expires_in?: number;
+}
+
 @RegisterClass(BaseAction, 'InstagramBaseAction')
 export abstract class InstagramBaseAction extends BaseSocialMediaAction {
     protected get platformName(): string {
@@ -34,37 +41,38 @@ export abstract class InstagramBaseAction extends BaseSocialMediaAction {
     }
 
     /**
-     * Axios instance for API calls
+     * HTTP client for API calls
      */
-    private _axiosInstance: AxiosInstance | null = null;
+    private _httpClient: HttpClient | null = null;
 
     /**
-     * Get or create axios instance with authentication
+     * Get or create the HTTP client with authentication
      */
-    protected get axios(): AxiosInstance {
-        if (!this._axiosInstance) {
-            this._axiosInstance = axios.create({
-                baseURL: this.apiBaseUrl,
-                headers: this.buildHeaders()
-            });
-
-            // Add response interceptor for error handling
-            this._axiosInstance.interceptors.response.use(
-                response => response,
-                async error => {
-                    if (error.response?.status === 401 && this.isAuthError(error)) {
+    protected get httpClient(): HttpClient {
+        if (!this._httpClient) {
+            this._httpClient = new HttpClient({
+                BaseURL: this.apiBaseUrl,
+                Headers: this.buildHeaders(),
+                // Replaces the axios-era response interceptor: on a 401 that looks like an expired
+                // token, refresh it and retry once with the new credentials.
+                OnRequest: (config) => {
+                    const token = this.getAccessToken();
+                    if (token) {
+                        return { ...config, Headers: { ...config.Headers, Authorization: `Bearer ${token}` } };
+                    }
+                    return config;
+                },
+                OnRetry: async (error) => {
+                    if (error.Status === 401 && this.isAuthError(error)) {
                         LogStatus('Instagram token appears invalid, attempting refresh...');
                         await this.refreshAccessToken();
-                        
-                        // Retry the request with new token
-                        error.config.headers.Authorization = `Bearer ${this.getAccessToken()}`;
-                        return axios.request(error.config);
+                        return true;
                     }
-                    throw error;
+                    return false;
                 }
-            );
+            });
         }
-        return this._axiosInstance;
+        return this._httpClient;
     }
 
     /**
@@ -80,8 +88,8 @@ export abstract class InstagramBaseAction extends BaseSocialMediaAction {
             }
 
             // Exchange for a new long-lived token
-            const response = await axios.get(`${this.apiBaseUrl}/oauth/access_token`, {
-                params: {
+            const response = await HttpGet<InstagramTokenResponse>(`${this.apiBaseUrl}/oauth/access_token`, {
+                Query: {
                     grant_type: 'fb_exchange_token',
                     client_id: this.getCustomAttribute(3), // App ID stored in CustomAttribute3
                     client_secret: this.getCustomAttribute(4), // App Secret stored in CustomAttribute4
@@ -89,15 +97,15 @@ export abstract class InstagramBaseAction extends BaseSocialMediaAction {
                 }
             });
 
-            if (response.data.access_token) {
+            if (response.Data.access_token) {
                 await this.updateStoredTokens(
-                    response.data.access_token,
+                    response.Data.access_token,
                     undefined, // Instagram doesn't use refresh tokens
-                    response.data.expires_in || 5184000 // Default to 60 days
+                    response.Data.expires_in || 5184000 // Default to 60 days
                 );
 
-                // Reset axios instance to use new token
-                this._axiosInstance = null;
+                // Reset the HTTP client to use the new token
+                this._httpClient = null;
             }
         } catch (error) {
             LogError('Failed to refresh Instagram access token', error);
@@ -117,17 +125,17 @@ export abstract class InstagramBaseAction extends BaseSocialMediaAction {
         try {
             this.logApiRequest(method, `${this.apiBaseUrl}/${endpoint}`, data || params);
 
-            const response = await this.axios.request<T>({
-                url: endpoint,
-                method,
-                data,
-                params
+            const response = await this.httpClient.Request<T>({
+                Url: endpoint,
+                Method: method,
+                Body: data,
+                Query: params
             });
 
-            this.logApiResponse(response.data);
-            return response.data;
+            this.logApiResponse(response.Data);
+            return response.Data;
         } catch (error) {
-            if (axios.isAxiosError(error)) {
+            if (IsHttpError(error)) {
                 this.handleInstagramError(error);
             }
             throw error;
@@ -137,21 +145,21 @@ export abstract class InstagramBaseAction extends BaseSocialMediaAction {
     /**
      * Handle Instagram-specific errors
      */
-    protected handleInstagramError(error: AxiosError): void {
-        const response = error.response;
+    protected handleInstagramError(error: HttpError): void {
+        const response = error;
         if (!response) {
             throw new Error('Network error occurred while calling Instagram API');
         }
 
-        const errorData = response.data as any;
+        const errorData = response.Data as any;
         const errorMessage = errorData?.error?.message || 'Unknown Instagram API error';
         const errorCode = errorData?.error?.code;
         const errorSubcode = errorData?.error?.error_subcode;
 
         // Check for rate limiting
-        if (errorCode === 32 || errorCode === 4 || response.status === 429) {
-            const retryAfter = response.headers['x-app-usage'] 
-                ? this.parseAppUsage(response.headers['x-app-usage']) 
+        if (errorCode === 32 || errorCode === 4 || response.Status === 429) {
+            const retryAfter = response.Headers['x-app-usage'] 
+                ? this.parseAppUsage(response.Headers['x-app-usage']) 
                 : 3600; // Default to 1 hour
             
             throw {
