@@ -2,6 +2,8 @@
  * Shared utilities for SchemaEngine — identifier validation and SQL escaping.
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
+
 /** Characters allowed in SQL identifiers (schema, table, column names). */
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -13,6 +15,4 @@ export function ValidateIdentifier(name: string, kind: string): void {
 }
 
 /** Escapes single quotes in a string for use in SQL string literals. */
-export function EscapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
-}
+export const EscapeSqlString = EscapeSQLString;

@@ -18,6 +18,8 @@ export const ENTITY_VERSION_LABEL_RESTORES = 'MJ: Version Label Restores';
 /** Entity name for Record Changes */
 export const ENTITY_RECORD_CHANGES = 'MJ: Record Changes';
 
+import { EscapeSQLString } from '@memberjunction/global';
+
 // ---------------------------------------------------------------------------
 // SQL safety utilities
 // ---------------------------------------------------------------------------
@@ -26,10 +28,7 @@ export const ENTITY_RECORD_CHANGES = 'MJ: Record Changes';
  * Escape a string value for safe inclusion in a SQL filter.
  * Doubles single quotes to prevent SQL injection.
  */
-export function escapeSqlString(value: string): string {
-    if (value == null) return '';
-    return String(value).replace(/'/g, "''");
-}
+export const escapeSqlString = EscapeSQLString;
 
 /**
  * Build a safe SQL equality filter: FieldName = 'escapedValue'

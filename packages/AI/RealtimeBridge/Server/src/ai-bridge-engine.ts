@@ -8,7 +8,7 @@ import {
     RunView,
     RegisterForStartup,
 } from '@memberjunction/core';
-import { BaseSingleton, MJGlobal } from '@memberjunction/global';
+import { BaseSingleton, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import {
     IRealtimeSession,
     RealtimeTranscript,
@@ -2291,6 +2291,6 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** Escapes single quotes for safe embedding inside an `ExtraFilter` literal. */
     private escapeSql(value: string): string {
-        return value.replace(/'/g, "''");
+        return EscapeSQLString(value);
     }
 }

@@ -270,9 +270,9 @@ async function DropAllSchemaObjects(
   `);
 }
 
+import { EscapeSQLString } from '@memberjunction/global';
+
 /**
  * Escapes a string for use in SQL string literals (prevents SQL injection).
  */
-export function EscapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
-}
+export const EscapeSqlString = EscapeSQLString;

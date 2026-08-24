@@ -32,7 +32,7 @@
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { MJGlobal, MJLruCache, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     ChatMessage,
@@ -1127,7 +1127,7 @@ export class RealtimeClientSessionService {
 
     /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
     private escapeSqlLiteral(value: string): string {
-        return value.replace(/'/g, "''");
+        return EscapeSQLString(value);
     }
 
     /** Loads + finalizes the co-agent `AIAgentRun` if still `Running`. Tolerant: logs, never throws. */

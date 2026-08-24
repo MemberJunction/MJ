@@ -43,6 +43,7 @@
  */
 
 import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJConversationEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
@@ -427,6 +428,4 @@ function resolveStorageAccountForProvider(providerID: string): string | null {
 }
 
 /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
-function escapeSql(value: string): string {
-  return value.replace(/'/g, "''");
-}
+const escapeSql = EscapeSQLString;

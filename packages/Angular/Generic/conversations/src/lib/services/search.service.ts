@@ -11,6 +11,7 @@ import {
   MJArtifactEntity
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 
 /**
  * Types of searchable content
@@ -635,7 +636,7 @@ export class SearchService {
    * Escape SQL special characters
    */
   private escapeSQL(value: string): string {
-    return value.replace(/'/g, "''");
+    return EscapeSQLString(value);
   }
 
   /**

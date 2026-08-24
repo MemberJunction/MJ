@@ -1420,16 +1420,6 @@ export function EscapeSQLString(value: string | null | undefined): string {
 }
 
 /**
- * Alias for {@link EscapeSQLString}.
- */
-export const EscapeSQL = EscapeSQLString;
-
-/**
- * PascalCase alias for {@link EscapeSQLString}.
- */
-export const EscapeSqlString = EscapeSQLString;
-
-/**
  * The format a piece of text appears to be authored in, as classified by
  * {@link detectRichTextFormat}.
  */

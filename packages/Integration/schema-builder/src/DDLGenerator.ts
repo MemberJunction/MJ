@@ -2,6 +2,7 @@
  * DDLGenerator — produces CREATE TABLE / ALTER TABLE SQL strings.
  * File-emission only — never executes SQL.
  */
+import { EscapeSQLString } from '@memberjunction/global';
 import type { DatabasePlatform, TargetColumnConfig, TargetTableConfig, ColumnModification } from './interfaces.js';
 
 /** Characters allowed in identifiers (schema, table, column names). */
@@ -317,6 +318,4 @@ export function ValidateIdentifier(name: string, kind: string): void {
 }
 
 /** Escapes single quotes in a string for use in SQL string literals. */
-function EscapeSqlString(value: string): string {
-    return value.replace(/'/g, "''");
-}
+const EscapeSqlString = EscapeSQLString;

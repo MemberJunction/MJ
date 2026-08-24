@@ -16,7 +16,6 @@ import {
   IsOnlyTimezoneShift,
   EscapeHTML,
   EscapeSQLString,
-  EscapeSQL,
   HighlightSearchMatches,
 } from '../util';
 
@@ -771,11 +770,6 @@ describe('EscapeSQLString', () => {
   it('handles empty string and clean strings', () => {
     expect(EscapeSQLString('')).toBe('');
     expect(EscapeSQLString('plain.email@example.com')).toBe('plain.email@example.com');
-  });
-
-  it('works identically via EscapeSQL alias', () => {
-    expect(EscapeSQL("O'Reilly")).toBe("O''Reilly");
-    expect(EscapeSQL(null)).toBe('');
   });
 });
 

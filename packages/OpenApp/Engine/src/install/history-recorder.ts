@@ -6,6 +6,7 @@
  *
  * Uses MJ's RunView + Metadata directly for strongly typed entity operations.
  */
+import { EscapeSQLString } from '@memberjunction/global';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, TransactionGroupBase, BaseEntity, IMetadataProvider } from '@memberjunction/core';
 import type { MJOpenAppEntity, MJOpenAppInstallHistoryEntity, MJOpenAppDependencyEntity } from '@memberjunction/core-entities';
@@ -15,9 +16,7 @@ import type { MJAppManifest } from '../manifest/manifest-schema.js';
 /**
  * Escapes single quotes in a string for use in SQL filter expressions.
  */
-function EscapeSqlFilter(value: string): string {
-  return value.replace(/'/g, "''");
-}
+const EscapeSqlFilter = EscapeSQLString;
 
 /**
  * Records a new app installation in the MJ: Open Apps table.

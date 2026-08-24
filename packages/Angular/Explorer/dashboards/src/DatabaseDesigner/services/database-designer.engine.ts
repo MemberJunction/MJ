@@ -25,7 +25,7 @@
  */
 
 import { Metadata, RunView, AuthorizationEvaluator } from '@memberjunction/core';
-import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 
 import type {
     AccessibleEntity,
@@ -487,6 +487,4 @@ function escapeSqlId(id: string): string {
 }
 
 /** Escape a string value for safe embedding in a SQL single-quoted literal. */
-function escapeSqlLiteral(value: string): string {
-    return value.replace(/'/g, "''");
-}
+const escapeSqlLiteral = EscapeSQLString;

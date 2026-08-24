@@ -8,6 +8,7 @@
  * @module @memberjunction/ng-dashboards
  */
 import { IMetadataProvider, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 const CONVERSATION_ENTITY = 'MJ: Conversations';
@@ -36,7 +37,7 @@ export interface TranscriptLine {
     At: Date;
 }
 
-const escapeSql = (v: string): string => v.replace(/'/g, "''");
+const escapeSql = EscapeSQLString;
 const toDate = (v: unknown): Date => (v instanceof Date ? v : new Date(String(v ?? '')));
 
 /**

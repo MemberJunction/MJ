@@ -15,6 +15,7 @@
  */
 
 import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 
 /** The conversation `ApplicationScope` values (mirrors the entity union). `'Application'` hides it from the main chat list. */
@@ -226,6 +227,4 @@ async function resolveApplicationIdByName(
 }
 
 /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
-function escapeSql(value: string): string {
-    return value.replace(/'/g, "''");
-}
+const escapeSql = EscapeSQLString;

@@ -20,6 +20,7 @@
  * @module @memberjunction/core
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
 import type { BaseEntity } from './baseEntity';
 import { RelatedRecordCollection } from './relatedRecordCollection';
 import type { IRunViewProvider } from './interfaces';
@@ -182,10 +183,5 @@ function normalizeKey(value: unknown): string {
 
 /**
  * Escapes a value for safe inclusion in a single-quoted SQL literal.
- *
- * @param value - The raw value.
- * @returns The escaped value.
  */
-function escapeSQLLiteral(value: string): string {
-    return value.replace(/'/g, "''");
-}
+const escapeSQLLiteral = EscapeSQLString;
