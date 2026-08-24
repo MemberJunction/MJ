@@ -15,6 +15,7 @@ import {
   replaceAllSpaces,
   IsOnlyTimezoneShift,
   EscapeHTML,
+  EscapeSQLString,
   HighlightSearchMatches,
 } from '../util';
 
@@ -749,3 +750,26 @@ describe('HighlightSearchMatches', () => {
     expect(HighlightSearchMatches('<i>x</i>', '   ')).toBe('&lt;i&gt;x&lt;/i&gt;');
   });
 });
+
+describe('EscapeSQLString', () => {
+  it('escapes single quotes by doubling them', () => {
+    expect(EscapeSQLString("O'Brien")).toBe("O''Brien");
+    expect(EscapeSQLString("user's 'name'")).toBe("user''s ''name''");
+  });
+
+  it('strips null bytes to prevent injection', () => {
+    expect(EscapeSQLString("test\0injection")).toBe("testinjection");
+    expect(EscapeSQLString("user\0' OR '1'='1")).toBe("user'' OR ''1''=''1");
+  });
+
+  it('handles null and undefined safely', () => {
+    expect(EscapeSQLString(null)).toBe('');
+    expect(EscapeSQLString(undefined)).toBe('');
+  });
+
+  it('handles empty string and clean strings', () => {
+    expect(EscapeSQLString('')).toBe('');
+    expect(EscapeSQLString('plain.email@example.com')).toBe('plain.email@example.com');
+  });
+});
+

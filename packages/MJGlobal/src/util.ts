@@ -1401,6 +1401,39 @@ export function EscapeHTML(text: string): string {
 }
 
 /**
+ * Safely escapes a string literal for use inside single-quoted SQL statements, clauses, or `ExtraFilter` predicates.
+ *
+ * Replaces each single quote with doubled single quotes (`''`) per ANSI SQL standard — the escaping
+ * mechanism supported by both SQL Server and PostgreSQL — and removes null bytes (`\0`), which cannot
+ * appear in any legitimate value and invite parser-level surprises when left in a predicate.
+ *
+ * **This escapes string literals and nothing else.** Three cases it does NOT cover:
+ *
+ * - **`LIKE` patterns** — `%`, `_` and `[` remain live wildcards after quote doubling, so a user
+ *   searching for `%` still matches every row. A LIKE value must additionally escape those
+ *   metacharacters and pair the clause with `ESCAPE '\'`. See `escapeLikeValue()` in
+ *   `@memberjunction/core` (`generic/runQuerySQLFilterImplementations.ts`) or
+ *   `GenericDatabaseProvider.escapeLikeTerm()`.
+ * - **Identifier names** (table/column/schema) — those require bracket or double-quote quoting, and
+ *   are handled by SchemaEngine's `ValidateIdentifier()`.
+ * - **Values that must not be missing** — `null`/`undefined` map to `''`, so a predicate built from a
+ *   missing value silently becomes `Field = ''` rather than throwing. Validate before interpolating
+ *   when absence is a bug.
+ *
+ * @param value - The raw string value to escape. If null or undefined, returns empty string.
+ * @returns Safely escaped string value (without surrounding quotes).
+ *
+ * @example
+ * ```typescript
+ * const filter = `Email = '${EscapeSQLString(userEmail)}'`;
+ * ```
+ */
+export function EscapeSQLString(value: string | null | undefined): string {
+  if (value == null) return '';
+  return String(value).replace(/\0/g, '').replace(/'/g, "''");
+}
+
+/**
  * The format a piece of text appears to be authored in, as classified by
  * {@link detectRichTextFormat}.
  */

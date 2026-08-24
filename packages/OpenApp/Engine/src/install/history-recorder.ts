@@ -6,18 +6,13 @@
  *
  * Uses MJ's RunView + Metadata directly for strongly typed entity operations.
  */
+import { EscapeSQLString } from '@memberjunction/global';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, TransactionGroupBase, BaseEntity, IMetadataProvider } from '@memberjunction/core';
 import type { MJOpenAppEntity, MJOpenAppInstallHistoryEntity, MJOpenAppDependencyEntity } from '@memberjunction/core-entities';
 import type { AppStatus, InstallAction, ErrorPhase, InstalledAppInfo, AppInstallCallbacks, InstallStep, UpgradeStep, RemoveStep } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
-/**
- * Escapes single quotes in a string for use in SQL filter expressions.
- */
-function EscapeSqlFilter(value: string): string {
-  return value.replace(/'/g, "''");
-}
 
 /**
  * Records a new app installation in the MJ: Open Apps table.
@@ -249,7 +244,7 @@ export async function RecordAppDependencies(
     const depResult = await rv.RunView<InstalledAppInfo>(
       {
         EntityName: 'MJ: Open Apps',
-        ExtraFilter: `Name = '${EscapeSqlFilter(depName)}'`,
+        ExtraFilter: `Name = '${EscapeSQLString(depName)}'`,
         ResultType: 'simple',
         MaxRows: 1,
       },
@@ -294,7 +289,7 @@ export async function DeleteAppDependencies(
   const result = await rv.RunView<BaseEntity>(
     {
       EntityName: 'MJ: Open App Dependencies',
-      ExtraFilter: `OpenAppID = '${EscapeSqlFilter(appId)}'`,
+      ExtraFilter: `OpenAppID = '${EscapeSQLString(appId)}'`,
       ResultType: 'entity_object',
     },
     contextUser,
@@ -354,7 +349,7 @@ export async function FindInstalledApp(contextUser: UserInfo, appName: string, p
   const result = await rv.RunView<InstalledAppInfo>(
     {
       EntityName: 'MJ: Open Apps',
-      ExtraFilter: `Name = '${EscapeSqlFilter(appName)}'`,
+      ExtraFilter: `Name = '${EscapeSQLString(appName)}'`,
       ResultType: 'simple',
     },
     contextUser,
@@ -421,8 +416,8 @@ export async function CheckSchemaSharedByOtherApps(
       // casing vs PG's lowercase-folded twin). A case-sensitive `=` would miss the co-tenant
       // and let the remove CASCADE-drop a schema another app still lives in.
       ExtraFilter:
-        `LOWER(SchemaName) = LOWER('${EscapeSqlFilter(schemaName)}') ` +
-        `AND ID <> '${EscapeSqlFilter(excludeAppId)}' ` +
+        `LOWER(SchemaName) = LOWER('${EscapeSQLString(schemaName)}') ` +
+        `AND ID <> '${EscapeSQLString(excludeAppId)}' ` +
         `AND Status NOT IN ('Removed', 'Removing')`,
       ResultType: 'simple',
     },
@@ -473,7 +468,7 @@ export async function FindDependentApps(contextUser: UserInfo, appName: string):
   const depResult = await rv.RunView<{ OpenAppID: string }>(
     {
       EntityName: 'MJ: Open App Dependencies',
-      ExtraFilter: `DependsOnAppName = '${EscapeSqlFilter(appName)}'`,
+      ExtraFilter: `DependsOnAppName = '${EscapeSQLString(appName)}'`,
       Fields: ['OpenAppID'],
       ResultType: 'simple',
     },
@@ -489,7 +484,7 @@ export async function FindDependentApps(contextUser: UserInfo, appName: string):
     return [];
   }
 
-  const idList = appIds.map((id) => `'${EscapeSqlFilter(id)}'`).join(',');
+  const idList = appIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
   const appResult = await rv.RunView<{ Name: string }>(
     {
       EntityName: 'MJ: Open Apps',
