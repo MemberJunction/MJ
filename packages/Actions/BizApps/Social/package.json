@@ -28,13 +28,12 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/actions-base": "6.1.0-edge.3",
     "@memberjunction/actions": "6.1.0-edge.3",
+    "@memberjunction/actions-base": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
     "@memberjunction/core-entities": "6.1.0-edge.3",
-    "axios": "^1.13.4",
-    "form-data": "^4.0.5"
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/network-utils": "6.1.0-edge.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (405 classes)
+// @memberjunction/core-entities (407 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -273,6 +273,8 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -868,6 +870,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -1157,7 +1161,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 531;
+export const CLASS_REGISTRATIONS_COUNT = 533;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
