@@ -41,7 +41,7 @@
       "Description": "General guest order claim for linking order records upon login or email verification.",
       "DriverClass": "GuestOrderClaimDriver",
       "DefaultExpirationDays": 30,
-      "IsActive": false
+      "IsActive": true
     },
     "primaryKey": {
       "ID": "D46BD001-B4F8-48FA-EC42-F44CB1923443"
