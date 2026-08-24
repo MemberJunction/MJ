@@ -1597,31 +1597,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ_BizApps_Common: Address Links Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsCommonAddressLinks"
-        SectionName="MJ_BizApps_Common: Address Links"
-        Icon="fa fa-link"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsCommonAddressLinks')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Common: Address Links','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Common: Address Links','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsCommonAddressLinks')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCommonAddressLinks', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Access Control Rules Section -->
     <mj-collapsible-panel
         SectionKey="mJAccessControlRules"
@@ -2322,31 +2297,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Task Assignments Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsTasksTaskAssignments"
-        SectionName="Task Assignments"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskAssignments')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Assignments','AssigneeEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Assignments','AssigneeEntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskAssignments')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskAssignments', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Process Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJProcessRuns"
@@ -2366,31 +2316,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJProcessRuns', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Task Links Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsTasksTaskLinks"
-        SectionName="Task Links"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskLinks')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Links','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Links','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskLinks')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2422,31 +2347,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Issues (Source Entity ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsIssuesIssuesSourceEntityID"
-        SectionName="Issues (Source Entity ID)"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsIssuesIssuesSourceEntityID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Issues: Issues','SourceEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Issues: Issues','SourceEntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsIssuesIssuesSourceEntityID')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsIssuesIssuesSourceEntityID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Record Processes Section -->
     <mj-collapsible-panel
         SectionKey="mJRecordProcesses"
@@ -2466,31 +2366,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordProcesses', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Issues (Assignee Entity ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsIssuesIssuesAssigneeEntityID"
-        SectionName="Issues (Assignee Entity ID)"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsIssuesIssuesAssigneeEntityID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Issues: Issues','AssigneeEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Issues: Issues','AssigneeEntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsIssuesIssuesAssigneeEntityID')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsIssuesIssuesAssigneeEntityID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2697,31 +2572,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- GL Account Links Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsAccountingGLAccountLinks"
-        SectionName="GL Account Links"
-        Icon="fa fa-book-open"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsAccountingGLAccountLinks')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: GL Account Links','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: GL Account Links','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingGLAccountLinks')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingGLAccountLinks', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Materialized Results (Generated Entity ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJMaterializedResultsGeneratedEntityID"
@@ -2741,81 +2591,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultsGeneratedEntityID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Journal Entries Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsAccountingJournalEntries"
-        SectionName="Journal Entries"
-        Icon="fa fa-book"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsAccountingJournalEntries')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Journal Entries','LinkedEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entries','LinkedEntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingJournalEntries')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingJournalEntries', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Order Line Price Components Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsOrdersOrderLinePriceComponents"
-        SectionName="Order Line Price Components"
-        Icon="fa fa-calculator"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsOrdersOrderLinePriceComponents')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Order Line Price Components','SourceEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Line Price Components','SourceEntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersOrderLinePriceComponents')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersOrderLinePriceComponents', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Form Chrome Rules (Related Entity) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJFormChromeRulesRelatedEntityID"
-        SectionName="Form Chrome Rules (Related Entity)"
-        Icon="fa fa-sliders-h"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJFormChromeRulesRelatedEntityID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Form Chrome Rules','RelatedEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Form Chrome Rules','RelatedEntityID')"
-                [AllowLoad]="IsSectionExpanded('mJFormChromeRulesRelatedEntityID')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJFormChromeRulesRelatedEntityID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2847,25 +2622,50 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Activity Links Section -->
+    <!-- Form Chrome Rules (Related Entity) Section -->
     <mj-collapsible-panel
-        SectionKey="mJBizAppsCommonActivityLinks"
-        SectionName="Activity Links"
-        Icon="fa fa-table"
+        SectionKey="mJFormChromeRulesRelatedEntityID"
+        SectionName="Form Chrome Rules (Related Entity)"
+        Icon="fa fa-sliders-h"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsCommonActivityLinks')"
+        [BadgeCount]="GetSectionRowCount('mJFormChromeRulesRelatedEntityID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Common: Activity Links','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Common: Activity Links','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsCommonActivityLinks')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Form Chrome Rules','RelatedEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Form Chrome Rules','RelatedEntityID')"
+                [AllowLoad]="IsSectionExpanded('mJFormChromeRulesRelatedEntityID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCommonActivityLinks', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJFormChromeRulesRelatedEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Identity Claims Section -->
+    <mj-collapsible-panel
+        SectionKey="mJIdentityClaims"
+        SectionName="Identity Claims"
+        Icon="fa fa-id-card"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJIdentityClaims')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Identity Claims','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Identity Claims','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJIdentityClaims')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJIdentityClaims', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -27,6 +27,9 @@ export interface FormToolbarConfig {
   /** Show the Delete button in read mode. Default: true */
   ShowDeleteButton: boolean;
 
+  /** Show the Refresh button in read mode (reloads record from database). Default: true */
+  ShowRefreshButton: boolean;
+
   /** Show the Favorite/Unfavorite button. Default: true */
   ShowFavoriteButton: boolean;
 
@@ -38,6 +41,9 @@ export interface FormToolbarConfig {
 
   /** Show the Tags button for viewing/managing tags on this record. Default: true */
   ShowTagsButton: boolean;
+
+  /** Show the Attachments button for viewing/managing linked file attachments. Default: true */
+  ShowAttachmentsButton: boolean;
 
   /**
    * Show the **form-variant picker** button — a right-side toolbar button
@@ -121,10 +127,12 @@ export interface FormToolbarConfig {
 export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
@@ -148,10 +156,12 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
 export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
@@ -179,10 +189,12 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
 export const CUSTOM_LAYOUT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: false,            // ← hides the whole right group

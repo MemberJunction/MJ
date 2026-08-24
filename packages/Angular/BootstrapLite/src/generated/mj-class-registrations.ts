@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (405 classes)
+// @memberjunction/core-entities (407 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -273,6 +273,8 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -530,7 +532,7 @@ import {
     TimelineViewType,
 } from '@memberjunction/ng-entity-viewer';
 
-// @memberjunction/ng-core-entity-forms (20 classes)
+// @memberjunction/ng-core-entity-forms (21 classes)
 import {
     FlowAgentFormSectionComponent,
     MJAIAgentChannelFormComponentExtended,
@@ -543,6 +545,7 @@ import {
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
+    MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
     MJTemplateFormComponentExtended,
@@ -842,6 +845,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -1068,6 +1073,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
+    MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
     MJTemplateFormComponentExtended,
@@ -1105,7 +1111,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 505;
+export const CLASS_REGISTRATIONS_COUNT = 508;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

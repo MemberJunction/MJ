@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions-content-autotag",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "Action classes that execute the content autotagging and vectorization actions.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,15 +22,14 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/actions": "6.1.0-edge.2",
-    "@memberjunction/actions-base": "6.1.0-edge.2",
-    "@memberjunction/content-autotagging": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-actions": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/ai-vector-sync": "6.1.0-edge.2",
-    "axios": "^1.13.4"
+    "@memberjunction/actions": "6.1.0-edge.3",
+    "@memberjunction/actions-base": "6.1.0-edge.3",
+    "@memberjunction/content-autotagging": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-actions": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/ai-vector-sync": "6.1.0-edge.3"
   },
   "repository": {
     "type": "git",

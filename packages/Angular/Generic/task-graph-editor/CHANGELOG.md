@@ -1,5 +1,129 @@
 # @memberjunction/ng-task-graph-editor
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 63ea273: A workflow run now draws what happened, and the Runs surface remembers how you arranged it.
+
+  **Edges could never bind.** Every task-graph node declared canvas ports literally named `in` and
+  `out`, and the canvas resolves a connection by looking its port ids up in one flat, graph-wide
+  namespace — so no connection could say which node's port it meant, and a workflow drew its boxes
+  with no edges at all. Nothing errored: an unresolvable port is just a connection with nowhere to
+  attach. Port ids are now scoped to their node (`InputPortID` / `OutputPortID`), matching the
+  convention the Flow Agent editor has always used.
+
+  **A declined branch was reported as `Pending`.** `NormalizeRuntimeState` falls back to `Pending` for
+  any status it does not recognise, and it did not recognise `Skipped` — so a branch the workflow
+  chose not to take reached the canvas as "still waiting to run". The node drew as an ordinary pending
+  step, its edges drew as live routes, and `IsRuntimeSettled` could never report a graph containing one
+  as finished, so a host polling on it polled a completed run forever. `Skipped` is now carried
+  through and counts as terminal.
+
+  With those two fixed, run mode draws **only the path taken**: edges touching a declined step are
+  omitted (both ends — an edge leaving a skipped step is as untravelled as one entering it) and the
+  step is hatched and struck through, in the same visual language the run timeline already uses.
+  Design mode still draws every edge, because there is no route yet — the graph is all the routes that
+  _could_ be taken, which is exactly what an author is arranging.
+
+  **The agent run's Workflow tab now shows the run, not the plan.** It rendered the recorded
+  `TaskGraphSpec` on a bare canvas with no runtime, so every branch appeared to have run. It uses the
+  same `mj-task-graph-run-view` the Workflows app does, falling back to the spec view only for a
+  constant-folded graph that never reached the dispatcher — where a plan is the honest thing to draw.
+
+  **Layout.** `FlowNodeStatus` gains `skipped` (deliberately not folded into `disabled`: disabled means
+  "cannot run", skipped means "the graph went the other way"). `ShowLegend` and `ShowToolbar` are
+  separately controllable, defaulting legend-off / toolbar-on in run views — the legend explains
+  authoring vocabulary a run does not need, while the toolbar is how a person navigates the picture.
+  `LegendToggled` is forwarded so a host can persist the choice rather than adding a second control.
+  The run view's height chain was also broken: `Height` sat on the canvas and resolved against an
+  auto-height ancestor, so `100%` meant nothing; it now governs the widget and the canvas flexes.
+
+  **Workflows → Runs** gains resizable, per-user-persisted panes (list | detail, and canvas | step
+  record inside it), with the step record moved beside the canvas rather than in a strip below it.
+  Sizes are stored separately from openness, so closing and reopening returns a pane to the width you
+  dragged it to. Preferences go through `UserInfoEngine`, never `localStorage`.
+
+- 6cd337d: Workflow Run Console — realtime runner and debugger for task graphs (`plans/task-graph-realtime-runner.md`).
+
+  Engine: new frame kinds (`GateDecision`, `ClaimChanged`, `PassCompleted`, `GraphPaused`, `GraphResumed`, `BreakpointHit`, `NodeProgress`) emitting state the dispatcher already computes; durable debug state (`$.debug` in the parent metadata bag) gating the claim filter — pause, single-step, breakpoints, and edge-condition overrides are claim gating, never new execution machinery. New Remote Operations: `TaskGraph.Pause/.Resume/.Step/.SetBreakpoints/.OverrideEdge/.SkipTask/.ForceCompleteTask/.UpdateTaskInput`; `RetryTask` accepts an edited input. Metadata rows for the new operations ride the branch (bump is `minor` per the metadata-branch rule).
+
+  Client: `GraphQLDataProvider.TaskGraphFrames(parentTaskId)` — the first consumer of the `taskGraphFrames` subscription (shared, refcounted per graph). The run view accepts a `LiveFrame` input (frames patch the canvas; cascade frames trigger a debounced row reconcile — frames advisory, rows truth) and a `ReplayAt` input (post-settle scrubbing from row timestamps). The Workflows app's Runs surface becomes the console: pause/resume/step toolbar, engine pass strip, stall banner, step inspector (claim, path verdicts, live progress, what-if via the engine's own algorithms), and replay scrub.
+
+### Patch Changes
+
+- 199eb2b: Debug a Flow agent from the Agent form Run dialog. Debug starts the graph paused at Submit (`$.debug.paused` on the parent row — Pause-after-submit races the dispatcher). The harness and Runs console share a VS Code-style icon toolbar and a red-circle breakpoint toggle. The invocation-envelope sanitizer from #3783 is preserved.
+- 7a71c96: Add DOM specs for the debugger wrap, VCR toolbar, and variables pane so the Generic coverage ratchet stays at 134 after #3793.
+- f80bdb7: Drop-in `mj-task-graph-debugger` wrap, Continue-from-breakpoint actually claims the stopped step, dispatcher kick on Submit, and run-view paint for queued / running / traveled edges plus a left data pane.
+- deea1a3: Unstick the DOM unit specs that fail under the M5 joined pnpm workspace. Two physical copies of @angular/core / @codemirror/state (parent store vs MJ store) made CodeMirror throw on EditorState.create, AgGrid crash with firstCreatePass of null, angular-split inject() hit NG0203, and bootstrap constructor inject() fail the same way. The specs now skip those host libraries (toolbar-only CodeMirror init, AgGrid/as-split stubs) and bootstrap inlines Angular through Vite so Analog and TestBed share one copy.
+- d907a1b: Wire the four unused workflow debug verbs into the Run Console — breakpoints, edge overrides, force-complete, and edit-input — so a held or interesting graph can be stepped without leaving Explorer.
+- 1be0f14: The workflow canvas fills the space it is given instead of sitting at 400px.
+
+  Two broken links in one height chain, both of which fail silently — CSS does not report a percentage
+  height that had nothing to resolve against, it just computes `auto`.
+
+  `FlowEditorComponent` and `TaskGraphEditorComponent` are custom elements with no `:host` rule, so
+  their host boxes were `display: inline` with automatic height. The `height: 100%` on each component's
+  root element therefore resolved against an auto-height parent — which means `auto` — and
+  `.mj-flow-editor` fell through to its `min-height: 400px` floor. The canvas was pinned at 400px no
+  matter how much room its pane had. Both hosts now declare `display: block; height: 100%`, which is
+  safe for callers that don't give them a box: it resolves to `auto` there and the floor takes over
+  exactly as before.
+
+  The Workflows Runs detail pane had the same defect one level up: `.wfr-detail` is a flex column
+  inside a split area with no height of its own, so the canvas below it — `flex: 1 1 auto` of an
+  auto-height parent — got its intrinsic size and left dead space beneath.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [63ea273]
+- Updated dependencies [1be0f14]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/ng-flow-editor@6.1.0-edge.3
+  - @memberjunction/ng-base-types@6.1.0-edge.3
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

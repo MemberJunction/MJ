@@ -2,7 +2,7 @@
   "name": "@memberjunction/database-designer-actions",
   "license": "BUSL-1.1",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "Database Designer Actions — metadata-driven action layer for entity creation and modification",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,13 +14,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/actions": "6.1.0-edge.2",
-    "@memberjunction/actions-base": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/database-designer-core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/schema-engine": "6.1.0-edge.2"
+    "@memberjunction/actions": "6.1.0-edge.3",
+    "@memberjunction/actions-base": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/database-designer-core": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/schema-engine": "6.1.0-edge.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

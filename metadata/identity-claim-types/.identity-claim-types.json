@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "EntitlementGrant",
+      "Description": "Entitlement grant claim for purchased or allocated passes, tickets, and subscriptions.",
+      "DriverClass": "EntitlementGrantClaimDriver",
+      "DefaultExpirationDays": 30,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A138A77E-81C5-45C7-B91F-C1198A6F0110"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MagicLink",
+      "Description": "Single-use magic link email claim for account linking and verification.",
+      "DriverClass": "MagicLinkClaimDriver",
+      "DefaultExpirationDays": 7,
+      "IsActive": false
+    },
+    "primaryKey": {
+      "ID": "B249B88F-92D6-46D8-CA20-D22A9B701221"
+    }
+  },
+  {
+    "fields": {
+      "Name": "PersonAccountLink",
+      "Description": "Associates guest purchase Person and entity records with authenticated User account.",
+      "DriverClass": "PersonAccountLinkClaimDriver",
+      "DefaultExpirationDays": 30,
+      "IsActive": false
+    },
+    "primaryKey": {
+      "ID": "C35AC990-A3E7-47E9-DB31-E33BA0812332"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GuestOrder",
+      "Description": "General guest order claim for linking order records upon login or email verification.",
+      "DriverClass": "GuestOrderClaimDriver",
+      "DefaultExpirationDays": 30,
+      "IsActive": false
+    },
+    "primaryKey": {
+      "ID": "D46BD001-B4F8-48FA-EC42-F44CB1923443"
+    }
+  }
+]

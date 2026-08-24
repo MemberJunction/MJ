@@ -330,56 +330,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Journal Entries Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsAccountingJournalEntries"
-        SectionName="Journal Entries"
-        Icon="fa fa-book"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsAccountingJournalEntries')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Journal Entries','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entries','FileID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingJournalEntries')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingJournalEntries', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Activity Files Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsCommonActivityFiles"
-        SectionName="Activity Files"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsCommonActivityFiles')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Common: Activity Files','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Common: Activity Files','FileID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsCommonActivityFiles')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCommonActivityFiles', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         
