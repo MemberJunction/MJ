@@ -31,6 +31,7 @@ import {
     ScopeBundle
 } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
 import {
     SearchParams,
     SearchResult,
@@ -951,7 +952,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /** Resolve entitlement for the dry run, including the skill and tenant principals. */
-    private async explainEntitlement(
+    /** `protected`, like {@link principalsFrom}, so a test can drive it without weak-typed casts. */
+    protected async explainEntitlement(
         scopeID: string,
         input: ExplainScopeInput,
         contextUser: UserInfo
@@ -967,6 +969,50 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
                 this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
             ]);
+            // MIRROR THE ACTION'S PRINCIPAL GATES, so a preview cannot promise what the search
+            // would refuse. The agent first: AgentUnscopedAll grants Search on any scope as a
+            // fallback "when the user has no per-scope grant", and agent permissions are open by
+            // default, so an agent the caller may not run must not shape the explanation either.
+            if (agent) {
+                await AIEngine.Instance.Config(false, contextUser);
+                // GetUserAgentPermissions is AIEngine's own passthrough, so this needs no
+                // dependency SearchEngine does not already have.
+                const agentPerms = await AIEngine.Instance.GetUserAgentPermissions(agent.ID, contextUser);
+                if (!agentPerms?.canRun) {
+                    return {
+                        Allowed: false,
+                        Level: 'None',
+                        Source: 'NoGrant',
+                        Reason: `Agent '${agent.Name}' is not runnable by this user, so it cannot act `
+                              + 'as a search principal; a real search would be refused.',
+                        Principals: principals,
+                    };
+                }
+            }
+
+            // Then the skill, on the terms it could have been ACTIVATED on.
+            // GetSkillsForAgent(agent, user) is agent-accepted n user-permitted n Active, the same
+            // call BaseAgent.preActivateRequestedSkills uses. Without this, SkillUnscopedAll would
+            // show here as a grant while the real search denied it — the preview-vs-enforcement
+            // drift this file already carries a regression test about. Note GetSkillsForAgent
+            // returns [] for a null agent, so a skill named without an agent is refused, which is
+            // what a real search would do: a search always has a calling agent.
+            if (skill) {
+                await AIEngine.Instance.Config(false, contextUser);
+                const activatable = AIEngine.Instance.GetSkillsForAgent(
+                    agent as Parameters<typeof AIEngine.Instance.GetSkillsForAgent>[0], contextUser);
+                if (!activatable.some(s => UUIDsEqual(s.ID, skill.ID))) {
+                    return {
+                        Allowed: false,
+                        Level: 'None',
+                        Source: 'NoGrant',
+                        Reason: `Skill '${skill.Name}' is not activatable by this agent for this user, `
+                              + 'so it cannot act as a search principal; a real search would be refused.',
+                        Principals: principals,
+                    };
+                }
+            }
+
             const permission = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
                 User: contextUser,
                 SearchScopeID: scopeID,
@@ -997,7 +1043,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /** Load an agent or skill principal by ID; null when no ID was supplied. */
-    private async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
+    /** `protected` so a test can substitute principal loading; see {@link explainEntitlement}. */
+    protected async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
         entityName: string,
         id: string | null | undefined,
         contextUser: UserInfo

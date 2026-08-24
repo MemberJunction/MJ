@@ -164,6 +164,23 @@ The action accepts two optional inputs whose values flow into `SearchParams.Sear
 | `PrimaryScopeRecordID` | string (UUID) | Primary tenant key (e.g. `OrganizationID`). Available in templates as `{{ context.PrimaryScopeRecordID }}`. |
 | `SecondaryScopes` | JSON string | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Incompatible value types are dropped at parse time with a log; malformed JSON falls back to `undefined` rather than failing the call. |
 
+#### The skill principal
+
+A third optional input, `AISkillID`, is **not** a SearchContext value and does not reach those templates. It is a *principal*, in the same sense the calling agent is:
+
+| Input | Type | Purpose |
+|---|---|---|
+| `AISkillID` | string (UUID) | The AI Skill this search runs under. Threaded onto `SearchParams.AISkillID` → `Principals.SkillID`, which a dimension's expansion query can bind. Also handed to `ResolveEffectivePermission`, so the skill's own `SearchScopeAccess` applies. |
+
+Two consequences worth being explicit about, because a skill is a principal that can both widen and deny:
+
+- **It is judged.** `AISkill.SearchScopeAccess` can reject a scope the user's roles allow (`None`, or `Assigned` without this scope listed) and can grant one they do not (`All`). The action resolves and passes the skill *before* the permission gate, so those rules fire — and denial rows are attributed to it.
+- **A bad value fails closed.** A non-UUID, or an ID that will not load, is rejected with `INVALID_PARAM` rather than being dropped. Silently continuing would bind an unjudged ID into the expansion query.
+
+- **The caller must be allowed to use it on this agent.** Loading a skill is not permission to wield it as a principal. Because `SkillUnscopedAll` grants `Search` on any scope, and AISkill permissions are open by default (no permission rows means everyone may View and Run), an unchecked ID would be a scope grant for the asking. The action intersects the skill against `GetSkillsForAgent(agent, user)` — agent-accepted ∩ user-permitted ∩ Active, the same call `BaseAgent.preActivateRequestedSkills` gates real activation on — and denies with `ACCESS_DENIED`, attributed to the skill in the Forbidden log. The **calling agent** is gated the same way — `AgentID` is a caller-supplied parameter too, and `AgentUnscopedAll` grants `Search` as a fallback when the user has no per-scope grant — so the action requires Run on the agent as well. `ExplainScope` applies both gates, so a preview cannot promise what the search would refuse.
+
+Omit the input and the principal is null, which is the behaviour for every caller that does not pass it.
+
 Example agent tool call selecting only Finance-department content for Org `O1`:
 
 ```json

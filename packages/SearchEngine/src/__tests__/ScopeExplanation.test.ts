@@ -13,12 +13,26 @@
  *  2. **`SummarizeExplanation`** — the human-readable rendering, including the case where
  *     entitlement was not evaluated at all.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// The explain path now mirrors the action's skill gate, so it needs the same engine call. Only this
+// file is affected — vi.mock is per-file.
+const skillsForAgentSpy = vi.fn(() => [{ ID: 'skill-1', Name: 'Test Skill' }]);
+const agentPermsSpy = vi.fn(async () => ({ canView: true, canRun: true, canEdit: false, canDelete: false, isOwner: false }));
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: {
+        Instance: {
+            Config: async () => undefined,
+            GetSkillsForAgent: (...args: unknown[]) => skillsForAgentSpy(...(args as [])),
+            GetUserAgentPermissions: (...args: unknown[]) => agentPermsSpy(...(args as [])),
+        },
+    },
+}));
 
 import { ScopeDimensionResolver } from '../generic/ScopeDimensionResolver';
 import { SearchEngine } from '../generic/SearchEngine';
 import { SummarizeExplanation, type ScopeExplanation } from '../generic/ScopeExplanation';
-import type { MJSearchScopeEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentEntity, MJAISkillEntity, MJSearchScopeEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import type { SearchContext, ScopeSearchContextConfig } from '../generic/search.types';
 
@@ -221,5 +235,51 @@ describe('principal parity between the dry run and the real search (regression)'
         const searchParams = { Query: 'x', AIAgentID: 'a', AISkillID: 's' };
         const explainInput = { ScopeIDs: ['scope-1'], AIAgentID: 'a', AISkillID: 's' };
         expect(probe.Principals(searchParams)).toEqual(probe.Principals(explainInput));
+    });
+});
+
+describe('explain mirrors the action\'s skill gate', () => {
+    // A preview that promises what the search refuses is worse than no preview. The search only
+    // honours a skill on the terms it could have been ACTIVATED on, so the explanation must too —
+    // otherwise SkillUnscopedAll shows here as a grant while the real search denies it.
+    // Overrides rather than casts: `explainEntitlement` and `loadPrincipal` are `protected` for the
+    // same reason `principalsFrom` is — so a probe can drive them without weakening types.
+    class EntitlementProbe extends SearchEngine {
+        protected override async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
+            _entityName: string, id: string | null | undefined
+        ): Promise<T | null> {
+            return id ? ({ ID: id, Name: id } as unknown as T) : null;
+        }
+        public Explain(input: { AIAgentID?: string; AISkillID?: string }, user: UserInfo) {
+            return this.explainEntitlement('scope-1', input, user);
+        }
+    }
+
+    it('reports a skill the agent cannot activate as DENIED, not as a grant', async () => {
+        skillsForAgentSpy.mockReturnValue([]);
+        const out = await new EntitlementProbe().Explain(
+            { AIAgentID: 'agent-1', AISkillID: 'skill-1' }, USER);
+        expect(out.Allowed).toBe(false);
+        expect(out.Source).toBe('NoGrant');
+        expect(out.Reason).toContain('not activatable');
+        // and it still records what was asked for, so the denial is diagnosable
+        expect(out.Principals.SkillID).toBe('skill-1');
+    });
+
+    it('reports an agent the user cannot run as DENIED', async () => {
+        agentPermsSpy.mockResolvedValue({ canView: true, canRun: false, canEdit: false, canDelete: false, isOwner: false });
+        const out = await new EntitlementProbe().Explain({ AIAgentID: 'agent-1' }, USER);
+        expect(out.Allowed).toBe(false);
+        expect(out.Reason).toContain('not runnable');
+        agentPermsSpy.mockResolvedValue({ canView: true, canRun: true, canEdit: false, canDelete: false, isOwner: false });
+    });
+
+    it('lets an activatable skill through to the permission resolver', async () => {
+        skillsForAgentSpy.mockReturnValue([{ ID: 'skill-1', Name: 'Test Skill' }]);
+        const out = await new EntitlementProbe().Explain(
+            { AIAgentID: 'agent-1', AISkillID: 'skill-1' }, USER);
+        // No resolver is configured in this harness, so it lands in the fail-closed catch — the
+        // point is that it got PAST the gate rather than being stopped by it.
+        expect(out.Reason).not.toContain('not activatable');
     });
 });

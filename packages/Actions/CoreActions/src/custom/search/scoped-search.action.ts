@@ -8,9 +8,11 @@ import {
     SearchResultItem,
     GetSearchScopePermissionResolver
 } from "@memberjunction/search-engine";
+import { AIAgentPermissionHelper, AIEngineBase } from "@memberjunction/ai-engine-base";
 import {
     SearchEngineBase,
     MJAIAgentEntity,
+    MJAISkillEntity,
     MJSearchScopeEntity,
     MJAIAgentSearchScopeEntity
 } from "@memberjunction/core-entities";
@@ -43,6 +45,11 @@ interface FormattedSearchResult {
  * Enforces the calling agent's `SearchScopeAccess` setting and restricts the requested
  * scope against the agent's `MJ: AI Agent Search Scopes` rows (Phase IN 'AgentInvoked','Both').
  * Delegates the actual search to `SearchEngine.Search()` with `ScopeIDs: [resolvedScopeID]`.
+ *
+ * The SKILL PRINCIPAL (`AISkillID`, optional) is resolved and permission-checked alongside the
+ * agent: `AISkill.SearchScopeAccess` can deny a scope the user's roles allow, or grant one they do
+ * not, and it binds as `Principals.SkillID` for a dimension's expansion query. A value that is not a
+ * UUID, or will not load, is refused rather than dropped.
  *
  * Agent identity is resolved from (in order):
  *   1. The explicit `AgentID` input parameter (most common — passed by the agent executor).
@@ -96,6 +103,9 @@ interface FormattedSearchResult {
  * }
  * ```
  */
+/** Strict UUID shape for the skill principal — it is caller-supplied and binds into a query. */
+const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @RegisterClass(BaseAction, "__Scoped_Search")
 export class ScopedSearchAction extends BaseAction {
 
@@ -109,15 +119,110 @@ export class ScopedSearchAction extends BaseAction {
             if ('result' in validation) return validation.result;
             const { query, agent } = validation;
 
+            // Read early: a skill denial below is logged against the scope the caller asked for,
+            // the same attribution the scope- and permission-denial rows use.
+            const requestedScopeID = this.getStringParam(params, "scopeid");
+
+            // Both principals are configured from one cache load.
+            await AIEngineBase.Instance.Config(false, params.ContextUser);
+
+            // 1a. THE AGENT IS A CALLER-SUPPLIED PRINCIPAL TOO, and it is judged the same way.
+            // resolveAgentID takes the `agentid` ACTION PARAMETER ahead of the server-stamped
+            // params.Context.AgentID, so the identity is only as trustworthy as whatever authored
+            // that parameter — in an agent flow, potentially the model. And the agent decides two
+            // things: which scopes resolveAndLogScope will even consider, and — via
+            // AgentUnscopedAll — whether permission is GRANTED, a rule whose own comment describes
+            // it as a fallback "when the user has no per-scope grant". Agent permissions are open
+            // by default (no rows means anyone may View and Run), so unchecked, naming a trusted
+            // agent converts "no grant" into "Search".
+            //
+            // Blast radius is scope-level, not row-level — results still pass filterByPermissions
+            // and RLS — but a scope IS the content bound, so it is worth a gate.
+            if (!(await AIAgentPermissionHelper.HasPermission(agent.ID, params.ContextUser, 'run'))) {
+                await SearchEngine.Instance.LogForbiddenSearch({
+                    Query: query,
+                    ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
+                    FailureReason: `User may not run agent '${agent.Name}', so it cannot act as a search principal.`,
+                    StartTime: startTime,
+                    ContextUser: params.ContextUser,
+                    AIAgentID: agent.ID,
+                    AISkillID: null,
+                });
+                return this.createErrorResult(
+                    `Forbidden: agent '${agent.Name}' is not available to you.`, 'ACCESS_DENIED');
+            }
+
+            // 1b. Resolve the SKILL PRINCIPAL FIRST, because two later steps need it: the gate is
+            // what judges it, and every denial row wants it attributed.
+            // `AISkill.SearchScopeAccess` can DENY a scope the user's roles allow ('None', or
+            // 'Assigned' without this scope listed) and can GRANT one they do not ('All'), so a
+            // skill that steers retrieval without being handed to ResolveEffectivePermission is a
+            // principal that widens and is never judged. ExplainScope already passes it, so leaving
+            // it out here would also make a preview disagree with the search it previews.
+            const aiSkillID = this.getStringParam(params, "aiskillid");
+            let skill: MJAISkillEntity | null = null;
+            if (aiSkillID) {
+                if (!SCOPED_SEARCH_UUID_RE.test(aiSkillID)) {
+                    return this.createErrorResult(
+                        `AISkillID '${aiSkillID}' is not a valid identifier.`, 'INVALID_PARAM');
+                }
+                skill = await this.loadSkill(aiSkillID, params.ContextUser);
+                if (!skill) {
+                    // FAIL CLOSED. Carrying on with skill=null would bind the ID into the
+                    // dimension's expansion query while the skill rules never ran.
+                    return this.createErrorResult(
+                        `AISkillID '${aiSkillID}' could not be loaded.`, 'INVALID_PARAM');
+                }
+
+                // BEING ABLE TO LOAD A SKILL IS NOT PERMISSION TO WIELD IT AS A PRINCIPAL.
+                // This ID arrives as an action parameter, and in an agent flow the model authors
+                // action parameters. One of the skill rules GRANTS: SkillUnscopedAll returns
+                // Allowed:true for ANY scope when SearchScopeAccess='All', overriding per-scope
+                // rules. AISkill permissions are OPEN BY DEFAULT (no permission rows -> everyone may
+                // View and Run), so unchecked, naming a skill that carries 'All' would be a scope
+                // grant for the asking on a fresh installation.
+                //
+                // The gate is GetSkillsForAgent(agent, user) — deliberately, rather than a bare
+                // 'can this user Run it' check. Its docstring calls it "the single call the /skill
+                // picker and the server-side RequestedSkills intersection guard use", and
+                // BaseAgent.preActivateRequestedSkills gates real skill activation on exactly it. So
+                // a skill may act as a principal here on the same terms it could have been activated
+                // in the first place: the agent accepts skills, this agent is granted this one, the
+                // skill is Active, AND the user may Run it. A user-only check would have honoured a
+                // skill the agent does not accept and one that is Inactive.
+                //
+                // The deny arms (SkillNone, SkillAssignedNotListed) would be safe unchecked; the
+                // grant arm is not, and both read the same field.
+                const activatable = AIEngineBase.Instance.GetSkillsForAgent(
+                    // ClassFactory hands back the extended subclass at runtime; the narrower static
+                    // type here is only what loadAgent declares. The call reads ID and AcceptsSkills.
+                    agent as Parameters<typeof AIEngineBase.Instance.GetSkillsForAgent>[0],
+                    params.ContextUser);
+                const mayRunSkill = activatable.some(s => UUIDsEqual(s.ID, skill!.ID));
+                if (!mayRunSkill) {
+                    await SearchEngine.Instance.LogForbiddenSearch({
+                        Query: query,
+                        ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
+                        FailureReason: `Skill '${skill.Name}' is not activatable by agent '${agent.Name}' for this user, so it cannot act as a search principal.`,
+                        StartTime: startTime,
+                        ContextUser: params.ContextUser,
+                        AIAgentID: agent.ID,
+                        AISkillID: skill.ID,
+                    });
+                    return this.createErrorResult(
+                        `Forbidden: skill '${skill.Name}' is not available to you on this agent.`,
+                        'ACCESS_DENIED');
+                }
+            }
+
             // 2. Resolve scope (agent-side SearchScopeAccess gate, with denial logging)
             await SearchEngineBase.Instance.Config(false, params.ContextUser);
-            const requestedScopeID = this.getStringParam(params, "scopeid");
-            const scopeOutcome = await this.resolveAndLogScope(agent, query, requestedScopeID, params, startTime);
+            const scopeOutcome = await this.resolveAndLogScope(agent, query, requestedScopeID, params, startTime, aiSkillID);
             if ('result' in scopeOutcome) return scopeOutcome.result;
             const { scope, scopeID } = scopeOutcome;
 
             // 3. User-side permission check (Phase 2A) + Read-level gate, with denial logging
-            const permDenial = await this.enforceUserPermission(agent, scopeID, query, params, startTime);
+            const permDenial = await this.enforceUserPermission(agent, skill, scopeID, query, params, startTime);
             if (permDenial) return permDenial;
 
             // 4. Run the search (sync or streaming)
@@ -135,14 +240,14 @@ export class ScopedSearchAction extends BaseAction {
             const primaryScopeRecordID = this.getStringParam(params, "primaryscoperecordid");
             const secondaryScopes = this.parseSecondaryScopes(params);
             LogStatusEx({
-                message: `ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}" primaryScopeRecordID="${primaryScopeRecordID ?? ''}" secondaryScopeKeys=[${Object.keys(secondaryScopes ?? {}).join(',')}]`,
+                message: `ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}" primaryScopeRecordID="${primaryScopeRecordID ?? ''}" aiSkillID="${aiSkillID ?? ''}" secondaryScopeKeys=[${Object.keys(secondaryScopes ?? {}).join(',')}]`,
                 verboseOnly: true,
                 isVerboseEnabled: IsVerboseLoggingEnabled
             });
             const exec = await this.runSearch({
                 query, maxResults, minScore, scopeID, agent,
                 contextUser: params.ContextUser, streamingMode,
-                primaryScopeRecordID, secondaryScopes,
+                primaryScopeRecordID, secondaryScopes, aiSkillID,
             });
             if ('result' in exec) return exec.result;
 
@@ -202,6 +307,7 @@ export class ScopedSearchAction extends BaseAction {
         requestedScopeID: string | undefined,
         params: RunActionParams,
         startTime: number,
+        aiSkillID: string | undefined,
     ): Promise<
         | { ok: true; scope: MJSearchScopeEntity | undefined; scopeID: string | undefined }
         | { ok: false; result: ActionResultSimple }
@@ -220,6 +326,7 @@ export class ScopedSearchAction extends BaseAction {
                     StartTime: startTime,
                     ContextUser: params.ContextUser,
                     AIAgentID: agent.ID,
+                    AISkillID: aiSkillID ?? null,
                 });
             }
             return { ok: false, result: this.createErrorResult(scopeResolution.errorMessage!, scopeResolution.errorCode!) };
@@ -238,6 +345,7 @@ export class ScopedSearchAction extends BaseAction {
      */
     private async enforceUserPermission(
         agent: MJAIAgentEntity,
+        skill: MJAISkillEntity | null,
         scopeID: string | undefined,
         query: string,
         params: RunActionParams,
@@ -249,6 +357,9 @@ export class ScopedSearchAction extends BaseAction {
             User: params.ContextUser,
             SearchScopeID: scopeID,
             Agent: agent,
+            // A skill is a principal in the same sense the agent is. Omitting it left
+            // SkillNone / SkillAssignedNotListed / SkillUnscopedAll unable to fire at all.
+            Skill: skill,
             ContextUser: params.ContextUser,
         });
         if (!verdict.Allowed) {
@@ -268,6 +379,9 @@ export class ScopedSearchAction extends BaseAction {
                 StartTime: startTime,
                 ContextUser: params.ContextUser,
                 AIAgentID: agent.ID,
+                // Attribute the denial to the skill too. A skill can BE the reason for it
+                // (SkillNone / SkillAssignedNotListed), so a NULL here loses the cause.
+                AISkillID: skill?.ID ?? null,
             });
             return this.createErrorResult(
                 `Forbidden: ${verdict.Reason}`,
@@ -290,6 +404,9 @@ export class ScopedSearchAction extends BaseAction {
                 StartTime: startTime,
                 ContextUser: params.ContextUser,
                 AIAgentID: agent.ID,
+                // Attribute the denial to the skill too. A skill can BE the reason for it
+                // (SkillNone / SkillAssignedNotListed), so a NULL here loses the cause.
+                AISkillID: skill?.ID ?? null,
             });
             return this.createErrorResult(`Forbidden: ${reason}`, 'PERMISSION_DENIED');
         }
@@ -312,6 +429,7 @@ export class ScopedSearchAction extends BaseAction {
         streamingMode: string;
         primaryScopeRecordID: string | undefined;
         secondaryScopes: Record<string, SecondaryScopeValue> | undefined;
+        aiSkillID: string | undefined;
     }): Promise<{ ok: true; sr: SearchResult; progressEvents: Array<Record<string, unknown>> } | { ok: false; result: ActionResultSimple }> {
         // Construct a SearchContext only when the caller supplied at least
         // one runtime dimension. Leaving it undefined preserves the existing
@@ -333,6 +451,15 @@ export class ScopedSearchAction extends BaseAction {
             // SearchExecutionLog.AIAgentID is populated. Mirror the pre-
             // execution RAG and Forbidden-path threading.
             AIAgentID: input.agent.ID,
+            // The skill this search is running under. `principalsFrom()` reads
+            // exactly this field and ScopeDimensionResolver binds it as
+            // `Principals.SkillID` for a dimension's expansion query — a slot
+            // that already existed with nothing to fill it, so a scope whose
+            // bound depends on the active skill could never resolve one
+            // through this action. Undefined leaves the principal null, which
+            // is the pre-change behaviour for every caller that does not pass
+            // it.
+            AISkillID: input.aiSkillID,
             // Multi-tenant runtime context. The engine renders this into the
             // scope's Nunjucks MetadataFilter / ExtraFilter / UserSearchString
             // / FolderPath fields at search time so a single scope definition
@@ -530,6 +657,21 @@ export class ScopedSearchAction extends BaseAction {
             }
         }
         return undefined;
+    }
+
+    /** Load the skill principal. Mirrors loadAgent; null when it cannot be loaded. */
+    private async loadSkill(skillID: string, contextUser: UserInfo): Promise<MJAISkillEntity | null> {
+        try {
+            const md = new Metadata(); // global-provider-ok: same rationale as loadAgent below
+            const entity = await md.GetEntityObject<MJAISkillEntity>('MJ: AI Skills', contextUser);
+            const loaded = await entity.Load(skillID);
+            if (!loaded) return null;
+            return entity;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`ScopedSearchAction: Failed to load skill "${skillID}": ${msg}`);
+            return null;
+        }
     }
 
     private async loadAgent(agentID: string, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
