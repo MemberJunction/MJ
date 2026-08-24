@@ -8,6 +8,18 @@
  */
 
 /**
+ * A single schema-name -> Flyway-placeholder mapping used when emitting a migration-formatted
+ * SQL log. Mirrors the shape CodeGen already accepts as `SQLOutput.schemaPlaceholders` in
+ * `mj.config.cjs`, so a repo declares the mapping once and both emitters agree.
+ */
+export interface SqlSchemaPlaceholder {
+  /** The literal database schema name as it appears in captured SQL (e.g. `__mj_BizAppsAccounting`) */
+  schema: string;
+  /** The placeholder to emit in its place (e.g. `${flyway:defaultSchema}` or `${mjSchema}`) */
+  placeholder: string;
+}
+
+/**
  * Configuration options for SQL logging sessions
  */
 export interface SqlLoggingOptions {
@@ -17,8 +29,43 @@ export interface SqlLoggingOptions {
   /**
    * Optional default schema name to use for Flyway migrations for replacing schema names with
    * the placeholder ${flyway:defaultSchema}
+   *
+   * Only consulted when `schemaPlaceholders` is not supplied.
    */
   defaultSchemaName?: string;
+
+  /**
+   * Optional explicit schema-to-placeholder mappings for migration formatting. When supplied,
+   * these REPLACE the single-schema `defaultSchemaName` -> `${flyway:defaultSchema}` rewrite.
+   *
+   * This exists because `${flyway:defaultSchema}` does not mean the same thing everywhere. In MJ's
+   * own repo it is the core schema, so the single-schema default is correct. In an Open App repo
+   * Skyway binds `${flyway:defaultSchema}` to the APP schema and `${mjSchema}` to core — so a
+   * captured core CRUD call rewritten to `${flyway:defaultSchema}` resolves, on a host, to a
+   * procedure that does not exist. An Open App supplies both rules instead:
+   *
+   * ```ts
+   * schemaPlaceholders: [
+   *   { schema: '__mj_BizAppsAccounting', placeholder: '${flyway:defaultSchema}' },
+   *   { schema: '__mj',                   placeholder: '${mjSchema}' },
+   * ]
+   * ```
+   *
+   * Rules are applied in a single pass, longest schema name first, so a generic rule can never
+   * eat the prefix of a more specific one regardless of the order they are declared in.
+   *
+   * Ignored unless `formatAsMigration` is true.
+   */
+  schemaPlaceholders?: SqlSchemaPlaceholder[];
+
+  /**
+   * Whether to escape `${...}` sequences found inside SQL string literals so Skyway/Flyway does not
+   * treat captured content (template text, prompt bodies) as an undeclared placeholder.
+   *
+   * Implied by `formatAsMigration`. Set it explicitly to get the protection on a log that is
+   * destined for a migration but is not being schema-rewritten here.
+   */
+  escapeFlywaySyntax?: boolean;
 
   /** Optional description to include as a comment at the start of the log */
   description?: string;

@@ -59,6 +59,7 @@ export {
   loadSyncConfig,
   loadEntityConfig,
   loadFolderConfig,
+  resolveSqlLoggingSchemaPlaceholders,
   type EntityConfig,
   type FolderConfig,
   type RelatedEntityConfig

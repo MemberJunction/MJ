@@ -14,7 +14,7 @@ export {
 } from './crudSprocFieldRules.js';
 export { resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
-export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
+export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder } from './types.js';
 export { SqlLoggingSessionImpl } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
 export { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
