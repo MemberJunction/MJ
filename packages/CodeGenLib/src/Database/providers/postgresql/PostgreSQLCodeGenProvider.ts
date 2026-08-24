@@ -1022,6 +1022,31 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
         );
     }
 
+    protected softPrimaryKeyIndexPrefix(): string {
+        return 'idx_auto_mj_softpk_';
+    }
+
+    /**
+     * PostgreSQL will happily accept an unbounded `text` column in a btree key and then fail at
+     * INSERT time if a value exceeds roughly an eighth of a page — an error that surfaces long
+     * after the index was created, on whichever row happens to be too long. Treating unbounded
+     * columns as unindexable keeps the failure at generation time, where it names the column.
+     */
+    protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
+        return f.Length !== -1;
+    }
+
+    protected formatCompositeIndexStatement(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {
+        const cols = fields.map(f => pgDialect.QuoteIdentifier(f.Name)).join(', ');
+        return (
+            `-- Index for the soft primary key (${fields.map(f => f.Name).join(', ')}) in table ${entity.BaseTable}.\n` +
+            `-- The key is metadata-only — no PRIMARY KEY constraint — so without this the per-record\n` +
+            `-- existence check on the create path scans the whole table.\n` +
+            `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
+            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${cols});`
+        );
+    }
+
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
     /**
