@@ -7,7 +7,8 @@ import {
   Input,
   HostListener,
   ViewChild,
-  ElementRef
+  ElementRef,
+  ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -35,7 +36,28 @@ import {
 export class SearchPanelComponent implements OnInit, OnDestroy {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
-  @Input() isOpen: boolean = false;
+
+  /** Term to open with, e.g. handed over from a narrower filter the user had already typed. */
+  @Input() initialQuery: string = '';
+
+  private _isOpen: boolean = false;
+
+  /**
+   * A setter rather than ngOnChanges so only an actual open transition acts — ngOnChanges
+   * fires for every input, so a currentUser or environmentId re-emit while the panel was
+   * open yanked focus back out of whatever field the user was in.
+   */
+  @Input()
+  set isOpen(value: boolean) {
+    const wasOpen = this._isOpen;
+    this._isOpen = value;
+    if (value && !wasOpen) {
+      this.onOpened();
+    }
+  }
+  get isOpen(): boolean {
+    return this._isOpen;
+  }
 
   @Output() close = new EventEmitter<void>();
   @Output() resultSelected = new EventEmitter<SearchResult>();
@@ -57,6 +79,13 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   public recentSearches: string[] = [];
   public selectedIndex: number = -1;
 
+  /**
+   * Flat view of `results`, rebuilt only on each results emission. The template binds
+   * isResultSelected() once per row, so deriving this on demand allocated a fresh array of
+   * every result for every row on every change-detection pass.
+   */
+  private flatResults: SearchResult[] = [];
+
   /** Message for the "no results" empty state, echoing the search term. */
   public get NoResultsMessage(): string {
     return `No results found for "${this.searchQuery}"`;
@@ -64,10 +93,39 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor(private searchService: SearchService) {}
+  /** True only while ngOnInit subscribes — see applyState(). */
+  private initializing = false;
+
+  constructor(
+    private searchService: SearchService,
+    private cdr: ChangeDetectorRef
+  ) {}
+
+  /**
+   * Apply state from an async emission and render it.
+   *
+   * The search resolves through the data provider's transport, and that emission does not
+   * reliably schedule a change-detection pass: results land on the component while the panel
+   * keeps showing the previous state until some DOM event — Enter, a click on the modal,
+   * even the blur from clicking into devtools — triggers the next one. detectChanges()
+   * checks this view on the spot; markForCheck() would only mark it for a pass that never
+   * comes.
+   */
+  private applyState(fn: () => void): void {
+    fn();
+    // The BehaviorSubjects replay synchronously while ngOnInit subscribes, which is already
+    // inside a pass. takeUntil(destroy$) stops emissions at teardown, so there is no
+    // destroyed-view case to guard against.
+    if (!this.initializing) {
+      this.cdr.detectChanges();
+    }
+  }
 
   ngOnInit(): void {
+    // Each BehaviorSubject replays synchronously on subscribe, inside this pass.
+    this.initializing = true;
     this.subscribeToSearchState();
+    this.initializing = false;
     this.loadRecentSearches();
   }
 
@@ -83,26 +141,41 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     this.searchService.isSearching$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isSearching => {
-        this.isSearching = isSearching;
+        this.applyState(() => {
+          this.isSearching = isSearching;
+        });
       });
 
     this.searchService.searchResults$
       .pipe(takeUntil(this.destroy$))
       .subscribe(results => {
-        this.results = results;
-        this.selectedIndex = -1;
+        this.applyState(() => {
+          this.results = results;
+          this.flatResults = [
+            ...results.conversations,
+            ...results.messages,
+            ...results.artifacts,
+            ...results.collections,
+            ...results.tasks
+          ];
+          this.selectedIndex = -1;
+        });
       });
 
     this.searchService.searchFilter$
       .pipe(takeUntil(this.destroy$))
       .subscribe(filter => {
-        this.activeFilter = filter;
+        this.applyState(() => {
+          this.activeFilter = filter;
+        });
       });
 
     this.searchService.dateRange$
       .pipe(takeUntil(this.destroy$))
       .subscribe(range => {
-        this.dateRange = range;
+        this.applyState(() => {
+          this.dateRange = range;
+        });
       });
   }
 
@@ -186,6 +259,25 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Seed and focus the box once the panel is open.
+   *
+   * Deferred to the next task so the @if(isOpen) view exists (there is no input to focus
+   * before it renders) and so every input bound in the same pass has been set — this reads
+   * initialQuery, which the host may bind after isOpen.
+   */
+  private onOpened(): void {
+    setTimeout(() => {
+      const seed = this.initialQuery?.trim();
+      if (seed && seed !== this.searchQuery) {
+        this.searchQuery = seed;
+        this.onSearchInput();
+        this.cdr.detectChanges();
+      }
+      this.searchInput?.nativeElement.focus();
+    }, 0);
+  }
+
+  /**
    * Focus search input
    */
   private focusSearchInput(): void {
@@ -201,7 +293,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   public handleKeyboard(event: KeyboardEvent): void {
     if (!this.isOpen) return;
 
-    const allResults = this.getAllResultsFlat();
+    const allResults = this.flatResults;
 
     switch (event.key) {
       case 'Escape':
@@ -235,25 +327,11 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Get all results as flat array
-   */
-  private getAllResultsFlat(): SearchResult[] {
-    return [
-      ...this.results.conversations,
-      ...this.results.messages,
-      ...this.results.artifacts,
-      ...this.results.collections,
-      ...this.results.tasks
-    ];
-  }
-
-  /**
    * Check if result is selected
    */
   public isResultSelected(result: SearchResult): boolean {
-    const allResults = this.getAllResultsFlat();
-    const index = allResults.findIndex(r => r.id === result.id && r.type === result.type);
-    return index === this.selectedIndex;
+    const selected = this.flatResults[this.selectedIndex];
+    return !!selected && selected.id === result.id && selected.type === result.type;
   }
 
   /**
@@ -340,12 +418,4 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Watch for panel open state changes
-   */
-  ngOnChanges(): void {
-    if (this.isOpen) {
-      this.focusSearchInput();
-    }
-  }
 }

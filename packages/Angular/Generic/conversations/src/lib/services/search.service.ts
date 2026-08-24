@@ -240,8 +240,17 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
+    // Resolve the view from metadata rather than naming it bare: the SQL login's default
+    // schema is dbo, not __mj, so an unqualified vwConversations fails to resolve and the
+    // whole query errors out — which this method reports only as an empty result.
+    const c = this.Provider.EntityByName('MJ: Conversations');
+    if (!c) {
+      console.warn('⚠️ Missing metadata for Conversations');
+      return [];
+    }
+
     // First get conversations in this environment
-    let filter = `ConversationID IN (SELECT ID FROM vwConversations WHERE EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0))`;
+    let filter = `ConversationID IN (SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0))`;
     filter += ` AND LOWER(Message) LIKE '%${this.escapeSQL(lowerQuery)}%'`;
     filter += ` AND (HiddenToUser IS NULL OR HiddenToUser=0)`;
 

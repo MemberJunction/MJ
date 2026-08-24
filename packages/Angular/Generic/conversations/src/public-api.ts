@@ -110,6 +110,9 @@ export * from './lib/components/shared/user-picker.component';
 export * from './lib/components/tasks/tasks-dropdown.component';
 export * from './lib/components/thread/thread-panel.component';
 export * from './lib/directives/search-shortcut.directive';
+// SearchResult / SearchResultType are the payload of SearchPanelComponent's
+// resultSelected output, so consumers cannot type a handler without them.
+export * from './lib/services/search.service';
 
 // PR 2c — Widget extension surface (slots, events, design tokens)
 export * from './lib/services/conversations-runtime-bootstrap.service';
