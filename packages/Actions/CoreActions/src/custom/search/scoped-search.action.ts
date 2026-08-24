@@ -138,6 +138,18 @@ export class ScopedSearchAction extends BaseAction {
             //
             // Blast radius is scope-level, not row-level — results still pass filterByPermissions
             // and RLS — but a scope IS the content bound, so it is worth a gate.
+            // "Could not evaluate" is not "denied". GetEffectivePermissions throws when the agent is
+            // absent from AIEngineBase's cache and its catch fails closed to all-false — so an agent
+            // that loads fine through Metadata but is missing from a stale AI metadata cache would
+            // make every scoped search report "this agent is not available to you", with the real
+            // cause visible only in a LogError. Check cache membership first and say which it is.
+            const agentInCache = AIEngineBase.Instance.Agents.some(a => UUIDsEqual(a.ID, agent.ID));
+            if (!agentInCache) {
+                return this.createErrorResult(
+                    `Agent '${agent.Name}' is not present in the AI metadata cache, so its permissions `
+                    + 'cannot be evaluated. This is a metadata-load problem, not an access denial.',
+                    'UNEXPECTED_ERROR');
+            }
             if (!(await AIAgentPermissionHelper.HasPermission(agent.ID, params.ContextUser, 'run'))) {
                 await SearchEngine.Instance.LogForbiddenSearch({
                     Query: query,

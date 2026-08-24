@@ -914,7 +914,14 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // action refuses with INVALID_PARAM rather than "continuing with a null skill". The
             // dimension explanation is still produced, just for an unprincipled search, and the
             // diagnostic says so rather than leaving the reader to assume the principals applied.
-            const principalsJudged = entitlement.Allowed;
+            // Drop the principals ONLY when the principals are what was refused. Dropping them for
+            // an unrelated denial — the user simply has no per-scope grant — drives the expansion
+            // query with null ids, which returns no rows, which makes a required dimension throw and
+            // the explanation announce "dimension resolution FAILED". The admin then goes and fixes a
+            // dimension that was never broken. `PrincipalNotActivatable` is exactly the distinction
+            // needed to tell those two cases apart.
+            const principalsJudged =
+                entitlement.Allowed || entitlement.Source !== 'PrincipalNotActivatable';
             if (!principalsJudged && (input.AIAgentID || input.AISkillID)) {
                 diagnostics.push(
                     'principals were NOT bound into dimension resolution: entitlement denied them, '

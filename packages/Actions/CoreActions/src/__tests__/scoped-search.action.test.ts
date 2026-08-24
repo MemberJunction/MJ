@@ -21,6 +21,7 @@ const skillMayRunSpy = vi.fn(() => [{ ID: 'skill-1' }]);
 // The agent is a caller-supplied principal too. Defaults to allowed so every pre-existing test keeps
 // exercising what it was written for.
 const agentMayRunSpy = vi.fn(async () => true);
+let agentsInCacheStub: Array<{ ID: string }> = [{ ID: 'agent-1' }];
 
 // Mock the SearchEngine singleton + the SearchScope permission resolver.
 // The resolver mock returns Allowed=true by default so existing tests that
@@ -48,6 +49,9 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
         Instance: {
             Config: async () => undefined,
             GetSkillsForAgent: (...args: unknown[]) => skillMayRunSpy(...(args as [])),
+            // Cache membership is checked separately from permission so a stale cache reports as a
+            // metadata-load problem rather than an access denial.
+            get Agents() { return agentsInCacheStub; },
         },
     },
     AIAgentPermissionHelper: {
@@ -629,6 +633,22 @@ describe('ScopedSearchAction', () => {
         // value, and AgentUnscopedAll grants Search on any scope when SearchScopeAccess='All' —
         // explicitly as a fallback "when the user has no per-scope grant". Agent permissions are open
         // by default, so unchecked this converts "no grant" into "Search".
+        it('calls a stale metadata cache what it is, not an access denial', async () => {
+            // GetEffectivePermissions throws when the agent is absent from the cache and fails
+            // closed to all-false, so without this an ordinary metadata-load problem would tell an
+            // operator the agent "is not available to you" and hide the cause in a LogError.
+            agentsInCacheStub = [];
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' }
+            ]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).not.toBe('ACCESS_DENIED');
+            expect(result.Message).toContain('metadata-load problem');
+            agentsInCacheStub = [{ ID: 'agent-1' }];
+        });
+
         it('refuses an agent the caller may not run, before any scope is resolved', async () => {
             agentMayRunSpy.mockResolvedValue(false);
             loadedAgentStub.SearchScopeAccess = 'All';
