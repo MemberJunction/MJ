@@ -10,10 +10,12 @@ import {
     CompositeKey,
     EntityDependency,
     BaseEntity,
+    BulkCreateResult,
     BaseEntityResult,
     SaveSQLResult,
     DeleteSQLResult,
     LogError,
+    LogStatus,
     TransactionGroupBase,
     IMetadataProvider,
     RunQuerySQLFilterManager,
@@ -26,6 +28,7 @@ import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFrag
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
+import { BuildPgBulkStatements, ExecutePgBulkStatements, IsPgBulkStatements } from './PostgreSQLBulkCreate.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 import { PostgreSQLProviderConfigData } from './types.js';
 import { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
@@ -224,6 +227,36 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     get DatabaseConnection(): pg.Pool {
         return this._connectionManager.Pool;
+    }
+
+    /**
+     * Set-based override of {@link DatabaseProviderBase.BulkCreate}: multi-row parameterized
+     * INSERTs in one transaction instead of one function round trip per record, chunked under
+     * PostgreSQL's 65,535-bind-parameter wire limit (a wide table gets fewer rows per statement,
+     * never a failure). Falls back to the base per-record loop when the set is ineligible —
+     * mixed entity types, an already-saved entity, or a missing client-side primary key. See
+     * PostgreSQLBulkCreate for the contract and its costs.
+     */
+    override async BulkCreate(entities: BaseEntity[], contextUser?: UserInfo): Promise<BulkCreateResult> {
+        if (entities.length === 0) return { Success: true, RowsInserted: 0, Mechanism: 'bulk' };
+        const entityInfo = entities[0].EntityInfo;
+        const plan = BuildPgBulkStatements(entities, entityInfo, (n) => this.QuoteIdentifier(n));
+        if (!IsPgBulkStatements(plan)) {
+            LogStatus(`[PostgreSQLDataProvider.BulkCreate] falling back to per-record: ${plan.Reason} (${plan.Detail})`);
+            return super.BulkCreate(entities, contextUser);
+        }
+        try {
+            const inserted = await ExecutePgBulkStatements(this._connectionManager.Pool, plan);
+            return { Success: true, RowsInserted: inserted, Mechanism: 'bulk' };
+        } catch (err) {
+            // All-or-nothing: the transaction rolled back, nothing landed; the caller owns retry.
+            return {
+                Success: false,
+                RowsInserted: 0,
+                Mechanism: 'bulk',
+                ErrorMessage: err instanceof Error ? err.message : String(err),
+            };
+        }
     }
 
     get InstanceConnectionString(): string {

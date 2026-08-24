@@ -53,6 +53,7 @@ export type SyncLogEvent =
     | 'sync.record.retry'
     | 'sync.record.archived'
     | 'sync.record.conflict'
+    | 'sync.bulk.flush'
     | 'sync.push.candidates'
     | 'sync.push.record'
     | 'sync.push.response'

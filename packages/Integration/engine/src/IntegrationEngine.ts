@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type BaseEntity, type UserInfo } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
@@ -3667,6 +3667,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // to 500 healthy records.
         const APPLY_BATCH_SIZE = 500;
         const provider = this.ProviderToUse as DatabaseProviderBase;
+        // Opt-in per connection: Configuration.writeMode === 'bulk' routes eligible NEW records
+        // through the provider's set-based BulkCreate. Anything else (absent, unknown) keeps the
+        // proven per-record path — the default never changes underneath an existing tenant.
+        const bulkWrites = this.ReadWriteMode(companyIntegration) === 'bulk';
 
         // One batched record-map writer for this entity map's whole apply pass. Every path that
         // used to spend three round trips per record establishing a mapping now queues into this
@@ -3681,12 +3685,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         for (let i = 0; i < records.length; i += APPLY_BATCH_SIZE) {
             const batch = records.slice(i, i + APPLY_BATCH_SIZE);
-            const batchStartProcessed = result.RecordsProcessed;
-            const batchStartCreated = result.RecordsCreated;
-            const batchStartUpdated = result.RecordsUpdated;
-            const batchStartDeleted = result.RecordsDeleted;
-            const batchStartSkipped = result.RecordsSkipped;
-
             // One cheap read per batch fetches the stored content hashes for the rows we'd
             // otherwise load one-by-one. For a watermark-less re-sync where nothing changed,
             // this lets UpdateRecord skip every per-record load. Best-effort: undefined → the
@@ -3698,15 +3696,34 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             await this.runWriteExclusive(async () => {
                 const precheckHashes = await this.PrefetchContentHashes(batch, contextUser);
 
+                // Opt-in bulk writes (Configuration.writeMode === 'bulk'): NEW records whose primary
+                // key travels in the mapped data are inserted set-based — one provider round trip per
+                // batch — and everything else (updates, deletes, skips, ineligible creates, or the
+                // whole set when the bulk write fails) continues down the unchanged per-record path
+                // below. See ApplyCreatesBulk for the contract.
+                let workingBatch = batch;
+                if (bulkWrites && useTransaction) {
+                    workingBatch = await this.ApplyCreatesBulk(
+                        batch, companyIntegration, entityMap, result, contextUser, logger, recordMaps,
+                    );
+                }
+
                 // PKs of records the content-hash fast path skipped this batch — still present and
                 // confirmed-unchanged on the source. Collected so we can refresh LastReconciledAt for
                 // all of them in ONE set-based touch after the batch (instead of a frozen-forever stamp).
                 let reconciledSkipIds: string[] = [];
 
+                // The rollback restore below must NOT erase counts the bulk pass already committed —
+                // re-snapshot here so only the per-record transaction's own increments are undone.
+                const txStartProcessed = result.RecordsProcessed;
+                const txStartCreated = result.RecordsCreated;
+                const txStartUpdated = result.RecordsUpdated;
+                const txStartDeleted = result.RecordsDeleted;
+                const txStartSkipped = result.RecordsSkipped;
                 if (useTransaction) {
                     await provider.BeginTransaction();
                     try {
-                        for (const record of batch) {
+                        for (const record of workingBatch) {
                             result.RecordsProcessed++;
                             await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
                         }
@@ -3721,11 +3738,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         recordMaps.Discard();
 
                         // Roll back the in-memory counters that ApplySingleRecord bumped inside the failed batch
-                        result.RecordsProcessed = batchStartProcessed;
-                        result.RecordsCreated = batchStartCreated;
-                        result.RecordsUpdated = batchStartUpdated;
-                        result.RecordsDeleted = batchStartDeleted;
-                        result.RecordsSkipped = batchStartSkipped;
+                        // (to the post-bulk snapshot — the bulk pass's rows are committed and keep their counts)
+                        result.RecordsProcessed = txStartProcessed;
+                        result.RecordsCreated = txStartCreated;
+                        result.RecordsUpdated = txStartUpdated;
+                        result.RecordsDeleted = txStartDeleted;
+                        result.RecordsSkipped = txStartSkipped;
 
                         // SchemaNotGeneratedError is per-entity-deterministic — every record in
                         // this object will fail the same way. Bubble it up so ProcessPullSync
@@ -3738,7 +3756,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         // Degrade to per-record application so the failure isolates to the poison
                         // record(s) and every good record in this batch still commits.
                         await this.applyRecordsIndividually(
-                            batch, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps
+                            workingBatch, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps
                         );
                     }
                 } else {
@@ -3977,6 +3995,122 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Applies a single record change (Create, Update, Delete, or Skip).
      */
+    /** Reads Configuration.writeMode off the connection; absent/malformed → '' (per-record). */
+    private ReadWriteMode(companyIntegration: MJCompanyIntegrationEntity): string {
+        try {
+            const raw = companyIntegration.Get('Configuration') as string | null;
+            if (!raw) return '';
+            const parsed = JSON.parse(raw) as { writeMode?: unknown };
+            return typeof parsed.writeMode === 'string' ? parsed.writeMode : '';
+        } catch {
+            return '';
+        }
+    }
+
+    /**
+     * Set-based pass over one apply batch (opt-in, Configuration.writeMode === 'bulk').
+     *
+     * Eligible records — ChangeType 'Create' whose mapped fields carry the full primary key — are
+     * built through the SAME per-record machinery as ever (SetEntityFields' coercion and value-fit
+     * enforcement, SetStandardIntegrationFields, pre-write validation) and then handed to the
+     * provider's BulkCreate as one set-based insert. Everything else is RETURNED for the unchanged
+     * per-record path: updates/deletes/skips, creates whose PK is server-assigned (a set-based
+     * insert cannot report keys back), records whose build failed validation, and — on any bulk
+     * failure — every eligible record too, because BulkCreate is all-or-nothing (the transaction
+     * rolled back, nothing landed) and the per-record path is where failure isolation lives. A
+     * PK collision with an existing row is therefore not a special case: the bulk write fails
+     * whole, and the per-record CreateRecord upsert resolves each record correctly.
+     *
+     * Invariants preserved by construction: the watermark advances only after the whole batch is
+     * applied (unchanged, outside this method); record maps ride the SAME RecordMapBatch flush as
+     * the per-record path; a ValueFitError during build is the same per-record skip-and-warn it
+     * has always been.
+     *
+     * @returns the records this pass did NOT apply — the caller runs them per-record.
+     */
+    private async ApplyCreatesBulk(
+        batch: MappedRecord[],
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
+        contextUser: UserInfo,
+        logger?: SyncLogger,
+        recordMaps?: RecordMapBatch,
+    ): Promise<MappedRecord[]> {
+        // Capability detection by shape, not lineage: any provider exposing BulkCreate qualifies
+        // (every DatabaseProviderBase does — the base implementation is the per-record loop).
+        const md = this.ProviderToUse as IMetadataProvider & { BulkCreate?: DatabaseProviderBase['BulkCreate'] };
+        if (typeof md.BulkCreate !== 'function') return batch;
+        const entityInfo = md.EntityByName(batch[0]?.MJEntityName ?? '');
+        if (!entityInfo) return batch;
+        const pkFields = entityInfo.PrimaryKeys ?? (entityInfo.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        if (pkFields.length === 0) return batch;
+
+        const remaining: MappedRecord[] = [];
+        const built: Array<{ record: MappedRecord; entity: BaseEntity }> = [];
+        for (const record of batch) {
+            if (record.ChangeType !== 'Create' || this.extractMappedPrimaryKey(record, pkFields) == null) {
+                remaining.push(record);
+                continue;
+            }
+            try {
+                const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+                entity.NewRecord();
+                this.SetEntityFields(entity, record.MappedFields);
+                this.SetStandardIntegrationFields(entity, record);
+                this.validateEntity(entity, record.MJEntityName);
+                built.push({ record, entity });
+            } catch (err) {
+                if (err instanceof ValueFitError) {
+                    // Same per-record semantics as ApplySingleRecord: an unfittable value skips
+                    // THIS record with a structured warning; it never fails the batch.
+                    result.RecordsProcessed++;
+                    result.RecordsSkipped++;
+                    logger?.warning(
+                        entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
+                        err.WarningCode,
+                        `Record skipped — ${err.message}`,
+                        { externalId: record.ExternalRecord.ExternalID, field: err.FieldName, ...err.Details() },
+                    );
+                } else {
+                    // A build/validation failure is not a verdict — let the per-record path give
+                    // this record its own transaction and its own error attribution.
+                    remaining.push(record);
+                }
+            }
+        }
+        if (built.length === 0) return remaining;
+
+        const t0 = Date.now();
+        const bulk = await md.BulkCreate!(built.map(b => b.entity), contextUser);
+        if (!bulk.Success) {
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
+                'BULK_CREATE_FELL_BACK',
+                `Set-based insert of ${built.length} record(s) did not land (${bulk.ErrorMessage ?? 'unknown'}); ` +
+                `applying per-record instead. Correctness is unaffected — only this batch's write cost.`,
+                { records: built.length, mechanism: bulk.Mechanism },
+            );
+            return remaining.concat(built.map(b => b.record));
+        }
+
+        for (const { record, entity } of built) {
+            result.RecordsProcessed++;
+            result.RecordsCreated++;
+            await this.QueueRecordMap(
+                recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
+                entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
+            );
+        }
+        logger?.emit('sync.bulk.flush', {
+            entity: entityInfo.Name,
+            rows: built.length,
+            mechanism: bulk.Mechanism,
+            durationMs: Date.now() - t0,
+        });
+        return remaining;
+    }
+
     private async ApplySingleRecord(
         record: MappedRecord,
         companyIntegration: MJCompanyIntegrationEntity,

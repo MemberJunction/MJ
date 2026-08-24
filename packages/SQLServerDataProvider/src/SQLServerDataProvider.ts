@@ -19,6 +19,7 @@
 
 import {
   BaseEntity,
+  BulkCreateResult,
   IEntityDataProvider,
   IMetadataProvider,
   IRunViewProvider,
@@ -63,6 +64,7 @@ import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, Save
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
+import { BuildBulkTablePlan, ExecuteBulkPlan, IsBulkPlan } from './SQLServerBulkCreate';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
 
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
@@ -599,6 +601,36 @@ export class SQLServerDataProvider
    */
   public get DatabaseConnection(): any {
     return this._pool;
+  }
+
+  /**
+   * Set-based override of {@link DatabaseProviderBase.BulkCreate}: one TDS bulk insert in one
+   * transaction instead of one stored-procedure round trip per record. Falls back to the base
+   * per-record loop whenever the set is not eligible (mixed entity types, an already-saved
+   * entity, or a missing client-side primary key) — so the call always succeeds or fails on the
+   * WRITE, never on eligibility. See SQLServerBulkCreate for the contract and its costs.
+   */
+  public override async BulkCreate(entities: BaseEntity[], contextUser?: UserInfo): Promise<BulkCreateResult> {
+    if (entities.length === 0) return { Success: true, RowsInserted: 0, Mechanism: 'bulk' };
+    const entityInfo = entities[0].EntityInfo;
+    const plan = BuildBulkTablePlan(entities, entityInfo);
+    if (!IsBulkPlan(plan)) {
+      LogStatus(`[SQLServerDataProvider.BulkCreate] falling back to per-record: ${plan.Reason} (${plan.Detail})`);
+      return super.BulkCreate(entities, contextUser);
+    }
+    try {
+      const inserted = await ExecuteBulkPlan(this._pool, plan);
+      return { Success: true, RowsInserted: inserted, Mechanism: 'bulk' };
+    } catch (err) {
+      // All-or-nothing: the transaction rolled back, nothing landed. Report rather than silently
+      // degrade — the caller owns the retry policy (typically per-record, where isolation lives).
+      return {
+        Success: false,
+        RowsInserted: 0,
+        Mechanism: 'bulk',
+        ErrorMessage: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 
   /**

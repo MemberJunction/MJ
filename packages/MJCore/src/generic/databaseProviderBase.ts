@@ -92,6 +92,21 @@ export interface SaveContext {
  * record dependencies, diffing, etc.) that is shared across all database providers.
  * Subclasses implement abstract methods for DB-specific SQL dialect generation.
  */
+/**
+ * Result of a {@link DatabaseProviderBase.BulkCreate} call.
+ *
+ * `Mechanism` names how the rows actually landed: 'per-record' is the base loop (full BaseEntity
+ * semantics), 'bulk' is a provider's set-based path (one transaction, no per-row side effects).
+ * On `Success: false` from a set-based mechanism, NO rows landed (the transaction rolled back);
+ * from the per-record mechanism, `RowsInserted` rows landed before the failing entity.
+ */
+export interface BulkCreateResult {
+    Success: boolean;
+    RowsInserted: number;
+    Mechanism: 'per-record' | 'bulk';
+    ErrorMessage?: string;
+}
+
 export abstract class DatabaseProviderBase extends ProviderBase {
     /**
      * Server-side providers trust the local cache completely because it is
@@ -127,6 +142,47 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns A promise that resolves to an array of results of type T
      */
     abstract ExecuteSQL<T>(query: string, parameters?: unknown[], options?: ExecuteSQLOptions, contextUser?: UserInfo): Promise<Array<T>>
+
+    /**
+     * Creates a set of NEW entity records as one set-based operation, when the provider can.
+     *
+     * The BASE implementation is a straight loop over {@link BaseEntity.Save} — semantics
+     * identical to the caller doing it themselves (per-entity validation, stored procedures,
+     * Record Changes tracking, cache invalidation events), so every provider supports the method
+     * from day one and a caller never has to feature-detect. A provider that has a genuinely
+     * set-based mechanism overrides this: SQL Server with a TDS bulk insert, PostgreSQL with
+     * multi-row parameterized INSERTs — collapsing one round trip per record into one per batch,
+     * which is the difference between hundreds and hundreds of thousands of rows per minute on a
+     * high-latency link.
+     *
+     * The contract a set-based override MUST honour:
+     * - Every entity is a NEW record (`IsSaved === false`) with its primary key already set
+     *   client-side. An override MUST refuse (fall back to the base loop) when a PK is missing —
+     *   set-based inserts cannot report server-assigned keys back onto the entities.
+     * - All-or-nothing per call: the override wraps its writes in one transaction and either all
+     *   entities land or none do. `Success: false` means NONE landed — the caller retries however
+     *   it likes (typically per-record, where failure isolation lives).
+     * - What a set-based path deliberately does NOT do — and callers opt into that knowingly:
+     *   no stored-procedure side effects, no Record Changes rows, no per-entity save events (so
+     *   no cache invalidation for these rows until the next reload). That is why this method is
+     *   never called implicitly: only a caller that asked for bulk semantics gets them.
+     */
+    public async BulkCreate(entities: BaseEntity[], contextUser?: UserInfo): Promise<BulkCreateResult> {
+        let inserted = 0;
+        for (const entity of entities) {
+            const saved = await entity.Save();
+            if (!saved) {
+                return {
+                    Success: false,
+                    RowsInserted: inserted,
+                    Mechanism: 'per-record',
+                    ErrorMessage: entity.LatestResult?.CompleteMessage ?? 'Save() returned false',
+                };
+            }
+            inserted++;
+        }
+        return { Success: true, RowsInserted: inserted, Mechanism: 'per-record' };
+    }
 
     /**
      * Builds a parameter placeholder for parameterized queries.
