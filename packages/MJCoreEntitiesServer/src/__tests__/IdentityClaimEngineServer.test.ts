@@ -472,6 +472,31 @@ describe('IdentityClaimEngineServer', () => {
         expect(revertCall).toBeDefined();
     });
 
+    it('AutoClaimForUser redeems each pending claim through the full RedeemClaim gate', async () => {
+        const engine = IdentityClaimEngineServer.Instance;
+        const pending = [
+            createMockClaim({ ID: 'claim-a', NormalizedEmail: 'claimant@example.com' }),
+            createMockClaim({ ID: 'claim-b', NormalizedEmail: 'claimant@example.com' })
+        ];
+
+        vi.spyOn(engine, 'GetPendingClaimsForEmail').mockResolvedValue(
+            pending as unknown as MJIdentityClaimEntity[]
+        );
+        const redeem = vi
+            .spyOn(engine, 'RedeemClaim')
+            .mockResolvedValue({ Success: true, Data: { Granted: true } });
+
+        const user = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
+        const results = await engine.AutoClaimForUser(user, testProvider);
+
+        expect(results).toHaveLength(2);
+        // Each claim goes through RedeemClaim rather than being transitioned directly, so the
+        // email/token gate, atomic CAS and driver error handling all still apply. The email
+        // lookup that found them is a convenience, not the boundary.
+        expect(redeem).toHaveBeenCalledWith('claim-a', user, testProvider);
+        expect(redeem).toHaveBeenCalledWith('claim-b', user, testProvider);
+    });
+
     it('should revoke a claim and invoke driver OnRevoke', async () => {
         const engine = IdentityClaimEngineServer.Instance;
         const mockClaim = createMockClaim({

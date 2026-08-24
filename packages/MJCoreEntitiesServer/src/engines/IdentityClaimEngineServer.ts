@@ -44,6 +44,23 @@ export interface CreateClaimServerParams extends CreateClaimParams {
     ClaimBaseURL?: string;
 }
 
+/**
+ * Server-side Identity Claim engine — the ONLY place the claim lifecycle is implemented.
+ *
+ * Uses containment rather than inheritance, the same split as `AIEngine` / `AIEngineBase`: an
+ * instance of the client+server `IdentityClaimEngine` is held via {@link Base} and its cached
+ * members (claim types, lookups, driver resolution, email normalization) are proxied below, so
+ * `IdentityClaimEngineServer.Instance.X` reaches the whole surface. When a public member is added
+ * to `IdentityClaimEngine`, add a proxy here.
+ *
+ * Creation, redemption and revocation live here and nowhere else, because each depends on
+ * something a browser cannot do: `crypto.randomBytes` token generation and SHA-256 hashing,
+ * `timingSafeEqual` comparison, an atomic compare-and-swap issued as raw SQL, and email dispatch
+ * via MJ Communications.
+ *
+ * @description ONLY USE ON SERVER-SIDE. For claim-type metadata only, use `IdentityClaimEngine`,
+ * which is safe in any host.
+ */
 export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngineServer> {
     protected constructor() {
         super();
@@ -53,8 +70,12 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         return super.getInstance<IdentityClaimEngineServer>();
     }
 
+    // ------------------------------------------------------------------
+    // Contained base engine + proxied members
+    // ------------------------------------------------------------------
+
     /**
-     * Underlying shared metadata cache
+     * The contained client+server engine that owns all cached claim-type metadata.
      */
     protected get Base(): IdentityClaimEngine {
         return IdentityClaimEngine.Instance;
@@ -467,6 +488,25 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
 
         return result;
     }
+
+    /**
+     * Discovers every pending claim addressed to the authenticated user's email and redeems each
+     * one. This is workflow #2 from the entity's migration header — "Automatic Claim on Login".
+     *
+     * Server-only, and deliberately so: it runs through `RedeemClaim`, so each redemption still
+     * passes the full gate (email match or verified token, atomic CAS, driver exception handling).
+     * The email filter used to find the claims is a lookup convenience, not the security boundary.
+     */
+    public async AutoClaimForUser(user: UserInfo, provider: IMetadataProvider): Promise<ClaimResult[]> {
+        if (!user || !user.Email) return [];
+        const claims = await this.GetPendingClaimsForEmail(user.Email, user, provider);
+        const results: ClaimResult[] = [];
+        for (const claim of claims) {
+            results.push(await this.RedeemClaim(claim.ID, user, provider));
+        }
+        return results;
+    }
+
 
     /**
      * Executes atomic single-use Compare-And-Swap (CAS) state transition on the IdentityClaim record
