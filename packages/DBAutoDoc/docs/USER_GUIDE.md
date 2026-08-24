@@ -2452,7 +2452,7 @@ See CHANGELOG.md for release notes and breaking changes.
 
 ## License
 
-MIT - See LICENSE file
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.
 
 ## Related Documentation
 

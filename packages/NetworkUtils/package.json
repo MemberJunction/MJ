@@ -1,0 +1,41 @@
+{
+  "name": "@memberjunction/network-utils",
+  "type": "module",
+  "version": "6.1.0-edge.3",
+  "description": "MemberJunction: Server-side network utilities - SSRF-safe URL validation and a dependency-free HTTP client built on native fetch. Node only.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "@types/node": "^24.10.11",
+    "tsc-alias": "^1.8.10",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "keywords": [
+    "memberjunction",
+    "ssrf",
+    "fetch",
+    "http",
+    "security",
+    "network"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

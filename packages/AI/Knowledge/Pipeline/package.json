@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-knowledge-pipeline",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: Knowledge Pipeline - unified ingest/autotag/vectorize orchestrator",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,16 +14,16 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.2",
-    "@memberjunction/ai-vectordb": "6.1.0-edge.2",
-    "@memberjunction/ai-vectors": "6.1.0-edge.2",
-    "@memberjunction/ai-vector-sync": "6.1.0-edge.2",
-    "@memberjunction/aiengine": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2"
+    "@memberjunction/ai": "6.1.0-edge.3",
+    "@memberjunction/ai-vectordb": "6.1.0-edge.3",
+    "@memberjunction/ai-vectors": "6.1.0-edge.3",
+    "@memberjunction/ai-vector-sync": "6.1.0-edge.3",
+    "@memberjunction/aiengine": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

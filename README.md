@@ -6,14 +6,14 @@
   </picture>
 </p>
 
-<h3 align="center">The open-source, AI-native data platform.</h3>
+<h3 align="center">The AI-native data platform.</h3>
 
 <p align="center">
   Unify your data. Add intelligence. <strong>Build AI-native apps on top of it.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MemberJunction/MJ?style=flat-square" alt="License"></a>
+  <a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-BUSL--1.1-blue?style=flat-square" alt="License: BUSL 1.1"></a>
   <a href="https://www.npmjs.com/package/@memberjunction/core"><img src="https://img.shields.io/npm/v/@memberjunction/core?style=flat-square&label=npm" alt="npm version"></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://github.com/MemberJunction/MJ/stargazers"><img src="https://img.shields.io/github/stars/MemberJunction/MJ?style=flat-square" alt="GitHub Stars"></a>
@@ -254,7 +254,11 @@ We welcome contributions!
 
 ## License
 
-MemberJunction is open source under the [ISC License](./LICENSE).
+MemberJunction's full source code is public on GitHub — free and unrestricted for nonprofits, forever. Licensed under the [Business Source License 1.1](./LICENSE).
+
+Versions prior to v6.0.0 were released under the ISC License and remain ISC-licensed.
+
+Firms providing professional services to clients on MemberJunction need to be certified — see the [MemberJunction Certified Program](https://docs.memberjunction.org/mjcertified).
 
 ---
 
@@ -724,5 +728,5 @@ Curious how big the codebase is? Lines-of-code snapshots by language — with tr
 </p>
 
 <p align="center">
-  <sub>Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License</sub>
+  <sub>Built with TypeScript · Angular 21 · SQL Server · Source available under the Business Source License 1.1</sub>
 </p>

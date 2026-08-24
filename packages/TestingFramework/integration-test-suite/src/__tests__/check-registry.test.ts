@@ -125,7 +125,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
-        ['conversation-compaction', ConversationCompactionChecks, 12], // CC1-CC12
+        ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -236,7 +236,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 8,
-        'conversation-compaction': 12,
+        'conversation-compaction': 18,
         'dataset-cache': 3,
         'entity-actions': 8,
         'entity-embedded': 6,

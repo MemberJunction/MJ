@@ -378,18 +378,36 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     private _lingerInvalidationWired = false;
 
+    // ── Write-invalidation fan-out (process-wide, not per-instance) ────
     /**
-     * Lazily subscribes (once per provider instance) to BaseEntity events so
-     * in-flight/lingered RunView entries touching a written entity are dropped.
-     * Deleting an IN-FLIGHT entry is deliberate: late joiners must not share a
-     * query that may have read pre-commit data; the original caller still gets
-     * its own result, and the orphaned promise's stash step no-ops safely.
+     * Every live provider instance that has opted into write-invalidation, held via
+     * `WeakRef` so registering here never keeps a provider (and everything it
+     * references — connection pool, entity metadata, `_inflightViews`) reachable.
+     * Short-lived providers (one per GraphQL request, one per durable task-graph
+     * task execution — see `MJServer/context.ts` and `TaskGraphProviderFactory`)
+     * become eligible for GC as soon as the request/task finishes; dead refs are
+     * pruned lazily the next time an entity event fires.
      */
-    private ensureInflightViewInvalidation(): void {
-        if (this._lingerInvalidationWired) {
+    private static _invalidationTargets = new Set<WeakRef<ProviderBase>>();
+
+    /** Guards {@link ensureStaticInvalidationSubscription} to wire the bus listener at most once per process. */
+    private static _staticInvalidationWired = false;
+
+    /**
+     * Subscribes exactly ONCE per process (not once per provider instance) to BaseEntity
+     * events and fans each one out to every still-live registered provider. This is what
+     * keeps the number of `MJGlobal` event-bus subscribers constant regardless of how many
+     * short-lived provider instances get created — subscribing per-instance (the prior
+     * implementation) permanently pinned one subscription per instance on the process-wide
+     * `Subject`, which never releases subscribers on its own, so a fresh provider minted on
+     * every GraphQL request (or every durable task-graph task) leaked its entire object graph
+     * forever.
+     */
+    private static ensureStaticInvalidationSubscription(): void {
+        if (ProviderBase._staticInvalidationWired) {
             return;
         }
-        this._lingerInvalidationWired = true;
+        ProviderBase._staticInvalidationWired = true;
         MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
             if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) {
                 return;
@@ -402,10 +420,36 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 return;
             }
             const entityName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
-            if (entityName) {
-                this.invalidateInflightViewsForEntity(entityName);
+            if (!entityName) {
+                return;
+            }
+            for (const ref of ProviderBase._invalidationTargets) {
+                const instance = ref.deref();
+                if (!instance) {
+                    // Provider was GC'd since it registered — prune the dead ref instead of
+                    // letting the registry grow forever with entries that resolve to nothing.
+                    ProviderBase._invalidationTargets.delete(ref);
+                    continue;
+                }
+                instance.invalidateInflightViewsForEntity(entityName);
             }
         });
+    }
+
+    /**
+     * Lazily registers this instance (once per provider instance) for write-invalidation
+     * of in-flight/lingered RunView entries touching a written entity. Deleting an IN-FLIGHT
+     * entry is deliberate: late joiners must not share a query that may have read pre-commit
+     * data; the original caller still gets its own result, and the orphaned promise's stash
+     * step no-ops safely.
+     */
+    private ensureInflightViewInvalidation(): void {
+        if (this._lingerInvalidationWired) {
+            return;
+        }
+        this._lingerInvalidationWired = true;
+        ProviderBase.ensureStaticInvalidationSubscription();
+        ProviderBase._invalidationTargets.add(new WeakRef(this));
     }
 
     /**
