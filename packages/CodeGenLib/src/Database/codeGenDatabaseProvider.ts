@@ -1077,8 +1077,15 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `IF NOT EXISTS (checkQuery) BEGIN insertSQL END`
      * PostgreSQL: `DO $$ BEGIN IF NOT EXISTS (checkQuery) THEN insertSQL; END IF; END $$`
      *
-     * @param checkQuery The SELECT query to check for existence.
-     * @param insertSQL The INSERT statement to execute if the check returns no rows.
+     * **Both arguments must already be identifier-quoted by the caller** (`qi()`/`qs()`).
+     * On PostgreSQL the result is a `DO $$ ... $$` block, and the identifier auto-quoter
+     * (`quoteSQLForExecution`, applied later by `runQuery`/`LogSQLAndExecute`) skips dollar-quoted
+     * blocks wholesale — it cannot know whether their contents are SQL or literal text. So this is
+     * the one SQL-building path where the usual "write it bare, the quoter handles it" convention
+     * does not hold: a bare `ID` survives to PG folded as `id` and the statement fails every run.
+     *
+     * @param checkQuery The SELECT query to check for existence. Identifiers must be pre-quoted.
+     * @param insertSQL The INSERT statement to execute if the check returns no rows. Identifiers must be pre-quoted.
      */
     abstract conditionalInsertSQL(checkQuery: string, insertSQL: string): string;
 
