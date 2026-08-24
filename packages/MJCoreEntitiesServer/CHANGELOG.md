@@ -1,5 +1,158 @@
 # @memberjunction/core-entities-server
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- d4a5b4c: Content vectorization: make colocated vector stores usable, and stop ignoring an index's declared dimensions
+
+  A colocated vector provider (`SQLServerVectorDatabase`, pgvector) keeps vectors in the application's own
+  database. It has no credentials to present, and it needs the active data-provider connection handed to it
+  before use. The ContentSource pipeline honored neither, so a colocated store could be **searched** but
+  never **written** — and it failed in a way that pointed somewhere else entirely: `CreateIndex` logged
+  `"requires a host connection"` and continued, then vectorization died later on a vector-database cache
+  miss, which reads like bad metadata rather than a missing wire-up.
+
+  Four changes, in two places that both create provider instances:
+  - **`AutotagBaseEngine.createVectorDBInstance`** now instantiates first, calls `TryWireColocatedHost`, and
+    only then requires an API key — for providers that actually need one (`!SupportsColocatedQuery &&
+RequiresAPIKey`). The old order could not work: whether a provider is colocated is not knowable until it
+    exists. A non-empty sentinel is passed to the constructor because `VectorDBBase` rejects an empty key
+    outright and colocated providers do not override it, so `''` would throw for precisely the keyless case.
+  - **`MJVectorIndexEntityServer.getVectorDBInstance`** gets the same treatment. This is the site that runs
+    on `VectorIndex.Save()`, so without it the provider index is never created regardless of the above.
+  - **`AutotagBaseEngine.createEmbeddingInstance`** drops its pre-flight key check, matching the decision
+    already documented in the EntityDocument pipeline: an empty key is legitimate for local-only drivers
+    (`LocalEmbedding` runs ONNX in-process and defends itself with `super(apiKey || 'local')`), and a cloud
+    driver that genuinely needs one raises a real provider-level auth error, which is more actionable than a
+    guard here. Gating up front made local embedding models unusable from this pipeline.
+  - **`MJVectorIndexEntityServer.resolveDimensions`** now honors the index's own `Dimensions` column instead
+    of returning a hardcoded 1536. This was a latent bug with real consequences on any store that enforces
+    width: a colocated SQL Server index is a `VECTOR(n)` column, so a 384-dimension model got a
+    `VECTOR(1536)` table and every insert was rejected.
+
+  **Behaviour change worth noting before upgrading:** a `MJ: Vector Indexes` record whose `Dimensions`
+  differs from 1536 will now have its provider index created at the stated width. That is the intent — the
+  column exists to be honored, and the embedding call already honored it — but an index created earlier at
+  1536 will not match, and wants recreating.
+
+  Verified end to end against SQL Server 2025 with local embeddings: two content sources differing only in
+  whether they declare `VectorEntityName`, both vectorized through the real pipeline into a real colocated
+  index. Before these changes the pipeline could not reach that state at all.
+
+  Both entries are `minor` rather than `patch` because the bump level is evaluated per branch and this branch
+  also changes `metadata/` — see `.claude/rules/changesets.md`. The changes here are code only.
+
+- 9cd81ca: Integration apply path: stop record-map write amplification, surface pagination violations, and stop blocking the connection wizard on a schema refresh.
+
+  `MJ: Company Integration Record Maps` is the highest-volume table the sync path writes — one row per external record ever mapped, re-touched every sync — and unlike its run-log siblings it still shipped with `TrackRecordChanges = 1`, so every mapping upsert also wrote a `RecordChange` row and doubled a sync's write volume. Nothing reads that history: the mapping row is the current state, and operators audit a sync through the per-run artifact stream. Change tracking is now off for that entity; existing history rows are left in place. Separately, a connector returning an oversized batch (a pagination-contract violation) is now reported rather than absorbed silently, and `IntegrationUpdateConnection` can launch its schema refresh without waiting on it.
+
+  `MJCompanyIntegrationEntityServer` gains `SuppressActivationSchemaRefresh`, a transient opt-out that stops the activation (`IsActive` false→true) schema refresh from running inside `Save()` when the caller is going to run it itself. `IntegrationCreateConnection` sets it for `awaitSchemaRefresh: false`, which makes that flag actually non-blocking on create — previously the Save-side refresh ran first and awaited, so the mutation paid a full live introspect regardless — and moves the introspect after the connection test, so a connection rejected by that test is rolled back without having written IntegrationObject rows. Default false, so every other activation path is unchanged.
+
+  `IntegrationConnectorCreationPipeline.Run()` now honours a caller-supplied `RunID` even when it coalesces onto an already-running or just-completed run for the same CompanyIntegration. Previously the supplied ID was silently discarded, so a caller that had already handed it to a client as "the run to tail" left that client polling a run directory that was never created — `IntegrationTailRunEvents` answering "Run not found" forever, which is indistinguishable from "hasn't started yet". A coalesced call now publishes a terminal alias run under the requested ID that mirrors the served run's outcome and names it, so the ID is always tailable.
+
+### Patch Changes
+
+- 2875f6f: Stop running a live source introspection inside `CompanyIntegration.Save()`
+
+  `MJCompanyIntegrationEntityServer` no longer overrides `Save()` to fire
+  `IntegrationConnectorCreationPipeline` on an `IsActive false→true` transition.
+  That hook made an unbounded scan of the customer's source a side effect of
+  writing a row — it ran for any writer of that transition, inside the caller's
+  HTTP request, and on the create path it ran before the credential had been
+  tested.
+
+  Discovery is now something a caller asks for:
+  - `IntegrationCreateConnection` creates the row inactive and activates it only
+    after the credential test, so the scan can never run against a password that
+    is about to be rejected and rolled back.
+  - `IntegrationReactivateConnection` gains a `runSchemaRefresh` argument
+    (default `true`, matching the previous behaviour) so the refresh is visible
+    in the API and can be declined.
+  - `runSchemaRefreshPipeline` now takes the `IntegrationEngine` maintenance lock,
+    which the other pipeline call sites already held, and supplies the
+    SoftPKClassifier LLM callback the save hook used to provide.
+
+  `MJCompanyIntegrationEntityServer.RunSchemaRefreshPipeline()` is public for
+  callers that want the old behaviour explicitly.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [a788e27]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [2741d46]
+- Updated dependencies [2741d46]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/scheduling-engine@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/sql-converter@6.1.0-edge.3
+  - @memberjunction/sql-parser@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/tag-engine@6.1.0-edge.3
+  - @memberjunction/ai-vectordb@6.1.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/doc-utils@6.1.0-edge.3
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.3
+  - @memberjunction/predictive-studio-core@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes
