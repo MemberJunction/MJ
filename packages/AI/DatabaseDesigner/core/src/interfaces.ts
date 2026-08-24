@@ -354,5 +354,12 @@ export const UDT_SETTINGS = {
 /**
  * Escapes a string value for safe inclusion in a SQL string literal
  * (used in RunView `ExtraFilter` strings).
+ *
+ * **Do not use for identifier names** (table/column names) — those require bracket or
+ * double-quote quoting and are handled by SchemaEngine's `ValidateIdentifier()`.
+ *
+ * @deprecated Import `EscapeSQLString` from `@memberjunction/global` instead — it is the one
+ * canonical escaper. This alias remains only so external callers do not break; it will be
+ * removed in the next major.
  */
-export const escapeSqlLiteral = EscapeSQLString;
+export const escapeSqlLiteral = (value: string | null | undefined): string => EscapeSQLString(value);

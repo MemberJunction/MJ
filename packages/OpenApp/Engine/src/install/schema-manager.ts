@@ -9,6 +9,7 @@
  * consistent logging, connection pooling, and provider abstraction.
  */
 import { DatabaseProviderBase } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 
 /**
  * Reserved schema names that apps cannot claim.
@@ -85,7 +86,7 @@ export async function SchemaExists(
   // and PostgreSQL, so schema existence needs no dialect branch (sys.schemas is
   // SQL-Server-only and errors on PG).
   const results = await provider.ExecuteSQL<Record<string, unknown>>(
-    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSqlString(schemaName)}'`
+    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSQLString(schemaName)}'`
   );
   return results.length > 0;
 }
@@ -166,7 +167,7 @@ export async function DropAppSchema(
       // schema (the legacy-split fragments). It will NOT touch an unrelated app's schema unless two
       // apps adopted names differing only by case — which canonicalization now prevents at install.
       const matches = await provider.ExecuteSQL<{ schema_name: string }>(
-        `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSqlString(schemaName)}')`
+        `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSQLString(schemaName)}')`
       );
       for (const m of matches) {
         await provider.ExecuteSQL(`DROP SCHEMA ${provider.Dialect.QuoteIdentifier(m.schema_name)} CASCADE`);
@@ -210,7 +211,7 @@ async function DropAllSchemaObjects(
   schemaName: string,
   provider: DatabaseProviderBase
 ): Promise<void> {
-  const escaped = EscapeSqlString(schemaName);
+  const escaped = EscapeSQLString(schemaName);
 
   // Drop foreign keys first to avoid dependency issues
   await provider.ExecuteSQL(`
@@ -270,9 +271,11 @@ async function DropAllSchemaObjects(
   `);
 }
 
-import { EscapeSQLString } from '@memberjunction/global';
-
 /**
  * Escapes a string for use in SQL string literals (prevents SQL injection).
+ *
+ * @deprecated Import `EscapeSQLString` from `@memberjunction/global` instead — it is the one
+ * canonical escaper. This alias remains only so external callers do not break; it will be
+ * removed in the next major.
  */
-export const EscapeSqlString = EscapeSQLString;
+export const EscapeSqlString = (value: string | null | undefined): string => EscapeSQLString(value);

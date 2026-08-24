@@ -111,7 +111,7 @@ export class DDLGenerator {
 
         // Table-level description
         if (config.Description) {
-            const escaped = EscapeSqlString(config.Description);
+            const escaped = EscapeSQLString(config.Description);
             const exec =
                 `EXEC sp_addextendedproperty\n` +
                 `    @name = N'MS_Description',\n` +
@@ -150,7 +150,7 @@ export class DDLGenerator {
     private MakeColumnExtendedProperty(
         schemaName: string, tableName: string, columnName: string, description: string
     ): string {
-        const escaped = EscapeSqlString(description);
+        const escaped = EscapeSQLString(description);
         const exec =
             `EXEC sp_addextendedproperty\n` +
             `    @name = N'MS_Description',\n` +
@@ -316,6 +316,3 @@ export function ValidateIdentifier(name: string, kind: string): void {
         throw new Error(`Invalid ${kind} name "${name}": must match ${IDENTIFIER_RE.source}`);
     }
 }
-
-/** Escapes single quotes in a string for use in SQL string literals. */
-const EscapeSqlString = EscapeSQLString;
