@@ -1401,6 +1401,35 @@ export function EscapeHTML(text: string): string {
 }
 
 /**
+ * Safely escapes a string literal for use inside single-quoted SQL statements, clauses, or `ExtraFilter` predicates.
+ *
+ * Replaces each single quote with doubled single quotes (`''`) per ANSI SQL standard, and removes
+ * null bytes (`\0`) to prevent null-byte injection attacks.
+ *
+ * @param value - The raw string value to escape. If null or undefined, returns empty string.
+ * @returns Safely escaped string value (without surrounding quotes).
+ *
+ * @example
+ * ```typescript
+ * const filter = `Email = '${EscapeSQLString(userEmail)}'`;
+ * ```
+ */
+export function EscapeSQLString(value: string | null | undefined): string {
+  if (value == null) return '';
+  return String(value).replace(/\0/g, '').replace(/'/g, "''");
+}
+
+/**
+ * Alias for {@link EscapeSQLString}.
+ */
+export const EscapeSQL = EscapeSQLString;
+
+/**
+ * PascalCase alias for {@link EscapeSQLString}.
+ */
+export const EscapeSqlString = EscapeSQLString;
+
+/**
  * The format a piece of text appears to be authored in, as classified by
  * {@link detectRichTextFormat}.
  */

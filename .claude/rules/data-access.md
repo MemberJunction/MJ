@@ -190,6 +190,22 @@ const results = await rv.RunView<TemplateContentEntity>({
 const entities = results.Results; // No casting needed!
 ```
 
+### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — ALWAYS use `EscapeSQLString`
+
+- **NEVER use manual inline string replace or regex** like `.replace(/'/g, "''")` when interpolating dynamic values into SQL text, `ExtraFilter`, or query predicates.
+- **ALWAYS import `EscapeSQLString` from `@memberjunction/global`** to safely escape string literals (e.g. emails, titles, names, search terms, user input).
+- **Why**: Plain inline `.replace(/'/g, "''")` is error-prone, crashes or misbehaves on `null`/`undefined`, fails to strip null bytes (`\0`), and creates divergent ad-hoc sanitization throughout the codebase. `EscapeSQLString` provides standardized ANSI quote doubling and null-byte elimination with null-safety.
+
+```typescript
+import { EscapeSQLString } from '@memberjunction/global';
+
+// ✅ CORRECT — centralized, safe SQL escaping
+const filter = `Email = '${EscapeSQLString(user.Email?.trim().toLowerCase())}'`;
+
+// ❌ WRONG — fragile manual regex
+const filter = `Email = '${user.Email.replace(/'/g, "''")}'`;
+```
+
 ### RunView Error Handling
 **Important**: RunView does NOT throw exceptions when it fails. Instead, it returns a result object with `Success` and `ErrorMessage` properties:
 
