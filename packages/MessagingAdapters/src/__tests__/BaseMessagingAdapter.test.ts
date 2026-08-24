@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { UserInfo, RunView } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
@@ -15,18 +16,36 @@ import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResp
 // ─── Mock external modules ──────────────────────────────────────────────────
 
 vi.mock('@memberjunction/generic-database-provider', () => {
-    const users = [
+    // A FAITHFUL model of the real UserCache, footgun included. The real class extends
+    // BaseSingleton, whose constructor RETURNS the already-stored shared instance — and then
+    // the subclass field initializer (`_users = []`) runs against that returned instance. So
+    // `new UserCache()` empties the process-wide cache and reads back nothing. The previous
+    // mock returned a static user list from ANY instance, which is precisely why
+    // `new UserCache()` passed this suite while failing on every real deployment
+    // ("Fallback context user not found" for any valid email). Model the semantics honestly
+    // and the suite guards the distinction.
+    const store: { instance?: unknown } = {};
+    class MockSingletonBase {
+        constructor() {
+            if (store.instance) return store.instance as MockSingletonBase; // BaseSingleton semantics
+            store.instance = this;
+        }
+    }
+    class MockUserCache extends MockSingletonBase {
+        // Field initializer — runs on whatever super() returned, exactly like the real class.
+        _users: Array<{ ID: string; Email: string; Name: string }> = [];
+        get Users() { return this._users; }
+        static get Instance(): MockUserCache {
+            if (!store.instance) new MockUserCache();
+            return store.instance as MockUserCache;
+        }
+    }
+    // Warm the cache the way the server does at bootstrap, AFTER construction.
+    MockUserCache.Instance._users = [
         { ID: 'u1', Email: 'alice@example.com', Name: 'Alice' },
         { ID: 'u2', Email: 'bob@example.com', Name: 'Bob' },
         { ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' },
     ];
-
-    class MockUserCache {
-        get Users() { return users; }
-        static get Instance() { return new MockUserCache(); }
-        static get Users() { return users; }
-    }
-
     return { UserCache: MockUserCache };
 });
 
@@ -191,6 +210,13 @@ describe('BaseMessagingAdapter', () => {
     let adapter: TestAdapter;
 
     beforeEach(() => {
+        // Re-warm the shared cache each test the way server bootstrap does — the mock models the
+        // real singleton, so a stray construction in one test would otherwise starve the rest.
+        (UserCache.Instance as unknown as { _users: unknown[] })._users = [
+            { ID: 'u1', Email: 'alice@example.com', Name: 'Alice' },
+            { ID: 'u2', Email: 'bob@example.com', Name: 'Bob' },
+            { ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' },
+        ];
         adapter = new TestAdapter(defaultSettings);
         // Mock RunView for agent lookup: first call = loadDefaultAgent, second = loadAvailableAgents
         const callCount = { n: 0 };
@@ -278,6 +304,35 @@ describe('BaseMessagingAdapter', () => {
             const msg = createMessage({ SenderEmail: 'ALICE@EXAMPLE.COM' });
             const user = await adapter.testResolveContextUser(msg);
             expect(user.Email).toBe('alice@example.com');
+        });
+    });
+
+    describe('UserCache singleton discipline (regression)', () => {
+        // The bug: `new UserCache()` — the BaseSingleton constructor returns the SHARED instance,
+        // then the subclass field initializer re-runs on it, emptying the process-wide cache. On
+        // every real deployment Initialize() then failed with "Fallback context user not found"
+        // for any valid email. The suite never caught it because the old mock returned a static
+        // list from any instance; the mock above now models the real semantics, so these tests
+        // (and the resolveContextUser suite) fail if either call site regresses to `new`.
+        it('Initialize resolves the fallback user from a warmed cache and leaves it intact', async () => {
+            await adapter.Initialize();
+            expect(UserCache.Instance.Users.length).toBe(3);
+        });
+
+        it('sender resolution does not empty the shared cache', async () => {
+            await adapter.Initialize();
+            const user = await adapter.testResolveContextUser(createMessage({ SenderEmail: 'alice@example.com' }));
+            expect(user.Email).toBe('alice@example.com');
+            expect(UserCache.Instance.Users.length).toBe(3);
+        });
+
+        it('the mock itself reproduces the footgun (keeps these tests able to fail)', () => {
+            // If someone "simplifies" the mock back to a static list, this fails — and with it
+            // goes the suite's ability to catch a regression to `new UserCache()`.
+            expect(UserCache.Instance.Users.length).toBe(3);
+            const constructed = new (UserCache as unknown as new () => { Users: unknown[] })();
+            expect(constructed.Users.length).toBe(0);          // construction wiped the shared instance
+            expect(UserCache.Instance.Users.length).toBe(0);   // ...which IS the shared instance
         });
     });
 

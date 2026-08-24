@@ -38,9 +38,18 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/generic-database-provider', () => {
+    // Models the real UserCache: BaseSingleton's constructor returns the shared instance, and
+    // `Instance` is the only supported accessor (see BaseMessagingAdapter.test.ts for the full
+    // note — `new UserCache()` wipes the shared cache and is why this mock must expose Instance).
     const users = [{ ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' }];
+    const store: { instance?: MockUserCache } = {};
     class MockUserCache {
-        get Users() { return users; }
+        _users = users;
+        get Users() { return this._users; }
+        static get Instance(): MockUserCache {
+            if (!store.instance) store.instance = new MockUserCache();
+            return store.instance;
+        }
     }
     return { UserCache: MockUserCache };
 });

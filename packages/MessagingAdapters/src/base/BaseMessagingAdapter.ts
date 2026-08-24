@@ -456,7 +456,13 @@ export abstract class BaseMessagingAdapter {
         }
 
         if (email) {
-            const userCache = new UserCache();
+            // UserCache.Instance, never `new UserCache()`: UserCache extends BaseSingleton, whose
+            // constructor RETURNS the existing shared instance — and then the subclass field
+            // initializer (`_users = []`) runs against that returned instance. So `new` both
+            // EMPTIES the process-wide user cache and reads back an empty list: the lookup below
+            // could never succeed, and the whole server lost its user cache until the next
+            // auto-refresh tick.
+            const userCache = UserCache.Instance;
             const mjUser = userCache.Users.find(
                 (u: UserInfo) => u.Email?.toLowerCase() === email!.toLowerCase()
             );
@@ -1162,7 +1168,10 @@ export abstract class BaseMessagingAdapter {
      * @throws Error if the configured email cannot be found.
      */
     private async loadFallbackContextUser(): Promise<void> {
-        const userCache = new UserCache();
+        // UserCache.Instance, never `new UserCache()` — see resolveContextUser for why `new`
+        // wipes the shared cache. Here it made Initialize fail with "Fallback context user not
+        // found" for EVERY configured email, on every deployment.
+        const userCache = UserCache.Instance;
         const user = userCache.Users.find(
             (u: UserInfo) => u.Email?.toLowerCase() === this.settings.ContextUserEmail.toLowerCase()
         );
