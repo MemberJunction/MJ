@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpGet, IsHttpError } from "@memberjunction/network-utils";
 import { getApiIntegrationsConfig } from "../../config";
 
 interface GoogleSearchItem {
@@ -156,19 +156,19 @@ export class GoogleCustomSearchAction extends BaseAction {
         }
 
         try {
-            const response = await axios.get<GoogleSearchResponse>(
+            const response = await HttpGet<GoogleSearchResponse>(
                 "https://www.googleapis.com/customsearch/v1",
                 {
-                    params: requestParams,
-                    timeout: 15000
+                    Query: requestParams,
+                    Timeout: 15000
                 }
             );
 
-            if (!response.data) {
+            if (!response.Data) {
                 return this.createErrorResult("Empty response from Google Custom Search API", "EMPTY_RESPONSE");
             }
 
-            const data = response.data;
+            const data = response.Data;
             const items = (data.items || []).map(item => this.transformItemByVerbosity(item, verbosity));
             const totalResults = Number(data.searchInformation?.totalResults || "0");
 
@@ -190,9 +190,9 @@ export class GoogleCustomSearchAction extends BaseAction {
                 Message: JSON.stringify(resultData, null, 2)
             };
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const status = error.response?.status;
-                const errorMessage = error.response?.data?.error?.message;
+            if (IsHttpError(error)) {
+                const status = error.Status;
+                const errorMessage = (error.Data as { error?: { message?: string } } | undefined)?.error?.message;
 
                 if (status === 403) {
                     return this.createErrorResult(
