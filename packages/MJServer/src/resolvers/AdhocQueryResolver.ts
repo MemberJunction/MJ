@@ -6,6 +6,7 @@ import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { RunQueryResultType } from './QueryResolver.js';
 import { ClampAdhocTimeoutSeconds } from './adhocTimeout.js';
 
@@ -45,6 +46,10 @@ class AdhocQueryInput {
  * - Read-only provider only (no fallback to read-write)
  * - Configurable timeout (default 30s), enforced by the database
  * - Requires authenticated user (standard GraphQL auth, no @RequireSystemUser)
+ * - Refuses scope-limited principals (see {@link IsScopeLimitedPrincipal}). Raw SQL bypasses
+ *   RunView, entity permissions and row-level security, so the RLS scope tokens that confine a
+ *   magic-link session are never applied on this path — there is no narrower filter to fall back
+ *   to, only refusal.
  *
  * Auto-discovered by MJServer's dynamic resolver import.
  */
@@ -56,7 +61,14 @@ export class AdhocQueryResolver extends ResolverBase {
         @Ctx() context: AppContext
     ): Promise<RunQueryResultType> {
         const startTime = Date.now();
-        const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
+        // SECURITY: refuse principals whose read authority is narrower than their role grant.
+        // Ad-hoc SQL does not go through RunView, entity permissions or row-level security, so the
+        // RLS scope tokens that confine a magic-link session are never substituted. There is no
+        // filter to narrow, so the only correct answer for such a principal is no.
+        if (IsScopeLimitedPrincipal(context.userPayload?.userRecord)) {
+            return this.buildErrorResult('Ad-hoc SQL execution is not permitted for scope-limited sessions.');
+        }
+        const provider =GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
         if (!provider) {
             return this.buildErrorResult('No read-only data source available for ad-hoc query execution');
         }
