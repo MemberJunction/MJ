@@ -42,6 +42,88 @@ export function isResolutionFailure(error: unknown): boolean {
 }
 
 /**
+ * Renders an unknown thrown value as something an operator can read — safely.
+ *
+ * Under MJAPI's loader (`ts-node/esm` registered through `node:module`), a dynamic-import
+ * resolution failure crosses the module-hooks thread and arrives as a **null-prototype object
+ * with zero own properties**, carrying only `Symbol(nodejs.util.inspect.custom)`. Two things
+ * go wrong if you treat it like an error (MJ#3975 §4):
+ *
+ *   - `String(value)` THROWS `TypeError: Cannot convert object to primitive value` — a
+ *     diagnostic that kills the process while trying to explain why the process is dying.
+ *   - `console.warn('msg', value)` renders it as `{}`, so the whole report is `{}`.
+ *
+ * So: no coercion of an unrecognised object, and a message that states the value carried
+ * nothing rather than printing an empty one. The caller supplies the identity (which package
+ * was being loaded) — that is the only place it exists.
+ */
+export function describeThrown(value: unknown): string {
+  if (value instanceof Error) {
+    const code = (value as { code?: unknown }).code;
+    return typeof code === 'string' ? `${value.message} (code ${code})` : value.message;
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return `${String(value)} was thrown (no error object)`;
+  }
+  if (typeof value === 'object') {
+    // Never String()/JSON.stringify a null-prototype object — the first throws and the second
+    // yields '{}'. Report the shape instead, and say the underlying reason is unavailable.
+    const props = Object.getOwnPropertyNames(value);
+    const detail = props.length > 0
+      ? `own properties: ${props.join(', ')}`
+      : 'no message and no own properties — the ESM loader hook stripped the underlying resolution error';
+    return `a non-Error value was thrown (${detail})`;
+  }
+  return `a non-Error ${typeof value} value was thrown`;
+}
+
+/** One host anchor that was tried when resolving a runtime-configured package. */
+export interface HostResolutionAttempt {
+  /** The anchor resolution was attempted from (a mj.config.cjs, a package.json, an entrypoint). */
+  Anchor: string;
+  /** Why this anchor could not see the package. */
+  Error: string;
+}
+
+/** Where a runtime-configured package resolves from the host, and what was tried. */
+export interface HostResolutionReport {
+  /** The package that was looked up. */
+  PackageName: string;
+  /** The resolved file, when some anchor could see it. */
+  Resolved?: string;
+  /** Every anchor tried, and its failure, in priority order. */
+  Attempts: HostResolutionAttempt[];
+}
+
+/**
+ * Reports whether a runtime-configured package is reachable from the host, and from where.
+ *
+ * Deliberately uses `createRequire().resolve` only — a plain CommonJS resolver that runs
+ * in-process, raises ordinary catchable errors, and never involves the ESM loader hooks. That
+ * is the whole point: the failure mode this exists for (MJ#3975 §4) is a loader-hook resolution
+ * failure that a `try`/`catch` cannot see, so the explanation has to be computed WITHOUT going
+ * near the loader. Because it is CJS-only, a package whose exports map declares only an
+ * `"import"` condition will be reported unreachable even though `import()` could load it — so
+ * this is a diagnostic, never a gate: nothing skips an import on the strength of it.
+ */
+export function describeHostResolution(pkgName: string, configFilePath?: string): HostResolutionReport {
+  const anchors = [configFilePath, path.join(process.cwd(), 'package.json'), process.argv[1]]
+    .filter((anchor): anchor is string => typeof anchor === 'string' && anchor.length > 0);
+  const attempts: HostResolutionAttempt[] = [];
+  for (const anchor of anchors) {
+    try {
+      return { PackageName: pkgName, Resolved: createRequire(anchor).resolve(pkgName), Attempts: attempts };
+    } catch (error: unknown) {
+      attempts.push({ Anchor: anchor, Error: describeThrown(error) });
+    }
+  }
+  return { PackageName: pkgName, Attempts: attempts };
+}
+
+/**
  * Imports a runtime-configured package from the HOST application's context.
  *
  * Resolution and evaluation are handled separately on the fallback path: an anchor that

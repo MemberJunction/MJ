@@ -43,15 +43,130 @@ interface SkywayConfig {
     Provider?: unknown;
 }
 
+/**
+ * One migration's execution result, as skyway reports it to `OnProgress`.
+ *
+ * `Error.message` is skyway's rich per-batch message
+ * (`Failed at batch 2/253 (lines 50-71): <the database error>`) — the thing an operator
+ * actually needs, and the thing `Migrate()`'s return value can lose. See
+ * {@link CaptureFirstMigrationFailure}.
+ */
+interface SkywayMigrationExecutionResult {
+    Success: boolean;
+    Migration: { Filename: string };
+    Error?: { message?: string; cause?: unknown };
+}
+
 /** Minimal interface for the Skyway instance returned at runtime. */
 interface SkywayInstance {
     Migrate(): Promise<{
         Success: boolean;
         MigrationsApplied: number;
         ErrorMessage?: string;
-        Details: { Success: boolean; Migration: { Filename: string } }[];
+        Details: SkywayMigrationExecutionResult[];
     }>;
+    /**
+     * Registers progress callbacks. Present since skyway 0.6; optional here because the
+     * interface is structural over a dynamically imported class, so an older skyway simply
+     * does not have it and the diagnostics degrade to `Migrate()`'s return value.
+     */
+    OnProgress?(callbacks: {
+        OnMigrationEnd?: (result: SkywayMigrationExecutionResult) => void;
+        OnLog?: (message: string) => void;
+    }): SkywayInstance;
     Close(): Promise<void>;
+}
+
+/**
+ * Recovers the FIRST database error behind a driver error that reports only its last one.
+ *
+ * A batch-aborting SQL Server failure emits a chain — `Msg 1767, Foreign key
+ * 'FK_ContractLine_Product' references invalid table '__mj_BizAppsOrders.Product'` followed by
+ * `Msg 1750, Could not create constraint or index. See previous errors.` — and `mssql` rejects
+ * with the LAST one while parking the earlier ones on `precedingErrors`. Reporting only the
+ * rejection therefore reports "see previous errors" without the previous errors: literally a
+ * pointer to output the operator was never shown. This walks back to the first one, which is
+ * the error that names the actual problem.
+ *
+ * Defensive by construction: the value comes from a dynamically imported driver via an
+ * `unknown` cause, so every access is guarded and an unrecognised shape yields undefined.
+ */
+export function FirstDatabaseError(cause: unknown): string | undefined {
+    if (typeof cause !== 'object' || cause === null) {
+        return undefined;
+    }
+    const preceding = (cause as { precedingErrors?: unknown }).precedingErrors;
+    if (!Array.isArray(preceding) || preceding.length === 0) {
+        return undefined;
+    }
+    const first = preceding[0] as { message?: unknown } | undefined;
+    return typeof first?.message === 'string' && first.message.length > 0 ? first.message : undefined;
+}
+
+/**
+ * A migration failure observed through `OnProgress`, kept so it can be reported even when
+ * `Migrate()`'s return value no longer carries it.
+ */
+interface CapturedMigrationFailure {
+    /** The migration file that failed. */
+    File: string;
+    /** Skyway's per-batch message, including the underlying database error. */
+    Message: string;
+    /** The first error of the database's error chain, when the driver kept it. */
+    FirstDatabaseError?: string;
+}
+
+/**
+ * Builds the operator-facing error message for a failed migration run, preferring whichever
+ * source still has the migration file and the real database error.
+ *
+ * **Why this exists (MJ#3975 §3).** A failed app migration was reported, in its entirety, as
+ * `Migration failed for schema 'X': Transaction has been aborted.` — no filename, no error
+ * number, no object name. The cause is a masking chain inside skyway, and it is worth stating
+ * because the fix looks redundant otherwise: a batch fails with the real error (e.g.
+ * `Msg 1767, Foreign key 'FK_ContractLine_Product' references invalid table
+ * '__mj_BizAppsOrders.Product'`), skyway builds a rich `MigrationExecutionError` for it and
+ * heads for `txn.Rollback()` — but the transaction is already doomed, so the rollback itself
+ * throws `TransactionError: Transaction has been aborted.`, that throw escapes
+ * `executeMigrationsWithHistory`, and `Migrate()`'s outer catch returns
+ * `{ Details: [], ErrorMessage: 'Transaction has been aborted.' }`. The good diagnosis is
+ * discarded by the compensation path that ran because of it.
+ *
+ * `OnProgress.OnMigrationEnd` fires with the rich result BEFORE that rollback is attempted,
+ * so capturing it there survives the masking. Priority: captured callback failure → the first
+ * failed `Details` entry (present when the rollback succeeded) → skyway's own `ErrorMessage`.
+ * When a transport-level message masked a captured one, both are reported: the underlying
+ * error is what to fix, and the abort explains why the run stopped where it did.
+ */
+export function BuildMigrationFailureMessage(
+    schemaName: string,
+    skywayErrorMessage: string | undefined,
+    details: SkywayMigrationExecutionResult[],
+    captured: CapturedMigrationFailure | undefined,
+): string {
+    const prefix = `Migration failed for schema '${schemaName}'`;
+    const fromDetails = details.find((d) => !d.Success);
+    const best: CapturedMigrationFailure | undefined = captured ?? (fromDetails
+        ? {
+            File: fromDetails.Migration.Filename,
+            Message: fromDetails.Error?.message ?? skywayErrorMessage ?? 'unknown error',
+            FirstDatabaseError: FirstDatabaseError(fromDetails.Error?.cause),
+        }
+        : undefined);
+
+    if (!best) {
+        // Nothing named the migration — all we have is skyway's message. Say plainly that the
+        // file is unknown rather than leaving the operator to wonder whether one exists.
+        return `${prefix}: ${skywayErrorMessage ?? 'unknown error'} (no migration file was identified — the run failed before or between migrations)`;
+    }
+
+    const masked = skywayErrorMessage && skywayErrorMessage !== best.Message
+        ? ` [run terminated with: ${skywayErrorMessage}]`
+        : '';
+    const root = best.FirstDatabaseError && !best.Message.includes(best.FirstDatabaseError)
+        ? ` [first database error: ${best.FirstDatabaseError}]`
+        : '';
+    return `${prefix}: ${best.File} — ${best.Message}${root}${masked}`;
 }
 
 /**
@@ -193,6 +308,26 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         }
 
         skyway = new Skyway(config) as SkywayInstance;
+
+        // Capture the FIRST migration failure as skyway reports it, before its own rollback
+        // can mask it. See BuildMigrationFailureMessage for the masking chain.
+        let capturedFailure: CapturedMigrationFailure | undefined;
+        skyway.OnProgress?.({
+            OnMigrationEnd: (r) => {
+                if (!r.Success && !capturedFailure) {
+                    const first = FirstDatabaseError(r.Error?.cause);
+                    capturedFailure = {
+                        File: r.Migration.Filename,
+                        Message: r.Error?.message ?? 'unknown error',
+                        // `Could not create constraint or index. See previous errors.` is a
+                        // pointer to output nobody sees; this is the error it points at.
+                        FirstDatabaseError: first,
+                    };
+                }
+            },
+            OnLog: Verbose ? (m) => console.log(`  ${m}`) : undefined,
+        });
+
         const result = await skyway.Migrate();
 
         const appliedFiles = result.Details
@@ -205,7 +340,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             AppliedFiles: appliedFiles,
             ErrorMessage: result.Success
                 ? undefined
-                : `Migration failed for schema '${SchemaName}': ${result.ErrorMessage ?? 'unknown error'}`,
+                : BuildMigrationFailureMessage(SchemaName, result.ErrorMessage, result.Details, capturedFailure),
         };
     }
     catch (error: unknown) {

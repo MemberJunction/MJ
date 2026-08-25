@@ -152,10 +152,16 @@ describe('ServerBootstrap', () => {
 
                 // The failure names the missing TRANSITIVE dep — it must reach the operator via
                 // console.warn with the true cause, not be swallowed by the friendly line.
-                expect(warnSpy).toHaveBeenCalledWith(
-                    expect.stringContaining('Error loading Open App server package @sbtest/broken'),
-                    expect.objectContaining({ message: expect.stringContaining('sbtest-definitely-missing-transitive-dep') }),
-                );
+                //
+                // The cause is now interpolated INTO the message rather than passed as a second
+                // console.warn argument (MJ#3975 §4): a non-Error rejection renders as `{}` in that
+                // position, and String()ing a null-prototype one throws — so describeThrown()
+                // formats it into the string instead. Assert on the rendered output.
+                const warnText = warnSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+                expect(warnText).toContain('Error loading Open App server package @sbtest/broken');
+                expect(warnText).toContain('sbtest-definitely-missing-transitive-dep');
+                // ...and the entry is identified, so the operator knows WHICH config entry to fix.
+                expect(warnText).toContain('package        : @sbtest/broken');
                 expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining("not found (run 'npm install'?)"));
                 warnSpy.mockRestore();
                 logSpy.mockRestore();

@@ -16,7 +16,7 @@
 
 import { serve, MJServerOptions } from '@memberjunction/server';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { importFromHost, isResolutionFailure } from './host-import.js';
+import { describeHostResolution, describeThrown, importFromHost, isResolutionFailure, type HostResolutionReport } from './host-import.js';
 
 /**
  * Configuration options for creating an MJ Server
@@ -155,43 +155,128 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
 
   console.log('Loading Open App server packages...');
 
-  for (const entry of serverPackages) {
-    const pkgName = entry?.PackageName;
-    if (!pkgName || entry.Enabled === false) {
-      continue;
-    }
-    try {
-      // Dynamic import to trigger side effects (class registration).
-      const mod = await importFromHost(pkgName, configResult.configFilePath);
-      // Invoke the declared startup export, if any (e.g. a registration kicker).
-      const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
-      if (typeof startup === 'function') {
-        await Promise.resolve((startup as () => unknown)());
+  /**
+   * The entry currently being imported, plus its pre-computed host-resolution report.
+   *
+   * This exists because of the failure mode in MJ#3975 §4: under MJAPI's loader
+   * (`ts-node/esm` registered through `node:module`), a dynamic-import resolution failure can
+   * be raised as a FATAL uncaught exception carrying a null-prototype object with zero own
+   * properties — no message, no code, no stack. The `try`/`catch` below cannot see it, and the
+   * value cannot identify itself. The process died reporting nothing at all.
+   *
+   * So the identity has to come from OUTSIDE the failure: this variable is what the process
+   * guard reads to name the culprit, and the report is computed BEFORE the import (via a CJS
+   * resolver that never touches the loader hooks) so the reason survives too.
+   */
+  let loading: { Entry: DynamicServerPackage; Resolution: HostResolutionReport } | undefined;
+  const failed: { PackageName: string; Reason: string }[] = [];
+
+  /** Renders everything known about the entry that was loading when the process fell over. */
+  const describeLoadFailure = (reason: string): string => {
+    const entry = loading?.Entry;
+    const lines = [
+      `  package        : ${entry?.PackageName ?? '(unknown)'}`,
+      `  app            : ${entry?.AppName ?? '(not declared)'}`,
+      `  startup export : ${entry?.StartupExport ?? '(none)'}`,
+      `  failure        : ${reason}`,
+    ];
+    const attempts = loading?.Resolution.Attempts ?? [];
+    if (loading?.Resolution.Resolved) {
+      lines.push(`  resolved from  : ${loading.Resolution.Resolved} (so this is a LOAD failure, not a resolution one)`);
+    } else if (attempts.length > 0) {
+      lines.push('  not reachable from any host anchor:');
+      for (const a of attempts) {
+        lines.push(`    - ${a.Anchor}: ${a.Error}`);
       }
-      // Collect the package's exported resolver paths so serve() globs them into the schema.
-      const pkgResolverPaths = mod.RESOLVER_PATHS;
-      let added = 0;
-      if (Array.isArray(pkgResolverPaths)) {
-        for (const p of pkgResolverPaths) {
-          if (typeof p === 'string' && p.length > 0) {
-            resolverPaths.push(p);
-            added++;
+      lines.push("  most likely the package has not been built (no dist/), or 'npm install' has not run for it.");
+    }
+    return lines.join('\n');
+  };
+
+  /**
+   * Turns a fatal, uncatchable loader failure into a legible one. Deliberately does NOT change
+   * the outcome — the process still refuses to start, because a registered app whose server
+   * package cannot load leaves the API missing that app's entities, resolvers and class
+   * registrations, and booting into that silently is worse than not booting. It only replaces
+   * "zero output" with "here is the entry and why".
+   */
+  const onFatal = (value: unknown): void => {
+    console.error('');
+    console.error('FATAL: an Open App server package declared in mj.config.cjs could not be loaded.');
+    console.error(describeLoadFailure(describeThrown(value)));
+    console.error('');
+    console.error("  Fix the package (build it, or install it), or set Enabled: false on its dynamicPackages.server entry.");
+    console.error('');
+    process.exit(1);
+  };
+  process.on('uncaughtException', onFatal);
+  process.on('unhandledRejection', onFatal);
+
+  try {
+    for (const entry of serverPackages) {
+      const pkgName = entry?.PackageName;
+      if (!pkgName || entry.Enabled === false) {
+        continue;
+      }
+      // Computed BEFORE the import, with a CJS resolver that cannot involve the loader hooks,
+      // so the explanation exists even when the import takes the process down.
+      loading = { Entry: entry, Resolution: describeHostResolution(pkgName, configResult.configFilePath) };
+      try {
+        // Dynamic import to trigger side effects (class registration).
+        const mod = await importFromHost(pkgName, configResult.configFilePath);
+        // Invoke the declared startup export, if any (e.g. a registration kicker).
+        const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
+        if (typeof startup === 'function') {
+          await Promise.resolve((startup as () => unknown)());
+        }
+        // Collect the package's exported resolver paths so serve() globs them into the schema.
+        const pkgResolverPaths = mod.RESOLVER_PATHS;
+        let added = 0;
+        if (Array.isArray(pkgResolverPaths)) {
+          for (const p of pkgResolverPaths) {
+            if (typeof p === 'string' && p.length > 0) {
+              resolverPaths.push(p);
+              added++;
+            }
           }
         }
+        console.log(`  Loaded Open App server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}`);
+      } catch (error: unknown) {
+        // isResolutionFailure (not a bare code check) because ts-node's ESM shim throws
+        // resolution failures with no code at all. The quoted-name guard keeps a missing
+        // TRANSITIVE dependency on the warn path with its true cause: resolution errors QUOTE
+        // the missing name, and a transitive failure quotes the transitive dep — this
+        // package's name only appears unquoted in the imported-from path.
+        //
+        // describeThrown rather than the raw value: a non-Error rejection renders as `{}` under
+        // console.warn, and String()ing a null-prototype one THROWS (MJ#3975 §4).
+        const message = error instanceof Error ? error.message : '';
+        const reason = describeThrown(error);
+        if (isResolutionFailure(error) && message.includes(`'${pkgName}'`)) {
+          console.log(`  Open App server package not found (run 'npm install'?): ${pkgName}`);
+        } else {
+          console.warn(`  Error loading Open App server package ${pkgName}: ${reason}`);
+          console.warn(describeLoadFailure(reason));
+        }
+        failed.push({ PackageName: pkgName, Reason: reason });
       }
-      console.log(`  Loaded Open App server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}`);
-    } catch (error: unknown) {
-      // isResolutionFailure (not a bare code check) because ts-node's ESM shim throws
-      // resolution failures with no code at all. The quoted-name guard keeps a missing
-      // TRANSITIVE dependency on the warn path with its true cause: resolution errors QUOTE
-      // the missing name, and a transitive failure quotes the transitive dep — this
-      // package's name only appears unquoted in the imported-from path.
-      const message = error instanceof Error ? error.message : String(error);
-      if (isResolutionFailure(error) && message.includes(`'${pkgName}'`)) {
-        console.log(`  Open App server package not found (run 'npm install'?): ${pkgName}`);
-      } else {
-        console.warn(`  Error loading Open App server package ${pkgName}:`, error);
-      }
+    }
+  }
+  finally {
+    process.off('uncaughtException', onFatal);
+    process.off('unhandledRejection', onFatal);
+    loading = undefined;
+  }
+
+  if (failed.length > 0) {
+    // Boot continues (unchanged behaviour), but never quietly: each of these apps is missing
+    // its entities, resolvers and class registrations from the running API.
+    console.warn(
+      `  ${failed.length} Open App server package(s) declared in mj.config.cjs did NOT load — ` +
+      `their apps' resolvers and class registrations are MISSING from this API:`,
+    );
+    for (const f of failed) {
+      console.warn(`    - ${f.PackageName}: ${f.Reason}`);
     }
   }
 

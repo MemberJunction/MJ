@@ -10,6 +10,7 @@ import {
     PhasedExecutionResult,
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
+import { ExtractCreatedObjectName, SQLExecutionDiagnostics } from '../../sql-execution-diagnostics';
 import { configInfo, mj_core_schema } from '../../../Config/config';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
@@ -2099,6 +2100,13 @@ $if_view_exists$;
                 return true;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
+                // Recorded (not just logged) so STEP 4 can attribute a downstream permissions
+                // failure on the same object back to this error — MJ#3975 §1.
+                SQLExecutionDiagnostics.Record({
+                    file: path.basename(absoluteFilePath),
+                    objectName: ExtractCreatedObjectName(sql),
+                    message: msg,
+                });
                 logError(`[CodeGen] SQL execution failed in ${path.basename(absoluteFilePath)}: ${msg.substring(0, 400)}`);
                 return false;
             }

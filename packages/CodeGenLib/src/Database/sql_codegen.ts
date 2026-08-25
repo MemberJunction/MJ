@@ -15,6 +15,7 @@ import { MJEntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
+import { IsMissingObjectError, SQLExecutionDiagnostics } from './sql-execution-diagnostics';
 
 
 export const SPType = {
@@ -112,6 +113,10 @@ export class SQLCodeGenBase {
                     throw new Error(`Invalid forceRegeneration.entityWhereClause: ${error}`);
                 }
             }
+
+            // A fresh run starts with a clean failure record — STEP 4 reads it to attribute a
+            // permissions failure back to the object-creation failure that caused it (MJ#3975 §1).
+            SQLExecutionDiagnostics.Reset();
 
             // STEP 1 - execute any custom SQL scripts for object creation that need to happen first - for example, if
             //          we have custom base views, need to have them defined before we do
@@ -406,7 +411,7 @@ export class SQLCodeGenBase {
             // STEP 4- Apply permissions, executing all .permissions files
             startSpinner('Applying permissions...');
             const step4StartTime: Date = new Date();
-            if (! await this.applyPermissions(pool, directory, baselineEntities)) {
+            if (! await this.applyPermissions(pool, directory, baselineEntities, 5, new Set(excludedEntities.map(e => e.ID)))) {
                 failSpinner('Failed to apply permissions');
                 overallSuccess = false;
             }
@@ -431,6 +436,12 @@ export class SQLCodeGenBase {
 
             if (overallSuccess) {
                 succeedSpinner(`SQL CodeGen completed successfully (${((new Date().getTime() - startTime.getTime())/1000)}s total)`);
+            }
+            else {
+                // The individual failures were already logged where they happened, among
+                // hundreds of other lines. Repeat them here, FIRST failure first, so the
+                // last thing on screen is the cause rather than its consequences.
+                SQLExecutionDiagnostics.ReportSummary();
             }
 
             // now - we need to tell our metadata object to refresh itself
@@ -501,13 +512,47 @@ export class SQLCodeGenBase {
     }
 
 
-    public async applyPermissions(pool: CodeGenConnection, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
+    /**
+     * Executes every generated `.permissions` file for `entities` (STEP 4).
+     *
+     * Two behaviours here exist because of MJ#3975, and both are about WHICH failure the
+     * operator is shown:
+     *
+     * 1. **A missing target object is a consequence, never a cause.** A GRANT can only fail
+     *    with "cannot find the object" if that object's creation already failed earlier in
+     *    this run — and that earlier error is the one worth reading. `SQLExecutionDiagnostics`
+     *    holds it, so the report names it instead of leaving the GRANT as the loudest line.
+     *
+     * 2. **Out-of-scope entities cannot fail the run on a missing object.** STEP 2(c)
+     *    deliberately generates permissions for the entities `excludeSchemas` removed, so in a
+     *    multi-app database this method is handed entities owned by OTHER apps. On a fresh
+     *    multi-app install their `spCreate*`/`spUpdate*` do not exist yet, which made whichever
+     *    app ran CodeGen first fail on a sibling app's not-yet-generated object — unavoidable
+     *    by configuration, because the behaviour acts on precisely the excluded set. Such a
+     *    GRANT is now skipped with a note. Any OTHER error on an out-of-scope entity (a real
+     *    permission problem, a bad login) still fails the run.
+     *
+     * @param outOfScopeEntityIDs IDs of entities this package does not own — the excluded set
+     *        from STEP 2(c). Omit for a single-scope run; every entity is then treated as owned.
+     */
+    public async applyPermissions(
+        pool: CodeGenConnection,
+        directory: string,
+        entities: EntityInfo[],
+        batchSize: number = 5,
+        outOfScopeEntityIDs?: Set<string>,
+    ): Promise<boolean> {
         try {
             let bSuccess = true;
+            /** Real failures, in the order they happened — [0] is what gets reported as the cause. */
+            const failures: { entity: string; file: string; message: string; cause?: string }[] = [];
+            /** Out-of-scope GRANTs skipped because the owning app has not generated the object yet. */
+            const skippedOutOfScope: { entity: string; schema: string; object: string }[] = [];
 
             for (let i = 0; i < entities.length; i += batchSize) {
                 const batch = entities.slice(i, i + batchSize);
                 const promises = batch.map(async (e) => {
+                    const outOfScope = outOfScopeEntityIDs?.has(e.ID) ?? false;
                     // generate the file names for the entity
                     const files = this.getEntityPermissionFileNames(e);
                     let innerSuccess: boolean = true;
@@ -527,7 +572,28 @@ export class SQLCodeGenBase {
                                 // logs read `for entity undefined` and were impossible to
                                 // pin to a specific entity.
                                 const errorMessage = sqlError instanceof Error ? sqlError.message : String(sqlError);
-                                logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${errorMessage}`);
+                                const targetObject = this.permissionFileTargetObject(f);
+                                if (IsMissingObjectError(errorMessage)) {
+                                    if (outOfScope) {
+                                        // Another app owns this object and has not generated it yet.
+                                        // Not this run's problem, and not a reason to fail it.
+                                        skippedOutOfScope.push({ entity: e.Name, schema: e.SchemaName, object: targetObject });
+                                        continue;
+                                    }
+                                    // In scope: the object should exist, so its creation failed
+                                    // earlier in this run. Report THAT, not the GRANT.
+                                    const upstream = SQLExecutionDiagnostics.FailureForObject(targetObject)
+                                        ?? SQLExecutionDiagnostics.FirstFailure;
+                                    failures.push({
+                                        entity: e.Name,
+                                        file: fullPath,
+                                        message: errorMessage,
+                                        cause: upstream ? SQLExecutionDiagnostics.Describe(upstream) : undefined,
+                                    });
+                                    innerSuccess = false;
+                                    continue;
+                                }
+                                failures.push({ entity: e.Name, file: fullPath, message: errorMessage });
                                 innerSuccess = false;
                             }
                         }
@@ -542,8 +608,43 @@ export class SQLCodeGenBase {
 
                 const results = await Promise.all(promises);
                 if (results.includes(false)) {
-                    logError(`Error executing one or more permissions files in batch starting from index ${i}`);
                     bSuccess = false; // keep going, but will return false at the end
+                }
+            }
+
+            if (skippedOutOfScope.length > 0) {
+                // Grouped by schema: the per-object list is long and the schema is the actionable
+                // part ("bizapps-common has not generated yet").
+                const bySchema = new Map<string, string[]>();
+                for (const s of skippedOutOfScope) {
+                    const list = bySchema.get(s.schema) ?? [];
+                    list.push(s.object);
+                    bySchema.set(s.schema, list);
+                }
+                const detail = [...bySchema.entries()]
+                    .map(([schema, objects]) => `  - ${schema}: ${objects.length} object(s) (e.g. ${objects.slice(0, 3).join(', ')})`)
+                    .join('\n');
+                logStatus(
+                    `Skipped ${skippedOutOfScope.length} permissions file(s) for out-of-scope entities whose target object ` +
+                    `does not exist — these schemas are excluded from this package's generation and are owned by another ` +
+                    `app that has not generated them yet:\n${detail}`,
+                );
+            }
+
+            if (failures.length > 0) {
+                const first = failures[0];
+                const causeLine = first.cause
+                    ? `\n  This is a CONSEQUENCE, not the cause. The object was never created because of an earlier failure in this run:\n    ${first.cause}`
+                    : '';
+                logError(
+                    `Failed to apply permissions for ${failures.length} file(s). FIRST FAILURE:\n` +
+                    `  ${first.file} (entity ${first.entity}): ${first.message}${causeLine}`,
+                );
+                if (failures.length > 1) {
+                    logError(
+                        `  ${failures.length - 1} further permissions failure(s):\n` +
+                        failures.slice(1).map((f) => `  - ${f.file} (entity ${f.entity}): ${f.message}`).join('\n'),
+                    );
                 }
             }
 
@@ -553,6 +654,16 @@ export class SQLCodeGenBase {
             logError(err as string);
             return false;
         }
+    }
+
+    /**
+     * The database object a generated permissions file grants on — derived from the file name,
+     * which is built as `<schema>/<objectName>.<type>.permissions.generated.sql` by
+     * {@link SQLUtilityBase.getDBObjectFileName}. Used to match a failed GRANT back to the
+     * creation that failed.
+     */
+    protected permissionFileTargetObject(permissionFileName: string): string {
+        return path.basename(permissionFileName).split('.')[0];
     }
 
 
