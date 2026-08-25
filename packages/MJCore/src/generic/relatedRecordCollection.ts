@@ -28,7 +28,8 @@ import type { BaseEntity } from './baseEntity';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsVerboseLoggingEnabled, LogStatus } from './logging';
 import { CompositeKey, KeyValuePair } from './compositeKey';
-import { EntityCompanion, EntityCompanionDeserializeMode } from './entityCompanion';
+import { EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
+import { EmbeddedRecord } from './embeddedRecord';
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
 import type { EntitySaveOptions, IMetadataProvider, IRunViewProvider } from './interfaces';
@@ -153,6 +154,11 @@ export type RelatedRecordCollectionOptions = {
  * One retained child on the wire.
  */
 export type RelatedRecordCollectionWireItem = {
+    /**
+     * Entity name in metadata for polymorphic IS-A subtypes (e.g. 'MJ_BizApps_Orders: Event Order Lines').
+     * If omitted, defaults to the collection's declared RelatedEntityName.
+     */
+    EntityName?: string | null;
     /** The child's field values, as produced by `GetAll()`. */
     Fields: Record<string, unknown>;
     /**
@@ -164,6 +170,11 @@ export type RelatedRecordCollectionWireItem = {
      * the server try to load a row that does not exist for every client-created child.
      */
     IsNew: boolean;
+    /**
+     * Serialized companion payloads attached to this child record, enabling recursive N-level
+     * companion hierarchy serialization across the wire.
+     */
+    Companions?: EntityCompanionPayload[] | null;
 };
 
 /**
@@ -557,7 +568,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     }
 
     /** @inheritdoc */
-    public override async LoadEager(): Promise<void> {
+    public override async LoadEager(_visited?: Set<string>): Promise<void> {
         if (this.LoadMode === 'immediate') {
             await this.Load();
         }
@@ -575,6 +586,25 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         this.items = items ?? [];
         this.removed = [];
         this.loaded = true;
+    }
+
+    /**
+     * Replaces an existing item in the collection with another item (e.g. replacing a generic
+     * base entity with its hydrated polymorphic IS-A leaf entity instance).
+     *
+     * @param oldItem - The item currently in the collection to replace.
+     * @param newItem - The replacement item.
+     * @returns True if the item was found and replaced, false otherwise.
+     */
+    public ReplaceItem(oldItem: T, newItem: T): boolean {
+        this.assertMutable('ReplaceItem');
+        const idx = this.items.indexOf(oldItem);
+        if (idx === -1) {
+            return false;
+        }
+        this.items[idx] = newItem;
+        this.stampParentKey();
+        return true;
     }
 
     /**
@@ -1009,6 +1039,11 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override ContributeSaveWork(plan: EntitySavePlan, options?: EntitySaveOptions): void {
+        // Caller is writing the collection itself after preparing it (booking, pricing).
+        // Embeds still contribute — this is not the private graph-node recursion guard.
+        if (options?.SkipRelatedCollections) {
+            return;
+        }
         // A read-only collection is a projection, not a unit of work. Contributing nothing is what
         // makes it safe to point one at an engine's shared cache.
         if (this.IsReadOnly) {
@@ -1090,7 +1125,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     }
 
     /** @inheritdoc */
-    public override async Serialize(): Promise<RelatedRecordCollectionWire | null> {
+    public override async Serialize(mode: EntityCompanionDeserializeMode = 'request'): Promise<RelatedRecordCollectionWire | null> {
         // A read-only collection ships nothing, for the same reason it contributes no save work:
         // it is a projection over records this parent does not own. Serializing it put the donor
         // engine's ENTIRE cached child set on the wire with every graph save and TransactionGroup
@@ -1106,8 +1141,19 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             return null;
         }
 
+        const items: RelatedRecordCollectionWireItem[] = [];
+        for (const i of this.items) {
+            const companions = i.HasCompanions ? await i.SerializeCompanions(mode) : [];
+            items.push({
+                EntityName: i.EntityInfo?.Name ?? this.RelatedEntityName,
+                Fields: i.GetAll(),
+                IsNew: !i.IsSaved,
+                Companions: companions.length > 0 ? companions : null,
+            });
+        }
+
         return {
-            Items: this.items.map(i => ({ Fields: i.GetAll(), IsNew: !i.IsSaved })),
+            Items: items,
             Removed: this.removed.map(r => this.primaryKeyOf(r)),
         };
     }
@@ -1136,6 +1182,9 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * on **this** tier. That is what makes a graph assembled in the browser execute server-side
      * business logic: the server rebuilds the same records as their server subclasses.
      *
+     * Supports polymorphic IS-A subtypes when `row.EntityName` specifies a child entity in the IS-A
+     * hierarchy; falls back to the declared `RelatedEntityName` for standard homogeneous collections.
+     *
      * @param provider - The provider to create entity objects from.
      * @param rows - Wire items.
      * @returns Rehydrated child entities.
@@ -1147,12 +1196,16 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     ): Promise<T[]> {
         const out: T[] = [];
         for (const row of rows) {
-            const child = await provider.GetEntityObject<T>(this.RelatedEntityName, this.Owner.ContextCurrentUser);
+            const entityName = row.EntityName || this.RelatedEntityName;
+            const child = await provider.GetEntityObject<T>(entityName, this.Owner.ContextCurrentUser);
 
             if (mode === 'result') {
                 // Authoritative post-save state: adopt it verbatim and land clean. No query — the
                 // sender just persisted these rows and is telling us what they now contain.
                 await child.LoadFromData(row.Fields, true);
+                if (row.Companions && row.Companions.length > 0) {
+                    await child.DeserializeCompanions(row.Companions, 'result');
+                }
                 out.push(child);
                 continue;
             }
@@ -1177,12 +1230,17 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 const loaded = await child.InnerLoad(key);
                 if (!loaded) {
                     throw new Error(
-                        `RelatedRecordCollection '${this.Name}': cannot load existing ${this.RelatedEntityName} ` +
+                        `RelatedRecordCollection '${this.Name}': cannot load existing ${entityName} ` +
                         `record ${key.ToString()} referenced by the incoming payload.`,
                     );
                 }
                 child.SetMany(row.Fields, true);
             }
+
+            if (row.Companions && row.Companions.length > 0) {
+                await child.DeserializeCompanions(row.Companions, mode);
+            }
+
             out.push(child);
         }
         return out;
@@ -1202,7 +1260,8 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     private async rehydrateRemovals(provider: IMetadataProvider, rows: Record<string, unknown>[]): Promise<T[]> {
         const out: T[] = [];
         for (const row of rows) {
-            const child = await provider.GetEntityObject<T>(this.RelatedEntityName, this.Owner.ContextCurrentUser);
+            const entityName = (row['__entityName'] as string) || this.RelatedEntityName;
+            const child = await provider.GetEntityObject<T>(entityName, this.Owner.ContextCurrentUser);
             const key = new CompositeKey(
                 child.EntityInfo.PrimaryKeys.map(pk => new KeyValuePair(pk.Name, row[pk.Name])),
             );
@@ -1223,7 +1282,9 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @returns A map of primary-key field names to values.
      */
     private primaryKeyOf(child: T): Record<string, unknown> {
-        const out: Record<string, unknown> = {};
+        const out: Record<string, unknown> = {
+            __entityName: child.EntityInfo?.Name ?? this.RelatedEntityName,
+        };
         for (const pk of child.EntityInfo?.PrimaryKeys ?? []) {
             out[pk.Name] = child.Get(pk.Name);
         }

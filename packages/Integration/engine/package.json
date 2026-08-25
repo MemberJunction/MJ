@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-engine",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction Integration Engine - orchestration, field mapping, and connector framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,12 +14,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/integration-engine-base": "6.1.0-edge.2",
-    "@memberjunction/integration-pk-classifier": "6.1.0-edge.2",
-    "@memberjunction/integration-progress-artifacts": "6.1.0-edge.2"
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/integration-engine-base": "6.1.0-edge.3",
+    "@memberjunction/integration-pk-classifier": "6.1.0-edge.3",
+    "@memberjunction/integration-progress-artifacts": "6.1.0-edge.3"
   },
   "devDependencies": {
     "tsc-alias": "^1.8.16",
@@ -31,5 +31,5 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "author": "MemberJunction.com",
-  "license": "ISC"
+  "license": "BUSL-1.1"
 }

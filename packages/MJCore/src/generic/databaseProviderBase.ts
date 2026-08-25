@@ -1560,7 +1560,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     }
                 }
             } else {
-                return entity; // nothing to save
+                return entity.GetAll(); // nothing to save
             }
         } catch (e) {
             this.OnResumeRefresh();

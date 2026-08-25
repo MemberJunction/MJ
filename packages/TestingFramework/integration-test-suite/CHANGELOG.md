@@ -1,5 +1,284 @@
 # @memberjunction/integration-test-suite
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- f5ec13b: Fix the queue engine's terminal-status write, and stop MJAPI's task-graph dispatcher from competing with a test harness.
+
+  **`QueueBase` could never record a task outcome.** `StartTask` discarded the boolean `Save()` return, so the terminal-status write failed silently: the row kept whatever status it held before the run while the in-memory task still reported `Complete`. Underneath it, no role held `CanUpdate` on `MJ: Queue Tasks` or `MJ: Queues`, so CodeGen had never emitted an update grant and `spUpdateQueueTask` carried no `EXECUTE` grant at all. The Developer + Integration CRUD grants are now in `metadata/entity-permissions`, matching every other engine-written entity (`MJ: Tasks`, `MJ: Scheduled Jobs`, `MJ: Action Execution Logs`), with a migration that applies the SQL grants directly — a fresh install runs `migrate` + `sync push` and no CodeGen, so metadata alone would leave the permission correct in Explorer and broken at runtime.
+
+  **`MJ_DISABLE_TASK_GRAPH_DISPATCHER` opts a server out of claiming.** A dispatcher claims from the whole `Task` table rather than from "its own" graphs, so a second dispatcher on the same database is a competitor — correct in production, and wrong for a harness that injects a stub runner and then asserts which tasks its own runner executed. Tasks MJAPI won were executed with the real agent runner and never reached the stub, which the harness read as "never ran". Immediately-eligible root tasks lose that race most often, so it presented as an intermittent failure.
+
+  Also in the integration suite: the RLS fixture now carries the clauses discovery compared (a client-transport check cannot re-derive them and was reporting a cache leak that did not exist), the auth-validation fixtures supply every shipped provider's required config fields, the cache-gauntlet anti-vacuity floors are created rather than assumed, and the task-graph checks wait for the child read-back instead of silently undercounting.
+
+- ae2baef: Content vectors: declare the entity on the content source, and let `explicit` omit the per-vector key
+
+  Minor rather than patch on both: this adds a property to the `ContentSource.Configuration` JSONType, so
+  it changes metadata rather than code alone.
+
+  `VectorSearchProvider` could attribute a match two ways: an `Entity` key in the vector's own metadata,
+  or an Entity Document targeting the index. Neither covers the ContentSource pipeline running
+  `fieldStrategy: 'explicit'`, where metadata carries only the configured fields — `ContentSourceID` is
+  present, the identity keys are not — and where the caller may not use Entity Documents at all.
+
+  That gap is not cosmetic. `SearchEngine.filterEntityResults` groups results by `EntityName` and
+  resolves each group with `EntityByName()` to evaluate CanRead and row-level security. An unresolvable
+  name yields no `EntityInfo`, the method returns before admitting the group, and **the results are
+  silently discarded** — `Residual permission filter removed N result(s)` is the only trace.
+
+  A content source can now declare what its vectors are, via `VectorEntityName` on its `Configuration`
+  JSON — the same place every other per-source vector knob already lives (`EnableVectorization`,
+  `VectorIDStrategy`, `ChunkTextStorage`, `VectorMetadata`). When a match omits `Entity`, its
+  `ContentSourceID` resolves through `KnowledgeHubMetadataEngine.GetContentSourceByID()` — an O(1) lookup
+  against an already-cached collection — to that declaration.
+
+  **The declaration is validated before it is trusted, twice.** Whatever it resolves to becomes the
+  entity whose CanRead and row-level security `filterEntityResults` evaluates, and that method never
+  checks the matched record ids belong to it. So the name must (a) resolve in metadata — an unresolvable
+  name would otherwise silently delete a source's results rather than mislabel them — and (b) be one of
+  `MJ: Content Items` / `MJ: Content Item Chunks`, or an IS-A subtype of one. Without (b) an arbitrary
+  entity name in a writable configuration blob would decide which permissions apply. The canonical name
+  from metadata is what gets used, so casing and whitespace cannot fork the grouping.
+
+  Two properties worth calling out, because they are why this sits where it does rather than being
+  inferred from somewhere else:
+  - **Per match, not per index.** One vector index can serve many content sources, so an index-wide
+    answer is wrong as soon as a second source shares the index. `ContentSourceID` travels on the vector.
+  - **Declared, not guessed** — and validated, per above. Since attribution decides _which_ entity's
+    permissions are evaluated, an inferred or unchecked name would put the wrong object's rules in front
+    of the records — worse than no attribution, which merely drops them.
+
+  Declaring it per source also lets a source name an **ISA extension** instead of the base entity it
+  inherits from. That distinction is a security one: row-level security typically lives on the
+  extension, so a hardcoded or index-wide base-entity name evaluates the wrong entity's RLS.
+
+  Resolution order is most-specific-first: the match's own `Entity` key, then its content source's
+  declaration, then the index's Entity Documents, then `'Unknown'` as before. A source that declares
+  nothing — or declares something that fails validation — is simply absent from the lookup, so its matches
+  behave exactly as they do today.
+
+  Also fixed, both pre-existing:
+  - `convertMatches` applied the resolved fallback with `??` while the "does this match need one" test is
+    falsy, so an `Entity: ''` resolved a name and then discarded it — the result was dropped with the
+    resolution already paid for.
+  - `convertMatches` had the same `??` on `RecordID`, so a producer writing `RecordID: ''` shipped an empty
+    record id instead of falling through to the vector's own id — dropped by the permission filter on an
+    `IN ('')`, or returned as a result that cannot be opened.
+
+  `extractDisplayTitle` is deliberately left reading `meta['Entity']` rather than the resolved name, with a
+  comment saying so. It looks like an oversight and is not: when the metadata carries no name fields it
+  falls through to `` `${fallbackEntity} Record` ``, and that string is the sentinel
+  `SearchEnricher.resolveRecordNames` matches to replace the title with the live name from the database.
+  Feeding the resolved entity in makes the name-field branch succeed off the embedding-time snapshot, the
+  sentinel never forms, and a renamed record shows a stale title until it is re-embedded.
+
+  Failures decline rather than guess, and each declines narrowly: a source whose `Configuration` will not
+  parse is skipped on its own (one guard per source, not one around the batch, so a single bad blob cannot
+  downgrade every match after it to a different entity's permissions), and a `KnowledgeHubMetadataEngine`
+  load that is **permission-constrained** declines explicitly instead of reading its empty collections as
+  "nothing declared" — otherwise attribution would silently depend on who was searching.
+
+  **Attribution failure is now audible.** A batch containing matches that no step could name logs the
+  count, the index, a sample of vector ids, and the three ways to fix it — once per index per batch, and
+  only when it happens. Before this, such matches were discarded by `filterEntityResults` with no log on
+  that path at all; the sole trace was the aggregate `Residual permission filter removed N result(s)`,
+  whose wording blames incomplete provider push-down. So the one signal a deployment got pointed away from
+  the cause, which is why "vectors are in the index and never surface" was undiagnosable.
+
+  **And the write side can now drop the key.** With a declaration in place, `'explicit'` genuinely omits
+  `Entity` and writes `ContentSourceID` instead — the source becomes the single place the answer lives
+  rather than a string repeated on every vector. Previously the key could not be removed by configuration
+  at all on this pipeline: it is written _before_ the `explicit` early return (the EntityDocument pipeline
+  has it the other way around), and there is no `IncludeEntity` toggle beside `IncludeEntityIcon` /
+  `IncludeUpdatedAt` / `IncludeTags` / `IncludeText`.
+
+  The declaration is validated where it is written, not only where it is read. It must resolve in
+  metadata, and it must name `MJ: Content Item Chunks` or an IS-A subtype — because omission requires
+  `'alwaysChunk'`, which makes every vector a chunk row whose id is a chunk key. A name that fails either
+  check keeps the `Entity` key and logs once per run. This fails _safe_ rather than closed, and
+  deliberately so: the reader can only refuse a bad declaration after the fact, by which point the vectors
+  carry no entity at all, so correcting the configuration would not recover them without a re-embed.
+
+  Omission is therefore gated on all four of `'explicit'`, a declaration resolving to the chunk entity,
+  `ChunkTextStorage: 'alwaysChunk'` and `VectorIDStrategy: 'recordId'`, with
+  `ContentSourceID` then written unconditionally. Each condition keeps the guarantee that every vector
+  carries either `Entity` or a key that resolves to a declared entity:
+  - **`'mixed'`** emits ContentItem-level vectors for single-chunk items and ContentItemChunk-level vectors
+    for the rest — two entities from one source, which one declaration cannot describe.
+  - **`'hash'`** leaves no recoverable record id, since `'explicit'` drops `RecordID` too and the vector's
+    own id is a digest rather than the row's. Attribution would succeed and then hand search an id that
+    resolves against no row — the same disappearance, one step later.
+  - **Other field strategies** document a populated metadata set; dropping a key their consumers are told
+    is always present would be a behavior change for them.
+
+  Anything else keeps writing `Entity` exactly as before, and existing vectors are untouched — they keep
+  resolving through their stored key (resolution step 1), so no re-index is required.
+
+  Integration coverage comes with it: `IT — content-vectorization` gains CV7 (a declaring source omits
+  `Entity`, promotes `ContentSourceID`, and its vector id is the chunk row's PK) and CV8 (three refusal
+  paths — no opt-in, an unresolvable name, and a declaration naming the item entity — each keep the key).
+
+  No schema change and no migration. It does add a property to the `ContentSource.Configuration` JSONType,
+  so `mj sync push` + `mj codegen` are needed before the typed accessor exists; until then both sides read
+  it through a locally-declared interface that is deleted at that point. Behaviour is unchanged for callers
+  whose matches carry `Entity` metadata and for any index resolving through an Entity Document.
+
+### Patch Changes
+
+- f5ec13b: Move the shared LLM conformance suite out of the runtime `@memberjunction/ai` package, and gate silent skip-growth in the integration registry (review fixes for #3542).
+
+  **Conformance suite relocated to `@memberjunction/unit-testing`.** The shared BaseLLM
+  streaming/ChatResult conformance suite and its OpenAI-compatible seam mock previously lived in
+  `@memberjunction/ai/src/test-support/` and were consumed through a deep `@memberjunction/ai/dist/test-support/*.js`
+  import — reaching past the package's public API into its build output, which resolved only because
+  `@memberjunction/ai` has no `exports` map, and which shipped test code plus an optional `vitest`
+  peer dependency inside the runtime package. Both files (and the suite's own reference regression
+  test) now live in `@memberjunction/unit-testing`, are exported from its index
+  (`RunLLMConformanceSuite`, `CreateOpenAICompatibleSeamMock`, and their types), and the eight
+  provider conformance suites import them from `@memberjunction/unit-testing`. `@memberjunction/ai`
+  no longer ships `dist/test-support/*` and no longer declares the optional `vitest` peer. No runtime
+  behavior changes; test-only wiring.
+
+  **Skip-growth is now gated, not just reported.** `check-registry.test.ts` gained a snapshot of the
+  exact set of checks that self-skip out of the deterministic lane (every `RequiresMutation` and
+  `RequiresLiveModel` check across all bundles). A change that makes a check newly self-skip — or
+  silently un-gates one — now fails the unit tests with a paste-ready diff, instead of only shrinking
+  the CI step-summary. Also corrected a stale `task-graph-execution` count (26 → 27) in the
+  all-bundle coverage-loss guard that had drifted after a `next` merge added TX27.
+
+- c581b4f: Close the #3874 adversarial review. SkipRelatedCollections persists embeds while collections stay with the caller. The graph-node recursion guard is private on BaseEntity (IsGraphNodeSave is gone from EntitySaveOptions). Result serialize adopts saved peers; a rolled-back graph reverts in-memory saved/dirty so retry works. Two same-entity embeds no longer false-cycle. Ensure, Load, NewRecord FK, CodeName emission, core-schema imports, IT85/EE5, graph-view UUID links, focal-node dblclick, and default excludeSchemas no longer dropping core form tabs.
+- 2741d46: Make the deterministic integration tier runnable against PostgreSQL, and fix the runtime and conversion defects that running it exposed.
+
+  **Why.** MJ #3257 records that the integration suite is meant to run twice per build — once per backend — and that this was never implemented. PostgreSQL therefore shipped with migration parity verified and _runtime_ parity unverified. This change makes the tier run on PostgreSQL for the first time and fixes what that surfaced: **49 of 61 deterministic bundles now pass on PostgreSQL** (measured, MJAPI live; 61/61 executed, none skipped).
+
+  **Harness (closes the #3257 blocker list).** `testing-cli` now branches on platform instead of unconditionally building an `mssql` pool: `mj-provider.ts` gains a PostgreSQL path (dynamic import, declared as an optionalDependency so SQL-Server-only consumers never resolve `pg`) with a PG-native user-cache load, `MJConfig` gains `dbPlatform`, and `getContextUser()` resolves the same user on both backends — System by name, then the well-known System ID, then the first active Owner, with `.trim()` because `Type` is space-padded in both ledgers. `mj.config.cjs` gains `dbPlatform` and a platform-aware `dbPort` default; with `DB_PLATFORM` unset both are exactly the previous SQL Server behaviour.
+
+  **Runtime dialect leaks.**
+  - `SQLDialect` gains `AffectedRowCountSQL()`. `TaskClaimStore` was emitting `SELECT @@ROWCOUNT`, which is T-SQL only — on PostgreSQL the `@@` is consumed as a parameter marker and the bare `ROWCOUNT` folds to lowercase, so _every_ guarded write failed with `column "rowcount" does not exist` (7,168 occurrences in one tier run, now zero). SQL Server keeps `@@ROWCOUNT`; PostgreSQL uses a data-modifying CTE.
+  - `MJDashboardEntityExtended` no longer denies the owner. `Validate()` is synchronous and reads `DashboardEngine`'s cache directly, so in any process using the default `task` startup mode — where engine pre-warm is deferred — an unloaded cache was indistinguishable from "you have no permission", and `mj sync push` failed on a dashboard whose `UserID` _was_ the pushing user. Ownership is now answered from the row itself, which needs no cache; a non-owner still falls through to the engine and is refused when it is cold. `Delete()`, being async, loads the engine for the non-owner case and short-circuits for the owner, so a merely _stale_ cache — a dashboard created since the last `Config()` is absent from the backing array — cannot refuse its own owner either.
+
+    Ownership is read from the **persisted** `UserID` (`GetFieldByName('UserID').OldValue`), never the in-memory one. `UserID` is a settable field on `UpdateMJDashboardInput`, and `ResolverBase.UpdateRecord` loads the row and then applies the client's values _before_ `Save()` runs `Validate()` — so an owner check written against `this.UserID` would be satisfied by a value the caller supplied in the same request. Since this class **is** the permission gate for dashboards, that would let any user who can load one send `UpdateMJDashboard(ID: <someone else's>, UserID: <self>)` and take the record. Transferring ownership is separately gated to the owner, so a user holding `CanEdit` through a share can edit but not appropriate. `MJDashboardEntityExtended.ownership.test.ts` covers both directions, including that the engine is still consulted for the attacker case.
+
+  **Conversion (T-SQL → PostgreSQL).** Five defects, each caught only by applying the output to a fresh database — the converter reported `0 errors` every time:
+  - CASE-expression keywords were quoted as identifiers inside `CHECK` bodies (`"CASE" "WHEN" …`), so the migration would not parse. The missing keyword set was derived by intersecting 2,084 `CHECK` bodies across 67 shipped migrations against the dialect keyword list: exactly `CASE`, `WHEN`, `THEN`, `ELSE`, `END`.
+  - Every `IF EXISTS (…)` batch was classified `SKIP_SQLSERVER` and silently discarded. A guarded `DROP CONSTRAINT` therefore vanished — with exit code 0 — and the paired `ADD CONSTRAINT` later in the same migration failed with "already exists". The rewrite discards the guard, so it fires **only when the guard is a catalog probe** (`sys.check_constraints` / `key_constraints` / `foreign_keys` / `default_constraints` / `objects`) — the form that exists purely because SQL Server has no `DROP CONSTRAINT IF EXISTS`. A guard on data (`IF EXISTS (SELECT 1 FROM Payment WHERE Status = 'Legacy')`) is a real condition; dropping it would make PostgreSQL drop unconditionally while SQL Server does not. Those keep falling through to the generic path, which comments out what it cannot express. This mirrors the `sys.indexes` gate the conditional-index rule already had.
+  - `CREATE SCHEMA` is folded to lowercase to match its unquoted references — `convertIdentifiers` emits the schema half of `[X].[Y]` bare, so a quoted `CREATE` and a bare reference name two different schemas. **`__mj_UDT` is exempt**, because it is the one schema with a producer outside the migration set: the Database Designer creates it, and every table in it, through `UDT_SCHEMA_NAME` — quoted and case-preserved, as do `CreateSchemaDDL`, `QuoteSchema` and the schema-builder's `QuotePostgres`. Folding it would leave the runtime writing into a schema no migration made, and would orphan every UDT entity from its table in `vwSQLTablesAndEntities`, which joins `nspname = e."SchemaName"` case-sensitively. Nothing wants the folded spelling: across `migrations-pg/` there is not one unquoted `__mj_udt` reference, and all 272 other occurrences of the name are prose or JSON string content. No reconciliation DDL is emitted for any schema — a guard at that point would land in the converted output of the migration that CREATES the schema, the one file every affected database has already applied and Flyway will never re-run, so it could only ever fire on a database that does not need it.
+  - T-SQL table variables became the invalid declaration `v_X TABLE;`; they now become `CREATE TEMP TABLE … ON COMMIT DROP`.
+  - `DELETE alias FROM … JOIN …` passed through as T-SQL; it now becomes PostgreSQL's `DELETE … USING` (the UPDATE analogue already existed).
+  - `WITH CHECK ADD CONSTRAINT` survived on non-FK constraints, and `END ELSE BEGIN` left stray tokens. A subtler one: the `DECLARE` indent capture also matched a preceding blank line, which pushed the declaration out of the `DECLARE` section and into the block body.
+
+  **Also fixed.** `spDeleteEntityWithCoreDependencies` could not be invoked on PostgreSQL — `callRoutineSQL` always emitted `SELECT * FROM fn(...)`, which PostgreSQL rejects for a `RETURNS SETOF record` routine with no OUT parameters, so entity pruning silently died and cascaded into 22 missing CRUD routines. `callRoutineSQL` gains an optional `expectsResultSet`; SQL Server ignores it. CodeGen's PostgreSQL audit-SQL folder swap was pinned to `v5` by exact match, so on v6 it wrote into the SQL Server tree. `applyLLMPrimaryKeys` validated primary-key names case-insensitively but then used the model's spelling in the `UPDATE`, matching zero rows on PostgreSQL while reporting success — it now uses the matched column's actual name.
+
+  **Repeatable metadata refresh.** `R__RefreshMetadata` on PostgreSQL now also clears orphaned `EntityField` rows, as the SQL Server file has always done. Without it a from-scratch PostgreSQL database ends up with metadata describing columns its own base views do not have, and every read of those views fails.
+
+  **Two test-authoring fixes, not product changes.** The aggregates bundle passed `MAX(__mj_UpdatedAt)` unquoted and the open-app-teardown fixture called `SYSDATETIMEOFFSET()`; both are SQL-Server-only spellings and are now dialect-quoted.
+
+  **On the `migrations-pg/v6/**`files in this PR.**`CLAUDE.md`says a feature PR ships the T-SQL migration only and that PG counterparts are regenerated by the build engineer at release time. The five files here are`mj migrate convert`output, not hand-authored, and they exist because the tier cannot run on PostgreSQL without them — that is the whole subject of the change. They need the build engineer's sign-off before merge, and should be regenerated rather than merged if the release conversion runs first. Existing`migrations-pg`output is deliberately **not** regenerated against the converter changes above: the v5 files are frozen baselines, and the`\_\_mj_UDT` exemption above means the converter's new output agrees with what they already installed.
+
+  SQL Server is unaffected: every changed path is either PostgreSQL-only or a same-output refactor. Unit tests across the touched packages pass — SQLDialect 404, SQLConverter 1139, MJCoreEntities 597, CodeGenLib 808, TaskGraph 60, testing-cli 23 — zero failures in any of them.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [5ef97ff]
+- Updated dependencies [d4a5b4c]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [407f2f7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [49f3592]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [2e2879e]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [2741d46]
+- Updated dependencies [b6416f4]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ae2baef]
+- Updated dependencies [4b1257f]
+- Updated dependencies [6cd337d]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/ai-agents@6.1.0-edge.3
+  - @memberjunction/scheduling-engine@6.1.0-edge.3
+  - @memberjunction/codegen-lib@6.1.0-edge.3
+  - @memberjunction/content-autotagging@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/task-graph@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/metadata-sync@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/api-keys@6.1.0-edge.3
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.3
+  - @memberjunction/open-app-engine@6.1.0-edge.3
+  - @memberjunction/auth-providers@6.1.0-edge.3
+  - @memberjunction/queue@6.1.0-edge.3
+  - @memberjunction/testing-integration@6.1.0-edge.3
+  - @memberjunction/search-engine@6.1.0-edge.3
+  - @memberjunction/ai-agent-harness@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/predictive-studio@6.1.0-edge.3
+  - @memberjunction/ai-bridge-base@6.1.0-edge.3
+  - @memberjunction/ai-bridge-server@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+  - @memberjunction/communication-types@6.1.0-edge.3
+  - @memberjunction/communication-engine@6.1.0-edge.3
+  - @memberjunction/notifications@6.1.0-edge.3
+  - @memberjunction/communication-ms-graph@6.1.0-edge.3
+  - @memberjunction/communication-expo-push@6.1.0-edge.3
+  - @memberjunction/communication-gmail@6.1.0-edge.3
+  - @memberjunction/communication-sendgrid@6.1.0-edge.3
+  - @memberjunction/communication-twilio@6.1.0-edge.3
+  - @memberjunction/conversations-runtime@6.1.0-edge.3
+  - @memberjunction/query-processor@6.1.0-edge.3
+  - @memberjunction/record-set-processor-base@6.1.0-edge.3
+  - @memberjunction/record-set-processor@6.1.0-edge.3
+  - @memberjunction/redis-provider@6.1.0-edge.3
+  - @memberjunction/templates-base-types@6.1.0-edge.3
+  - @memberjunction/templates@6.1.0-edge.3
+  - @memberjunction/predictive-studio-core@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

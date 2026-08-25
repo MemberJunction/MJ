@@ -16,6 +16,7 @@ export * from "./generic/entityTransactionScope";
 export * from "./generic/entityCompanion";
 export * from "./generic/entitySavePlan";
 export * from "./generic/relatedRecordCollection";
+export * from "./generic/embeddedRecord";
 export * from "./generic/relatedRecordBatchLoader";
 export * from "./generic/saveEntityGraphOperation";
 export * from "./generic/BaseEntitySaveQueue";
@@ -61,6 +62,7 @@ export * from "./generic/column-descriptors";
 export * from "./generic/data-table";
 export * from "./generic/data-snapshot";
 export * from "./generic/permissionInterfaces";
+export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter
