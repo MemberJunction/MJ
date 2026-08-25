@@ -11,8 +11,9 @@
  * a live API attached and is not required to align EntityField.Sequence).
  * View refresh is dependency-ordered (`spRecompileAllViews`) and scoped to
  * the app schema.
- * PostgreSQL: no view recompile (column lists freeze at CREATE); run the
- * field-heal functions that exist (orphans, AllowsNull, Sequence from catalog).
+ * PostgreSQL: restar layered outer views (`spRebindLayeredOuterViewsInSchema`)
+ * so `g.*` re-expands, then run the field-heal functions (orphans, AllowsNull,
+ * Sequence from catalog). No `spRecompileAllViews` — PG has none.
  */
 
 import { GetDialect, type DatabasePlatform } from '@memberjunction/sql-dialect';
@@ -107,8 +108,10 @@ function buildPostgresRefreshSQL(coreSchema: string, appSchema: string, otherEnt
 
     // Mirrors migrations-pg/v5/R__RefreshMetadata.pg-only.sql (AllowsNull + orphan prune)
     // PLUS spUpdateExistingEntityFieldsFromSchema so MAX+N / shifted view ordinals
-    // get rewritten from the live catalog. No view recompile — PG freezes * at CREATE.
+    // get rewritten from the live catalog. Layered outers are restarred first so
+    // Sequence heal reads the re-expanded g.* column list.
     return [
+        `SELECT ${core}."spRebindLayeredOuterViewsInSchema"(${app});`,
         `UPDATE ${core}."EntityField" ef`,
         `   SET "AllowsNull" = (c.is_nullable = 'YES')`,
         `  FROM ${core}."Entity" e,`,

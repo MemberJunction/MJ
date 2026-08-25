@@ -34,8 +34,10 @@ describe('buildOpenAppRefreshMetadataSQL', () => {
         expect(sql).not.toMatch(/spRecompileAllViews[^\n]*__mj_BizAppsOrders/);
     });
 
-    it('PostgreSQL heals AllowsNull and field catalog without view recompile', () => {
+    it('PostgreSQL restars layered outers then heals AllowsNull and field catalog', () => {
         const sql = buildOpenAppRefreshMetadataSQL('postgresql', '__mj', '__mj_BizAppsCommon', ['__mj']);
+        expect(sql).toContain('spRebindLayeredOuterViewsInSchema');
+        expect(sql.indexOf('spRebindLayeredOuterViewsInSchema')).toBeLessThan(sql.indexOf('"AllowsNull"'));
         expect(sql).toContain('"AllowsNull"');
         expect(sql).toContain('spDeleteUnneededEntityFields');
         expect(sql).toContain('spUpdateExistingEntityFieldsFromSchema');
