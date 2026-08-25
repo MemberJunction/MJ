@@ -117,6 +117,12 @@ jobs:
           fetch-depth: 0
           filter: blob:none
 
+      # These gates read source TEXT, not build output — but the DOM ratchets parse component
+      # surfaces with the real TypeScript compiler (scripts/lib/component-surface.mjs imports
+      # `typescript`), so they need node_modules. They still need no dist/, which is the point:
+      # this job never waits on, and can never be silenced by, the build.
+      - uses: ./.github/actions/mj-setup
+
       # Fast pure-file guards (no build needed), all Phase-4 "keep tests honest" gates:
       # 1) A *.dom.test.ts placed inside __tests__/ is silently excluded from BOTH projects
       #    of a dual-preset package (and passWithNoTests hides the silence). Fails loud here.
@@ -507,6 +513,15 @@ jobs:
 
       # The guard imports built dist/, so materialize it from the build job's cache. This is a
       # pure cache replay (no compilation) whenever the handoff hit.
+      #
+      # The commands MUST mirror the build job's exactly. An unfiltered `turbo run build` is
+      # NOT the same thing as `pnpm run build`: the root script is `turbo build
+      # --filter="@memberjunction*"` plus a postbuild that adds mj_api and mj_codegen_api. So
+      # bare `turbo run build` would additionally compile packages the build job never built
+      # (mj_explorer, the Angular app) — a guaranteed cache miss and a real compile, in the one
+      # job that is supposed to do no work. Conversely it must not build LESS than the build
+      # job: mj_api is `type: module`, so the guard checks it, and skipping it would silently
+      # drop a package from the sweep as NOT_BUILT.
       - name: Materialize dist/ from the build cache
         env:
           TURBO_FILTER: ${{ needs.build.outputs.turbo_filter }}
@@ -514,7 +529,7 @@ jobs:
           if [ -n "$TURBO_FILTER" ]; then
             npx turbo run build --log-order=stream "$TURBO_FILTER"
           else
-            npx turbo run build --log-order=stream
+            pnpm run build
           fi
 
       # The guard-script unit suites (371 tests, ~4s) — they gate the gates, including the

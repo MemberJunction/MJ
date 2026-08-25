@@ -100,6 +100,52 @@ describe('test.yml — shard fan-out', () => {
     });
 });
 
+describe('test.yml — jobs get the dependencies their scripts need', () => {
+    // The DOM ratchets parse component surfaces with the real TypeScript compiler
+    // (scripts/lib/component-surface.mjs imports `typescript`), so the guards job needs
+    // node_modules even though it needs no dist/. Shipping it without an install failed both
+    // ratchets in under a second with ERR_MODULE_NOT_FOUND — a failure that looks like a
+    // ratchet violation, not like a missing dependency.
+    it('the guards job installs dependencies', () => {
+        const steps = readWorkflow().split(/^ {2}guards:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
+        expect(steps).toMatch(/uses: \.\/\.github\/actions\/mj-setup/);
+    });
+
+    // Every job that runs turbo must install first, or `npx turbo` silently fetches a
+    // DIFFERENT turbo version from the registry and computes different hashes — every cache
+    // entry the build job wrote would miss.
+    it('every turbo-running job installs first', () => {
+        for (const job of ['build', 'test', 'esm-guard', 'coverage']) {
+            const block = readWorkflow().split(new RegExp(`^ {2}${job}:$`, 'm'))[1].split(/^ {2}[a-z-]+:$/m)[0];
+            expect(block, `job "${job}"`).toMatch(/uses: \.\/\.github\/actions\/mj-setup/);
+        }
+    });
+});
+
+describe('test.yml — the ESM guard mirrors the build job', () => {
+    // `pnpm run build` is `turbo build --filter="@memberjunction*"` plus a postbuild adding
+    // mj_api and mj_codegen_api. A bare `turbo run build` is a DIFFERENT set in both
+    // directions: it adds mj_explorer (a real Angular compile, guaranteed cache miss, in the
+    // job meant to do no work) and — if narrowed the other way — would drop mj_api, which is
+    // `type: module` and therefore part of the sweep. Either way the divergence is invisible:
+    // the job just gets slower, or quietly checks fewer packages.
+    it('uses the same full-suite build command as the build job', () => {
+        const guardBuild = readJobSteps('esm-guard').find((s) => s.name === 'Materialize dist/ from the build cache');
+        expect(guardBuild, 'the esm-guard job must materialize dist/').toBeDefined();
+        const body = guardBuild.body.join('\n');
+        const buildStep = readJobSteps('build').find((s) => s.name === 'Build');
+        const buildBody = buildStep.body.join('\n');
+
+        // Both branches identical: filtered path and full path.
+        expect(body).toMatch(/npx turbo run build --log-order=stream "\$TURBO_FILTER"/);
+        expect(buildBody).toMatch(/npx turbo run build --log-order=stream "\$TURBO_FILTER"/);
+        expect(body).toMatch(/^\s*pnpm run build$/m);
+        expect(buildBody).toMatch(/^\s*pnpm run build$/m);
+        // The specific regression: an unfiltered turbo build is not the root build script.
+        expect(body).not.toMatch(/npx turbo run build --log-order=stream\s*$/m);
+    });
+});
+
 describe('test.yml — checkout cost', () => {
     // The blobless partial clone took checkout from 3m33s to well under a minute, and every
     // job pays it. A checkout that loses `filter: blob:none` silently re-adds minutes to every
