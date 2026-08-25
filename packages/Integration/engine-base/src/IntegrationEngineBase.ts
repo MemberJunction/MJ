@@ -43,6 +43,29 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
 
     // ── BaseEngine Config ─────────────────────────────────────────────
 
+    /**
+     * The two catalog datasets, declared ONCE and used by both places that need them: the
+     * BaseEngine registration in {@link Config}, and {@link RefreshCatalog}.
+     *
+     * Sharing the objects is the point. `BaseEnginePropertyConfig.PropertyName` is typed `string`
+     * and `keyof this` does not include private fields, so a separate list of property-name
+     * literals could never be checked by the compiler against the fields it names — a rename would
+     * leave RefreshCatalog matching nothing and silently refreshing nothing. Referencing the same
+     * objects removes the lookup, and with it the possibility of a miss.
+     */
+    private static readonly CATALOG_CONFIGS: Array<Partial<BaseEnginePropertyConfig>> = [
+        {
+            PropertyName: '_integrationObjects',
+            EntityName: 'MJ: Integration Objects',
+            CacheLocal: true,
+        },
+        {
+            PropertyName: '_integrationObjectFields',
+            EntityName: 'MJ: Integration Object Fields',
+            CacheLocal: true,
+        },
+    ];
+
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
             {
@@ -75,16 +98,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
                 EntityName: 'MJ: Company Integration Sync Watermarks',
                 CacheLocal: true,
             },
-            {
-                PropertyName: '_integrationObjects',
-                EntityName: 'MJ: Integration Objects',
-                CacheLocal: true,
-            },
-            {
-                PropertyName: '_integrationObjectFields',
-                EntityName: 'MJ: Integration Object Fields',
-                CacheLocal: true,
-            },
+            ...IntegrationEngineBase.CATALOG_CONFIGS,
         ];
 
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -99,34 +113,14 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
      * views: the per-object field index and the connectors' GetCachedFields memo both key on
      * ARRAY IDENTITY, so they rebuild lazily on first read after the swap.
      */
-    /**
-     * The BaseEngine-registered property names RefreshCatalog re-reads. Matched by string against
-     * `BaseEnginePropertyConfig.PropertyName`, which is typed `string` — so a rename of either field
-     * cannot be caught by the compiler and is caught by the assertion in RefreshCatalog instead.
-     */
-    private static readonly CATALOG_PROPERTIES = ['_integrationObjects', '_integrationObjectFields'] as const;
-
     public async RefreshCatalog(contextUser?: UserInfo): Promise<void> {
-        // An engine that was never configured holds no cache, so there is nothing to go stale.
-        // This is the one case where finding no config is legitimate.
+        // An engine that was never configured holds no cache to go stale, and LoadSingleConfig has
+        // no provider or user to work with. That is the only guard needed: the configs below are
+        // the very objects registered in Config(), so they can never be "not found".
         if (this.Configs.length === 0) return;
 
-        for (const prop of IntegrationEngineBase.CATALOG_PROPERTIES) {
-            const cfg = this.Configs.find(c => c.PropertyName === prop);
-            if (!cfg) {
-                // Loud on purpose. `BaseEnginePropertyConfig.PropertyName` is typed `string`, and
-                // `keyof this` does not include private fields, so there is no compile-time link
-                // between these names and the fields they refer to. Skipping quietly would leave
-                // RefreshCatalog reporting success while refreshing nothing — every run would then
-                // read whatever this process happened to load at startup, which is precisely the
-                // staleness this method exists to prevent. It can only be reached by a code change,
-                // never by data, so failing is safe and immediate.
-                throw new Error(
-                    `RefreshCatalog: no BaseEngine config registered for '${prop}'. The field was ` +
-                    `renamed or its config removed — the catalog would silently NOT refresh.`,
-                );
-            }
-            await this.LoadSingleConfig(cfg, (contextUser ?? this.ContextUser) as UserInfo, /*bypassCache*/ true);
+        for (const cfg of IntegrationEngineBase.CATALOG_CONFIGS) {
+            await this.LoadSingleConfig(cfg as BaseEnginePropertyConfig, (contextUser ?? this.ContextUser) as UserInfo, /*bypassCache*/ true);
         }
     }
 
