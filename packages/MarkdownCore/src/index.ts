@@ -1,4 +1,5 @@
 // Public API of @memberjunction/markdown-core
+// [ci-verify] temporary no-op edit to exercise the filtered CI path. Do not merge.
 //
 // Framework-agnostic markdown engine + custom extensions. No DOM, Prism, or
 // Mermaid dependency — consumers (ng-markdown on web, the React Native
