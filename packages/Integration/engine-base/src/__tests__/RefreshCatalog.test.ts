@@ -62,4 +62,16 @@ describe('RefreshCatalog', () => {
         await engine.RefreshCatalog({ ID: 'u1' } as never);
         expect(loaded).toEqual([]);
     });
+
+    it('THROWS when a configured engine is missing one of the catalog properties', async () => {
+        // The property names are matched by string against BaseEnginePropertyConfig.PropertyName,
+        // which is typed `string`, and `keyof this` does not cover private fields — so a rename
+        // cannot be caught by the compiler. Skipping quietly would leave RefreshCatalog reporting
+        // success while refreshing nothing, and every run would then read whatever the process
+        // loaded at startup: exactly the staleness it exists to prevent.
+        vi.spyOn(engine, 'Configs', 'get').mockReturnValue([
+            { PropertyName: '_integrationObjects' },
+        ] as never);
+        await expect(engine.RefreshCatalog({ ID: 'u1' } as never)).rejects.toThrow(/_integrationObjectFields/);
+    });
 });
