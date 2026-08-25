@@ -358,4 +358,50 @@ describe('SlackAdapter', () => {
         });
     });
 
+
+    describe('message text length (msg_too_long)', () => {
+        // Slack rejects a message whose `text` exceeds ~4,000 characters. The limit here was set
+        // to 39,000 — the figure for a message's total BLOCK payload — so truncation never
+        // engaged before Slack refused the call: every streaming update for a long output failed,
+        // the progress placeholder froze mid-run, and the log filled with msg_too_long.
+        const SLACK_TEXT_LIMIT = 4000;
+
+        function streamingHarness() {
+            const sent: Record<string, unknown>[] = [];
+            const harness = Object.create(SlackAdapter.prototype) as SlackAdapter & {
+                client: unknown;
+                thinkingMessageIds: Map<string, string>;
+                sendOrUpdateStreamingMessage: (m: unknown, c: string, id: string | null, a?: unknown) => Promise<string>;
+            };
+            (harness as { client: unknown }).client = {
+                chat: {
+                    update: async (args: Record<string, unknown>) => { sent.push(args); return { ok: true, ts: 'ts-1' }; },
+                    postMessage: async (args: Record<string, unknown>) => { sent.push(args); return { ok: true, ts: 'ts-1' }; },
+                },
+            };
+            (harness as { thinkingMessageIds: Map<string, string> }).thinkingMessageIds = new Map();
+            return { harness, sent };
+        }
+
+        it('keeps a streaming update under Slack\'s text limit', async () => {
+            const { harness, sent } = streamingHarness();
+            const huge = 'x'.repeat(50_000);
+            await harness.sendOrUpdateStreamingMessage({ ChannelID: 'C1', MessageID: 'm1' } as never, huge, 'ts-1');
+            expect(sent).toHaveLength(1);
+            expect((sent[0].text as string).length).toBeLessThanOrEqual(SLACK_TEXT_LIMIT);
+        });
+
+        it('keeps a new streaming message under the limit too', async () => {
+            const { harness, sent } = streamingHarness();
+            await harness.sendOrUpdateStreamingMessage({ ChannelID: 'C1', MessageID: 'm1' } as never, 'y'.repeat(50_000), null);
+            expect((sent[0].text as string).length).toBeLessThanOrEqual(SLACK_TEXT_LIMIT);
+        });
+
+        it('leaves short content untouched', async () => {
+            const { harness, sent } = streamingHarness();
+            await harness.sendOrUpdateStreamingMessage({ ChannelID: 'C1', MessageID: 'm1' } as never, 'short answer', 'ts-1');
+            expect(sent[0].text).toBe('short answer ...');
+        });
+    });
+
 });

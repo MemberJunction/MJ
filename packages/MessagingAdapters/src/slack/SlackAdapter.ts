@@ -54,11 +54,18 @@ export class SlackAdapter extends BaseMessagingAdapter {
     private thinkingMessageIds = new Map<string, string>();
 
     /**
-     * Slack's maximum message text length. Messages exceeding this cause `msg_too_long`.
-     * The `text` field is the plain-text fallback when blocks are present; the rich
-     * content is in Block Kit blocks (already limited to 50 blocks with "View Full" button).
+     * Maximum length of a message's `text` field.
+     *
+     * Slack rejects `chat.postMessage`/`chat.update` with `msg_too_long` past roughly 4,000
+     * characters — NOT the ~40,000 that applies to a message's total block payload. The higher
+     * figure meant this limit never engaged before Slack refused the call, so streaming updates
+     * failed continuously for any long output: the model streams its raw envelope (which can
+     * include base64 file data), every progress update was rejected, and the placeholder sat
+     * frozen mid-flight while the log filled with `msg_too_long`.
+     *
+     * 3,900 leaves room for the truncation notice appended below.
      */
-    private static readonly MAX_TEXT_LENGTH = 39_000;
+    private static readonly MAX_TEXT_LENGTH = 3_900;
 
     protected get PlatformName(): string { return 'Slack'; }
 
