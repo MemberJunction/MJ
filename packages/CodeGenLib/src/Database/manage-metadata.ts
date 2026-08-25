@@ -4683,7 +4683,13 @@ export class ManageMetadataBase {
       if (ag.featureEnabled('EntityDescriptions')) {
          // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
-            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${e}'`);
+            // Every literal in this function is doubled-quote escaped. The description below is
+            // FREE TEXT FROM AN LLM — prose about business entities contains apostrophes as a
+            // matter of course, and one unescaped quote aborts the whole CodeGen run with
+            // "Unclosed quotation mark" (SQL Server) at the very end of an otherwise-complete
+            // pass. '' doubling is correct on both supported dialects.
+            const esc = (s: string) => s.replace(/'/g, "''");
+            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${esc(e)}'`);
             const data = dataResult.recordset;
             const fieldsResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} WHERE EntityID='${data[0].ID}'`);
             const fields = fieldsResult.recordset;
@@ -4697,7 +4703,7 @@ export class ManageMetadataBase {
             );
 
             if (result?.entityDescription && result.entityDescription.length > 0) {
-               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
+               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${esc(result.entityDescription)}' WHERE Name = '${esc(e)}'`;
                await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
             }
             else {
