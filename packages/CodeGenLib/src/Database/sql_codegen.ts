@@ -6,7 +6,7 @@ import path from 'path';
 import { SQLUtilityBase } from './sql';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
 
-import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
+import { autoIndexForeignKeys, autoIndexSoftPrimaryKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -24,6 +24,19 @@ export const SPType = {
   } as const;
 
 export type SPType = typeof SPType[keyof typeof SPType];
+
+/**
+ * Entities whose SchemaName is not in excludeSchemas (case-insensitive).
+ * This is the CodeGen run's in-scope set: SQL objects and GRANTs are
+ * generated and executed only for these. excludeSchemas means "not this run".
+ */
+export function entitiesNotInExcludedSchemas<T extends { SchemaName: string }>(
+    entities: T[],
+    excludeSchemas: string[],
+): T[] {
+    const exclude = new Set(excludeSchemas.map((s) => s.toLowerCase()));
+    return entities.filter((e) => !exclude.has(e.SchemaName.toLowerCase()));
+}
 
 
 /**
@@ -130,9 +143,7 @@ export class SQLCodeGenBase {
             const baselineEntities = entities.filter(e => e.IncludeInAPI);
 
             // OPTIMIZATION: Use a Set for O(1) lookups instead of O(n) array finds to improve performance
-            const excludeSchemasSet = new Set(configInfo.excludeSchemas.map(s => s.toLowerCase()));
-            const includedEntities = baselineEntities.filter(e => !excludeSchemasSet.has(e.SchemaName.toLowerCase())); //only include entities that are NOT in the excludeSchemas list
-            const excludedEntities = baselineEntities.filter(e => excludeSchemasSet.has(e.SchemaName.toLowerCase())); //only include entities that ARE in the excludeSchemas list in this array
+            const includedEntities = entitiesNotInExcludedSchemas(baselineEntities, configInfo.excludeSchemas);
 
             // Initialize temp batch files for each schema
             // These will be populated as SQL is generated and will be used for actual execution
@@ -169,18 +180,18 @@ export class SQLCodeGenBase {
 
             // Track per-batch success without short-circuiting. Historically,
             // any single batch failure here returned `false` immediately, which
-            // skipped the cascade-regen and excluded-perms batches and left
-            // their entities with no SQL emitted at all. The post-run CRUD
-            // validator (in runCodeGen.ts) is the authoritative ship-gate now,
-            // so we want every batch to attempt its work and surface the
-            // complete picture of what's missing — partial generation is
-            // strictly more useful than nothing.
+            // skipped the cascade-regen batch and left those entities with no
+            // SQL emitted at all. The post-run CRUD validator (in runCodeGen.ts)
+            // is the authoritative ship-gate now, so we want every in-scope
+            // batch to attempt its work and surface the complete picture of
+            // what's missing — partial generation is strictly more useful than
+            // nothing.
             let entityGenSuccess = true;
 
             // Build a UNION will-regenerate set across every batch we're about
-            // to launch (main + cascade-regen + excluded-perms). The PG view
-            // fallback's restoreDependents path uses this to skip restoring
-            // captured dependents that codegen will recreate later in the run.
+            // to launch (main + cascade-regen). The PG view fallback's
+            // restoreDependents path uses this to skip restoring captured
+            // dependents that codegen will recreate later in the run.
             // Without the union, batch 1's fallback only sees batch 1's
             // entities — so a dependent like vwAIAgentRuns (which lives in
             // batch 2 cascade-regen) is "missing from willRegenerate", the
@@ -192,7 +203,6 @@ export class SQLCodeGenBase {
             const allBatchEntities: EntityInfo[] = [
                 ...entitiesWithoutCascadeRegeneration,
                 ...entitiesForCascadeRegeneration,
-                ...excludedEntities,
             ];
             const globalWillRegenerate = new Set(
                 allBatchEntities
@@ -230,7 +240,7 @@ export class SQLCodeGenBase {
                 willRegenerate: globalWillRegenerate
             }); // enable sql logging for NEW entities....
             if (!genResult.Success) {
-                logError('Main entity SQL generation batch had failures — continuing with cascade-regen and excluded-perms batches; validator will report any missing routines.');
+                logError('Main entity SQL generation batch had failures — continuing with cascade-regen; validator will report any missing routines.');
                 entityGenSuccess = false;
             }
 
@@ -255,23 +265,19 @@ export class SQLCodeGenBase {
                 genResult.Files.push(...cascadeGenResult.Files);
             }
 
-            // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
-            updateSpinner(`Generating permissions for ${excludedEntities.length} excluded entities...`);
-            const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                pool,
-                entities: excludedEntities,
-                directory,
-                onlyPermissions: true,
-                skipExecution: true, // skip execution because we execute it all in a giant batch below
-                batchSize: perEntityBatchSize,
-                writeFiles: true,
-                enableSQLLoggingForNewOrModifiedEntities: false, /*don't log this stuff, it is just permissions for excluded entities*/
-                willRegenerate: globalWillRegenerate
-            });
-            if (!genResult2.Success) {
-                logError('Excluded-entities permissions batch had failures — continuing; validator will report any missing routines.');
-                entityGenSuccess = false;
-            }
+            // STEP 2(c) used to generate+apply GRANT files for excludeSchemas entities
+            // ("we don't want to generate SQL, we do want to generate the permissions").
+            // That is wrong once excludeSchemas means "not this CodeGen run":
+            //
+            //   - Open Apps exclude sibling schemas (__mj_BizAppsCommon, …) and __mj.
+            //     GRANT SELECT ON [__mj_BizAppsCommon].[vwContactMethods] then runs from
+            //     the orders (or other) repo, pollutes SQL Scripts/generated/<sibling>/,
+            //     and fails the whole run (exit 1) when that object is missing or lives
+            //     in a schema the executing login does not resolve.
+            //   - Core (__mj) permissions already ship in MJ migrations. Refreshing them
+            //     from an app CodeGen is not this app's job.
+            //
+            // Permissions are applied in STEP 4 for includedEntities only.
             if (entityGenSuccess) {
                 succeedSpinner(`Entity generation completed (${(new Date().getTime() - step2StartTime.getTime())/1000}s)`);
             } else {
@@ -280,8 +286,8 @@ export class SQLCodeGenBase {
 
             // STEP 2(d) now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
             startSpinner('Creating combined SQL files...');
-            const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
-            succeedSpinner(`Created combined SQL files for ${allEntityFiles.length} schemas`);
+            const allEntityFiles = this.createCombinedEntitySQLFiles(directory, includedEntities);
+            succeedSpinner(`Created combined SQL files for ${allEntityFiles.length} file(s)`);
 
             // STEP 2(e) ---- FINALLY, we execute SQL in proper dependency order
             // Use temp batch files (which maintain CodeGen log order) if available, otherwise fall back to combined files
@@ -290,7 +296,7 @@ export class SQLCodeGenBase {
 
             let executionSuccess = false;
             if (useProviderPhasedExecution) {
-                // Per-entity phased execution already ran during steps 2(b)/(c).
+                // Per-entity phased execution already ran during step 2(b).
                 // Skip the bulk file re-execution — replaying the same SQL here
                 // would re-trigger 42P16 without the phased recovery wrapper and
                 // undo the work the phased executor just did.
@@ -403,10 +409,13 @@ export class SQLCodeGenBase {
                 }
             }
 
-            // STEP 4- Apply permissions, executing all .permissions files
+            // STEP 4- Apply permissions for THIS run's schemas only. Excluded-schema
+            // GRANT files are not generated (see STEP 2(c) note) and must not be
+            // executed: a missing sibling object would fail CodeGen with
+            // "Cannot find the object 'vw…'" even though this app's work succeeded.
             startSpinner('Applying permissions...');
             const step4StartTime: Date = new Date();
-            if (! await this.applyPermissions(pool, directory, baselineEntities)) {
+            if (! await this.applyPermissions(pool, directory, includedEntities)) {
                 failSpinner('Failed to apply permissions');
                 overallSuccess = false;
             }
@@ -814,7 +823,7 @@ export class SQLCodeGenBase {
     }
 
     /**
-     * Concatenates the root-ID TVF SQL for every recursive ParentID-style FK
+     * Concatenates the hierarchy TVF SQL for every recursive ParentID-style FK
      * on this entity. Mirrors the inline TVF generation in
      * `generateSingleEntitySQLToSeparateFiles` so the phased executor can run
      * the same DDL ahead of the base view.
@@ -824,10 +833,10 @@ export class SQLCodeGenBase {
         if (recursiveFKs.length === 0) return '';
         let combined = '';
         for (const field of recursiveFKs) {
-            const functionName = `fn${entity.BaseTable}${field.Name}_GetRootID`;
-            combined += this.generateSingleEntitySQLFileHeader(entity, functionName)
-                + this.generateRootIDFunction(entity, field)
-                + '\n' + this._dbProvider.BatchSeparator + '\n';
+            const fns = this.getHierarchyFunctionsForField(entity, field);
+            for (const fn of fns) {
+                combined += fn.sql + '\n' + this._dbProvider.BatchSeparator + '\n';
+            }
         }
         return combined;
     }
@@ -1148,9 +1157,21 @@ export class SQLCodeGenBase {
             let baseViewChanged = false;
             // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
             if (!options.onlyPermissions && !options.entity.VirtualEntity){
-                const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
+                const forceIndexes = !!(configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
+                const shouldGenerateIndexes = autoIndexForeignKeys() || forceIndexes;
                 const indexSQL = shouldGenerateIndexes ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
-                const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
+                // The soft-PK index rides in the same generated file (and therefore the same
+                // migration log), but on its own setting — see generateIndexForSoftPrimaryKey.
+                // Appended rather than prepended so the file's existing content stays
+                // byte-identical for every entity that has no soft PK, which is nearly all of
+                // them: writeFileIfChanged compares content, and reordering would rewrite the
+                // whole tree for no functional gain.
+                const softPKSQL = (autoIndexSoftPrimaryKeys() || forceIndexes)
+                    ? this.generateIndexForSoftPrimaryKey(options.entity)
+                    : '';
+                const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys')
+                    + indexSQL
+                    + (softPKSQL ? (indexSQL ? '\n\n' : '') + softPKSQL : '');
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
                     this.writeFileIfChanged(filePath, s);
@@ -1171,23 +1192,23 @@ export class SQLCodeGenBase {
                 (options.entity.BaseViewGenerated || options.entity.HasLayeredBaseView) &&
                 !options.entity.VirtualEntity) {
 
-                // ROOT ID FUNCTIONS (TVFs) + BASE VIEW
+                // HIERARCHY & ROOT ID FUNCTIONS (TVFs) + BASE VIEW
                 // TVFs must be created BEFORE the view that references them.
                 // We defer TVF logging until after baseViewChanged is computed so that
                 // TVFs are force-logged to the TempBatchFile whenever the view changes.
                 // This prevents "Invalid object name" errors when the view references
                 // TVFs that haven't been executed yet (e.g., when soft FKs are newly added).
                 const recursiveFKs = this.detectRecursiveForeignKeys(options.entity);
-                const tvfEntries: Array<{sql: string, filePath: string, fieldName: string}> = [];
+                const tvfEntries: Array<{sql: string, filePath: string, fieldName: string, description: string}> = [];
                 if (recursiveFKs.length > 0) {
                     for (const field of recursiveFKs) {
-                        const functionName = `fn${options.entity.BaseTable}${field.Name}_GetRootID`;
-                        const tvfSQL = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
-                                  this.generateRootIDFunction(options.entity, field);
-                        const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
-                        tvfEntries.push({sql: tvfSQL, filePath: tvfFilePath, fieldName: field.Name});
-                        // Add function SQL to output BEFORE the view
-                        sRet += tvfSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
+                        const fns = this.getHierarchyFunctionsForField(options.entity, field);
+                        for (const fn of fns) {
+                            const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, fn.functionName, false, true));
+                            tvfEntries.push({sql: fn.sql, filePath: tvfFilePath, fieldName: fn.fieldName, description: fn.description});
+                            // Add function SQL to output BEFORE the view
+                            sRet += fn.sql + '\n' + this._dbProvider.BatchSeparator + '\n';
+                        }
                     }
                 }
 
@@ -1204,7 +1225,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     for (const tvf of tvfEntries) {
                         this.writeFileIfChanged(tvf.filePath, tvf.sql);
-                        this.logSQLForNewOrModifiedEntity(options.entity, tvf.sql, `Root ID Function SQL for ${options.entity.Name}.${tvf.fieldName}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, tvf.sql, tvf.description, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(tvf.filePath);
                     }
                 }
@@ -1534,14 +1555,79 @@ export class SQLCodeGenBase {
     }
 
     /**
+     * Generates the composite index covering the entity's SOFT primary key. Empty for every
+     * entity with a real `PRIMARY KEY` constraint, which is nearly all of them.
+     *
+     * Kept separate from {@link generateIndexesForForeignKeys} and gated by its own setting: a
+     * soft-PK index serves MJ's own per-record existence check on the create path, which is a
+     * different concern from indexing foreign keys for joins and filters, and an operator's
+     * opinion about one is not an opinion about the other.
+     */
+    generateIndexForSoftPrimaryKey(entity: EntityInfo): string {
+        const indexStatements = this._dbProvider.generateSoftPrimaryKeyIndex(entity);
+        return indexStatements.join('\n\n');
+    }
+
+    /**
      * Detects self-referential foreign keys in an entity (e.g., ParentTaskID pointing back to Task table)
      * Returns array of field info objects representing recursive relationships
      */
     protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
-        return entity.Fields.filter(field =>
+        const hierarchyFKs = entity.Fields.filter(field =>
             field.RelatedEntityID != null &&
-            UUIDsEqual(field.RelatedEntityID, entity.ID)
+            UUIDsEqual(field.RelatedEntityID, entity.ID) &&
+            !field.IsVirtual &&
+            field.IsHierarchy === true
         );
+        if (hierarchyFKs.length === 0) {
+            return [];
+        }
+        if (entity.PrimaryKeys.length !== 1) {
+            logWarning(
+                `[Hierarchy] Entity '${entity.Name}' has ${hierarchyFKs.length} hierarchy foreign key(s) ` +
+                `(${hierarchyFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
+                `MemberJunction hierarchy TVF generation and traversal require a single-column primary key. Skipping hierarchy generation for this entity.`
+            );
+            return [];
+        }
+        return hierarchyFKs;
+    }
+
+    /**
+     * Helper to get the canonical hierarchy function definitions and metadata for an entity and recursive FK field.
+     */
+    protected getHierarchyFunctionsForField(entity: EntityInfo, field: EntityFieldInfo): Array<{functionName: string, sql: string, description: string, fieldName: string}> {
+        const metaFnName = this._dbProvider.getHierarchyMetaFunctionName(entity, field);
+        const descFnName = this._dbProvider.getDescendantsFunctionName(entity, field);
+        const ancFnName = this._dbProvider.getAncestorsFunctionName(entity, field);
+        const rootFnName = this._dbProvider.getRootIDFunctionName(entity, field);
+
+        return [
+            {
+                functionName: metaFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, metaFnName) + this._dbProvider.generateHierarchyMetaFunction(entity, field),
+                description: `Hierarchy Metadata Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: descFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, descFnName) + this._dbProvider.generateDescendantsFunction(entity, field),
+                description: `Descendants Traversal Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: ancFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, ancFnName) + this._dbProvider.generateAncestorsFunction(entity, field),
+                description: `Ancestors Traversal Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: rootFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, rootFnName) + this._dbProvider.generateRootIDFunction(entity, field),
+                description: `Root ID Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            }
+        ];
     }
 
     /**
@@ -1567,36 +1653,48 @@ export class SQLCodeGenBase {
             .join('\n');
     }
 
-
     /**
-     * Generates the SELECT clause additions for root fields from TVFs
-     * Example: , root_ParentID.RootID AS [RootParentID]
+     * Generates the SELECT clause additions for hierarchy metadata fields from TVFs
+     * Projects: Root<Field>, <Field>Depth, <Field>Path, <Field>IsLeaf, <Field>ChildCount
      */
-    protected generateRootFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+    protected generateHierarchyFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
         if (recursiveFKs.length === 0) return '';
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
-            const alias = `root_${field.Name}`;
-            sOutput += `,\n    ${this._dbProvider.generateRootFieldSelect(entity, field, alias)}`;
+            const alias = `hier_${field.Name}`;
+            sOutput += `,\n    ${this._dbProvider.generateHierarchyFieldSelect(entity, field, alias)}`;
         }
         return sOutput;
     }
 
     /**
-     * Generates OUTER APPLY joins to inline Table Value Functions for root ID calculation
-     * Each recursive FK gets an OUTER APPLY that calls its corresponding function
+     * Generates JOIN clauses to inline Table Value Functions for hierarchy metadata calculation
      */
-    protected generateRootIDJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+    protected generateHierarchyJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
         if (recursiveFKs.length === 0) return '';
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
-            const alias = `root_${field.Name}`;
+            const alias = `hier_${field.Name}`;
             if (sOutput.length > 0) sOutput += '\n';
-            sOutput += this._dbProvider.generateRootFieldJoin(entity, field, alias);
+            sOutput += this._dbProvider.generateHierarchyFieldJoin(entity, field, alias);
         }
         return '\n' + sOutput;
+    }
+
+    /**
+     * Generates the SELECT clause additions for root and hierarchy fields from TVFs
+     */
+    protected generateRootFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+        return this.generateHierarchyFieldSelects(entity, recursiveFKs, classNameFirstChar);
+    }
+
+    /**
+     * Generates joins to inline Table Value Functions for hierarchy and root ID calculation
+     */
+    protected generateRootIDJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+        return this.generateHierarchyJoins(recursiveFKs, classNameFirstChar, entity);
     }
 
     /**

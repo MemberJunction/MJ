@@ -1,5 +1,5 @@
 /**
- * entity-embedded.checks.ts — the 'entity-embedded' bundle (EE1–EE5): live-database
+ * entity-embedded.checks.ts — the 'entity-embedded' bundle (EE1–EE6): live-database
  * proof of owner-held embedded records.
  *
  * No production `__mj` field is an honest 1:1 composition (see plans/embedded-records.md
@@ -158,8 +158,10 @@ export const EntityEmbeddedChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const child = await newCategory(ctx, 'ee5-child');
             const parent = child.ParentID_EnsureObject();
-            // Name is required — leave it empty so the peer fails validation/save
-            parent.Name = '';
+            // Name is nvarchar(255) and required. Empty string is a value and
+            // passes validation; a too-long name is what the generated
+            // MaxLength check rejects, so the graph save fails before insert.
+            parent.Name = 'x'.repeat(256);
             parent.Status = 'Active';
 
             const saved = await child.Save();
@@ -167,6 +169,29 @@ export const EntityEmbeddedChecks: NamedCheck[] = [
             if (child.ID) {
                 track(child);
             }
+        },
+    },
+    {
+        Id: 'entity-embedded.EE6',
+        Name: 'EE6: Load of a self-parented embed fails cleanly instead of hanging',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const cat = await newCategory(ctx, 'ee6-self');
+            Assert(await cat.Save(), `EE6: initial save failed — ${cat.LatestResult?.CompleteMessage}`);
+            track(cat);
+            cat.ParentID = cat.ID;
+            Assert(await cat.Save(), `EE6: self-parent save failed — ${cat.LatestResult?.CompleteMessage}`);
+
+            const again = await ctx.Provider.GetEntityObject<EmbeddedTestCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            let threw = false;
+            try {
+                await again.Load(cat.ID);
+            } catch (e) {
+                threw = true;
+                const message = e instanceof Error ? e.message : String(e);
+                Assert(/cycle/i.test(message), `EE6: expected a cycle error, got: ${message}`);
+            }
+            Assert(threw, 'EE6: loading a self-parented embed must fail cleanly, not hang');
         },
     },
 ];

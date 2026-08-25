@@ -1,5 +1,65 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 6ecfaa0: Relationship `UI.sortKey` orders first-class related rail items after Details. Hug-height related grids use a top-aligned inline empty state. Left-nav labels cap at 200px and show the full title on hover.
+
+### Patch Changes
+
+- b46330e: Skip ClassFactory.CreateInstance when a view-type DriverClass has no registered descriptor. Seeded rows like TagCloudViewType no longer dump a fallback warning at Explorer boot.
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ng-base-types@6.1.0-edge.3
+  - @memberjunction/ng-notifications@6.1.0-edge.3
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.3
+  - @memberjunction/ng-list-management@6.1.0-edge.3
+  - @memberjunction/ng-map-view@6.1.0-edge.3
+  - @memberjunction/ng-record-changes@6.1.0-edge.3
+  - @memberjunction/ng-shared-generic@6.1.0-edge.3
+  - @memberjunction/ng-filter-builder@6.1.0-edge.3
+  - @memberjunction/ng-timeline@6.1.0-edge.3
+  - @memberjunction/ng-export-service@6.1.0-edge.3
+  - @memberjunction/ng-pagination@6.1.0-edge.3
+  - @memberjunction/export-engine@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

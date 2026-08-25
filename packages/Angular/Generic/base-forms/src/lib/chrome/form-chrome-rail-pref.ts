@@ -12,6 +12,15 @@ export function FormChromeRailPinnedKey(entityName: string): string {
     return `mj.formChrome.${name}.railPinned`;
 }
 
+/**
+ * Left-nav `activeGroup` is stored per entity. Unsaved (new) records must
+ * neither restore nor write it — they should open on the first first-class
+ * group (Details) instead of the last related section from another record.
+ */
+export function ShouldPersistChromeActiveGroup(isSaved: boolean | null | undefined): boolean {
+    return isSaved === true;
+}
+
 /** UserInfoEngine key: `mj.formChrome.<entity>.railWidth`. */
 export function FormChromeRailWidthKey(entityName: string): string {
     const name = (entityName ?? 'entity').trim().toLowerCase();

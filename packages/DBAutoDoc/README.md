@@ -1353,7 +1353,7 @@ DBAutoDoc is part of the MemberJunction project. Contributions welcome!
 
 ## License
 
-MIT
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.
 
 ## Demo Databases
 
