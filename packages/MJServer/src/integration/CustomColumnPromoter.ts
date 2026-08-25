@@ -18,8 +18,10 @@
  * goes through DDLGenerator driven by provider.PlatformKey ('sqlserver' | 'postgresql'); RSU has
  * dual SS/PG setup; IOF + field map are BaseEntity. No SS-only SQL anywhere in this file.
  *
- * The MJAPI restart (so the new column is exposed over GraphQL) + the JSON spread of staged
- * values into the new columns are M3 — this stage applies the schema only (SkipRestart).
+ * The ADD COLUMN runs through RSU's normal pipeline — migration written, committed, MJAPI
+ * restarted once for the whole batch — because the restart is what exposes the new columns over
+ * GraphQL and the commit is what stops the database carrying columns the repository has no record
+ * of. The JSON spread of staged values into those columns happens here too.
  */
 import {
     LogError,
@@ -215,9 +217,11 @@ export class IntegrationCustomColumnPromoter {
 
         // ── PHASE 2: ONE batched RSU pass for ALL entities' ADD COLUMN migrations. ──
         // RunPipelineBatch runs every migration under one lock, then ONE CodeGen + compile +
-        // restart + git commit. Each input carries the same SkipRestart/SkipGitCommit the
-        // per-entity path set, so the batch honours the same restart semantics — one restart
-        // signal at the end when applicable, never N.
+        // restart + git commit — which is now genuinely one restart and one commit for the whole
+        // promotion, rather than one per entity. See buildSchemaInput: the inputs no longer set
+        // SkipRestart/SkipGitCommit, so the batch commits the migration and restarts once at the
+        // end, which is what exposes the new columns over GraphQL and what keeps the repository in
+        // step with the database.
         let batchResults: RSUPipelineResult[] = [];
         if (batchInputs.length > 0) {
             const batch = await RuntimeSchemaManager.Instance.RunPipelineBatch(batchInputs);
@@ -504,10 +508,32 @@ export class IntegrationCustomColumnPromoter {
             MigrationSQL: statements.join('\n'),
             Description: `Promote ${named.length} custom column(s) on ${entityInfo.Name}`,
             AffectedTables: [`${entityInfo.SchemaName}.${entityInfo.BaseTable}`],
-            // M3 owns the restart-signal + restart; this stage applies schema only. Runtime
-            // promotion creates no git commit (the dev RSU flow does; a per-sync commit is noise).
-            SkipRestart: true,
-            SkipGitCommit: true,
+            // SkipRestart / SkipGitCommit are deliberately NOT set, so RSU runs its normal
+            // pipeline: migration written, committed, MJAPI restarted. Both fields are optional and
+            // RSU gates on `!inputs.every(i => i.SkipGitCommit)`, so omitting them IS the default.
+            //
+            // They were previously hardcoded `true` here — the only place in the repo either flag is
+            // forced rather than passed in. Every integration entry point takes them as arguments
+            // defaulting to false (IntegrationApplySchema / ApplySchemaBatch / ApplyAll /
+            // ApplyAllBatch), so adding tables, removing tables, refreshing schema and first-time
+            // setup all commit and restart. Promotion was the outlier, and neither reason held:
+            //
+            //  - "M3 owns the restart": nothing does. `sync.schema_update` carries
+            //    restartRequiredForGraphQL: true and has no subscriber anywhere — not in this repo,
+            //    not in the client. Meanwhile the client, on SchemaUpdatePending, arms its RSU poll
+            //    and treats a restart signature as "the expected RSU restart, not a failure" — then
+            //    waits for a restart that never came. Without it the columns never reach GraphQL,
+            //    so the UI that just asked for them cannot read them. The claim that they are
+            //    "already usable without a restart (metadata refreshed)" conflates metadata with
+            //    CODE: Refresh() reloads EntityField rows, it does not load regenerated entity
+            //    classes into a running process — which is exactly why the spread below documents
+            //    dynamic .Get/.Set as "the sanctioned exception", the typed property not existing yet.
+            //
+            //  - "a per-sync commit is noise": without the commit the migration and the regenerated
+            //    code never reach the repository, so the database carries columns git has no record
+            //    of. Observed live: a workspace's promoted columns were present only because a LATER
+            //    schema refresh happened to re-emit them as ADD COLUMN IF NOT EXISTS. Absent that
+            //    refresh, any environment rebuilt from the repo would silently lack them.
         };
     }
 
