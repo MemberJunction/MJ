@@ -495,9 +495,42 @@ export class IntegrationConnectorCreationPipeline {
                     // for that object never landed. Discover its fields over the read path and populate the
                     // existing declared object IN PLACE so it becomes syncable.
                     const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
-                    if (existing && existing.Fields.length === 0) {
+                    // The gate used to be "declared but FIELD-less", which tests the wrong property
+                    // for the decision that follows. An object declared WITH fields but WITHOUT a
+                    // primary key skipped the read path entirely, so its key was never decided from
+                    // data — StagePKClassify then ran on field NAMES alone (its `sampleRows` input
+                    // has no producer), and a convention match like `*_id` won. On a parent-scoped
+                    // child that elects the PARENT's foreign key as the child's PK: every child row
+                    // in a parent collapses onto one record, and because a soft PK carries no unique
+                    // index nothing catches it until concurrent writers deadlock on the shared row.
+                    //
+                    // Sample whenever the KEY is unknown — the question this branch exists to
+                    // answer. Declared-with-a-PK still skips: a declared key is authoritative.
+                    const declaredPKCount = (existing?.PrimaryKeyFields?.length ?? 0) > 0
+                        ? existing!.PrimaryKeyFields.length
+                        : (existing?.Fields ?? []).filter(f => f.IsPrimaryKey === true).length;
+                    if (existing && (existing.Fields.length === 0 || declaredPKCount === 0)) {
                         try {
                             const dfields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
+                            if (existing.Fields.length > 0) {
+                                // Field-less is the ONLY case that may take the discovered field set
+                                // wholesale. Here the declared catalog is authoritative for everything
+                                // except the key: re-sampled widths/types would overwrite deliberately
+                                // declared ones. Adopt the proven key, touch nothing else.
+                                const pkNames = new Set(dfields.filter(f => f.IsPrimaryKey === true).map(f => f.Name));
+                                if (pkNames.size > 0) {
+                                    let stamped = 0;
+                                    for (const ef of existing.Fields) {
+                                        if (pkNames.has(ef.Name)) { ef.IsPrimaryKey = true; stamped++; }
+                                    }
+                                    existing.PrimaryKeyFields = [...pkNames].filter(n => existing.Fields.some(ef => ef.Name === n));
+                                    const orphaned = [...pkNames].filter(n => !existing.Fields.some(ef => ef.Name === n));
+                                    console.log(`[IntrospectPipeline] declared keyless object "${d.Name}" → key from read path: [${[...pkNames].join(', ')}] (stamped ${stamped}/${pkNames.size}${orphaned.length ? `; NOT in declared fields: ${orphaned.join(', ')}` : ''})`);
+                                } else {
+                                    console.warn(`[IntrospectPipeline] declared keyless object "${d.Name}" → read path proved NO key from ${dfields.length} discovered field(s); leaving it to the soft-PK classifier.`);
+                                }
+                                continue;
+                            }
                             existing.Fields = dfields.map(f => ({
                                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
                                 IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
