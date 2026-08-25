@@ -1,5 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import { isInsideMonorepo, spawnInherit } from '../../../lib/regression/docker-helpers.js';
+import { CANONICAL_FORMAT_FLAG } from '../../../lib/format-compat.js';
 
 const REGRESSION_RESULTS_DIR = 'docker/regression/test-results';
 const EXTERNAL_RESULTS_DIR = 'test-results';
@@ -22,12 +23,7 @@ export default class TestRegressionCompare extends Command {
       description: 'Show only differences.',
       default: false,
     }),
-    format: Flags.string({
-      char: 'f',
-      description: 'Output format.',
-      options: ['console', 'json', 'markdown'],
-      default: 'console',
-    }),
+    format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path.',
@@ -58,7 +54,9 @@ export default class TestRegressionCompare extends Command {
     }
     if (flags.tag) args.push('--tag', flags.tag);
     if (flags['diff-only']) args.push('--diff-only');
-    if (flags.format && flags.format !== 'console') args.push('--format', flags.format);
+    // Forward only an explicit choice — the child command applies the same TTY
+    // detection we would, against the stdio it inherits from us.
+    if (flags.format) args.push('--format', flags.format);
     if (flags.output) args.push('--output', flags.output);
     if (flags.verbose) args.push('--verbose');
 

@@ -1,7 +1,9 @@
+import type { AuditOutputFormat } from '@memberjunction/ai-cli';
 import { Command, Flags, Args } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
+import { CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class AgentRun extends Command {
   static description = 'Audit and analyze AI agent execution runs for debugging and performance analysis';
@@ -28,9 +30,12 @@ export default class AgentRun extends Command {
 
   static flags = {
     // Output format
+    format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
-      description: 'Output format',
+      description:
+        "Output format (legacy alias for --format in the 'mj ai' family; elsewhere -o is an output FILE path). "
+        + 'Prefer --format.',
       options: ['compact', 'json', 'table', 'markdown'],
       default: 'compact',
     }),
@@ -129,6 +134,15 @@ export default class AgentRun extends Command {
     const { args, flags } = await this.parse(AgentRun);
     const spinner = ora();
 
+    // One typed resolution for all four render sites below — replaces the `as any`
+    // casts and applies the same --format/pipe rules as the rest of the CLI.
+    const outputFormat: AuditOutputFormat = resolveLegacyFormat({
+      format: flags.format,
+      legacy: flags.output as AuditOutputFormat,
+      legacyDefault: 'compact' as const,
+      map: { text: 'compact', json: 'json', md: 'markdown' },
+    });
+
     try {
       const service = new AgentAuditService();
 
@@ -143,7 +157,7 @@ export default class AgentRun extends Command {
         });
         spinner.stop();
 
-        this.log(service.formatRunList(runs, flags.output as any));
+        this.log(service.formatRunList(runs, outputFormat));
         process.exit(0);
         return;
       }
@@ -166,7 +180,7 @@ export default class AgentRun extends Command {
         );
         spinner.stop();
 
-        this.log(service.formatStepDetail(stepDetail, flags.output as any));
+        this.log(service.formatStepDetail(stepDetail, outputFormat));
         process.exit(0);
         return;
       }
@@ -177,7 +191,7 @@ export default class AgentRun extends Command {
         const errorAnalysis = await service.analyzeErrors(args.runId);
         spinner.stop();
 
-        this.log(service.formatErrorAnalysis(errorAnalysis, flags.output as any));
+        this.log(service.formatErrorAnalysis(errorAnalysis, outputFormat));
         process.exit(0);
         return;
       }
@@ -203,7 +217,7 @@ export default class AgentRun extends Command {
       });
       spinner.stop();
 
-      this.log(service.formatRunSummary(summary, flags.output as any));
+      this.log(service.formatRunSummary(summary, outputFormat));
 
       if (flags.verbose) {
         this.log(chalk.dim('\n💡 Tip: Use --step <N> to see details for a specific step'));

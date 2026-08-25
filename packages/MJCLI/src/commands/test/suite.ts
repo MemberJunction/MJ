@@ -1,4 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
+import { CANONICAL_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestSuite extends Command {
   static description = 'Execute a test suite';
@@ -22,12 +23,7 @@ export default class TestSuite extends Command {
       char: 'n',
       description: 'Test suite name to execute',
     }),
-    format: Flags.string({
-      char: 'f',
-      description: 'Output format',
-      options: ['console', 'json', 'markdown'],
-      default: 'console',
-    }),
+    format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',
@@ -79,7 +75,12 @@ export default class TestSuite extends Command {
       const suiteCommand = new SuiteCommand();
       await suiteCommand.execute(args.suiteId, {
         name: flags.name,
-        format: flags.format as 'console' | 'json' | 'markdown',
+        format: resolveLegacyFormat({
+          format: flags.format,
+          legacy: 'console' as const,
+          legacyDefault: 'console' as const,
+          map: TEST_FORMAT_MAP,
+        }),
         output: flags.output,
         verbose: flags.verbose,
         delay: flags.delay,

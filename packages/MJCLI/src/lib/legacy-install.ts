@@ -14,6 +14,7 @@ import { execSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { ZodError, z } from 'zod';
+import { requireInteractive } from './interactive-guard.js';
 
 // Directories are relative to execution cwd
 const GENERATED_ENTITIES_DIR = 'GeneratedEntities';
@@ -64,6 +65,13 @@ export class LegacyInstaller {
   }
 
   async Run(): Promise<void> {
+    // Two dozen blocking questions with no flag equivalents. Refuse before the first
+    // one rather than hanging an agent on stdin forever.
+    requireInteractive(
+      'The legacy interactive installer',
+      'Re-run with --human-friendly on a terminal, or drop --legacy to use the engine installer (which accepts --config).'
+    );
+
     this.checkNodeVersion();
     this.checkAvailableDiskSpace(2);
     this.verifyDirs(GENERATED_ENTITIES_DIR, SQL_SCRIPTS_DIR, MJAPI_DIR, MJEXPLORER_DIR);

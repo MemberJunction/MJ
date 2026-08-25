@@ -1,5 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import { confirm, checkbox } from '@inquirer/prompts';
+import { NonInteractiveError, resolveOrPrompt, withNonInteractiveHandling } from '../../lib/interactive-guard.js';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as path from 'path';
@@ -31,159 +32,178 @@ export default class FileReset extends Command {
 
     const { flags } = await this.parse(FileReset);
     const spinner = ora();
-    
-    try {
-      // Load configuration
-      spinner.start('Loading configuration');
-      const mjConfig = loadMJConfig();
-      if (!mjConfig) {
-        this.error('No mj.config.cjs found in current directory or parent directories');
-      }
+
+    await withNonInteractiveHandling(this, async () => {
+      try {
+        // Load configuration
+        spinner.start('Loading configuration');
+        const mjConfig = loadMJConfig();
+        if (!mjConfig) {
+          this.error('No mj.config.cjs found in current directory or parent directories');
+        }
       
-      // Stop spinner before provider initialization
-      spinner.stop();
-      
-      // Initialize data provider
-      await initializeProvider(mjConfig);
-      
-      // Initialize sync engine
-      const syncEngine = await getSyncEngine(getSystemUser());
-      
-      // Show success after initialization
-      if (flags.verbose) {
-        spinner.succeed('Configuration and metadata loaded');
-      } else {
+        // Stop spinner before provider initialization
         spinner.stop();
-      }
       
-      // Determine sections to reset
-      let sectionsToReset: string[] = [];
-      const availableSections = ['primaryKey', 'sync'];
+        // Initialize data provider
+        await initializeProvider(mjConfig);
       
-      if (flags.all) {
-        sectionsToReset = availableSections;
-      } else if (flags.sections) {
-        sectionsToReset = flags.sections.split(',').map(s => s.trim());
-        
-        // Validate sections
-        const invalidSections = sectionsToReset.filter(s => !availableSections.includes(s));
-        if (invalidSections.length > 0) {
-          this.error(`Invalid sections: ${invalidSections.join(', ')}. Valid sections are: ${availableSections.join(', ')}`);
-        }
-      } else {
-        // Interactive selection
-        sectionsToReset = await checkbox({
-          message: 'Select sections to reset:',
-          choices: [
-            { name: 'Primary Key metadata', value: 'primaryKey', checked: false },
-            { name: 'Sync metadata', value: 'sync', checked: false }
-          ]
-        });
-        
-        if (sectionsToReset.length === 0) {
-          this.log(chalk.yellow('No sections selected. Exiting.'));
-          return;
-        }
-      }
+        // Initialize sync engine
+        const syncEngine = await getSyncEngine(getSystemUser());
       
-      // Determine target directory
-      const targetDir = flags.dir 
-        ? path.resolve(configManager.getOriginalCwd(), flags.dir) 
-        : configManager.getOriginalCwd();
-      
-      // Show what will be reset
-      this.log(chalk.bold('\nFile Reset Summary:'));
-      this.log(`Target directory: ${path.relative(process.cwd(), targetDir)}`);
-      this.log(`Sections to reset: ${sectionsToReset.join(', ')}`);
-      this.log(`Mode: ${flags['dry-run'] ? 'Dry run (no changes will be made)' : 'Live (files will be modified)'}`);
-      
-      // Confirm unless forced or dry-run
-      if (!flags.force && !flags['dry-run']) {
-        const shouldContinue = await confirm({
-          message: 'This will reset the selected metadata sections. Continue?',
-          default: false
-        });
-        
-        if (!shouldContinue) {
-          this.log(chalk.yellow('\nFile reset cancelled.'));
-          return;
-        }
-      }
-      
-      // Create file reset service and execute
-      const fileResetService = new FileResetService();
-      
-      spinner.start('Resetting file metadata...');
-      
-      // Map selected sections to service options
-      let serviceSection: 'both' | 'primaryKey' | 'sync' = 'both';
-      if (sectionsToReset.includes('primaryKey') && sectionsToReset.includes('sync')) {
-        serviceSection = 'both';
-      } else if (sectionsToReset.includes('primaryKey')) {
-        serviceSection = 'primaryKey';
-      } else if (sectionsToReset.includes('sync')) {
-        serviceSection = 'sync';
-      }
-      
-      const result = await fileResetService.resetFiles({
-        sections: serviceSection,
-        dryRun: flags['dry-run'],
-        noBackup: false,
-        verbose: flags.verbose
-      }, {
-        onProgress: (message: string) => {
-          spinner.start(message);
-        },
-        onWarn: (message: string) => {
-          this.warn(message);
-        },
-        onLog: (message: string) => {
-          this.log(message);
-        }
-      });
-      
-      spinner.stop();
-      
-      // Show summary
-      if (result.modifiedFiles > 0) {
-        if (flags['dry-run']) {
-          this.log(chalk.blue(`\n🔍 Dry run complete. ${result.modifiedFiles} file(s) would be reset.`));
+        // Show success after initialization
+        if (flags.verbose) {
+          spinner.succeed('Configuration and metadata loaded');
         } else {
-          this.log(chalk.green(`\n✅ Successfully reset ${result.modifiedFiles} file(s).`));
-          if (result.backupsCreated > 0) {
-            this.log(chalk.gray(`   📁 Created ${result.backupsCreated} backup(s).`));
+          spinner.stop();
+        }
+      
+        // Determine sections to reset
+        let sectionsToReset: string[] = [];
+        const availableSections = ['primaryKey', 'sync'];
+      
+        if (flags.all) {
+          sectionsToReset = availableSections;
+        } else if (flags.sections) {
+          sectionsToReset = flags.sections.split(',').map(s => s.trim());
+        
+          // Validate sections
+          const invalidSections = sectionsToReset.filter(s => !availableSections.includes(s));
+          if (invalidSections.length > 0) {
+            this.error(`Invalid sections: ${invalidSections.join(', ')}. Valid sections are: ${availableSections.join(', ')}`);
+          }
+        } else {
+          // No --all/--sections given: ask when allowed, else fail naming the flags.
+          sectionsToReset = await resolveOrPrompt<string[]>({
+            flagValue: undefined,
+            what: 'A list of sections to reset',
+            suggestion: `Pass --sections=${availableSections.join(',')} or --all.`,
+            prompt: () =>
+              checkbox({
+                message: 'Select sections to reset:',
+                choices: [
+                  { name: 'Primary Key metadata', value: 'primaryKey', checked: false },
+                  { name: 'Sync metadata', value: 'sync', checked: false }
+                ]
+              }),
+          });
+
+          if (sectionsToReset.length === 0) {
+            this.log(chalk.yellow('No sections selected. Exiting.'));
+            return;
           }
         }
-      } else {
-        this.log(chalk.yellow('\n⚠️  No files needed resetting.'));
+      
+        // Determine target directory
+        const targetDir = flags.dir 
+          ? path.resolve(configManager.getOriginalCwd(), flags.dir) 
+          : configManager.getOriginalCwd();
+      
+        // Show what will be reset
+        this.log(chalk.bold('\nFile Reset Summary:'));
+        this.log(`Target directory: ${path.relative(process.cwd(), targetDir)}`);
+        this.log(`Sections to reset: ${sectionsToReset.join(', ')}`);
+        this.log(`Mode: ${flags['dry-run'] ? 'Dry run (no changes will be made)' : 'Live (files will be modified)'}`);
+      
+        // Confirm unless forced or dry-run. Headless runs must pass --force explicitly:
+        // this rewrites files on disk, so silently assuming "yes" would be worse than failing.
+        if (!flags.force && !flags['dry-run']) {
+          const shouldContinue = await resolveOrPrompt<boolean>({
+            flagValue: undefined,
+            what: 'Confirmation to reset metadata sections',
+            suggestion: 'Pass --force to proceed without confirmation, or --dry-run to preview.',
+            prompt: () =>
+              confirm({
+                message: 'This will reset the selected metadata sections. Continue?',
+                default: false
+              }),
+          });
+
+          if (!shouldContinue) {
+            this.log(chalk.yellow('\nFile reset cancelled.'));
+            return;
+          }
+        }
+      
+        // Create file reset service and execute
+        const fileResetService = new FileResetService();
+      
+        spinner.start('Resetting file metadata...');
+      
+        // Map selected sections to service options
+        let serviceSection: 'both' | 'primaryKey' | 'sync' = 'both';
+        if (sectionsToReset.includes('primaryKey') && sectionsToReset.includes('sync')) {
+          serviceSection = 'both';
+        } else if (sectionsToReset.includes('primaryKey')) {
+          serviceSection = 'primaryKey';
+        } else if (sectionsToReset.includes('sync')) {
+          serviceSection = 'sync';
+        }
+      
+        const result = await fileResetService.resetFiles({
+          sections: serviceSection,
+          dryRun: flags['dry-run'],
+          noBackup: false,
+          verbose: flags.verbose
+        }, {
+          onProgress: (message: string) => {
+            spinner.start(message);
+          },
+          onWarn: (message: string) => {
+            this.warn(message);
+          },
+          onLog: (message: string) => {
+            this.log(message);
+          }
+        });
+      
+        spinner.stop();
+      
+        // Show summary
+        if (result.modifiedFiles > 0) {
+          if (flags['dry-run']) {
+            this.log(chalk.blue(`\n🔍 Dry run complete. ${result.modifiedFiles} file(s) would be reset.`));
+          } else {
+            this.log(chalk.green(`\n✅ Successfully reset ${result.modifiedFiles} file(s).`));
+            if (result.backupsCreated > 0) {
+              this.log(chalk.gray(`   📁 Created ${result.backupsCreated} backup(s).`));
+            }
+          }
+        } else {
+          this.log(chalk.yellow('\n⚠️  No files needed resetting.'));
+        }
+      
+        if (flags.verbose) {
+          this.log(`\n📊 Statistics:`);
+          this.log(`   Files processed: ${result.processedFiles}`);
+          this.log(`   Files with primaryKey: ${result.filesWithPrimaryKey}`);
+          this.log(`   Files with sync: ${result.filesWithSync}`);
+          this.log(`   Total primaryKeys removed: ${result.totalPrimaryKeys}`);
+          this.log(`   Total syncs removed: ${result.totalSyncs}`);
+        }
+      
+      } catch (error) {
+        // A refusal to prompt is not a file-reset failure — let it through so the
+        // caller sees the flag to pass rather than a stack trace.
+        if (error instanceof NonInteractiveError) throw error;
+
+        spinner.fail('File reset failed');
+      
+        // Enhanced error logging
+        this.log('\n=== File Reset Error Details ===');
+        this.log(`Error type: ${error?.constructor?.name || 'Unknown'}`);
+        this.log(`Error message: ${error instanceof Error ? error.message : String(error)}`);
+      
+        if (error instanceof Error && error.stack) {
+          this.log(`\nStack trace:`);
+          this.log(error.stack);
+        }
+      
+        this.error(error as Error);
+      } finally {
+        // Reset singletons
+        resetSyncEngine();
       }
-      
-      if (flags.verbose) {
-        this.log(`\n📊 Statistics:`);
-        this.log(`   Files processed: ${result.processedFiles}`);
-        this.log(`   Files with primaryKey: ${result.filesWithPrimaryKey}`);
-        this.log(`   Files with sync: ${result.filesWithSync}`);
-        this.log(`   Total primaryKeys removed: ${result.totalPrimaryKeys}`);
-        this.log(`   Total syncs removed: ${result.totalSyncs}`);
-      }
-      
-    } catch (error) {
-      spinner.fail('File reset failed');
-      
-      // Enhanced error logging
-      this.log('\n=== File Reset Error Details ===');
-      this.log(`Error type: ${error?.constructor?.name || 'Unknown'}`);
-      this.log(`Error message: ${error instanceof Error ? error.message : String(error)}`);
-      
-      if (error instanceof Error && error.stack) {
-        this.log(`\nStack trace:`);
-        this.log(error.stack);
-      }
-      
-      this.error(error as Error);
-    } finally {
-      // Reset singletons
-      resetSyncEngine();
-    }
+    });
   }
 }

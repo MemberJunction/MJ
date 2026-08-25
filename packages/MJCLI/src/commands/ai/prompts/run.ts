@@ -1,6 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
+import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class PromptsRun extends Command {
   static description = 'Execute a direct prompt with an AI model';
@@ -37,9 +38,12 @@ export default class PromptsRun extends Command {
       char: 'c',
       description: 'AI Configuration ID to use',
     }),
+    format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
-      description: 'Output format',
+      description:
+        "Output format (legacy alias for --format in the 'mj ai' family; elsewhere -o is an output FILE path). "
+        + 'Prefer --format.',
       options: ['compact', 'json', 'table'],
       default: 'compact',
     }),
@@ -58,7 +62,12 @@ export default class PromptsRun extends Command {
 
     const { flags } = await this.parse(PromptsRun);
     const service = new PromptService();
-    const formatter = new OutputFormatter(flags.output as 'compact' | 'json' | 'table');
+    const formatter = new OutputFormatter(resolveLegacyFormat({
+        format: flags.format,
+        legacy: flags.output as 'compact' | 'json' | 'table',
+        legacyDefault: 'compact' as const,
+        map: AI_FORMAT_MAP,
+      }));
 
     try {
       const spinner = ora();

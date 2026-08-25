@@ -13,6 +13,7 @@ import {
 } from '@memberjunction/installer';
 
 import { LegacyInstaller } from '../../lib/legacy-install.js';
+import { requireInteractive, withNonInteractiveHandling } from '../../lib/interactive-guard.js';
 
 export default class Install extends Command {
   static description = 'Install MemberJunction from a GitHub release';
@@ -78,12 +79,20 @@ export default class Install extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(Install);
 
-    if (flags.legacy) {
-      const legacy = new LegacyInstaller(this, flags.verbose ?? false);
-      return legacy.Run();
-    }
+    return withNonInteractiveHandling(this, async () => {
+      if (flags.legacy) {
+        // The legacy installer is a two-dozen-question wizard with no flag equivalents,
+        // so it is interactive by nature — refuse it up front rather than at question 1.
+        requireInteractive(
+          'The legacy interactive installer',
+          'Re-run with --human-friendly on a terminal, or drop --legacy to use the engine installer (which accepts --config).'
+        );
+        const legacy = new LegacyInstaller(this, flags.verbose ?? false);
+        return legacy.Run();
+      }
 
-    return this.runEngineInstall(flags);
+      return this.runEngineInstall(flags);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -186,6 +195,13 @@ export default class Install extends Command {
   }
 
   private async handlePromptEvent(event: PromptEvent): Promise<void> {
+    // Every branch below blocks on stdin. Refuse up front when this run may not prompt,
+    // so the caller gets an actionable error instead of a process that never returns.
+    requireInteractive(
+      `An answer to "${event.Message}"`,
+      'Re-run with --human-friendly on an interactive terminal, or supply the value through mj.config.cjs / the command\'s flags.'
+    );
+
     let answer: string;
 
     switch (event.PromptType) {

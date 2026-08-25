@@ -1,6 +1,26 @@
 import { Hook } from '@oclif/core';
 import figlet from 'figlet';
+import { HUMAN_FRIENDLY_ENV } from '@memberjunction/cli-core';
 import { LIGHT_COMMANDS } from '../light-commands.js';
+
+/**
+ * Strips a global boolean flag from argv in place and reports whether it was there.
+ *
+ * Global chrome flags have to work on ANY command, including the ~80 that are still
+ * plain oclif `Command`s and don't declare them — oclif's strict parser would reject
+ * an undeclared flag with "Nonexistent flag". So the hook consumes them here and
+ * signals downstream through the environment instead.
+ */
+function takeGlobalFlag(argv: string[], flag: string): boolean {
+  let found = false;
+  for (let i = argv.length - 1; i >= 0; i--) {
+    if (argv[i] === flag) {
+      argv.splice(i, 1);
+      found = true;
+    }
+  }
+  return found;
+}
 
 const hook: Hook<'prerun'> = async function (options) {
   const argv = options.argv ?? [];
@@ -13,24 +33,33 @@ const hook: Hook<'prerun'> = async function (options) {
     const i = argv.indexOf('--format');
     return i >= 0 ? argv[i + 1] : undefined;
   })();
-  const machineFormat = formatArg === 'json' || formatArg === 'md';
-  const noBanner = argv.includes('--no-banner');
+  const machineFormat = formatArg === 'json' || formatArg === 'md' || formatArg === 'markdown';
 
-  // `--no-banner` is global chrome — every command renders the banner, so suppressing
-  // it must work on ANY command, including those not yet migrated to BaseCLIPlugin
-  // (which don't declare the flag and would otherwise fail oclif's strict parser with
-  // "Nonexistent flag"). Signal suppression to MJCLIRuntimeHost via env (so migrated
-  // commands still gate their runtime advisory) and strip the flag from argv in place
-  // so the per-command parser never sees an undeclared flag.
-  if (noBanner) {
-    process.env.MJ_CLI_NO_BANNER = '1';
-    for (let i = argv.length - 1; i >= 0; i--) {
-      if (argv[i] === '--no-banner') argv.splice(i, 1);
-    }
+  // `--human-friendly` is the global opt-in to interactive prompts (mj is otherwise
+  // non-interactive so an agent or CI job can never hang on a question). Like
+  // `--no-banner` it must work on every command, so it is consumed here and forwarded
+  // via env to both BaseCLIPlugin and the unmigrated commands' interactive guards.
+  if (takeGlobalFlag(argv, '--human-friendly')) {
+    process.env[HUMAN_FRIENDLY_ENV] = '1';
   }
 
+  const noBanner = takeGlobalFlag(argv, '--no-banner');
+  if (noBanner) {
+    process.env.MJ_CLI_NO_BANNER = '1';
+  }
+
+  // A caller that redirected stdout has already told us it is a machine; a figlet
+  // banner in its capture buffer is pure noise. This is the same pipe-detection that
+  // selects the JSON output format, applied to decorative chrome.
+  const piped = process.stdout.isTTY !== true;
+
   // Skip banners if --quiet flag is present (or appears to be present)
-  if (machineFormat || noBanner || argv.some((arg) => arg === '--quiet' || (/^-[^-]+/.test(arg) && arg.includes('q')))) {
+  if (
+    machineFormat ||
+    noBanner ||
+    piped ||
+    argv.some((arg) => arg === '--quiet' || (/^-[^-]+/.test(arg) && arg.includes('q')))
+  ) {
     // Still conditionally load bootstrap below — just no decorative output.
     return await maybeLoadBootstrap(options);
   }
@@ -38,7 +67,7 @@ const hook: Hook<'prerun'> = async function (options) {
   // Skip banners entirely when --json is requested — the contract for --json
   // is that stdout is parseable JSON, and any banner above it breaks
   // `mj … --json | jq`. This early-return also skips the userAgent line below.
-  if (options.argv?.some((arg) => arg === '--json')) {
+  if (argv.some((arg) => arg === '--json')) {
     return;
   }
 

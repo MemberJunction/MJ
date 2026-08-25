@@ -1,5 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
+import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class ActionsList extends Command {
   static description = 'List available AI actions';
@@ -11,9 +12,12 @@ export default class ActionsList extends Command {
   ];
 
   static flags = {
+    format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
-      description: 'Output format',
+      description:
+        "Output format (legacy alias for --format in the 'mj ai' family; elsewhere -o is an output FILE path). "
+        + 'Prefer --format.',
       options: ['compact', 'json', 'table'],
       default: 'compact',
     }),
@@ -31,7 +35,12 @@ export default class ActionsList extends Command {
       const actions = await service.listActions();
       spinner.stop();
 
-      const formatter = new OutputFormatter(flags.output as 'compact' | 'json' | 'table');
+      const formatter = new OutputFormatter(resolveLegacyFormat({
+        format: flags.format,
+        legacy: flags.output as 'compact' | 'json' | 'table',
+        legacyDefault: 'compact' as const,
+        map: AI_FORMAT_MAP,
+      }));
       this.log(formatter.formatActionList(actions));
       
       // Force exit after completion

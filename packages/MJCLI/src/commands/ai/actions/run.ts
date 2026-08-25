@@ -1,6 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
+import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class ActionsRun extends Command {
   static description = 'Execute an AI action with parameters';
@@ -26,9 +27,12 @@ export default class ActionsRun extends Command {
     'dry-run': Flags.boolean({
       description: 'Validate without executing',
     }),
+    format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
-      description: 'Output format',
+      description:
+        "Output format (legacy alias for --format in the 'mj ai' family; elsewhere -o is an output FILE path). "
+        + 'Prefer --format.',
       options: ['compact', 'json', 'table'],
       default: 'compact',
     }),
@@ -47,7 +51,12 @@ export default class ActionsRun extends Command {
 
     const { flags } = await this.parse(ActionsRun);
     const service = new ActionService();
-    const formatter = new OutputFormatter(flags.output as 'compact' | 'json' | 'table');
+    const formatter = new OutputFormatter(resolveLegacyFormat({
+        format: flags.format,
+        legacy: flags.output as 'compact' | 'json' | 'table',
+        legacyDefault: 'compact' as const,
+        map: AI_FORMAT_MAP,
+      }));
 
     // Parse parameters
     const params: Record<string, string> = {};
