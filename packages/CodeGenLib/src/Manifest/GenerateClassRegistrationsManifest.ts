@@ -1,10 +1,10 @@
 /**
  * Build-time tool to generate an import manifest that prevents tree-shaking of
- * @RegisterClass decorated classes.
+ * classes registered with @RegisterClass / @RegisterClassEx.
  *
  * The tool starts from the current app's package.json, walks its full transitive
- * dependency tree, scans each dependency's source for @RegisterClass decorators,
- * and generates a manifest importing only the packages that contain them.
+ * dependency tree, scans each dependency's source for both register-decorator
+ * forms, and generates a manifest importing only the packages that contain them.
  *
  * Usage (via MJCLI):
  *   mj codegen manifest --output ./src/generated/class-registrations-manifest.ts
@@ -35,7 +35,11 @@ export interface RegisteredClassInfo {
     packageName: string;
     /** The base class name from the decorator (first argument) */
     baseClassName?: string;
-    /** The key from the decorator (second argument) */
+    /**
+     * The registration key: the second positional argument of `RegisterClass`,
+     * or the `key` property of the `RegisterClassEx` options bag. Undefined when
+     * the decorator supplies no statically knowable key.
+     */
     key?: string;
 }
 
@@ -409,12 +413,58 @@ async function findDistFiles(distDir: string, excludePatterns: string[]): Promis
 }
 
 /**
- * Parses a TypeScript file and extracts @RegisterClass decorator information
+ * Decorator identifiers that register a class with the MJGlobal class factory.
+ *
+ * Both forms must be recognized: `RegisterClass` is the classic positional
+ * signature, `RegisterClassEx` the options-bag variant that MJGlobal's own
+ * docs recommend for new code. Matching only one of them silently omits the
+ * other's classes from the manifest AND from the coverage audit meant to
+ * catch such gaps (issue #3944).
+ */
+const REGISTER_DECORATORS = new Set(['RegisterClass', 'RegisterClassEx']);
+
+/**
+ * Pulls the registration `key` out of a register-decorator argument list,
+ * handling both signatures:
+ *
+ *   RegisterClass(baseClass, 'key', priority?, ...)     -> args[1] is a string literal
+ *   RegisterClassEx(baseClass, { key: 'key', ... })     -> args[1] is an options bag
+ *
+ * `args[0]` (the base class identifier) is identical in both forms, so only the
+ * key extraction differs. Returns undefined when there is no statically
+ * knowable key (absent, null, or a non-literal expression) — the same treatment
+ * the positional form already gave a non-literal second argument.
+ */
+function extractRegistrationKey(args: ts.NodeArray<ts.Expression>): string | undefined {
+    if (args.length < 2) return undefined;
+    const second = args[1];
+
+    // Positional form: RegisterClass(baseClass, 'key')
+    if (ts.isStringLiteral(second)) return second.text;
+
+    // Options-bag form: RegisterClassEx(baseClass, { key: 'key', ... })
+    if (ts.isObjectLiteralExpression(second)) {
+        for (const prop of second.properties) {
+            if (!ts.isPropertyAssignment(prop)) continue;
+            const name = prop.name;
+            const propName = ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
+            if (propName !== 'key') continue;
+            return ts.isStringLiteral(prop.initializer) ? prop.initializer.text : undefined;
+        }
+    }
+
+    return undefined;
+}
+
+/**
+ * Parses a TypeScript file and extracts @RegisterClass / @RegisterClassEx
+ * decorator information
  */
 function extractRegisterClassDecorators(filePath: string, sourceText: string, packageName: string): RegisteredClassInfo[] {
     const results: RegisteredClassInfo[] = [];
 
-    // Quick check before parsing
+    // Quick check before parsing. 'RegisterClassEx' contains 'RegisterClass',
+    // so this substring test covers both decorator forms.
     if (!sourceText.includes('RegisterClass')) return results;
 
     const sourceFile = ts.createSourceFile(
@@ -445,7 +495,8 @@ function extractRegisterClassDecorators(filePath: string, sourceText: string, pa
 }
 
 /**
- * Parses a single @RegisterClass decorator and extracts its arguments
+ * Parses a single @RegisterClass / @RegisterClassEx decorator and extracts its
+ * arguments
  */
 function parseRegisterClassDecorator(
     decorator: ts.Decorator,
@@ -457,22 +508,19 @@ function parseRegisterClassDecorator(
 
     const callExpr = decorator.expression;
 
-    // Check if the function being called is "RegisterClass"
-    if (!ts.isIdentifier(callExpr.expression) || callExpr.expression.text !== 'RegisterClass') {
+    // Check if the function being called is a register decorator (either form)
+    if (!ts.isIdentifier(callExpr.expression) || !REGISTER_DECORATORS.has(callExpr.expression.text)) {
         return null;
     }
 
     // Extract arguments
     const args = callExpr.arguments;
     let baseClassName: string | undefined;
-    let key: string | undefined;
 
     if (args.length > 0 && ts.isIdentifier(args[0])) {
         baseClassName = args[0].text;
     }
-    if (args.length > 1 && ts.isStringLiteral(args[1])) {
-        key = args[1].text;
-    }
+    const key = extractRegistrationKey(args);
 
     return { className, filePath, packageName, baseClassName, key };
 }
@@ -484,10 +532,11 @@ function parseRegisterClassDecorator(
  * `__decorate()` calls with the pattern:
  *
  *   ClassName = __decorate([ RegisterClass(BaseClass, 'key') ], ClassName);
+ *   ClassName = __decorate([ RegisterClassEx(BaseClass, { key: 'key' }) ], ClassName);
  *
  * This function uses TypeScript's parser with ScriptKind.JS to build a proper
  * AST, then walks it looking for assignment expressions whose right-hand side
- * is a `__decorate([ ... ], ClassName)` call containing `RegisterClass()`.
+ * is a `__decorate([ ... ], ClassName)` call containing a register decorator.
  */
 function extractRegisterClassFromCompiledJS(
     filePath: string,
@@ -496,7 +545,8 @@ function extractRegisterClassFromCompiledJS(
 ): RegisteredClassInfo[] {
     const results: RegisteredClassInfo[] = [];
 
-    // Quick check before parsing
+    // Quick check before parsing. 'RegisterClassEx' contains 'RegisterClass',
+    // so this substring test covers both decorator forms.
     if (!sourceText.includes('RegisterClass')) return results;
 
     const sourceFile = ts.createSourceFile(
@@ -553,7 +603,8 @@ function parseDecorateAssignment(
 
 /**
  * Walks the elements of a __decorate() array literal and extracts
- * RegisterClass(...) calls, returning a RegisteredClassInfo for each.
+ * RegisterClass(...) / RegisterClassEx(...) calls, returning a
+ * RegisteredClassInfo for each.
  */
 function extractRegisterClassFromDecoratorArray(
     arrayLiteral: ts.ArrayLiteralExpression,
@@ -566,18 +617,15 @@ function extractRegisterClassFromDecoratorArray(
     for (const element of arrayLiteral.elements) {
         if (!ts.isCallExpression(element)) continue;
         if (!ts.isIdentifier(element.expression)) continue;
-        if (element.expression.text !== 'RegisterClass') continue;
+        if (!REGISTER_DECORATORS.has(element.expression.text)) continue;
 
         let baseClassName: string | undefined;
-        let key: string | undefined;
 
         const args = element.arguments;
         if (args.length > 0 && ts.isIdentifier(args[0])) {
             baseClassName = args[0].text;
         }
-        if (args.length > 1 && ts.isStringLiteral(args[1])) {
-            key = args[1].text;
-        }
+        const key = extractRegistrationKey(args);
 
         results.push({ className, filePath, packageName, baseClassName, key });
     }
