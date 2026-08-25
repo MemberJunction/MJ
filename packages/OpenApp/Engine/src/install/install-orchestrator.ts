@@ -18,7 +18,7 @@ import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-bu
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
-import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
+import { CreateAppSchema, DropAppSchema, SchemaExists } from './schema-manager.js';
 import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
@@ -27,7 +27,7 @@ import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamic
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { NormalizeUUID, EscapeSQLString } from '@memberjunction/global';
 import type { MJEntityEntity, MJEntityFieldEntity, MJApplicationEntity } from '@memberjunction/core-entities';
 import {
   RecordAppInstallation,
@@ -2050,7 +2050,7 @@ export async function RemoveAppEntityMetadata(
 ): Promise<{ Success: boolean; ErrorMessage?: string }> {
   try {
     const rv = new RunView();
-    const escaped = EscapeSqlString(schemaName);
+    const escaped = EscapeSQLString(schemaName);
 
     // Migration-declared Application IDs (normalized). A link-less nav Application can exist even
     // with zero entities, so these are honored on both the no-entities early-out and after teardown.
@@ -2099,7 +2099,7 @@ export async function RemoveAppEntityMetadata(
     }
 
     const entityIds = entityResult.Results.map((e) => e.ID);
-    const idList = entityIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+    const idList = entityIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
 
     // Capture the app's OWN Application row(s) NOW — before the ApplicationEntity links below
     // are torn down — so they can be cleaned up post-teardown (see DeleteAppOwnedApplications). An
@@ -2145,7 +2145,7 @@ export async function RemoveAppEntityMetadata(
       if (!fieldResult.Success) {
         throw new Error(`Failed to query entity fields for schema '${schemaName}': ${fieldResult.ErrorMessage}`);
       }
-      const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(f.ID)}'`).join(',');
+      const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSQLString(f.ID)}'`).join(',');
 
       // Queue FK-dependent deletes in dependency order (children before parents).
       if (fieldIdList.length > 0) {
@@ -2259,7 +2259,7 @@ async function FindAppOwnedApplications(rv: RunView, contextUser: UserInfo, enti
   }
   // Re-read ALL links for the candidates: an Application is "owned" only if EVERY one of its
   // links is to an entity we're removing (otherwise it groups another app's entities too).
-  const candList = candidateIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+  const candList = candidateIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
   const allLinks = await rv.RunView<{ ApplicationID: string; EntityID: string }>(
     { EntityName: 'MJ: Application Entities', ExtraFilter: `ApplicationID IN (${candList})`, Fields: ['ApplicationID', 'EntityID'], ResultType: 'simple' },
     contextUser,
@@ -2287,7 +2287,7 @@ async function DeleteAppOwnedApplications(rv: RunView, applicationIds: string[],
   if (applicationIds.length === 0) {
     return;
   }
-  const idList = applicationIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+  const idList = applicationIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
   const appsResult = await rv.RunView<MJApplicationEntity>(
     { EntityName: 'MJ: Applications', ExtraFilter: `ID IN (${idList})`, ResultType: 'entity_object' },
     contextUser,
