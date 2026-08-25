@@ -1,5 +1,6 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { MJSearchScopePermissionEntity, MJAIAgentEntity, MJAISkillEntity, MJAISkillSearchScopeEntity } from '@memberjunction/core-entities';
 
 /**
@@ -267,12 +268,33 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         // Step 4: agent fallback. SearchScopeAccess='All' lets trusted agents
         // operate across scopes when the user has no per-scope grant.
         if (Agent && Agent.SearchScopeAccess === 'All') {
+            // A PRINCIPAL MAY ONLY WIDEN IF THE CALLER MAY WIELD IT.
+            //
+            // This is the one place an agent changes an outcome: by here the user has no direct or
+            // role grant, and 'All' is about to supply one. Elsewhere `Agent` is attribution — the
+            // pre-execution RAG path threads AIAgentID purely so SearchExecutionLog can attribute
+            // the search — so the check belongs HERE and not at the point the id is supplied.
+            // Gating supply instead of grant is what turns an analytics field into an outage.
+            //
+            // Failing the check does not refuse the search; the fallback simply does not apply and
+            // we fall through to denied, which is where the user already was.
+            const wieldable = await this.principalIsWieldable(Agent, null, User);
+            if (wieldable.ok === false) {
+                return this.buildResult(false, 'None', 'PrincipalNotActivatable',
+                    `Agent '${Agent.Name}' has SearchScopeAccess='All', but ${wieldable.reason} — the fallback does not apply.`);
+            }
             return this.buildResult(true, 'Search', 'AgentUnscopedAll',
                 `Agent '${Agent.Name}' has SearchScopeAccess='All'; granting 'Search' as a fallback for this scope.`);
         }
 
         // Step 4b: skill fallback, mirroring the agent's 'All'.
         if (Skill && Skill.SearchScopeAccess === 'All') {
+            // Same rule, same reason — see the agent arm above.
+            const wieldable = await this.principalIsWieldable(Agent, Skill, User);
+            if (wieldable.ok === false) {
+                return this.buildResult(false, 'None', 'PrincipalNotActivatable',
+                    `Skill '${Skill.Name}' has SearchScopeAccess='All', but ${wieldable.reason} — the fallback does not apply.`);
+            }
             return this.buildResult(true, 'Search', 'SkillUnscopedAll',
                 `Skill '${Skill.Name}' has SearchScopeAccess='All'; granting 'Search' as a fallback for this scope.`);
         }
@@ -400,6 +422,48 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         }
         return result.Results ?? [];
     }
+
+    /**
+     * May this caller actually wield this principal?
+     *
+     * Asked ONLY where a principal is about to widen (the two `SearchScopeAccess='All'` fallbacks).
+     * Both permission models are open by default — no permission rows means anyone may run it — so
+     * without this an id a caller merely NAMED could grant `Search` on any scope.
+     *
+     * A stale metadata cache is reported distinctly. `GetUserAgentPermissions` throws when the agent
+     * is absent from `AIEngine.Instance.Agents` and fails closed to all-false, so an agent created
+     * after the cache loaded would otherwise read as "not permitted" — a metadata-load problem
+     * wearing an authorization message.
+     */
+    protected async principalIsWieldable(
+        agent: MJAIAgentEntity | null,
+        skill: MJAISkillEntity | null,
+        user: UserInfo,
+    ): Promise<{ ok: true } | { ok: false; reason: string }> {
+        await AIEngine.Instance.Config(false, user);
+
+        if (agent) {
+            if (!AIEngine.Instance.Agents.some(a => UUIDsEqual(a.ID, agent.ID))) {
+                return { ok: false, reason: `agent '${agent.Name}' is not in the AI metadata cache, so its permissions cannot be evaluated (a metadata-load problem, not a denial)` };
+            }
+            const perms = await AIEngine.Instance.GetUserAgentPermissions(agent.ID, user);
+            if (!perms?.canRun) return { ok: false, reason: `this user may not run agent '${agent.Name}'` };
+        }
+
+        if (skill) {
+            if (!agent) return { ok: false, reason: 'a skill is judged relative to the calling agent, and none was supplied' };
+            // agent-accepted n agent-granted n Active n user-runnable — the same call
+            // BaseAgent.preActivateRequestedSkills gates real activation on, so a skill may widen a
+            // search only on the terms it could have been activated on.
+            const activatable = AIEngine.Instance.GetSkillsForAgent(
+                agent as Parameters<typeof AIEngine.Instance.GetSkillsForAgent>[0], user);
+            if (!activatable.some(x => UUIDsEqual(x.ID, skill.ID))) {
+                return { ok: false, reason: `skill '${skill.Name}' is not activatable by agent '${agent.Name}' for this user` };
+            }
+        }
+        return { ok: true };
+    }
+
 
     /** Bundles the result fields together with a closure-bound toSqlPredicate. */
     private buildResult(

@@ -39,6 +39,23 @@ vi.mock('@memberjunction/core', () => {
 // to satisfy `RegisterClass` and `MJGlobal` as well as `UUIDsEqual`. Registration is a no-op here —
 // these tests exercise the stock resolver's own logic directly, not the resolution seam (that is
 // covered by `__tests__/SearchScopePermissionResolver.pluggable.test.ts`).
+// The resolver now imports AIEngine to judge whether a principal may be WIELDED before its
+// SearchScopeAccess='All' fallback grants anything. AIEngine pulls BaseSingleton from global, so a
+// hand-written global mock has to carry it; importOriginal keeps the rest real.
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: { Instance: {
+        Config: async () => undefined,
+        get Agents() { return aiAgentsStub; },
+        GetUserAgentPermissions: (...a: unknown[]) => agentPermsStub(...(a as [])),
+        GetSkillsForAgent: (...a: unknown[]) => skillsForAgentStub(...(a as [])),
+    } },
+}));
+// Permissive by default: every test in this file predates the wieldability gate and assumes the
+// principal is one the caller may use. Tests that exercise the gate narrow these.
+let aiAgentsStub: { some: (predicate: unknown) => boolean } = { some: () => true };
+const agentPermsStub = vi.fn(async () => ({ canView: true, canRun: true, canEdit: false, canDelete: false, isOwner: false }));
+const skillsForAgentStub = vi.fn((): Array<{ ID: string }> => [{ ID: 'ANY' }]);
+
 vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a?: string | null, b?: string | null) =>
         !!a && !!b && a.toLowerCase() === b.toLowerCase(),
@@ -206,6 +223,58 @@ describe('SearchScopePermissionResolver', () => {
             expect(result.Allowed).toBe(true);
             expect(result.Level).toBe('Search');
             expect(result.Source).toBe('AgentUnscopedAll');
+        });
+    });
+
+    describe("a principal may only WIDEN if the caller may wield it", () => {
+        // The 'All' fallbacks are the only place a principal changes an outcome: by the time they
+        // are reached the user has no grant of their own, and 'All' is about to supply one. Both
+        // permission models are open by default, so without this an id a caller merely NAMED could
+        // grant Search on any scope.
+        beforeEach(() => {
+            // mockClear as well as re-stubbing: the attribution test asserts the gate was never
+            // CALLED, and call history survives a value reset.
+            agentPermsStub.mockClear();
+            skillsForAgentStub.mockClear();
+            aiAgentsStub = { some: () => true };
+            agentPermsStub.mockResolvedValue({ canView: true, canRun: true, canEdit: false, canDelete: false, isOwner: false });
+        });
+
+        it('does NOT grant when the user may not run the agent', async () => {
+            agentPermsStub.mockResolvedValue({ canView: true, canRun: false, canEdit: false, canDelete: false, isOwner: false });
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(), SearchScopeID: SCOPE_ID, Agent: makeAgent('All'),
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Source).toBe('PrincipalNotActivatable');
+            expect(result.Reason).toContain('may not run agent');
+        });
+
+        it('calls a stale metadata cache what it is, not a denial', async () => {
+            // GetUserAgentPermissions throws when the agent is absent from the cache and fails
+            // closed to all-false, so without this an agent created after the cache loaded reads as
+            // "not permitted" — a metadata-load problem wearing an authorization message.
+            aiAgentsStub = { some: () => false };
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(), SearchScopeID: SCOPE_ID, Agent: makeAgent('All'),
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toContain('metadata-load problem');
+        });
+
+        it('LEAVES ATTRIBUTION ALONE — an agent that is not "All" is never gated', async () => {
+            // The regression this placement exists to avoid. agent-pre-execution-rag threads
+            // AIAgentID purely so SearchExecutionLog can attribute the search; gating the SUPPLY of
+            // the id rather than its use as a GRANT turned an analytics field into a retrieval
+            // outage. A non-'All' agent must reach the same verdict it always did.
+            agentPermsStub.mockResolvedValue({ canView: false, canRun: false, canEdit: false, canDelete: false, isOwner: false });
+            aiAgentsStub = { some: () => false };
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(), SearchScopeID: SCOPE_ID, Agent: makeAgent('Assigned'),
+            });
+            // Whatever the outcome, it is decided by the scope rules — NOT by wieldability.
+            expect(result.Source).not.toBe('PrincipalNotActivatable');
+            expect(agentPermsStub).not.toHaveBeenCalled();
         });
     });
 

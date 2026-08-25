@@ -26,26 +26,34 @@ already been bitten by once. So the skill is resolved *before* the permission ch
 A value that is not a UUID, or that will not load, is refused with `INVALID_PARAM` rather than
 dropped: continuing with a null skill would bind an unjudged ID into the expansion query.
 
-**Loading a principal is not permission to wield it — and that judgement lives on the ENGINE.**
+**A principal may only WIDEN if the caller may wield it — checked where it widens.**
 
-`principalsFrom()` is where an id becomes a principal that can change what a search may reach:
-`AgentUnscopedAll` and `SkillUnscopedAll` GRANT `Search` on any scope, and both permission models are
-open by default. Those ids arrive from callers — a GraphQL argument, an action parameter the model
-authored — so "was this supplied" and "may this caller wield it" are different questions.
+`AgentUnscopedAll` and `SkillUnscopedAll` are the only places a principal changes an outcome: by the
+time they are reached the user has no grant of their own, and `SearchScopeAccess='All'` is about to
+supply one. Both permission models are open by default — no permission rows means anyone may run it —
+so an id a caller merely NAMED could grant `Search` on any scope.
 
-`SearchEngine.validatePrincipals()` answers the second, once, in `searchInternal` before scopes or the
-cache. It requires Run on the agent, requires the skill to be in `GetSkillsForAgent(agent, user)` —
-the same call `BaseAgent.preActivateRequestedSkills` gates real activation on, so a skill may steer a
-search only on the terms it could have been activated on — and refuses a supplied id that will not
-load rather than silently downgrading to "no principal".
+`SearchScopePermissionResolver.principalIsWieldable()` gates exactly those two fallbacks: Run on the
+agent, and for a skill, membership of `GetSkillsForAgent(agent, user)` — the same call
+`BaseAgent.preActivateRequestedSkills` gates real activation on, so a skill may widen a search only on
+the terms it could have been activated on. Failing the check does not refuse the search; the fallback
+simply does not apply and the verdict falls through to denied, which is where the user already was.
 
-It is on the engine rather than in the action because `Search()` has SEVEN callers: three GraphQL
-resolvers, two actions, the pre-execution RAG path and the test harness. A gate in one of them is a
-gate the other six route around — and two of those resolvers already pass a client-supplied `agentID`
-straight through with no Run check. `ExplainScope` needing its own copy of the same policy was the
-tell; it now calls the same method, so a preview cannot promise what a search would refuse.
+**Deliberately NOT gated at the point the id is supplied.** `AIAgentID` is attribution far more often
+than it is authorization — `agent-pre-execution-rag` threads it purely so `SearchExecutionLog` can
+attribute the search — and gating supply rather than grant turns an analytics field into a retrieval
+outage on any install with explicit `AI Agent Permission` rows. A test pins that: a non-`'All'` agent
+never reaches the check.
 
-**`ExplainScope` mirrors both gates** (`@memberjunction/search-engine`). It already loaded the skill
+A stale metadata cache is reported as itself. `GetUserAgentPermissions` throws when the agent is
+absent from `AIEngine.Instance.Agents` and fails closed to all-false, so an agent created after the
+cache loaded would otherwise read as "not permitted" — a metadata-load problem wearing an
+authorization message.
+
+Because the policy sits in the resolver, `ExplainScope` inherits it: preview and search reach the same
+verdict by running the same code rather than by two copies agreeing.
+
+**`ExplainScope` inherits the same judgement** (`@memberjunction/search-engine`). It already loaded the skill
 principal and applied its rules, so without this a preview would report `SkillUnscopedAll` as a grant
 while the real search refused — the preview-vs-enforcement drift that file already carries a regression
 test about. Both paths now judge both principals on identical terms, and a principal the entitlement step refused

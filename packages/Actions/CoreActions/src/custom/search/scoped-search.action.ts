@@ -165,7 +165,7 @@ export class ScopedSearchAction extends BaseAction {
                         AISkillID: skill.ID,
                     });
                     return this.createErrorResult(
-                        `Forbidden: skill '${skill.Name}' has SearchScopeAccess='None'.`, 'ACCESS_DENIED');
+                        `Forbidden: AISkillID '${aiSkillID}' cannot steer a scoped search.`, 'ACCESS_DENIED');
                 }
 
             }
@@ -328,7 +328,7 @@ export class ScopedSearchAction extends BaseAction {
                 AISkillID: skill.ID,
             });
             return this.createErrorResult(
-                `Forbidden: no search scope resolved, so skill '${skill.Name}' cannot be judged.`,
+                `Forbidden: no search scope resolved, so the supplied skill principal cannot be judged.`,
                 'ACCESS_DENIED');
         }
         const permResolver = GetSearchScopePermissionResolver();
