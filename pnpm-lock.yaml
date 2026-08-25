@@ -12940,6 +12940,12 @@ importers:
       '@memberjunction/skyway-sqlserver':
         specifier: ^0.6.2
         version: 0.6.2
+      mssql:
+        specifier: ^11.0.1
+        version: 11.0.1
+      pg:
+        specifier: ^8.13.1
+        version: 8.18.0
 
   packages/PostgreSQLDataProvider:
     dependencies:
