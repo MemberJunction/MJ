@@ -43,29 +43,6 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
 
     // ── BaseEngine Config ─────────────────────────────────────────────
 
-    /**
-     * The two catalog datasets, declared ONCE and used by both places that need them: the
-     * BaseEngine registration in {@link Config}, and {@link RefreshCatalog}.
-     *
-     * Sharing the objects is the point. `BaseEnginePropertyConfig.PropertyName` is typed `string`
-     * and `keyof this` does not include private fields, so a separate list of property-name
-     * literals could never be checked by the compiler against the fields it names — a rename would
-     * leave RefreshCatalog matching nothing and silently refreshing nothing. Referencing the same
-     * objects removes the lookup, and with it the possibility of a miss.
-     */
-    private static readonly CATALOG_CONFIGS: Array<Partial<BaseEnginePropertyConfig>> = [
-        {
-            PropertyName: '_integrationObjects',
-            EntityName: 'MJ: Integration Objects',
-            CacheLocal: true,
-        },
-        {
-            PropertyName: '_integrationObjectFields',
-            EntityName: 'MJ: Integration Object Fields',
-            CacheLocal: true,
-        },
-    ];
-
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
             {
@@ -98,7 +75,16 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
                 EntityName: 'MJ: Company Integration Sync Watermarks',
                 CacheLocal: true,
             },
-            ...IntegrationEngineBase.CATALOG_CONFIGS,
+            {
+                PropertyName: '_integrationObjects',
+                EntityName: 'MJ: Integration Objects',
+                CacheLocal: true,
+            },
+            {
+                PropertyName: '_integrationObjectFields',
+                EntityName: 'MJ: Integration Object Fields',
+                CacheLocal: true,
+            },
         ];
 
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -114,13 +100,9 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
      * ARRAY IDENTITY, so they rebuild lazily on first read after the swap.
      */
     public async RefreshCatalog(contextUser?: UserInfo): Promise<void> {
-        // An engine that was never configured holds no cache to go stale, and LoadSingleConfig has
-        // no provider or user to work with. That is the only guard needed: the configs below are
-        // the very objects registered in Config(), so they can never be "not found".
-        if (this.Configs.length === 0) return;
-
-        for (const cfg of IntegrationEngineBase.CATALOG_CONFIGS) {
-            await this.LoadSingleConfig(cfg as BaseEnginePropertyConfig, (contextUser ?? this.ContextUser) as UserInfo, /*bypassCache*/ true);
+        for (const prop of ['_integrationObjects', '_integrationObjectFields']) {
+            const cfg = this.Configs.find(c => c.PropertyName === prop);
+            if (cfg) await this.LoadSingleConfig(cfg, (contextUser ?? this.ContextUser) as UserInfo, /*bypassCache*/ true);
         }
     }
 

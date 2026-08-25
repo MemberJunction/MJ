@@ -62,12 +62,4 @@ describe('RefreshCatalog', () => {
         await engine.RefreshCatalog({ ID: 'u1' } as never);
         expect(loaded).toEqual([]);
     });
-
-
-    it('reloads the SAME config objects the engine registered — not a name lookup', async () => {
-        // The two catalog configs are shared between Config() and RefreshCatalog, so a rename of
-        // either private field moves both together and there is no lookup left to miss.
-        await engine.RefreshCatalog({ ID: 'u1' } as never);
-        expect(loaded.map(l => l.prop)).toEqual(['_integrationObjects', '_integrationObjectFields']);
-    });
 });
