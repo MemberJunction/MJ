@@ -415,39 +415,6 @@ describe('ScopedSearchAction', () => {
             expect(searchSpy).not.toHaveBeenCalled();
         });
 
-        it('refuses a skill the caller may not RUN, so a named skill cannot grant a scope', async () => {
-            // SkillUnscopedAll grants Search on ANY scope when SearchScopeAccess='All', and skill
-            // permissions are open by default — so an unchecked, caller-supplied skill id is a
-            // scope grant for the asking.
-            skillMayRunSpy.mockReturnValue([]);
-            loadedAgentStub.SearchScopeAccess = 'All';
-            const action = new ScopedSearchAction();
-            const res = await run(action, mkParams([
-                { Name: 'Query', Value: 'q' },
-                { Name: 'AgentID', Value: 'agent-1' },
-                { Name: 'AISkillID', Value: SKILL_UUID }
-            ]));
-            expect(res.Success).toBe(false);
-            expect(res.ResultCode).toBe('ACCESS_DENIED');
-            // and it never reached the search or the scope gate
-            expect(searchSpy).not.toHaveBeenCalled();
-            expect(permissionResolveSpy).not.toHaveBeenCalled();
-        });
-
-        it('attributes that denial to the skill in the Forbidden log', async () => {
-            skillMayRunSpy.mockReturnValue([]);
-            loadedAgentStub.SearchScopeAccess = 'All';
-            const action = new ScopedSearchAction();
-            await run(action, mkParams([
-                { Name: 'Query', Value: 'q' },
-                { Name: 'AgentID', Value: 'agent-1' },
-                { Name: 'AISkillID', Value: SKILL_UUID }
-            ]));
-            expect(logForbiddenSpy).toHaveBeenCalled();
-            const row = logForbiddenSpy.mock.calls.at(-1)?.[0] as { AISkillID?: string };
-            expect(row.AISkillID).toBe('skill-1');
-        });
-
         it("refuses a skill whose SearchScopeAccess is 'None', the documented veto", async () => {
             loadedSkillStub.SearchScopeAccess = 'None';
             loadedAgentStub.SearchScopeAccess = 'All';
@@ -627,53 +594,6 @@ describe('ScopedSearchAction', () => {
         beforeEach(() => {
             agentMayRunSpy.mockResolvedValue(true);
             skillMayRunSpy.mockReturnValue([{ ID: 'skill-1' }]);
-        });
-
-        // resolveAgentID takes the `agentid` ACTION PARAMETER ahead of the server-stamped context
-        // value, and AgentUnscopedAll grants Search on any scope when SearchScopeAccess='All' —
-        // explicitly as a fallback "when the user has no per-scope grant". Agent permissions are open
-        // by default, so unchecked this converts "no grant" into "Search".
-        it('calls a stale metadata cache what it is, not an access denial', async () => {
-            // GetEffectivePermissions throws when the agent is absent from the cache and fails
-            // closed to all-false, so without this an ordinary metadata-load problem would tell an
-            // operator the agent "is not available to you" and hide the cause in a LogError.
-            agentsInCacheStub = [];
-            const action = new ScopedSearchAction();
-            const result = await run(action, mkParams([
-                { Name: 'Query', Value: 'q' },
-                { Name: 'AgentID', Value: 'agent-1' }
-            ]));
-            expect(result.Success).toBe(false);
-            expect(result.ResultCode).not.toBe('ACCESS_DENIED');
-            expect(result.Message).toContain('metadata-load problem');
-            agentsInCacheStub = [{ ID: 'agent-1' }];
-        });
-
-        it('refuses an agent the caller may not run, before any scope is resolved', async () => {
-            agentMayRunSpy.mockResolvedValue(false);
-            loadedAgentStub.SearchScopeAccess = 'All';
-            const action = new ScopedSearchAction();
-            const result = await run(action, mkParams([
-                { Name: 'Query', Value: 'q' },
-                { Name: 'AgentID', Value: 'agent-1' }
-            ]));
-            expect(result.Success).toBe(false);
-            expect(result.ResultCode).toBe('ACCESS_DENIED');
-            expect(searchSpy).not.toHaveBeenCalled();
-            expect(permissionResolveSpy).not.toHaveBeenCalled();
-        });
-
-        it('attributes that denial to the agent in the Forbidden log', async () => {
-            agentMayRunSpy.mockResolvedValue(false);
-            loadedAgentStub.SearchScopeAccess = 'All';
-            const action = new ScopedSearchAction();
-            await run(action, mkParams([
-                { Name: 'Query', Value: 'q' },
-                { Name: 'AgentID', Value: 'agent-1' }
-            ]));
-            const row = logForbiddenSpy.mock.calls.at(-1)?.[0] as { AIAgentID?: string; AISkillID?: string | null };
-            expect(row.AIAgentID).toBe('agent-1');
-            expect(row.AISkillID).toBeNull();
         });
 
         it('lets a runnable agent through, which is every existing caller', async () => {

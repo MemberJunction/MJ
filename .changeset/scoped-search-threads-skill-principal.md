@@ -26,40 +26,24 @@ already been bitten by once. So the skill is resolved *before* the permission ch
 A value that is not a UUID, or that will not load, is refused with `INVALID_PARAM` rather than
 dropped: continuing with a null skill would bind an unjudged ID into the expansion query.
 
-**Loading a skill is not permission to wield it.** The ID arrives as an action parameter, and in an
-agent flow the model authors action parameters. `SkillUnscopedAll` GRANTS `Search` on any scope when
-`SearchScopeAccess='All'`, and AISkill permissions are open by default (no permission rows -> everyone
-may View and Run), so an unchecked skill id would be a scope grant for the asking on a fresh install.
-The action therefore intersects the skill against `GetSkillsForAgent(agent, user)` before it acts as a
-principal, and denies with `ACCESS_DENIED`, attributed to the skill in the Forbidden log. That call —
-not a bare "can this user Run it" check — is deliberate: it is what `BaseAgent.preActivateRequestedSkills`
-gates real activation on, so a skill may steer a search on exactly the terms it could have been
-activated on (the agent accepts skills, this agent is granted this one, the skill is Active, and the
-user may Run it). The deny arms would have been safe unchecked; the grant arm is not, and both read
-the same field.
+**Loading a principal is not permission to wield it — and that judgement lives on the ENGINE.**
 
-**The agent is judged on the same terms.** `resolveAgentID` takes the `agentid` ACTION PARAMETER
-ahead of the server-stamped `params.Context.AgentID`, and `AgentUnscopedAll` grants `Search` on any
-scope as a fallback "when the user has no per-scope grant" — with agent permissions also open by
-default. Naming a trusted agent therefore converted "no grant" into "Search". The action now requires
-Run on the agent (`AIAgentPermissionHelper`) before it acts as a principal. This was pre-existing
-rather than introduced here, but shipping a skill gate while leaving the agent ungated would have been
-an odd place to stop. Blast radius is scope-level, not row-level — results still pass
-`filterByPermissions` and RLS — but a scope IS the content bound.
+`principalsFrom()` is where an id becomes a principal that can change what a search may reach:
+`AgentUnscopedAll` and `SkillUnscopedAll` GRANT `Search` on any scope, and both permission models are
+open by default. Those ids arrive from callers — a GraphQL argument, an action parameter the model
+authored — so "was this supplied" and "may this caller wield it" are different questions.
 
-**The veto is enforced structurally, not only through the resolver.** `enforceUserPermission` returns
-early when no scope resolved, and `resolveScopeAll` yields `GlobalScope?.ID` — `undefined` on any
-installation with no `IsGlobal` scope row. On that path the per-scope gate never ran while
-`AISkillID` was still threaded into `SearchParams`, so a skill documented as a veto would have
-permitted an unbounded search. `SearchScopeAccess='None'` is now checked where the skill is resolved,
-exactly as `resolveScope` already does for the agent, and a skill that cannot be judged at all
-(no scope resolved) is refused rather than allowed to ride an unscoped search. Callers passing no
-skill are unaffected, which is every caller that existed before this input.
+`SearchEngine.validatePrincipals()` answers the second, once, in `searchInternal` before scopes or the
+cache. It requires Run on the agent, requires the skill to be in `GetSkillsForAgent(agent, user)` —
+the same call `BaseAgent.preActivateRequestedSkills` gates real activation on, so a skill may steer a
+search only on the terms it could have been activated on — and refuses a supplied id that will not
+load rather than silently downgrading to "no principal".
 
-**`SearchScopePermissionSource` gains `'PrincipalNotActivatable'`** — hence `minor` rather than
-`patch` on `search-engine`. `'NoGrant'` documents itself as "no applicable row found", so reporting a
-principal REJECTION with it left `ScopeDecisionJSON` and audit readers unable to tell the two apart.
-Additive; nothing switches exhaustively on the type.
+It is on the engine rather than in the action because `Search()` has SEVEN callers: three GraphQL
+resolvers, two actions, the pre-execution RAG path and the test harness. A gate in one of them is a
+gate the other six route around — and two of those resolvers already pass a client-supplied `agentID`
+straight through with no Run check. `ExplainScope` needing its own copy of the same policy was the
+tell; it now calls the same method, so a preview cannot promise what a search would refuse.
 
 **`ExplainScope` mirrors both gates** (`@memberjunction/search-engine`). It already loaded the skill
 principal and applied its rules, so without this a preview would report `SkillUnscopedAll` as a grant

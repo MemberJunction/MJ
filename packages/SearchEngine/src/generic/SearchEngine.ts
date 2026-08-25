@@ -362,6 +362,23 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 await this.Config({}, contextUser);
             }
 
+            // JUDGE THE PRINCIPALS BEFORE ANYTHING ELSE — before scope resolution, before the
+            // cache. Every caller of Search() arrives here, so this is the gate the GraphQL
+            // resolvers and the pre-execution RAG path get for free.
+            const principalCheck = await this.validatePrincipals(params, contextUser);
+            if (principalCheck.ok === false) {
+                await this.LogForbiddenSearch({
+                    Query: params.Query,
+                    ScopeIDs: params.ScopeIDs,
+                    FailureReason: principalCheck.reason,
+                    StartTime: startTime,
+                    ContextUser: contextUser,
+                    AIAgentID: params.AIAgentID ?? null,
+                    AISkillID: params.AISkillID ?? null,
+                });
+                return this.buildErrorResult(`Forbidden: ${principalCheck.reason}`, startTime);
+            }
+
             const topK = params.MaxResults ?? this._defaultMaxResults;
             const mode = params.Mode ?? 'full';
             const isPreview = mode === 'preview';
@@ -881,6 +898,69 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * Accepts anything carrying the two principal IDs, which both `SearchParams` and
      * `ExplainScopeInput` do.
      */
+    /**
+     * THE ONE PLACE A SUPPLIED PRINCIPAL IS JUDGED.
+     *
+     * `principalsFrom()` is where an agent or skill id becomes a principal that can change what a
+     * search may reach: `AgentUnscopedAll` and `SkillUnscopedAll` GRANT `Search` on any scope when
+     * the principal carries `SearchScopeAccess='All'`, and both permission models are open by
+     * default. Those ids arrive from callers — a GraphQL argument, an action parameter the model
+     * authored — so "was this id supplied" and "may this caller wield it" are different questions.
+     *
+     * This lives on the engine rather than in a caller because `Search()` has SEVEN callers (three
+     * GraphQL resolvers, two actions, the pre-execution RAG path, the test harness). A gate in one
+     * of them is a gate the other six route around, and `ExplainScope` would need its own copy —
+     * which is how the duplication that prompted this method arose in the first place.
+     *
+     * Returns the loaded principals so callers do not re-read them.
+     */
+    protected async validatePrincipals(
+        input: { AIAgentID?: string | null; AISkillID?: string | null },
+        contextUser: UserInfo,
+    ): Promise<
+        | { ok: true; agent: MJAIAgentEntity | null; skill: MJAISkillEntity | null }
+        | { ok: false; reason: string }
+    > {
+        const [agent, skill] = await Promise.all([
+            this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
+            this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
+        ]);
+
+        // A SUPPLIED id that does not load is a refusal, not an absent principal. Treating it as
+        // absent silently downgrades to "no principal" and lets the search run unjudged.
+        if (input.AIAgentID && !agent) {
+            return { ok: false, reason: `Agent '${input.AIAgentID}' could not be loaded, so it cannot act as a search principal.` };
+        }
+        if (input.AISkillID && !skill) {
+            return { ok: false, reason: `Skill '${input.AISkillID}' could not be loaded, so it cannot act as a search principal.` };
+        }
+        // A skill is judged RELATIVE TO an agent (GetSkillsForAgent), and a real search always has a
+        // calling agent, so a skill without one cannot be judged at all.
+        if (input.AISkillID && !input.AIAgentID) {
+            return { ok: false, reason: 'A skill principal is judged relative to the calling agent, so AIAgentID is required alongside AISkillID.' };
+        }
+
+        if (agent) {
+            await AIEngine.Instance.Config(false, contextUser);
+            const perms = await AIEngine.Instance.GetUserAgentPermissions(agent.ID, contextUser);
+            if (!perms?.canRun) {
+                return { ok: false, reason: `Agent '${agent.Name}' is not runnable by this user, so it cannot act as a search principal.` };
+            }
+        }
+        if (skill) {
+            await AIEngine.Instance.Config(false, contextUser);
+            // agent-accepted n agent-granted n Active n user-runnable — the same call
+            // BaseAgent.preActivateRequestedSkills gates real activation on, so a skill may steer a
+            // search only on the terms it could have been activated on.
+            const activatable = AIEngine.Instance.GetSkillsForAgent(
+                agent as Parameters<typeof AIEngine.Instance.GetSkillsForAgent>[0], contextUser);
+            if (!activatable.some(x => UUIDsEqual(x.ID, skill.ID))) {
+                return { ok: false, reason: `Skill '${skill.Name}' is not activatable by this agent for this user, so it cannot act as a search principal.` };
+            }
+        }
+        return { ok: true, agent, skill };
+    }
+
     protected principalsFrom(source: { AIAgentID?: string | null; AISkillID?: string | null }): ScopePrincipals {
         return { AgentID: source.AIAgentID ?? null, SkillID: source.AISkillID ?? null };
     }
@@ -988,89 +1068,18 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             PrimaryScopeRecordID: input.SearchContext?.PrimaryScopeRecordID ?? null,
         };
         try {
-            const [agent, skill] = await Promise.all([
-                this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
-                this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
-            ]);
-            // A SUPPLIED PRINCIPAL THAT DID NOT LOAD IS A REFUSAL, not an absent principal. The
-            // gates below sit behind `if (agent)` / `if (skill)`, so a deleted or mistyped id would
-            // otherwise skip them entirely and the explanation would report whatever the user's own
-            // grants give — while the action refuses the same input with INVALID_PARAM /
-            // MISSING_AGENT_CONTEXT. That is the drift this mirroring exists to remove.
-            if (input.AIAgentID && !agent) {
+            // Same judge as the search — see validatePrincipals. This used to carry its own copy of
+            // the gates, which is exactly the duplication that showed the policy belonged on the
+            // engine: a preview must not promise what Search() would refuse.
+            const judged = await this.validatePrincipals(input, contextUser);
+            if (judged.ok === false) {
                 return {
                     Allowed: false, Level: 'None', Source: 'PrincipalNotActivatable',
-                    Reason: `Agent '${input.AIAgentID}' could not be loaded, so it cannot act as a `
-                          + 'search principal; a real search would be refused.',
+                    Reason: `${judged.reason} A real search would be refused.`,
                     Principals: principals,
                 };
             }
-            if (input.AISkillID && !skill) {
-                return {
-                    Allowed: false, Level: 'None', Source: 'PrincipalNotActivatable',
-                    Reason: `Skill '${input.AISkillID}' could not be loaded, so it cannot act as a `
-                          + 'search principal; a real search would be refused.',
-                    Principals: principals,
-                };
-            }
-            // A skill is judged RELATIVE TO an agent (GetSkillsForAgent), and a real search always
-            // has a calling agent. Asked about a skill with no agent, say that plainly instead of
-            // reporting "not activatable by this agent" when the caller never named one.
-            if (input.AISkillID && !input.AIAgentID) {
-                return {
-                    Allowed: false, Level: 'None', Source: 'PrincipalNotActivatable',
-                    Reason: 'A skill principal is judged relative to the calling agent, so AIAgentID '
-                          + 'is required alongside AISkillID; a real search always has one.',
-                    Principals: principals,
-                };
-            }
-
-            // MIRROR THE ACTION'S PRINCIPAL GATES, so a preview cannot promise what the search
-            // would refuse. The agent first: AgentUnscopedAll grants Search on any scope as a
-            // fallback "when the user has no per-scope grant", and agent permissions are open by
-            // default, so an agent the caller may not run must not shape the explanation either.
-            if (agent) {
-                await AIEngine.Instance.Config(false, contextUser);
-                // GetUserAgentPermissions is AIEngine's own passthrough, so this needs no
-                // dependency SearchEngine does not already have.
-                const agentPerms = await AIEngine.Instance.GetUserAgentPermissions(agent.ID, contextUser);
-                if (!agentPerms?.canRun) {
-                    return {
-                        Allowed: false,
-                        Level: 'None',
-                        Source: 'PrincipalNotActivatable',
-                        Reason: `Agent '${agent.Name}' is not runnable by this user, so it cannot act `
-                              + 'as a search principal; a real search would be refused.',
-                        Principals: principals,
-                    };
-                }
-            }
-
-            // Then the skill, on the terms it could have been ACTIVATED on.
-            // GetSkillsForAgent(agent, user) is agent-accepted n user-permitted n Active, the same
-            // call BaseAgent.preActivateRequestedSkills uses. Without this, SkillUnscopedAll would
-            // show here as a grant while the real search denied it — the preview-vs-enforcement
-            // drift this file already carries a regression test about. Note GetSkillsForAgent
-            // returns [] for a null agent, so a skill named without an agent is refused, which is
-            // what a real search would do: a search always has a calling agent.
-            if (skill) {
-                await AIEngine.Instance.Config(false, contextUser);
-                // Cast derived from Parameters<> rather than naming MJAIAgentEntityExtended: the
-                // body reads only `agent.ID` and `agent.AcceptsSkills`, both on the base entity, so
-                // the signature is over-specified — and a derived cast cannot drift if it changes.
-                const activatable = AIEngine.Instance.GetSkillsForAgent(
-                    agent as Parameters<typeof AIEngine.Instance.GetSkillsForAgent>[0], contextUser);
-                if (!activatable.some(s => UUIDsEqual(s.ID, skill.ID))) {
-                    return {
-                        Allowed: false,
-                        Level: 'None',
-                        Source: 'PrincipalNotActivatable',
-                        Reason: `Skill '${skill.Name}' is not activatable by this agent for this user, `
-                              + 'so it cannot act as a search principal; a real search would be refused.',
-                        Principals: principals,
-                    };
-                }
-            }
+            const { agent, skill } = judged;
 
             const permission = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
                 User: contextUser,

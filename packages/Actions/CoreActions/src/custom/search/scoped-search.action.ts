@@ -8,7 +8,6 @@ import {
     SearchResultItem,
     GetSearchScopePermissionResolver
 } from "@memberjunction/search-engine";
-import { AIAgentPermissionHelper, AIEngineBase } from "@memberjunction/ai-engine-base";
 import {
     SearchEngineBase,
     MJAIAgentEntity,
@@ -123,46 +122,7 @@ export class ScopedSearchAction extends BaseAction {
             // the same attribution the scope- and permission-denial rows use.
             const requestedScopeID = this.getStringParam(params, "scopeid");
 
-            // Both principals are configured from one cache load.
-            await AIEngineBase.Instance.Config(false, params.ContextUser);
 
-            // 1a. THE AGENT IS A CALLER-SUPPLIED PRINCIPAL TOO, and it is judged the same way.
-            // resolveAgentID takes the `agentid` ACTION PARAMETER ahead of the server-stamped
-            // params.Context.AgentID, so the identity is only as trustworthy as whatever authored
-            // that parameter — in an agent flow, potentially the model. And the agent decides two
-            // things: which scopes resolveAndLogScope will even consider, and — via
-            // AgentUnscopedAll — whether permission is GRANTED, a rule whose own comment describes
-            // it as a fallback "when the user has no per-scope grant". Agent permissions are open
-            // by default (no rows means anyone may View and Run), so unchecked, naming a trusted
-            // agent converts "no grant" into "Search".
-            //
-            // Blast radius is scope-level, not row-level — results still pass filterByPermissions
-            // and RLS — but a scope IS the content bound, so it is worth a gate.
-            // "Could not evaluate" is not "denied". GetEffectivePermissions throws when the agent is
-            // absent from AIEngineBase's cache and its catch fails closed to all-false — so an agent
-            // that loads fine through Metadata but is missing from a stale AI metadata cache would
-            // make every scoped search report "this agent is not available to you", with the real
-            // cause visible only in a LogError. Check cache membership first and say which it is.
-            const agentInCache = AIEngineBase.Instance.Agents.some(a => UUIDsEqual(a.ID, agent.ID));
-            if (!agentInCache) {
-                return this.createErrorResult(
-                    `Agent '${agent.Name}' is not present in the AI metadata cache, so its permissions `
-                    + 'cannot be evaluated. This is a metadata-load problem, not an access denial.',
-                    'UNEXPECTED_ERROR');
-            }
-            if (!(await AIAgentPermissionHelper.HasPermission(agent.ID, params.ContextUser, 'run'))) {
-                await SearchEngine.Instance.LogForbiddenSearch({
-                    Query: query,
-                    ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
-                    FailureReason: `User may not run agent '${agent.Name}', so it cannot act as a search principal.`,
-                    StartTime: startTime,
-                    ContextUser: params.ContextUser,
-                    AIAgentID: agent.ID,
-                    AISkillID: null,
-                });
-                return this.createErrorResult(
-                    `Forbidden: agent '${agent.Name}' is not available to you.`, 'ACCESS_DENIED');
-            }
 
             // 1b. Resolve the SKILL PRINCIPAL FIRST, because two later steps need it: the gate is
             // what judges it, and every denial row wants it attributed.
@@ -186,53 +146,6 @@ export class ScopedSearchAction extends BaseAction {
                         `AISkillID '${aiSkillID}' could not be loaded.`, 'INVALID_PARAM');
                 }
 
-                // BEING ABLE TO LOAD A SKILL IS NOT PERMISSION TO WIELD IT AS A PRINCIPAL.
-                // This ID arrives as an action parameter, and in an agent flow the model authors
-                // action parameters. One of the skill rules GRANTS: SkillUnscopedAll returns
-                // Allowed:true for ANY scope when SearchScopeAccess='All', overriding per-scope
-                // rules. AISkill permissions are OPEN BY DEFAULT (no permission rows -> everyone may
-                // View and Run), so unchecked, naming a skill that carries 'All' would be a scope
-                // grant for the asking on a fresh installation.
-                //
-                // The gate is GetSkillsForAgent(agent, user) — deliberately, rather than a bare
-                // 'can this user Run it' check. Its docstring calls it "the single call the /skill
-                // picker and the server-side RequestedSkills intersection guard use", and
-                // BaseAgent.preActivateRequestedSkills gates real skill activation on exactly it. So
-                // a skill may act as a principal here on the same terms it could have been activated
-                // in the first place: the agent accepts skills, this agent is granted this one, the
-                // skill is Active, AND the user may Run it. A user-only check would have honoured a
-                // skill the agent does not accept and one that is Inactive.
-                //
-                // The deny arms (SkillNone, SkillAssignedNotListed) would be safe unchecked; the
-                // grant arm is not, and both read the same field.
-                const activatable = AIEngineBase.Instance.GetSkillsForAgent(
-                    // The signature asks for MJAIAgentEntityExtended, but the body reads only
-                    // `agent.ID` and `agent.AcceptsSkills`, both of which are on the base entity —
-                    // so the requirement is over-specified rather than unmet. Derived from
-                    // Parameters<> rather than naming a type, so it cannot drift if MJ narrows or
-                    // widens that signature later.
-                    agent as Parameters<typeof AIEngineBase.Instance.GetSkillsForAgent>[0],
-                    params.ContextUser);
-                // ORDER MATTERS: the activation gate runs FIRST. loadSkill loads any skill row
-                // regardless of permission, so checking SearchScopeAccess before establishing that
-                // the caller may wield the skill would disclose a skill's configuration — and its
-                // Name, via the message — to a caller probing arbitrary ids. In an agent flow that
-                // caller is the model. Establish entitlement, then talk about the skill.
-                const mayRunSkill = activatable.some(s => UUIDsEqual(s.ID, skill!.ID));
-                if (!mayRunSkill) {
-                    await SearchEngine.Instance.LogForbiddenSearch({
-                        Query: query,
-                        ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
-                        FailureReason: `Skill '${skill.Name}' is not activatable by agent '${agent.Name}' for this user, so it cannot act as a search principal.`,
-                        StartTime: startTime,
-                        ContextUser: params.ContextUser,
-                        AIAgentID: agent.ID,
-                        AISkillID: skill.ID,
-                    });
-                    return this.createErrorResult(
-                        `Forbidden: skill '${skill.Name}' is not available to you on this agent.`,
-                        'ACCESS_DENIED');
-                }
 
                 // SearchScopeAccess='None' is a VETO, and it must be enforced structurally rather
                 // than only inside ResolveEffectivePermission. resolveScope() already does exactly

@@ -346,3 +346,58 @@ describe('explain mirrors the action\'s skill gate', () => {
         expect(out.Reason).not.toContain('not activatable');
     });
 });
+
+describe('validatePrincipals — the one place a principal is judged', () => {
+    // This policy used to live in the Scoped Search action. It moved onto the engine because
+    // Search() has seven callers — three GraphQL resolvers, two actions, the pre-execution RAG
+    // path — and a gate in one of them is a gate the other six route around. ExplainScope needing
+    // its own copy was the tell.
+    class PrincipalProbe extends SearchEngine {
+        protected override async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
+            _entityName: string, id: string | null | undefined
+        ): Promise<T | null> {
+            return id === 'missing' ? null : (id ? ({ ID: id, Name: id } as unknown as T) : null);
+        }
+        public Check(input: { AIAgentID?: string; AISkillID?: string }, user: UserInfo) {
+            return this.validatePrincipals(input, user);
+        }
+    }
+    const allow = () => { agentPermsSpy.mockResolvedValue({ canView: true, canRun: true, canEdit: false, canDelete: false, isOwner: false });
+                          skillsForAgentSpy.mockReturnValue([{ ID: 'skill-1', Name: 'Test Skill' }]); };
+
+    it('passes when the caller may wield both principals', async () => {
+        allow();
+        const r = await new PrincipalProbe().Check({ AIAgentID: 'agent-1', AISkillID: 'skill-1' }, USER);
+        expect(r.ok).toBe(true);
+    });
+
+    it('refuses an agent the user cannot run', async () => {
+        allow();
+        agentPermsSpy.mockResolvedValue({ canView: true, canRun: false, canEdit: false, canDelete: false, isOwner: false });
+        const r = await new PrincipalProbe().Check({ AIAgentID: 'agent-1' }, USER);
+        expect(r.ok).toBe(false);
+        if (r.ok === false) expect(r.reason).toContain('not runnable');
+    });
+
+    it('refuses a skill the agent cannot activate — AgentUnscopedAll/SkillUnscopedAll GRANT', async () => {
+        allow();
+        skillsForAgentSpy.mockReturnValue([]);
+        const r = await new PrincipalProbe().Check({ AIAgentID: 'agent-1', AISkillID: 'skill-1' }, USER);
+        expect(r.ok).toBe(false);
+        if (r.ok === false) expect(r.reason).toContain('not activatable');
+    });
+
+    it('refuses a supplied id that will not load, rather than treating it as absent', async () => {
+        allow();
+        const r = await new PrincipalProbe().Check({ AIAgentID: 'missing' }, USER);
+        expect(r.ok).toBe(false);
+        if (r.ok === false) expect(r.reason).toContain('could not be loaded');
+    });
+
+    it('refuses a skill with no agent, because a skill is judged relative to one', async () => {
+        allow();
+        const r = await new PrincipalProbe().Check({ AISkillID: 'skill-1' }, USER);
+        expect(r.ok).toBe(false);
+        if (r.ok === false) expect(r.reason).toContain('AIAgentID is required');
+    });
+});
