@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-realtime-client",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction: Framework-agnostic browser client abstraction for provider-direct realtime (voice) sessions - BaseRealtimeClient + provider drivers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,10 +14,10 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/ai": "6.1.0-edge.2",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/ai": "6.1.0-edge.3",
     "@google/genai": "^1.40.0"
   },
   "devDependencies": {

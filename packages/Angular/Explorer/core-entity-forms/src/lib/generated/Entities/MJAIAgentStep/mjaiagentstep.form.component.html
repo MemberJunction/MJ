@@ -260,9 +260,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Step Paths','OriginStepID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths','OriginStepID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentStepPathsOriginStepID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPathsOriginStepID', $event.totalRowCount)"
                 >
@@ -285,9 +285,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Step Paths','DestinationStepID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Step Paths','DestinationStepID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentStepPathsDestinationStepID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentStepPathsDestinationStepID', $event.totalRowCount)"
                 >

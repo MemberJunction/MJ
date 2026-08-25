@@ -423,20 +423,31 @@ module.exports = {
    * OAuth Providers (for MCP Server auth.mode: 'oauth' or 'both')
    * ====================
    *
-   * AUTH PROVIDERS ARE AUTO-CONFIGURED FROM ENVIRONMENT VARIABLES:
+   * AUTH PROVIDERS ARE AUTO-CONFIGURED FROM ENVIRONMENT VARIABLES.
    *
-   * Azure AD / Entra ID (if TENANT_ID and WEB_CLIENT_ID are set in .env):
-   *   - Automatically creates an 'azure' provider using these env vars
-   *   - No manual authProviders config needed!
+   * Each provider class declares its own env-var mapping (the `ConfigFromEnvironment` static —
+   * see IEnvironmentConfigurableProvider in @memberjunction/auth-providers), so this list is not
+   * closed: a third-party provider gets the same treatment by shipping the static, with no change
+   * to MJ core. Providers that ship with MJ:
    *
-   * Auth0 (if AUTH0_DOMAIN and AUTH0_CLIENT_ID are set in .env):
-   *   - Automatically creates an 'auth0' provider using these env vars
-   *   - Optional: AUTH0_CLIENT_SECRET
+   *   Entra ID / Azure AD  TENANT_ID + WEB_CLIENT_ID                      -> provider 'azure'
+   *   Auth0                AUTH0_DOMAIN + AUTH0_CLIENT_ID                 -> provider 'auth0'
+   *                        (optional AUTH0_CLIENT_SECRET)
+   *   Amazon Cognito       COGNITO_USER_POOL_ID + COGNITO_CLIENT_ID
+   *                        + AWS_REGION                                   -> provider 'cognito'
+   *   Okta                 OKTA_DOMAIN + OKTA_CLIENT_ID                   -> provider 'okta'
+   *                        (optional OKTA_ISSUER, OKTA_AUDIENCE)
+   *   WorkOS               WORKOS_CLIENT_ID                               -> provider 'workos'
+   *                        (optional WORKOS_AUDIENCE)
    *
-   * MANUAL OVERRIDE: Only add authProviders below if you need to:
-   *   - Use Okta, Cognito, or Google (no env var defaults yet)
-   *   - Override the auto-configured settings
-   *   - Add multiple providers
+   * MANUAL OVERRIDE: adding an authProviders array below REPLACES the environment-derived set
+   * entirely (arrays replace rather than merge). Use it to pin exact settings or to declare a
+   * provider that has no env-var mapping.
+   *
+   * Beyond config: providers can also be defined as data in the "MJ: Authentication Providers"
+   * entity, which is what enables the multi-IdP login picker and admin-managed configuration.
+   * Config-file and environment providers remain the bootstrap path — you cannot configure auth
+   * through a UI you must authenticate to reach.
    *
    * authProviders: [
    *   {
