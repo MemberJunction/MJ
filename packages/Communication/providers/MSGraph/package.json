@@ -34,7 +34,6 @@
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@microsoft/microsoft-graph-types": "^2.43.1",
     "@types/html-to-text": "^9.0.4",
-    "axios": "^1.13.4",
     "dotenv": "^17.2.4",
     "env-var": "^7.5.0",
     "html-to-text": "^9.0.5"
