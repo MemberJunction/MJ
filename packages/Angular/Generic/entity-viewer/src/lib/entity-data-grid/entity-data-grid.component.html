@@ -326,6 +326,7 @@
     @if (errorMessage && !loading) {
       <mj-empty-state
         class="mj-grid-state-fill"
+        [Size]="EmptyStateSize"
         Variant="error"
         Icon="fa-solid fa-triangle-exclamation"
         Title="Could not load data"
@@ -339,6 +340,7 @@
     @if (!loading && !errorMessage && rowData.length === 0) {
       <mj-empty-state
         class="mj-grid-state-fill"
+        [Size]="EmptyStateSize"
         Icon="fa-solid fa-inbox"
         Title="No data to display" />
     }

@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (400 classes)
+// @memberjunction/core-entities (407 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -147,6 +147,7 @@ import {
     MJArtifactVersionEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
@@ -269,8 +270,11 @@ import {
     MJFileStorageAccountEntity,
     MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
+    MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -307,6 +311,8 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -333,6 +339,7 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -525,7 +532,7 @@ import {
     TimelineViewType,
 } from '@memberjunction/ng-entity-viewer';
 
-// @memberjunction/ng-core-entity-forms (20 classes)
+// @memberjunction/ng-core-entity-forms (21 classes)
 import {
     FlowAgentFormSectionComponent,
     MJAIAgentChannelFormComponentExtended,
@@ -538,6 +545,7 @@ import {
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
+    MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
     MJTemplateFormComponentExtended,
@@ -711,6 +719,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJArtifactVersionEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
@@ -833,8 +842,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFileStorageAccountEntity,
     MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
+    MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -871,6 +883,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -897,6 +911,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -1058,6 +1073,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
+    MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
     MJTemplateFormComponentExtended,
@@ -1095,7 +1111,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 500;
+export const CLASS_REGISTRATIONS_COUNT = 508;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { BaseEntity, EntityInfo } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjFormToolbarComponent } from './form-toolbar.component';
-import type { BeforeSaveEventArgs } from '../types/form-events';
+import type { BeforeSaveEventArgs, BeforeRefreshEventArgs } from '../types/form-events';
 
 /**
  * DOM coverage for <mj-form-toolbar> — the action bar CodeGen renders on every entity form (~6× direct,
@@ -16,6 +16,7 @@ import type { BeforeSaveEventArgs } from '../types/form-events';
 const ENTITY_INFO = { TrackRecordChanges: true, ParentChain: [], ChildEntities: [], Fields: [], NameField: null } as unknown as EntityInfo;
 const RECORD = {
   EntityInfo: ENTITY_INFO,
+  IsSaved: true,
   ISAChild: null,
   ISAChildren: [],
   Get: () => null,
@@ -42,10 +43,11 @@ const btn = (f: Fx, sel: string) => query(f, sel) as HTMLElement | null;
 
 describe('MjFormToolbarComponent (DOM)', () => {
   describe('view mode', () => {
-    it('renders the edit / delete / favorite / history / list / tags actions', () => {
+    it('renders the edit / delete / refresh / favorite / history / list / tags actions', () => {
       const f = render();
       expect(btn(f, 'button[title="Edit this Record"]')).not.toBeNull();
       expect(btn(f, 'button[title="Delete this Record"]')).not.toBeNull();
+      expect(btn(f, 'button[title="Refresh record from database"]')).not.toBeNull();
       expect(btn(f, 'button[title="Make Favorite"]')).not.toBeNull();
       expect(btn(f, '.mj-forms-btn--history')).not.toBeNull();
       expect(btn(f, '.mj-forms-btn--list')).not.toBeNull();
@@ -55,6 +57,16 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const f = render({ UserCanEdit: false, UserCanDelete: false });
       expect(btn(f, 'button[title="Edit this Record"]')).toBeNull();
       expect(btn(f, 'button[title="Delete this Record"]')).toBeNull();
+    });
+
+    it('hides the refresh button when ShowRefreshButton is false', () => {
+      const f = render({ Config: { ShowRefreshButton: false } });
+      expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
+    });
+
+    it('hides the refresh button when record is unsaved', () => {
+      const f = render({ Record: { ...RECORD, IsSaved: false } });
+      expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
     });
 
     it('hides the history button when the entity does not track changes', () => {
@@ -67,6 +79,31 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const out = capture(f.componentInstance.EditModeChange);
       btn(f, 'button[title="Edit this Record"]')!.click();
       expect(out).toEqual([true]);
+    });
+
+    it('emits RefreshRequested and BeforeRefresh when refresh is clicked', () => {
+      const f = render();
+      const refreshOut = capture(f.componentInstance.RefreshRequested);
+      const beforeOut = capture(f.componentInstance.BeforeRefresh);
+      btn(f, 'button[title="Refresh record from database"]')!.click();
+      expect(beforeOut.length).toBe(1);
+      expect(refreshOut.length).toBe(1);
+    });
+
+    it('does not emit RefreshRequested when BeforeRefresh handler cancels', () => {
+      const f = render();
+      f.componentInstance.BeforeRefresh.subscribe((e: BeforeRefreshEventArgs) => (e.Cancel = true));
+      const refreshOut = capture(f.componentInstance.RefreshRequested);
+      btn(f, 'button[title="Refresh record from database"]')!.click();
+      expect(refreshOut.length).toBe(0);
+    });
+
+    it('disables the refresh button and shows spinner when IsRefreshing is true', () => {
+      const f = render({ IsRefreshing: true });
+      const refreshBtn = btn(f, 'button[title="Refresh record from database"]');
+      expect(refreshBtn).not.toBeNull();
+      expect((refreshBtn as HTMLButtonElement).disabled).toBe(true);
+      expect(query(f, 'button[title="Refresh record from database"] .fa-spinner')).not.toBeNull();
     });
 
     it('emits FavoriteToggled when the favorite button is clicked', () => {
@@ -116,6 +153,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(btn(f, 'button[title="Save Changes"]')).not.toBeNull();
       expect(btn(f, 'button[title="Discard Changes"]')).not.toBeNull();
       expect(btn(f, 'button[title="Edit this Record"]')).toBeNull();
+      expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
     });
 
     it('emits SaveRequested (after the microtask) when Save is clicked with no Form bound', async () => {
@@ -170,6 +208,18 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(collapse.length).toBe(1);
     });
 
+    it('hides expand/collapse-all in left-nav chrome', () => {
+      const f = render({ ChromeLayout: 'left-nav', VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      expect(btn(f, 'button[title="Expand all sections"]')).toBeNull();
+      expect(btn(f, 'button[title="Collapse all sections"]')).toBeNull();
+    });
+
+    it('hides expand/collapse-all in right-nav chrome', () => {
+      const f = render({ ChromeLayout: 'right-nav', VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      expect(btn(f, 'button[title="Expand all sections"]')).toBeNull();
+      expect(btn(f, 'button[title="Collapse all sections"]')).toBeNull();
+    });
+
     it('emits FilterChange as the user types in the section filter', () => {
       const f = render();
       const out = capture(f.componentInstance.FilterChange);
@@ -185,6 +235,137 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const clear = queryAll(f, '.mj-clear-search')[0] as HTMLElement;
       clear.click();
       expect(out).toEqual(['']);
+    });
+  });
+
+  describe('dynamic toolbar customization & items', () => {
+    it('renders registered custom action buttons with text, icon, and primary styling', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Icon: 'fa-solid fa-check-double',
+          Variant: 'primary' as const,
+          Order: 5,
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const confirmBtn = btn(f, '.mj-forms-btn--primary');
+      expect(confirmBtn).not.toBeNull();
+      expect(confirmBtn?.textContent?.trim()).toContain('Confirm Order');
+      expect(confirmBtn?.querySelector('.fa-check-double')).not.toBeNull();
+    });
+
+    it('orders custom items before standard items when Order is lower', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Icon: 'fa-solid fa-check-double',
+          Variant: 'primary' as const,
+          Order: 5, // before Edit (Order 10)
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const buttons = queryAll(f, '.mj-forms-toolbar-group > button');
+      expect(buttons.length).toBeGreaterThan(1);
+      expect(buttons[0].textContent?.trim()).toContain('Confirm Order');
+      expect(buttons[1].getAttribute('title')).toBe('Edit this Record');
+    });
+
+    it('evaluates dynamic Visible predicate function to hide items', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Visible: () => false,
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      expect(btn(f, 'button:has(.mj-forms-btn-text)')).toBeNull();
+    });
+
+    it('evaluates dynamic Visible predicate function to show items', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Visible: () => true,
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      expect(btn(f, 'button:has(.mj-forms-btn-text)')).not.toBeNull();
+    });
+
+    it('evaluates dynamic Disabled reason string predicate and sets tooltip', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          Disabled: () => 'Order must have at least one line',
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const confirmBtn = btn(f, 'button:has(.mj-forms-btn-text)');
+      expect(confirmBtn).not.toBeNull();
+      expect(confirmBtn?.hasAttribute('disabled')).toBe(true);
+      expect(confirmBtn?.getAttribute('title')).toBe('Order must have at least one line');
+    });
+
+    it('renders loading spinner and disables button when IsLoading is true', () => {
+      const registeredItems = [
+        {
+          Key: 'confirm-order',
+          Text: 'Confirm Order',
+          IsLoading: true,
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const confirmBtn = btn(f, 'button:has(.mj-forms-btn-text)');
+      expect(confirmBtn?.hasAttribute('disabled')).toBe(true);
+      expect(confirmBtn?.querySelector('.fa-spinner.fa-spin')).not.toBeNull();
+    });
+
+    it('applies dynamic item overrides to hide delete and disable edit', () => {
+      const overrides = new Map([
+        ['delete', { Visible: false }],
+        ['edit', { Disabled: 'Cannot edit posted record' }],
+      ]);
+
+      const f = render({ ItemOverrides: overrides });
+      expect(btn(f, 'button[title="Delete this Record"]')).toBeNull();
+
+      const editBtn = btn(f, 'button[title="Cannot edit posted record"]');
+      expect(editBtn).not.toBeNull();
+      expect(editBtn?.hasAttribute('disabled')).toBe(true);
+    });
+
+    it('triggers ToolbarItemClick and OnClick handler when custom button is clicked', async () => {
+      let clicked = false;
+      const registeredItems = [
+        {
+          Key: 'custom-action',
+          Text: 'Custom Action',
+          OnClick: () => {
+            clicked = true;
+          },
+        },
+      ];
+
+      const f = render({ RegisteredItems: registeredItems });
+      const out = capture(f.componentInstance.ToolbarItemClick);
+      const customBtn = btn(f, 'button:has(.mj-forms-btn-text)');
+      customBtn?.click();
+
+      expect(clicked).toBe(true);
+      expect(out.length).toBe(1);
+      expect(out[0].ItemKey).toBe('custom-action');
     });
   });
 });

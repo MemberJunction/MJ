@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpGet } from "@memberjunction/network-utils";
 
 /**
  * Action that retrieves geolocation information for an IP address using free public APIs.
@@ -178,16 +178,16 @@ export class IPGeolocationAction extends BaseAction {
         // Try each API until one succeeds
         for (const api of apis) {
             try {
-                const response = await axios.get(api.url, {
-                    timeout: 5000,
-                    headers: {
+                const response = await HttpGet(api.url, {
+                    Timeout: 5000,
+                    Headers: {
                         'Accept': 'application/json',
                         'User-Agent': 'MemberJunction-IPGeolocation-Action/1.0'
                     }
                 });
 
-                if (response.data) {
-                    return api.transform(response.data);
+                if (response.Data) {
+                    return api.transform(response.Data);
                 }
             } catch (error) {
                 // Continue to next API
@@ -198,12 +198,12 @@ export class IPGeolocationAction extends BaseAction {
         // If we have an IP, try a basic API that just gives country
         if (ipAddress) {
             try {
-                const response = await axios.get(`https://api.country.is/${ipAddress}`);
-                if (response.data) {
+                const response = await HttpGet<{ country?: string }>(`https://api.country.is/${ipAddress}`);
+                if (response.Data) {
                     return {
                         ip: ipAddress,
-                        country: response.data.country,
-                        countryCode: response.data.country
+                        country: response.Data.country,
+                        countryCode: response.Data.country
                     };
                 }
             } catch {

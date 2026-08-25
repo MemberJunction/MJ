@@ -235,3 +235,8 @@ migrations/v*/*__RSU_*.sql
 # explicitly un-ignore this one subtree.
 !/templates/claude-pack/dist/
 !/templates/claude-pack/dist/**
+
+# Per-package LICENSE copies are generated at publish time by
+# .github/scripts/stage-package-licenses.mjs. The root LICENSE is the only
+# source of truth; committing 300 copies would let them drift from it.
+packages/**/LICENSE

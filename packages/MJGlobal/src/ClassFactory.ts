@@ -339,7 +339,20 @@ export class ClassFactory {
 
         // ── Fallback path: the requested key did not resolve to any registered subclass. ──
         const requiresSubclass = ClassRequiresSubclass(baseClass);
-        const reason = this.describeResolutionFailure(baseClass, key, requiresSubclass);
+        // Built LAZILY, and memoised for the consumers below.
+        //
+        // describeResolutionFailure scans every registration in the process (GetAllRegistrations is
+        // an unmemoised filter over _registrations), then maps/dedupes/sorts/joins the result into a
+        // multi-KB string. That is affordable for a real failure and ruinous here, because this
+        // fallback path is DESIGNED to be hit: an '@OptionalKeyedSpecialization' base probes
+        // '<Entity>.<Field>' once per field of every entity, and neither of the two consumers below
+        // ends up reading the string on that path — the gate at the end of this block skips
+        // reporting, and CreateInstance never reads Reason when an instance was produced.
+        // reportResolutionFailure ALSO returns early (volume cap, then per-base+key dedup) before it
+        // formats anything, so passing an already-built string wasted the work even when reporting.
+        let describedReason: string | undefined;
+        const reason = (): string =>
+            (describedReason ??= this.describeResolutionFailure(baseClass, key, requiresSubclass));
 
         // Only REPORT when the caller actually asked for something specific.
         //
@@ -363,14 +376,27 @@ export class ClassFactory {
             this.reportResolutionFailure(baseClass, key, requiresSubclass, reason);
         }
 
+
         if (requiresSubclass) {
-            return { Resolved: false, Instance: null, Reason: reason };
+            // A hard error: the string is genuinely wanted here (CreateInstance throws it).
+            return { Resolved: false, Instance: null, Reason: reason() };
         }
 
         // No marker — the base is presumed usable standalone (e.g. BaseEntity). Preserve the
         // historical fallback so existing, CORRECT consumers keep working.
+        //
+        // Reason stays lazy via an enumerable accessor: consumers that read it (see the doc comment
+        // on CreateInstance) get the identical string, while the designed-probe path — which
+        // produces an instance and never looks — pays nothing. Spread and JSON.stringify still
+        // observe it, exactly as before.
         const BaseClassConstructor = baseClass as new (...args: unknown[]) => T;
-        return { Resolved: false, Instance: new BaseClassConstructor(...params), Reason: reason };
+        return {
+            Resolved: false,
+            Instance: new BaseClassConstructor(...params),
+            get Reason(): string {
+                return reason();
+            }
+        };
     }
 
     /**
@@ -404,7 +430,7 @@ export class ClassFactory {
      * very hot paths (once per entity-field hydration), so an un-deduped log would be a firehose.
      * A captured stack is included so the offending call site is identifiable.
      */
-    private reportResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean, reason: string): void {
+    private reportResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean, reason: () => string): void {
         // Volume cap, PER BASE CLASS (not per base+key).
         //
         // The existing dedup keys on base+key, which is useless for callers whose key varies per
@@ -433,8 +459,10 @@ export class ClassFactory {
         if (this._reportedResolutionFailures.has(logKey)) return;
         this._reportedResolutionFailures.add(logKey);
 
+        // Both early returns above are past us, so this report is really going to be emitted —
+        // only now is it worth describing the failure.
         const stack = new Error().stack ?? '(stack unavailable)';
-        const message = `${reason}\nCall site:\n${stack}`;
+        const message = `${reason()}\nCall site:\n${stack}`;
         if (requiresSubclass) console.error(message);
         else console.warn(message);
     }
@@ -447,11 +475,14 @@ export class ClassFactory {
      */
     public GetAllRegistrations(baseClass: unknown, key?: string | null): ClassRegistration[] {
         if (baseClass) {
+            // baseClassName and the normalised key are loop-invariant — computed once here rather
+            // than once per registration. This filter runs over every registration in the process.
+            const baseClassName = (baseClass as { name: string }).name;
+            const normalizedKey = key === undefined || key === null ? null : key.trim().toLowerCase();
             return this._registrations.filter(r => {
-                const baseClassName = (baseClass as { name: string }).name;
                 const regBaseClassName = (r.BaseClass as { name: string }).name;
                 return  regBaseClassName === baseClassName && // we use the name of the class instead of the class itself because JS is finicky about this since a given module can be loaded in various places (like from multiple other modules) and the class itself will be different in each case
-                        ( key === undefined || key === null ? true : r.Key?.trim().toLowerCase() === key.trim().toLowerCase())
+                        ( normalizedKey === null ? true : r.Key?.trim().toLowerCase() === normalizedKey)
             } );
         }
         else

@@ -43,6 +43,38 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDDepth"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDPath"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDIsLeaf"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDChildCount"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -301,9 +333,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Params','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Params')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Params','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJActionParams')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionParams', $event.totalRowCount)"
                 >
@@ -326,9 +358,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Libraries','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Libraries')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Libraries','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJActionLibraries')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionLibraries', $event.totalRowCount)"
                 >
@@ -351,9 +383,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Result Codes','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Result Codes')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Result Codes','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJActionResultCodes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionResultCodes', $event.totalRowCount)"
                 >
@@ -376,9 +408,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Actions','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Actions')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Actions','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentActions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentActions', $event.totalRowCount)"
                 >
@@ -401,9 +433,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Tools','GeneratedActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools','GeneratedActionID')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerTools')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerTools', $event.totalRowCount)"
                 >
@@ -426,9 +458,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Contexts','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Contexts')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Contexts','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJActionContexts')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionContexts', $event.totalRowCount)"
                 >
@@ -451,9 +483,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Steps','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSteps')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSteps', $event.totalRowCount)"
                 >
@@ -476,9 +508,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Actions','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Actions')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Actions','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityActions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityActions', $event.totalRowCount)"
                 >
@@ -501,9 +533,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Execution Logs','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Execution Logs')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Execution Logs','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJActionExecutionLogs')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionExecutionLogs', $event.totalRowCount)"
                 >
@@ -526,9 +558,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Authorizations','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Authorizations')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Authorizations','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJActionAuthorizations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionAuthorizations', $event.totalRowCount)"
                 >
@@ -551,9 +583,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Actions','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Actions')"
+                [NewRecordValues]="NewRecordValues('MJ: Actions','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJActions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActions', $event.totalRowCount)"
                 >
@@ -576,9 +608,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Processes','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Processes')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Processes','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJRecordProcesses')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordProcesses', $event.totalRowCount)"
                 >
@@ -601,9 +633,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Skill Actions','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Skill Actions')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Skill Actions','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJAISkillActions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAISkillActions', $event.totalRowCount)"
                 >
@@ -626,9 +658,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tasks')"
+                [NewRecordValues]="NewRecordValues('MJ: Tasks','ActionID')"
                 [AllowLoad]="IsSectionExpanded('mJTasks')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
                 >

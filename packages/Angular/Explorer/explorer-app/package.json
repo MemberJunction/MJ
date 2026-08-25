@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-app",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction Explorer Application Shell - Complete branded entry point for Explorer-style applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,7 +9,9 @@
     "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat",
     "watch": "ngc --watch",
     "clean": "rimraf dist",
-    "build:clean": "npm run clean && npm run build"
+    "build:clean": "npm run clean && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",
@@ -19,24 +21,24 @@
     "shell"
   ],
   "author": "MemberJunction",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai-agent-client": "6.1.0-edge.2",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/ng-agent-client": "6.1.0-edge.2",
-    "@memberjunction/ng-auth-services": "6.1.0-edge.2",
-    "@memberjunction/ng-base-application": "6.1.0-edge.2",
-    "@memberjunction/ng-base-types": "6.1.0-edge.2",
-    "@memberjunction/ng-bootstrap": "6.1.0-edge.2",
-    "@memberjunction/ng-conversations": "6.1.0-edge.2",
-    "@memberjunction/ng-explorer-core": "6.1.0-edge.2",
-    "@memberjunction/ng-explorer-service-worker": "6.1.0-edge.2",
-    "@memberjunction/ng-feedback": "6.1.0-edge.2",
-    "@memberjunction/ng-notifications": "6.1.0-edge.2",
-    "@memberjunction/ng-shared": "6.1.0-edge.2",
-    "@memberjunction/ng-workspace-initializer": "6.1.0-edge.2"
+    "@memberjunction/ai-agent-client": "6.1.0-edge.3",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/ng-agent-client": "6.1.0-edge.3",
+    "@memberjunction/ng-auth-services": "6.1.0-edge.3",
+    "@memberjunction/ng-base-application": "6.1.0-edge.3",
+    "@memberjunction/ng-base-types": "6.1.0-edge.3",
+    "@memberjunction/ng-bootstrap": "6.1.0-edge.3",
+    "@memberjunction/ng-conversations": "6.1.0-edge.3",
+    "@memberjunction/ng-explorer-core": "6.1.0-edge.3",
+    "@memberjunction/ng-explorer-service-worker": "6.1.0-edge.3",
+    "@memberjunction/ng-feedback": "6.1.0-edge.3",
+    "@memberjunction/ng-notifications": "6.1.0-edge.3",
+    "@memberjunction/ng-shared": "6.1.0-edge.3",
+    "@memberjunction/ng-workspace-initializer": "6.1.0-edge.3"
   },
   "peerDependencies": {
     "@angular/common": "^21.0.0",
@@ -49,7 +51,8 @@
     "@angular/core": "^21.1.3",
     "@angular/compiler": "^21.1.3",
     "@angular/compiler-cli": "^21.1.3",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.18"
   },
   "files": [
     "dist/**/*"

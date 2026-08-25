@@ -45,10 +45,73 @@ export function IsRetryableError(code: SyncErrorCode): boolean {
     return code === 'NETWORK_TIMEOUT' || code === 'RATE_LIMIT_EXCEEDED' || code === 'DATABASE_ERROR';
 }
 
+/**
+ * Flatten an error to the text this classifier can actually read: its own message plus every
+ * `cause` in the chain, plus any `code` property found along the way.
+ *
+ * WHY: `fetch` (undici) reports EVERY transport failure as the bare message `fetch failed` and
+ * puts the real reason — `ECONNRESET`, `ENOTFOUND`, `EAI_AGAIN`, `UND_ERR_SOCKET`, "socket hang
+ * up" — in `error.cause`. Classifying on the top-level message alone therefore saw a string that
+ * matched no pattern, fell through to UNKNOWN_ERROR/Critical, and was NOT retryable: a routine
+ * blip ended the object's fetch loop and the sync stopped early, reporting success on a partial
+ * pull. Measured on a long-running production sync, this fired every 30-60 minutes.
+ */
+function ErrorTextChain(error: unknown): string {
+    const parts: string[] = [];
+    let current: unknown = error;
+    for (let depth = 0; current != null && depth < 5; depth++) {
+        if (typeof current === 'string') {
+            parts.push(current);
+            break;
+        }
+        if (current instanceof Error) {
+            parts.push(current.message);
+        } else if (typeof current === 'object') {
+            const asRecord = current as Record<string, unknown>;
+            if (typeof asRecord['message'] === 'string') parts.push(asRecord['message']);
+        } else {
+            parts.push(String(current));
+            break;
+        }
+        const code = (current as Record<string, unknown>)['code'];
+        if (typeof code === 'string') parts.push(code);
+        const errno = (current as Record<string, unknown>)['errno'];
+        if (typeof errno === 'string') parts.push(errno);
+        current = (current as Record<string, unknown>)['cause'];
+    }
+    return parts.join(' | ');
+}
+
+/**
+ * Transport-level failures that are transient by nature: the request never reached a decision,
+ * so retrying is correct. Kept as an explicit list rather than a loose substring so it cannot
+ * quietly swallow deterministic errors (the mistake the DATABASE_ERROR branch below already
+ * had to be narrowed for).
+ */
+const TRANSIENT_NETWORK_SIGNALS = [
+    'fetch failed',      // undici's blanket message — the real cause is in `cause`
+    'socket hang up',
+    'econnreset',
+    'enotfound',         // DNS blip; the vendor host resolves again moments later
+    'eai_again',         // transient DNS failure, explicitly retryable per getaddrinfo
+    'epipe',
+    'ehostunreach',
+    'enetunreach',
+    'etimedout',
+    'und_err_',          // undici's own error family (socket, connect timeout, headers timeout)
+    'terminated',        // undici body/stream termination mid-response
+];
+
 /** Classify an error from its message/type into a structured code and severity */
 export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: ErrorSeverity } {
     const message = error instanceof Error ? error.message : String(error);
-    const lower = message.toLowerCase();
+    const lower = ErrorTextChain(error).toLowerCase() || message.toLowerCase();
+
+    // Checked FIRST: a transport failure carries no verdict from the server, so it must never be
+    // shadowed by a keyword that happens to appear in a nested cause chain.
+    if (TRANSIENT_NETWORK_SIGNALS.some(signal => lower.includes(signal))) {
+        return { Code: 'NETWORK_TIMEOUT', Severity: 'Warning' };
+    }
 
     if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('econnreset')) {
         return { Code: 'NETWORK_TIMEOUT', Severity: 'Warning' };
@@ -367,6 +430,14 @@ export interface IntegrationSyncOptions {
      * Pull = external → MJ only. Push = MJ → external only. Bidirectional = both.
      */
     SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+    /**
+     * Expected maximum runtime for this sync, in minutes. Sizes the run's OWNERSHIP LEASE
+     * (durable-run claim/renew): the lease is max(engine default, this value), so a run with a
+     * known long single batch is not falsely reclaimed as dead by the stale sweep while a batch
+     * is still in flight. The lease is renewed on a timer regardless; this only raises the
+     * worst-case window a crashed run stays unclaimed. Omit for the engine default.
+     */
+    MaxRuntimeMinutes?: number;
 }
 
 // ─── Source Schema Introspection Types ──────────────────────────────

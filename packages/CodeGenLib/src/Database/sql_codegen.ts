@@ -827,7 +827,7 @@ export class SQLCodeGenBase {
     }
 
     /**
-     * Concatenates the root-ID TVF SQL for every recursive ParentID-style FK
+     * Concatenates the hierarchy TVF SQL for every recursive ParentID-style FK
      * on this entity. Mirrors the inline TVF generation in
      * `generateSingleEntitySQLToSeparateFiles` so the phased executor can run
      * the same DDL ahead of the base view.
@@ -837,10 +837,10 @@ export class SQLCodeGenBase {
         if (recursiveFKs.length === 0) return '';
         let combined = '';
         for (const field of recursiveFKs) {
-            const functionName = `fn${entity.BaseTable}${field.Name}_GetRootID`;
-            combined += this.generateSingleEntitySQLFileHeader(entity, functionName)
-                + this.generateRootIDFunction(entity, field)
-                + '\n' + this._dbProvider.BatchSeparator + '\n';
+            const fns = this.getHierarchyFunctionsForField(entity, field);
+            for (const fn of fns) {
+                combined += fn.sql + '\n' + this._dbProvider.BatchSeparator + '\n';
+            }
         }
         return combined;
     }
@@ -1177,23 +1177,23 @@ export class SQLCodeGenBase {
                 (options.entity.BaseViewGenerated || options.entity.HasLayeredBaseView) &&
                 !options.entity.VirtualEntity) {
 
-                // ROOT ID FUNCTIONS (TVFs) + BASE VIEW
+                // HIERARCHY & ROOT ID FUNCTIONS (TVFs) + BASE VIEW
                 // TVFs must be created BEFORE the view that references them.
                 // We defer TVF logging until after baseViewChanged is computed so that
                 // TVFs are force-logged to the TempBatchFile whenever the view changes.
                 // This prevents "Invalid object name" errors when the view references
                 // TVFs that haven't been executed yet (e.g., when soft FKs are newly added).
                 const recursiveFKs = this.detectRecursiveForeignKeys(options.entity);
-                const tvfEntries: Array<{sql: string, filePath: string, fieldName: string}> = [];
+                const tvfEntries: Array<{sql: string, filePath: string, fieldName: string, description: string}> = [];
                 if (recursiveFKs.length > 0) {
                     for (const field of recursiveFKs) {
-                        const functionName = `fn${options.entity.BaseTable}${field.Name}_GetRootID`;
-                        const tvfSQL = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
-                                  this.generateRootIDFunction(options.entity, field);
-                        const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
-                        tvfEntries.push({sql: tvfSQL, filePath: tvfFilePath, fieldName: field.Name});
-                        // Add function SQL to output BEFORE the view
-                        sRet += tvfSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
+                        const fns = this.getHierarchyFunctionsForField(options.entity, field);
+                        for (const fn of fns) {
+                            const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, fn.functionName, false, true));
+                            tvfEntries.push({sql: fn.sql, filePath: tvfFilePath, fieldName: fn.fieldName, description: fn.description});
+                            // Add function SQL to output BEFORE the view
+                            sRet += fn.sql + '\n' + this._dbProvider.BatchSeparator + '\n';
+                        }
                     }
                 }
 
@@ -1210,7 +1210,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     for (const tvf of tvfEntries) {
                         this.writeFileIfChanged(tvf.filePath, tvf.sql);
-                        this.logSQLForNewOrModifiedEntity(options.entity, tvf.sql, `Root ID Function SQL for ${options.entity.Name}.${tvf.fieldName}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, tvf.sql, tvf.description, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(tvf.filePath);
                     }
                 }
@@ -1582,10 +1582,61 @@ export class SQLCodeGenBase {
      * Returns array of field info objects representing recursive relationships
      */
     protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
-        return entity.Fields.filter(field =>
+        const hierarchyFKs = entity.Fields.filter(field =>
             field.RelatedEntityID != null &&
-            UUIDsEqual(field.RelatedEntityID, entity.ID)
+            UUIDsEqual(field.RelatedEntityID, entity.ID) &&
+            !field.IsVirtual &&
+            field.IsHierarchy === true
         );
+        if (hierarchyFKs.length === 0) {
+            return [];
+        }
+        if (entity.PrimaryKeys.length !== 1) {
+            logWarning(
+                `[Hierarchy] Entity '${entity.Name}' has ${hierarchyFKs.length} hierarchy foreign key(s) ` +
+                `(${hierarchyFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
+                `MemberJunction hierarchy TVF generation and traversal require a single-column primary key. Skipping hierarchy generation for this entity.`
+            );
+            return [];
+        }
+        return hierarchyFKs;
+    }
+
+    /**
+     * Helper to get the canonical hierarchy function definitions and metadata for an entity and recursive FK field.
+     */
+    protected getHierarchyFunctionsForField(entity: EntityInfo, field: EntityFieldInfo): Array<{functionName: string, sql: string, description: string, fieldName: string}> {
+        const metaFnName = this._dbProvider.getHierarchyMetaFunctionName(entity, field);
+        const descFnName = this._dbProvider.getDescendantsFunctionName(entity, field);
+        const ancFnName = this._dbProvider.getAncestorsFunctionName(entity, field);
+        const rootFnName = this._dbProvider.getRootIDFunctionName(entity, field);
+
+        return [
+            {
+                functionName: metaFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, metaFnName) + this._dbProvider.generateHierarchyMetaFunction(entity, field),
+                description: `Hierarchy Metadata Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: descFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, descFnName) + this._dbProvider.generateDescendantsFunction(entity, field),
+                description: `Descendants Traversal Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: ancFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, ancFnName) + this._dbProvider.generateAncestorsFunction(entity, field),
+                description: `Ancestors Traversal Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: rootFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, rootFnName) + this._dbProvider.generateRootIDFunction(entity, field),
+                description: `Root ID Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            }
+        ];
     }
 
     /**
@@ -1611,36 +1662,48 @@ export class SQLCodeGenBase {
             .join('\n');
     }
 
-
     /**
-     * Generates the SELECT clause additions for root fields from TVFs
-     * Example: , root_ParentID.RootID AS [RootParentID]
+     * Generates the SELECT clause additions for hierarchy metadata fields from TVFs
+     * Projects: Root<Field>, <Field>Depth, <Field>Path, <Field>IsLeaf, <Field>ChildCount
      */
-    protected generateRootFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+    protected generateHierarchyFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
         if (recursiveFKs.length === 0) return '';
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
-            const alias = `root_${field.Name}`;
-            sOutput += `,\n    ${this._dbProvider.generateRootFieldSelect(entity, field, alias)}`;
+            const alias = `hier_${field.Name}`;
+            sOutput += `,\n    ${this._dbProvider.generateHierarchyFieldSelect(entity, field, alias)}`;
         }
         return sOutput;
     }
 
     /**
-     * Generates OUTER APPLY joins to inline Table Value Functions for root ID calculation
-     * Each recursive FK gets an OUTER APPLY that calls its corresponding function
+     * Generates JOIN clauses to inline Table Value Functions for hierarchy metadata calculation
      */
-    protected generateRootIDJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+    protected generateHierarchyJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
         if (recursiveFKs.length === 0) return '';
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
-            const alias = `root_${field.Name}`;
+            const alias = `hier_${field.Name}`;
             if (sOutput.length > 0) sOutput += '\n';
-            sOutput += this._dbProvider.generateRootFieldJoin(entity, field, alias);
+            sOutput += this._dbProvider.generateHierarchyFieldJoin(entity, field, alias);
         }
         return '\n' + sOutput;
+    }
+
+    /**
+     * Generates the SELECT clause additions for root and hierarchy fields from TVFs
+     */
+    protected generateRootFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+        return this.generateHierarchyFieldSelects(entity, recursiveFKs, classNameFirstChar);
+    }
+
+    /**
+     * Generates joins to inline Table Value Functions for hierarchy and root ID calculation
+     */
+    protected generateRootIDJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+        return this.generateHierarchyJoins(recursiveFKs, classNameFirstChar, entity);
     }
 
     /**

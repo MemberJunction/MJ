@@ -1,5 +1,6 @@
 {
   "name": "react-test-example",
+  "license": "BUSL-1.1",
   "version": "1.0.0",
   "description": "Example React components for testing with MemberJunction test harness",
   "main": "index.js",

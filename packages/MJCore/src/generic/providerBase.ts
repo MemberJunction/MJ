@@ -378,18 +378,36 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     private _lingerInvalidationWired = false;
 
+    // ── Write-invalidation fan-out (process-wide, not per-instance) ────
     /**
-     * Lazily subscribes (once per provider instance) to BaseEntity events so
-     * in-flight/lingered RunView entries touching a written entity are dropped.
-     * Deleting an IN-FLIGHT entry is deliberate: late joiners must not share a
-     * query that may have read pre-commit data; the original caller still gets
-     * its own result, and the orphaned promise's stash step no-ops safely.
+     * Every live provider instance that has opted into write-invalidation, held via
+     * `WeakRef` so registering here never keeps a provider (and everything it
+     * references — connection pool, entity metadata, `_inflightViews`) reachable.
+     * Short-lived providers (one per GraphQL request, one per durable task-graph
+     * task execution — see `MJServer/context.ts` and `TaskGraphProviderFactory`)
+     * become eligible for GC as soon as the request/task finishes; dead refs are
+     * pruned lazily the next time an entity event fires.
      */
-    private ensureInflightViewInvalidation(): void {
-        if (this._lingerInvalidationWired) {
+    private static _invalidationTargets = new Set<WeakRef<ProviderBase>>();
+
+    /** Guards {@link ensureStaticInvalidationSubscription} to wire the bus listener at most once per process. */
+    private static _staticInvalidationWired = false;
+
+    /**
+     * Subscribes exactly ONCE per process (not once per provider instance) to BaseEntity
+     * events and fans each one out to every still-live registered provider. This is what
+     * keeps the number of `MJGlobal` event-bus subscribers constant regardless of how many
+     * short-lived provider instances get created — subscribing per-instance (the prior
+     * implementation) permanently pinned one subscription per instance on the process-wide
+     * `Subject`, which never releases subscribers on its own, so a fresh provider minted on
+     * every GraphQL request (or every durable task-graph task) leaked its entire object graph
+     * forever.
+     */
+    private static ensureStaticInvalidationSubscription(): void {
+        if (ProviderBase._staticInvalidationWired) {
             return;
         }
-        this._lingerInvalidationWired = true;
+        ProviderBase._staticInvalidationWired = true;
         MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
             if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) {
                 return;
@@ -402,10 +420,36 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 return;
             }
             const entityName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
-            if (entityName) {
-                this.invalidateInflightViewsForEntity(entityName);
+            if (!entityName) {
+                return;
+            }
+            for (const ref of ProviderBase._invalidationTargets) {
+                const instance = ref.deref();
+                if (!instance) {
+                    // Provider was GC'd since it registered — prune the dead ref instead of
+                    // letting the registry grow forever with entries that resolve to nothing.
+                    ProviderBase._invalidationTargets.delete(ref);
+                    continue;
+                }
+                instance.invalidateInflightViewsForEntity(entityName);
             }
         });
+    }
+
+    /**
+     * Lazily registers this instance (once per provider instance) for write-invalidation
+     * of in-flight/lingered RunView entries touching a written entity. Deleting an IN-FLIGHT
+     * entry is deliberate: late joiners must not share a query that may have read pre-commit
+     * data; the original caller still gets its own result, and the orphaned promise's stash
+     * step no-ops safely.
+     */
+    private ensureInflightViewInvalidation(): void {
+        if (this._lingerInvalidationWired) {
+            return;
+        }
+        this._lingerInvalidationWired = true;
+        ProviderBase.ensureStaticInvalidationSubscription();
+        ProviderBase._invalidationTargets.add(new WeakRef(this));
     }
 
     /**
@@ -1282,6 +1326,38 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             param.ResultType !== 'count_only' &&
             (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
             this.IsServerCacheAllowedForEntity(param);
+    }
+
+    /** True when the entity is a CodeGen materialized-query wrapper (materialized_vw*) whose snapshot is
+     * refreshed out-of-band — the same one IsServerCacheAllowedForEntity excludes from the server cache. */
+    protected isMaterializedWrapperEntity(param: RunViewParams): boolean {
+        if (!param.EntityName) {
+            return false;
+        }
+        const entity = this.EntityByName(param.EntityName);
+        return !!(entity?.VirtualEntity && entity.BaseView && entity.BaseView.toLowerCase().startsWith('materialized_vw'));
+    }
+
+    /**
+     * Write-side eligibility for the smart-cache-check (stamped) path. On the trusting SERVER this is
+     * exactly runViewCacheEligible — the server cache is kept fresh by BaseEntity events, so a
+     * server-cache-disallowed entity must never be slotted. On a CLIENT the slot is instead written with
+     * a maxUpdatedAt stamp and DB-revalidated per request, so the server Trust/event gate does NOT apply:
+     * a server-cache-disallowed entity (Trust=0 'MJ: Audit Logs', Record Changes, other caching-disabled)
+     * is still safely client-cacheable when stamped — folding runViewCacheEligible's server gate onto this
+     * path regressed that (integration check client-cache.C12). Materialized reads stay excluded on both
+     * (the out-of-band snapshot swap the stamp can't observe).
+     */
+    protected runViewCacheEligibleForWrite(param: RunViewParams): boolean {
+        if (this.TrustLocalCacheCompletely) {
+            return this.runViewCacheEligible(param);
+        }
+        return !param.BypassCache &&
+            !param.AfterKey &&
+            !IsMaterializedDataSource(param.DataSource) &&
+            param.ResultType !== 'count_only' &&
+            param.CacheLocal === true &&
+            !this.isMaterializedWrapperEntity(param);
     }
 
     /**
@@ -2617,7 +2693,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // BaseEntity event), count_only, AfterKey, BypassCache, cache-disallowed entities. On a client
             // (!TrustLocalCacheCompletely) runViewCacheEligible already implies CacheLocal===true, so this is
             // strictly a tightening — normal cacheable slots are unaffected.
-            if (this.runViewCacheEligible(param) && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && LocalCacheManager.Instance.IsInitialized) {
                 cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
             }
         }
@@ -2821,7 +2897,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Apply differential update to cache (runViewCacheEligible, not raw CacheLocal — see the
             // cacheable-gate note in prepareSmartCacheCheckParams; keeps Materialized/count_only/etc. out).
-            if (this.runViewCacheEligible(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
                 const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
                     fingerprint,
                     param,
@@ -2888,7 +2964,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Update the local cache with fresh data (don't await - fire and forget for performance).
             // runViewCacheEligible, not raw CacheLocal — see the cacheable-gate note; a first-time
             // Materialized read reaches this 'stale' branch with fresh data and would otherwise be cached.
-            if (this.runViewCacheEligible(param) && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = this.clientCacheFingerprint(param);
                 // Note: We don't await here to avoid blocking the response
                 // Cache update happens in background
@@ -4616,6 +4692,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                     // Initialize IS-A parent entity composition chain before any data operations
                     await newObject.InitializeParentEntity();
+                    // Construct declared embedded peers (no NewRecord/Load yet) so NewRecord()
+                    // can provision required FKs synchronously and Load() can fill them.
+                    await newObject.InitializeEmbeddedRecords();
 
                     if (actualLoadKey) {
                         // Load existing record

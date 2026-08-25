@@ -201,4 +201,4 @@ The queue system persists state across three tables:
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

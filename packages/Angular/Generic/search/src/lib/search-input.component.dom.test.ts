@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
-import { renderComponentFixture, query, text, attr, hasClass, click, typeInto, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, attr, hasClass, click, typeInto, capture, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { SearchInputComponent } from './search-input.component';
 
 /**
@@ -108,5 +108,11 @@ describe('SearchInputComponent (DOM)', () => {
     const fixture = render({ Query: 'x' });
     expect(attr(fixture, 'button.search-input-clear', 'aria-label')).toBe('Clear search');
     expect(attr(fixture, 'button.search-input-clear', 'type')).toBe('button');
+  });
+
+  it('has no axe accessibility violations (jsdom-safe rule set)', async () => {
+    // Render with a non-empty query so the clear button (the richest a11y surface) is present.
+    const fixture = render({ Placeholder: 'Search…', Query: 'abc', ShowShortcutHint: true });
+    await ExpectNoAxeViolations(fixture);
   });
 });
