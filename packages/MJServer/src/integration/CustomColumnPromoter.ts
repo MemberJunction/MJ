@@ -508,32 +508,27 @@ export class IntegrationCustomColumnPromoter {
             MigrationSQL: statements.join('\n'),
             Description: `Promote ${named.length} custom column(s) on ${entityInfo.Name}`,
             AffectedTables: [`${entityInfo.SchemaName}.${entityInfo.BaseTable}`],
-            // SkipRestart / SkipGitCommit are deliberately NOT set, so RSU runs its normal
-            // pipeline: migration written, committed, MJAPI restarted. Both fields are optional and
-            // RSU gates on `!inputs.every(i => i.SkipGitCommit)`, so omitting them IS the default.
+            // SkipRestart MUST stay true: `pm2 restart` kills this process ("Expected: pm2
+            // restart killed us and we caught the signal" — RuntimeSchemaManager.restartMJAPI), and
+            // PHASE 3 below still has to create the IOF rows, the field maps and spread the staged
+            // values. Restarting here would end the function at the DDL, leaving exactly the
+            // interrupted-spread state this PR exists to recover from — on every promotion.
+            SkipRestart: true,
+
+            // SkipGitCommit, by contrast, was wrong and is now dropped, so the migration and the
+            // regenerated code reach the repository. It is the only place in the repo either flag
+            // was forced rather than passed in; every integration entry point takes them as
+            // arguments defaulting to false, so add/remove tables, refresh schema and first-time
+            // setup all commit already. Without the commit the database carries columns git has no
+            // record of — observed live, where a workspace's promoted columns were present only
+            // because a LATER schema refresh happened to re-emit them as ADD COLUMN IF NOT EXISTS.
+            // The commit does not touch the process, so it is safe where the restart is not.
             //
-            // They were previously hardcoded `true` here — the only place in the repo either flag is
-            // forced rather than passed in. Every integration entry point takes them as arguments
-            // defaulting to false (IntegrationApplySchema / ApplySchemaBatch / ApplyAll /
-            // ApplyAllBatch), so adding tables, removing tables, refreshing schema and first-time
-            // setup all commit and restart. Promotion was the outlier, and neither reason held:
-            //
-            //  - "M3 owns the restart": nothing does. `sync.schema_update` carries
-            //    restartRequiredForGraphQL: true and has no subscriber anywhere — not in this repo,
-            //    not in the client. Meanwhile the client, on SchemaUpdatePending, arms its RSU poll
-            //    and treats a restart signature as "the expected RSU restart, not a failure" — then
-            //    waits for a restart that never came. Without it the columns never reach GraphQL,
-            //    so the UI that just asked for them cannot read them. The claim that they are
-            //    "already usable without a restart (metadata refreshed)" conflates metadata with
-            //    CODE: Refresh() reloads EntityField rows, it does not load regenerated entity
-            //    classes into a running process — which is exactly why the spread below documents
-            //    dynamic .Get/.Set as "the sanctioned exception", the typed property not existing yet.
-            //
-            //  - "a per-sync commit is noise": without the commit the migration and the regenerated
-            //    code never reach the repository, so the database carries columns git has no record
-            //    of. Observed live: a workspace's promoted columns were present only because a LATER
-            //    schema refresh happened to re-emit them as ADD COLUMN IF NOT EXISTS. Absent that
-            //    refresh, any environment rebuilt from the repo would silently lack them.
+            // The restart itself remains genuinely unsolved: it has to happen AFTER phase 3, and
+            // nothing performs it — `sync.schema_update` carries restartRequiredForGraphQL: true
+            // and has no subscriber, while the client arms its RSU poll and waits for a restart
+            // that never comes. Until that is closed, the columns do not reach GraphQL. Deliberately
+            // NOT fixed by restarting here, which would break promotion outright.
         };
     }
 
