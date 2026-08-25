@@ -124,14 +124,38 @@ export function planShards(packages, shardCount, { packages: weights = {}, defau
 }
 
 /**
+ * Every forwarded token must be a turbo FLAG. Anything else would be read by turbo as a task
+ * name, and `turbo run test <something>` does not fail the way you would hope — it reports
+ * "Could not find task", which reads like a broken turbo.json rather than like a mangled
+ * argument.
+ *
+ * The specific mangling this catches: passing the filter in the SPACE form,
+ * `--turbo-args "--filter=...[base]"`. parseArgs sees a `--`-prefixed next token, treats
+ * --turbo-args as a valueless boolean, then re-parses `--filter=...[base]` as its own
+ * key=value pair — and the `--filter=` prefix silently disappears, leaving the bare
+ * `...[base]`. Use the `=` form (`--turbo-args=...`), which has no such ambiguity.
+ */
+function assertTurboFlags(args) {
+    const stray = args.filter((a) => !a.startsWith('-'));
+    if (stray.length > 0) {
+        throw new Error(
+            `plan-test-shards: refusing to forward non-flag argument(s) to turbo: ${stray.join(' ')}\n` +
+                `Turbo would read these as task names. Pass the filter with the "=" form, e.g.\n` +
+                `  --turbo-args="--filter=...[origin/next]"`
+        );
+    }
+}
+
+/**
  * Ask turbo which packages have a `test` task in scope. `filterArgs` is the already-split
- * turbo filter (e.g. ['--filter=...[origin/next]']) or [] for the full suite.
+ * turbo argument list (e.g. ['--filter=...[origin/next]']) or [] for the full suite.
  *
  * maxBuffer is raised well past the default 1 MB: the full-repo dry run is ~3 MB of JSON and
  * the default would truncate it into a parse error — a silent "no packages" plan, which would
  * skip the entire test tier while reporting success.
  */
 export function readTurboTestPackages(filterArgs = [], { cwd = process.cwd() } = {}) {
+    assertTurboFlags(filterArgs);
     const args = ['turbo', 'run', 'test', '--dry=json', ...filterArgs];
     const stdout = execFileSync('npx', args, {
         cwd,
@@ -182,9 +206,12 @@ async function main() {
         process.exit(2);
     }
 
-    // The filter arrives as one string (possibly empty) straight from the workflow's
-    // TURBO_FILTER env; split on whitespace so an empty value yields no args at all.
-    const filterArgs = (args.filter ?? '').trim().split(/\s+/).filter(Boolean);
+    // The turbo args arrive as ONE string (possibly empty) straight from the workflow's
+    // TURBO_FILTER env — already in flag form, e.g. `--filter=...[origin/next]`. Split on
+    // whitespace so an empty value yields no args at all. `--filter` is accepted as a legacy
+    // alias so an operator running this by hand either way gets the same behaviour.
+    const raw = args['turbo-args'] ?? args.filter ?? '';
+    const filterArgs = String(raw).trim().split(/\s+/).filter(Boolean);
 
     const packages = readTurboTestPackages(filterArgs, { cwd: resolve(args.cwd ?? process.cwd()) });
     const weights = loadWeights(args.weights ? resolve(args.weights) : DEFAULT_WEIGHTS_PATH);

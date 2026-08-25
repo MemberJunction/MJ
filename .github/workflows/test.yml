@@ -338,7 +338,11 @@ jobs:
         id: plan
         env:
           TURBO_FILTER: ${{ steps.scope.outputs.turbo_filter }}
-        run: node .github/scripts/plan-test-shards.mjs --shards "$SHARD_COUNT" --filter "$TURBO_FILTER"
+        # The "=" form is required, not stylistic: TURBO_FILTER's value is itself a flag
+        # (`--filter=...[base]`), and in the space form the parser cannot tell that apart from
+        # a valueless flag followed by the next option — it silently drops the `--filter=`
+        # prefix and turbo then reports the remainder as an unknown TASK name.
+        run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --turbo-args="$TURBO_FILTER"
 
       # The handoff to the shards. Keyed to this RUN (not this ref or sha) so it can never be
       # read by another run, and deleted by the cleanup job at the end — the repo shares one
@@ -453,10 +457,6 @@ jobs:
 
       - name: Run unit tests
         env:
-          # Angular DOM suites each spin heavy AOT-compile + jsdom workers (capped to 2/package
-          # by vitest.dom.shared.ts), so turbo's concurrency is capped to keep peak workers
-          # (concurrency × 2) well under the 16 GB runner's limit (otherwise: OOM / exit 137,
-          # as seen on PR #3231 twice).
           SHARD_PACKAGES: ${{ matrix.shard.packages }}
         run: |
           # Via env, never interpolated into the script: package names must not reach the shell.
@@ -470,6 +470,11 @@ jobs:
             exit 1
           fi
           echo "Shard ${{ matrix.shard.index }}/${{ matrix.shard.total }}: ${#FILTER_ARGS[@]} package(s)"
+          # --concurrency=4: Angular DOM suites each spin heavy AOT-compile + jsdom workers
+          # (capped to 2/package by vitest.dom.shared.ts), so peak workers (concurrency × 2)
+          # must stay well under the 16 GB runner's limit — uncapped it OOM'd with exit 137 on
+          # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
+          # the heavy DOM packages across shards, yet a shard can still draw several.
           npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}"
 
   # ---------------------------------------------------------------------------------------

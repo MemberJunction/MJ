@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractTestPackages, planShards, loadWeights, parseArgs } from '../plan-test-shards.mjs';
+import { execFileSync } from 'node:child_process';
+import { extractTestPackages, planShards, loadWeights, parseArgs, readTurboTestPackages } from '../plan-test-shards.mjs';
 
 const SCRIPTS_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEIGHTS_PATH = join(SCRIPTS_DIR, 'test-shard-weights.json');
@@ -230,3 +231,73 @@ describe('parseArgs', () => {
         expect(parseArgs(['positional', '--shards', '2'])).toEqual({ shards: '2' });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Argument forwarding. This is where the planner very nearly shipped broken: the
+// workflow passes TURBO_FILTER, whose VALUE is itself a flag
+// (`--filter=...[origin/next]`). In the space form the parser cannot distinguish
+// that from a valueless flag followed by the next option, silently drops the
+// `--filter=` prefix, and turbo then reports the bare `...[origin/next]` as an
+// unknown TASK. It fails only on the FILTERED path — i.e. on every ordinary PR,
+// and never on the full-suite runs that root/global changes trigger.
+// ---------------------------------------------------------------------------
+
+describe('turbo argument forwarding', () => {
+    it('parses the "=" form the workflow uses, keeping a flag-shaped value intact', () => {
+        const args = parseArgs(['--shards=6', '--turbo-args=--filter=...[origin/next]']);
+        expect(args['turbo-args']).toBe('--filter=...[origin/next]');
+        expect(args.shards).toBe('6');
+    });
+
+    it('keeps an empty turbo-args empty (the full-suite/backstop path)', () => {
+        expect(parseArgs(['--shards=6', '--turbo-args='])['turbo-args']).toBe('');
+    });
+
+    // The exact mangling, pinned so nobody "simplifies" the workflow back to the space form.
+    it('demonstrates why the space form is unusable for a flag-shaped value', () => {
+        const args = parseArgs(['--turbo-args', '--filter=...[origin/next]']);
+        // --turbo-args reads as a boolean, and the value re-parses as its own key=value pair,
+        // losing the `--filter=` prefix entirely.
+        expect(args['turbo-args']).toBe('true');
+        expect(args.filter).toBe('...[origin/next]');
+    });
+
+    // The safety net: whatever the parse produced, a non-flag token must never reach turbo,
+    // because `turbo run test <token>` reads it as a task name and fails confusingly.
+    it('refuses to forward a non-flag argument to turbo', () => {
+        expect(() => readTurboTestPackages(['...[origin/next]'])).toThrow(/refusing to forward non-flag/);
+        expect(() => readTurboTestPackages(['...[origin/next]'])).toThrow(/--turbo-args=/);
+    });
+
+    it('accepts genuine turbo flags', () => {
+        expect(() => readTurboTestPackages(['--filter=@memberjunction/global'])).not.toThrow();
+    });
+});
+
+describe('CLI end to end (real turbo graph)', () => {
+    const SCRIPT = join(SCRIPTS_DIR, 'plan-test-shards.mjs');
+    const REPO_ROOT = join(SCRIPTS_DIR, '..', '..');
+    const runCli = (extraArgs) =>
+        execFileSync(process.execPath, [SCRIPT, '--shards=6', ...extraArgs], {
+            cwd: REPO_ROOT,
+            encoding: 'utf8',
+            maxBuffer: 64 * 1024 * 1024,
+        });
+
+    // The full-suite path: what push/schedule and root-global PRs run.
+    it('plans the full suite into 6 balanced shards', () => {
+        const out = runCli(['--turbo-args=']);
+        expect(out).toMatch(/package\(s\) with a test task → 6 shard\(s\)/);
+        const weights = [...out.matchAll(/~(\d+)s/g)].map((m) => Number(m[1]));
+        expect(weights).toHaveLength(6);
+        // Balanced within 10% — the real check that the weight table is doing its job.
+        expect(Math.max(...weights)).toBeLessThanOrEqual(Math.min(...weights) * 1.1);
+    });
+
+    // The FILTERED path — the one the space-form bug broke, and the one a root/global PR
+    // (like the one introducing this workflow) can never exercise in CI.
+    it('accepts a real turbo filter in the form the workflow passes it', () => {
+        const out = runCli(['--turbo-args=--filter=@memberjunction/global']);
+        expect(out).toMatch(/1 package\(s\) with a test task → 1 shard\(s\)/);
+    });
+}, 120000);
