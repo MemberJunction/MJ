@@ -79,6 +79,27 @@ interface ConversationAgentResult {
  * This gives proper per-user permission scoping without a separate auth flow.
  * Falls back to the configured service account email if no MJ user matches.
  */
+/**
+ * A binary output to deliver as a platform file: either a generated `MediaOutput` or a file the
+ * agent inlined as a `data:` URI. `fileName`, when present, wins over any derived name.
+ */
+export interface UploadableFile {
+    modality?: string;
+    mimeType?: string;
+    /** Base64-encoded bytes. */
+    data?: string;
+    label?: string;
+    /** Preferred name; when absent the adapter derives one from `label` and the MIME type. */
+    fileName?: string;
+}
+
+/**
+ * Optional per-platform file upload. Implemented by adapters whose platform can accept file
+ * uploads (see `SlackAdapter.uploadMediaOutputs`); absent elsewhere, in which case binary output
+ * is simply not delivered as files.
+ */
+export type MediaUploader = (message: IncomingMessage, files: readonly UploadableFile[]) => Promise<void>;
+
 export abstract class BaseMessagingAdapter {
     /** Extension settings from `mj.config.cjs`. */
     protected settings: MessagingAdapterSettings;
@@ -1042,6 +1063,60 @@ export abstract class BaseMessagingAdapter {
         } else {
             await this.sendFinalMessage(message, formatted);
         }
+
+        // Deliver binary output as real platform files, AFTER the text reply is posted.
+        //
+        // Two sources, neither of which the message renderers can show:
+        //   - `mediaOutputs` — generated images arrive as base64, and the block/card builders can
+        //     only render media that already has a public https URL, so they were silently dropped.
+        //   - inlined file data URIs on actionable commands — MJ's document actions embed a whole
+        //     generated file as `data:<mime>;base64,...` when no file storage account is
+        //     configured. Unusable as a link (see isOpenableURI), but the bytes are right there.
+        //
+        // Failures are logged and swallowed: the text reply has already posted, and an upload
+        // problem must not turn a delivered answer into an error.
+        const uploader = (this as { uploadMediaOutputs?: MediaUploader }).uploadMediaOutputs;
+        if (typeof uploader === 'function') {
+            const attachments = [
+                ...(result.mediaOutputs ?? []),
+                ...this.collectInlineFileAttachments(result),
+            ];
+            if (attachments.length > 0) {
+                try {
+                    await uploader.call(this, message, attachments);
+                } catch (error) {
+                    LogError('Failed to upload agent output files (the text reply already posted):', undefined, error);
+                }
+            }
+        }
+    }
+
+    /**
+     * Harvest files that an agent inlined as `data:` URIs on its actionable commands.
+     *
+     * MJ's document actions fall back to embedding the generated file itself when no file storage
+     * account is configured. That URI cannot be opened from a chat client, so the file is decoded
+     * here and handed to the platform's uploader as an ordinary attachment.
+     */
+    protected collectInlineFileAttachments(result: ExecuteAgentResult): UploadableFile[] {
+        const files: UploadableFile[] = [];
+        const commands = (result as { actionableCommands?: unknown }).actionableCommands;
+        if (!Array.isArray(commands)) return files;
+
+        for (const raw of commands) {
+            const cmd = raw as { url?: unknown; label?: unknown; fileName?: unknown };
+            if (typeof cmd?.url !== 'string') continue;
+            const match = /^data:([^;,]+);base64,(.+)$/i.exec(cmd.url.trim());
+            if (!match) continue;
+            files.push({
+                modality: 'file',
+                mimeType: match[1],
+                data: match[2],
+                label: typeof cmd.label === 'string' ? cmd.label : undefined,
+                fileName: typeof cmd.fileName === 'string' ? cmd.fileName : undefined,
+            });
+        }
+        return files;
     }
 
     /**

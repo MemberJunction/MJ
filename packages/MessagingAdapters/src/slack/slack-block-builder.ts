@@ -284,8 +284,16 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
     });
   }
 
-  // "View Full" button if URL is available
-  if (artifact.URL) {
+  // "View Full" button if URL is available. A non-public URL here fails the entire message
+  // (see isButtonSafeURL), so anything not button-safe degrades to a mrkdwn link.
+  if (artifact.URL && !isButtonSafeURL(artifact.URL)) {
+    if (isOpenableURI(artifact.URL)) {
+      blocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: `<${artifact.URL}|View Full Report>` }],
+      });
+    }
+  } else if (artifact.URL) {
     blocks.push({
       type: 'actions',
       elements: [
@@ -312,6 +320,40 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
  *
  * Returns an array of blocks (may include both action and context blocks).
  */
+/**
+ * Can this URI be opened from a chat client at all?
+ *
+ * `data:` (and `blob:`/`file:`) URIs cannot. Agents do emit them: MJ's document actions inline a
+ * whole generated file as `data:<mime>;base64,...` when no file storage account is configured.
+ * Rendered into a message that becomes thousands of unclickable characters the user would have to
+ * copy by hand — and it breaches Slack's message length limit, failing the whole reply.
+ */
+function isOpenableURI(url: unknown): boolean {
+  return typeof url === 'string' && !/^(data|blob|file):/i.test(url.trim());
+}
+
+/**
+ * Is this URL valid inside a Slack **block element**?
+ *
+ * Slack rejects the ENTIRE message with `invalid_blocks: invalid url` when a button's `url` is not
+ * a public http(s) address — so a localhost `ExplorerBaseURL` (the normal local-dev value) meant a
+ * reply carrying any resource command never posted: the agent's work completed, the artifact was
+ * created, and the user saw nothing. Note mrkdwn `<url|text>` links accept localhost, which is why
+ * context deep-links worked while buttons silently killed the message.
+ */
+function isButtonSafeURL(url: unknown): boolean {
+  if (typeof url !== 'string' || !isOpenableURI(url)) return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return host !== 'localhost' && host !== '127.0.0.1' && host !== '::1' && host !== '0.0.0.0'
+      && !host.endsWith('.localhost');
+  } catch {
+    return false;
+  }
+}
+
 export function buildActionButtons(commands: ActionableCommand[], explorerBaseURL?: string): Record<string, unknown>[] {
   const blocks: Record<string, unknown>[] = [];
   const buttons: Record<string, unknown>[] = [];
@@ -319,12 +361,25 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
 
   for (const cmd of commands.slice(0, 5)) {
     if (cmd.type === 'open:url' && 'url' in cmd) {
-      buttons.push(buildURLButton(cmd.label, cmd.url, buttons.length));
+      if (!isOpenableURI(cmd.url)) {
+        // Name the file rather than dumping it: the adapter uploads inlined file data as a real
+        // attachment (see BaseMessagingAdapter.collectInlineFileAttachments), so the bytes still
+        // reach the user — as a download, not as text to copy.
+        resourceInfoItems.push(`📄 _${cmd.label} — attached to this reply._`);
+      } else if (isButtonSafeURL(cmd.url)) {
+        buttons.push(buildURLButton(cmd.label, cmd.url, buttons.length));
+      } else {
+        resourceInfoItems.push(`<${cmd.url}|${cmd.label}>`);
+      }
     } else if (cmd.type === 'open:resource') {
       const resourceCmd = cmd as OpenResourceCommand;
       const deepLink = buildExplorerDeepLink(resourceCmd, explorerBaseURL);
-      if (deepLink) {
+      if (deepLink && isButtonSafeURL(deepLink)) {
         buttons.push(buildURLButton(cmd.label, deepLink, buttons.length));
+      } else if (deepLink) {
+        // Not button-safe (a localhost Explorer, typical in local dev) — a mrkdwn link is
+        // accepted where a button URL is not, and still resolves for whoever can reach it.
+        resourceInfoItems.push(`<${deepLink}|${cmd.label}>`);
       } else {
         resourceInfoItems.push(formatResourceInfo(resourceCmd));
       }

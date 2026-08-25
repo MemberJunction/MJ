@@ -183,6 +183,12 @@ class TestAdapter extends BaseMessagingAdapter {
     public testDetectDelegation(result: ExecuteAgentResult): string | null {
         return this.detectDelegation(result);
     }
+
+    /** Records what the base class asked this platform to upload. */
+    public Uploads: { mimeType?: string; fileName?: string; label?: string; data?: string }[] = [];
+    protected async uploadMediaOutputs(_message: IncomingMessage, files: readonly { mimeType?: string; fileName?: string; label?: string; data?: string }[]): Promise<void> {
+        this.Uploads.push(...files);
+    }
 }
 
 /** A TestAdapter whose platform routes every thread reply to every app (Slack-like). */
@@ -416,6 +422,69 @@ describe('BaseMessagingAdapter', () => {
             const a = new TestAdapter({ ...defaultSettings, DisableDelegation: true });
             await a.Initialize();
             expect(a.testDetectDelegation(delegatingResult)).toBeNull();
+        });
+    });
+
+    describe('binary output delivery', () => {
+        // MJ's document actions inline a whole generated file as a data: URI when no file storage
+        // account is configured. It cannot be opened from a chat client, so the bytes are decoded
+        // and uploaded as a real attachment instead of being rendered as unusable link text.
+        const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const dataUri = (mime: string, text: string) => `data:${mime};base64,${Buffer.from(text).toString('base64')}`;
+
+        beforeEach(async () => {
+            await adapter.Initialize();
+        });
+
+        it('uploads a file an agent inlined as a data: URI', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: { Message: 'Your document is ready.' },
+                    actionableCommands: [
+                        { type: 'open:url', label: 'Download Document', url: dataUri(DOCX, 'the-docx-bytes') },
+                    ],
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            await adapter.HandleMessage(createMessage({ IsDirectMessage: true }));
+
+            expect(adapter.Uploads).toHaveLength(1);
+            expect(adapter.Uploads[0].mimeType).toBe(DOCX);
+            expect(Buffer.from(adapter.Uploads[0].data!, 'base64').toString()).toBe('the-docx-bytes');
+            expect(adapter.Uploads[0].label).toBe('Download Document');
+        });
+
+        it('uploads generated media alongside inlined files', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: { Message: 'Here you go.' },
+                    mediaOutputs: [{ modality: 'image', mimeType: 'image/png', data: 'aW1n' }],
+                    actionableCommands: [
+                        { type: 'open:url', label: 'Download Document', url: dataUri(DOCX, 'doc') },
+                    ],
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            await adapter.HandleMessage(createMessage({ IsDirectMessage: true }));
+            expect(adapter.Uploads.map((u) => u.mimeType)).toEqual(['image/png', DOCX]);
+        });
+
+        it('uploads nothing when a reply carries no binary output', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: { Message: 'Just text.' },
+                    actionableCommands: [{ type: 'open:url', label: 'Docs', url: 'https://example.com' }],
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            await adapter.HandleMessage(createMessage({ IsDirectMessage: true }));
+            expect(adapter.Uploads).toHaveLength(0);
         });
     });
 

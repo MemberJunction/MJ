@@ -14,7 +14,7 @@
 import { WebClient, type KnownBlock } from '@slack/web-api';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { LogStatus } from '@memberjunction/core';
-import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
+import { BaseMessagingAdapter, type UploadableFile } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { buildRichResponse, buildErrorBlocks, buildAgentContextBlock, buildDivider } from './slack-block-builder.js';
 import { markdownToBlocks } from './slack-formatter.js';
@@ -190,6 +190,65 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * Send the final formatted response. If a "Thinking..." message exists
      * (no streaming occurred), update it in-place instead of posting a new message.
      */
+    /**
+     * Extensions for MIME types whose subtype is not a usable file extension.
+     *
+     * `mimeType.split('/')[1]` yields "vnd.openxmlformats-officedocument.wordprocessingml.document"
+     * for a .docx, which Slack shows as an unopenable blob.
+     */
+    private static readonly EXTENSION_BY_MIME_TYPE: Readonly<Record<string, string>> = {
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+        'application/msword': 'doc',
+        'application/vnd.ms-excel': 'xls',
+        'application/vnd.ms-powerpoint': 'ppt',
+        'application/pdf': 'pdf',
+        'application/json': 'json',
+        'text/markdown': 'md',
+        'text/plain': 'txt',
+        'text/csv': 'csv',
+        'image/jpeg': 'jpg',
+        'image/svg+xml': 'svg',
+    };
+
+    /**
+     * Upload an agent's binary output as real Slack files, threaded under the reply.
+     *
+     * Slack's `image` blocks can only reference a public https URL, so base64 media — every
+     * generated image, and any file inlined as a `data:` URI — could not be rendered and was
+     * silently dropped: the agent did the work, the artifact existed, and the user saw nothing.
+     * Uploading makes it an ordinary attachment the user can open or download.
+     *
+     * Requires the `files:write` bot scope; without it Slack answers `missing_scope`, which the
+     * caller logs (the text reply has already posted by then).
+     */
+    protected async uploadMediaOutputs(originalMessage: IncomingMessage, files: readonly UploadableFile[]): Promise<void> {
+        const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
+        // Capped to mirror the media-block limit — a reply should not become a file dump.
+        for (const file of files.slice(0, 5)) {
+            if (!file || typeof file.data !== 'string' || file.data.length === 0) continue;
+
+            const mimeType = (file.mimeType ?? 'image/png').toLowerCase();
+            const extension = SlackAdapter.EXTENSION_BY_MIME_TYPE[mimeType]
+                ?? (mimeType.split('/')[1] ?? 'bin').split('+')[0];
+            const preferredName = (file.fileName?.trim() || file.label || `generated-${file.modality ?? 'media'}`)
+                .replace(/[^\w.-]+/g, '_')
+                .slice(0, 80) || 'generated-file';
+            const filename = /\.[A-Za-z0-9]{1,5}$/.test(preferredName)
+                ? preferredName
+                : `${preferredName}.${extension}`;
+
+            await this.client.files.uploadV2({
+                channel_id: originalMessage.ChannelID,
+                thread_ts: threadTs,
+                file: Buffer.from(file.data, 'base64'),
+                filename,
+                title: file.label ?? file.fileName ?? undefined,
+            });
+        }
+    }
+
     protected async sendFinalMessage(originalMessage: IncomingMessage, response: FormattedResponse): Promise<void> {
         const key = this.threadKey(originalMessage);
         const thinkingId = this.thinkingMessageIds.get(key);

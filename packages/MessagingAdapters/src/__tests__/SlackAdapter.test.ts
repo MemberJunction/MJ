@@ -309,4 +309,53 @@ describe('SlackAdapter', () => {
             expect(mocks.usersInfo).toHaveBeenCalledWith({ user: 'U_ALICE' });
         });
     });
+
+    describe('uploadMediaOutputs', () => {
+        // Slack's image blocks require a public https URL, so base64 output (every generated
+        // image, and files inlined as data: URIs) was silently dropped. These upload instead.
+        const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+        function uploaderHarness() {
+            const uploads: Record<string, unknown>[] = [];
+            const harness = Object.create(SlackAdapter.prototype) as SlackAdapter & {
+                client: unknown;
+                uploadMediaOutputs: (m: unknown, f: unknown[]) => Promise<void>;
+            };
+            (harness as { client: unknown }).client = {
+                files: { uploadV2: async (args: Record<string, unknown>) => { uploads.push(args); return { ok: true }; } },
+            };
+            return { harness, uploads };
+        }
+
+        it('gives a .docx the correct extension, not the MIME subtype', async () => {
+            const { harness, uploads } = uploaderHarness();
+            await harness.uploadMediaOutputs({ ChannelID: 'C1', MessageID: 'm1' } as never, [
+                { modality: 'file', mimeType: DOCX, data: Buffer.from('doc').toString('base64'), label: 'Download Document' },
+            ]);
+            expect(uploads).toHaveLength(1);
+            expect(uploads[0].filename).toBe('Download_Document.docx');
+            expect((uploads[0].file as Buffer).toString()).toBe('doc');
+        });
+
+        it('prefers an explicit fileName and keeps its existing extension', async () => {
+            const { harness, uploads } = uploaderHarness();
+            await harness.uploadMediaOutputs({ ChannelID: 'C1', MessageID: 'm1' } as never, [
+                { modality: 'file', mimeType: DOCX, data: 'ZG9j', fileName: 'MemberJunction Overview.docx' },
+            ]);
+            expect(uploads[0].filename).toBe('MemberJunction_Overview.docx');
+        });
+
+        it('threads uploads under the reply and skips entries with no data', async () => {
+            const { harness, uploads } = uploaderHarness();
+            await harness.uploadMediaOutputs({ ChannelID: 'C1', MessageID: 'm1', ThreadID: 't7' } as never, [
+                { modality: 'image', mimeType: 'image/png', data: 'aW1n', label: 'Generated image 1' },
+                { modality: 'image', mimeType: 'image/png', data: '' },
+                { modality: 'image', mimeType: 'image/png' },
+            ]);
+            expect(uploads).toHaveLength(1);
+            expect(uploads[0].thread_ts).toBe('t7');
+            expect(uploads[0].filename).toBe('Generated_image_1.png');
+        });
+    });
+
 });

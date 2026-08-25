@@ -807,4 +807,59 @@ describe('slack-block-builder', () => {
         });
     });
 
+
+    describe('URL safety in block elements', () => {
+        const DATA_URI = 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,' + 'UEsDB'.repeat(2000);
+
+        it('renders a public https resource link as a real button', () => {
+            const blocks = buildActionButtons(
+                [{ type: 'open:resource', label: 'Open Report', resourceType: 'Report', resourceId: 'r-1' } as never],
+                'https://explorer.example.com'
+            );
+            expect(blocks[0].type).toBe('actions');
+            const el = (blocks[0].elements as Record<string, unknown>[])[0];
+            expect(el.url).toBe('https://explorer.example.com/resource/report/r-1');
+        });
+
+        it('degrades a localhost resource link to mrkdwn instead of failing the message', () => {
+            // Slack rejects the WHOLE message (invalid_blocks) when a button url is not public,
+            // so a localhost ExplorerBaseURL used to mean the reply never posted at all.
+            const blocks = buildActionButtons(
+                [{ type: 'open:resource', label: 'Open Report', resourceType: 'Report', resourceId: 'r-1' } as never],
+                'http://localhost:4201'
+            );
+            expect(blocks.every((b) => b.type !== 'actions')).toBe(true);
+            const text = ((blocks[0].elements as Record<string, unknown>[])[0].text as string);
+            expect(text).toContain('http://localhost:4201/resource/report/r-1');
+        });
+
+        it('never emits an unopenable data: URI, and does not dump it as text', () => {
+            const blocks = buildActionButtons(
+                [{ type: 'open:url', label: 'Download Document', url: DATA_URI } as never],
+                'https://explorer.example.com'
+            );
+            const serialized = JSON.stringify(blocks);
+            expect(serialized).not.toContain('data:application');
+            expect(serialized).not.toContain('UEsDB');
+            expect(serialized).toContain('Download Document');
+            // The whole block set stays far under Slack's message limit.
+            expect(serialized.length).toBeLessThan(500);
+        });
+
+        it('keeps an ordinary https open:url as a button', () => {
+            const blocks = buildActionButtons(
+                [{ type: 'open:url', label: 'Docs', url: 'https://example.com/docs' } as never],
+                undefined
+            );
+            expect(blocks[0].type).toBe('actions');
+        });
+
+        it('artifact card: a localhost URL becomes a link, a public one stays a button', () => {
+            const local = buildArtifactCard({ Title: 'T', URL: 'http://localhost:4201/x' } as never);
+            expect(local.every((b) => b.type !== 'actions')).toBe(true);
+            const pub = buildArtifactCard({ Title: 'T', URL: 'https://example.com/x' } as never);
+            expect(pub.some((b) => b.type === 'actions')).toBe(true);
+        });
+    });
+
 });
