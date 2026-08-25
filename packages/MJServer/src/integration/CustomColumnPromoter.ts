@@ -299,14 +299,26 @@ export class IntegrationCustomColumnPromoter {
                 continue;
             }
             try {
-                await this.createIntegrationObjectFields(integrationID, plan.entityMap.ExternalObjectName, plan.work);
-                await this.createFieldMaps(plan.entityMap.ID, plan.work.filter(w => w.needsFieldMap));
-                const refreshedEntityInfo = this.provider.EntityByName(plan.entityName) ?? plan.entityInfo;
-                await this.spreadAndRebaseline(plan.entityName, plan.entityMap.ID, refreshedEntityInfo, plan.work);
+                // Completion goes through the SAME method the post-restart consumer calls, given the
+                // same payload shape. There is one implementation of "finish a promotion", so the
+                // no-restart case can never drift from the restart case — which is the drift that
+                // would be impossible to notice, since only one of them runs on any given pass.
+                await this.CompletePromotion([{
+                    EntityName: plan.entityName,
+                    EntityMapID: plan.entityMap.ID,
+                    ExternalObjectName: plan.entityMap.ExternalObjectName,
+                    IntegrationID: integrationID,
+                    Columns: plan.work.map(w => ({
+                        SourceKey: w.sourceKey,
+                        ColumnName: w.columnName,
+                        SchemaFieldType: w.candidate.Inferred.SchemaFieldType,
+                        MaxLength: w.candidate.Inferred.MaxLength,
+                        Coverage: w.candidate.Coverage,
+                    })),
+                }], new Map([[plan.entityName, plan.entityInfo]]));
                 // recoverSpread items add no column/metadata — they only finish an interrupted
                 // backfill, so they don't count as "columns added" (keeps SchemaUpdatePending honest).
                 const added = plan.work.filter(w => !w.recoverSpread);
-                LogStatus(`[CustomColumnPromoter] Promoted/recovered ${plan.work.length} custom column(s) on ${plan.entityName}: ${plan.work.map(w => w.columnName).join(', ')}`);
                 columnsAdded.push(...added.map(w => ({ EntityName: plan.entityName, ColumnName: w.columnName })));
             } catch (err) {
                 // One entity's promotion failure must not abort the others, and never the sync.
@@ -333,11 +345,15 @@ export class IntegrationCustomColumnPromoter {
      */
     public async CompletePromotion(
         promoted: NonNullable<RSUPendingWork['PromotedColumns']>,
+        knownEntities?: ReadonlyMap<string, EntityInfo>,
     ): Promise<Array<{ EntityName: string; ColumnName: string }>> {
         const columnsAdded: Array<{ EntityName: string; ColumnName: string }> = [];
         for (const entry of promoted) {
             try {
-                const entityInfo = this.provider.EntityByName(entry.EntityName);
+                // Provider first — post-restart it holds the REGENERATED class, which is the whole
+                // reason completion was deferred. knownEntities is the inline caller handing back the
+                // EntityInfo it already resolved, for the no-DDL pass where nothing was regenerated.
+                const entityInfo = this.provider.EntityByName(entry.EntityName) ?? knownEntities?.get(entry.EntityName);
                 if (!entityInfo) {
                     LogError(`[CustomColumnPromoter] Post-restart: entity '${entry.EntityName}' not found; skipping.`);
                     continue;

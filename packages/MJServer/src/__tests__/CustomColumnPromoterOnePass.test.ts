@@ -71,8 +71,11 @@ function stubPromoter(provider: IMetadataProvider, planByEntity: Record<string, 
     const p = promoter as unknown as {
         resolveIntegrationID: unknown; planWorkForEntity: unknown;
         createIntegrationObjectFields: unknown; createFieldMaps: unknown; spreadAndRebaseline: unknown;
-        buildSchemaInput: unknown;
+        buildSchemaInput: unknown; activeFieldMapSources: unknown;
     };
+    // CompletePromotion re-reads the active field maps (it must: post-restart it has no plan to
+    // trust). That is a RunView, so it is stubbed at the seam like the other DB touches.
+    p.activeFieldMapSources = vi.fn().mockResolvedValue(new Set<string>());
     p.resolveIntegrationID = vi.fn().mockResolvedValue('int-1');
     p.planWorkForEntity = vi.fn().mockImplementation(async (_ci: string, entityName: string) => {
         const work = planByEntity[entityName];
