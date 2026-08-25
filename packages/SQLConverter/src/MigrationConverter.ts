@@ -452,12 +452,16 @@ function assemblePgSQL(
   // sentinel, should it ever leak.
   return parts
     .join('\n\n')
-    .replaceAll('${flyway:defaultSchema}', schema)
-    .replaceAll('__mj_flyway_default_schema__', schema)
+    // Replacement FUNCTIONS, not strings: a string replacement expands $$, $&, $` , $' and
+    // $1-$99, so any '$' in a schema name would be executed rather than inserted (issue #3171).
+    // A schema name is unlikely to carry one, but the function form costs nothing and removes
+    // the question.
+    .replaceAll('${flyway:defaultSchema}', () => schema)
+    .replaceAll('__mj_flyway_default_schema__', () => schema)
     // `${mjSchema}` names MJ CORE, not the app's own schema, so it resolves to a different value
     // and was previously left in the output — surviving into the file AND into the SQL that
     // `--bake-codegen` executes against the working database (issue #3838).
-    .replaceAll('${mjSchema}', coreSchema)
+    .replaceAll('${mjSchema}', () => coreSchema)
     .concat('\n');
 }
 

@@ -256,8 +256,9 @@ export class IncrementalBaker {
     // emits literal `__mj`. Replace any stray macro so the baked file is fully literal.
     return parts
       .join('\n\n')
-      .replaceAll('${flyway:defaultSchema}', this.schema)
-      .replaceAll('${mjSchema}', this.coreSchema) + '\n';
+      // Replacement functions, not strings — see MigrationConverter.assemblePgSQL (issue #3171).
+      .replaceAll('${flyway:defaultSchema}', () => this.schema)
+      .replaceAll('${mjSchema}', () => this.coreSchema) + '\n';
   }
 
   private bakedHeader(fileName: string): string {
