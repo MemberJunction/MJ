@@ -1,9 +1,18 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { describe, it, expect, afterEach } from 'vitest';
+import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { extractTestPackages, planShards, loadWeights, parseArgs, readTurboTestPackages } from '../plan-test-shards.mjs';
+import {
+    extractTestPackages,
+    planShards,
+    loadWeights,
+    parseArgs,
+    readTurboTestPackages,
+    parseDuration,
+    extractDurationsFromLog,
+    recordWeights,
+} from '../plan-test-shards.mjs';
 
 const SCRIPTS_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEIGHTS_PATH = join(SCRIPTS_DIR, 'test-shard-weights.json');
@@ -301,3 +310,122 @@ describe('CLI end to end (real turbo graph)', () => {
         expect(out).toMatch(/1 package\(s\) with a test task → 1 shard\(s\)/);
     });
 }, 120000);
+
+// ---------------------------------------------------------------------------
+// Weight-table maintenance. The table is measured from a real run and WILL go
+// stale as packages are added and suites grow. `--record` is what keeps the
+// documented regeneration path honest — the file's own _README points at it.
+// ---------------------------------------------------------------------------
+
+describe('parseDuration', () => {
+    it('parses the shapes vitest prints', () => {
+        expect(parseDuration('1.23s')).toBeCloseTo(1.23);
+        expect(parseDuration('456ms')).toBeCloseTo(0.456);
+        expect(parseDuration('1m 30s')).toBe(90);
+        expect(parseDuration('2m30.5s')).toBeCloseTo(150.5);
+    });
+
+    it('returns null for anything else', () => {
+        expect(parseDuration('soon')).toBeNull();
+        expect(parseDuration('')).toBeNull();
+        expect(parseDuration('12')).toBeNull();
+    });
+});
+
+describe('extractDurationsFromLog', () => {
+    // The `gh run view --job <id> --log` shape: job \t step \t timestamp <line>.
+    const ghRunView = [
+        'Run unit tests\tUNKNOWN STEP\t2026-08-24T16:00:00.0Z ##[group]@mj/alpha:test',
+        'Run unit tests\tUNKNOWN STEP\t2026-08-24T16:00:00.0Z    Duration  12.50s (transform 1s)',
+        'Run unit tests\tUNKNOWN STEP\t2026-08-24T16:00:00.0Z ##[endgroup]',
+    ].join('\n');
+
+    it('reads the gh run view log shape', () => {
+        expect(extractDurationsFromLog(ghRunView)).toEqual({ '@mj/alpha': 12.5 });
+    });
+
+    it('reads the raw job-logs shape and strips ANSI', () => {
+        const raw = [
+            '2026-08-24T16:00:00.0Z \x1b[31m##[group]@mj/beta:test\x1b[0m',
+            '2026-08-24T16:00:00.0Z    \x1b[2mDuration\x1b[22m  1m 5s',
+        ].join('\n');
+        expect(extractDurationsFromLog(raw)).toEqual({ '@mj/beta': 65 });
+    });
+
+    // A build task's output must never be attributed to a test — that would inflate the
+    // weight of whichever package happened to build slowly and skew the packing.
+    it('ignores durations belonging to non-test tasks', () => {
+        const log = [
+            '##[group]@mj/gamma:build',
+            '   Duration  99.00s',
+            '##[endgroup]',
+            '##[group]@mj/gamma:test',
+            '   Duration  3.00s',
+        ].join('\n');
+        expect(extractDurationsFromLog(log)).toEqual({ '@mj/gamma': 3 });
+    });
+
+    it('does not carry a duration across a group boundary', () => {
+        const log = ['##[group]@mj/delta:test', '##[endgroup]', '   Duration  50.00s'].join('\n');
+        expect(extractDurationsFromLog(log)).toEqual({});
+    });
+
+    it('keeps the longest reading when a package reports twice (dual-preset packages)', () => {
+        const log = [
+            '##[group]@mj/eps:test',
+            '   Duration  2.00s',
+            '##[group]@mj/eps:test',
+            '   Duration  9.00s',
+        ].join('\n');
+        expect(extractDurationsFromLog(log)).toEqual({ '@mj/eps': 9 });
+    });
+
+    it('returns nothing for a log with no test groups', () => {
+        expect(extractDurationsFromLog('just some output\nDuration  5.00s')).toEqual({});
+    });
+});
+
+describe('recordWeights', () => {
+    const TMP = join(SCRIPTS_DIR, '__tests__', 'fixtures', 'tmp-weights.json');
+    afterEach(() => {
+        if (existsSync(TMP)) rmSync(TMP);
+    });
+
+    it('writes a table a later plan can read back', () => {
+        const log = ['##[group]@mj/a:test', '   Duration  10.00s', '##[endgroup]'].join('\n');
+        const res = recordWeights(log, { weightsPath: TMP, source: 'unit test' });
+        expect(res.measured).toBe(1);
+        const table = loadWeights(TMP);
+        expect(table.packages['@mj/a']).toBe(10);
+        expect(typeof table.defaultSeconds).toBe('number');
+    });
+
+    // One log covers only the packages in that run/shard. Dropping the rest would blank the
+    // table one shard at a time — the exact failure that makes a "regenerate" step dangerous.
+    it('merges over the existing table instead of replacing it', () => {
+        writeFileSync(TMP, JSON.stringify({ _defaultSeconds: 4, packages: { '@mj/old': 42, '@mj/a': 1 } }));
+        const log = ['##[group]@mj/a:test', '   Duration  7.00s', '##[endgroup]'].join('\n');
+        recordWeights(log, { weightsPath: TMP });
+        const table = loadWeights(TMP);
+        expect(table.packages['@mj/a']).toBe(7);   // updated
+        expect(table.packages['@mj/old']).toBe(42); // preserved
+    });
+
+    it('records the provenance so a stale table is traceable', () => {
+        const log = ['##[group]@mj/a:test', '   Duration  1.00s', '##[endgroup]'].join('\n');
+        recordWeights(log, { weightsPath: TMP, source: 'run 12345' });
+        expect(JSON.parse(readFileSync(TMP, 'utf8'))._generatedFrom).toBe('run 12345');
+    });
+});
+
+describe('the weight table documents a command that exists', () => {
+    // The file's _README tells the next maintainer how to regenerate it. If that command is
+    // wrong, the table silently rots — which is how it read before this test existed.
+    it('_README names a flag the CLI actually implements', () => {
+        const readme = JSON.parse(readFileSync(WEIGHTS_PATH, 'utf8'))._README;
+        const flag = /--(\w[\w-]*)/.exec(readme);
+        expect(flag, '_README should name the regeneration flag').not.toBeNull();
+        const source = readFileSync(join(SCRIPTS_DIR, 'plan-test-shards.mjs'), 'utf8');
+        expect(source, `--${flag[1]} must be handled in main()`).toContain(`args.${flag[1]}`);
+    });
+});

@@ -1,5 +1,5 @@
 {
-  "_README": "Measured per-package vitest wall time (seconds), used ONLY to balance the CI test shards in .github/workflows/test.yml. Nothing gates on these numbers: an entry that is stale, missing, or wrong costs a slightly lopsided shard and nothing else. Regenerate with: node .github/scripts/plan-test-shards.mjs --record <path-to-a-job-log>",
+  "_README": "Measured per-package vitest wall time (seconds), used ONLY to balance the CI test shards in .github/workflows/test.yml. Nothing gates on these numbers: an entry that is stale, missing, or wrong costs a slightly lopsided shard and nothing else. To regenerate after the suite has drifted, download a green run's shard log and record it -- new measurements are merged OVER the existing table, never replacing it, because one log only covers that shard's packages:  gh api repos/MemberJunction/MJ/actions/jobs/<jobId>/logs > job.log && node .github/scripts/plan-test-shards.mjs --record=job.log --source='run <runId>'",
   "_generatedFrom": "Unit Tests run 32746276615 (PR #4028, 2026-08-24) \u2014 the 55-minute run this table exists to shrink",
   "_defaultSeconds": 4,
   "packages": {

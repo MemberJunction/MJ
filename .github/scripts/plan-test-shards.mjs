@@ -18,7 +18,7 @@
  * is the property the round-trip test in __tests__/plan-test-shards.test.mjs pins.
  */
 
-import { readFileSync, existsSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, appendFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -166,6 +166,84 @@ export function readTurboTestPackages(filterArgs = [], { cwd = process.cwd() } =
     return extractTestPackages(JSON.parse(stdout));
 }
 
+/**
+ * Parse a vitest duration as it appears in a run log: `1.23s`, `456ms`, `1m 30s`, `2m30.5s`.
+ * Returns seconds, or null when the text is not a duration.
+ */
+export function parseDuration(text) {
+    const m = /^(?:(\d+)m\s*)?([\d.]+)(ms|s)$/.exec(String(text).trim());
+    if (!m) return null;
+    const minutes = Number(m[1] ?? 0);
+    const value = Number(m[2]);
+    return minutes * 60 + (m[3] === 'ms' ? value / 1000 : value);
+}
+
+/**
+ * Extract per-package `test` durations from a GitHub Actions job log.
+ *
+ * Accepts either log shape: `gh run view --job <id> --log` (which prefixes every line with
+ * `<job>\t<step>\t<timestamp> `) and `gh api .../jobs/<id>/logs` (timestamp only). ANSI colour
+ * codes are stripped first — turbo and vitest both emit them, and an unstripped `##[group]`
+ * never matches.
+ *
+ * turbo's grouped output wraps each task's output in `##[group]<pkg>:<task>`, so a `Duration`
+ * line belongs to the most recent group. Any intervening group (a build task, a step boundary)
+ * clears the association, so a build's output can never be attributed to a test.
+ */
+export function extractDurationsFromLog(logText) {
+    const durations = {};
+    let current = null;
+    for (const raw of String(logText).split('\n')) {
+        const line = raw
+            .replace(/\x1b\[[0-9;]*m/g, '')
+            .replace(/^(?:[^\t]*\t){0,2}/, '')
+            .replace(/^[0-9T:.\-]+Z\s*/, '');
+
+        const group = /^##\[group\](\S+?):(\S+)\s*$/.exec(line);
+        if (group) {
+            current = group[2] === 'test' ? group[1] : null;
+            continue;
+        }
+        if (/^##\[(endgroup|group)\]/.test(line)) {
+            current = null;
+            continue;
+        }
+        if (!current) continue;
+
+        const dur = /\bDuration\s+((?:\d+m\s*)?[\d.]+(?:ms|s))\b/.exec(line);
+        if (dur) {
+            const seconds = parseDuration(dur[1]);
+            if (seconds != null) {
+                // Keep the longest reading if a package somehow reports twice (dual-preset
+                // packages run two vitest projects); the shard pays the larger cost.
+                durations[current] = Math.max(durations[current] ?? 0, Math.round(seconds * 10) / 10);
+            }
+            current = null;
+        }
+    }
+    return durations;
+}
+
+/**
+ * Rebuild the weight table from a job log and write it to disk. Packages absent from the log
+ * keep their previous weight rather than being dropped: one log only covers the packages that
+ * run in that shard/run, and discarding the rest would blank the table a shard at a time.
+ */
+export function recordWeights(logText, { weightsPath = DEFAULT_WEIGHTS_PATH, source = 'a job log' } = {}) {
+    const measured = extractDurationsFromLog(logText);
+    const previous = existsSync(weightsPath) ? JSON.parse(readFileSync(weightsPath, 'utf8')) : {};
+    const merged = { ...(previous.packages ?? {}), ...measured };
+
+    const out = {
+        _README: previous._README ?? 'Measured per-package vitest wall time (seconds), used ONLY to balance the CI test shards.',
+        _generatedFrom: source,
+        _defaultSeconds: previous._defaultSeconds ?? 4,
+        packages: Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b))),
+    };
+    writeFileSync(weightsPath, `${JSON.stringify(out, null, 2)}\n`);
+    return { measured: Object.keys(measured).length, total: Object.keys(merged).length, weightsPath };
+}
+
 /** Append a `name=value` line to GITHUB_OUTPUT, when running under Actions. */
 function writeGithubOutput(name, value) {
     const target = process.env.GITHUB_OUTPUT;
@@ -200,6 +278,31 @@ export function parseArgs(argv) {
 
 async function main() {
     const args = parseArgs(process.argv.slice(2));
+
+    // Maintenance mode: rebuild the weight table from a saved run log instead of planning.
+    if (args.record && args.record !== 'true') {
+        const logPath = resolve(args.record);
+        if (!existsSync(logPath)) {
+            console.error(`plan-test-shards: no such log file: ${logPath}`);
+            process.exit(2);
+        }
+        const result = recordWeights(readFileSync(logPath, 'utf8'), {
+            weightsPath: args.weights ? resolve(args.weights) : DEFAULT_WEIGHTS_PATH,
+            source: args.source ?? logPath,
+        });
+        if (result.measured === 0) {
+            console.error(
+                `plan-test-shards: found no per-package test durations in ${logPath}. ` +
+                    `Expected turbo's grouped output (##[group]<pkg>:test) with a vitest "Duration" line. ` +
+                    `Download one with: gh api repos/<owner>/<repo>/actions/jobs/<jobId>/logs > job.log`
+            );
+            process.exit(1);
+        }
+        console.log(`plan-test-shards: recorded ${result.measured} package duration(s); table now has ${result.total}.`);
+        console.log(`plan-test-shards: wrote ${result.weightsPath}`);
+        return;
+    }
+
     const shardCount = Number.parseInt(args.shards ?? '6', 10);
     if (!Number.isInteger(shardCount) || shardCount < 1) {
         console.error(`plan-test-shards: --shards must be a positive integer, got "${args.shards}"`);
