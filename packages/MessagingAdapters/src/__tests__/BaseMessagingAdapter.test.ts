@@ -184,6 +184,10 @@ class TestAdapter extends BaseMessagingAdapter {
         return this.detectDelegation(result);
     }
 
+    public testIsUserVisibleArtifact(artifactId: string): Promise<boolean> {
+        return this.isUserVisibleArtifact(artifactId, this.fallbackContextUser!);
+    }
+
     /** Records what the base class asked this platform to upload. */
     public Uploads: { mimeType?: string; fileName?: string; label?: string; data?: string }[] = [];
     protected async uploadMediaOutputs(_message: IncomingMessage, files: readonly { mimeType?: string; fileName?: string; label?: string; data?: string }[]): Promise<void> {
@@ -422,6 +426,50 @@ describe('BaseMessagingAdapter', () => {
             const a = new TestAdapter({ ...defaultSettings, DisableDelegation: true });
             await a.Initialize();
             expect(a.testDetectDelegation(delegatingResult)).toBeNull();
+        });
+    });
+
+    describe('artifact link visibility', () => {
+        // MJ marks an artifact System Only when the agent's ArtifactCreationMode says so. The
+        // Explorer UI hides those; the link the bridge posts did not, so a run whose payload was
+        // internal loop state offered "view the artifact" and opened raw JSON. Checked on the
+        // artifact — a System-Only agent can still produce a user-facing FILE artifact.
+        function mockArtifactVisibility(visibility: string | undefined, success = true) {
+            vi.mocked(RunView).mockImplementation(() => {
+                const callCount = { n: 0 };
+                return {
+                    RunView: vi.fn().mockImplementation((params: { EntityName?: string }) => {
+                        if (params?.EntityName === 'MJ: Artifacts') {
+                            return { Success: success, Results: visibility ? [{ ID: 'a-1', Visibility: visibility }] : [] };
+                        }
+                        callCount.n++;
+                        return callCount.n === 1
+                            ? { Success: true, Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }] }
+                            : { Success: true, Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }] };
+                    })
+                } as unknown as RunView;
+            });
+        }
+
+        it('does not link a System Only artifact', async () => {
+            const a = new TestAdapter(defaultSettings);
+            mockArtifactVisibility('System Only');
+            await a.Initialize();
+            expect(await a.testIsUserVisibleArtifact('a-1')).toBe(false);
+        });
+
+        it('links an ordinary artifact', async () => {
+            const a = new TestAdapter(defaultSettings);
+            mockArtifactVisibility('Always');
+            await a.Initialize();
+            expect(await a.testIsUserVisibleArtifact('a-1')).toBe(true);
+        });
+
+        it('fails open when the artifact cannot be read', async () => {
+            const a = new TestAdapter(defaultSettings);
+            mockArtifactVisibility(undefined, false);
+            await a.Initialize();
+            expect(await a.testIsUserVisibleArtifact('a-1')).toBe(true);
         });
     });
 

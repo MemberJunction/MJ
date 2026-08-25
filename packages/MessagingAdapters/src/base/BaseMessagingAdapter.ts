@@ -300,6 +300,36 @@ export abstract class BaseMessagingAdapter {
     protected abstract getBotUserId(): string;
 
     /**
+     * Is this artifact meant for the user, rather than internal system state?
+     *
+     * Fails OPEN: an unreadable artifact keeps its link, since losing a working link on a
+     * transient read failure is worse than the rare case of surfacing an internal one.
+     */
+    protected async isUserVisibleArtifact(artifactId: string, contextUser: UserInfo): Promise<boolean> {
+        try {
+            const res = await new RunView().RunView<{ Visibility?: string }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID = '${artifactId.replace(/'/g, "''")}'`,
+                    Fields: ['ID', 'Visibility'],
+                    ResultType: 'simple',
+                    MaxRows: 1,
+                },
+                contextUser
+            );
+            const visibility = res.Success ? res.Results?.[0]?.Visibility : undefined;
+            if (visibility === 'System Only') {
+                LogStatus(`Not linking artifact ${artifactId}: it is marked System Only`);
+                return false;
+            }
+            return true;
+        } catch (error) {
+            LogError(`Could not read artifact ${artifactId} visibility; linking it anyway:`, undefined, error);
+            return true;
+        }
+    }
+
+    /**
      * Was this history message written by ANY bot (not just this one)?
      *
      * Thread affinity and conversation context must both ignore other bots' messages: an agent's
@@ -798,7 +828,17 @@ export abstract class BaseMessagingAdapter {
                 conversationName: `${this.PlatformName}: ${userMessageText.substring(0, 80)}`,
             });
 
-            const artifactId = conversationResult.artifactInfo?.artifactId;
+            // Only link an artifact the user is meant to see. MJ marks an artifact
+            // `Visibility = 'System Only'` when the agent's ArtifactCreationMode says so — the
+            // Explorer UI hides those, but the link we post does not, so a run whose payload was
+            // internal state (a loop agent's scratch payload) offered "view the artifact" and
+            // opened raw JSON. Checked on the artifact itself rather than the agent's mode,
+            // because a System-Only agent can still produce a user-facing FILE artifact.
+            const candidateArtifactId = conversationResult.artifactInfo?.artifactId;
+            const artifactId = candidateArtifactId
+                && (await this.isUserVisibleArtifact(candidateArtifactId, contextUser))
+                ? candidateArtifactId
+                : undefined;
 
             return {
                 result: conversationResult.agentResult,
