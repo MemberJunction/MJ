@@ -24,6 +24,12 @@ The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 
 Hand-authoring per-PR sync migrations duplicates this step, creates many small migrations instead of one per build, and risks drift from the real push output.
 
+### 1c. JSON-Type Fields: Author as Native JSON Objects (Never Escaped Strings)
+When setting JSON-type values (such as `Configuration`, `DisplayComponentConfiguration`, `RelatedRecordCollection`, etc.) in metadata JSON files:
+- **Format as clean, nested JSON objects** directly in the metadata file (e.g. `"Configuration": { "Hierarchy": { "IsHierarchy": true } }`).
+- **Do NOT escape as strings** (`"Configuration": "{\"Hierarchy\":...}"`).
+- `mj sync` automatically serializes nested JSON objects to string values when pushing to the database, keeping the metadata source files readable and easy to diff.
+
 ### 2. File Naming Conventions
 - **Metadata files**: Must match the filePattern in `.mj-sync.json` (typically `.*.json` for dot-prefixed files)
 - **Configuration files**: Always start with dot (`.mj-sync.json`, `.mj-folder.json`)

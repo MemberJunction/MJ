@@ -15,9 +15,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { NavigationService } from '@memberjunction/ng-shared';
-import { CompositeKey } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import * as d3 from 'd3';
 import type {
     GraphNode,
@@ -535,7 +533,6 @@ const GRAPH_VIEW_CSS = `
 })
 export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
-    private navService = inject(NavigationService, { optional: true });
 
     @ViewChild('wrapper', { static: true }) public WrapperRef!: ElementRef<HTMLDivElement>;
     @ViewChild('svgCanvas', { static: true }) public CanvasRef!: ElementRef<SVGSVGElement>;
@@ -668,16 +665,28 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         const cx = this.GetContainerWidth() / 2 || 400;
         const cy = this.GetContainerHeight() / 2 || 250;
 
-        // Build links clone for D3 simulation
-        const links: d3.SimulationLinkDatum<GraphNode>[] = this.Edges.map(e => ({
-            ...e,
-            source: e.SourceID,
-            target: e.TargetID
-        }));
+        // Resolve endpoints to node objects so a case-skewed UUID or dangling
+        // edge cannot throw "node not found" out of ngOnInit. Raw-string
+        // .id(d => d.ID) compared with ===, which UUIDsEqual elsewhere
+        // deliberately does not.
+        const nodeById = new Map<string, GraphNode>();
+        for (const node of this.Nodes) {
+            const key = NormalizeUUID(node.ID);
+            if (key) {
+                nodeById.set(key, node);
+            }
+        }
+        const links: d3.SimulationLinkDatum<GraphNode>[] = [];
+        for (const edge of this.Edges) {
+            const source = nodeById.get(NormalizeUUID(edge.SourceID));
+            const target = nodeById.get(NormalizeUUID(edge.TargetID));
+            if (source && target) {
+                links.push({ source, target });
+            }
+        }
 
         this.simulation = d3.forceSimulation<GraphNode>(this.Nodes)
             .force('link', d3.forceLink<GraphNode, d3.SimulationLinkDatum<GraphNode>>(links)
-                .id((d: GraphNode) => d.ID)
                 .distance(this.Physics.LinkDistance || 120))
             .force('charge', d3.forceManyBody<GraphNode>()
                 .strength(this.Physics.Repulsion || -450)
@@ -853,16 +862,20 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public NavigateToEntity(node: GraphNode): void {
-        const rawId = String(node.Data?.['ID'] || node.ID).replace(/^(person|org|account|committee|custom):/, '');
+        // Focal-node dblclick must not navigate away from the record this
+        // graph is illustrating — the inspector already hides the navigate
+        // button for the same reason.
+        if (this.IsFocalNode(node)) {
+            return;
+        }
+        const rawId = this.stripCategoryPrefix(String(node.Data?.['ID'] || node.ID));
         const entityName = String(node.Data?.['EntityName'] || (node.Category === 'person' ? 'MJ_BizApps_Common: People' : 'MJ_BizApps_Common: Organizations'));
         const beforeEvent = new BeforeNodeNavigateEventArgs(node, entityName, rawId);
         this.BeforeNodeNavigate.emit(beforeEvent);
         if (beforeEvent.Cancel) return;
 
-        if (this.navService) {
-            const pk = CompositeKey.FromID(rawId);
-            this.navService.OpenEntityRecord(entityName, pk);
-        }
+        // Hosts navigate. This widget is L1 and must not import Explorer's
+        // NavigationService — emit the intent and let the surface open the record.
         this.NodeNavigated.emit(new NodeNavigatedEventArgs(node, entityName, rawId));
     }
 
@@ -1041,9 +1054,26 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
 
     public IsFocalNode(node: GraphNode): boolean {
         if (!node || !this.FocalNodeId) return false;
-        const focalClean = this.FocalNodeId.replace(/^(person|org|account|committee|custom):/, '').toLowerCase();
-        const nodeClean = node.ID.replace(/^(person|org|account|committee|custom):/, '').toLowerCase();
+        const focalClean = this.stripCategoryPrefix(this.FocalNodeId).toLowerCase();
+        const nodeClean = this.stripCategoryPrefix(node.ID).toLowerCase();
         const dataClean = node.Data?.['ID'] ? String(node.Data['ID']).toLowerCase() : '';
         return UUIDsEqual(node.ID, this.FocalNodeId) || nodeClean === focalClean || dataClean === focalClean;
+    }
+
+    /**
+     * Hosts prefix node IDs with `{category}:`. Categories are dynamic
+     * (`organization`, `asset`, `group`, plus caller keys), so strip any
+     * known-category prefix rather than a hardcoded subset.
+     */
+    private stripCategoryPrefix(id: string): string {
+        const idx = id.indexOf(':');
+        if (idx <= 0) {
+            return id;
+        }
+        const prefix = id.slice(0, idx).toLowerCase();
+        const known =
+            this.Categories?.some(c => c.Category.toLowerCase() === prefix) ||
+            DEFAULT_GRAPH_CATEGORIES.some(c => c.Category.toLowerCase() === prefix);
+        return known ? id.slice(idx + 1) : id;
     }
 }
