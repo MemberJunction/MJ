@@ -1,3 +1,4 @@
+import { resolveDeepLinkParam } from './chat-deeplink-params.js';
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
@@ -521,8 +522,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Check queryParams first (shell populates these from the URL for deep-linking)
     const qp = config['queryParams'] as Record<string, string> | undefined;
     this.applyAgentParam(qp?.['agent'], qp?.['agentReq']);
-    const conversationId = qp?.['conversationId'] || (config.conversationId as string);
-    const artifactId = qp?.['artifactId'] || (config.artifactId as string);
+
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    const conversationId = resolveDeepLinkParam('conversationId', search, qp, config.conversationId as string);
+    const artifactId = resolveDeepLinkParam('artifactId', search, qp, config.artifactId as string);
     const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
       : config.versionNumber ? (config.versionNumber as number) : null;
 
