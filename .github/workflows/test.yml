@@ -397,7 +397,7 @@ jobs:
 
       # The handoff to the shards. Keyed to this RUN (not this ref or sha) so it can never be
       # read by another run, and deleted by the cleanup job at the end — the repo shares one
-      # 10 GB Actions cache budget and a multi-GB entry per PR would evict the `next` seed that
+      # LRU-evicted Actions cache budget, and a ~3 GB entry per PR would evict the `next` seed that
       # every PR's build restores from. run_attempt is in the key so a re-run rebuilds rather
       # than reading a half-written entry from the attempt that failed.
       - name: Save turbo cache for the test shards
@@ -444,9 +444,10 @@ jobs:
       #  1) The backstop builds EVERY package, so its cache is the most complete seed a PR can
       #     restore from. A PR's cache would be partial (affected-only) and, being scoped to the
       #     PR ref, unreadable by any other PR anyway — it would seed nothing.
-      #  2) Budget. The repo shares a 10 GB Actions cache across all keys, and the existing pnpm
-      #     store entries are ~583 MB each. Writing a turbo entry per PR run would thrash that
-      #     budget via LRU eviction and start evicting the very `next` entry PRs restore from.
+      #  2) Budget. Actions cache is a single LRU-evicted pool shared across every key in the
+      #     repo (pnpm store entries alone are ~583 MB each, and a turbo entry is ~3 GB).
+      #     Writing one per PR run would thrash it and start evicting the very `next` entry
+      #     that every PR's build restores from.
       # `always()` so a RED run still saves the build outputs it produced — the build succeeding
       # is independent of whether the suite passed, and re-running shouldn't pay for a cold build.
       - name: Save turbo build cache
@@ -702,7 +703,7 @@ jobs:
 
   # ---------------------------------------------------------------------------------------
   # Delete the run-scoped handoff cache. Without this, every run would leave a multi-GB entry
-  # in the repo's shared 10 GB Actions cache budget until LRU evicted it — and what it would
+  # in the repo's shared, LRU-evicted Actions cache budget until it aged out — and what it would
   # evict is the `next` turbo seed that makes every PR's build fast, plus the pnpm store.
   # Best-effort by design: a failed cleanup must never red an otherwise green run.
   # ---------------------------------------------------------------------------------------
