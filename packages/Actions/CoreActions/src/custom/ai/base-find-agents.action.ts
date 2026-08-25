@@ -10,11 +10,13 @@ import { runSemanticEntitySearch, getActionParamValue, getActionBooleanParam } f
  * Shared base for the "Find Best Agent" / "Find Candidate Agents" wrappers.
  *
  * Both rank agents for a task description via the unified
- * {@link IRunViewProvider.SearchEntity} pipeline (semantic mode, backed by the
- * daily-synced "AI Agents Search" EntityDocument), then permission-filter to
- * agents the user can run, drop Sub-Agents, and hydrate agent metadata from
- * AIEngine's cache. Subclasses tune the invocation filter and whether sub-agent
- * details are included in the output.
+ * {@link IRunViewProvider.SearchEntity} pipeline in HYBRID mode — the semantic pass
+ * (backed by the daily-synced "AI Agents Search" EntityDocument) plus a lexical
+ * name/description pass, so agents not yet embedded by the daily sync (e.g. one just
+ * created by the Agent Manager) are still found by text. Results are then
+ * permission-filtered to agents the user can run, Sub-Agents dropped, and agent
+ * metadata hydrated from AIEngine's cache. Subclasses tune the invocation filter and
+ * whether sub-agent details are included in the output.
  *
  * Carries **no** `@RegisterClass` decorator so importing it does not register an
  * extra action.
@@ -55,8 +57,12 @@ export abstract class BaseFindAgentsAction extends BaseAction {
                 return { Success: false, ResultCode: 'MISSING_USER_CONTEXT', Message: 'User context required for permission filtering' };
             }
 
-            // Rank via the unified SearchEntity pipeline (over-fetch 3x for post-filtering)
-            const search = await runSemanticEntitySearch(params, this.entityName, taskDescription, maxResults * 3, minimumSimilarityScore);
+            // Rank via the unified SearchEntity pipeline in HYBRID mode (over-fetch 3x for
+            // post-filtering). Hybrid adds a lexical name/description pass on top of semantic
+            // ranking, so agents the daily vector sync hasn't embedded yet — e.g. one just
+            // created by the Agent Manager — are still discoverable by text instead of being
+            // invisible until the next sync.
+            const search = await runSemanticEntitySearch(params, this.entityName, taskDescription, maxResults * 3, minimumSimilarityScore, 'hybrid');
             if (!search.ok) {
                 return { Success: false, ResultCode: search.resultCode ?? 'SEARCH_FAILED', Message: search.message ?? 'Semantic search failed' };
             }
@@ -71,10 +77,26 @@ export abstract class BaseFindAgentsAction extends BaseAction {
             const scoreById = new Map<string, number>();
             let matched: MJAIAgentEntityExtended[] = [];
             for (const r of search.results) {
+                // Hybrid blends via RRF, so r.score is a tiny rank-based value — apply the
+                // cosine floor against the SEMANTIC component instead, and let ANY lexical
+                // (name/description) match pass regardless. The lexical pass is what surfaces
+                // newly-created, not-yet-embedded agents by name.
+                const semantic = r.components?.semantic;
+                const lexical = r.components?.lexical;
+                const passes = (semantic != null && semantic >= minimumSimilarityScore) || lexical != null;
+                if (!passes) {
+                    continue;
+                }
                 const agent = agentsById.get(NormalizeUUID(r.recordId));
                 if (agent) {
                     matched.push(agent);
-                    scoreById.set(NormalizeUUID(agent.ID), r.score);
+                    // Report the STRONGEST 0–1 signal that qualified this match. Using
+                    // `semantic ?? lexical` would report a below-floor semantic component
+                    // (e.g. 0.3) even when the match actually passed on a strong lexical hit
+                    // (e.g. 0.85) — a misleadingly low score. Fall back to r.score only when
+                    // neither component is present.
+                    const reported = Math.max(semantic ?? 0, lexical ?? 0) || r.score;
+                    scoreById.set(NormalizeUUID(agent.ID), reported);
                 }
             }
 

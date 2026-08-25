@@ -2,7 +2,12 @@
     "extends": "../../../../tsconfig.angular.json",
     "compilerOptions": {
       "outDir": "./dist",
-      "useDefineForClassFields": false
+      "useDefineForClassFields": false,
+      "baseUrl": ".",
+      "paths": {
+        "@memberjunction/ng-hierarchy-tree": ["../../Generic/hierarchy-tree/dist/public-api.d.ts"],
+        "@memberjunction/ng-hierarchy-tree/*": ["../../Generic/hierarchy-tree/dist/*"]
+      }
     },
     "angularCompilerOptions": {
       // Forms in this package are emitted by CodeGen, one per entity. For

@@ -6031,7 +6031,11 @@ export class ManageMetadataBase {
          // not products — hide them from new users. Application.DefaultForNewUser defaults to 1 in the
          // DB, so omitting the column here is what put raw '__mj_*'-named apps in every new user's
          // app switcher while the human-authored metadata app stayed hidden.
-         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath, DefaultForNewUser)
+         // Every column is quoted through `qi()` rather than written bare. `conditionalInsert` wraps this
+         // statement in PG's `DO $$ ... $$` block, and the identifier auto-quoter skips dollar-quoted
+         // blocks wholesale (they can legally contain arbitrary text), so nothing downstream will quote
+         // these for us. Bare `ID` reaches PG folded to `id` and the INSERT fails on every run.
+         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (${this.qi('ID')}, ${this.qi('Name')}, ${this.qi('Description')}, ${this.qi('SchemaAutoAddNewEntities')}, ${this.qi('Path')}, ${this.qi('AutoUpdatePath')}, ${this.qi('DefaultForNewUser')})
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)}, ${this.dialect.BooleanLiteral(false)})`;
          const sSQL = this.conditionalInsert(appCheckQuery, appInsert);
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);

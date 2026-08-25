@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-betty-bot",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction Wrapper for Betty Bot",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,15 +14,15 @@
     "test": "vitest run"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "axios": "^1.13.4",
+    "@memberjunction/ai": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3",
+    "@memberjunction/network-utils": "6.1.0-edge.3",
     "axios-retry": "^4.5.0",
     "env-var": "^7.5.0"
   },

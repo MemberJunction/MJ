@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/action-runtime-host",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "Host-side bridge that exposes MJ services (metadata, views, queries, entity CRUD, action invocation, agent run, AI prompt execution) to sandboxed Runtime-action code via `utilities.*`. Ships a default implementation of `RuntimeActionBridgeBuilder` that `@memberjunction/actions` resolves at runtime through `ClassFactory`. Top of the Actions stack — breaks the cycle that would otherwise exist between `@memberjunction/actions` and `@memberjunction/ai-agents`.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,23 +15,23 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/actions": "6.1.0-edge.2",
-    "@memberjunction/actions-base": "6.1.0-edge.2",
-    "@memberjunction/ai": "6.1.0-edge.2",
-    "@memberjunction/ai-agents": "6.1.0-edge.2",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
-    "@memberjunction/ai-prompts": "6.1.0-edge.2",
-    "@memberjunction/aiengine": "6.1.0-edge.2",
-    "@memberjunction/code-execution": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2"
+    "@memberjunction/actions": "6.1.0-edge.3",
+    "@memberjunction/actions-base": "6.1.0-edge.3",
+    "@memberjunction/ai": "6.1.0-edge.3",
+    "@memberjunction/ai-agents": "6.1.0-edge.3",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.3",
+    "@memberjunction/ai-prompts": "6.1.0-edge.3",
+    "@memberjunction/aiengine": "6.1.0-edge.3",
+    "@memberjunction/code-execution": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.3",
+    "@memberjunction/core-entities": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.3"
   },
   "repository": {
     "type": "git",

@@ -92,10 +92,13 @@ interface DhxGridColumn {
              [style.display]="loading ? 'none' : 'block'"></div>
     `,
     styles: [`
-        :host { display: block; font-family: var(--mj-font-family); }
+        :host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; flex: 1; font-family: var(--mj-font-family); }
 
         .mj-gantt-container {
             width: 100%;
+            height: 100%;
+            min-height: 0;
+            flex: 1;
             position: relative;
         }
 
@@ -319,18 +322,25 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
             const module = await import('dhtmlx-gantt');
             this.gantt = module.gantt;
             this.loading = false;
+            this.cdr.detectChanges();
 
             if (this.Items.length > 0 && this.ganttContainer) {
                 this.initGantt();
+                this.cdr.markForCheck();
             }
         } catch (error) {
             console.error('@memberjunction/ng-gantt: Failed to load dhtmlx-gantt:', error);
             this.loading = false;
+            this.cdr.markForCheck();
         }
     }
 
     ngOnChanges(changes: SimpleChanges): void {
         if (!this.gantt) return;
+
+        if (changes['Height'] && this.initialized) {
+            this.gantt.setSizes();
+        }
 
         if (this.initialized && this.ganttContainer) {
             this.updateData();
@@ -340,10 +350,13 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     }
 
     private destroyDblClick?: () => void;
+    private resizeObserver?: ResizeObserver;
 
     ngOnDestroy(): void {
         this.destroyDblClick?.();
         this.destroyDblClick = undefined;
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
         if (this.initialized && this.gantt) {
             this.gantt.clearAll();
             this.initialized = false;
@@ -379,6 +392,19 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         this.initZoom(g);
         this.bindGridCellTooltips(g);
         this.bindGridEvents(g);
+
+        // ResizeObserver ensures DHTMLX layout recalculates whenever container gets valid non-zero dimensions
+        this.resizeObserver?.disconnect();
+        if (typeof ResizeObserver !== 'undefined' && this.ganttContainer?.nativeElement) {
+            this.resizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    if (entry.contentRect.width > 0 && entry.contentRect.height > 0 && this.initialized && this.gantt) {
+                        this.gantt.setSizes();
+                    }
+                }
+            });
+            this.resizeObserver.observe(this.ganttContainer.nativeElement);
+        }
 
         // Event: click
         g.attachEvent('onTaskClick', (id: string) => {
