@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import hook from '../hooks/prerun';
-import { INTERACTIVE_ENV } from '@memberjunction/cli-core';
+import { FORMAT_ENV, INTERACTIVE_ENV } from '@memberjunction/cli-core';
 
 /**
  * The agent-facing banner-suppression contract: `--format=json|md`, `--no-banner`,
@@ -37,12 +37,14 @@ describe('prerun banner suppression', () => {
   beforeEach(() => {
     setTTY(true);
     delete process.env[INTERACTIVE_ENV];
+    delete process.env[FORMAT_ENV];
     delete process.env.MJ_CLI_NO_BANNER;
   });
 
   afterEach(() => {
     Object.defineProperty(process.stdout, 'isTTY', { value: originalTTY, configurable: true });
     delete process.env[INTERACTIVE_ENV];
+    delete process.env[FORMAT_ENV];
     delete process.env.MJ_CLI_NO_BANNER;
   });
 
@@ -96,6 +98,37 @@ describe('prerun banner suppression', () => {
     await promise;
     expect(logs).toEqual([]);
   });
+
+  // Regression: the hook used to scan argv for `--format` itself, so the env var the
+  // COMMANDS honour was invisible to it. On a TTY (where the pipe check does not fire)
+  // that printed a figlet banner and then a JSON envelope — breaking the format's whole
+  // contract. Both sides now go through ResolveOutputFormat.
+  it('suppresses chrome for a machine format selected by MJ_CLI_FORMAT, not just by flag', async () => {
+    process.env[FORMAT_ENV] = 'json';
+    const { promise, logs } = runHook([], 'bump');
+    await promise;
+    expect(logs).toEqual([]);
+  });
+
+  it('still shows chrome when MJ_CLI_FORMAT pins a human format', async () => {
+    process.env[FORMAT_ENV] = 'text';
+    const { promise, logs } = runHook([], 'bump');
+    await promise;
+    expect(logs.some((l) => l.includes('mj/test'))).toBe(true);
+  });
+
+  it('lets an explicit --format=text beat MJ_CLI_FORMAT=json, chrome included', async () => {
+    process.env[FORMAT_ENV] = 'json';
+    const { promise, logs } = runHook(['--format=text'], 'bump');
+    await promise;
+    expect(logs.some((l) => l.includes('mj/test'))).toBe(true);
+  });
+
+  it('suppresses chrome for oclif\'s own --json boolean', async () => {
+    const { promise, logs } = runHook(['--json'], 'bump');
+    await promise;
+    expect(logs).toEqual([]);
+  });
 });
 
 describe('prerun global flag consumption', () => {
@@ -104,12 +137,14 @@ describe('prerun global flag consumption', () => {
   beforeEach(() => {
     setTTY(true);
     delete process.env[INTERACTIVE_ENV];
+    delete process.env[FORMAT_ENV];
     delete process.env.MJ_CLI_NO_BANNER;
   });
 
   afterEach(() => {
     Object.defineProperty(process.stdout, 'isTTY', { value: originalTTY, configurable: true });
     delete process.env[INTERACTIVE_ENV];
+    delete process.env[FORMAT_ENV];
     delete process.env.MJ_CLI_NO_BANNER;
   });
 

@@ -60,12 +60,13 @@ export default class PromptsRun extends Command {
   async run(): Promise<void> {
     const { PromptService, OutputFormatter } = await import('@memberjunction/ai-cli');
 
-    const { flags } = await this.parse(PromptsRun);
+    const { flags, metadata } = await this.parse(PromptsRun);
     const service = new PromptService();
     const formatter = new OutputFormatter(resolveLegacyFormat({
         format: flags.format,
         legacy: flags.output as 'compact' | 'json' | 'table',
         legacyDefault: 'compact' as const,
+        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
         map: AI_FORMAT_MAP,
       }));
 

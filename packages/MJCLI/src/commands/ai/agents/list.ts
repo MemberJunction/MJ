@@ -26,7 +26,7 @@ export default class AgentsList extends Command {
   async run(): Promise<void> {
     const { AgentService, OutputFormatter } = await import('@memberjunction/ai-cli');
 
-    const { flags } = await this.parse(AgentsList);
+    const { flags, metadata } = await this.parse(AgentsList);
     const spinner = ora();
 
     try {
@@ -39,6 +39,7 @@ export default class AgentsList extends Command {
         format: flags.format,
         legacy: flags.output as 'compact' | 'json' | 'table',
         legacyDefault: 'compact' as const,
+        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
         map: AI_FORMAT_MAP,
       }));
       this.log(formatter.formatAgentList(agents));

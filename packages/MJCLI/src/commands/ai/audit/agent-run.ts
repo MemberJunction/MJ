@@ -131,7 +131,7 @@ export default class AgentRun extends Command {
   async run(): Promise<void> {
     const { AgentAuditService } = await import('@memberjunction/ai-cli');
 
-    const { args, flags } = await this.parse(AgentRun);
+    const { args, flags, metadata } = await this.parse(AgentRun);
     const spinner = ora();
 
     // One typed resolution for all four render sites below — replaces the `as any`
@@ -140,6 +140,7 @@ export default class AgentRun extends Command {
       format: flags.format,
       legacy: flags.output as AuditOutputFormat,
       legacyDefault: 'compact' as const,
+      legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
       map: { text: 'compact', json: 'json', md: 'markdown' },
     });
 

@@ -16,6 +16,7 @@
  * Both entry points here are pure functions over injected state — no direct
  * `process` reads — so a test can drive every branch without a real TTY.
  */
+import { MJCLIErrorCodes } from './types';
 
 /**
  * Forces interactivity on (`1`/`true`) or off (`0`/`false`) for a whole shell session,
@@ -24,8 +25,12 @@
  */
 export const INTERACTIVE_ENV = 'MJ_CLI_INTERACTIVE';
 
-/** Stable code carried by {@link NonInteractiveError} and its result-envelope entry. */
-export const NON_INTERACTIVE_CODE = 'E_NON_INTERACTIVE';
+/**
+ * Stable code carried by {@link NonInteractiveError} and its result-envelope entry.
+ * Re-exported from the {@link MJCLIErrorCodes} catalog rather than restated, so the
+ * error thrown here and the `code` an agent branches on can never drift apart.
+ */
+export const NON_INTERACTIVE_CODE = MJCLIErrorCodes.NonInteractive;
 
 /**
  * Environment variables that mean "this is an automated build", checked when a TTY is

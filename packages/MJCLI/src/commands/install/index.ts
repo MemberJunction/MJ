@@ -13,7 +13,7 @@ import {
 } from '@memberjunction/installer';
 
 import { LegacyInstaller } from '../../lib/legacy-install.js';
-import { requireInteractive, withNonInteractiveHandling } from '../../lib/interactive-guard.js';
+import { NonInteractiveError, requireInteractive, withNonInteractiveHandling } from '../../lib/interactive-guard.js';
 
 export default class Install extends Command {
   static description = 'Install MemberJunction from a GitHub release';
@@ -154,7 +154,13 @@ export default class Install extends Command {
 
   private wireEventHandlers(engine: InstallerEngine, verbose: boolean): void {
     engine.On('prompt', (event: PromptEvent) => {
-      this.handlePromptEvent(event);
+      // The emitter neither awaits nor catches this promise, so a rejection escaping
+      // here becomes an unhandled rejection — Node prints a stack trace and kills the
+      // process, which is exactly the opposite of the actionable error the guard inside
+      // handlePromptEvent is meant to produce. Catch it at the boundary. (Rejecting
+      // also means the event is never Resolve()d, so the engine would otherwise sit
+      // waiting on an answer that can never arrive.)
+      void this.handlePromptEvent(event).catch((e: unknown) => this.abortOnPromptFailure(e));
     });
 
     engine.On('phase:start', (event: PhaseStartEvent) => {
@@ -192,6 +198,22 @@ export default class Install extends Command {
         this.log(chalk.yellow(`    \u2192 ${event.Error.SuggestedFix}`));
       }
     });
+  }
+
+  /**
+   * Terminates the install with a clean, actionable message when a prompt cannot be
+   * answered.
+   *
+   * `this.error()` throws, and there is no oclif frame above an emitter callback to
+   * catch it — so this writes the message itself and exits. An abrupt exit is the right
+   * trade here: the alternative is an engine blocked forever on an answer that will
+   * never come.
+   */
+  private abortOnPromptFailure(error: unknown): never {
+    const message = error instanceof Error ? error.message : String(error);
+    const suggestion = error instanceof NonInteractiveError ? `\nTry this: ${error.suggestion}` : '';
+    process.stderr.write(`${chalk.red('Error:')} ${message}${suggestion}\n`);
+    process.exit(1);
   }
 
   private async handlePromptEvent(event: PromptEvent): Promise<void> {

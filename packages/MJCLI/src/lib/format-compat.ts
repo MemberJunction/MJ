@@ -47,8 +47,18 @@ export interface LegacyFormatInput<TLegacy extends string> {
   format?: string;
   /** The family's own flag value as oclif parsed it (its default included). */
   legacy: TLegacy;
-  /** What that flag defaults to, so an explicit choice can be told from a default. */
+  /** What that flag falls back to when nothing was specified. */
   legacyDefault: TLegacy;
+  /**
+   * Whether the caller actually typed the family's flag. Pass
+   * `metadata.flags.<name>?.setFromDefault === false` from the command's `parse()`.
+   *
+   * When omitted this falls back to comparing the value against the default, which
+   * cannot distinguish `-o compact` (the caller asking for compact) from no flag at
+   * all — so a piped `mj ai agents list -o compact` would silently return json,
+   * overriding an explicit request. Always pass it from a real command.
+   */
+  legacyWasExplicit?: boolean;
   /** How each canonical format maps onto this family's vocabulary. */
   map: Record<OutputFormat, TLegacy>;
   /** Defaults to `process.stdout.isTTY`. Injectable for tests. */
@@ -69,15 +79,17 @@ export interface LegacyFormatInput<TLegacy extends string> {
  * Rule 2 is what makes this backwards compatible: an existing script passing
  * `--format=markdown` or `-o table` keeps getting exactly what it always got.
  * Rule 4 only fires when the caller expressed no preference at all, so it can
- * never override an intentional choice.
+ * never override an intentional choice — which is precisely why rule 2 needs
+ * {@link LegacyFormatInput.legacyWasExplicit} rather than a value comparison.
  */
 export function resolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
   const explicitCanonical = NormalizeFormatAlias(input.format);
   if (explicitCanonical) return input.map[explicitCanonical];
 
-  // The caller set the family's own flag to something other than its default —
-  // that is an explicit choice and outranks any inference we could make.
-  if (input.legacy !== input.legacyDefault) return input.legacy;
+  // The caller typed the family's own flag — an explicit choice that outranks any
+  // inference we could make, even when the value they typed IS the default.
+  const legacyWasExplicit = input.legacyWasExplicit ?? input.legacy !== input.legacyDefault;
+  if (legacyWasExplicit) return input.legacy;
 
   const { format, reason } = ResolveOutputFormat({
     stdoutIsTTY: input.stdoutIsTTY,

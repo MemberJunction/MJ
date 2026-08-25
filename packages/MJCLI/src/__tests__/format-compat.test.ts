@@ -23,12 +23,13 @@ function testFamily(format: string | undefined, opts: { stdoutIsTTY?: boolean; e
 function aiFamily(
   format: string | undefined,
   legacy: 'compact' | 'json' | 'table',
-  opts: { stdoutIsTTY?: boolean; env?: NodeJS.ProcessEnv } = {}
+  opts: { stdoutIsTTY?: boolean; env?: NodeJS.ProcessEnv; legacyWasExplicit?: boolean } = {}
 ) {
   return resolveLegacyFormat({
     format,
     legacy,
     legacyDefault: 'compact' as const,
+    legacyWasExplicit: opts.legacyWasExplicit,
     map: AI_FORMAT_MAP,
     stdoutIsTTY: opts.stdoutIsTTY ?? true,
     env: opts.env ?? {},
@@ -108,6 +109,24 @@ describe('resolveLegacyFormat — pipe detection', () => {
     expect(testFamily(undefined, { stdoutIsTTY: false, env: { [FORMAT_ENV]: 'text' } })).toBe('console');
     // ...but loses to an explicit flag.
     expect(testFamily('json', { env: { [FORMAT_ENV]: 'text' } })).toBe('json');
+  });
+
+  // Regression: explicitness used to be inferred from `value !== default`, which cannot
+  // see the difference between `-o compact` and no flag at all. Piped, that silently
+  // overrode an explicit request with json. oclif's metadata.flags[x].setFromDefault
+  // knows the answer, so the resolver now takes it as an input.
+  it('honors an explicitly-typed legacy value even when it equals the default', () => {
+    expect(aiFamily(undefined, 'compact', { stdoutIsTTY: false, legacyWasExplicit: true })).toBe('compact');
+  });
+
+  it('still infers json when the same value came from the default', () => {
+    expect(aiFamily(undefined, 'compact', { stdoutIsTTY: false, legacyWasExplicit: false })).toBe('json');
+  });
+
+  it('falls back to the value comparison when explicitness was not supplied', () => {
+    // Keeps the helper usable from a non-oclif caller; a real command always passes it.
+    expect(aiFamily(undefined, 'table', { stdoutIsTTY: false })).toBe('table');
+    expect(aiFamily(undefined, 'compact', { stdoutIsTTY: false })).toBe('json');
   });
 
   it('never flattens a family default to a generic text value on a terminal', () => {

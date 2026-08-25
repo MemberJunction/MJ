@@ -50,7 +50,7 @@ export default class AgentsRun extends Command {
   async run(): Promise<void> {
     const { AgentService, OutputFormatter, ConversationService } = await import('@memberjunction/ai-cli');
 
-    const { flags } = await this.parse(AgentsRun);
+    const { flags, metadata } = await this.parse(AgentsRun);
 
     if (!flags.prompt && !flags.chat) {
       this.error('Either --prompt or --chat flag is required');
@@ -61,6 +61,7 @@ export default class AgentsRun extends Command {
         format: flags.format,
         legacy: flags.output as 'compact' | 'json' | 'table',
         legacyDefault: 'compact' as const,
+        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
         map: AI_FORMAT_MAP,
       }));
 

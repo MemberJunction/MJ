@@ -246,7 +246,7 @@ export default class DevWorkspace extends Command {
     // Non-interactive by default (see lib/interactive-guard). This one skips loudly rather
     // than failing: leaving a standalone install in place is a safe no-op, and the warning
     // names the flags. Destructive prompts elsewhere fail fast instead.
-    if (!isInteractiveRun() || !process.stdout.isTTY) {
+    if (!isInteractiveRun()) {
       this.warn(
         `${name} has a standalone install (${treeCount} node_modules tree(s)) and this run is non-interactive ` +
           `with no --clean-members/--no-clean-members given — leaving it in place. ` +

@@ -49,12 +49,13 @@ export default class ActionsRun extends Command {
   async run(): Promise<void> {
     const { ActionService, OutputFormatter } = await import('@memberjunction/ai-cli');
 
-    const { flags } = await this.parse(ActionsRun);
+    const { flags, metadata } = await this.parse(ActionsRun);
     const service = new ActionService();
     const formatter = new OutputFormatter(resolveLegacyFormat({
         format: flags.format,
         legacy: flags.output as 'compact' | 'json' | 'table',
         legacyDefault: 'compact' as const,
+        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
         map: AI_FORMAT_MAP,
       }));
 
