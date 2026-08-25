@@ -1121,7 +1121,14 @@ export class SQLCodeGenBase {
                     return outer; // fully custom — one view, and it is a standing prerequisite
                 }
                 const inner = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.GeneratedViewName);
-                return inner + '\n' + this.guardOnApplicationOwnedView(e, outer);
+                const rebind = this._dbProvider.generateLayeredOuterRebindSQL(e);
+                const outerSql = outer.trim().length > 0
+                    ? this.guardOnApplicationOwnedView(e, outer)
+                    : '';
+                const rebindSql = rebind.trim().length > 0
+                    ? this.guardOnApplicationOwnedView(e, rebind.trim())
+                    : '';
+                return [inner, outerSql, rebindSql].filter((s) => s && s.trim().length > 0).join('\n');
             })
             .join('\n');
     }
@@ -1919,6 +1926,12 @@ export class SQLCodeGenBase {
             }
             const refreshSQL: string = this._dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
             sOutput += this.guardOnApplicationOwnedView(entity, refreshSQL) + separator;
+        }
+        if (entity.HasLayeredBaseView && !entity.VirtualEntity) {
+            const rebindSQL: string = this._dbProvider.generateLayeredOuterRebindSQL(entity);
+            if (rebindSQL.trim().length > 0) {
+                sOutput += this.guardOnApplicationOwnedView(entity, rebindSQL.trim()) + separator;
+            }
         }
 
         return sOutput + permissionsHeader + this.guardOnApplicationOwnedView(entity, permissionsBody) + separator;
