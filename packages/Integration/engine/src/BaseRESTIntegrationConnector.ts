@@ -675,6 +675,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         batchSize: number,
         maxRecords: number,
         deadlineMs?: number,
+        watchKey?: string,
     ): AsyncGenerator<Record<string, unknown>> {
         const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
         if (this.DetectTemplateVars(obj.APIPath).length === 0) {
@@ -689,7 +690,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             // cannot tell a sample from a sync, and one FetchChanges call walks every parent.
             // Live 2026-08-12: 28 minutes inside a single call, returning rows=0.
             yield* super.DiscoverySampleRecordStream(
-                companyIntegration, objectName, contextUser, batchSize, maxRecords, deadlineMs,
+                companyIntegration, objectName, contextUser, batchSize, maxRecords, deadlineMs, watchKey,
             );
             return;
         }
