@@ -3,30 +3,36 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * Per-action tests for the Buffer provider.
  *
- * Buffer talks GraphQL over `axios.post(apiBaseUrl, { query, variables })`,
- * so the module-level axios mock captures the exact mutation/query text and
+ * Buffer talks GraphQL over `HttpPost(apiBaseUrl, { query, variables })`,
+ * so the module-level network-utils mock captures the exact mutation/query text and
  * variables each action sends. BaseOAuthAction is mocked so OAuth succeeds by
  * default. Base behaviors (normalizePost, mapBufferError, extractHashtags)
  * are covered in social.test.ts.
  */
 
 const http = vi.hoisted(() => {
-  const axiosDefault = {
-    create: vi.fn(),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { axiosDefault };
+  return { standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -127,10 +133,10 @@ function outParam(result: ActionResultSimple, name: string): unknown {
  * 'account', 'channels', 'posts').
  */
 function mockGraphQL(routes: Array<{ match: string; data: unknown }>): void {
-  http.axiosDefault.post.mockImplementation((_url: string, body: GraphQLBody) => {
+  http.standalone.HttpPost.mockImplementation((_url: string, body: GraphQLBody) => {
     for (const route of routes) {
       if (body.query.includes(route.match)) {
-        return Promise.resolve({ data: { data: route.data }, headers: {} });
+        return Promise.resolve({ Data: { data: route.data }, Headers: {}, Status: 200 });
       }
     }
     return Promise.reject(new Error(`Unmocked GraphQL operation: ${body.query.slice(0, 60)}`));
@@ -138,7 +144,7 @@ function mockGraphQL(routes: Array<{ match: string; data: unknown }>): void {
 }
 
 function graphQLCalls(): Array<{ url: string; body: GraphQLBody }> {
-  return http.axiosDefault.post.mock.calls.map((call) => ({ url: call[0] as string, body: call[1] as GraphQLBody }));
+  return http.standalone.HttpPost.mock.calls.map((call) => ({ url: call[0] as string, body: call[1] as GraphQLBody }));
 }
 
 function makeBufferPost(overrides: Partial<BufferPost> = {}): BufferPost {
@@ -167,7 +173,7 @@ const postsConnection = (posts: BufferPost[], hasNextPage = false) => ({
 });
 
 beforeEach(() => {
-  http.axiosDefault.post.mockReset();
+  http.standalone.HttpPost.mockReset();
 });
 
 // ─── BufferCreatePostAction ─────────────────────────────────────────────────
@@ -305,7 +311,7 @@ describe('BufferGetAnalyticsAction', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('NOT_SUPPORTED');
     expect(result.Message).toContain('Buffer analytics are not available');
-    expect(http.axiosDefault.post).not.toHaveBeenCalled();
+    expect(http.standalone.HttpPost).not.toHaveBeenCalled();
   });
 });
 
@@ -315,7 +321,7 @@ describe('BufferReorderQueueAction', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('NOT_SUPPORTED');
     expect(result.Message).toContain('Queue reordering is not available');
-    expect(http.axiosDefault.post).not.toHaveBeenCalled();
+    expect(http.standalone.HttpPost).not.toHaveBeenCalled();
   });
 });
 

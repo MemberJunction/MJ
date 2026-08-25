@@ -150,13 +150,13 @@ You have TWO search capabilities. Use the right one:
 - "Find me...", "Who is...", "What products do we have about..."
 - This searches across entity records (database), vector embeddings (semantic), full-text indexes, and file storage in parallel
 
-**Google Custom Search** (external web) — Use when the user asks about:
+**Web search** — *Perplexity Search* (preferred) or *Google Custom Search*; only one may be credentialed, so if one returns a missing-API-key error, try the other. Use when the user asks about:
 - General knowledge not in the organization's data
 - Current events, news, public information
 - Technical documentation, how-to guides from the internet
 - "What is...", "How does...", "Tell me about..." (general topics)
 
-**When in doubt:** Try the internal Search first — if the user is asking about something that could be in their organization's data, always search internally first. Only fall back to Google if the internal search returns nothing relevant or the question is clearly about external/public information.
+**When in doubt:** Try the internal Search first — if the user is asking about something that could be in their organization's data, always search internally first. Only fall back to web search if the internal search returns nothing relevant or the question is clearly about external/public information.
 
 ### Step 2: Execute
 

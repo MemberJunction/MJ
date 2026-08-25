@@ -112,6 +112,23 @@ module.exports = {
 };
 ```
 
+#### Choosing a web-search provider
+
+Agents that do web research (Research Agent, Sage, the Web Research skill) are granted **both** the
+`Perplexity Search` and `Google Custom Search` actions, and are instructed to prefer Perplexity and
+fall back if one returns a missing-API-key error. Credential whichever you have:
+
+| | Credentials | Availability |
+|---|---|---|
+| **Perplexity Search** *(recommended)* | `perplexityApiKey` — one key, no engine ID | Open to new customers |
+| **Google Custom Search** | `google.customSearch.apiKey` **and** `.cx` | **Closed to new customers**; existing customers are served until **2027-01-01**, after which the Custom Search JSON API is discontinued |
+
+New deployments should configure `perplexityApiKey`. Google's stated successor, Vertex AI Search, is
+not a drop-in: it uses service-account auth against a data store over *your own* content and does not
+return public web results, so it produces neither of the two values this config expects and there is
+no MJ action for it. Deployments that already have Custom Search access can keep using it through
+2026 and add `perplexityApiKey` whenever convenient — configuring both is supported.
+
 ## Action Catalog
 
 All 100+ actions organized by category. Each action is registered with `@RegisterClass(BaseAction, "<name>")`.

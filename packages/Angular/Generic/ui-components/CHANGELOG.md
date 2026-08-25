@@ -1,5 +1,11 @@
 # @memberjunction/ng-ui-components
 
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 6ecfaa0: Relationship `UI.sortKey` orders first-class related rail items after Details. Hug-height related grids use a top-aligned inline empty state. Left-nav labels cap at 200px and show the full title on hover.
+
 ## 6.1.0-edge.2
 
 ## 6.1.0-edge.1

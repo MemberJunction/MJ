@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-ui-types",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.3",
   "description": "MemberJunction Integration UI Types - lightweight Angular-safe view model types",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,5 +19,5 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "author": "MemberJunction.com",
-  "license": "ISC"
+  "license": "BUSL-1.1"
 }

@@ -19,10 +19,14 @@
   [DirtyFieldNames]="EffectiveDirtyFieldNames"
   [ListCount]="ListCount"
   [TagCount]="TagCount"
+  [AttachmentCount]="AttachmentCount"
+  [AttachmentsAvailable]="AttachmentsAvailable"
+  [IsAttachmentsPanelOpen]="ShowAttachmentsPanel"
   [VersionCount]="VersionCount"
   [EntityInfo]="EffectiveEntityInfo"
   [Config]="EffectiveToolbarConfig"
   [IsSaving]="EffectiveIsSaving"
+  [IsRefreshing]="EffectiveIsRefreshing"
   [VisibleSectionCount]="VisibleSectionCount"
   [TotalSectionCount]="TotalSectionCount"
   [ExpandedSectionCount]="ExpandedSectionCount"
@@ -33,6 +37,9 @@
   [ChromeLayout]="ChromeLayout"
   [Variants]="EffectiveVariants"
   [CurrentVariantID]="EffectiveCurrentVariantID"
+  [RegisteredItems]="EffectiveRegisteredToolbarItems"
+  [ItemOverrides]="EffectiveToolbarItemOverrides"
+  [FormComponent]="fc"
   (Navigate)="OnNavigate($event)"
   (EditModeChange)="OnEditModeChange($event)"
   (BeforeSave)="BeforeSave.emit($event)"
@@ -41,6 +48,8 @@
   (CancelRequested)="OnCancelRequested()"
   (BeforeDelete)="BeforeDelete.emit($event)"
   (DeleteRequested)="OnDeleteRequested()"
+  (BeforeRefresh)="BeforeRefresh.emit($event)"
+  (RefreshRequested)="OnRefreshRequested()"
   (FavoriteToggled)="OnFavoriteToggled()"
   (BeforeHistoryView)="BeforeHistoryView.emit($event)"
   (HistoryRequested)="OnHistoryRequested()"
@@ -48,6 +57,7 @@
   (ListManagementRequested)="OnListManagementRequested()"
   (ShowChangesRequested)="OnShowChangesRequested()"
   (CustomButtonClick)="CustomButtonClick.emit($event)"
+  (ToolbarItemClick)="ToolbarItemClick.emit($event)"
   (FilterChange)="OnFilterChange($event)"
   (ExpandAllRequested)="OnExpandAll()"
   (CollapseAllRequested)="OnCollapseAll()"
@@ -56,6 +66,7 @@
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
   (ManageSectionsRequested)="OnManageSections()"
   (TagsPanelToggled)="OnTagsPanelToggled()"
+  (AttachmentsPanelToggled)="OnAttachmentsPanelToggled()"
   (VariantPicked)="OnVariantPicked($event)">
 </mj-form-toolbar>
 }
@@ -314,6 +325,18 @@
     (RecordNavigate)="OnTagsRecordNavigate($event)"
     (WidthChanged)="OnTagsPanelWidthChanged($event)">
   </mj-record-tags>
+}
+
+<!-- ============================================
+     ATTACHMENTS PANEL (shown when attachments button clicked)
+     ============================================ -->
+@if (ShowAttachmentsPanel && AttachmentsAvailable && EffectiveRecord) {
+  <mj-record-attachments
+    [Record]="EffectiveRecord"
+    [Visible]="true"
+    (PanelClosed)="OnAttachmentsPanelClosed()"
+    (AttachmentCountChanged)="OnAttachmentCountChanged($event)">
+  </mj-record-attachments>
 }
 
 <!-- ============================================

@@ -81,6 +81,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps"
+    },
+    "sync": {
+      "lastModified": "2026-08-20T22:30:51.458Z",
+      "checksum": "a6ec5dddb60528679ce08cb1ab654233b860b4a440485e2c5f019d5aee4bafd5"
     }
   },
   {
