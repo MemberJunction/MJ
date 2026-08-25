@@ -14,6 +14,7 @@ import { NgModule, ModuleWithProviders, enableProdMode, isDevMode } from '@angul
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MJExplorerAppComponent } from './explorer-app.component';
+import { MJLoginPickerComponent } from '@memberjunction/ng-auth-services';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
 import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
@@ -28,6 +29,7 @@ import { MJServiceWorkerModule, UpdateNotificationComponent } from '@memberjunct
     CommonModule,
     RouterModule,
     ShellModule,
+    MJLoginPickerComponent,  // Standalone — shared multi-IdP picker on the login surface
     SystemValidationBannerComponent,  // Standalone component
     ServerConnectivityBannerComponent,  // Standalone component
     ConversationsModule,

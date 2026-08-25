@@ -85,4 +85,4 @@ entities are not supported in this mode.
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../../LICENSE) for details.

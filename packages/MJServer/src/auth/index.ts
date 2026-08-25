@@ -10,7 +10,11 @@ import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { initializeAuthProviders } from './initializeProviders.js';
 
 export * from './APIKeyScopeAuth.js';
+export * from './scopeLimitedPrincipal.js';
 export * from './actingContextResolver.js';
+export * from './AuthProviderEngine.js';
+export * from './AuthProviderCatalogRouter.js';
+export { initializeAuthProviders, initializeAuthProvidersFromMetadata, refreshAuthProviders, validateAuthProvidersRegistered } from './initializeProviders.js';
 
 // This is a hard-coded forever constant due to internal migrations
 

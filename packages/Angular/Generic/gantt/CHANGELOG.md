@@ -1,5 +1,40 @@
 # @memberjunction/ng-gantt
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 815b9bc: feat(storage,core,forms): ephemeral staged binary upload pipeline, polymorphic related collections, and file record viewer
+  - **Storage & Server**:
+    - Implement Tier 2 ephemeral staged raw binary upload pipeline (UploadTokenManager, POST /media/upload-stage, CreateUploadStageToken mutation, UploadStorageFile token consumption).
+    - Add single-use cryptographic token security, user identity ownership binding, automated TTL eviction, and memory bounds.
+    - Sanitize paths/filenames and add X-Content-Type-Options: nosniff to /media endpoints.
+  - **Core & ORM**:
+    - Add support for polymorphic IS-A subtypes in RelatedRecordCollection and dirty state preservation across relationship chains.
+    - Support IEntityConfiguration and entity hierarchy traversal.
+  - **Angular & UI**:
+    - Add 3-tier upload pipeline in RecordAttachmentsComponent with real-time wire progress.
+    - Add dedicated MJ: Files custom record viewer form component in ng-core-entity-forms.
+    - Add attachment count badges to base form container and toolbar.
+    - Add ResizeObserver lifecycle handling to Gantt chart and OpenNewEntityRecord in SharedService.
+
+- 05865ea: feat(angular): introduce `@memberjunction/ng-hierarchy-tree` visual hierarchy component and wire 15 core entity form hierarchy panels
+  - **`@memberjunction/ng-hierarchy-tree`**: Reusable D3-based interactive visual hierarchy and taxonomy tree component with smooth pan/zoom, dynamic primary key metadata extraction, real-time path search and ancestor branch auto-expansion, subtree focus, cancelable lifecycle events, and `--mj-*` design token theming.
+  - **`@memberjunction/ng-core-entity-forms`**: Adds 15 visual hierarchy form panels in the `after-related` slot for self-referencing and category entities in MJ Core (`AI Agent Categories`, `AI Prompt Categories`, `Action Categories`, `Dashboard Categories`, `Query Categories`, `Tags`, `Projects`, `Content Items`, `File Categories`, `List Categories`, `Record Process Categories`, `Skills`, `Template Categories`, `Test Suites`, `User View Categories`).
+  - **`@memberjunction/ng-gantt`**: Polish host height layout on `MJGanttChartComponent`.
+
+- 3eeab6d: The left Gantt grid can scroll independently of the timeline, has a splitter to change pane width, and supports user-resized columns. Callers get GridWidth / ColumnWidths inputs and Before/After resize events.
+- c83f0d3: Gantt and Kanban emit double-click so host surfaces can open the underlying entity record without fighting DHTMLX's default lightbox.
+- 01dd00c: Map DHTMLX `--dhx-gantt-*` theme variables onto MJ semantic tokens so the chart follows light/dark and white-label automatically.
+- 5d29ece: Show the full Gantt item name on hover. DHTMLX column-border resize is PRO-only in the community build; tooltips cover truncated Name cells and bars.
+- af0e32d: Expose DHTMLX timeline zoom on `<mj-gantt-chart>`: named levels (hour→year), ZoomIn/ZoomOut/SetZoomLevel, Ctrl/Cmd+wheel, and cancelable BeforeZoomChange / AfterZoomChange events.
+- Updated dependencies [834f8d7]
+- Updated dependencies [cefc302]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1bd9674]
+  - @memberjunction/global@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes
