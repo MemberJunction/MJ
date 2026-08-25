@@ -123,6 +123,39 @@ describe('PromoteForSync — one batched RSU pass', () => {
         expect((provider as unknown as { Refresh: ReturnType<typeof vi.fn> }).Refresh).toHaveBeenCalledTimes(1);
     });
 
+    it('registers the follow-up as promote-columns PendingWork, and does NOT skip the restart', async () => {
+        // The restart is what loads the regenerated entity classes, so everything downstream of the
+        // DDL belongs after it. Skipping the restart to finish inline is what left promoted columns
+        // invisible to GraphQL; skipping the commit left the database carrying columns git had no
+        // record of. Both flags are optional and RSU treats absent as false, so omitting them IS
+        // commit + restart — no caller or platform change required.
+        const provider = makeProvider();
+        const { promoter } = stubPromoter(provider, { A: [workItem('a1')], B: [workItem('b1')] });
+        runPipelineBatchMock.mockResolvedValue({
+            Results: [{ Success: true }, { Success: true }], SuccessCount: 2, FailureCount: 0, TotalCount: 2,
+        });
+
+        await promoter.PromoteForSync('ci-1', ['A', 'B']);
+
+        const inputs = runPipelineBatchMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+        for (const input of inputs) {
+            expect(input.SkipRestart).toBeUndefined();
+            expect(input.SkipGitCommit).toBeUndefined();
+        }
+        // Carried on the FIRST input: RSU restarts once for the whole batch, so one payload
+        // describes every entity in the pass.
+        const pending = (inputs[0].PendingWork as Array<Record<string, unknown>>)[0];
+        expect(pending.WorkType).toBe('promote-columns');
+        expect(pending.CompanyIntegrationID).toBe('ci-1');
+        expect(inputs[1].PendingWork).toBeUndefined();
+
+        // The destination names are CARRIED, not recomputed — uniqueColumnName may have suffixed
+        // one to dodge a collision, and re-deriving it post-restart could pick a different name.
+        const promoted = pending.PromotedColumns as Array<{ EntityName: string; Columns: Array<{ SourceKey: string; ColumnName: string }> }>;
+        expect(promoted.map(p => p.EntityName)).toEqual(['A', 'B']);
+        expect(promoted[0].Columns[0]).toMatchObject({ ColumnName: 'a1' });
+    });
+
     it('a failed migration leaves ITS entity captured for retry and does not stop the others', async () => {
         const provider = makeProvider();
         const { promoter, spread } = stubPromoter(provider, {

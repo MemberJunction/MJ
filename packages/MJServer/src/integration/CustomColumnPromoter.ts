@@ -64,7 +64,7 @@ interface PersistedCustomKeyCandidate {
 }
 import type { BaseEntity } from '@memberjunction/core';
 import { DDLGenerator, type TargetColumnConfig, type DatabasePlatform } from '@memberjunction/integration-schema-builder';
-import { RuntimeSchemaManager, type RSUPipelineInput, type RSUPipelineResult } from '@memberjunction/schema-engine';
+import { RuntimeSchemaManager, type RSUPipelineInput, type RSUPipelineResult, type RSUPendingWork } from '@memberjunction/schema-engine';
 import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -215,6 +215,39 @@ export class IntegrationCustomColumnPromoter {
         }
         if (plans.length === 0) return NOT_PROMOTED;
 
+        // Register the follow-up DURABLY before the restart, the way the apply-objects path does
+        // (IntegrationDiscoveryResolver: `rsuInput.PendingWork = [pendingPayload]`). The restart is
+        // what loads the regenerated entity classes, so everything downstream of the DDL — the IOF
+        // rows, the field maps, the overflow spread — belongs after it, not before.
+        //
+        // Carried on the first input because RSU restarts ONCE for the whole batch; the payload
+        // describes every entity in the pass.
+        if (batchInputs.length > 0) {
+            batchInputs[0].PendingWork = [{
+                WorkType: 'promote-columns',
+                CompanyIntegrationID: companyIntegrationID,
+                // Not used by the promote path (which works from PromotedColumns), but the contract
+                // requires them and they keep the row legible to an operator reading the table.
+                SourceObjectNames: plans.map(p => p.entityMap.ExternalObjectName),
+                SchemaName: plans[0].entityInfo.SchemaName,
+                CreatedAt: new Date().toISOString(),
+                PromotedColumns: plans.map(p => ({
+                    EntityName: p.entityName,
+                    EntityMapID: p.entityMap.ID,
+                    ExternalObjectName: p.entityMap.ExternalObjectName,
+                    IntegrationID: integrationID,
+                    Columns: p.work.map(w => ({
+                        SourceKey: w.sourceKey,
+                        ColumnName: w.columnName,
+                        SchemaFieldType: w.candidate.Inferred.SchemaFieldType,
+                        MaxLength: w.candidate.Inferred.MaxLength,
+                        Coverage: w.candidate.Coverage,
+                    })),
+                })),
+            }];
+            batchInputs[0].ContextUser = this.user;
+        }
+
         // ── PHASE 2: ONE batched RSU pass for ALL entities' ADD COLUMN migrations. ──
         // RunPipelineBatch runs every migration under one lock, then ONE CodeGen + compile +
         // restart + git commit — which is now genuinely one restart and one commit for the whole
@@ -262,6 +295,67 @@ export class IntegrationCustomColumnPromoter {
 
         const promoted = columnsAdded.length > 0;
         return { Promoted: promoted, ColumnsAdded: columnsAdded, SchemaUpdatePending: promoted };
+    }
+
+    /**
+     * Finish a promotion AFTER the restart — the IntegrationObjectField rows, the field maps and
+     * the overflow→column spread — from the {@link RSUPendingWork} the pre-restart pass registered.
+     *
+     * Same work PHASE 3 does inline when no restart occurred; it lives here rather than in the
+     * consumer so promotion logic stays in one class. The difference is that here the regenerated
+     * entity classes ARE loaded, so the spread writes through real typed columns instead of the
+     * dynamic .Get/.Set the pre-restart path is forced into.
+     *
+     * Idempotent, because a pending row is marked Completed only after success and so stays
+     * re-processable after a crash: field maps are filtered against those already active, and the
+     * spread only fills a destination that is still empty.
+     */
+    public async CompletePromotion(
+        promoted: NonNullable<RSUPendingWork['PromotedColumns']>,
+    ): Promise<Array<{ EntityName: string; ColumnName: string }>> {
+        const columnsAdded: Array<{ EntityName: string; ColumnName: string }> = [];
+        for (const entry of promoted) {
+            try {
+                const entityInfo = this.provider.EntityByName(entry.EntityName);
+                if (!entityInfo) {
+                    LogError(`[CustomColumnPromoter] Post-restart: entity '${entry.EntityName}' not found; skipping.`);
+                    continue;
+                }
+                // Destination names are CARRIED, never recomputed: uniqueColumnName may have
+                // suffixed one to dodge a collision, and re-deriving it here could pick a different
+                // name than the column the migration actually created.
+                const existingMaps = await this.activeFieldMapSources(entry.EntityMapID);
+                const named: WorkItem[] = entry.Columns.map(c => ({
+                    candidate: {
+                        Key: c.SourceKey,
+                        Coverage: c.Coverage,
+                        // SqlServerType/PostgresType drive DDL only, which ran before the restart.
+                        // The phase-3 work below reads SchemaFieldType and MaxLength.
+                        Inferred: {
+                            SchemaFieldType: c.SchemaFieldType,
+                            MaxLength: c.MaxLength,
+                            SqlServerType: '',
+                            PostgresType: '',
+                        },
+                    } as unknown as PromotionCandidate,
+                    sourceKey: c.SourceKey,
+                    columnName: c.ColumnName,
+                    needsColumn: false,
+                    needsFieldMap: !existingMaps.has(c.SourceKey.toLowerCase()),
+                }));
+
+                await this.createIntegrationObjectFields(entry.IntegrationID, entry.ExternalObjectName, named);
+                await this.createFieldMaps(entry.EntityMapID, named.filter(n => n.needsFieldMap));
+                await this.spreadAndRebaseline(entry.EntityName, entry.EntityMapID, entityInfo, named);
+
+                LogStatus(`[CustomColumnPromoter] Post-restart: completed ${named.length} promoted column(s) on ${entry.EntityName}: ${named.map(n => n.columnName).join(', ')}`);
+                columnsAdded.push(...named.map(n => ({ EntityName: entry.EntityName, ColumnName: n.columnName })));
+            } catch (err) {
+                // One entity must not abort the others; the pending row stays open for retry.
+                LogError(`[CustomColumnPromoter] Post-restart completion failed for '${entry.EntityName}': ${this.msg(err)}`);
+            }
+        }
+        return columnsAdded;
     }
 
     /**
@@ -508,12 +602,24 @@ export class IntegrationCustomColumnPromoter {
             MigrationSQL: statements.join('\n'),
             Description: `Promote ${named.length} custom column(s) on ${entityInfo.Name}`,
             AffectedTables: [`${entityInfo.SchemaName}.${entityInfo.BaseTable}`],
-            // SkipRestart MUST stay true: `pm2 restart` kills this process ("Expected: pm2
-            // restart killed us and we caught the signal" — RuntimeSchemaManager.restartMJAPI), and
-            // PHASE 3 below still has to create the IOF rows, the field maps and spread the staged
-            // values. Restarting here would end the function at the DDL, leaving exactly the
-            // interrupted-spread state this PR exists to recover from — on every promotion.
-            SkipRestart: true,
+            // Neither SkipRestart nor SkipGitCommit is set, so RSU runs its normal pipeline. Both
+            // are optional and RSU gates on `!inputs.every(i => i.SkipGitCommit)`, so omitting them
+            // IS the default — no caller or platform change is needed to get commit + restart.
+            //
+            // `pm2 restart` kills this process, so PHASE 3 below does NOT run when the restart
+            // happens. That is why the follow-up is registered as PendingWork above: the
+            // post-restart consumer completes it, with the regenerated entity classes actually
+            // loaded. PHASE 3 remains as the fallback for the case where no DDL was needed (no
+            // batch, so no restart) — mirroring the apply path, which likewise finishes inline only
+            // when the restart did not occur.
+            //
+            // Both flags were previously hardcoded true here, the only place in the repo either was
+            // forced rather than passed in. Every integration entry point takes them as arguments
+            // defaulting to false, so add/remove tables, refresh schema and first-time setup all
+            // commit and restart; promotion was the outlier. Without the restart the columns never
+            // reached GraphQL — "already usable (metadata refreshed)" conflated metadata with CODE,
+            // since Refresh() reloads EntityField rows but does not load regenerated classes into a
+            // running process. Without the commit the database carried columns git had no record of.
 
             // SkipGitCommit, by contrast, was wrong and is now dropped, so the migration and the
             // regenerated code reach the repository. It is the only place in the repo either flag
