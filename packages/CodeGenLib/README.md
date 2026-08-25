@@ -692,27 +692,21 @@ FROM   [orders].[vwOrderHeadersGenerated] g;
 `RunView`, visible in Explorer — and is returned by `spCreate`/`spUpdate`/`spDelete`, because those
 select from `BaseView`.
 
-### SQL Server only
+### PostgreSQL — restar the outer view; ship it via pg-migrate
 
-**Layering is rejected on PostgreSQL.** CodeGen throws when it encounters an entity with
-`GeneratedBaseViewName` set on a PG install, naming the entity and both views.
+The outer view is still **custom SQL**. A build engineer ships the PostgreSQL equivalent through
+pg-migrate (same `SELECT g.*, extras FROM inner g` shape, with `||` / `LEFT JOIN LATERAL` instead of
+T-SQL). CodeGen never overwrites that outer SQL.
 
-The reason is that PG cannot deliver the feature's whole point. Everything above depends on the
-outer view's `SELECT g.*` being re-resolved after the inner view regenerates — that is what makes a
-late-added foreign key appear on its own. SQL Server does that with `sp_refreshview`. PostgreSQL
-expands `*` into a fixed column list at creation and freezes it, has no refresh equivalent, and
-CodeGen does not own the outer view, so nothing recreates it.
+PostgreSQL expands `g.*` at `CREATE VIEW` and freezes the column list, and it has no
+`sp_refreshview`. After CodeGen rewrites the inner view it **restars** the outer definition — rewrites
+the deparsed `SELECT g.col1, g.col2, …, extras` back to `SELECT g.*, extras` — then
+`CREATE OR REPLACE` (or, when a new inner column lands in the middle of `g.*` and PostgreSQL raises
+`42P16`, capture / `DROP CASCADE` / recreate / replay dependent functions). Open App `mj migrate`
+calls `spRebindLayeredOuterViewsInSchema` for the same rebind.
 
-The resulting behaviour would not even be consistently broken. Adding a column — the common case —
-leaves the outer view stale, because `CREATE OR REPLACE` on the inner view never touches dependents.
-Renaming a column or changing its type raises `42P16`, which sends CodeGen down its
-capture/`DROP CASCADE`/replay path; that incidentally recreates the outer view, which then *does*
-pick the new columns up. Same feature, opposite outcomes, decided by which kind of schema change
-happened to land that day. Since silent staleness is the exact failure layering exists to eliminate,
-PG refuses it outright rather than shipping a documented footgun.
-
-On PostgreSQL, use a fully custom base view (`BaseViewGenerated = 0`, `GeneratedBaseViewName` left
-`NULL`) and accept that it must be hand-maintained as the schema changes.
+Do not leave the outer as a one-time pg-migrate artifact and hope later inner regenerations show up.
+Without the restar they will not.
 
 ### Setting it up
 
@@ -721,8 +715,10 @@ On PostgreSQL, use a fully custom base view (`BaseViewGenerated = 0`, `Generated
    `metadata/entities/.layered-base-views.json`.
 2. Run CodeGen. It writes the inner view.
 3. Create your `BaseView` in a migration that runs **after** CodeGen output, since it selects from the
-   inner view — and may reference generated root-ID functions.
-4. Run CodeGen again so the new columns are discovered as `EntityField` rows.
+   inner view — and may reference generated root-ID functions. On PostgreSQL, ship the same wrapper
+   via pg-migrate (`LEFT JOIN LATERAL` / `||` instead of `OUTER APPLY` / `CONVERT`).
+4. Run CodeGen again so the new columns are discovered as `EntityField` rows. On PostgreSQL this
+   pass restars the outer view so `g.*` includes anything the inner view gained.
 
 > ### ⚠️ Adopting layering on an EXISTING entity needs `forceRegeneration`
 >
