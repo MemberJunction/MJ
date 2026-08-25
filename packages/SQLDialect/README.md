@@ -422,4 +422,4 @@ Or, in a MemberJunction workspace, add the dependency to your package's `package
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

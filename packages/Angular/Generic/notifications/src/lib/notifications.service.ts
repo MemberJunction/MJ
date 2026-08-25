@@ -260,13 +260,19 @@ export class MJNotificationService {
 
   /**
    * Creates a message that is not saved to the User Notifications table, but is displayed to the user.
-   * Uses a lightweight DOM-based toast notification.
+   * Uses a lightweight DOM-based toast notification styled with MemberJunction design tokens.
    * @param message - text to display
-   * @param style - display styling
-   * @param hideAfter - option to auto hide after the specified delay in milliseconds
+   * @param style - display styling ('none' | 'success' | 'error' | 'warning' | 'info')
+   * @param hideAfter - option to auto hide after the specified delay in milliseconds (defaults to 3500-5000ms based on style; pass 0 to disable auto-hide)
    */
-  public CreateSimpleNotification(message: string, style: "none" | "success" | "error" | "warning" | "info" = "success", hideAfter?: number) {
-    this.showToast(message, style, hideAfter);
+  public CreateSimpleNotification(
+    message: string,
+    style: "none" | "success" | "error" | "warning" | "info" = "success",
+    hideAfter?: number
+  ): void {
+    const defaultHide = style === 'error' ? 5000 : style === 'warning' ? 4500 : 3500;
+    const effectiveHideAfter = hideAfter !== undefined ? hideAfter : defaultHide;
+    this.showToast(message, style, effectiveHideAfter);
   }
 
   /**
@@ -278,9 +284,16 @@ export class MJNotificationService {
       container = document.createElement('div');
       container.id = 'mj-toast-container';
       container.style.cssText = `
-        position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-        z-index: 100000; display: flex; flex-direction: column; align-items: center; gap: 8px;
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 100000;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 10px;
         pointer-events: none;
+        max-width: calc(100vw - 48px);
       `;
       document.body.appendChild(container);
     }
@@ -288,52 +301,77 @@ export class MJNotificationService {
   }
 
   /**
-   * Shows a lightweight toast notification using DOM elements.
+   * Shows a modern card toast notification using DOM elements and MJ design tokens.
    */
-  private showToast(message: string, style: string, hideAfter?: number): void {
+  private showToast(message: string, style: string, hideAfter: number): void {
     const container = this.ensureToastContainer();
 
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      pointer-events: auto; padding: 12px 20px; border-radius: 6px; font-size: 14px;
-      font-family: inherit; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      display: flex; align-items: center; gap: 8px; animation: mj-toast-slide-in 0.3s ease-out;
-      color: var(--mj-text-inverse);
-    `;
-
-    const bgColors: Record<string, string> = {
-      success: 'var(--mj-status-success)',
-      error:   'var(--mj-status-error)',
-      warning: 'var(--mj-status-warning)',
-      info:    'var(--mj-status-info)',
-      none:    'var(--mj-text-secondary)'
+    const statusColors: Record<string, string> = {
+      success: 'var(--mj-status-success, #10b981)',
+      error:   'var(--mj-status-error, #ef4444)',
+      warning: 'var(--mj-status-warning, #f59e0b)',
+      info:    'var(--mj-status-info, #3b82f6)',
+      none:    'var(--mj-brand-primary, #6366f1)',
     };
-    toast.style.backgroundColor = bgColors[style] || bgColors['none'];
+    const accentColor = statusColors[style] || statusColors['none'];
 
     const iconMap: Record<string, string> = {
-      success: '\u2713',
-      error:   '\u2717',
-      warning: '\u26A0',
-      info:    '\u2139',
-      none:    ''
+      success: `<div style="width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--mj-status-success, #10b981) 14%, transparent); display: flex; align-items: center; justify-content: center; color: var(--mj-status-success, #10b981); flex-shrink: 0;"><i class="fa-solid fa-circle-check" style="font-size: 15px;"></i></div>`,
+      error:   `<div style="width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--mj-status-error, #ef4444) 14%, transparent); display: flex; align-items: center; justify-content: center; color: var(--mj-status-error, #ef4444); flex-shrink: 0;"><i class="fa-solid fa-circle-xmark" style="font-size: 15px;"></i></div>`,
+      warning: `<div style="width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 14%, transparent); display: flex; align-items: center; justify-content: center; color: var(--mj-status-warning, #f59e0b); flex-shrink: 0;"><i class="fa-solid fa-triangle-exclamation" style="font-size: 14px;"></i></div>`,
+      info:    `<div style="width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--mj-status-info, #3b82f6) 14%, transparent); display: flex; align-items: center; justify-content: center; color: var(--mj-status-info, #3b82f6); flex-shrink: 0;"><i class="fa-solid fa-circle-info" style="font-size: 15px;"></i></div>`,
+      none:    `<div style="width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--mj-brand-primary, #6366f1) 14%, transparent); display: flex; align-items: center; justify-content: center; color: var(--mj-brand-primary, #6366f1); flex-shrink: 0;"><i class="fa-solid fa-bell" style="font-size: 14px;"></i></div>`,
     };
-    const icon = iconMap[style] || '';
+    const iconHtml = iconMap[style] || iconMap['none'];
 
-    const removeToast = () => {
-      toast.style.animation = 'mj-toast-slide-out 0.3s ease-in forwards';
-      toast.addEventListener('animationend', () => toast.remove());
-    };
-
-    toast.innerHTML = `
-      ${icon ? `<span style="font-size:16px;font-weight:bold;">${icon}</span>` : ''}
-      <span style="flex:1;">${this.escapeHtml(message)}</span>
-      ${!hideAfter ? `<button style="background:none;border:none;color:var(--mj-text-inverse);cursor:pointer;font-size:18px;padding:0 0 0 8px;line-height:1;" aria-label="Close">&times;</button>` : ''}
+    const toast = document.createElement('div');
+    toast.className = `mj-toast-item mj-toast--${style}`;
+    toast.style.cssText = `
+      pointer-events: auto;
+      min-width: 300px;
+      max-width: 460px;
+      padding: 12px 16px;
+      border-radius: var(--mj-radius-md, 8px);
+      background: var(--mj-bg-surface, #ffffff);
+      color: var(--mj-text-primary, #1e293b);
+      border: 1px solid var(--mj-border-subtle, rgba(0, 0, 0, 0.08));
+      border-left: 4px solid ${accentColor};
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      animation: mj-toast-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     `;
 
-    if (!hideAfter) {
-      const closeBtn = toast.querySelector('button');
-      closeBtn?.addEventListener('click', removeToast);
-    }
+    toast.innerHTML = `
+      ${iconHtml}
+      <div style="flex: 1; font-weight: 500; font-size: 0.84rem; color: var(--mj-text-primary, #1e293b); word-break: break-word;">${this.escapeHtml(message)}</div>
+      <button type="button" class="mj-toast-close" style="background: transparent; border: none; padding: 4px 6px; border-radius: 4px; color: var(--mj-text-muted, #94a3b8); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1; transition: color 0.15s ease;" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    `;
+
+    const closeBtn = toast.querySelector<HTMLButtonElement>('.mj-toast-close');
+    const removeToast = () => {
+      toast.style.animation = 'mj-toast-slide-out 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+      toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    };
+
+    closeBtn?.addEventListener('click', removeToast);
+    closeBtn?.addEventListener('mouseenter', () => {
+      closeBtn.style.color = 'var(--mj-text-primary, #1e293b)';
+      closeBtn.style.backgroundColor = 'var(--mj-bg-surface-sunken, #f1f5f9)';
+    });
+    closeBtn?.addEventListener('mouseleave', () => {
+      closeBtn.style.color = 'var(--mj-text-muted, #94a3b8)';
+      closeBtn.style.backgroundColor = 'transparent';
+    });
 
     container.appendChild(toast);
 
@@ -342,14 +380,34 @@ export class MJNotificationService {
       const styleEl = document.createElement('style');
       styleEl.id = 'mj-toast-keyframes';
       styleEl.textContent = `
-        @keyframes mj-toast-slide-in { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes mj-toast-slide-out { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-20px); } }
+        @keyframes mj-toast-slide-in {
+          from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes mj-toast-slide-out {
+          from { opacity: 1; transform: translateY(0) scale(1); }
+          to { opacity: 0; transform: translateY(-12px) scale(0.96); }
+        }
       `;
       document.head.appendChild(styleEl);
     }
 
-    if (hideAfter) {
-      setTimeout(removeToast, hideAfter);
+    // Auto-hide with hover-pause support
+    if (hideAfter > 0) {
+      let timer: ReturnType<typeof setTimeout> | null = setTimeout(removeToast, hideAfter);
+
+      toast.addEventListener('mouseenter', () => {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      });
+
+      toast.addEventListener('mouseleave', () => {
+        if (!timer) {
+          timer = setTimeout(removeToast, 2000);
+        }
+      });
     }
   }
 

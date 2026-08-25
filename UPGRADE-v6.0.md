@@ -10,6 +10,31 @@ export list — is byte-for-byte identical to 5.51.0, and Angular, Node, TypeScr
 rxjs floors did not move. There is a short list of real breaking changes, documented below;
 most upgrades will only feel one or two of them.
 
+## License change — read this first
+
+**6.x is the first MemberJunction line released under the [Business Source License 1.1](./LICENSE).** 5.x
+and every version before it were released under the ISC License and remain ISC-licensed forever. Upgrading
+is what changes your terms; nothing about an existing 5.x installation changes.
+
+The BUSL grants the following without any further agreement:
+
+- **Internal use.** You may run MemberJunction in production for your own business or organizational
+  operations.
+- **Nonprofit use.** A nonprofit — 501(c)(3), (c)(4), (c)(5), or (c)(6), or a foreign organization
+  recognized under substantially equivalent laws — may run it in production for the operations and
+  activities of its Organizational Family.
+- **Non-production use.** Development, testing, and evaluation are unrestricted for everyone.
+- **Change Date.** Four years after a given version is first made available, that version converts to the
+  MIT License.
+
+What now requires certification is **providing professional services to clients on MemberJunction** —
+implementation, integration, customization, or consulting performed in a client's environment on their
+behalf. That runs through the [MemberJunction Certified Program](https://docs.memberjunction.org/mjcertified).
+
+The controlling terms, including the definitions that govern the Nonprofit grant and the documentation a
+nonprofit may be asked to provide, are in [`LICENSE`](./LICENSE). If your usage doesn't fit the grants
+above, staying on the 5.x LTS line keeps you on ISC.
+
 ## Understanding the 6.x version scheme
 
 Five facts up front, because the numbering is the part most likely to confuse a 5.x user:

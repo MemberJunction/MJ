@@ -22,6 +22,45 @@ export interface IEntityConfiguration {
      * `RelatedRolePolicy: smart`).
      */
     UI?: IEntityUIConfiguration;
+
+    /**
+     * Optional file attachment configuration for this entity.
+     * Controls whether attachments are permitted and sets entity-level upload policies.
+     */
+    Attachments?: IEntityAttachmentsConfiguration;
+}
+
+/**
+ * Configuration for entity-level file attachments.
+ */
+export interface IEntityAttachmentsConfiguration {
+    /**
+     * Whether file attachments/linking are enabled for this entity.
+     * Default: true when storage providers are active. Set to false to explicitly disallow attachments.
+     */
+    Enabled?: boolean;
+
+    /**
+     * Maximum allowed size per attachment in bytes (e.g. 52428800 for 50MB).
+     * When omitted, uses global storage provider default.
+     */
+    MaxFileSizeBytes?: number;
+
+    /**
+     * Allowed MIME types or file extensions (e.g. ['image/*', 'application/pdf', '.docx']).
+     * When omitted, all file types supported by the storage provider are allowed.
+     */
+    AllowedContentTypes?: string[];
+
+    /**
+     * Optional default Storage Account ID to route uploads for this entity.
+     */
+    DefaultStorageAccountID?: string;
+
+    /**
+     * Optional default File Category ID for attachments on this entity.
+     */
+    DefaultCategoryID?: string;
 }
 
 /**

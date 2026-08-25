@@ -1,5 +1,80 @@
 # Change Log - @memberjunction/storage
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 815b9bc: feat(storage,core,forms): ephemeral staged binary upload pipeline, polymorphic related collections, and file record viewer
+  - **Storage & Server**:
+    - Implement Tier 2 ephemeral staged raw binary upload pipeline (UploadTokenManager, POST /media/upload-stage, CreateUploadStageToken mutation, UploadStorageFile token consumption).
+    - Add single-use cryptographic token security, user identity ownership binding, automated TTL eviction, and memory bounds.
+    - Sanitize paths/filenames and add X-Content-Type-Options: nosniff to /media endpoints.
+  - **Core & ORM**:
+    - Add support for polymorphic IS-A subtypes in RelatedRecordCollection and dirty state preservation across relationship chains.
+    - Support IEntityConfiguration and entity hierarchy traversal.
+  - **Angular & UI**:
+    - Add 3-tier upload pipeline in RecordAttachmentsComponent with real-time wire progress.
+    - Add dedicated MJ: Files custom record viewer form component in ng-core-entity-forms.
+    - Add attachment count badges to base form container and toolbar.
+    - Add ResizeObserver lifecycle handling to Gantt chart and OpenNewEntityRecord in SharedService.
+
+- bc45ded: Log named diagnostic fields from Box and Dropbox SDK errors instead of the whole error object
+
+  `BoxFileStorage` and `DropboxFileStorage` each serialised a caught SDK error
+  wholesale under a `fullError` key. Neither was leaking a credential — Box's SDK
+  redacts `Authorization` on every serialisation path, and Dropbox's error carries
+  only status, a `Headers` instance that flattens to `{}`, and the parsed error
+  body — but the redaction is the SDKs' promise, not ours, and it never covered
+  Box's `requestInfo.body`.
+
+  Both drivers now build a bounded, named set of diagnostics (`describeBoxError` /
+  `describeDropboxError`), and a source guard keeps wholesale serialisation and
+  `|| error` fallbacks out of every driver in the package.
+
+  Also fixes a latent bug found while doing it: `BoxFileStorage` read `statusCode`,
+  `code` and `context_info` from the flat `box-node-sdk` v3 error shape, all of
+  which are `undefined` on the v10 SDK the package depends on. Those three log
+  fields were always empty, and the 409-conflict handling in `PutObject` — which
+  returns success when the file already exists — could never fire.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/credentials@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

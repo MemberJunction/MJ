@@ -1,5 +1,131 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 68b9cf0: New-record tabs store an empty recordId while the URL uses the `new` sentinel. URL sync treated those as different records and opened another tab, which synced the same URL again.
+
+  A second compare was permanently true even after the tab matched: `encodeURIComponent` writes `%3A` for the colon in `MJ_BizApps_Orders: Order Headers`, Angular's serializer leaves `:`. Combined with `onSameUrlNavigation: 'reload'`, Person → Orders → New navigated `/new` until Chrome died. URL compare now decodes path and query first.
+
+- 84f276e: Related-entity grids prefill every join field on a new child record and persist those defaults on the new-record URL (`/record/:entity/new?NewRecordValues=...`) so the link survives refresh and deeplink.
+
+  Left-nav related grids (including slot-mounted contributions) fill leftover column height and report their row-count badge: SetSectionRowCount upserts unknown section keys, contribution hosts are display:contents so they participate in the flex column, and accordion pixel heights are not applied while the rail is showing the panel.
+
+  Section search matches contribution titles (Orders) in both accordion and left-nav, keeps the rail visible when only one group hits, and does not treat chrome-hidden panels as non-matches.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [a2e4e09]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [69f2bf2]
+- Updated dependencies [05865ea]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [ac6755c]
+- Updated dependencies [73c853b]
+- Updated dependencies [051e0ff]
+- Updated dependencies [142cf2a]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [e635378]
+- Updated dependencies [26046d8]
+- Updated dependencies [cefc302]
+- Updated dependencies [44ac084]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [6e98173]
+- Updated dependencies [0869c24]
+- Updated dependencies [aa9006b]
+- Updated dependencies [a76cf28]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [2e2879e]
+- Updated dependencies [9b6fb5b]
+- Updated dependencies [b46330e]
+- Updated dependencies [2a0262d]
+- Updated dependencies [6ef741e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [b46330e]
+- Updated dependencies [4b1257f]
+- Updated dependencies [63ea273]
+- Updated dependencies [1be0f14]
+- Updated dependencies [6cd337d]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ng-base-forms@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.3
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.3
+  - @memberjunction/ng-dashboards@6.1.0-edge.3
+  - @memberjunction/ng-base-types@6.1.0-edge.3
+  - @memberjunction/ng-file-storage@6.1.0-edge.3
+  - @memberjunction/ng-shared@6.1.0-edge.3
+  - @memberjunction/ng-notifications@6.1.0-edge.3
+  - @memberjunction/ng-auth-services@6.1.0-edge.3
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.3
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/ng-conversations@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/ng-base-application@6.1.0-edge.3
+  - @memberjunction/ng-entity-form-dialog@6.1.0-edge.3
+  - @memberjunction/ng-entity-permissions@6.1.0-edge.3
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.3
+  - @memberjunction/ng-list-detail-grid@6.1.0-edge.3
+  - @memberjunction/ng-artifacts@6.1.0-edge.3
+  - @memberjunction/ng-composer@6.1.0-edge.3
+  - @memberjunction/ng-container-directives@6.1.0-edge.3
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.3
+  - @memberjunction/ng-list-management@6.1.0-edge.3
+  - @memberjunction/ng-mj-livekit-room@6.1.0-edge.3
+  - @memberjunction/ng-query-viewer@6.1.0-edge.3
+  - @memberjunction/ng-react@6.1.0-edge.3
+  - @memberjunction/ng-record-changes@6.1.0-edge.3
+  - @memberjunction/ng-record-selector@6.1.0-edge.3
+  - @memberjunction/ng-record-tags@6.1.0-edge.3
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.3
+  - @memberjunction/ng-search@6.1.0-edge.3
+  - @memberjunction/ng-shared-generic@6.1.0-edge.3
+  - @memberjunction/ng-user-avatar@6.1.0-edge.3
+  - @memberjunction/communication-types@6.1.0-edge.3
+  - @memberjunction/entity-communications-client@6.1.0-edge.3
+  - @memberjunction/templates-base-types@6.1.0-edge.3
+  - @memberjunction/ng-feedback@6.1.0-edge.3
+  - @memberjunction/interactive-component-types@6.1.0-edge.3
+  - @memberjunction/ng-generic-dialog@6.1.0-edge.3
+  - @memberjunction/ng-export-service@6.1.0-edge.3
+  - @memberjunction/ng-markdown@6.1.0-edge.3
+  - @memberjunction/ng-word-cloud@6.1.0-edge.3
+  - @memberjunction/ng-pagination@6.1.0-edge.3
+  - @memberjunction/lists-base@6.1.0-edge.3
+  - @memberjunction/export-engine@6.1.0-edge.3
+  - @memberjunction/theme-engine@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes
