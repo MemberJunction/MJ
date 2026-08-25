@@ -13,8 +13,8 @@ import {
 export default class Init extends Command {
   static description = `Initialize a directory for metadata synchronization.
 
-Non-interactive by default: pass --setup-entity (and --entity/--dir when setting up
-"other") to run unattended. Add --human-friendly to be prompted for anything omitted.`;
+Prompts at a terminal; runs unattended when piped, spawned, or in CI. To script it,
+pass --setup-entity (and --entity/--dir when setting up "other").`;
 
   static examples = [
     { command: `<%= config.bin %> <%= command.id %> --setup-entity=no`, description: 'Initialize with no entity directory' },
@@ -26,7 +26,7 @@ Non-interactive by default: pass --setup-entity (and --entity/--dir when setting
       command: `<%= config.bin %> <%= command.id %> --setup-entity=other --entity="MJ: AI Models" --dir=ai-models`,
       description: 'Initialize for an arbitrary entity',
     },
-    { command: `<%= config.bin %> <%= command.id %> --human-friendly`, description: 'Prompt for each answer' },
+    { command: `<%= config.bin %> <%= command.id %> --no-interactive --setup-entity=no`, description: 'Never prompt, even at a terminal' },
   ];
 
   static flags = {

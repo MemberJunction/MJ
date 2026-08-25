@@ -1,6 +1,6 @@
 import { Hook } from '@oclif/core';
 import figlet from 'figlet';
-import { HUMAN_FRIENDLY_ENV } from '@memberjunction/cli-core';
+import { INTERACTIVE_ENV } from '@memberjunction/cli-core';
 import { LIGHT_COMMANDS } from '../light-commands.js';
 
 /**
@@ -35,13 +35,18 @@ const hook: Hook<'prerun'> = async function (options) {
   })();
   const machineFormat = formatArg === 'json' || formatArg === 'md' || formatArg === 'markdown';
 
-  // `--human-friendly` is the global opt-in to interactive prompts (mj is otherwise
-  // non-interactive so an agent or CI job can never hang on a question). Like
-  // `--no-banner` it must work on every command, so it is consumed here and forwarded
+  // `--interactive` / `--no-interactive` override the terminal detection that decides
+  // whether a command may prompt. Like `--no-banner` they must work on every command,
+  // including the ~80 that don't declare them, so they are consumed here and forwarded
   // via env to both BaseCLIPlugin and the unmigrated commands' interactive guards.
-  if (takeGlobalFlag(argv, '--human-friendly')) {
-    process.env[HUMAN_FRIENDLY_ENV] = '1';
-  }
+  // BOTH are stripped unconditionally before either is acted on: short-circuiting the
+  // second strip would leave the losing flag in argv, where oclif's strict parser
+  // rejects it as a nonexistent flag on any command that doesn't declare it.
+  const forceOff = takeGlobalFlag(argv, '--no-interactive');
+  const forceOn = takeGlobalFlag(argv, '--interactive');
+  // Passing both resolves to off — the safe answer when the caller contradicts itself.
+  if (forceOff) process.env[INTERACTIVE_ENV] = '0';
+  else if (forceOn) process.env[INTERACTIVE_ENV] = '1';
 
   const noBanner = takeGlobalFlag(argv, '--no-banner');
   if (noBanner) {

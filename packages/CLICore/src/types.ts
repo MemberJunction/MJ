@@ -148,9 +148,9 @@ export interface IMJCLIRuntimeHost {
   /** Whether `--verbose` was set. */
   readonly Verbose: boolean;
   /**
-   * Whether this run may prompt. False by default (agent-first); true only when
-   * `--human-friendly` was passed and there is a real TTY. Plugins read this to
-   * choose between asking and failing fast with the flag to pass.
+   * Whether this run may prompt — true at a real terminal, false when piped, spawned,
+   * or running in CI, unless `--interactive` / `--no-interactive` overrides it. Plugins
+   * read this to choose between asking and failing fast with the flag to pass.
    */
   readonly Interactive: boolean;
 

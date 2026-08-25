@@ -85,7 +85,7 @@ export default class Install extends Command {
         // so it is interactive by nature — refuse it up front rather than at question 1.
         requireInteractive(
           'The legacy interactive installer',
-          'Re-run with --human-friendly on a terminal, or drop --legacy to use the engine installer (which accepts --config).'
+          'Re-run at an interactive terminal, or drop --legacy to use the engine installer (which accepts --config).'
         );
         const legacy = new LegacyInstaller(this, flags.verbose ?? false);
         return legacy.Run();
@@ -199,7 +199,7 @@ export default class Install extends Command {
     // so the caller gets an actionable error instead of a process that never returns.
     requireInteractive(
       `An answer to "${event.Message}"`,
-      'Re-run with --human-friendly on an interactive terminal, or supply the value through mj.config.cjs / the command\'s flags.'
+      'Re-run at an interactive terminal, or supply the value through mj.config.cjs / the command\'s flags.'
     );
 
     let answer: string;

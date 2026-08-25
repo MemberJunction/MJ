@@ -6,12 +6,14 @@
 
 Make the `mj` CLI agent-first, following the model the ElevenLabs CLI adopted.
 
-**Prompting is now opt-in.** `mj` no longer prompts by default; pass the global
-`--human-friendly` flag (on a terminal) to get the interactive experience back. Every
-prompt site now fails fast naming the flag that supplies the value instead of blocking on
-stdin, so an agent or CI job can no longer hang on a question it cannot answer. Previously
-`mj sync init` had four prompts and no escape flags at all, and `mj install --legacy` had
-two dozen.
+**Prompting now follows the terminal.** A command prompts when stdin and stdout are both
+TTYs — so nothing changes for a human — and does not when either is piped, when a CI
+environment variable is set, or when `TERM=dumb`. In those cases a command that needs a
+value it wasn't given fails immediately naming the flag that supplies it, instead of
+blocking on stdin forever. Previously `mj sync init` had four prompts and no escape flags
+at all, and `mj install --legacy` had two dozen; both hung an agent indefinitely. Override
+the detection with the global `--interactive` / `--no-interactive`, or pin it for a session
+with `MJ_CLI_INTERACTIVE`.
 
 **Output follows the pipe.** With no explicit `--format`, a non-TTY stdout resolves to
 `json` and all decorative chrome (banner, spinners, color) is suppressed — no flag
@@ -30,6 +32,7 @@ drift; only the per-domain runtime budget is hand-maintained.
 serialized result) and `MJCLIResultError` gains machine-readable `code` and actionable
 `suggestion` fields. JSON output is compact when piped and pretty on a terminal.
 
-BREAKING (behavioral): commands that used to prompt now require either the relevant flag or
-`--human-friendly`. `mj sync init` gains `--setup-entity`, `--entity`, `--dir`, and
-`--overwrite` to make it fully scriptable.
+Behavioral change: a command that used to prompt when spawned or piped now fails with an
+actionable error instead of hanging. Interactive use at a terminal is unchanged.
+`mj sync init` gains `--setup-entity`, `--entity`, `--dir`, and `--overwrite` to make it
+fully scriptable.

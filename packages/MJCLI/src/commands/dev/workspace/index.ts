@@ -250,7 +250,7 @@ export default class DevWorkspace extends Command {
       this.warn(
         `${name} has a standalone install (${treeCount} node_modules tree(s)) and this run is non-interactive ` +
           `with no --clean-members/--no-clean-members given — leaving it in place. ` +
-          `Pass --clean-members or --no-clean-members to decide explicitly, or --human-friendly to be asked.`
+          `Pass --clean-members or --no-clean-members to decide explicitly, or run at a terminal to be asked.`
       );
       return false;
     }

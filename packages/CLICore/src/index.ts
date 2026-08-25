@@ -16,12 +16,13 @@ export {
   ResolveOrPrompt,
   RequireInteractive,
   NonInteractiveError,
-  HUMAN_FRIENDLY_ENV,
+  INTERACTIVE_ENV,
   NON_INTERACTIVE_CODE,
 } from './interaction';
 export type {
   InteractivityInput,
   InteractivityDecision,
+  InteractivityReason,
   ResolveOrPromptOptions,
 } from './interaction';
 export {

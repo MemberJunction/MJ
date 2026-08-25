@@ -69,24 +69,33 @@ npm install --save-dev @memberjunction/cli
 
 ## Using `mj` from an agent or CI
 
-`mj` is **agent-first**: the default assumption is that no human is at the terminal.
+`mj` detects whether a human is present and behaves accordingly. Nothing changes for
+someone typing at a terminal; everything changes for a program.
 
-### Prompting is opt-in
+### Prompting follows the terminal
 
-No `mj` command prompts unless you pass the global `--human-friendly` flag (which also
-requires a real terminal). Without it, a command that needs a value it wasn't given fails
-immediately, naming the flag that supplies it:
+A command prompts when stdin and stdout are both real terminals. When either is piped
+or redirected, when a CI environment variable is set, or when `TERM=dumb`, it does not —
+and a command that needs a value it wasn't given fails immediately, naming the flag that
+supplies it, rather than blocking on stdin forever:
 
 ```console
-$ mj sync init
- ›   Error: An entity-directory choice is required and this run is non-interactive.
- ›   Pass --setup-entity=ai-prompts|other|no. (Or pass --human-friendly to be prompted
- ›   for it, which needs an interactive terminal.)
- ›   Try this: Pass --setup-entity=ai-prompts|other|no.
+$ mj sync init                         # at a terminal: prompts, exactly as before
 
-$ mj sync init --setup-entity=no        # runs unattended
-$ mj sync init --human-friendly         # the old interactive wizard
+$ mj sync init < /dev/null             # spawned by an agent
+ ›   Error: An entity-directory choice is required and this run has no interactive
+ ›   terminal. Pass --setup-entity=ai-prompts|other|no.
+ ›   Try this: Pass --setup-entity=ai-prompts|other|no.
+$ echo $?
+1
+
+$ mj sync init --setup-entity=no       # scripted: runs unattended anywhere
 ```
+
+Override the detection in either direction with `--interactive` / `--no-interactive`, or
+pin it for a whole shell session with `MJ_CLI_INTERACTIVE=0` (or `1`). An agent harness
+that shells out through a pty should set `MJ_CLI_INTERACTIVE=0` so its subprocesses can
+never block on a question.
 
 ### Output follows the pipe
 

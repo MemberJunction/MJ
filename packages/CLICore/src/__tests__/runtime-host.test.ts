@@ -150,11 +150,11 @@ describe('MJCLIRuntimeHost', () => {
   });
 
   describe('Interactive', () => {
-    it('defaults to non-interactive — the agent-first inversion', () => {
+    it('defaults to non-interactive when the plugin did not resolve it', () => {
       expect(new MJCLIRuntimeHost('text').Interactive).toBe(false);
     });
 
-    it('reports interactive when the plugin resolved --human-friendly', () => {
+    it('reports interactive when the plugin detected a terminal', () => {
       expect(new MJCLIRuntimeHost('text', false, false, { interactive: true }).Interactive).toBe(true);
     });
   });

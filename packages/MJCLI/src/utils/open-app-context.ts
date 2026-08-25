@@ -135,7 +135,7 @@ export async function buildOrchestratorContext(
   // Their ABSENCE signals headless mode to in-process hook modules (e.g. the setup wizard),
   // which then fall back to env/defaults instead of blocking on @inquirer (which errors in CI).
   // `interactive` is the per-command opt-out (--non-interactive); isInteractiveRun() is the
-  // global agent-first default, which now requires --human-friendly plus a real TTY.
+  // global rule: a real terminal unless --no-interactive / CI says otherwise.
   const wantPrompts = interactive && isInteractiveRun();
 
   return {

@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import hook from '../hooks/prerun';
-import { HUMAN_FRIENDLY_ENV } from '@memberjunction/cli-core';
+import { INTERACTIVE_ENV } from '@memberjunction/cli-core';
 
 /**
  * The agent-facing banner-suppression contract: `--format=json|md`, `--no-banner`,
  * a piped stdout, and the usage commands must not print the figlet banner OR the
  * userAgent line, so machine-readable stdout stays clean.
  *
- * Also covers the two global flags the hook consumes out of argv on behalf of the
- * ~80 commands that don't declare them (`--no-banner`, `--human-friendly`).
+ * Also covers the global flags the hook consumes out of argv on behalf of the ~80
+ * commands that don't declare them (`--no-banner`, `--interactive`/`--no-interactive`).
  *
  * We pass LIGHT command ids only (no bootstrap import) so the hook's
  * maybeLoadBootstrap() stays a no-op during the test.
@@ -36,13 +36,13 @@ describe('prerun banner suppression', () => {
 
   beforeEach(() => {
     setTTY(true);
-    delete process.env[HUMAN_FRIENDLY_ENV];
+    delete process.env[INTERACTIVE_ENV];
     delete process.env.MJ_CLI_NO_BANNER;
   });
 
   afterEach(() => {
     Object.defineProperty(process.stdout, 'isTTY', { value: originalTTY, configurable: true });
-    delete process.env[HUMAN_FRIENDLY_ENV];
+    delete process.env[INTERACTIVE_ENV];
     delete process.env.MJ_CLI_NO_BANNER;
   });
 
@@ -103,32 +103,51 @@ describe('prerun global flag consumption', () => {
 
   beforeEach(() => {
     setTTY(true);
-    delete process.env[HUMAN_FRIENDLY_ENV];
+    delete process.env[INTERACTIVE_ENV];
     delete process.env.MJ_CLI_NO_BANNER;
   });
 
   afterEach(() => {
     Object.defineProperty(process.stdout, 'isTTY', { value: originalTTY, configurable: true });
-    delete process.env[HUMAN_FRIENDLY_ENV];
+    delete process.env[INTERACTIVE_ENV];
     delete process.env.MJ_CLI_NO_BANNER;
   });
 
-  it('strips --human-friendly from argv so strict-parser commands do not reject it', async () => {
-    const { promise, argv } = runHook(['--human-friendly', '--dir', 'x'], 'bump');
+  it('strips --interactive from argv so strict-parser commands do not reject it', async () => {
+    const { promise, argv } = runHook(['--interactive', '--dir', 'x'], 'bump');
     await promise;
     expect(argv).toEqual(['--dir', 'x']);
   });
 
-  it('forwards --human-friendly to the interactivity layer via env', async () => {
-    const { promise } = runHook(['--human-friendly'], 'bump');
+  it('strips --no-interactive too', async () => {
+    const { promise, argv } = runHook(['--no-interactive', '--dir', 'x'], 'bump');
     await promise;
-    expect(process.env[HUMAN_FRIENDLY_ENV]).toBe('1');
+    expect(argv).toEqual(['--dir', 'x']);
   });
 
-  it('leaves the env unset when --human-friendly was not passed — non-interactive by default', async () => {
+  it('forwards --interactive to the interactivity layer via env', async () => {
+    const { promise } = runHook(['--interactive'], 'bump');
+    await promise;
+    expect(process.env[INTERACTIVE_ENV]).toBe('1');
+  });
+
+  it('forwards --no-interactive as the off signal', async () => {
+    const { promise } = runHook(['--no-interactive'], 'bump');
+    await promise;
+    expect(process.env[INTERACTIVE_ENV]).toBe('0');
+  });
+
+  it('resolves to off when both flags are passed — the safe answer wins', async () => {
+    const { promise, argv } = runHook(['--interactive', '--no-interactive'], 'bump');
+    await promise;
+    expect(process.env[INTERACTIVE_ENV]).toBe('0');
+    expect(argv).toEqual([]);
+  });
+
+  it('leaves the env unset when neither flag was passed, so detection decides', async () => {
     const { promise } = runHook([], 'bump');
     await promise;
-    expect(process.env[HUMAN_FRIENDLY_ENV]).toBeUndefined();
+    expect(process.env[INTERACTIVE_ENV]).toBeUndefined();
   });
 
   it('strips --no-banner from argv and signals it via env', async () => {
@@ -145,10 +164,10 @@ describe('prerun global flag consumption', () => {
   });
 
   it('handles both global flags in one invocation', async () => {
-    const { promise, argv } = runHook(['--human-friendly', '--no-banner', 'x'], 'bump');
+    const { promise, argv } = runHook(['--interactive', '--no-banner', 'x'], 'bump');
     await promise;
     expect(argv).toEqual(['x']);
-    expect(process.env[HUMAN_FRIENDLY_ENV]).toBe('1');
+    expect(process.env[INTERACTIVE_ENV]).toBe('1');
     expect(process.env.MJ_CLI_NO_BANNER).toBe('1');
   });
 });

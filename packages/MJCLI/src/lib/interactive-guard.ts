@@ -3,10 +3,11 @@
  * `@memberjunction/cli-core`'s `interaction.ts` for the model).
  *
  * These exist because most `mj` commands are still plain oclif `Command`s rather
- * than `BaseCLIPlugin` subclasses, so they don't inherit `--human-friendly` or the
- * structured `NonInteractiveError` handling. They read the same env signal the
- * prerun hook sets, which keeps a migrated plugin and an unmigrated command behaving
- * identically at the prompt.
+ * than `BaseCLIPlugin` subclasses, so they don't inherit `--interactive` or the
+ * structured `NonInteractiveError` handling. They read the same env signal the prerun
+ * hook sets from that flag, which keeps a migrated plugin and an unmigrated command
+ * behaving identically at the prompt — and both of them detecting a terminal the same
+ * way when no flag is given.
  */
 import {
   NonInteractiveError,
@@ -19,8 +20,9 @@ import {
 export { NonInteractiveError };
 
 /**
- * Whether this run may prompt. Reads the env var the prerun hook sets from the
- * global `--human-friendly` flag, plus the real stdin TTY state.
+ * Whether this run may prompt: true at a real terminal, false when piped, spawned, or
+ * running in CI. Reads the env var the prerun hook sets from the global `--interactive`
+ * / `--no-interactive` flags, then falls back to detecting the terminal.
  */
 export function isInteractiveRun(overrides: InteractivityInput = {}): boolean {
   return ResolveInteractivity(overrides).interactive;
@@ -42,8 +44,8 @@ export const requireInteractive = RequireInteractive;
  * aren't `BaseCLIPlugin` subclasses (which get the structured envelope instead).
  *
  * Sets exit code 1 and prints the suggestion, so an agent reading stderr still gets
- * the flag to pass — the important half of the contract — even before the command
- * is migrated.
+ * the flag to pass — the important half of the contract — even before the command is
+ * migrated.
  *
  * Re-throws anything that isn't a `NonInteractiveError` untouched.
  */

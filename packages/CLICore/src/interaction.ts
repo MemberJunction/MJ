@@ -1,84 +1,186 @@
 /**
- * Agent-first interactivity (the ElevenLabs CLI inversion).
+ * Interactivity resolution: detect whether a human is actually present, and let
+ * either side say otherwise explicitly.
  *
- * The default is **non-interactive**. A prompt is a blocking question, and the
- * overwhelmingly common caller of `mj` is now an automation — an agent, a CI job,
- * a container — that cannot answer one. Under the old default those callers hung
- * forever on a `@inquirer` prompt with no output explaining why.
+ * A prompt is a blocking question. A human at a terminal can answer one; an agent,
+ * a CI job, or a container cannot, and under the old behaviour it simply hung on
+ * stdin with no output explaining why. The fix is not to take prompting away from
+ * humans — it is to stop *assuming* one is there.
  *
- * So interactivity is opt-in via the global `--human-friendly` flag (or the
- * {@link HUMAN_FRIENDLY_ENV} env var the CLI root sets from it). Everything else
- * runs headless and, when it genuinely needs a value it wasn't given, **fails
- * fast with the flag to pass** rather than waiting on stdin.
+ * So the default is inferred rather than fixed: a real terminal on both stdin and
+ * stdout means a human, and everything else means automation. `--interactive` and
+ * `--no-interactive` (plus {@link INTERACTIVE_ENV}) override the inference in either
+ * direction. When a command needs a value it wasn't given and may not ask for it, it
+ * **fails fast naming the flag** instead of waiting on stdin.
  *
  * Both entry points here are pure functions over injected state — no direct
- * `process` reads — so a test can drive every branch without touching the real
- * TTY.
+ * `process` reads — so a test can drive every branch without a real TTY.
  */
 
-/** Env var the CLI root sets when `--human-friendly` was passed (see the prerun hook). */
-export const HUMAN_FRIENDLY_ENV = 'MJ_CLI_HUMAN_FRIENDLY';
+/**
+ * Forces interactivity on (`1`/`true`) or off (`0`/`false`) for a whole shell session,
+ * overriding TTY detection. An agent harness that shells out through a pty should set
+ * this to `0` so its subprocesses can never block on a question.
+ */
+export const INTERACTIVE_ENV = 'MJ_CLI_INTERACTIVE';
 
 /** Stable code carried by {@link NonInteractiveError} and its result-envelope entry. */
 export const NON_INTERACTIVE_CODE = 'E_NON_INTERACTIVE';
 
+/**
+ * Environment variables that mean "this is an automated build", checked when a TTY is
+ * present anyway (some runners allocate one). Any value other than the empty string,
+ * `0`, or `false` counts as set — CI systems variously use `true`, `1`, or their own name.
+ */
+const CI_ENV_VARS = [
+  'CI',
+  'CONTINUOUS_INTEGRATION',
+  'GITHUB_ACTIONS',
+  'GITLAB_CI',
+  'BUILDKITE',
+  'CIRCLECI',
+  'TRAVIS',
+  'TEAMCITY_VERSION',
+  'TF_BUILD',
+  'JENKINS_URL',
+] as const;
+
 /** Inputs to {@link ResolveInteractivity}. Every field is injectable for tests. */
 export interface InteractivityInput {
-  /** The `--human-friendly` flag value, when the command declared it. */
-  humanFriendlyFlag?: boolean;
+  /**
+   * The `--interactive` / `--no-interactive` flag value, when the caller passed one.
+   * `undefined` means "not specified" — that is what lets detection run.
+   */
+  interactiveFlag?: boolean;
   /** Defaults to `process.env`. */
   env?: NodeJS.ProcessEnv;
   /** Defaults to `process.stdin.isTTY`. A prompt needs a real stdin to read from. */
   stdinIsTTY?: boolean;
+  /** Defaults to `process.stdout.isTTY`. A prompt needs a real stdout to render on. */
+  stdoutIsTTY?: boolean;
 }
 
-/**
- * Why the CLI is (or is not) allowed to prompt. The `reason` is machine-stable so
- * an error envelope can carry it and a test can assert on it.
- */
+/** Why this run may or may not prompt. Machine-stable, so errors and tests can use it. */
+export type InteractivityReason =
+  /** `--no-interactive` was passed. */
+  | 'flag-off'
+  /** `--interactive` was passed and there is a usable terminal. */
+  | 'flag-on'
+  /** {@link INTERACTIVE_ENV} is `0`/`false`. */
+  | 'env-off'
+  /** {@link INTERACTIVE_ENV} is `1`/`true` and there is a usable terminal. */
+  | 'env-on'
+  /** No terminal on stdin and/or stdout — piped, redirected, or spawned. */
+  | 'no-tty'
+  /** A terminal is present, but a CI environment variable says this is a build. */
+  | 'ci'
+  /** `TERM=dumb` — a terminal that cannot render a prompt. */
+  | 'dumb-terminal'
+  /** A real terminal with nothing indicating otherwise: a human is presumed present. */
+  | 'tty-detected';
+
+/** The decision plus the rule that produced it. */
 export interface InteractivityDecision {
   interactive: boolean;
-  reason:
-    /** `--human-friendly` was passed and stdin is a TTY. */
-    | 'human-friendly-flag'
-    /** {@link HUMAN_FRIENDLY_ENV} was set (the root flag, forwarded) and stdin is a TTY. */
-    | 'human-friendly-env'
-    /** Interactivity was requested but there is no TTY to prompt on. */
-    | 'no-tty'
-    /** Nothing asked for interactivity — the agent-first default. */
-    | 'agent-first-default';
+  reason: InteractivityReason;
+}
+
+/** Treats `''`, `'0'`, and `'false'` as unset; anything else as set. */
+function envFlagIsSet(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  const v = value.trim().toLowerCase();
+  return v !== '' && v !== '0' && v !== 'false';
+}
+
+/** `1`/`true` → true, `0`/`false` → false, anything else (including unset) → undefined. */
+function envTriState(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined;
+  const v = value.trim().toLowerCase();
+  if (v === '1' || v === 'true') return true;
+  if (v === '0' || v === 'false') return false;
+  return undefined;
 }
 
 /**
- * Decides whether this run may prompt.
+ * Decides whether this run may prompt, most explicit signal first:
  *
- * Note the asymmetry: asking for `--human-friendly` without a TTY resolves to
- * NON-interactive with reason `no-tty` rather than throwing. The caller is then
- * free to fail with a useful message at the exact point a value is missing —
- * which is far more actionable than a blanket "no TTY" error at startup.
+ * 1. `--no-interactive` → never
+ * 2. `--interactive` → yes, if there is a terminal to prompt on
+ * 3. {@link INTERACTIVE_ENV} → the same, one level down
+ * 4. no terminal on stdin or stdout → never
+ * 5. a CI environment variable is set → never
+ * 6. `TERM=dumb` → never
+ * 7. otherwise → yes; a real terminal means a human
+ *
+ * Note the asymmetry at steps 2 and 3: asking for interactivity without a terminal
+ * resolves to NON-interactive with reason `no-tty` rather than throwing. The caller
+ * is then free to fail at the exact point a value is missing, which is far more
+ * actionable than a blanket "no TTY" error at startup.
  */
 export function ResolveInteractivity(input: InteractivityInput = {}): InteractivityDecision {
   const env = input.env ?? process.env;
   const stdinIsTTY = input.stdinIsTTY ?? process.stdin.isTTY === true;
+  const stdoutIsTTY = input.stdoutIsTTY ?? process.stdout.isTTY === true;
+  const hasTerminal = stdinIsTTY && stdoutIsTTY;
 
-  const wantedByFlag = input.humanFriendlyFlag === true;
-  const wantedByEnv = env[HUMAN_FRIENDLY_ENV] === '1';
-
-  if (wantedByFlag || wantedByEnv) {
-    if (!stdinIsTTY) return { interactive: false, reason: 'no-tty' };
-    return { interactive: true, reason: wantedByFlag ? 'human-friendly-flag' : 'human-friendly-env' };
+  if (input.interactiveFlag === false) return { interactive: false, reason: 'flag-off' };
+  if (input.interactiveFlag === true) {
+    return hasTerminal ? { interactive: true, reason: 'flag-on' } : { interactive: false, reason: 'no-tty' };
   }
 
-  return { interactive: false, reason: 'agent-first-default' };
+  const fromEnv = envTriState(env[INTERACTIVE_ENV]);
+  if (fromEnv === false) return { interactive: false, reason: 'env-off' };
+  if (fromEnv === true) {
+    return hasTerminal ? { interactive: true, reason: 'env-on' } : { interactive: false, reason: 'no-tty' };
+  }
+
+  if (!hasTerminal) return { interactive: false, reason: 'no-tty' };
+  if (CI_ENV_VARS.some((name) => envFlagIsSet(env[name]))) return { interactive: false, reason: 'ci' };
+  if (env.TERM?.trim().toLowerCase() === 'dumb') return { interactive: false, reason: 'dumb-terminal' };
+
+  return { interactive: true, reason: 'tty-detected' };
+}
+
+/** Explains, in one clause, why prompting was refused — so the error can say it out loud. */
+function describeReason(reason: InteractivityReason): string {
+  switch (reason) {
+    case 'no-tty':
+      return 'this run has no interactive terminal';
+    case 'ci':
+      return 'this run looks like CI';
+    case 'dumb-terminal':
+      return 'this terminal cannot display a prompt (TERM=dumb)';
+    case 'flag-off':
+      return '--no-interactive was passed';
+    case 'env-off':
+      return `${INTERACTIVE_ENV} is set to off`;
+    default:
+      return 'this run is non-interactive';
+  }
+}
+
+/** The "you could also just ask me" half of the message, omitted when it would be wrong. */
+function describeRemedy(reason: InteractivityReason): string {
+  // Telling someone to pass --interactive when there is no terminal to prompt on
+  // would send them in a circle.
+  switch (reason) {
+    case 'no-tty':
+    case 'dumb-terminal':
+      return '';
+    case 'flag-off':
+      return ' (Or drop --no-interactive to be prompted for it.)';
+    default:
+      return ' (Or pass --interactive to be prompted for it.)';
+  }
 }
 
 /**
- * Thrown when a command needs a value it wasn't given and isn't allowed to ask.
+ * Thrown when a command needs a value it wasn't given and isn't allowed to ask for.
  *
- * Carries the two fields an agent actually needs to recover on its own: a stable
+ * Carries the two fields an agent needs to recover unaided: a stable
  * {@link NonInteractiveError.code} to branch on, and a {@link NonInteractiveError.suggestion}
- * naming the exact flag to pass. `MJCLIResultError` mirrors both, so a plugin can
- * put this straight into its result envelope.
+ * naming the exact flag to pass. `MJCLIResultError` mirrors both, so a plugin can put
+ * this straight into its result envelope.
  */
 export class NonInteractiveError extends Error {
   /** Always {@link NON_INTERACTIVE_CODE}. */
@@ -86,13 +188,10 @@ export class NonInteractiveError extends Error {
   /** The concrete remedy, e.g. `Pass --entity "MJ: AI Prompts".` */
   public readonly suggestion: string;
   /** Why prompting was refused — from {@link InteractivityDecision.reason}. */
-  public readonly reason: InteractivityDecision['reason'];
+  public readonly reason: InteractivityReason;
 
-  constructor(what: string, suggestion: string, reason: InteractivityDecision['reason']) {
-    super(
-      `${what} is required and this run is non-interactive. ${suggestion} ` +
-        `(Or pass --human-friendly to be prompted for it, which needs an interactive terminal.)`
-    );
+  constructor(what: string, suggestion: string, reason: InteractivityReason) {
+    super(`${what} is required and ${describeReason(reason)}. ${suggestion}${describeRemedy(reason)}`);
     this.name = 'NonInteractiveError';
     this.suggestion = suggestion;
     this.reason = reason;
@@ -119,9 +218,10 @@ export interface ResolveOrPromptOptions<T> {
 /**
  * The single choke point every prompt in the CLI goes through.
  *
- * Resolution order: an explicit flag wins; otherwise prompt if this run is
- * allowed to; otherwise throw {@link NonInteractiveError} naming the flag. A
- * command that routes all its prompts through this can never hang an agent.
+ * Resolution order: an explicit flag wins; otherwise prompt if this run is allowed to;
+ * otherwise throw {@link NonInteractiveError} naming the flag. A command that routes all
+ * its prompts through this can never hang an agent, and still behaves exactly as before
+ * for a human at a terminal.
  */
 export async function ResolveOrPrompt<T>(options: ResolveOrPromptOptions<T>): Promise<T> {
   if (options.flagValue !== undefined) return options.flagValue;
@@ -133,9 +233,9 @@ export async function ResolveOrPrompt<T>(options: ResolveOrPromptOptions<T>): Pr
 }
 
 /**
- * Guards a whole command (rather than one value) that is interactive by nature —
- * e.g. the setup wizard, which asks two dozen questions with no flag equivalents.
- * Throws {@link NonInteractiveError} unless this run may prompt.
+ * Guards a whole command (rather than one value) that is interactive by nature — e.g.
+ * the setup wizard, which asks two dozen questions with no flag equivalents. Throws
+ * {@link NonInteractiveError} unless this run may prompt.
  */
 export function RequireInteractive(what: string, suggestion: string, interactivity?: InteractivityInput): void {
   const decision = ResolveInteractivity(interactivity);

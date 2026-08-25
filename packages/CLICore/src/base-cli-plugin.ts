@@ -13,18 +13,19 @@ import { MJCLIErrorCodes, type IMJCLIRuntimeHost, type MJCLIResult, type PluginU
  * shared {@link BaseCLIPlugin.run} wires up the {@link IMJCLIRuntimeHost}, emits
  * the runtime advisory, renders the result per `--format`, and sets the exit code.
  *
- * The global flags `--format`, `--verbose`, `--no-banner`, and `--human-friendly`
+ * The global flags `--format`, `--verbose`, `--no-banner`, and `--interactive`
  * are declared on {@link BaseCLIPlugin.baseFlags} and inherited by every subclass
  * via oclif's native `baseFlags` merging — no per-command duplication (plan D3).
  *
- * Two agent-first defaults are applied here rather than per command:
+ * Two defaults are inferred here rather than declared per command, so that a human
+ * and an agent each get the right behaviour without either having to ask for it:
  * - **Format follows the pipe.** With no explicit `--format`, a non-TTY stdout
  *   resolves to `json`. A caller that redirected stdout has already said it is a
  *   machine; it should not also have to remember a flag.
- * - **Prompting is opt-in.** {@link BaseCLIPlugin.Interactive} is false unless
- *   `--human-friendly` was passed with a real TTY, and a {@link NonInteractiveError}
- *   escaping `Execute` is rendered as a structured, actionable result rather than a
- *   stack trace.
+ * - **Prompting follows the terminal.** {@link BaseCLIPlugin.Interactive} is true at a
+ *   real terminal and false when piped, spawned, or running in CI. A
+ *   {@link NonInteractiveError} escaping `Execute` is rendered as a structured,
+ *   actionable result rather than a stack trace.
  */
 export abstract class BaseCLIPlugin extends Command {
   /** Inherited by every subclass through oclif's static `baseFlags` mechanism. */
@@ -37,11 +38,11 @@ export abstract class BaseCLIPlugin extends Command {
     }),
     verbose: Flags.boolean({ char: 'v', default: false, description: 'Show detailed output' }),
     'no-banner': Flags.boolean({ default: false, description: 'Suppress the startup banner and runtime advisory' }),
-    'human-friendly': Flags.boolean({
-      default: false,
+    interactive: Flags.boolean({
+      allowNo: true,
       description:
-        'Allow interactive prompts. Off by default: mj is non-interactive so agents and CI never hang on a question. ' +
-        'Requires a terminal.',
+        'Allow interactive prompts. Defaults to on at a terminal and off when piped, spawned, or in CI, ' +
+        'so an agent never hangs on a question. Use --no-interactive to force it off.',
     }),
   };
 
@@ -56,9 +57,10 @@ export abstract class BaseCLIPlugin extends Command {
   protected Host!: IMJCLIRuntimeHost;
 
   /**
-   * Whether this run may prompt. False unless `--human-friendly` was passed AND
-   * stdin is a TTY. Subclasses pass this into `ResolveOrPrompt` rather than calling
-   * `@inquirer` directly, so a missing value fails fast with the flag to pass.
+   * Whether this run may prompt — detected from the terminal unless `--interactive` /
+   * `--no-interactive` says otherwise. Subclasses pass this into `ResolveOrPrompt`
+   * rather than calling `@inquirer` directly, so a missing value fails fast with the
+   * flag to pass instead of blocking on stdin.
    */
   protected Interactive = false;
 
@@ -89,12 +91,12 @@ export abstract class BaseCLIPlugin extends Command {
     const { flags } = await this.parse(ctor);
     this.parsedFlags = flags;
 
-    const f = flags as { format?: string; verbose?: boolean; 'no-banner'?: boolean; 'human-friendly'?: boolean };
+    const f = flags as { format?: string; verbose?: boolean; 'no-banner'?: boolean; interactive?: boolean };
     const { format } = ResolveOutputFormat({ formatFlag: f.format });
     const verbose = !!f.verbose;
     const noBanner = !!f['no-banner'];
 
-    this.Interactive = ResolveInteractivity({ humanFriendlyFlag: f['human-friendly'] }).interactive;
+    this.Interactive = ResolveInteractivity({ interactiveFlag: f.interactive }).interactive;
 
     this.Host = new MJCLIRuntimeHost(format, verbose, noBanner, { interactive: this.Interactive });
 

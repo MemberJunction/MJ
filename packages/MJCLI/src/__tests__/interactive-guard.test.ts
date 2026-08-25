@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { HUMAN_FRIENDLY_ENV } from '@memberjunction/cli-core';
+import { INTERACTIVE_ENV } from '@memberjunction/cli-core';
 import {
   NonInteractiveError,
   isInteractiveRun,
@@ -10,11 +10,19 @@ import {
 } from '../lib/interactive-guard';
 
 /**
- * These cover the MJCLI half of the agent-first inversion: the ~80 commands that are
+ * These cover the MJCLI half of the interactivity contract: the ~80 commands that are
  * still plain oclif `Command`s and therefore don't inherit `BaseCLIPlugin`'s handling.
- * The property that matters is uniform: a missing value must produce an error naming
- * the flag, never a process that waits on stdin.
+ * Two properties matter, and they pull in opposite directions:
+ *
+ * - a human at a terminal still gets prompted, with no flag;
+ * - a missing value in any automated context produces an error naming the flag,
+ *   never a process that waits on stdin.
  */
+
+/** A real terminal. */
+const terminal = { env: {}, stdinIsTTY: true, stdoutIsTTY: true };
+/** An agent or script: stdio is piped. */
+const piped = { env: {}, stdinIsTTY: false, stdoutIsTTY: false };
 
 /** Stands in for an oclif Command's `error()`, which is typed as `never`-returning. */
 function fakeCommand() {
@@ -33,50 +41,53 @@ function fakeCommand() {
 }
 
 describe('isInteractiveRun', () => {
-  const originalTTY = process.stdin.isTTY;
+  const originalStdin = process.stdin.isTTY;
+  const originalStdout = process.stdout.isTTY;
+
+  const setTTY = (isTTY: boolean) => {
+    Object.defineProperty(process.stdin, 'isTTY', { value: isTTY, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', { value: isTTY, configurable: true });
+  };
 
   beforeEach(() => {
-    delete process.env[HUMAN_FRIENDLY_ENV];
-    Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+    delete process.env[INTERACTIVE_ENV];
   });
 
   afterEach(() => {
-    delete process.env[HUMAN_FRIENDLY_ENV];
-    Object.defineProperty(process.stdin, 'isTTY', { value: originalTTY, configurable: true });
+    delete process.env[INTERACTIVE_ENV];
+    Object.defineProperty(process.stdin, 'isTTY', { value: originalStdin, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', { value: originalStdout, configurable: true });
   });
 
-  it('is false on a bare terminal run — prompting is opt-in, not TTY-detected', () => {
-    expect(isInteractiveRun()).toBe(false);
+  it('reads the real process state when given no overrides', () => {
+    // vitest runs without a terminal, which is exactly the automation case.
+    setTTY(false);
+    expect(isInteractiveRun({ env: {} })).toBe(false);
   });
 
-  it('is true once the prerun hook has forwarded --human-friendly', () => {
-    process.env[HUMAN_FRIENDLY_ENV] = '1';
-    expect(isInteractiveRun()).toBe(true);
-  });
-
-  it('stays false without a TTY even when --human-friendly was forwarded', () => {
-    process.env[HUMAN_FRIENDLY_ENV] = '1';
-    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+  it('honors the env var the prerun hook sets from --no-interactive', () => {
+    setTTY(true);
+    process.env[INTERACTIVE_ENV] = '0';
     expect(isInteractiveRun()).toBe(false);
   });
 
   it('accepts injected state so a caller can reason without touching the real process', () => {
-    expect(isInteractiveRun({ env: { [HUMAN_FRIENDLY_ENV]: '1' }, stdinIsTTY: true })).toBe(true);
-    expect(isInteractiveRun({ env: {}, stdinIsTTY: true })).toBe(false);
+    expect(isInteractiveRun(terminal)).toBe(true);
+    expect(isInteractiveRun(piped)).toBe(false);
   });
 });
 
 describe('failOnNonInteractive', () => {
   it('routes a NonInteractiveError through oclif with exit 1 and the suggestion attached', () => {
     const { command, calls } = fakeCommand();
-    const error = new NonInteractiveError('An entity name', 'Pass --entity "MJ: AI Models".', 'agent-first-default');
+    const error = new NonInteractiveError('An entity name', 'Pass --entity "MJ: AI Models".', 'no-tty');
 
     expect(() => failOnNonInteractive(command, error)).toThrow('__oclif_error__');
     expect(calls).toHaveLength(1);
     expect(calls[0].exit).toBe(1);
     // The suggestion must be machine-visible, not only buried in prose.
     expect(calls[0].suggestions).toEqual(['Pass --entity "MJ: AI Models".']);
-    expect(calls[0].message).toContain('non-interactive');
+    expect(calls[0].message).toContain('no interactive terminal');
   });
 
   it('re-throws any other error untouched so real failures keep their own handling', () => {
@@ -103,7 +114,7 @@ describe('withNonInteractiveHandling', () => {
         prompt: async () => 'never',
         what: 'A section list',
         suggestion: 'Pass --sections=primaryKey,sync or --all.',
-        interactivity: { env: {}, stdinIsTTY: true },
+        interactivity: piped,
       });
     };
 
@@ -123,19 +134,39 @@ describe('withNonInteractiveHandling', () => {
 });
 
 describe('the guarded-prompt property', () => {
-  const headless = { env: {}, stdinIsTTY: true };
+  it('prompts normally at a terminal — humans keep the flow they had', async () => {
+    const prompt = vi.fn().mockResolvedValue('ai-prompts');
+    await expect(
+      resolveOrPrompt({
+        flagValue: undefined,
+        prompt,
+        what: 'A choice',
+        suggestion: 'Pass --setup-entity=no.',
+        interactivity: terminal,
+      })
+    ).resolves.toBe('ai-prompts');
+    expect(prompt).toHaveBeenCalledOnce();
+  });
 
-  it('never invokes the prompt when headless, for any value shape', async () => {
+  it('never invokes the prompt in any automated context, for any value shape', async () => {
     const prompt = vi.fn();
-    const cases = [
-      { what: 'A choice', suggestion: 'Pass --setup-entity=no.' },
-      { what: 'A confirmation', suggestion: 'Pass --force.' },
-      { what: 'A directory', suggestion: 'Pass --dir.' },
+    const contexts = [
+      piped,                                            // spawned by an agent
+      { ...terminal, env: { CI: 'true' } },             // a CI runner with a pty
+      { ...terminal, interactiveFlag: false },          // --no-interactive
+      { ...terminal, env: { [INTERACTIVE_ENV]: '0' } }, // an agent harness pinning it off
+      { ...terminal, env: { TERM: 'dumb' } },           // a terminal that cannot render one
     ];
 
-    for (const c of cases) {
+    for (const interactivity of contexts) {
       await expect(
-        resolveOrPrompt({ flagValue: undefined, prompt, ...c, interactivity: headless })
+        resolveOrPrompt({
+          flagValue: undefined,
+          prompt,
+          what: 'A choice',
+          suggestion: 'Pass --setup-entity=no.',
+          interactivity,
+        })
       ).rejects.toBeInstanceOf(NonInteractiveError);
     }
     expect(prompt).not.toHaveBeenCalled();
@@ -147,7 +178,7 @@ describe('the guarded-prompt property', () => {
       prompt: async () => 'never',
       what: 'A choice',
       suggestion: 'Pass --setup-entity=ai-prompts|other|no.',
-      interactivity: headless,
+      interactivity: piped,
     }).catch((e: unknown) => e as NonInteractiveError);
 
     expect(error.suggestion).toMatch(/^Pass --/);
@@ -155,21 +186,21 @@ describe('the guarded-prompt property', () => {
 });
 
 describe('requireInteractive', () => {
-  it('blocks a wizard-style command that has no flag equivalents', () => {
+  it('allows a wizard-style command at a terminal', () => {
     expect(() =>
-      requireInteractive('The legacy interactive installer', 'Drop --legacy to use the engine installer.', {
-        env: {},
-        stdinIsTTY: true,
-      })
+      requireInteractive('The legacy interactive installer', 'Drop --legacy.', terminal)
+    ).not.toThrow();
+  });
+
+  it('blocks it when spawned, where it has no flag equivalents to fall back on', () => {
+    expect(() =>
+      requireInteractive('The legacy interactive installer', 'Drop --legacy to use the engine installer.', piped)
     ).toThrow(NonInteractiveError);
   });
 
-  it('allows it once --human-friendly is in play', () => {
+  it('blocks it in CI, where a wizard would stall the build until it timed out', () => {
     expect(() =>
-      requireInteractive('The legacy interactive installer', 'Drop --legacy.', {
-        env: { [HUMAN_FRIENDLY_ENV]: '1' },
-        stdinIsTTY: true,
-      })
-    ).not.toThrow();
+      requireInteractive('The legacy interactive installer', 'Drop --legacy.', { ...terminal, env: { CI: '1' } })
+    ).toThrow(NonInteractiveError);
   });
 });

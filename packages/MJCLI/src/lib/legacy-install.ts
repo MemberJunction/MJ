@@ -69,7 +69,7 @@ export class LegacyInstaller {
     // one rather than hanging an agent on stdin forever.
     requireInteractive(
       'The legacy interactive installer',
-      'Re-run with --human-friendly on a terminal, or drop --legacy to use the engine installer (which accepts --config).'
+      'Re-run at an interactive terminal, or drop --legacy to use the engine installer (which accepts --config).'
     );
 
     this.checkNodeVersion();
