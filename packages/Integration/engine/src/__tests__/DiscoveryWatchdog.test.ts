@@ -12,7 +12,12 @@ function harness(intervalMs = 15_000) {
     let nowMs = 1_000_000;
     const logs: string[] = [];
     const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = [];
-    const watchdog = new DiscoveryWatchdog({
+    // The watchdog is a BaseSingleton — `new` would return the stored instance and discard these
+    // seams — so each harness resets the shared instance and reconfigures it. Reset() also clears
+    // any in-flight state a previous test left behind, which is what keeps these independent.
+    const watchdog = DiscoveryWatchdog.Instance;
+    watchdog.Reset();
+    watchdog.Configure({
         IntervalMs: intervalMs,
         Now: () => nowMs,
         Log: m => logs.push(m),

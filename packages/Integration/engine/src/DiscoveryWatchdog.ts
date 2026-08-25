@@ -17,6 +17,8 @@
  * can never be the reason Node stays alive, and it exists only while samples are in flight.
  */
 
+import { BaseSingleton, ShutdownRegistry, IShutdownable } from '@memberjunction/global';
+
 /** What one in-flight sample is doing right now. */
 export type DiscoveryWatchEntry = {
     /** The external object being sampled. */
@@ -60,35 +62,76 @@ export function ResolveWatchdogIntervalMs(env: string | undefined, defaultMs = 1
     return parsed <= 0 ? 0 : parsed;
 }
 
-export class DiscoveryWatchdog {
-    private static _instance: DiscoveryWatchdog | null = null;
-
-    /** Process-wide instance used by the connector base class. */
+export class DiscoveryWatchdog extends BaseSingleton<DiscoveryWatchdog> implements IShutdownable {
+    /**
+     * Process-wide instance, resolved through the Global Object Store rather than a static field.
+     *
+     * That distinction matters here specifically: this package is one of the ones that can be
+     * loaded twice in a process (a bundled connector copy alongside the standalone one). A static
+     * field would then give each copy its OWN registry and its OWN ticker, so samples registered
+     * through one would be absent from the other's report — a watchdog that silently under-reports
+     * what is in flight, which is worse than no watchdog, because the whole contract is that
+     * silence means the process is gone.
+     */
     public static get Instance(): DiscoveryWatchdog {
-        return (DiscoveryWatchdog._instance ??= new DiscoveryWatchdog());
+        return super.getInstance<DiscoveryWatchdog>();
     }
 
+    public readonly ShutdownName = 'DiscoveryWatchdog';
+
     private readonly inFlight = new Map<string, DiscoveryWatchEntry>();
-    private readonly intervalMs: number;
-    private readonly now: () => number;
-    private readonly log: (message: string) => void;
-    private readonly setIntervalFn: (fn: () => void, ms: number) => unknown;
-    private readonly clearFn: (handle: unknown) => void;
+    private intervalMs: number;
+    private now: () => number;
+    private log: (message: string) => void;
+    private setIntervalFn: (fn: () => void, ms: number) => unknown;
+    private clearFn: (handle: unknown) => void;
     private ticker: unknown = null;
     private keySeq = 0;
 
-    constructor(options: DiscoveryWatchdogOptions = {}) {
-        this.intervalMs = options.IntervalMs
-            ?? ResolveWatchdogIntervalMs(process.env.MJ_INTEGRATION_DISCOVERY_WATCHDOG_MS);
-        this.now = options.Now ?? (() => Date.now());
-        this.log = options.Log ?? (message => console.log(message));
-        this.setIntervalFn = options.SetInterval ?? ((fn, ms) => {
+    protected constructor() {
+        super();
+        this.intervalMs = ResolveWatchdogIntervalMs(process.env.MJ_INTEGRATION_DISCOVERY_WATCHDOG_MS);
+        this.now = () => Date.now();
+        this.log = message => console.log(message);
+        this.setIntervalFn = (fn, ms) => {
             const handle = setInterval(fn, ms);
             // Never hold the process open for a diagnostic.
             if (typeof (handle as { unref?: () => void }).unref === 'function') (handle as { unref: () => void }).unref();
             return handle;
-        });
-        this.clearFn = options.Clear ?? (handle => clearInterval(handle as ReturnType<typeof setInterval>));
+        };
+        this.clearFn = handle => clearInterval(handle as ReturnType<typeof setInterval>);
+        ShutdownRegistry.Instance.Register(this);
+    }
+
+    /**
+     * Overrides the defaults — the interval, and the clock/timer/log seams the tests drive.
+     * Mirrors {@link AgentRunWatchdog.Configure}: a singleton cannot take constructor arguments,
+     * because `BaseSingleton` returns the stored instance and would discard them.
+     *
+     * Restarts the ticker when one is already running, so a changed interval takes effect at once.
+     */
+    public Configure(options: DiscoveryWatchdogOptions = {}): void {
+        if (options.IntervalMs !== undefined) this.intervalMs = options.IntervalMs;
+        if (options.Now) this.now = options.Now;
+        if (options.Log) this.log = options.Log;
+        if (options.SetInterval) this.setIntervalFn = options.SetInterval;
+        if (options.Clear) this.clearFn = options.Clear;
+        if (this.ticker !== null) {
+            this.stopTicker();
+            this.ensureTicker();
+        }
+    }
+
+    /** Drops all in-flight state and stops the ticker. For tests, and for a clean shutdown. */
+    public Reset(): void {
+        this.inFlight.clear();
+        this.stopTicker();
+        this.keySeq = 0;
+    }
+
+    /** IShutdownable: a diagnostic ticker must not keep firing while the process drains. */
+    public async Shutdown(): Promise<void> {
+        this.stopTicker();
     }
 
     /** Registers a sample and returns the key used to update and end it. */
