@@ -1,3 +1,4 @@
+// [ci-measure] temporary no-op edit to reproduce the baseline's worst-case fan-out. Do not merge.
 import { BaseEntity } from "./generic/baseEntity";
 import { Metadata } from "./generic/metadata";
 import { RunQuery } from "./generic/runQuery";

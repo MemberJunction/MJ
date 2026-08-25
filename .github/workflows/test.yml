@@ -276,6 +276,12 @@ jobs:
       # essentially the whole repo anyway (measured: 309 of 313 packages) — nearly everything
       # depends on them. The filter narrows the small-PR case and is a no-op for the rest,
       # which is precisely why sharding, not filtering, is what made this workflow fast.
+      # !!! MEASUREMENT BRANCH ONLY — DO NOT MERGE !!!
+      # test.yml is removed from the root/global grep so this branch takes the FILTERED
+      # path, and the commit touches @memberjunction/core — reproducing exactly the fan-out
+      # of the 55m18s baseline run (309 build / 307 test tasks) for an apples-to-apples
+      # measurement. A PR carrying the workflow change always forces the full-suite path,
+      # so the worst case cannot otherwise be measured before merge.
       - name: Determine test scope
         id: scope
         env:
@@ -285,7 +291,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "$PR_BASE_REF"
             CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
-            if echo "$CHANGED" | grep -qE '^(package\.json|package-lock\.json|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
+            if echo "$CHANGED" | grep -qE '^(package\.json|package-lock\.json|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json)$'; then
               echo "Root/global change detected — running the FULL suite."
             else
               FILTER="--filter=...[origin/$PR_BASE_REF]"
