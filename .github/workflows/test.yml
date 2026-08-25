@@ -332,6 +332,57 @@ jobs:
           fi
           echo "Class-registration manifests are fresh."
 
+      # The turbo cache carries a task's declared OUTPUTS (dist/, build/) — it does not carry
+      # files a build writes back into the SOURCE tree. The root postbuild's `mj:manifest`
+      # writes ten class-registration manifests, and two of them are gitignored host artifacts
+      # rather than committed files:
+      #
+      #   packages/MJAPI/src/generated/class-registrations-manifest.ts
+      #   packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
+      #
+      # The old single job built and tested in one workspace, so they were simply present. A
+      # shard is a fresh runner that restores only the cache, so without this handoff
+      # `mj_api#test` dies with ERR_MODULE_NOT_FOUND on its own manifest — and, because
+      # src/generated/** is inside the `test` task's `src/**/*.ts` inputs, their absence also
+      # changes the hash and forces a cache miss.
+      #
+      # Shipped as a tar rather than as raw upload-artifact paths on purpose: upload-artifact
+      # rebases a multi-path upload onto the least-common-ancestor directory, so the layout on
+      # download depends on which paths are listed. A tar round-trips byte-exact paths, which
+      # also keeps the content identical to what the build job produced — the property turbo's
+      # hashing needs for the shards to hit cache at all.
+      #
+      # Only the FULL-suite path generates these (`pnpm run build` runs the root postbuild;
+      # `npx turbo run build --filter=...` does not), so on the filtered path there is
+      # legitimately nothing to hand over and the shards end up in exactly the state the old
+      # single job left itself in. This transfers a workspace; it does not invent one. The
+      # tarball is therefore always created — empty if need be — so the shards' download step
+      # has a stable contract and never needs a conditional.
+      - name: Package generated host artifacts for the shards
+        run: |
+          PATHS=()
+          for d in packages/MJAPI/src/generated packages/MJExplorer/src/app/generated; do
+            if [ -d "$d" ]; then PATHS+=("$d"); fi
+          done
+          if [ ${#PATHS[@]} -gt 0 ]; then
+            tar -czf generated-host-artifacts.tar.gz "${PATHS[@]}"
+            echo "Packaged generated host artifacts:"
+            tar -tzf generated-host-artifacts.tar.gz | sed 's/^/  /'
+          else
+            tar -czf generated-host-artifacts.tar.gz --files-from /dev/null
+            echo "No generated host artifacts to package — this build did not run the root postbuild (filtered path)."
+          fi
+
+      - name: Upload generated host artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-host-artifacts
+          path: generated-host-artifacts.tar.gz
+          retention-days: 1
+          # The tarball itself is always produced above, so this guards the upload wiring, not
+          # the manifests' presence.
+          if-no-files-found: error
+
       # Partition the in-scope packages into balanced shards for the matrix below. Runs after
       # the build so the turbo dry-run it uses reads a warm graph.
       - name: Plan test shards
@@ -454,6 +505,31 @@ jobs:
       - name: Warn when the build handoff missed
         if: steps.shard_cache.outputs.cache-hit != 'true'
         run: echo "::warning::Run-scoped turbo cache miss — this shard will rebuild its own dependency subtree, which is slower but still correct."
+
+      # The gitignored class-registration manifests the root postbuild writes into the SOURCE
+      # tree. See the build job's packaging step for why the turbo cache cannot carry these.
+      - name: Download generated host artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-host-artifacts
+
+      - name: Restore generated host artifacts
+        run: |
+          tar -xzf generated-host-artifacts.tar.gz
+          rm generated-host-artifacts.tar.gz
+          # Report what landed rather than asserting it. An EMPTY handoff is legitimate: the
+          # filtered path never runs the root postbuild, so the build job had nothing to send
+          # and this shard is in the same state the old single job would have been in. What
+          # must never happen silently is the full-suite case arriving empty — hence the log.
+          RESTORED=0
+          for f in packages/MJAPI/src/generated/class-registrations-manifest.ts \
+                   packages/MJExplorer/src/app/generated/class-registrations-manifest.ts; do
+            if [ -f "$f" ]; then
+              echo "  restored $f"
+              RESTORED=$((RESTORED + 1))
+            fi
+          done
+          echo "Generated host artifacts restored: $RESTORED"
 
       - name: Run unit tests
         env:

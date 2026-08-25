@@ -146,6 +146,59 @@ describe('test.yml — the ESM guard mirrors the build job', () => {
     });
 });
 
+describe('test.yml — generated host artifacts reach the shards', () => {
+    // The turbo cache carries declared task OUTPUTS (dist/, build/), never files a build writes
+    // back into the SOURCE tree. Two class-registration manifests are gitignored host artifacts
+    // written by the root postbuild, so a shard — a fresh runner restoring only the cache —
+    // does not have them, and mj_api#test dies with ERR_MODULE_NOT_FOUND on its own manifest.
+    // The old single job never hit this because it built and tested in one workspace.
+    const HOST_ARTIFACTS = [
+        'packages/MJAPI/src/generated',
+        'packages/MJExplorer/src/app/generated',
+    ];
+
+    it('the build job packages and uploads them', () => {
+        const pack = readJobSteps('build').find((s) => s.name === 'Package generated host artifacts for the shards');
+        expect(pack, 'build must package the generated host artifacts').toBeDefined();
+        for (const p of HOST_ARTIFACTS) {
+            expect(pack.body.join('\n'), `must package ${p}`).toContain(p);
+        }
+        const upload = readJobSteps('build').find((s) => s.name === 'Upload generated host artifacts');
+        expect(upload).toBeDefined();
+        // A missing manifest must fail in the build job, not six jobs later inside one shard.
+        expect(upload.body.join('\n')).toMatch(/if-no-files-found: error/);
+    });
+
+    it('every shard downloads and unpacks them before running tests', () => {
+        const steps = readJobSteps('test');
+        const names = steps.map((s) => s.name);
+        expect(names).toContain('Download generated host artifacts');
+        expect(names).toContain('Restore generated host artifacts');
+        // Order matters: unpack must precede the tests that import them.
+        expect(names.indexOf('Restore generated host artifacts')).toBeLessThan(names.indexOf('Run unit tests'));
+    });
+
+    it('a shard reports what it restored', () => {
+        const restore = readJobSteps('test').find((s) => s.name === 'Restore generated host artifacts');
+        const body = restore.body.join('\n');
+        for (const p of HOST_ARTIFACTS) {
+            expect(body, `must report on ${p}`).toContain(p);
+        }
+        expect(body).toMatch(/Generated host artifacts restored/);
+    });
+
+    // Only `pnpm run build` (the full-suite path) runs the root postbuild that writes these;
+    // `npx turbo run build --filter=...` does not. Hard-coding the tar paths would therefore
+    // break EVERY filtered PR on a missing directory — the same full-path-only blind spot that
+    // hid the original bug, just inverted.
+    it('tolerates the filtered path having produced no manifests', () => {
+        const pack = readJobSteps('build').find((s) => s.name === 'Package generated host artifacts for the shards');
+        const body = pack.body.join('\n');
+        expect(body).toMatch(/if \[ -d "\$d" \]/);
+        expect(body).toMatch(/--files-from \/dev\/null/);
+    });
+});
+
 describe('test.yml — checkout cost', () => {
     // The blobless partial clone took checkout from 3m33s to well under a minute, and every
     // job pays it. A checkout that loses `filter: blob:none` silently re-adds minutes to every
