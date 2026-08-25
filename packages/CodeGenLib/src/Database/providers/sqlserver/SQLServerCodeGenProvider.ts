@@ -576,6 +576,37 @@ IF NOT EXISTS (
 CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`;
     }
 
+    protected softPrimaryKeyIndexPrefix(): string {
+        return 'IDX_AUTO_MJ_SOFTPK_';
+    }
+
+    /**
+     * SQL Server refuses `NVARCHAR(MAX)` (and the other LOB types) as an index KEY column
+     * outright, regardless of the data it holds. `Length === -1` is how MJ spells MAX.
+     *
+     * Note the trap this closes: a source schema that declares a key column with no explicit
+     * length maps to `NVARCHAR(MAX)`, and the index then vanishes without complaint. The base
+     * class turns that into a comment in the generated file naming the offending columns,
+     * rather than an empty one.
+     */
+    protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
+        return f.Length !== -1;
+    }
+
+    protected formatCompositeIndexStatement(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {
+        const cols = fields.map(f => `[${f.Name}]`).join(', ');
+        return `-- Index for the soft primary key (${fields.map(f => f.Name).join(', ')}) in table ${entity.BaseTable}.
+-- The key is metadata-only — no PRIMARY KEY constraint — so without this the per-record
+-- existence check on the create path scans the whole table.
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = '${indexName}'
+    AND object_id = OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')
+)
+CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${cols});`;
+    }
+
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
     /**

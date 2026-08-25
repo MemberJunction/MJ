@@ -1200,6 +1200,46 @@ export function autoIndexForeignKeys(): boolean {
 }
 
 /**
+ * Checks if automatic indexing of SOFT primary keys is enabled.
+ *
+ * **Defaults to `true` when the `auto_index_soft_primary_keys` setting is absent**, for the
+ * same reason as {@link autoIndexForeignKeys} and then some: nothing else in the stack can
+ * ever create these indexes.
+ *
+ * A soft primary key is a PK that exists only in metadata — `IsPrimaryKey` and
+ * `IsSoftPrimaryKey` are both set, and the table carries NO `PRIMARY KEY` constraint and no
+ * unique index. Integration tables are built this way deliberately: their keys are *inferred*
+ * from naming and streamed-data statistics, so enforcing one would reject valid rows the
+ * moment an inference is wrong.
+ *
+ * The cost of that choice is that the table is a heap, and MJ's own write path pays it on
+ * every single record. A create calls `InnerLoad` on the key to see whether the record already
+ * exists; a genuinely new record finds nothing; and a not-found lookup cannot short-circuit,
+ * so it scans the ENTIRE table before concluding the row is absent. Every create scans the
+ * whole table, the table grows, and the scan grows with it — the throughput of a sync decays
+ * as it runs, which reads as "the vendor is slow" rather than "an index is missing".
+ *
+ * Three separate mechanisms each declined to cover this:
+ *   - the integration DDL generator emits the table with no index on the key columns
+ *   - {@link autoIndexForeignKeys} covers foreign keys only, and explicitly SKIPS primary keys
+ *     on the reasoning that "a primary key is already covered by its own index" — true for a
+ *     real PK, false by definition for a soft one
+ *   - the missing-index probe reads `sys.foreign_keys`, and these tables have no physical FK
+ *     constraints, so it can never flag them
+ *
+ * Hence a separate setting rather than reusing the FK flag: an operator who has opinions about
+ * foreign-key indexing has not thereby expressed an opinion about the engine's own hot path.
+ *
+ * @returns True if soft-PK auto-indexing is enabled (the default), false only if explicitly disabled
+ */
+export function autoIndexSoftPrimaryKeys(): boolean {
+  const keyName = 'auto_index_soft_primary_keys';
+  const setting = getSetting(keyName);
+  if (setting) return <boolean>setting.value;
+  else return true;
+}
+
+/**
  * Resolves the entity package name for a given database schema.
  *
  * When `entityPackageName` is a plain string (legacy/default), all non-core schemas
