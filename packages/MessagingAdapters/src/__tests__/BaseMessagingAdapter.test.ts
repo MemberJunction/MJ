@@ -175,6 +175,19 @@ class TestAdapter extends BaseMessagingAdapter {
         // Use fallbackContextUser for testing; Initialize() must be called first
         return this.resolveAgent(msg, this.fallbackContextUser!, threadHistory);
     }
+
+    public testBuildConversationMessages(history: IncomingMessage[], current: IncomingMessage) {
+        return this.buildConversationMessages(history, current);
+    }
+
+    public testDetectDelegation(result: ExecuteAgentResult): string | null {
+        return this.detectDelegation(result);
+    }
+}
+
+/** A TestAdapter whose platform routes every thread reply to every app (Slack-like). */
+class MultiBotTestAdapter extends TestAdapter {
+    public get PlatformName(): string { return 'TestPlatform'; }
 }
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
@@ -304,6 +317,105 @@ describe('BaseMessagingAdapter', () => {
             const msg = createMessage({ SenderEmail: 'ALICE@EXAMPLE.COM' });
             const user = await adapter.testResolveContextUser(msg);
             expect(user.Email).toBe('alice@example.com');
+        });
+    });
+
+    describe('multi-bot deployment (one platform app per agent)', () => {
+        // With one app per agent, an un-mentioned thread reply reaches EVERY bot in the channel,
+        // and each answered — so a single reply produced N answers, one per installed agent.
+        // Only a bot that is addressed, or already party to the thread, may answer.
+        const BOT = 'BOT123';   // TestAdapter.MockBotUserId
+        const OTHER_BOT = 'BOT999';
+
+        beforeEach(async () => {
+            adapter = new MultiBotTestAdapter(defaultSettings);
+            await adapter.Initialize();
+        });
+
+        it('stays out of a thread it was not addressed in and has not posted in', async () => {
+            adapter.MockThreadHistory = [
+                createMessage({ MessageID: 't1', SenderID: 'user-1', Text: 'starting a thread' }),
+                createMessage({ MessageID: 't2', SenderID: OTHER_BOT, Text: "I'm Sage, here to help", RawEvent: { bot_id: 'B999' } }),
+            ];
+            const msg = createMessage({ MessageID: 'm9', ThreadID: 't1', Text: 'thanks!' });
+            // Guard against a false pass: the message must be one the adapter WOULD answer.
+            expect(adapter.testShouldRespond(msg)).toBe(true);
+            await adapter.HandleMessage(msg);
+            expect(adapter.FinalMessages.length + adapter.FinalUpdates.length).toBe(0);
+            expect(adapter.TypeIndicatorShown).toBe(false); // no indicator before declining
+        });
+
+        it('answers an un-mentioned thread reply when it already posted in that thread', async () => {
+            adapter.MockThreadHistory = [
+                createMessage({ MessageID: 't1', SenderID: 'user-1', Text: 'starting a thread' }),
+                createMessage({ MessageID: 't2', SenderID: BOT, Text: 'my earlier answer' }),
+            ];
+            await adapter.HandleMessage(createMessage({ MessageID: 'm9', ThreadID: 't1', Text: 'follow-up' }));
+            expect(adapter.FinalMessages.length + adapter.FinalUpdates.length).toBeGreaterThan(0);
+        });
+
+        it('answers when explicitly addressed, even in a thread it never posted in', async () => {
+            adapter.MockThreadHistory = [
+                createMessage({ MessageID: 't1', SenderID: 'user-1', Text: 'someone else thread' }),
+            ];
+            await adapter.HandleMessage(
+                createMessage({ MessageID: 'm9', ThreadID: 't1', Text: 'hey', IsBotMention: true })
+            );
+            expect(adapter.FinalMessages.length + adapter.FinalUpdates.length).toBeGreaterThan(0);
+        });
+
+        it('never gates a top-level mention (the gate is thread-scoped)', async () => {
+            adapter.MockThreadHistory = [];
+            await adapter.HandleMessage(createMessage({ MessageID: 'm9', ThreadID: null, IsBotMention: true }));
+            expect(adapter.FinalMessages.length + adapter.FinalUpdates.length).toBeGreaterThan(0);
+        });
+
+        it("does not let another bot's reply steal thread affinity", async () => {
+            // The other bot says "I'm Sage" — under the old rule the mention matcher read that as
+            // a user asking for Sage, so this bot ran Sage instead of its own default agent.
+            const history = [
+                createMessage({ MessageID: 't1', SenderID: 'user-1', Text: 'a question with no agent named' }),
+                createMessage({ MessageID: 't2', SenderID: OTHER_BOT, Text: "I'm Sage and I can help", RawEvent: { bot_id: 'B999' } }),
+            ];
+            const { agent } = await adapter.testResolveAgent(
+                createMessage({ ThreadID: 't1', Text: 'follow-up', MentionedAgentNames: [] }), history);
+            expect((agent as { Name?: string })?.Name).toBe('Default Agent');
+        });
+
+        it("excludes other bots' messages from the model's conversation context", () => {
+            const history = [
+                createMessage({ MessageID: 'h1', SenderID: 'user-1', Text: 'user says this' }),
+                createMessage({ MessageID: 'h2', SenderID: BOT, Text: 'this bot said this' }),
+                createMessage({ MessageID: 'h3', SenderID: OTHER_BOT, Text: "I'm Sage, a different agent", RawEvent: { bot_id: 'B999' } }),
+            ];
+            const msgs = adapter.testBuildConversationMessages(history, createMessage({ Text: 'current' }));
+            const contents = msgs.map((m) => m.content);
+            expect(contents).toContain('user says this');
+            expect(contents).toContain('this bot said this');
+            expect(contents.some((c) => c.includes('a different agent'))).toBe(false);
+        });
+    });
+
+    describe('DisableDelegation', () => {
+        // Delegation Strategy 3 scans the reply TEXT, so an orchestrator agent describing its own
+        // routing role ("I'll have the Marketing Agent ...") hands the conversation away under
+        // this bot's identity. A bot pinned to one agent must be undelegatable.
+        const delegatingResult = {
+            success: true,
+            payload: { invokeAgent: 'Marketing Agent' },
+            agentRun: { Message: "I'll have the Marketing Agent take this" },
+        } as unknown as ExecuteAgentResult;
+
+        it('delegates by default (unchanged behavior)', async () => {
+            const a = new TestAdapter(defaultSettings);
+            await a.Initialize();
+            expect(a.testDetectDelegation(delegatingResult)).toBe('Marketing Agent');
+        });
+
+        it('never delegates when the setting is on', async () => {
+            const a = new TestAdapter({ ...defaultSettings, DisableDelegation: true });
+            await a.Initialize();
+            expect(a.testDetectDelegation(delegatingResult)).toBeNull();
         });
     });
 

@@ -41,6 +41,16 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     private botID: string = '';
 
     /**
+     * Teams delivers a channel message to a bot only when that bot is @mentioned, so replies
+     * never fan out across installed apps the way they do on Slack. The multi-bot thread gate is
+     * therefore unnecessary here — and would wrongly suppress replies, since a Teams thread reply
+     * that reaches this bot at all was already addressed to it.
+     */
+    protected override respondsToUnaddressedThreadReplies(): boolean {
+        return true;
+    }
+
+    /**
      * Stored conversation references for proactive messaging.
      * Maps conversation ID to the reference needed to send proactive messages.
      * Entries are evicted after 24 hours to prevent unbounded growth.

@@ -145,13 +145,34 @@ export abstract class BaseMessagingAdapter {
         // 2. Resolve the MJ user for this platform sender
         const contextUser = await this.resolveContextUser(message);
 
-        // 3. Show typing indicator
+        // 3. Fetch thread history (needed for the multi-bot gate below, agent resolution, and
+        //    conversation context). Deliberately BEFORE the typing indicator: the gate may
+        //    decline silently, and an indicator followed by silence reads as a hung bot.
+        const threadHistory = await this.safeGetThreadHistory(message);
+
+        // 4. Multi-bot thread gate. A thread reply needs no mention to reach a bot, so on a
+        //    platform that broadcasts channel messages to every installed app (Slack), ONE
+        //    reply reached every bot and each answered — N replies to one message once more
+        //    than one agent had its own app. A bot may answer an un-mentioned thread reply
+        //    only when it is already party to that thread (it posted in it).
+        if (message.ThreadID && threadHistory.length > 0 && !this.respondsToUnaddressedThreadReplies()) {
+            const botUserId = this.getBotUserId();
+            const addressed = message.IsBotMention === true
+                || (!!botUserId && typeof message.Text === 'string' && message.Text.includes(botUserId));
+            const inThread = !!botUserId && threadHistory.some((m) => m.SenderID === botUserId);
+            if (!addressed && !inThread) {
+                LogStatus(
+                    `${this.PlatformName}: not answering thread ${message.ThreadID} — this bot was not ` +
+                    `addressed and has not posted in it (multi-bot thread gate)`
+                );
+                return;
+            }
+        }
+
+        // 5. Show typing indicator
         if (this.settings.ShowTypingIndicator !== false) {
             await this.safeShowTypingIndicator(message);
         }
-
-        // 4. Fetch thread history (needed for both agent resolution and conversation context)
-        const threadHistory = await this.safeGetThreadHistory(message);
 
         // 5. Determine which agent to use (uses thread history for agent affinity)
         const { agent, multiAgentNote } = await this.resolveAgent(message, contextUser, threadHistory);
@@ -256,6 +277,38 @@ export abstract class BaseMessagingAdapter {
      * Get the bot's own user ID on this platform (to identify bot messages in thread history).
      */
     protected abstract getBotUserId(): string;
+
+    /**
+     * Was this history message written by ANY bot (not just this one)?
+     *
+     * Thread affinity and conversation context must both ignore other bots' messages: an agent's
+     * reply names itself in prose, which the mention matcher would read as a user request, and as
+     * a 'user' turn it feeds one agent's self-description into another's context. The default
+     * inspects the platform's raw event for a bot marker; platforms that expose this differently
+     * should override.
+     */
+    protected isBotAuthored(message: IncomingMessage): boolean {
+        const raw = message.RawEvent as Record<string, unknown> | undefined;
+        if (raw && typeof raw === 'object') {
+            if (raw['bot_id'] || raw['bot_profile']) return true;
+            if (raw['subtype'] === 'bot_message') return true;
+        }
+        return false;
+    }
+
+    /**
+     * Does this platform deliver thread replies to every installed app, rather than only to the
+     * bot being addressed?
+     *
+     * `false` (the default) enables the multi-bot thread gate in {@link HandleMessage}: with one
+     * app per agent, an un-mentioned thread reply would otherwise be answered by every bot in the
+     * channel. Platforms that route a message only to its addressee — Teams, where a channel
+     * message reaches a bot solely via an @mention — should return `true`, as the gate is both
+     * unnecessary and would suppress legitimate replies there.
+     */
+    protected respondsToUnaddressedThreadReplies(): boolean {
+        return false;
+    }
 
     /**
      * Strip the bot @mention from the message text so the agent sees clean input.
@@ -547,8 +600,11 @@ export abstract class BaseMessagingAdapter {
 
         // Walk through thread messages (oldest first) looking for user messages with agent mentions
         for (const msg of threadHistory) {
-            // Skip bot messages
-            if (msg.SenderID === botUserId) continue;
+            // Skip bot messages — this bot's own, AND any other bot's. Another agent's reply
+            // names that agent in its own prose ("I'm Sage, ..."), which the mention matcher
+            // below reads as a user asking for it, letting one bot steal a thread that belongs
+            // to another. Only humans establish thread affinity.
+            if (msg.SenderID === botUserId || this.isBotAuthored(msg)) continue;
 
             // Check for agent mentions in this message
             const mentions = msg.MentionedAgentNames ?? this.matchAgentMentions(msg.Text);
@@ -769,7 +825,12 @@ export abstract class BaseMessagingAdapter {
         return this.cachedEnvironmentID;
     }
 
-    private detectDelegation(result: ExecuteAgentResult): string | null {
+    protected detectDelegation(result: ExecuteAgentResult): string | null {
+        // A bot pinned to one agent must not be delegated away from it. Checked before any
+        // strategy runs, because Strategy 3 below reads the reply TEXT — so an orchestrator
+        // agent describing its own routing role would hand the conversation to whichever agent
+        // it happened to name, under this bot's identity and with no attribution.
+        if (this.settings.DisableDelegation) return null;
         if (!result.success) return null;
 
         // Strategy 1: Check in-memory payload.invokeAgent (primary, matches MJ Explorer)
@@ -1105,6 +1166,10 @@ export abstract class BaseMessagingAdapter {
         const messages: ChatMessage[] = [];
 
         for (const msg of history) {
+            // Another bot's message is neither this agent's own turn nor anything the user said.
+            // Left as a 'user' turn it fed a different agent's self-description into this
+            // agent's context, and the model imitated it.
+            if (msg.SenderID !== botUserId && this.isBotAuthored(msg)) continue;
             const role = msg.SenderID === botUserId ? 'assistant' : 'user';
             const content = role === 'user' ? this.stripBotMention(msg.Text) : msg.Text;
             if (content.trim()) {
