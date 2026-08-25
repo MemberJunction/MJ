@@ -302,6 +302,36 @@ export class SlackMessagingExtension extends BaseServerExtension {
             await this.processSlackEvent(event as Record<string, unknown>);
         });
 
+        // Interactivity. Only 'message' and 'app_mention' were subscribed, so in Socket Mode every
+        // interactive element the block builder renders — the "Fill Out Form" button, choice
+        // buttons, action buttons — was inert: the click produced an event nothing listened for,
+        // and a human-in-the-loop agent could not be answered at all. `handleSlackInteraction`
+        // (with its full modal build/submit path) was wired only to the HTTP route, which
+        // additionally needs a SigningSecret that Socket Mode deployments have no reason to set.
+        //
+        // Both the envelope type and the inner payload types are subscribed: which one the Socket
+        // Mode client emits depends on its version, and a silent miss here is exactly the failure
+        // being fixed. Handlers are idempotent per event, so an overlap costs nothing.
+        const handleInteractiveEnvelope = async ({ body, ack }: { body?: Record<string, unknown>; ack: () => Promise<void> }) => {
+            await ack();
+            if (!this.interactClient || !this.adapter) {
+                LogStatus('Slack interact: extension not fully initialized');
+                return;
+            }
+            try {
+                // handleSlackInteraction parses a JSON string (its HTTP contract); Socket Mode
+                // hands us the payload already parsed.
+                const payload = body?.['payload'];
+                const raw = typeof payload === 'string' ? payload : JSON.stringify(payload ?? body ?? {});
+                await handleSlackInteraction(raw, this.interactClient, this.adapter);
+            } catch (error) {
+                LogError('Error handling Slack interaction (Socket Mode):', undefined, error);
+            }
+        };
+        this.socketModeClient.on('interactive', handleInteractiveEnvelope);
+        this.socketModeClient.on('block_actions', handleInteractiveEnvelope);
+        this.socketModeClient.on('view_submission', handleInteractiveEnvelope);
+
         await this.socketModeClient.start();
         LogStatus('Slack Socket Mode connected');
 
