@@ -20,7 +20,7 @@ describe('parseExcludeTableEntry', () => {
     });
   });
 
-  it('treats a table-only string as any-schema', () => {
+  it('treats a table-only string as schema-agnostic', () => {
     expect(parseExcludeTableEntry('%Audit%')).toEqual({
       schema: '%',
       table: '%Audit%',
