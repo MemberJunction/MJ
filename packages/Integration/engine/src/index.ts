@@ -139,6 +139,8 @@ export { RateLimiter } from './RateLimiter.js';
 export type { RateLimiterOptions, RateLimiterKeyState, NowFn, SleepFn } from './RateLimiter.js';
 export { IntegrationConnectorCreationPipeline } from './IntegrationConnectorCreationPipeline.js';
 export type { ConnectorCreationPipelineOptions, ConnectorCreationPipelineResult } from './IntegrationConnectorCreationPipeline.js';
+export { DiscoveryWatchdog, ResolveWatchdogIntervalMs } from './DiscoveryWatchdog.js';
+export type { DiscoveryWatchEntry, DiscoveryWatchPatch, DiscoveryWatchdogOptions } from './DiscoveryWatchdog.js';
 export { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult } from './AdaptiveConcurrency.js';
 export type { FetchWarning } from './BaseIntegrationConnector.js';
