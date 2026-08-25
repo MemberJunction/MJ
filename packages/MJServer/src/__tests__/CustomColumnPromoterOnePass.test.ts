@@ -169,10 +169,14 @@ describe('PromoteForSync — one batched RSU pass', () => {
 
         const result = await promoter.PromoteForSync('ci-1', ['A', 'B']);
 
-        // A's DDL failed → no metadata writes, no spread, not counted; B fully promoted.
+        // A's DDL failed → nothing written, not counted, left captured for retry.
+        // B's DDL succeeded → COUNTED (SchemaUpdatePending is derived from this list, and the
+        // client keys its "workspace updating" state off it), but its metadata and spread are NOT
+        // done here: the batch restarts, so the post-restart consumer owns them. Doing them inline
+        // as well would duplicate the work — and for B it would not run at all, since `pm2 restart`
+        // ends this process.
         expect(result.ColumnsAdded).toEqual([{ EntityName: 'B', ColumnName: 'b1' }]);
-        expect(spread).toHaveBeenCalledTimes(1);
-        expect(spread.mock.calls[0][0]).toBe('B');
+        expect(spread).not.toHaveBeenCalled();
     });
 
     it('a spread-recovery-only pass runs NO pipeline and reports no columns added', async () => {

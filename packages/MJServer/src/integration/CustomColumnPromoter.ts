@@ -266,18 +266,39 @@ export class IntegrationCustomColumnPromoter {
             try { await this.provider.Refresh(); } catch (err) { LogError(`[CustomColumnPromoter] post-batch Refresh failed: ${this.msg(err)}`); }
         }
 
-        // ── PHASE 3: IOF rows + field maps + value spread for every entity whose DDL landed. ──
+        // ── PHASE 3: the NO-DDL case only — IOF rows + field maps + value spread, inline. ──
+        //
+        // An entity that needed a column went through the batch, and the batch RESTARTS: `pm2
+        // restart` kills this process, so nothing below runs for it. Its IOF rows, field maps and
+        // spread are completed by the post-restart consumer from the PendingWork registered above
+        // (CompletePromotion) — which is also where they belong, because only after the restart are
+        // the regenerated entity classes loaded.
+        //
+        // What is left here is the recovery-only pass: work items that need no column, so no
+        // migration, so no batch entry and no restart. Those are finished inline exactly as before.
+        // Explicitly filtered rather than left to fall through, so this reads as the branch it is
+        // instead of as dead code that happens to be unreachable.
         const columnsAdded: Array<{ EntityName: string; ColumnName: string }> = [];
         for (const plan of plans) {
-            try {
-                if (plan.batchIndex >= 0) {
-                    const res = batchResults[plan.batchIndex];
-                    if (!res || !res.Success) {
-                        // DDL failed — leave everything captured; retry next promote (no partial commit lost).
-                        LogError(`[CustomColumnPromoter] RSU ADD COLUMN failed on ${plan.entityInfo.Name}: ${res?.ErrorMessage ?? res?.ErrorStep ?? 'unknown'} — leaving ${plan.entityName} captured for retry.`);
-                        continue;
-                    }
+            if (plan.batchIndex >= 0) {
+                const res = batchResults[plan.batchIndex];
+                if (!res || !res.Success) {
+                    // DDL failed — leave everything captured; retry next promote (no partial commit
+                    // lost). The PendingWork row stays Pending and is re-processable.
+                    LogError(`[CustomColumnPromoter] RSU ADD COLUMN failed on ${plan.entityInfo.Name}: ${res?.ErrorMessage ?? res?.ErrorStep ?? 'unknown'} — leaving ${plan.entityName} captured for retry.`);
+                } else {
+                    // Succeeded. The restart has either already ended this process or is about to,
+                    // and the consumer owns the follow-up — so do NOT do the metadata work here.
+                    // Still COUNT the columns: they were promoted, and SchemaUpdatePending is
+                    // derived from this list. The client keys its "workspace updating" state off
+                    // that flag, so dropping these would tell it nothing happened.
+                    const added = plan.work.filter(w => !w.recoverSpread);
+                    LogStatus(`[CustomColumnPromoter] Promoted ${added.length} column(s) on ${plan.entityName}: ${added.map(w => w.columnName).join(', ')} — metadata + spread deferred to the post-restart consumer.`);
+                    columnsAdded.push(...added.map(w => ({ EntityName: plan.entityName, ColumnName: w.columnName })));
                 }
+                continue;
+            }
+            try {
                 await this.createIntegrationObjectFields(integrationID, plan.entityMap.ExternalObjectName, plan.work);
                 await this.createFieldMaps(plan.entityMap.ID, plan.work.filter(w => w.needsFieldMap));
                 const refreshedEntityInfo = this.provider.EntityByName(plan.entityName) ?? plan.entityInfo;
