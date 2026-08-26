@@ -16,6 +16,7 @@ import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { applyIncludeSchemaScope } from "./schema-scope";
+import { buildHealSchemaRoutineParams, getAuthoredExcludeSchemas, snapshotAuthoredExcludeSchemas } from "./heal-schema-params";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
@@ -2190,6 +2191,11 @@ export class ManageMetadataBase {
             return false;
          }
       }
+
+      // Authored exclude list (sys, staging, …) must be captured BEFORE includeSchemas is
+      // compiled into excludeSchemas. Heal EXEC statements use that original list plus
+      // @IncludedSchemaNames — never the sibling snapshot of this machine's database.
+      snapshotAuthoredExcludeSchemas(configInfo.excludeSchemas);
 
       // Resolve the opt-in `includeSchemas` positive scope into excludeSchemas, BEFORE the exclude
       // snapshot below and before createNewEntities() runs. The universe is queried from the DATABASE
@@ -4760,7 +4766,11 @@ export class ManageMetadataBase {
     */
    protected async setDefaultColumnWidthWhereNeeded(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spSetDefaultColumnWidthWhereNeeded', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spSetDefaultColumnWidthWhereNeeded', heal.values, heal.names);
          await this.LogSQLAndExecute(pool, sSQL, `SQL text to set default column width where needed`, true);
          return true;
       }
@@ -4827,41 +4837,17 @@ export class ManageMetadataBase {
       const conflictCheck = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID = '${newEntityFieldUUID}' OR (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')`;
       const guard = this.dbProvider.wrapInsertWithConflictGuard(conflictCheck);
 
-      // Sequence is emitted as an expression evaluated AT APPLY TIME, not as the literal we computed
-      // against this database. That distinction is the whole point, so it is worth stating plainly.
-      //
-      // `n.Sequence` here is a TEMPORARY placeholder — `MAX(Sequence) + 100000 + ordinal` — that the
-      // renumber pass (spUpdateExistingEntityFieldsFromSchema, run live and again from
-      // R__RefreshMetadata) rewrites to a proper low value shortly afterwards. Locally that always
-      // works, which is exactly why the bug hides: by the time anyone looks, the number is correct.
-      //
-      // The generated INSERT, however, is appended verbatim to a migration. Flyway runs ALL versioned
-      // migrations before ANY repeatable script, so on a database built only from migrations the
-      // renumber never runs in between. Two migrations that add columns to the SAME entity within one
-      // release therefore both carry a placeholder computed from the same low MAX — and the second one
-      // collides on UQ_EntityField_EntityID_Sequence. The script does not SET XACT_ABORT ON, so that
-      // aborts only the statement; execution continues and the real failure surfaces later as an
-      // unrelated-looking FK violation on EntityFieldValue. (MJ#3670 is the instance that found this.)
-      //
-      // Computing from an apply-time MAX cannot collide, on any database, in any order. COALESCE
-      // rather than ISNULL so the emitted SQL stays valid for both providers.
-      //
-      // The offset is the field's RAW SCHEMA ORDINAL (SourceOrdinal), not a flat +1, so the ORDERING
-      // of a batch of new fields is encoded in the emitted value itself. Order is what actually
-      // matters here — the providers' positional save-capture requires base fields to sort before
-      // virtual ones — and a flat +1 would make that ordering depend on the order the INSERT
-      // statements happen to execute. That order is guaranteed today (the pending-fields query ends
-      // ORDER BY EntityID, Sequence and the batch preserves it), but it would be an implicit,
-      // unstated dependency: parallelise the inserts or drop that ORDER BY later and the ordering
-      // silently changes. Encoding the ordinal removes the dependency rather than relying on it.
-      //
-      // Distinctness holds regardless: MAX is re-evaluated per statement and every ordinal is >= 1,
-      // so each successive insert lands strictly above every existing row. The absolute values are
-      // throwaway — spUpdateExistingEntityFieldsFromSchema overwrites Sequence from the schema on
-      // the next pass (live, and from R__RefreshMetadata.sql).
+      // Sequence is the catalog ordinal of this column on the entity's BaseView
+      // (`SourceOrdinal` / column_id). Existing rows on the same entity are parked
+      // at Sequence+100000 first (see parkEntityFieldSequencesSQL) so this INSERT
+      // cannot collide on UQ_EntityField_EntityID_Sequence. Immediately after the
+      // batch, manageEntityFields calls spUpdateExistingEntityFieldsFromSchema
+      // which rewrites EVERY field on the entity from the live view — including
+      // parked rows. That proc must run AFTER views are current (CodeGen Pass 2,
+      // after SQL generation). Pass 1 still emits this SQL against whatever the
+      // view is at that moment; Pass 2 is the one that matches the finished BaseView.
       const sourceOrdinal = typeof n.SourceOrdinal === 'number' && n.SourceOrdinal > 0 ? n.SourceOrdinal : 1;
-      const sequenceExpr =
-         `(SELECT COALESCE(MAX(${this.qi('Sequence')}), 0) FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ${this.qi('EntityID')} = '${n.EntityID}') + ${sourceOrdinal}`;
+      const sequenceExpr = String(sourceOrdinal);
 
       return `
       ${guard.prefix}
@@ -4937,6 +4923,21 @@ export class ManageMetadataBase {
     * @param sqlDefaultValue
     * @returns
     */
+   /**
+    * Park existing EntityField.Sequence values out of the 1..N catalog range so a
+    * following INSERT can use the real BaseView column_id without colliding on
+    * UQ_EntityField_EntityID_Sequence. The +100000 band is unique-safe; the
+    * subsequent spUpdateExistingEntityFieldsFromSchema rewrite brings every row
+    * (parked and new) back to live catalog order. Skip rows already parked so a
+    * second pass in the same run does not add 100000 twice.
+    */
+   protected parkEntityFieldSequencesSQL(entityID: string): string {
+      return `UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+         SET ${this.qi('Sequence')} = ${this.qi('Sequence')} + 100000
+       WHERE ${this.qi('EntityID')} = '${entityID}'
+         AND ${this.qi('Sequence')} < 100000;`;
+   }
+
    protected parseDefaultValue(sqlDefaultValue: string): string {
       if (sqlDefaultValue === null || sqlDefaultValue === undefined) {
          return null!;
@@ -4966,11 +4967,16 @@ export class ManageMetadataBase {
                // Batch size is configurable via `metadataInsertBatchSize` (default 250).
                const CHUNK_SIZE = configInfo.metadataInsertBatchSize ?? 250;
                const inserts: string[] = [];
+               const parkedEntityIDs = new Set<string>();
                for (let i = 0; i < newEntityFields.length; ++i) {
                   const n = newEntityFields[i];
                   if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
                      // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
                      // that would have been created violate rules - such as not having an ID column, etc.
+                     if (!parkedEntityIDs.has(n.EntityID)) {
+                        inserts.push(this.parkEntityFieldSequencesSQL(n.EntityID));
+                        parkedEntityIDs.add(n.EntityID);
+                     }
                      const newEntityFieldUUID = this.createNewUUID();
                      inserts.push(this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n));
                   }
@@ -5028,7 +5034,11 @@ export class ManageMetadataBase {
    }
    protected async updateExistingEntitiesFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntitiesFromSchema', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntitiesFromSchema', heal.values, heal.names);
          const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to update existing entities from schema`, true);
          // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
          // add these to the modified entity list if they're not already in there
@@ -5059,14 +5069,13 @@ export class ManageMetadataBase {
          // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
          // a table variable via STRING_SPLIT and joins once. This avoids both per-entity
          // round-trips (slow) and parallel calls (page-level lock contention on EntityField).
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+            entityIDs,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', heal.values, heal.names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
-         const params = isScoped
-            ? [`'${excludeSchemas.join(',')}'`, `'${entityIDs!.join(',')}'`]
-            : [`'${excludeSchemas.join(',')}'`];
-         const paramNames = isScoped
-            ? ['ExcludedSchemaNames', 'EntityIDs']
-            : ['ExcludedSchemaNames'];
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', params, paramNames);
          const label = isScoped
             ? `SQL text to update existing entity fields from schema (${entityIDs!.length} scoped entities)`
             : `SQL text to update existing entity fields from schema`;
@@ -5094,7 +5103,11 @@ export class ManageMetadataBase {
     */
    protected async updateSchemaInfoFromDatabase(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateSchemaInfoFromDatabase', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateSchemaInfoFromDatabase', heal.values, heal.names);
          const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to sync schema info from database schemas`, true);
 
          if (result && result.length > 0) {
@@ -5201,14 +5214,13 @@ export class ManageMetadataBase {
          // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
          // a table variable via STRING_SPLIT and filters once. Avoids both per-entity
          // round-trips and parallel calls (page-level lock contention on EntityField).
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+            entityIDs,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', heal.values, heal.names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
-         const params = isScoped
-            ? [`'${excludeSchemas.join(',')}'`, `'${entityIDs!.join(',')}'`]
-            : [`'${excludeSchemas.join(',')}'`];
-         const paramNames = isScoped
-            ? ['ExcludedSchemaNames', 'EntityIDs']
-            : ['ExcludedSchemaNames'];
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', params, paramNames);
          const label = isScoped
             ? `SQL text to delete unneeded entity fields (${entityIDs!.length} scoped entities)`
             : `SQL text to delete unneeded entity fields`;
@@ -6031,7 +6043,11 @@ export class ManageMetadataBase {
          // not products — hide them from new users. Application.DefaultForNewUser defaults to 1 in the
          // DB, so omitting the column here is what put raw '__mj_*'-named apps in every new user's
          // app switcher while the human-authored metadata app stayed hidden.
-         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath, DefaultForNewUser)
+         // Every column is quoted through `qi()` rather than written bare. `conditionalInsert` wraps this
+         // statement in PG's `DO $$ ... $$` block, and the identifier auto-quoter skips dollar-quoted
+         // blocks wholesale (they can legally contain arbitrary text), so nothing downstream will quote
+         // these for us. Bare `ID` reaches PG folded to `id` and the INSERT fails on every run.
+         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (${this.qi('ID')}, ${this.qi('Name')}, ${this.qi('Description')}, ${this.qi('SchemaAutoAddNewEntities')}, ${this.qi('Path')}, ${this.qi('AutoUpdatePath')}, ${this.qi('DefaultForNewUser')})
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)}, ${this.dialect.BooleanLiteral(false)})`;
          const sSQL = this.conditionalInsert(appCheckQuery, appInsert);
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);

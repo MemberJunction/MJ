@@ -4,38 +4,43 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Per-action tests for the Instagram provider.
  *
  * Instagram actions return structured validation results (AUTH_FAILED /
- * MISSING_* / INVALID_* codes). The HTTP boundary is the axios module mock:
- * `makeInstagramRequest` routes through `axios.request` on the shared mock
+ * MISSING_* / INVALID_* codes). The HTTP boundary is the @memberjunction/network-utils module mock:
+ * `makeInstagramRequest` routes through `HttpClient.Request` on the shared mock
  * instance, capturing endpoint/method/params for mapping assertions.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -109,7 +114,7 @@ import { InstagramSearchPostsAction } from '../providers/instagram/actions/searc
 const contextUser = { ID: 'user-1', Name: 'Test User', Email: 'test@example.com' } as unknown as UserInfo;
 
 type RunnableAction = { InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> };
-type RequestConfig = { url: string; method: string; data?: unknown; params?: Record<string, unknown> };
+type RequestConfig = { Url: string; Method: string; Body?: unknown; Query?: Record<string, unknown> };
 
 function inputs(values: Record<string, unknown>, outputs: string[] = []): ActionParam[] {
   const params = Object.entries(values).map(
@@ -134,13 +139,13 @@ const jpegFile = { filename: 'a.jpg', mimeType: 'image/jpeg', data: 'aGVsbG8=', 
 const mp4File = { filename: 'a.mp4', mimeType: 'video/mp4', data: 'aGVsbG8=', size: 100 };
 
 function requestCalls(): RequestConfig[] {
-  return http.instance.request.mock.calls.map((call) => call[0] as RequestConfig);
+  return http.instance.Request.mock.calls.map((call) => call[0] as RequestConfig);
 }
 
 beforeEach(() => {
-  http.instance.request.mockReset();
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
+  http.instance.Request.mockReset();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
 });
 
 // ─── InstagramCreatePostAction ──────────────────────────────────────────────
@@ -282,14 +287,14 @@ describe('InstagramGetCommentsAction', () => {
   });
 
   it('should GET {postId}/comments with access token and capped limit', async () => {
-    http.instance.request.mockResolvedValue({ data: { data: [] }, headers: {} });
+    http.instance.Request.mockResolvedValue({ Data: { data: [] }, Headers: {}, Status: 200 });
 
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', PostID: 'ig-post-1', Limit: 500 }));
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('ig-post-1/comments');
-    expect(String(call.method)).toBe('GET');
-    expect(call.params).toEqual(
+    expect(call.Url).toBe('ig-post-1/comments');
+    expect(String(call.Method)).toBe('GET');
+    expect(call.Query).toEqual(
       expect.objectContaining({ access_token: 'test-access-token', limit: 100 }),
     );
     expect(result.Success).toBe(true);
@@ -316,7 +321,7 @@ describe('InstagramGetPostInsightsAction', () => {
   });
 
   it('should return POST_NOT_FOUND when the post lookup fails', async () => {
-    http.instance.request.mockRejectedValue(new Error('not found'));
+    http.instance.Request.mockRejectedValue(new Error('not found'));
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', PostID: 'ig-404' }));
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('POST_NOT_FOUND');
@@ -392,7 +397,7 @@ describe('InstagramSchedulePostAction', () => {
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Instagram post scheduled successfully');
-    expect(http.instance.request).not.toHaveBeenCalled();
+    expect(http.instance.Request).not.toHaveBeenCalled();
     const data = JSON.parse(String(outParam(result, 'ResultData'))) as { schedulingId: string; mediaCount: number };
     expect(data.schedulingId).toBeTruthy();
     expect(data.mediaCount).toBe(1);

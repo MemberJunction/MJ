@@ -168,6 +168,12 @@ jobs:
     # validated by the line branch's own CI on the backport PRs.
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     uses: ./.github/workflows/release-test.yml
+    # A reusable workflow receives NO secrets unless the caller passes them — `secrets:` is not
+    # inherited by default. Without this, release-test.yml's unit-tests job saw an empty
+    # TURBO_TOKEN on the publish path and silently ran with the remote cache disabled, while
+    # `vars.TURBO_TEAM` (a variable, not a secret) propagated fine and made it LOOK configured.
+    # The release gate is the slowest run in the repo and the one that most wants a warm cache.
+    secrets: inherit
 
   build-and-publish:
     name: Build and publish new versions of NPM packages

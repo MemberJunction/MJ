@@ -205,7 +205,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (405 classes)
+// @memberjunction/core-entities (407 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -446,6 +446,8 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -1746,6 +1748,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -2451,7 +2455,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 996;
+export const CLASS_REGISTRATIONS_COUNT = 998;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -29,8 +29,7 @@
     "@memberjunction/core-actions": "6.1.0-edge.3",
     "@memberjunction/core-entities": "6.1.0-edge.3",
     "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/ai-vector-sync": "6.1.0-edge.3",
-    "axios": "^1.13.4"
+    "@memberjunction/ai-vector-sync": "6.1.0-edge.3"
   },
   "repository": {
     "type": "git",
