@@ -7,6 +7,7 @@ import { SQLUtilityBase } from './sql';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
 
 import { autoIndexForeignKeys, autoIndexSoftPrimaryKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
+import { entityInCustomBaseViewRefreshScope, shouldEmitCascadeForRelatedEntity } from './schema-filters';
 import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -1087,7 +1088,12 @@ export class SQLCodeGenBase {
             modifiedOrNewNames.includes(e.Name) &&
             !e.BaseViewGenerated &&
             e.IncludeInAPI &&
-            !e.VirtualEntity
+            !e.VirtualEntity &&
+            entityInCustomBaseViewRefreshScope(
+                e.SchemaName,
+                configInfo.excludeSchemas ?? [],
+                configInfo.includeSchemas,
+            )
         );
     }
 
@@ -2286,6 +2292,13 @@ export class SQLCodeGenBase {
 
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
+                if (!shouldEmitCascadeForRelatedEntity(
+                    entity.SchemaName,
+                    e.SchemaName,
+                    configInfo.allowCrossSchemaCascadeDeletes === true,
+                )) {
+                    continue;
+                }
                 for (const ef of e.Fields) {
                     if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         const cascadeSql = await this.generateSingleCascadeOperation(entity, e, ef, pool);
@@ -2426,6 +2439,13 @@ export class SQLCodeGenBase {
 
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
+                if (!shouldEmitCascadeForRelatedEntity(
+                    entity.SchemaName,
+                    e.SchemaName,
+                    configInfo.allowCrossSchemaCascadeDeletes === true,
+                )) {
+                    continue;
+                }
                 for (const ef of e.Fields) {
                     if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         // Skip self-referential foreign keys (e.g., ParentID pointing to same entity)
