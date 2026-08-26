@@ -16,7 +16,8 @@ import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { applyIncludeSchemaScope } from "./schema-scope";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityDisplayNameResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { assessDisplayNameOpacity } from "../Misc/display-name-heuristics";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
    applySearchableFieldsCap,
@@ -6661,7 +6662,9 @@ export class ManageMetadataBase {
                e.AllowUserSearchAPI,
                e.AutoUpdateAllowUserSearchAPI,
                e.FullTextSearchEnabled,
-               e.AutoUpdateFullTextSearch
+               e.AutoUpdateFullTextSearch,
+               e.DisplayName,
+               e.AutoUpdateDisplayName
             FROM
                ${this.qs(mj_core_schema(), 'vwEntities')} e
             WHERE
@@ -6906,10 +6909,113 @@ export class ManageMetadataBase {
                logStatus(`         Applied form layout for ${entity.Name}`);
             }
          }
+
+         // Entity Display Name Generation
+         // Gated three ways: the entity must permit auto-update, the feature must
+         // be on, and (unless alwaysGenerate is set) the name must still look
+         // opaque after the deterministic conversion — so clean names never
+         // reach the model.
+         if (this.needsEntityDisplayNameGeneration(ag, entityRecord)) {
+            const displayNameResult = await ag.generateEntityDisplayName({
+               Name: entity.Name,
+               SchemaName: entityRecord.SchemaName as string | undefined,
+               BaseTable: entityRecord.BaseTable as string | undefined,
+               Description: entity.Description,
+               Fields: fields
+            }, currentUser);
+
+            if (displayNameResult) {
+               await this.applyEntityDisplayName(pool, entityRecord, displayNameResult);
+            }
+         }
       }
       catch (ex) {
          logError('Error Processing Entity Advanced Generation', ex)
       }
+   }
+
+   /**
+    * Decides whether an entity should be sent to the LLM for a display-name pass.
+    *
+    * Three independent gates, cheapest first:
+    *
+    * 1. `Entity.AutoUpdateDisplayName` — an administrator has locked this name.
+    * 2. The feature flag itself (checked inside `generateEntityDisplayName` too,
+    *    but checked here so the opacity assessment is skipped when it is off).
+    * 3. Opacity — whether the deterministic `createDisplayName()` conversion
+    *    already produces something readable. This is a COST filter and can be
+    *    turned off with the `alwaysGenerate` option; correctness does not depend
+    *    on it, only the token bill.
+    */
+   protected needsEntityDisplayNameGeneration(ag: AdvancedGeneration, entityRecord: Record<string, unknown>): boolean {
+      // The column is BIT/BOOLEAN over two drivers; compare loosely rather than
+      // assuming `true` vs `1`.
+      const autoUpdate = entityRecord.AutoUpdateDisplayName;
+      const allowsAutoUpdate = autoUpdate === true || autoUpdate === 1 || autoUpdate === '1';
+      if (!allowsAutoUpdate) {
+         return false;
+      }
+
+      if (!ag.featureEnabled('EntityDisplayNames')) {
+         return false;
+      }
+
+      if (ag.featureOptionBool('EntityDisplayNames', 'alwaysGenerate', false)) {
+         return true;
+      }
+
+      const entityName = String(entityRecord.Name ?? '');
+      const opacity = assessDisplayNameOpacity(entityName);
+      if (!opacity.isOpaque) {
+         return false;
+      }
+
+      logStatus(`         Display name for ${entityName} looks opaque (${opacity.reason}${opacity.offendingToken ? `: "${opacity.offendingToken}"` : ''}), requesting LLM rewrite`);
+      return true;
+   }
+
+   /**
+    * Writes an LLM-proposed entity display name.
+    *
+    * Refuses to write in three cases, each of which would otherwise make the
+    * feature actively harmful rather than merely unhelpful:
+    *
+    * - **Low confidence.** A confidently wrong display name is worse than an
+    *   ugly accurate one, since nothing downstream flags it as a guess.
+    * - **No change.** Skipped so the run does not report work it did not do.
+    * - **Empty or over-long.** `Entity.DisplayName` is nvarchar(255); a model
+    *   that returns prose instead of a name is discarded rather than truncated.
+    */
+   protected async applyEntityDisplayName(
+      pool: CodeGenConnection,
+      entityRecord: Record<string, unknown>,
+      result: EntityDisplayNameResult
+   ): Promise<void> {
+      const entityName = String(entityRecord.Name ?? '');
+      const proposed = (result.displayName ?? '').trim();
+
+      if (result.confidence === 'low') {
+         logStatus(`         Skipped display name for ${entityName}: low confidence ("${proposed}")`);
+         return;
+      }
+
+      if (proposed.length === 0 || proposed.length > 255) {
+         logStatus(`         Skipped display name for ${entityName}: proposed value is empty or exceeds 255 characters`);
+         return;
+      }
+
+      const current = entityRecord.DisplayName == null ? '' : String(entityRecord.DisplayName).trim();
+      if (current === proposed) {
+         return;
+      }
+
+      const sql = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, ${this.qi('DisplayName')} = '${proposed.replace(/'/g, "''")}' WHERE ID = '${String(entityRecord.ID)}' AND ${this.qi('AutoUpdateDisplayName')} = ${this.boolLit(true)}`;
+      await this.runQuery(pool, sql);
+
+      const expansions = result.expansions?.length
+         ? ` [${result.expansions.map(e => `${e.from}->${e.to}`).join(', ')}]`
+         : '';
+      logStatus(`         Display name for ${entityName}: "${current || '(none)'}" -> "${proposed}"${expansions}`);
    }
 
    /**

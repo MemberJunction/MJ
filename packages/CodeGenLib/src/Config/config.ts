@@ -206,6 +206,18 @@ const advancedGenerationSchema = z.object({
       enabled: false,
     },
     {
+      name: 'EntityDisplayNames',
+      description:
+        "Use AI to improve Entity.DisplayName where the mechanical name conversion cannot — expanding schema abbreviations into readable names (ACCT_STAT_CD -> 'Account Status Codes'). By default only entities whose names still look opaque AFTER the deterministic conversion are sent to the LLM, so clean names like CustomerOrder cost nothing; set the 'alwaysGenerate' option to true to send every entity. Only writes where Entity.AutoUpdateDisplayName = 1, so an administrator's chosen display name is never overwritten. Like other entity-level features this runs for new and modified entities, or for all entities when forceRegeneration is enabled.",
+      enabled: false,
+      options: [
+        {
+          name: 'alwaysGenerate',
+          value: false,
+        },
+      ],
+    },
+    {
       name: 'EntityFieldDescriptions',
       description: 'Use AI to generate descriptions for fields, only used when new fields are detected',
       enabled: false,
@@ -895,6 +907,18 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
         name: 'EntityDescriptions',
         description: 'Use AI to generate descriptions for entities, only used when creating new entities',
         enabled: false,
+      },
+      {
+        name: 'EntityDisplayNames',
+        description:
+          "Use AI to improve Entity.DisplayName where the mechanical name conversion cannot — expanding schema abbreviations into readable names (ACCT_STAT_CD -> 'Account Status Codes'). By default only entities whose names still look opaque AFTER the deterministic conversion are sent to the LLM, so clean names like CustomerOrder cost nothing; set the 'alwaysGenerate' option to true to send every entity. Only writes where Entity.AutoUpdateDisplayName = 1, so an administrator's chosen display name is never overwritten.",
+        enabled: false,
+        options: [
+          {
+            name: 'alwaysGenerate',
+            value: false,
+          },
+        ],
       },
       {
         name: 'SmartFieldIdentification',
