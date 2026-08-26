@@ -729,7 +729,9 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
         type: 'plain_text_input',
         action_id: `mj:form_field:${question.id}`,
         multiline: textType.type === 'textarea',
-        ...(textType.placeholder ? { placeholder: { type: 'plain_text', text: textType.placeholder } } : {}),
+        ...(textType.placeholder
+          ? { placeholder: { type: 'plain_text', text: truncateToLength(textType.placeholder, SLACK_PLACEHOLDER_MAX_LENGTH) } }
+          : {}),
         ...(textType.maxLength ? { max_length: textType.maxLength } : {}),
       };
     }
@@ -793,7 +795,7 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
       return {
         type: 'plain_text_input',
         action_id: `mj:form_field:${question.id}`,
-        placeholder: { type: 'plain_text', text: `Enter ${question.label}` },
+        placeholder: { type: 'plain_text', text: truncateToLength(`Enter ${question.label}`, SLACK_PLACEHOLDER_MAX_LENGTH) },
       };
   }
 }
@@ -924,6 +926,16 @@ function appendTruncationNotice(blocks: Record<string, unknown>[], storeKey?: st
 /**
  * Truncate a string to a given length with ellipsis.
  */
+/**
+ * Slack's maximum length for a modal input's `placeholder` text.
+ *
+ * Exceeding it fails the whole `views.open` call with `invalid_arguments`
+ * (`must be less than 151 characters [json-pointer:/view/blocks/0/element/placeholder/text]`),
+ * so the modal never opens and the button appears dead — with the only clue in the server log.
+ * A form question's label is free text and easily longer than this.
+ */
+const SLACK_PLACEHOLDER_MAX_LENGTH = 150;
+
 function truncateToLength(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength - 3) + '...';

@@ -808,6 +808,51 @@ describe('slack-block-builder', () => {
     });
 
 
+    describe('modal placeholder limits', () => {
+        // Slack rejects the whole views.open call with invalid_arguments when a placeholder
+        // exceeds 150 characters, so the modal never opens and the button looks dead — the only
+        // clue is a server-side log line. A question label is free text and easily longer.
+        const LIMIT = 150;
+
+        function placeholdersOf(modal: Record<string, unknown>): string[] {
+            const blocks = (modal.blocks ?? []) as Record<string, unknown>[];
+            return blocks
+                .map((b) => (b.element as Record<string, unknown> | undefined)?.['placeholder'] as Record<string, unknown> | undefined)
+                .filter((p): p is Record<string, unknown> => !!p)
+                .map((p) => p['text'] as string);
+        }
+
+        it('truncates a long question label in the generated placeholder', () => {
+            const form = {
+                title: 'Long form',
+                questions: [{ id: 'q1', label: 'x'.repeat(400), type: { type: 'unknown_kind' } }],
+            };
+            const placeholders = placeholdersOf(buildFormModal(form as never));
+            expect(placeholders.length).toBeGreaterThan(0);
+            for (const text of placeholders) {
+                expect(text.length).toBeLessThanOrEqual(LIMIT);
+            }
+        });
+
+        it('truncates an explicitly supplied long placeholder', () => {
+            const form = {
+                title: 'Long form',
+                questions: [{ id: 'q1', label: 'Notes', type: { type: 'text', placeholder: 'y'.repeat(400) } }],
+            };
+            for (const text of placeholdersOf(buildFormModal(form as never))) {
+                expect(text.length).toBeLessThanOrEqual(LIMIT);
+            }
+        });
+
+        it('leaves a short placeholder untouched', () => {
+            const form = {
+                title: 'Short form',
+                questions: [{ id: 'q1', label: 'Topic', type: { type: 'unknown_kind' } }],
+            };
+            expect(placeholdersOf(buildFormModal(form as never))).toContain('Enter Topic');
+        });
+    });
+
     describe('URL safety in block elements', () => {
         const DATA_URI = 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,' + 'UEsDB'.repeat(2000);
 
