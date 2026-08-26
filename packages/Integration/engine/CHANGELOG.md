@@ -1,5 +1,179 @@
 # @memberjunction/integration-engine
 
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- a59e52d: Discovery can recognise a rate limit again — its throttle test could never return true.
+
+  `IntrospectSchema` fans describes out to 8 concurrent and feeds each outcome to an AIMD controller that cuts the in-flight cap when an item reports `throttled`. It decided that by asking one question:
+
+  ```ts
+  return { ok: false, throttled: this.ExtractRetryAfterMs(err) !== undefined };
+  ```
+
+  and the base `ExtractRetryAfterMs` returned `undefined` unconditionally. So for any connector that did not override it — and for any error an overriding connector could not parse — the expression was `undefined !== undefined`, permanently false. The fan-out stayed at 8 straight through the vendor saying to slow down.
+
+  Two changes, both in the base class so every connector inherits them:
+  - **Classifier fallback.** The throttle test now falls back to `ClassifyError`, which reads the error's own text (`rate limit` / `throttl` / `429`) — the same classifier the sync fetch path already uses for exactly this decision. A connector's parsed value still wins when it has one; this is the floor beneath it. A throttled describe also emits an `introspect.object.throttled` event, so backing off is visible rather than inferred.
+  - **`ExtractRetryAfterMs` reads the standard header by default.** `Retry-After` (RFC 9110 §10.2.3) in both delay-seconds and HTTP-date forms, from headers on the error, on `error.response`, or one level into `error.cause`. Values are bounded at 5 minutes, so a vendor returning a Unix timestamp as delay-seconds cannot freeze the token bucket for millennia; anything unusable falls back to the limiter's own decrease. Deliberately not a message-text parser — inventing a delay is worse than having none, so prose signals stay the connector's job.
+
+  Connectors that already override `ExtractRetryAfterMs` keep their own parsing and are unaffected by the new default; they gain only the classifier floor for errors their parser returns nothing for.
+
+  Ordinary describe failures are still not throttles: cutting concurrency on every error would make a permissions problem look like a rate limit.
+
+- a04d5c9: A restart no longer turns concurrent syncs into a queue.
+
+  Syncs are **started** concurrently — `processRSUPendingWork` launches each connector's `RunSync` without awaiting it — and were **resumed** serially: `ResumeOrphanedSyncs` awaited `ExecuteEntityMaps` + `FinalizeRun` inside its loop. So a restart silently converted a parallel workload into a queue ordered by whatever `RunView` happened to return, and the slowest connector became a head-of-line block for every other connector on the workspace. If it never finished, they never started.
+
+  Observed live: a restart orphaned three syncs. One resumed and was still running five hours later; the other two (99,463 and 13,238 rows) never began. Nothing in the logs said so, because nothing had failed — they had never been reached. From outside the process a queued run and a crashed one are indistinguishable: `IsInFlight: true`, `CompletedAt: null`, counters frozen at the instant of the restart. The absence of an error is the only tell.
+
+  The loop body is now `ResumeOneOrphanedRun` (line-for-line unchanged), run through a bounded pool. What is **not** parallelised: the write section stays serialized by `runWriteExclusive` — all maps share one provider connection with singular transaction state — and per-CompanyIntegration exclusion stays via the `activeSyncs` lock each resume takes. What overlaps is what overlapped before the restart: different connectors waiting on different sources.
+
+  Bounded (default 4, `MJ_RESUME_CONCURRENCY` to override) rather than unbounded, because a workspace is one Node process: concurrency buys overlap on waiting, not more CPU, and a boot that adopted fifty runs at once would trade one pathology for another. A junk/zero/negative override falls back to the default rather than to 1 — silently restoring serial behaviour on a typo is the one outcome this must not have.
+
+  The pool never stops early: one resume's failure costs exactly that resume, and the first error is rethrown only after every run has had its turn. Abandoning the queue on one bad item would recreate the head-of-line failure in a different shape.
+
+### Patch Changes
+
+- 6242df1: A transport failure is retryable again: read the error's `cause` chain, not just its message.
+
+  `fetch` (undici) reports EVERY transport failure as the bare message `fetch failed` and puts the
+  real reason — `ECONNRESET`, `ENOTFOUND`, `EAI_AGAIN`, `UND_ERR_SOCKET`, `socket hang up` — in
+  `error.cause`. `ClassifyError` only read the top-level message, so that string matched no
+  pattern, fell through to `UNKNOWN_ERROR`/`Critical`, and was therefore **not retryable**: a
+  routine network blip ended the object's fetch loop, and the sync stopped early while reporting
+  success on a partial pull. Measured on a long-running production sync, this fired every 30-60
+  minutes and was indistinguishable from a completed run.
+
+  `ClassifyError` now flattens the error's message plus every `cause` in the chain (depth-capped,
+  so a cyclic chain cannot hang it) along with any `code`/`errno` found along the way, and checks
+  an explicit list of transport-level signals FIRST — because a request that never reached a server
+  carries no verdict, and must not be shadowed by a deterministic-looking keyword appearing deeper
+  in the chain. Those classify as `NETWORK_TIMEOUT`/`Warning`, which the existing retry path
+  already honors.
+
+  Deliberately an explicit signal list rather than a loose substring: the neighbouring
+  `DATABASE_ERROR` branch previously had to be narrowed for exactly that reason, and
+  deterministic errors (duplicate key, FK violation, write-verification) must keep classifying as
+  before.
+
+- d40251e: Discovery samples are now bounded and observable:
+  - **The base sampler enforces its own deadline between pages.** The deadline was handed to the connector so it could bound its internal fan-out, but a connector that ignores the marker (every connector predating it) keeps returning `HasMore=true` — and nothing above it enforced the budget at all, so an object one page short of its sample target was asked again forever. The sampler now stops at the deadline between pages, keeping everything collected so far. Legacy callers with no deadline are unchanged.
+  - **A discovery watchdog names what is in flight.** From outside the process, a hung sample and a busy one were identical — nothing logged between start and end. While samples run, a ticker (default 15s, `MJ_INTEGRATION_DISCOVERY_WATCHDOG_MS`, `0` disables) names every object still in flight with its age, stage, pages, records, and time to deadline; silence now means the process is gone. The timer is unref'd and exists only while samples are in flight.
+  - **Entry/exit lines with a budget marker.** `DiscoverFieldsViaFetch` logs what it set out to do and what it cost, and flags an object that consumed ≥90% of its time budget — separating "slow source" from "this object can never satisfy its stop condition".
+
+- 29187f8: An explicit MAX width (`-1`) survives discovery instead of being silently narrowed.
+
+  `-1` is the unbounded convention both dialects already speak — `sqlServerDialect` renders `len === -1` as `NVARCHAR(MAX)` and `postgresqlDialect` as `TEXT`. So it is the WIDEST width available, but two places ranked it as the narrowest:
+  - `decideLengthOverlay` compared numerically, so `decideLengthOverlay(-1, 4000)` returned `4000` — any sampled width beat MAX. An operator who widened a column to unbounded because real values exceed every bounded width had it narrowed again on the next discovery.
+  - `TypeMapper` routed `-1` through the `string` modality, where `resolveStringType`'s `maxLength > 0` test is false and the fallback is `NVARCHAR(255)` — the narrowest possible column for a field explicitly asked to be the widest.
+
+  The consequence is worse than truncation: records too long for the re-narrowed column are **skipped whole**, so the data simply stops arriving with no error on the row.
+
+  `decideLengthOverlay` now treats `-1` as the widest on both sides — a persisted MAX is never narrowed, and a source that reports unbounded upgrades a finite persisted width, consistent with the existing grow-only rule. `TypeMapper` resolves an unbounded width through the `text` modality, which each dialect already maps to its own unbounded type. A primary key is clamped to the dialect's key ceiling instead, since MAX is not indexable — a special case rather than a comparison, because `Math.min` would return `-1` here.
+
+- f2fa6b3: Honour `Retry-After` between fetch attempts, and re-acquire a rate token on each retry.
+
+  A 429 was already retried — `WithRetry` wraps `FetchChanges` and `IsRetryableError` admits `RATE_LIMIT_EXCEEDED` — but two things around that retry made the adaptation ineffective:
+  - **The wait ignored what the source said.** `computeDelay` is pure exponential backoff plus jitter. The `Retry-After` a connector can already parse was consumed only by `RateLimiter.ReportThrottle`, which is called from the `catch` — after every attempt is exhausted. A source replying "expected available in 60 seconds" was retried on a ~1s/2s ladder regardless.
+  - **Retries bypassed the limiter.** The rate token is acquired once, _before_ `WithRetry`, and never between attempts. So even once the bucket was frozen by a throttle report, the retries sailed straight past it.
+
+  Net effect: a throttled object burned its attempts in a few seconds and ended with zero records, while every other object fetching concurrently kept hammering the source, because the shared bucket was never frozen in time to matter.
+
+  `WithRetry` now takes two optional hooks, both no-ops for existing callers. `DelayForError` may replace the computed backoff with a source-directed wait — returning null or undefined keeps today's backoff, so a connector that cannot parse `Retry-After` is unaffected. `BeforeRetry` is awaited after the wait and before the next attempt, which is where the fetch path re-acquires its rate token, so a retry passes through the same gate the first attempt did and actually waits out the freeze.
+
+- e7b4833: Index integration-object fields, and memoise the per-record field view.
+
+  `GetIntegrationObjectFields(objectID)` was `this._integrationObjectFields.filter(f => UUIDsEqual(f.IntegrationObjectID, objectID))` — a full scan of every `IntegrationObjectField` in the process, on a path that runs **per record**: a connector's `RawToExternalRecord`/`TransformRecord` resolves an object's fields for every record it transforms. On a catalog of 364 objects, that scan plus the generated `IntegrationObjectID` getter it invokes per element measured **~46% of process CPU** in a live profile.
+
+  It is now backed by a lazily-built `objectID → fields` index, keyed on the **identity** of `_integrationObjectFields`. The engine replaces that array wholesale on load/refresh (and `SeedForTesting` replaces it directly), so a new array is a new index automatically — there is no invalidation hook to forget. Keys are normalised the same way `UUIDsEqual` compares, so SQL Server's uppercase and PostgreSQL's lowercase land on the same bucket, and the `objectID == null` case keeps the original both-null-matches semantics via the unindexed path rather than inventing a magic key. Callers still receive a fresh array per call, so sorting or splicing the result behaves exactly as before.
+
+  Also adds `RefreshCatalog()`, which re-reads **only** the `IntegrationObject`/`IntegrationObjectField` datasets straight from the database. `RefreshItem` will not do: it reloads through the local dataset cache, which is the very thing that goes stale when the catalog is edited by direct SQL, a sproc-based sync push, or another process — `BaseEngine`'s auto-refresh only observes in-process `BaseEntity` saves. Replacing the arrays is also what invalidates the memoised views, since both the field index and the connectors' `GetCachedFields` memo key on array identity.
+
+- 9cce262: Refuse to write a record that has no value for its soft primary key.
+
+  `CreateRecord` treated a missing mapped key as proof of a new row. That holds for a destination whose key is _generated_ — identity column, server-assigned UUID — because those rows are matched by record map rather than by key value. It does not hold for a **soft** primary key, which is the external system's own identifier stored as ordinary data: `DDLGenerator` deliberately emits it with no `PRIMARY KEY` and no `UNIQUE` constraint, since a unique constraint would reject legitimate rows. Nothing at the database level rejects a NULL key.
+
+  A row written without its key can never be matched again. The next sync's existence check misses it and inserts another copy, and the pass after that inserts another. Every business column is populated and only the key column is empty, so nothing looks wrong from the outside — the failure is silent and compounding.
+
+  The engine now refuses such a record before the insert/update decision, scoped to `IsSoftPrimaryKey` so generated-key destinations are entirely unaffected. The refusal is reported as `KEYLESS_RECORD_REFUSED` on the run's event stream (and to the console even without a logger — silence is the failure mode being fixed), names the entity and the key columns, and points at the two places the cause actually lives: the field map, and whether discovery resolved the object's primary key. It returns `'skipped'` rather than throwing, so one misconfigured object is counted instead of taking down the run.
+
+  Any connector that returns an empty key reproduces this — a discovery that never resolved a PK, a field map missing the key column, a source that stops returning its id field — so the guard is the invariant that makes the whole class impossible to write.
+
+  The refusal names the key columns that were actually absent rather than every soft column on the entity: `mappedPK == null` means some part of a composite key was empty, not all of it, and naming a populated column sends the operator to a field map that is working.
+
+- 0aa2b91: Reactivating a connection no longer blocks on a live schema introspect, and stops reporting a failed refresh as a clean zero-count one.
+
+  `IntegrationReactivateConnection` was the last schema-refresh path still awaiting the pipeline inline. Its two sibling mutations already gained `awaitSchemaRefresh` plus a detached launch; reactivate never did, and kept a hand-rolled copy of the message the shared builders exist to fix.
+  - **Reactivation no longer scans the source.** `runSchemaRefresh` now defaults to **false**: resuming a connection and rescanning its schema are separate decisions that this mutation used to fuse. A one-click resume would spend minutes of a vendor's rate budget on an introspect nobody asked for, and the catalog is usually exactly as current as it was when the connection was paused. `IntegrationRefreshConnectorSchema` remains the operation for "rescan now"; pass `runSchemaRefresh: true` to get both. **This changes what an existing caller gets by default** — a client that passes only `companyIntegrationID` will now reactivate without a refresh.
+  - **When a refresh IS requested, it is detached by default.** Reactivation is durably committed before the refresh begins — the mutation returns as soon as the connection is actually active, naming the run to tail. Holding the response open for the minutes a live introspect takes cannot make the reactivation more true, and a load balancer that terminates a held request at a fixed ceiling turns a succeeded operation into a reported failure with no run ID to check. Create and Update keep blocking by default, because there the caller is sitting on a wizard form and the counts are the answer they asked for. `awaitSchemaRefresh: true` restores blocking here.
+  - **Failed refreshes say so.** The inline path formatted its counts unconditionally, and a pipeline that fails returns rather than throws with every count at zero — so a refresh that died at the credential check reported "0 created, 0 updated, 0 PK-unresolved", indistinguishable from a source with nothing new. Reactivate now goes through the same `describeFinishedRefresh` the other two use, so a failure is named as one.
+
+  Also surfaces apply-time warnings for declared integration rows an apply silently leaves out: an `IntegrationObject`/`IntegrationObjectField` that a rediscovery or a schema-limit breach set to `Disabled` is excluded from the source schema the apply materializes, so the table appears without the column — or a requested object is not created at all — and nothing in the output said why.
+
+- 74e161d: One covering index for every record-map lookup, and a per-record write path that matches the batched one.
+
+  Every access path to `CompanyIntegrationRecordMap` resolves a row by `(CompanyIntegrationID, EntityID, ExternalSystemRecordID)` — `RecordMapBatch.readExisting` on the hot path of every sync, `LoadAllRecordMaps` for the orphan sweep, and `SaveRecordMap`'s upsert lookup. The table carried only its two single-column auto-FK indexes, so each read picked one and key-looked-up the rest, once per record per sync on a table holding a row for every record ever synced. A composite with `INCLUDE (EntityRecordID)` serves all three with no key lookup.
+
+  Separately, `SaveRecordMap` now applies the rule `RecordMapBatch.flushChunk` has always applied: when the row already maps this external ID to this MJ record, return without loading or saving. A row pointing at a _different_ MJ record is still loaded and rewritten, and a missing row is still created — only the genuine no-op is skipped.
+
+  Scope note: the apply loop builds a `RecordMapBatch`, so the ordinary incremental path was already filtered and never paid the per-record cost. `SaveRecordMap` is reached from call sites outside the apply loop and as the batch's own per-record fallback when a set-based write fails — which is where it mattered most, since that fallback degraded into two round trips per record.
+
+- d31cba4: A connector can declare a source field excluded from sync.
+
+  There was no way to say "do not sync this field". The nearest lever — deactivating its field map — does not exclude the value, it **reroutes** it: `FieldMappingEngine` captures every unmapped source key into `UnmappedFields`, the writer parks it in `__mj_integration_CustomOverflow`, and the custom-column promoter can later resurrect it as a real column. So the field costs more, not less.
+
+  `SourceFieldInfo.SyncDirective?: 'Sync' | 'Exclude'` closes that. `undefined` means Sync, so connectors that predate this behave exactly as before.
+  - **Persisted with no migration.** `IntegrationSchemaSync` writes the directive into `IntegrationObjectField.Configuration`, an existing JSON column. Overlay semantics match every other attribute — a stated directive wins, a silent connector preserves what is stored — so an operator-set directive survives connectors that never heard of the feature.
+  - **Stripped before flatten and before mapping.** An excluded key reaches neither `MappedFields`, nor `UnmappedFields` (and so never the overflow column), nor the content hash, whose basis is `MappedFields`. An excluded field therefore stops influencing change detection entirely, rather than quietly forcing rewrites. The no-exclusions path allocates nothing.
+  - **Visible in the run log.** The engine resolves the exclusion set once per entity map and emits `sync.entity-map.exclusions` naming what was withheld.
+
+  Existing columns are untouched: exclusion stops fetching into them, and dropping a column stays an operator decision.
+
+- ec71199: Mid-run watermark durability floor — the watermark twin of the keyset checkpoint. A watermark-based connector had no durable position at all until its run ended: a SIGKILL / OOM / container recycle mid-object threw away hours of applied batches, and the next run re-fetched the entire window from the last completed run's watermark. The 25-batch checkpoint now also persists the max watermark seen (`currentWatermark` only advances at the end of a fully-applied batch, so the floor can never point past an unwritten record). The floor is gated on no page-skip gap having occurred — a skipped page can hold records behind the max watermark seen, i.e. a hole behind the floor — and a floor already written is retracted to the pre-run value the moment the first gap appears, restoring the exact hold semantics the post-loop save has always had. Keyset connectors (their position is the seek key) and partition-reconcile maps (their watermark row stores the rollup snapshot) are excluded. `WatermarkService.RestoreValue` is new, accepting null because the prior state may be "no watermark yet".
+- c4e98ce: Enforce within-batch ExternalID identity before mapping.
+
+  ExternalID is the identity the record map keys on, so two records in one batch carrying the same one
+  are two observations of a single source record — never two rows. The write path cannot detect this:
+  it decides insert-vs-update by asking whether the identity exists in the DATABASE, and for a
+  first-time record neither copy does, so both insert and the pair re-inserts on every later sync. The
+  existing fingerprint guard only catches a batch repeated in full (the infinite-loop case), not
+  duplicates inside one batch.
+
+  Measured on a live tenant: one object held 54,119 rows for 42,519 distinct keys — 11,632 excess,
+  across 11,200 duplicate groups that were byte-identical on every captured column and written within
+  the same second, i.e. the source listed the same element twice inside one batch.
+
+  The engine now collapses duplicate identities per batch, keeping the last occurrence (upsert
+  semantics: the later entry is the more recent observation), and reports the count as a
+  `DUPLICATE_IDENTITIES_IN_BATCH` warning rather than silently — a connector emitting duplicate
+  identities is a defect worth fixing at its source. Records with no ExternalID pass through
+  untouched, since collapsing those would merge unrelated rows.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [e7b4833]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/integration-engine-base@6.1.0-edge.4
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.4
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes
