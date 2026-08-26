@@ -3170,19 +3170,27 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * with `runSchemaRefresh: false`, and (since it gained `awaitSchemaRefresh`)
      * no longer something the caller has to sit through.
      *
-     * WHY THIS ONE DEFAULTS TO DETACHED AND ITS SIBLINGS DO NOT.  Create and
-     * Update default to `awaitSchemaRefresh: true` because the caller is in a
-     * wizard, waiting on a form, and the counts ARE the answer they asked for.
-     * Reactivate is a one-click toggle on a connection row, and — unlike its
-     * siblings — its entire durable effect is already committed by the time the
-     * refresh begins: the `Save()` above returned. Blocking the response for the
-     * minutes a live introspect takes cannot make that reactivation any more
-     * true; it can only misreport it.
+     * WHY REACTIVATION NO LONGER SCANS THE SOURCE BY DEFAULT.  Resuming a
+     * connection and rescanning its schema are separate decisions that this
+     * mutation used to fuse. A one-click resume would spend minutes of a
+     * vendor's rate budget on an introspect nobody asked for, and the catalog is
+     * usually exactly as current as it was when the connection was paused.
+     * `IntegrationRefreshConnectorSchema` is the operation for "rescan now", and
+     * a caller that genuinely wants both passes `runSchemaRefresh: true`.
+     *
+     * WHY THAT REFRESH, WHEN REQUESTED, DEFAULTS TO DETACHED AND ITS SIBLINGS DO
+     * NOT.  Create and Update default to `awaitSchemaRefresh: true` because the
+     * caller is in a wizard, waiting on a form, and the counts ARE the answer
+     * they asked for. Reactivate is a one-click toggle on a connection row, and
+     * — unlike its siblings — its entire durable effect is already committed by
+     * the time any refresh begins: the `Save()` above returned. Blocking the
+     * response for the minutes a live introspect takes cannot make that
+     * reactivation any more true; it can only misreport it.
      *
      * And it did. The transport, not this resolver, is what breaks: a held
-     * request dies at the load balancer's fixed ~240s ceiling (Azure App Service
-     * cannot configure it), and the client then shows a resumed connection as a
-     * failure. Note the shape of that bug — the two failure paths BELOW are both
+     * request dies at the load balancer's fixed ceiling, which the app cannot
+     * configure and which differs by front end, and the client then shows a
+     * resumed connection as a failure. Note the shape of that bug — the two failure paths BELOW are both
      * handled correctly, returning `Success: true` with the refresh problem
      * appended, precisely because reactivation already happened. The gateway is
      * the one caller of this mutation that never reaches them.
@@ -3196,7 +3204,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     @Mutation(() => MutationResultOutput)
     async IntegrationReactivateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
-        @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default), re-runs IntegrationConnectorCreationPipeline after reactivating so the catalog reflects the source as it is now. Pass false to reactivate without a live scan — useful when the catalog is known-current, or when the source is large enough that discovery should be scheduled separately." }) runSchemaRefresh: boolean,
+        @Arg("runSchemaRefresh", () => Boolean, { defaultValue: false, description: "When false (default), reactivation ONLY reactivates — no live scan of the source. Resuming a connection and rescanning its schema are separate decisions, and a resume should not spend minutes of a vendor's rate budget nobody asked for; run IntegrationRefreshConnectorSchema when the catalog actually needs refreshing. Pass true to re-run IntegrationConnectorCreationPipeline as part of the reactivation." }) runSchemaRefresh: boolean,
         @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: false, description: "When false (default), the schema refresh is launched detached and this mutation returns as soon as the connection is active, naming the run to tail. Reactivation is already committed at that point, so blocking on a minutes-long live introspect can only delay — or, at the load balancer's fixed request ceiling, misreport — an operation that has already succeeded. Pass true to block until the refresh finishes and get its counts in the message." }) awaitSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
