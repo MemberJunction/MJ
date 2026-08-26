@@ -86,6 +86,22 @@ const MAX_PROMOTIONS_PER_PASS = 25;
 /** Page size for the full-table overflow walks (spread + stale purge). */
 const OVERFLOW_PAGE_SIZE = 500;
 
+/**
+ * Rows the stale purge may WRITE in one pass, the row-wise sibling of {@link MAX_PROMOTIONS_PER_PASS}.
+ *
+ * Each purged row costs one `BaseEntity.Save()` — roughly nine serialized round trips, which is the
+ * only write shape MJ offers today (there is no batched-update provider capability; `TransactionGroup`
+ * gives atomicity, not batching, since both dialect implementations loop one query per item). That
+ * puts the purge around 250 rows/min, so an unbounded sweep of a large table would hold the post-sync
+ * promotion callback open for hours.
+ *
+ * Residue is inert while it waits — the field-map-first terminate check already stops a mapped key
+ * being re-offered as a new column — so draining it across several syncs costs nothing but time.
+ * The budget bounds WRITES, not the scan: the walk keeps reading (page reads are cheap and rows
+ * already purged fall through in memory) so a later pass still reaches residue further down the table.
+ */
+const MAX_PURGE_ROWS_PER_PASS = 1000;
+
 /** An already-promoted key whose value is still sitting in the staging JSON — residue, not a candidate. */
 interface StaleOverflowKey {
     /** The source field name as it appears inside the overflow JSON. */
@@ -887,13 +903,25 @@ export class IntegrationCustomColumnPromoter {
         // leave every purged row hash-mismatched and force a needless rewrite on the next sync.
         const hasHashCol = entityInfo.Fields.some(f => f.Name === CONTENT_HASH_COLUMN);
         const mappedDestFields = hasHashCol ? await this.activeDestinationFields(entityMapID) : [];
-        let rows = 0;
-        await this.forEachOverflowRow(entityName, entityInfo, async row => {
-            const purged = await this.purgeOneRow(row, purgeable, hasHashCol, mappedDestFields);
-            if (purged) rows++;
-            return purged;
-        });
-        LogStatus(`[CustomColumnPromoter] Purged ${purgeable.map(k => k.sourceKey).join(', ')} from the staging JSON of ${rows} row(s) on ${entityName} (already promoted).`);
+        let written = 0;
+        let removedFromSet = 0;
+        await this.forEachOverflowRow(
+            entityName,
+            entityInfo,
+            async row => {
+                const result = await this.purgeOneRow(row, purgeable, hasHashCol, mappedDestFields);
+                if (result.wrote) written++;
+                if (result.leftSet) removedFromSet++;
+                return result.leftSet;
+            },
+            () => written >= MAX_PURGE_ROWS_PER_PASS,
+        );
+        const keys = purgeable.map(k => k.sourceKey).join(', ');
+        if (written >= MAX_PURGE_ROWS_PER_PASS) {
+            LogStatus(`[CustomColumnPromoter] Purged ${keys} from ${written} row(s) on ${entityName} — per-pass budget reached; any remaining residue is purged on the next sync.`);
+        } else {
+            LogStatus(`[CustomColumnPromoter] Purged ${keys} from the staging JSON of ${written} row(s) on ${entityName} (already promoted).`);
+        }
     }
 
     /**
@@ -903,11 +931,15 @@ export class IntegrationCustomColumnPromoter {
      * every later row toward the front, so the offset advances by rows-seen-minus-rows-removed rather
      * than by page size — otherwise the walk skips exactly as many rows as it cleans. Ordering is
      * pinned to the primary key so the offsets refer to a stable sequence across the paged queries.
+     *
+     * `stop` is checked before each row and ends the walk early — a write budget, not a scan limit,
+     * so a capped caller still reads past rows it has nothing to do on. See {@link MAX_PURGE_ROWS_PER_PASS}.
      */
     private async forEachOverflowRow(
         entityName: string,
         entityInfo: EntityInfo,
         visit: (row: BaseEntity) => Promise<boolean>,
+        stop?: () => boolean,
     ): Promise<void> {
         const orderBy = entityInfo.PrimaryKeys.map(pk => pk.Name).join(', ');
         let seen = 0;
@@ -928,25 +960,30 @@ export class IntegrationCustomColumnPromoter {
             }
             const rows = res.Results ?? [];
             for (const row of rows) {
+                if (stop?.()) return;
                 if (await visit(row)) removed++;
+                seen++;
             }
-            seen += rows.length;
             if (rows.length < OVERFLOW_PAGE_SIZE) break;
         }
     }
 
     /**
      * Strips the given already-promoted keys from one row's staging JSON, backfilling any real column
-     * that is still empty. Returns true when the row's JSON went null (it left the filtered set).
+     * that is still empty.
+     *
+     * Reports both facts the caller needs and they are NOT the same: `wrote` is what the per-pass
+     * budget spends (one Save), `leftSet` is whether the row dropped out of the `IS NOT NULL` filter
+     * and so shifts the paged offsets. A row that keeps other unmapped keys is written but stays.
      */
     private async purgeOneRow(
         row: BaseEntity,
         stale: StaleOverflowKey[],
         hasHashCol: boolean,
         mappedDestFields: string[],
-    ): Promise<boolean> {
+    ): Promise<{ wrote: boolean; leftSet: boolean }> {
         const overflow = this.parseOverflow(row.Get(CUSTOM_OVERFLOW_COLUMN));
-        if (!overflow) return false;
+        if (!overflow) return { wrote: false, leftSet: false };
         let changed = false;
         for (const k of stale) {
             if (!Object.prototype.hasOwnProperty.call(overflow, k.sourceKey)) continue;
@@ -955,7 +992,10 @@ export class IntegrationCustomColumnPromoter {
             delete overflow[k.sourceKey];
             changed = true;
         }
-        if (!changed) return false;
+        // Nothing of ours in this row — a pure read, so it costs no budget. This is the case that makes
+        // a capped pass still able to reach residue further down: rows an earlier pass already cleaned
+        // fall through here instead of being re-written.
+        if (!changed) return { wrote: false, leftSet: false };
         const remaining = Object.keys(overflow).length > 0 ? JSON.stringify(overflow) : null;
         row.Set(CUSTOM_OVERFLOW_COLUMN, remaining);
         if (hasHashCol) {
@@ -965,9 +1005,9 @@ export class IntegrationCustomColumnPromoter {
         }
         if (!await row.Save()) {
             LogError(`[CustomColumnPromoter] Overflow purge save failed: ${row.LatestResult?.CompleteMessage ?? 'unknown'}`);
-            return false;
+            return { wrote: false, leftSet: false };
         }
-        return remaining === null;
+        return { wrote: true, leftSet: remaining === null };
     }
 
     /**

@@ -277,6 +277,60 @@ describe('resolveWorkItems — the terminate check becomes spread recovery', () 
     });
 });
 
+describe('purgeOneRow — what the per-pass budget actually spends', () => {
+    function makeRow(values: Record<string, unknown>) {
+        const data = { ...values };
+        return {
+            Get: vi.fn((f: string) => data[f]),
+            Set: vi.fn((f: string, v: unknown) => { data[f] = v; }),
+            Save: vi.fn().mockResolvedValue(true),
+            _data: data,
+        };
+    }
+    function purge(row: ReturnType<typeof makeRow>, stale: Array<{ sourceKey: string; columnName: string }>) {
+        const promoter = new IntegrationCustomColumnPromoter(user, makeProvider());
+        return (promoter as unknown as {
+            purgeOneRow: (r: unknown, s: unknown, h: boolean, m: string[]) => Promise<{ wrote: boolean; leftSet: boolean }>;
+        }).purgeOneRow(row, stale, false, []);
+    }
+
+    it('a row an earlier pass already cleaned costs NO budget and no write', async () => {
+        // This is what lets a capped pass reach residue further down the table: already-purged rows
+        // fall through in memory instead of being re-written.
+        const row = makeRow({ __mj_integration_CustomFields: JSON.stringify({ somethingElse: 1 }) });
+        const res = await purge(row, [{ sourceKey: 'eventCode', columnName: 'eventCode' }]);
+        expect(res).toEqual({ wrote: false, leftSet: false });
+        expect(row.Save).not.toHaveBeenCalled();
+    });
+
+    it('a row that keeps other unmapped keys is WRITTEN but stays in the filtered set', async () => {
+        // wrote and leftSet are different questions: the first spends budget, the second shifts the
+        // paged offsets. Conflating them made the walk skip rows.
+        const row = makeRow({
+            __mj_integration_CustomFields: JSON.stringify({ eventCode: 'ABC', notYetPromoted: 'x' }),
+            eventCode: null,
+        });
+        const res = await purge(row, [{ sourceKey: 'eventCode', columnName: 'eventCode' }]);
+        expect(res).toEqual({ wrote: true, leftSet: false });
+        expect(row._data['eventCode']).toBe('ABC');
+        expect(JSON.parse(row._data['__mj_integration_CustomFields'] as string)).toEqual({ notYetPromoted: 'x' });
+    });
+
+    it('the last key leaving takes the row out of the set', async () => {
+        const row = makeRow({ __mj_integration_CustomFields: JSON.stringify({ eventCode: 'ABC' }), eventCode: null });
+        const res = await purge(row, [{ sourceKey: 'eventCode', columnName: 'eventCode' }]);
+        expect(res).toEqual({ wrote: true, leftSet: true });
+        expect(row._data['__mj_integration_CustomFields']).toBeNull();
+    });
+
+    it('never overwrites a column that already has a value, but still strips the key', async () => {
+        const row = makeRow({ __mj_integration_CustomFields: JSON.stringify({ eventCode: 'ABC' }), eventCode: 'SETTLED' });
+        const res = await purge(row, [{ sourceKey: 'eventCode', columnName: 'eventCode' }]);
+        expect(row._data['eventCode']).toBe('SETTLED');
+        expect(res.leftSet).toBe(true);
+    });
+});
+
 describe('spreadOneRow — idempotent backfill', () => {
     function makeRow(values: Record<string, unknown>) {
         const data = { ...values };
