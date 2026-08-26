@@ -45,16 +45,49 @@ export interface KeylessRefusal {
  */
 export function DecideKeylessRefusal(
     mappedPK: string | null | undefined,
-    pkFields: ReadonlyArray<KeyFieldLike>
+    pkFields: ReadonlyArray<KeyFieldLike>,
+    missingKeyNames?: ReadonlyArray<string>
 ): KeylessRefusal {
     if (mappedPK != null) {
         return { Refuse: false, KeyNames: '' };
     }
     const softKeys = pkFields.filter(f => f.IsSoftPrimaryKey === true);
+    if (softKeys.length === 0) {
+        return { Refuse: false, KeyNames: '' };
+    }
+    // REFUSE on any soft key, but NAME only the columns actually absent. `mappedPK == null` means
+    // some part of the key was empty, not all of it: on a composite key, naming every soft column
+    // sends the operator to a field map that is working. When the caller cannot say which were
+    // missing, fall back to naming them all rather than naming none.
+    const missing = missingKeyNames
+        ? softKeys.filter(f => missingKeyNames.some(n => n.toLowerCase() === f.Name.toLowerCase()))
+        : softKeys;
     return {
-        Refuse: softKeys.length > 0,
-        KeyNames: softKeys.map(f => f.Name).join(', '),
+        Refuse: true,
+        KeyNames: (missing.length > 0 ? missing : softKeys).map(f => f.Name).join(', '),
     };
+}
+
+/**
+ * The primary-key columns this record carries no usable value for — the input that lets
+ * {@link DecideKeylessRefusal} name the right column. Mirrors `extractMappedPrimaryKey`'s
+ * lookup (exact name, then case-insensitive) and its emptiness test, so the two agree about
+ * which fields count as absent.
+ */
+export function MissingKeyFieldNames(
+    mappedFields: Record<string, unknown> | null | undefined,
+    pkFields: ReadonlyArray<KeyFieldLike>,
+    serialize: (v: unknown) => string
+): string[] {
+    const fields = mappedFields ?? {};
+    const lower = new Map<string, unknown>();
+    for (const [k, v] of Object.entries(fields)) lower.set(k.toLowerCase(), v);
+    return pkFields
+        .filter(pk => {
+            const v = (pk.Name in fields) ? fields[pk.Name] : lower.get(pk.Name.toLowerCase());
+            return serialize(v) === '';
+        })
+        .map(pk => pk.Name);
 }
 
 /**

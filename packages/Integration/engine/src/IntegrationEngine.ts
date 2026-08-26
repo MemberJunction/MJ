@@ -38,7 +38,7 @@ import type {
 } from './types.js';
 import { ClassifyError, IsRetryableError } from './types.js';
 import { WithRetry } from './RetryRunner.js';
-import { DecideKeylessRefusal, DescribeKeylessRefusal, type KeyFieldLike } from './KeylessRecordGuard.js';
+import { DecideKeylessRefusal, DescribeKeylessRefusal, MissingKeyFieldNames, type KeyFieldLike } from './KeylessRecordGuard.js';
 import { WithTimeout, OperationTimeoutError, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
@@ -4131,7 +4131,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // `mappedPK == null` is legitimate ONLY when the destination generates its own key (an
         // identity column or a server-assigned UUID), which is why the check is scoped to soft PKs
         // rather than applied to every table.
-        const keyless = DecideKeylessRefusal(mappedPK, pkFields as ReadonlyArray<KeyFieldLike>);
+        const keyless = DecideKeylessRefusal(
+            mappedPK,
+            pkFields as ReadonlyArray<KeyFieldLike>,
+            MissingKeyFieldNames(record.MappedFields, pkFields as ReadonlyArray<KeyFieldLike>, serializeKeyValue),
+        );
         if (keyless.Refuse) {
             const detail = DescribeKeylessRefusal(record.MJEntityName, keyless.KeyNames);
             keylessLogger?.emit('sync.record.error', {

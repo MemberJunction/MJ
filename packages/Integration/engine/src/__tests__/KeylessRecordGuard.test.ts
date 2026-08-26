@@ -11,7 +11,7 @@
  * data-integrity failure into a loud per-record skip that names the field map to fix.
  */
 import { describe, it, expect } from 'vitest';
-import { DecideKeylessRefusal, DescribeKeylessRefusal, type KeyFieldLike } from '../KeylessRecordGuard';
+import { MissingKeyFieldNames, DecideKeylessRefusal, DescribeKeylessRefusal, type KeyFieldLike } from '../KeylessRecordGuard';
 
 const softKey = (name: string): KeyFieldLike => ({ Name: name, IsSoftPrimaryKey: true });
 const generatedKey = (name: string): KeyFieldLike => ({ Name: name, IsSoftPrimaryKey: false });
@@ -70,5 +70,55 @@ describe('DescribeKeylessRefusal', () => {
         expect(msg).toContain('discovery');
         // And why the engine didn't just write it anyway.
         expect(msg).toContain('re-inserted on every subsequent sync');
+    });
+});
+
+describe('DecideKeylessRefusal — naming the RIGHT column', () => {
+    const soft = (Name: string) => ({ Name, IsSoftPrimaryKey: true });
+
+    it('names only the missing part of a composite key, not every soft column', () => {
+        // The whole point: customer_id is populated and order_id is not. Naming both sends the
+        // operator to a field map that is working.
+        const r = DecideKeylessRefusal(null, [soft('customer_id'), soft('order_id')], ['order_id']);
+        expect(r.Refuse).toBe(true);
+        expect(r.KeyNames).toBe('order_id');
+    });
+
+    it('names every soft column when the caller cannot say which were missing', () => {
+        const r = DecideKeylessRefusal(null, [soft('customer_id'), soft('order_id')]);
+        expect(r.KeyNames).toBe('customer_id, order_id');
+    });
+
+    it('falls back to all soft columns rather than naming none', () => {
+        // A missing-list that overlaps nothing (case drift, a renamed column) must not produce an
+        // empty message — a refusal that names no column is worse than one that names too many.
+        const r = DecideKeylessRefusal(null, [soft('order_id')], ['something_else']);
+        expect(r.Refuse).toBe(true);
+        expect(r.KeyNames).toBe('order_id');
+    });
+
+    it('matches missing names case-insensitively, as the key extractor does', () => {
+        const r = DecideKeylessRefusal(null, [soft('Order_ID'), soft('customer_id')], ['order_id']);
+        expect(r.KeyNames).toBe('Order_ID');
+    });
+});
+
+describe('MissingKeyFieldNames', () => {
+    const ser = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+    const soft = (Name: string) => ({ Name, IsSoftPrimaryKey: true });
+
+    it('reports the empty parts of a composite key by their declared names', () => {
+        const missing = MissingKeyFieldNames({ customer_id: 'C1', order_id: null }, [soft('customer_id'), soft('order_id')], ser);
+        expect(missing).toEqual(['order_id']);
+    });
+
+    it('finds a value whose mapped key differs only in case', () => {
+        const missing = MissingKeyFieldNames({ ORDER_ID: 'O1' }, [soft('order_id')], ser);
+        expect(missing).toEqual([]);
+    });
+
+    it('treats an absent field and an empty one alike', () => {
+        const missing = MissingKeyFieldNames({}, [soft('order_id')], ser);
+        expect(missing).toEqual(['order_id']);
     });
 });
