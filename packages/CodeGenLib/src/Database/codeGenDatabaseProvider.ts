@@ -1680,12 +1680,28 @@ export abstract class CodeGenDatabaseProvider {
      */
     protected getViewColumnsBySchemaSQL(schemas: string[]): string {
         if (!schemas || schemas.length === 0) return '';
-        const list = schemas.map(s => `'${s.replace(/'/g, "''")}'`).join(', ');
+        // Case-INSENSITIVE on both sides, deliberately.
+        //
+        // The caller keys and looks up its map with `.toLowerCase()`, so matching the
+        // catalog verbatim here left the two halves disagreeing about case. On
+        // PostgreSQL an unquoted schema is folded to lowercase in the catalog, so an
+        // entity whose SchemaName is stored with any other casing matched no rows,
+        // fell into the "view does not exist" skip, and was silently dropped from
+        // validation — a validator reporting nothing, which is the exact failure this
+        // check exists to end.
+        //
+        // LOWER() on both sides rather than lowercasing only the list: that is correct
+        // whichever way the schema was actually created (PG folds unquoted, keeps
+        // quoted; SQL Server stores as-written and usually compares case-insensitively
+        // by collation), and it makes the SQL agree with the JS by construction rather
+        // than by coincidence. The cost is a scan of information_schema over a handful
+        // of schemas, which is nothing.
+        const list = schemas.map(s => `'${s.toLowerCase().replace(/'/g, "''")}'`).join(', ');
         return `SELECT c.table_schema AS schema_name, c.table_name AS view_name, c.column_name AS column_name
                   FROM information_schema.columns c
                   JOIN information_schema.views v
                     ON v.table_schema = c.table_schema AND v.table_name = c.table_name
-                 WHERE c.table_schema IN (${list})`;
+                 WHERE LOWER(c.table_schema) IN (${list})`;
     }
 }
 
