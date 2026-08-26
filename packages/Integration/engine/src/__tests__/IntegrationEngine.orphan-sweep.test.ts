@@ -38,6 +38,23 @@ function mockEntity(overrides: Partial<MockEntity> = {}): MockEntity {
     };
 }
 
+/**
+ * The private members this suite drives. Named explicitly rather than reached for with `as any`:
+ * the cast still has to happen (they are private), but writing the signature down means a change
+ * to either member breaks this file at compile time instead of at run time.
+ */
+type OrphanSweepInternals = {
+    LoadAllRecordMaps: unknown;
+    DeleteOrphanedRecords: (
+        companyIntegration: { ID: string },
+        entityMap: { ID: string; Entity: string; ExternalObjectName: string; DeleteBehavior: string; EntityID: string },
+        fetchedExternalIDs: ReadonlySet<string>,
+        result: { RecordsDeleted: number },
+        contextUser: { ID: string },
+        logger: { warning: (object: string, code: string, message: string, data?: unknown) => void },
+    ) => Promise<unknown>;
+};
+
 function harness(opts: {
     deleteBehavior: 'HardDelete' | 'SoftDelete' | 'DoNothing';
     mapRows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>;
@@ -59,14 +76,13 @@ function harness(opts: {
         }),
     };
     Object.defineProperty(engine, 'ProviderToUse', { get: () => md });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (engine as any).LoadAllRecordMaps = vi.fn().mockResolvedValue({ Rows: opts.mapRows, Complete: true });
+    const internals = engine as unknown as OrphanSweepInternals;
+    internals.LoadAllRecordMaps = vi.fn().mockResolvedValue({ Rows: opts.mapRows, Complete: true });
     const warnings: Array<{ code: string; data?: unknown }> = [];
     const logger = { warning: (_o: string, code: string, _m: string, data?: unknown) => warnings.push({ code, data }) };
     const result = { RecordsDeleted: 0 };
     const run = async () =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (engine as any).DeleteOrphanedRecords(
+        internals.DeleteOrphanedRecords(
             { ID: 'ci-1' },
             { ID: 'em-1', Entity: 'Widgets', ExternalObjectName: 'Widget', DeleteBehavior: opts.deleteBehavior, EntityID: 'e-1' },
             new Set(opts.fetched),
