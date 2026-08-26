@@ -1,9 +1,12 @@
 name: Unit Tests
 
 on:
+  # Line branches run this gate too (process doc 5.2 rule 4): lts/* is what a publish
+  # ships from and what customers pin to, so a break discovered after merge is worse
+  # here than on next. Without this the whole workflow was inert on every lts/* PR.
   workflow_dispatch:
   pull_request:
-    branches: [next]
+    branches: [next, 'lts/**']
     paths:
       - 'package.json'
       - 'package-lock.json'
@@ -29,7 +32,7 @@ on:
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
   push:
-    branches: [next]
+    branches: [next, 'lts/**']
   # Nightly full run as a second safety net (catches flaky/resource failures + drift).
   schedule:
     - cron: '0 7 * * *'
@@ -193,11 +196,14 @@ jobs:
           path: coverage/
           retention-days: 30
 
-      # Backstop-failure alert (rkihm-BC #2990): a red PUSH (merge to next) or nightly SCHEDULE run
-      # means a runtime-only break (e.g. @RegisterClass/ClassFactory coupling with no package.json edge)
-      # slipped past PR affected-filtering and `next` is now red. These runs gate nothing, so surface the
-      # failure as a GitHub issue instead of leaving it to whoever happens to open the Actions tab. Only
-      # fires on the backstop events (never on PRs, where the red check is already visible + gating).
+      # Backstop-failure alert (rkihm-BC #2990): a red PUSH (merge to next or to a line
+      # branch) or nightly SCHEDULE run means a runtime-only break (e.g. @RegisterClass/ClassFactory
+      # coupling with no package.json edge) slipped past PR affected-filtering and that branch is now
+      # red. These runs gate nothing, so surface the failure as a GitHub issue instead of leaving it to
+      # whoever happens to open the Actions tab. Only fires on the backstop events (never on PRs, where
+      # the red check is already visible + gating). The branch is interpolated rather than hardcoded:
+      # this workflow runs on lts/* too, and an alarm that always says "next" sends triage to the
+      # wrong branch.
       - name: Alert on backstop failure
         if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')
         env:
@@ -205,6 +211,6 @@ jobs:
         run: |
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           gh issue create \
-            --title "🔴 Unit-test backstop failed on next (${GITHUB_SHA:0:7})" \
-            --body "The full-suite **backstop** (\`${{ github.event_name }}\`) failed on \`next\` — a break slipped past PR affected-filtering, so \`next\` is red. Run: ${RUN_URL}. Please triage per CONTRIBUTING (owner TBD)." \
+            --title "🔴 Unit-test backstop failed on ${GITHUB_REF_NAME} (${GITHUB_SHA:0:7})" \
+            --body "The full-suite **backstop** (\`${{ github.event_name }}\`) failed on \`${GITHUB_REF_NAME}\` — a break slipped past PR affected-filtering, so that branch is red. Run: ${RUN_URL}. Please triage per CONTRIBUTING (owner TBD)." \
             || echo "::error::Backstop failed AND alert-issue creation failed — see ${RUN_URL}"

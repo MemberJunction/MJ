@@ -1,10 +1,14 @@
 name: Build all packages for testing
 
 on:
+  # Line branches run this gate too (process doc 5.2 rule 4): lts/* is what a publish
+  # ships from and what customers pin to, so a break discovered after merge is worse
+  # here than on next. Without this the whole workflow was inert on every lts/* PR.
   workflow_dispatch:
   push:
     branches:
       - next
+      - 'lts/**'
     paths:
       - 'package-lock.json'
       - 'packages/**'
