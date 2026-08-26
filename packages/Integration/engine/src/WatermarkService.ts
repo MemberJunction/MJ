@@ -65,6 +65,29 @@ export class WatermarkService {
     }
 
     /**
+     * Puts the watermark VALUE back to a prior state — the undo for a mid-run durability floor
+     * (IntegrationEngine §8a) after a page-skip gap makes that floor unsafe. Accepts null because
+     * the prior state may be "no watermark yet" (first run / the row was created BY the floor);
+     * a null value re-triggers a full window fetch on the next run, which is exactly the hold
+     * semantics the gap requires. A missing row means no floor was ever written — nothing to do.
+     */
+    public async RestoreValue(
+        entityMapID: string,
+        value: string | null,
+        contextUser: UserInfo,
+        direction: 'Pull' | 'Push' = 'Pull'
+    ): Promise<void> {
+        const existing = await this.Load(entityMapID, contextUser, direction);
+        if (!existing) return;
+        existing.WatermarkValue = value;
+        existing.LastSyncAt = new Date();
+        const saved = await existing.Save();
+        if (!saved) {
+            throw new Error(`Failed to restore watermark for EntityMapID=${entityMapID}`);
+        }
+    }
+
+    /**
      * Updates the progress fields on an existing watermark mid-sync without changing
      * the WatermarkValue. Updates RecordsSynced to the cumulative total written so far
      * and refreshes LastSyncAt so the DB reflects live progress between batches.
