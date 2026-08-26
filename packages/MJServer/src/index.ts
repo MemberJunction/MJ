@@ -82,6 +82,7 @@ import {
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
 import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount } from '@memberjunction/server-extensions-core';
+import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
@@ -1285,6 +1286,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const extensionLoader = new ServerExtensionLoader();
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // (and remains the only source for host-only extensions such as Slack/Teams).
+  // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
+  // so a new pre-auth app.use(...) in serve() must also be added to
+  // coreReservedServerExtensionRoots() — otherwise an Open App can claim it.
   const extensionConfigs = prepareServerExtensionConfigs(
     mergeServerExtensionConfigs(
       options?.serverExtensions ?? [],
@@ -1293,6 +1297,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     {
       onInvalid: (message) => LogError(message),
       onOverlap: (message) => LogStatus(message),
+      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
     },
   );
   // These routes mount BEFORE createUnifiedAuthMiddleware. Name every one so an

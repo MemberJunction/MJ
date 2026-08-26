@@ -292,6 +292,36 @@ describe('validateServerExtensionRootPath', () => {
         expect(validateServerExtensionRootPath('/healthcare')).toBeNull();
         expect(validateServerExtensionRootPath('/authorize-me')).toBeNull();
     });
+
+    it('rejects reserved prefixes case-insensitively (Express routing is case-insensitive)', () => {
+        expect(validateServerExtensionRootPath('/Auth')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/AUTH/providers')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/GraphQL')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/OAuth')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/Health')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/Magic-Link/redeem')).toMatch(/reserved prefix/);
+        // Sibling of /health, not nested under it — needs extraReservedRoots from serve().
+        expect(validateServerExtensionRootPath('/healthcheck')).toBeNull();
+        expect(validateServerExtensionRootPath('/Healthcheck')).toBeNull();
+    });
+
+    it('rejects extra reserved roots from the running server, including parent-path shadowing', () => {
+        const extra = ['/healthcheck', '/esignature', '/media', '/widget', '/telephony/twilio', '/api'];
+        expect(validateServerExtensionRootPath('/healthcheck', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/Healthcheck', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/esignature/webhook', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/media', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/widget/session', extra)).toMatch(/reserved prefix/);
+        // Parent of a reserved mount: Express prefix-match would shadow the core route.
+        expect(validateServerExtensionRootPath('/telephony', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/telephony/twilio', extra)).toMatch(/reserved prefix/);
+        // graphqlRootPath other than the static /graphql baseline.
+        expect(validateServerExtensionRootPath('/api', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/api/v1', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/apiv2', extra)).toBeNull();
+        expect(validateServerExtensionRootPath('/checkout', extra)).toBeNull();
+        expect(validateServerExtensionRootPath('/healthcare', extra)).toBeNull();
+    });
 });
 
 describe('serverExtensionRootsOverlap', () => {
@@ -300,6 +330,11 @@ describe('serverExtensionRootsOverlap', () => {
         expect(serverExtensionRootsOverlap('/webhooks', '/webhooks/payments')).toBe(true);
         expect(serverExtensionRootsOverlap('/a', '/b')).toBe(false);
         expect(serverExtensionRootsOverlap('/checkout', '/check')).toBe(false);
+    });
+
+    it('treats casing as overlapping because Express does', () => {
+        expect(serverExtensionRootsOverlap('/Checkout', '/checkout')).toBe(true);
+        expect(serverExtensionRootsOverlap('/Webhooks', '/webhooks/payments')).toBe(true);
     });
 });
 
@@ -331,6 +366,37 @@ describe('prepareServerExtensionConfigs', () => {
         expect(result).toHaveLength(3);
         expect(onOverlap).toHaveBeenCalledWith(expect.stringContaining('overlapping RootPaths'));
         expect(result.find((c) => c.DriverClass === 'Off')?.Enabled).toBe(false);
+    });
+
+    it('drops extra-reserved and cased reserved roots fail-closed, keeping original RootPath casing', () => {
+        const onInvalid = vi.fn();
+        const result = prepareServerExtensionConfigs(
+            [
+                { Enabled: true, DriverClass: 'Checkout', RootPath: '/Checkout', Settings: {} },
+                { Enabled: true, DriverClass: 'AuthCased', RootPath: '/Auth', Settings: {} },
+                { Enabled: true, DriverClass: 'Healthcheck', RootPath: '/healthcheck', Settings: {} },
+                { Enabled: true, DriverClass: 'TelephonyParent', RootPath: '/telephony', Settings: {} },
+            ],
+            {
+                onInvalid,
+                extraReservedRoots: ['/healthcheck', '/telephony/twilio'],
+            }
+        );
+        expect(result.map((c) => c.DriverClass)).toEqual(['Checkout']);
+        expect(result[0].RootPath).toBe('/Checkout');
+        expect(onInvalid).toHaveBeenCalledTimes(3);
+    });
+
+    it('warns on case-insensitive overlap between enabled extensions', () => {
+        const onOverlap = vi.fn();
+        prepareServerExtensionConfigs(
+            [
+                { Enabled: true, DriverClass: 'A', RootPath: '/Webhooks', Settings: {} },
+                { Enabled: true, DriverClass: 'B', RootPath: '/webhooks/payments', Settings: {} },
+            ],
+            { onOverlap }
+        );
+        expect(onOverlap).toHaveBeenCalledTimes(1);
     });
 });
 

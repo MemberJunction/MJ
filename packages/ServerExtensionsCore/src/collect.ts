@@ -198,9 +198,10 @@ export function mergeServerExtensionConfigs(
 export const RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = ['/'];
 
 /**
- * Prefixes of core MJServer routes. An extension RootPath that equals one of these
- * or is nested under it would mount pre-auth on top of (or instead of) a core path.
- * Matching is prefix-with-slash so `/health` rejects `/health/extensions` but not `/healthcare`.
+ * Baseline prefixes of core MJServer routes (always applied, including at discovery).
+ * Matching is case-insensitive and bidirectional — see `validateServerExtensionRootPath`.
+ * Prefix-with-slash so `/health` rejects `/health/extensions` but not `/healthcare`
+ * (sibling `/healthcheck` is supplied via `extraReservedRoots` from `serve()`).
  */
 export const RESERVED_SERVER_EXTENSION_ROOT_PREFIXES: readonly string[] = [
     '/graphql',
@@ -220,11 +221,27 @@ function normalizeRoot(rootPath: string): string {
     return trimmed.replace(/\/+$/, '') || '/';
 }
 
+/** Case-folded root for comparison. Express routing is case-insensitive by default. */
+function foldRoot(rootPath: string): string {
+    return normalizeRoot(rootPath).toLowerCase();
+}
+
 /**
  * Returns an error message when `rootPath` is unsafe to mount pre-auth, or `null` when it is usable.
  * Fail closed: invalid paths must not be mounted.
+ *
+ * Reserved matching is case-insensitive (Express does not set `case sensitive routing`)
+ * and bidirectional: claiming a parent of a reserved prefix (`/telephony` vs `/telephony/twilio`)
+ * is also a collision because Express prefix-matches the parent.
+ *
+ * `extraReservedRoots` is the running server's actual mounts (graphqlRootPath, widget, …)
+ * so this check cannot drift from `serve()`. Discovery-time normalize uses only the
+ * static baseline; `prepareServerExtensionConfigs` passes the extras.
  */
-export function validateServerExtensionRootPath(rootPath: string): string | null {
+export function validateServerExtensionRootPath(
+    rootPath: string,
+    extraReservedRoots?: readonly string[]
+): string | null {
     const raw = rootPath.trim();
     if (!raw) {
         return 'RootPath is empty';
@@ -238,22 +255,32 @@ export function validateServerExtensionRootPath(rootPath: string): string | null
     if (/[*?[\](){}]/.test(raw)) {
         return `RootPath '${raw}' must not contain wildcards or glob characters`;
     }
-    const normalized = normalizeRoot(raw);
-    if (RESERVED_SERVER_EXTENSION_ROOTS.includes(normalized)) {
+    const folded = foldRoot(raw);
+    if (RESERVED_SERVER_EXTENSION_ROOTS.some((r) => foldRoot(r) === folded)) {
         return `RootPath '${raw}' is reserved`;
     }
-    for (const prefix of RESERVED_SERVER_EXTENSION_ROOT_PREFIXES) {
-        if (normalized === prefix || normalized.startsWith(`${prefix}/`)) {
-            return `RootPath '${raw}' collides with the reserved prefix '${prefix}'`;
+    const reservedPrefixes: string[] = [
+        ...RESERVED_SERVER_EXTENSION_ROOT_PREFIXES,
+        ...(extraReservedRoots ?? []).map((s) => (typeof s === 'string' ? s.trim() : '')).filter((s) => s.startsWith('/')),
+    ];
+    const seen = new Set<string>();
+    for (const prefix of reservedPrefixes) {
+        const foldedPrefix = foldRoot(prefix);
+        if (seen.has(foldedPrefix)) {
+            continue;
+        }
+        seen.add(foldedPrefix);
+        if (serverExtensionRootsOverlap(raw, prefix)) {
+            return `RootPath '${raw}' collides with the reserved prefix '${normalizeRoot(prefix)}'`;
         }
     }
     return null;
 }
 
-/** True when two roots are equal or one is a nested path of the other. */
+/** True when two roots are equal or one is a nested path of the other (case-insensitive). */
 export function serverExtensionRootsOverlap(a: string, b: string): boolean {
-    const na = normalizeRoot(a);
-    const nb = normalizeRoot(b);
+    const na = foldRoot(a);
+    const nb = foldRoot(b);
     if (na === nb) {
         return true;
     }
@@ -262,6 +289,12 @@ export function serverExtensionRootsOverlap(a: string, b: string): boolean {
 
 export interface PrepareServerExtensionOptions extends NormalizeServerExtensionOptions {
     onOverlap?: (message: string) => void;
+    /**
+     * Additional reserved roots from the running server (graphqlRootPath, WIDGET_MOUNT_PATH, …).
+     * Compared case-insensitively and bidirectionally (an extension at `/telephony` collides
+     * with a core mount at `/telephony/twilio`).
+     */
+    extraReservedRoots?: readonly string[];
 }
 
 /**
@@ -275,7 +308,7 @@ export function prepareServerExtensionConfigs(
 ): ServerExtensionConfig[] {
     const kept: ServerExtensionConfig[] = [];
     for (const entry of configs ?? []) {
-        const rootError = validateServerExtensionRootPath(entry.RootPath ?? '');
+        const rootError = validateServerExtensionRootPath(entry.RootPath ?? '', options?.extraReservedRoots);
         if (rootError) {
             invalid(options, `Dropping server extension '${entry.DriverClass}': ${rootError}`);
             continue;
