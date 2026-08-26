@@ -82,7 +82,13 @@ describe('SQLServerTransactionGroup.Submit', () => {
     Metadata.Provider = previousProvider as IMetadataProvider;
   });
 
-  it('executes all statements in order inside ONE transaction and commits at the end', async () => {
+  const SENTINEL = '__mj_batch_item';
+  const sentinel = (i: number) => [{ [SENTINEL]: i }];
+
+  it('sends the whole group in ONE round trip inside ONE transaction, and maps each result back to its item', async () => {
+    // The group has no variable dependencies, so nothing here needs anything else to have run
+    // first — the condition under which N statements can travel as one. The SQL is unchanged:
+    // same generated procedures, same Record Changes writes, same save events. Only trips change.
     const entityInfo = makeWidgetEntityInfo();
     const entityA = makeSavedWidgetEntity(entityInfo, TEST_USER);
     const entityB = makeSavedWidgetEntity(entityInfo, TEST_USER);
@@ -93,22 +99,24 @@ describe('SQLServerTransactionGroup.Submit', () => {
     group.AddTransaction(b.item);
     const rowA = { ID: 'w-a', Name: 'A' };
     const rowB = { ID: 'w-b', Name: 'B' };
-    mssqlState.QueueResult({ rows: [rowA] });
-    mssqlState.QueueResult({ rows: [rowB] });
+    mssqlState.QueueResult({ recordsets: [sentinel(0), [rowA], sentinel(1), [rowB]] });
 
     const success = await group.Submit();
 
     expect(success).toBe(true);
     expect(group.Status).toBe('Complete');
-    // Exact connection choreography: begin → statement A → statement B → commit
-    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
-    expect(mssqlState.Queries.map((q) => q.sql)).toEqual([
-      'EXEC [dbo].spCreateWidget @Name=N\'A\'',
-      'EXEC [dbo].spUpdateWidget @Name=N\'B\'',
-    ]);
-    // Every statement ran ON the transaction, not on the pool
-    expect(mssqlState.Queries.every((q) => q.viaTransaction)).toBe(true);
-    // Result rows were post-processed by the provider and delivered to callbacks
+    // begin → ONE query → commit. Previously this was one query PER item.
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'commit']);
+    expect(mssqlState.Queries).toHaveLength(1);
+    // Both statements are present, in order, each opened by its own sentinel.
+    const sent = mssqlState.Queries[0].sql;
+    expect(sent).toContain('EXEC [dbo].spCreateWidget');
+    expect(sent).toContain('EXEC [dbo].spUpdateWidget');
+    expect(sent.indexOf('spCreateWidget')).toBeLessThan(sent.indexOf('spUpdateWidget'));
+    expect(sent).toContain(`SELECT 0 AS [${SENTINEL}]`);
+    expect(sent).toContain(`SELECT 1 AS [${SENTINEL}]`);
+    expect(mssqlState.Queries[0].viaTransaction).toBe(true);
+    // Each item still receives ITS OWN row, post-processed by the provider.
     expect(providerStub.ProcessEntityRows).toHaveBeenCalledTimes(2);
     expect(a.callback).toHaveBeenCalledWith(rowA, true);
     expect(b.callback).toHaveBeenCalledWith(rowB, true);
@@ -122,13 +130,13 @@ describe('SQLServerTransactionGroup.Submit', () => {
       'w-0001',
     ]);
     group.AddTransaction(item);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001', Name: 'Renamed' }] });
+    mssqlState.QueueResult({ recordsets: [sentinel(0), [{ ID: 'w-0001', Name: 'Renamed' }]] });
 
     const success = await group.Submit();
 
     expect(success).toBe(true);
     expect(mssqlState.Queries).toHaveLength(1);
-    expect(mssqlState.Queries[0].sql).toBe('UPDATE Widget SET Name = @p0 WHERE ID = @p1');
+    expect(mssqlState.Queries[0].sql).toContain('UPDATE Widget SET Name = @p0 WHERE ID = @p1');
     expect(mssqlState.Queries[0].inputs).toEqual([
       { name: 'p0', value: 'Renamed' },
       { name: 'p1', value: 'w-0001' },
@@ -136,7 +144,35 @@ describe('SQLServerTransactionGroup.Submit', () => {
     expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'commit']);
   });
 
-  it('rolls back immediately on the first failing statement — remaining statements never run, nothing commits', async () => {
+  it('numbers parameters ACROSS items, so two items cannot bind each other values', async () => {
+    // One request carries ONE parameter namespace. Two items that each rendered `?` would both
+    // want @p0 — the second silently overwriting the first — unless numbering is global.
+    const entityInfo = makeWidgetEntityInfo();
+    const group = new SQLServerTransactionGroup();
+    const a = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'UPDATE Widget SET Name = ? WHERE ID = ?', pool, ['A', 'w-1']);
+    const b = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'UPDATE Widget SET Name = ? WHERE ID = ?', pool, ['B', 'w-2']);
+    group.AddTransaction(a.item);
+    group.AddTransaction(b.item);
+    mssqlState.QueueResult({ recordsets: [sentinel(0), [{ ID: 'w-1' }], sentinel(1), [{ ID: 'w-2' }]] });
+
+    await group.Submit();
+
+    const sent = mssqlState.Queries[0].sql;
+    expect(sent).toContain('SET Name = @p0 WHERE ID = @p1');
+    expect(sent).toContain('SET Name = @p2 WHERE ID = @p3');
+    expect(mssqlState.Queries[0].inputs).toEqual([
+      { name: 'p0', value: 'A' },
+      { name: 'p1', value: 'w-1' },
+      { name: 'p2', value: 'B' },
+      { name: 'p3', value: 'w-2' },
+    ]);
+  });
+
+  it('a failure anywhere in the batch rolls the whole thing back and commits nothing', async () => {
+    // SEMANTIC NOTE. Serially, the client stopped SENDING after the first failure, so later
+    // statements were never transmitted. Batched, they travel together and the server may reach
+    // some of them before the error. The guarantee that matters is unchanged and is what this
+    // asserts: the transaction rolls back, NOTHING commits, and every item reports failure.
     const entityInfo = makeWidgetEntityInfo();
     const group = new SQLServerTransactionGroup();
     const a = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Create', 'STATEMENT 1', pool);
@@ -145,43 +181,38 @@ describe('SQLServerTransactionGroup.Submit', () => {
     group.AddTransaction(a.item);
     group.AddTransaction(b.item);
     group.AddTransaction(c.item);
-    mssqlState.QueueResult({ rows: [{ ID: '1' }] });
     mssqlState.QueueResult({ error: new Error('PK violation on STATEMENT 2') });
 
     const success = await group.Submit();
 
     expect(success).toBe(false);
     expect(group.Status).toBe('Failed');
-    // begin → stmt1 → stmt2 (fails) → rollback. Statement 3 never executes; commit never happens.
-    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'rollback']);
-    expect(mssqlState.Queries.map((q) => q.sql)).toEqual(['STATEMENT 1', 'STATEMENT 2']);
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'rollback']);
     expect(mssqlState.EventKinds()).not.toContain('commit');
-    // Submit's failure path reports the error to EVERY item's callback with success=false
     for (const { callback } of [a, b, c]) {
       expect(callback).toHaveBeenCalledTimes(1);
       expect(callback.mock.calls[0][1]).toBe(false);
     }
   });
 
-  it('treats an empty recordset as a failed item but still commits (no-exception path) and Submit returns false', async () => {
+  it('treats an item that returned no rows as failed, while the batch still commits', async () => {
+    // No exception was thrown, so the transaction still commits — only the group RESULT reflects
+    // the failed item. Load-bearing behaviour, preserved. The item that returned nothing emits no
+    // result set at all, which is exactly why results are split by sentinel rather than zipped.
     const entityInfo = makeWidgetEntityInfo();
     const group = new SQLServerTransactionGroup();
     const a = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'STATEMENT 1', pool);
     const b = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'STATEMENT 2', pool);
     group.AddTransaction(a.item);
     group.AddTransaction(b.item);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-1' }] });
-    mssqlState.QueueResult({ rows: [] }); // succeeded SQL, but no row returned
+    mssqlState.QueueResult({ recordsets: [sentinel(0), [{ ID: 'w-1' }], sentinel(1)] });
 
     const success = await group.Submit();
 
     expect(success).toBe(false);
     expect(group.Status).toBe('Failed');
-    // No exception was thrown, so the transaction still commits — only the group
-    // RESULT reflects the failed item. This is load-bearing current behavior.
-    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'commit']);
     expect(a.callback).toHaveBeenCalledWith({ ID: 'w-1' }, true);
-    // The empty-recordset item reports a falsy success flag to its callback
     expect(b.callback.mock.calls[0][1]).toBeFalsy();
   });
 
@@ -240,7 +271,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     const { item } = makeItem(entity, 'Update', 'STATEMENT 1', pool);
     group.AddTransaction(item);
     group.RegisterPreprocessing(entity);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ recordsets: [sentinel(0), [{ ID: 'w-0001' }]] });
 
     const submitPromise = group.Submit();
     // Give the event loop a chance — Submit must be parked on preprocessing
@@ -271,7 +302,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     const completed = new SQLServerTransactionGroup();
     const okItem = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'OK', pool);
     completed.AddTransaction(okItem.item);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ recordsets: [sentinel(0), [{ ID: 'w-0001' }]] });
     await completed.Submit();
     await expect(completed.Submit()).rejects.toThrow('TransactionGroup has already been completed');
 
@@ -289,7 +320,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     const group = new SQLServerTransactionGroup();
     const { item } = makeItem(entity, 'Update', 'STATEMENT 1', pool);
     group.AddTransaction(item);
-    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+    mssqlState.QueueResult({ recordsets: [sentinel(0), [{ ID: 'w-0001' }]] });
 
     const notifications: Array<{ success: boolean; results?: TransactionResult[] }> = [];
     group.TransactionNotifications$.subscribe((n) => notifications.push(n));
