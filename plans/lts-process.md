@@ -11,7 +11,7 @@
 > v1.2 replaced v1.1's reserved-minor-band design with the **Edge-prerelease version grammar** (§3.1): normal semver versions are certified/candidate builds only; Edge releases are semver prereleases of the next line. Introduced **all at once** at the 6.x era open — no staged transition. The band, and its open band-size question, are gone.
 > Amendments follow the same PR flow (proposal on a branch, review, merge); the document remains canon between amendments.
 > Decisions explicitly open: **starting cadence** (§9.1).
-> Post-adoption follow-ups: remaining §15 punch-list items (incl. `publish-lts.yml`), the P.8 `PUBLISH_NO_BREAK_POLICY.md` amendment (§3.2 supersession), and a root-level `VERSIONING.md` distillation for humans and agents.
+> Post-adoption follow-ups: remaining §15 punch-list items, the P.8 `PUBLISH_NO_BREAK_POLICY.md` amendment (§3.2 supersession), and a root-level `VERSIONING.md` distillation for humans and agents.
 
 ---
 
@@ -146,7 +146,7 @@ From the first certification onward, **every "default" surface resolves to certi
 |---|---|---|
 | `latest` | Newest build of the newest **certified** line | Certification (concurrent, verified, rerun-until-clean 294-package move via `ci/dist-tag-all.mjs`, run from the certified tag's checkout), and line publishes when their line is the newest certified |
 | `edge` | Newest Edge prerelease | `publish.yml` (routine publishes: changesets pre mode derives the tag from `pre.json`; the workflow cross-checks it before publishing and asserts it against the registry after) |
-| `lts-6.1` | Newest build of that line | `publish-lts.yml` on every line release |
+| `lts-6.1` | Newest build of that line | `publish.yml`'s LTS path on every line release |
 
 Notes:
 
@@ -176,7 +176,7 @@ The bootstrap cert **completes on the line branch**, not on `next`. Sequence: (1
 
 1. **Candidate cut = the pre-exit dance** (scripted): `changeset pre exit` → version → publish **`6.2.0`** (normal, `make_latest: false` until certified) → branch **`lts/6.2`** from the tag → `changeset pre enter edge` (Edge resumes at `6.3.0-edge.0`). `next` flows at full speed throughout.
 2. **Fixes land on `next` first**, then reach the line by label: `backport lts/6.2` on the merged PR → [korthout/backport-action](https://github.com/korthout/backport-action) opens the cherry-pick PR automatically (conflicts become a draft PR a human finishes). The only exceptions to next-first: fixes for code that no longer exists on the dev line, and genuinely line-specific metadata corrections (certification-owner triage). **No backport completes without being asserted**: the action only cherry-picks *non-merge* commits (`merge_commits: skip` — merging `next` into a feature branch is routine and must not poison the label; the cost is that payload living solely in a merge commit's conflict resolution never reaches the line, so keep real changes in ordinary commits), and the workflow fails red when any labeled target does not land — the action's own exit code stays 0 on failure, which left #3525's failed backport behind a green run (2026-08-06) until a human noticed the PR comment.
-3. **Line releases** ship from a parameterized `publish-lts.yml`: `changeset publish --tag lts-6.2`, git tag `v6.2.N`, GitHub Release (`make_latest` only if newest certified). Line publishes never merge back to `next`.
+3. **Line releases** ship from `publish.yml`'s parameterized LTS path, dispatched **from `next`** with `line_branch`/`confirm_branch`: `changeset publish --tag lts-6.2`, git tag `v6.2.N`, GitHub Release (`make_latest` only if newest certified). Line publishes never merge back to `next`. The path lives inside `publish.yml` rather than its own file because npm trusted publishing (OIDC) is scoped per package to the workflow **filename** — a second publishing file means a second trusted publisher entered by hand on ~300 packages. Dispatching from `next` (rather than from the line ref) means the release always runs the maintained copy of the workflow, never stale workflow code that was never backported to the line.
 4. **Line guard** (CI on `lts/*` branches): **patch-only, always.** A `migrations/` diff is scanned for DDL (CREATE/ALTER/DROP/…): **data-only** → requires the `metadata-migration` label; **contains DDL** → requires the `codegen-repair` label (generated-object repair only, §12) or the `security-exception` label (§12). Either way the release remains a patch; `dbImpact` records the DB touch. The scanner is a **tripwire, not the gate** — dynamic SQL (`EXEC`, `sp_rename`, string-built DDL) can evade a regex; the human review behind each DDL label is the real control.
 
 The existing `next → main → publish → merge-back` pipeline is untouched for Edge in every cycle — it just runs in prerelease mode.
@@ -213,7 +213,7 @@ R = does the work · A = accountable/sole approver · C = consulted · I = infor
 | Gate 5 (stage upgrades) | Env owners — **CDP: UNKNOWN · Skip: UNKNOWN · Izzy: UNKNOWN · MJC: UNKNOWN** | Craig | Env teams | — |
 | Gate 6 (human hammering) | Craig + crew | Craig | Johanna Snider (baseline list) | — |
 | Backport triage (weekly sweep + labels) | Craig (early cycles; then trained delegates) | Craig | Fix authors | — |
-| Line releases (`publish-lts.yml`) | Build engineer — **UNKNOWN** | Craig | — | Core team |
+| Line releases (`publish.yml`, LTS path) | Build engineer — **UNKNOWN** | Craig | — | Core team |
 | `release-lines.json` status changes | Craig | Craig | — | All (via PR) |
 | Platform manifest per era + overrides generation (§3.2) | MJ core (tooling) | Craig | Open App owners | App teams |
 | Local-dev / linked-workspace tooling (link mode, no-write-through guard, `mj doctor` link checks) | Craig (Open App local-dev program) | Craig | Open App owners | App teams |
@@ -365,7 +365,7 @@ Certification exists to surface defects, so finds are expected; what must conver
 
 Version grammar on the line branch **pre-certification** stays classic 5.x: code-only fix → patch; migration-bearing or metadata-bearing fix → the candidate advances a minor. "Patch-only, forever" locks in **at certification**, and the line freezes at whatever version passes the gates. (This wrinkle is bootstrap-only: in the 6.x grammar, line candidates take labeled patches from birth per §12.)
 
-**Line-publish choreography.** The steady state is a parameterized `publish-lts.yml` dispatched from the line branch (§5.2 rule 3; §15). Until it exists, **the existing `publish.yml` must not be `workflow_dispatch`ed from `lts/5`** — the dry-check below verified it is unsafe: its publish step runs a bare `changeset publish` (no `--tag`, so a line build would land on `latest`), and its version-guard and tag-push steps are `main`-gated and would silently skip. Interim line builds therefore ship by hand, from a clean checkout of `lts/5`:
+**Line-publish choreography.** The steady state shipped: line releases run `publish.yml`'s parameterized `publish-lts` job, dispatched **from `next`** with `line_branch=lts/N` and `confirm_branch=lts/N` (§5.2 rule 3). It lives inside `publish.yml` rather than in its own file because npm trusted publishing is scoped per package to the workflow **filename**, and it takes the line as a parameter rather than as the ref so that a release always runs the maintained copy of the workflow. **Do not dispatch from the line ref.** The warning this paragraph used to carry — that `publish.yml` must never be `workflow_dispatch`ed from `lts/5` — was true of the *pre-LTS-path* workflow and is recorded in the dry-check below; it is superseded, not reversed, because the reason to dispatch from `next` is now about running maintained code rather than about an unsafe publish step. The hand sequence below survives as the fallback for an Actions outage, from a clean checkout of `lts/5`:
 
 1. `changeset version` (the branch runs in normal, non-pre mode; backported fixes carry their changeset files, yielding patch or minor per the pre-cert grammar above)
 2. `npm install` and **commit the lockfile** — `changeset version` leaves `package-lock.json` uncommitted
@@ -379,7 +379,7 @@ Constraints in force on every line publish, manual or automated:
 - **Dist-tags:** line builds publish `--tag lts-5`, never `latest`. `latest` moves only at certification (the era-gated rule in this PR's `publish.yml` / `dist-tag-all` changes).
 - **GH Releases** from the line: `make_latest: false` until certified.
 
-**Dry-check (completed 2026-08-01, before first use, while `next` remained a fallback):** on a scratch clone of `lts/5` with a dummy patch changeset — (a) `changeset version` landed exactly where expected: all 298 lockstep packages advanced together, zero strays; (b) no pre-mode state leaked from `next`'s era flip (no `.changeset/pre.json` on the branch); (c) the publish plan resolves `--tag lts-5` only via the explicit flag — the finding that rules out the bare `publish.yml` dispatch path above. The check stopped before `npm publish`.
+**Dry-check (completed 2026-08-01, before first use, while `next` remained a fallback):** on a scratch clone of `lts/5` with a dummy patch changeset — (a) `changeset version` landed exactly where expected: all 298 lockstep packages advanced together, zero strays; (b) no pre-mode state leaked from `next`'s era flip (no `.changeset/pre.json` on the branch); (c) the publish plan resolves `--tag lts-5` only via the explicit flag — the finding that ruled out the bare `publish.yml` dispatch path *as it stood on that date*. That finding is what the dedicated `publish-lts` job was built to satisfy: it passes `--tag` explicitly and carries its own guards, so the current workflow is the fix for the defect this check found, not an exception to it. The check stopped before `npm publish`.
 
 ## 15. Tooling Punch List & Delivery Plan
 
@@ -392,7 +392,7 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 | 3 | `ci/dist-tag-all.mjs` — atomic 294-package tag moves + post-move assertions (+ scratch-scope drill; new-package first-publish edge case) | Before the flip | This branch |
 | 4 | Era-split tooling: expected-version guard (incl. prerelease grammar), changesets major flow, v6 migration baseline (`/create-new-baseline-migration`), docker tags, stale-comment cleanup | 6.x era open | Follow-up PR |
 | 5 | **Edge prerelease versioning** (the biggest tooling bet — **mandatory scratch-scope dry run before era open**): permanent changesets pre-mode wiring at 294-package lockstep scale; the scripted pre-exit/enter candidate-cut dance; `mj bump` + installer + version-compare prerelease awareness; verify pre-mode tuple math matches §3.1 intent (non-compounding bumps → next-line tuple); Open App host-compat gate coerces `-edge.N` hosts to their base tuple in `CheckMJVersionCompatibility` (`includePrerelease` overshoots — a 7-era Edge host would pass a `<7.0.0` range) | Before 6.x era open | Follow-up PR |
-| 6 | Line machinery: `publish-lts.yml` · korthout/backport-action + labels · line guard (patch-only + DDL scanner) | Before first post-cert 5.x backport | Follow-up PR |
+| 6 | Line machinery: the LTS path in `publish.yml` (done — shipped as a job in `publish.yml`, not a separate file, see §5.2 rule 3) · korthout/backport-action + labels (done) · line guard (patch-only + DDL scanner) — **still open** | Before first post-cert 5.x backport | Follow-up PR |
 | 7 | CLI channels: channel resolution, `mj versions` (+`dbImpact`), maintenance/EOL/breaking warnings, `releaseChannel` config — version selection resolves through `release-lines.json`, never raw registry range resolution (the candidacy/withdrawn gap, §3.1) | Aug–Sep (GH-latest flag covers the default meanwhile) | Follow-up PR |
 | 8 | MJC: LTS-only catalog policy (now, operational) · `release-lines.json` auto-ingest (later) | MJC team's schedule | **MJC repo — out of scope here** |
 | 9 | `mj migrate` out-of-order upgrade mode + LTS→Edge upgrade test rig | Before cycle #2 | Follow-up PR |
