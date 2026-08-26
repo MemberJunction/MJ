@@ -38,6 +38,7 @@ import type {
 } from './types.js';
 import { ClassifyError, IsRetryableError } from './types.js';
 import { WithRetry } from './RetryRunner.js';
+import { DecideKeylessRefusal, DescribeKeylessRefusal, MissingKeyFieldNames, type KeyFieldLike } from './KeylessRecordGuard.js';
 import { WithTimeout, OperationTimeoutError, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
@@ -4028,14 +4029,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         try {
             switch (record.ChangeType) {
                 case 'Create': {
-                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
+                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
                     if (outcome === 'updated') result.RecordsUpdated++;
                     else if (outcome === 'skipped') result.RecordsSkipped++;
                     else result.RecordsCreated++;
                     break;
                 }
                 case 'Update':
-                    await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps);
+                    await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps, logger);
                     break;
                 case 'Delete': {
                     const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
@@ -4104,7 +4105,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo,
-        recordMaps?: RecordMapBatch
+        recordMaps?: RecordMapBatch,
+        /** Optional — lets the keyless-key guard below surface on the run's event stream. */
+        keylessLogger?: SyncLogger
     ): Promise<'created' | 'updated' | 'skipped'> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
@@ -4115,6 +4118,37 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // ID), check whether that row already exists before deciding INSERT vs UPDATE. A null mappedPK
         // (e.g. a server-assigned UUID PK not present in the mapped fields) means a genuinely new row.
         const mappedPK = this.extractMappedPrimaryKey(record, pkFields);
+
+        // INVARIANT: a record destined for a SOFT-primary-key table must carry its key.
+        //
+        // A soft PK is INFERRED, not generated — it is the external system's own identifier, stored
+        // as ordinary data with no PRIMARY KEY constraint, no identity, and no unique index (see
+        // DDLGenerator: soft keys get a non-unique index only). So nothing at the database level
+        // rejects a NULL key, and a row written without one can never be matched again: the next
+        // sync's existence check misses it, and inserts another copy. Every pass therefore multiplies
+        // the damage silently — the rows look fully populated, only the key column is empty.
+        //
+        // `mappedPK == null` is legitimate ONLY when the destination generates its own key (an
+        // identity column or a server-assigned UUID), which is why the check is scoped to soft PKs
+        // rather than applied to every table.
+        const keyless = DecideKeylessRefusal(
+            mappedPK,
+            pkFields as ReadonlyArray<KeyFieldLike>,
+            MissingKeyFieldNames(record.MappedFields, pkFields as ReadonlyArray<KeyFieldLike>, serializeKeyValue),
+        );
+        if (keyless.Refuse) {
+            const detail = DescribeKeylessRefusal(record.MJEntityName, keyless.KeyNames);
+            keylessLogger?.emit('sync.record.error', {
+                phase: 'write',
+                externalObjectName: entityMap.ExternalObjectName,
+                externalID: record.ExternalRecord?.ExternalID,
+                error: `KEYLESS_RECORD_REFUSED: ${detail}`,
+            });
+            // Reported even without a logger — silence is the failure mode this guard exists to end.
+            console.error(`[IntegrationEngine] KEYLESS_RECORD_REFUSED: ${detail}`);
+            return 'skipped';
+        }
+
         const existed = mappedPK != null
             ? await entity.InnerLoad(this.BuildEntityPrimaryKey(mappedPK, pkFields))
             : false;
@@ -4222,11 +4256,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         precheckHashes?: Map<string, string>,
         reconciledSkipIds?: string[],
-        recordMaps?: RecordMapBatch
+        recordMaps?: RecordMapBatch,
+        /** Forwarded to CreateRecord's keyless-key guard on the upsert fallback paths. */
+        logger?: SyncLogger
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
             // No matched ID — upsert by PK (insert; or update/skip if the PK already exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -4275,7 +4311,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             // Matched-ID row vanished — fall back to upsert by PK (insert; or update/skip if PK exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
