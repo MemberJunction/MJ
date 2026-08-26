@@ -473,8 +473,21 @@ const configInfoSchema = z.object({
    * exclude list naming every other installed app — a list that is O(N²) to maintain and, more
    * importantly, cannot name schemas the app does not know about (such as a client's own schemas in
    * a deployed instance).
+   *
+   * The in-memory compile into `excludeSchemas` is for THIS CodeGen run only (which entities to
+   * generate). Heal stored-procedure EXEC statements logged into migrations use authored
+   * `excludeSchemas` plus `@IncludedSchemaNames` from this list — they must not snapshot sibling
+   * apps that happened to be installed on the publisher database.
    */
   includeSchemas: z.string().array().optional(),
+  /**
+   * When true, CodeGen cascade-delete SQL walks FKs pointing at the entity in
+   * EVERY schema in metadata. Default false: only same-schema children.
+   * Turning this on (and CascadeDeletes on an entity) will bake consumer
+   * schemas into a publisher's delete proc — a dangerous escape hatch.
+   * Leave off for Open Apps.
+   */
+  allowCrossSchemaCascadeDeletes: z.boolean().default(false),
   excludeTables: tableInfoSchema.array().default([
     { schema: '%', table: 'sys%' },
     { schema: '%', table: 'flyway_schema_history' }
@@ -646,6 +659,31 @@ const configInfoSchema = z.object({
     z.string(),
     z.record(z.string(), z.string())
   ]).default('mj_generatedentities'),
+  /**
+   * Schema → npm package map for **peer** entity classes this emit does not generate
+   * (cross-schema embedded records and related-record collections).
+   *
+   * This is a different knob from {@link entityPackageName} and {@link includeSchemas}:
+   *
+   * - `includeSchemas` — what this run generates
+   * - string `entityPackageName` — the npm package this run writes those classes into
+   * - Record `entityPackageName` — install-time host map; those schemas are also skipped
+   *   for local generation ({@link getExternalEntitySchemas}). Do not overload it on an
+   *   Open App under development: listing a sibling schema there would skip generating
+   *   *this* app if you also listed your own schema, and converting a custom string
+   *   `entityPackageName` into a Record silently re-routes every unmapped schema.
+   * - `entityImportPackages` — where to `import { PeerEntity }` from when the peer's
+   *   schema is not in this file
+   *
+   * Publishers (Open Apps under development) use string `entityPackageName` +
+   * `includeSchemas` and must list sibling app schemas here. Hosts that already use
+   * Record `entityPackageName` do not need this — that map is the fallback after this
+   * one. Case-insensitive schema keys. Mapping a foreign schema to this emit's own
+   * package is an error (that would self-import a class this file does not emit).
+   *
+   * @see resolveEntityImportPackage
+   */
+  entityImportPackages: z.record(z.string(), z.string()).optional(),
 
   verboseOutput: z.boolean().optional().default(false),
 
@@ -1016,9 +1054,9 @@ export function initializeConfig(cwd: string): ConfigInfo {
   applyPlatformDependentEnvVars(config, userConfigResult?.config ?? {});
 
   // Update the module-level configInfo so that helpers like
-  // resolveEntityPackageName() and getExternalEntitySchemas() see the
-  // config from the correct working directory, not the stale one from
-  // initial module load.
+  // resolveEntityPackageName(), resolveEntityImportPackage() and
+  // getExternalEntitySchemas() see the config from the correct working
+  // directory, not the stale one from initial module load.
   Object.assign(configInfo, config);
 
   return config;
@@ -1178,11 +1216,48 @@ export function autoIndexSoftPrimaryKeys(): boolean {
 }
 
 /**
+ * Case-insensitive lookup in a schema → npm package map. Empty values are treated as
+ * missing so a typo `''` cannot silently emit `from ''`.
+ */
+function lookupSchemaPackage(map: Record<string, string> | undefined | null, schemaName: string): string | undefined {
+  if (!map || typeof map !== 'object') {
+    return undefined;
+  }
+  const lower = schemaName.toLowerCase();
+  const match = Object.keys(map).find((k) => k.toLowerCase() === lower);
+  if (!match) {
+    return undefined;
+  }
+  const value = map[match];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function coreSchemaFromConfig(cfg: ConfigInfo): string {
+  if (cfg.mjCoreSchema && String(cfg.mjCoreSchema).trim()) {
+    return String(cfg.mjCoreSchema).trim();
+  }
+  try {
+    const fromFn = typeof mj_core_schema === 'function' ? mj_core_schema() : mj_core_schema;
+    if (fromFn && String(fromFn).trim()) {
+      return String(fromFn).trim();
+    }
+  } catch {
+    // settings missing in some unit tests
+  }
+  return '__mj';
+}
+
+/**
  * Resolves the entity package name for a given database schema.
  *
  * When `entityPackageName` is a plain string (legacy/default), all non-core schemas
  * use that single package. When it is a `Record<string, string>`, each schema is
- * mapped to its own package (used by OpenApp projects with multiple installed apps).
+ * mapped to its own package (used by OpenApp **hosts** with multiple installed apps).
+ *
+ * Do **not** use this for peer-class imports on generated subclasses (embeds,
+ * related-record collections). String form returns this emit's package for every
+ * schema, which is the self-import bug Open App publishers hit. Use
+ * {@link resolveEntityImportPackage} for that.
  *
  * @param schemaName The database schema name of the entity
  * @param config     Optional config override; falls back to the module-level configInfo
@@ -1194,10 +1269,109 @@ export function resolveEntityPackageName(schemaName: string, config?: ConfigInfo
   if (typeof epn === 'string') {
     return epn || 'mj_generatedentities';
   }
-  // Case-insensitive lookup: DB schema names may differ in casing from config keys
-  const lowerSchema = schemaName.toLowerCase();
-  const match = Object.keys(epn).find(k => k.toLowerCase() === lowerSchema);
-  return match ? epn[match] : 'mj_generatedentities';
+  return lookupSchemaPackage(epn, schemaName) || 'mj_generatedentities';
+}
+
+/**
+ * The npm package this CodeGen emit writes entity subclasses into.
+ *
+ * String `entityPackageName` is that package. Record form is the install-time host
+ * map (those keys are also skipped for local generation); this emit's package is
+ * the owning schema's entry, or `mj_generatedentities` when the owning schema is
+ * not mapped.
+ */
+export function thisEmitEntityPackageName(owningSchema: string, config?: ConfigInfo): string {
+  const cfg = config ?? configInfo;
+  const epn = cfg.entityPackageName;
+  if (typeof epn === 'string') {
+    return epn.trim() || 'mj_generatedentities';
+  }
+  return lookupSchemaPackage(epn, owningSchema) || 'mj_generatedentities';
+}
+
+/**
+ * Resolves the npm package to import a **peer** entity class from — embeds and
+ * related-record collections whose class is not being emitted in this file.
+ *
+ * Generation scope (`includeSchemas`) and this emit's package (string
+ * `entityPackageName`) are deliberately not reused as the import map. A string
+ * `entityPackageName` means "classes this run emits live in this package"; using
+ * it for a foreign schema is how Open App publishers used to self-import
+ * `@mj-biz-apps/orders-entities` for a Common Address embed.
+ *
+ * Resolution, in order:
+ * 1. Core schema (`mjCoreSchema` / `__mj`) → `@memberjunction/core-entities`
+ * 2. Same schema as the owning entity → this emit's package (same-schema peers
+ *    not in the current file, e.g. skipped PK-less entities)
+ * 3. `entityImportPackages` schema → npm map (publisher / Open App under development)
+ * 4. Record-form `entityPackageName` (install-time host map — fallback only)
+ * 5. Otherwise throw. Never silently fall back to the local package for a
+ *    foreign schema, and never emit a self-import of this emit's package for a
+ *    foreign schema even if the map says so.
+ *
+ * @param relatedSchema Schema of the peer being imported
+ * @param owningSchema  Schema of the entity currently being generated
+ * @param config        Optional config override; falls back to module-level configInfo
+ */
+export function resolveEntityImportPackage(
+  relatedSchema: string,
+  owningSchema: string,
+  config?: ConfigInfo,
+): string {
+  const cfg = config ?? configInfo;
+  const related = (relatedSchema ?? '').trim();
+  const owning = (owningSchema ?? '').trim();
+  if (!related) {
+    throw new Error(
+      `[CodeGen] entity import: related entity has an empty SchemaName while generating schema '${owning || '(unknown)'}'.`,
+    );
+  }
+  if (!owning) {
+    throw new Error(
+      `[CodeGen] entity import: owning entity has an empty SchemaName (related schema '${related}').`,
+    );
+  }
+
+  const core = coreSchemaFromConfig(cfg).toLowerCase();
+  if (related.toLowerCase() === core) {
+    return '@memberjunction/core-entities';
+  }
+
+  const localPackage = thisEmitEntityPackageName(owning, cfg);
+
+  if (related.toLowerCase() === owning.toLowerCase()) {
+    return localPackage;
+  }
+
+  const fromImportMap = lookupSchemaPackage(cfg.entityImportPackages, related);
+  const epn = cfg.entityPackageName;
+  const fromHostMap = typeof epn === 'object' && epn ? lookupSchemaPackage(epn, related) : undefined;
+  const resolved = fromImportMap || fromHostMap;
+
+  if (resolved) {
+    if (resolved === localPackage) {
+      throw new Error(
+        `[CodeGen] entity import: schema '${related}' is mapped to '${resolved}', which is this emit's own package ` +
+        `('${localPackage}') while generating '${owning}'. Foreign-schema peers must come from THEIR npm package. ` +
+        `includeSchemas already decided this emit does not generate '${related}'. Do not list that schema in ` +
+        `entityImportPackages (or entityPackageName) with this emit's package name.`,
+      );
+    }
+    return resolved;
+  }
+
+  const stringForm = typeof epn === 'string';
+  throw new Error(
+    `[CodeGen] entity import: cannot import entity classes from schema '${related}' while generating '${owning}'. ` +
+    `'${related}' is not listed in entityImportPackages` +
+    (stringForm
+      ? ` (and entityPackageName is the string '${localPackage}', which is this emit's package — not a schema map)`
+      : ` or the entityPackageName schema map`) +
+    `. Add to mj.config.cjs:\n` +
+    `  entityImportPackages: {\n    '${related}': '<npm-package-that-exports-these-entity-classes>',\n  }\n` +
+    `includeSchemas controls what this emit generates. String entityPackageName is this emit's npm package. ` +
+    `Do not map '${related}' to '${localPackage}'.`,
+  );
 }
 
 /**
