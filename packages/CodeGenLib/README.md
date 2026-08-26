@@ -317,9 +317,38 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `SQLOutput` | Controls Flyway migration file generation from SQL logging |
 | `commands` | Shell commands to run before/after generation (typically package builds) |
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
+| `includeSchemas` | Opt-in positive scope: generate only these schemas (resolved into `excludeSchemas`) |
+| `entityPackageName` | String: npm package this emit writes. Record: install-time host map (those schemas are also skipped for local generation) |
+| `entityImportPackages` | Schema → npm map for peer classes this emit does **not** generate (embeds + related-record collections). See below. |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |
 | `additionalSchemaInfo` | Path to JSON file with soft PK/FK definitions and schema prefix rules |
 | `dbPlatform` | Database backend selector. See **Database Platform Selection** below. |
+
+### Peer entity imports (`entityImportPackages`)
+
+Embedded records and related-record collections type the generated subclass against the **related** entity class (`DeclareEmbeddedRecord<AddressEntity>`, `DeclareRelatedRecords<PersonEntity>`). When that class is not emitted in the current file, CodeGen must `import` it from the npm package that owns it.
+
+Those are three different knobs. Do not overload `entityPackageName`:
+
+| Knob | Meaning |
+|------|---------|
+| `includeSchemas` | What this run **generates** |
+| string `entityPackageName` | The npm package this run **writes** those classes into |
+| Record `entityPackageName` | Install-time **host** map. Listed schemas are also skipped for local generation (`getExternalEntitySchemas`). Converting a publisher's string `entityPackageName` into this Record silently re-routes every unmapped schema. |
+| `entityImportPackages` | Schema → npm map for peers this run does **not** generate |
+
+Open App **publishers** (the repo that develops the app) use the string form plus `includeSchemas`, and must list sibling apps here:
+
+```javascript
+entityPackageName: '@mj-biz-apps/orders-entities',
+includeSchemas: ['__mj_BizAppsOrders'],
+entityImportPackages: {
+    '__mj_BizAppsCommon': '@mj-biz-apps/common-entities',
+    '__mj_BizAppsAccounting': '@mj-biz-apps/accounting-entities',
+},
+```
+
+Resolution: core schema (`__mj`) → `@memberjunction/core-entities`; same schema as the owning entity → this emit's package; then `entityImportPackages`; then Record `entityPackageName` (host fallback). An unmapped foreign schema **throws** — CodeGen will not self-import this emit's package (that was the Orders `import { mjBizAppsCommonAddressEntity } from '@mj-biz-apps/orders-entities'` bug). Mapping a foreign schema to this emit's own package is also an error. Imports are grouped: one `import { A, B } from 'pkg'` line per package.
 
 ### Database Platform Selection (`dbPlatform`)
 
@@ -987,6 +1016,9 @@ Generates an import manifest that prevents tree-shaking of `@RegisterClass` deco
 | `outputDir(type, fallback)` | Get the configured output directory for a generator type |
 | `getSettingValue(name, default)` | Get a named setting value from configuration |
 | `mj_core_schema()` | Get the MJ core schema name (typically `__mj`) |
+| `resolveEntityPackageName(schema)` | Package for a schema from `entityPackageName` (string form returns that string for every schema) |
+| `resolveEntityImportPackage(related, owning)` | Package to **import** a peer class from; throws if a foreign schema is unmapped |
+| `thisEmitEntityPackageName(owning)` | The npm package this CodeGen run writes |
 
 ## Dependencies
 
