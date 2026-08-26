@@ -285,6 +285,26 @@ describe('ServerBootstrap', () => {
             ]);
         });
 
+        it('logs each discovered extension as PRE-AUTH with DriverClass and RootPath', async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    dynamicPackages: {
+                        server: [{ PackageName: '@test/openapp-server', StartupExport: 'load', Enabled: true }],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+            await createMJServer();
+
+            const lines = logSpy.mock.calls.map((c) => String(c[0]));
+            expect(lines.some((l) => l.includes('TestOpenAppEdge') && l.includes('/test-openapp') && l.includes('PRE-AUTH'))).toBe(true);
+            logSpy.mockRestore();
+        });
+
         it('does NOT merge host serverExtensions into options — serve() overlays those itself', async () => {
             const mockSearch = vi.fn().mockReturnValue({
                 config: {

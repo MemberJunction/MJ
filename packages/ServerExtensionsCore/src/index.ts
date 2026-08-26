@@ -40,9 +40,16 @@ export {
 export {
     MJ_SERVER_EXTENSIONS_EXPORT,
     MJ_SERVER_EXTENSIONS_PACKAGE_JSON_PATH,
+    MAX_SERVER_EXTENSION_ROOT_PATH_LENGTH,
+    RESERVED_SERVER_EXTENSION_ROOTS,
+    RESERVED_SERVER_EXTENSION_ROOT_PREFIXES,
+    describeServerExtensionMount,
     extractServerExtensionsFromModule,
     extractServerExtensionsFromPackageJson,
     mergeServerExtensionConfigs,
     normalizeServerExtensionConfigs,
+    prepareServerExtensionConfigs,
+    serverExtensionRootsOverlap,
+    validateServerExtensionRootPath,
 } from './collect.js';
-export type { NormalizeServerExtensionOptions } from './collect.js';
+export type { NormalizeServerExtensionOptions, PrepareServerExtensionOptions } from './collect.js';

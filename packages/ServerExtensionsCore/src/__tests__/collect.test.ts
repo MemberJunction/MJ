@@ -4,10 +4,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     MJ_SERVER_EXTENSIONS_EXPORT,
+    describeServerExtensionMount,
     extractServerExtensionsFromModule,
     extractServerExtensionsFromPackageJson,
     mergeServerExtensionConfigs,
     normalizeServerExtensionConfigs,
+    prepareServerExtensionConfigs,
+    serverExtensionRootsOverlap,
+    validateServerExtensionRootPath,
 } from '../collect.js';
 import { ServerExtensionConfig } from '../types.js';
 
@@ -61,6 +65,19 @@ describe('normalizeServerExtensionConfigs', () => {
             { Enabled: false, DriverClass: 'ExtA', RootPath: '/a/', Settings: { k: 1 } },
         ]);
     });
+
+    it('skips reserved RootPaths fail-closed', () => {
+            const onInvalid = vi.fn();
+            const result = normalizeServerExtensionConfigs(
+                [
+                    { DriverClass: 'ShadowGraphql', RootPath: '/graphql' },
+                    { DriverClass: 'Ok', RootPath: '/checkout' },
+                ],
+                { onInvalid }
+            );
+            expect(result.map((c) => c.DriverClass)).toEqual(['Ok']);
+            expect(onInvalid).toHaveBeenCalledWith(expect.stringContaining('reserved prefix'));
+        });
 
     it('skips non-objects, missing DriverClass, missing RootPath, and non-boolean Enabled', () => {
         const onInvalid = vi.fn();
@@ -248,5 +265,82 @@ describe('mergeServerExtensionConfigs', () => {
         mergeServerExtensionConfigs(discovered, host);
         expect(discovered[0].Settings).toEqual({ a: 1 });
         expect(host[0].Settings).toEqual({ b: 2 });
+    });
+});
+
+describe('validateServerExtensionRootPath', () => {
+    it('accepts ordinary extension roots', () => {
+        expect(validateServerExtensionRootPath('/checkout')).toBeNull();
+        expect(validateServerExtensionRootPath('/webhooks/payments')).toBeNull();
+        expect(validateServerExtensionRootPath('/webhook/slack')).toBeNull();
+    });
+
+    it('rejects missing slash, wildcards, overlong paths, and the server root', () => {
+        expect(validateServerExtensionRootPath('checkout')).toMatch(/must start with '\//);
+        expect(validateServerExtensionRootPath('/check*out')).toMatch(/wildcards/);
+        expect(validateServerExtensionRootPath('/')).toMatch(/reserved/);
+        expect(validateServerExtensionRootPath(`/${'a'.repeat(128)}`)).toMatch(/exceeds/);
+    });
+
+    it('rejects reserved core prefixes without false-positive on similar names', () => {
+        expect(validateServerExtensionRootPath('/graphql')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/graphql/extra')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/auth/providers')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/health/extensions')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/oauth')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/magic-link/redeem')).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/healthcare')).toBeNull();
+        expect(validateServerExtensionRootPath('/authorize-me')).toBeNull();
+    });
+});
+
+describe('serverExtensionRootsOverlap', () => {
+    it('detects equal and nested roots', () => {
+        expect(serverExtensionRootsOverlap('/checkout', '/checkout/')).toBe(true);
+        expect(serverExtensionRootsOverlap('/webhooks', '/webhooks/payments')).toBe(true);
+        expect(serverExtensionRootsOverlap('/a', '/b')).toBe(false);
+        expect(serverExtensionRootsOverlap('/checkout', '/check')).toBe(false);
+    });
+});
+
+describe('prepareServerExtensionConfigs', () => {
+    it('drops invalid roots fail-closed and keeps valid ones', () => {
+        const onInvalid = vi.fn();
+        const result = prepareServerExtensionConfigs(
+            [
+                { Enabled: true, DriverClass: 'Good', RootPath: '/checkout', Settings: {} },
+                { Enabled: true, DriverClass: 'BadRoot', RootPath: '/', Settings: {} },
+                { Enabled: true, DriverClass: 'BadGraphql', RootPath: '/graphql', Settings: {} },
+            ],
+            { onInvalid }
+        );
+        expect(result.map((c) => c.DriverClass)).toEqual(['Good']);
+        expect(onInvalid).toHaveBeenCalledTimes(2);
+    });
+
+    it('warns when two enabled extensions overlap, and keeps disabled entries', () => {
+        const onOverlap = vi.fn();
+        const result = prepareServerExtensionConfigs(
+            [
+                { Enabled: true, DriverClass: 'A', RootPath: '/webhooks', Settings: {} },
+                { Enabled: true, DriverClass: 'B', RootPath: '/webhooks/payments', Settings: {} },
+                { Enabled: false, DriverClass: 'Off', RootPath: '/webhooks', Settings: {} },
+            ],
+            { onOverlap }
+        );
+        expect(result).toHaveLength(3);
+        expect(onOverlap).toHaveBeenCalledWith(expect.stringContaining('overlapping RootPaths'));
+        expect(result.find((c) => c.DriverClass === 'Off')?.Enabled).toBe(false);
+    });
+});
+
+describe('describeServerExtensionMount', () => {
+    it('names DriverClass, RootPath, enabled state, and PRE-AUTH', () => {
+        const line = describeServerExtensionMount(checkout);
+        expect(line).toContain('OrdersCheckoutEdge');
+        expect(line).toContain('/checkout');
+        expect(line).toContain('enabled');
+        expect(line).toContain('PRE-AUTH');
+        expect(line).toContain('Enabled: false');
     });
 });

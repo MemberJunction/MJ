@@ -73,6 +73,11 @@ export function normalizeServerExtensionConfigs(
             invalid(options, `serverExtensions[${i}] ('${driverClass}') missing RootPath${source}`);
             continue;
         }
+        const rootError = validateServerExtensionRootPath(rootPath);
+        if (rootError) {
+            invalid(options, `serverExtensions[${i}] ('${driverClass}') ${rootError}${source}`);
+            continue;
+        }
         let enabled = true;
         if (rec.Enabled !== undefined) {
             if (typeof rec.Enabled !== 'boolean') {
@@ -187,4 +192,115 @@ export function mergeServerExtensionConfigs(
     }
 
     return order.map((key) => byClass.get(key)!);
+}
+
+/** Exact RootPaths that must never be claimed by an extension (they are the whole tree or a core endpoint). */
+export const RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = ['/'];
+
+/**
+ * Prefixes of core MJServer routes. An extension RootPath that equals one of these
+ * or is nested under it would mount pre-auth on top of (or instead of) a core path.
+ * Matching is prefix-with-slash so `/health` rejects `/health/extensions` but not `/healthcare`.
+ */
+export const RESERVED_SERVER_EXTENSION_ROOT_PREFIXES: readonly string[] = [
+    '/graphql',
+    '/auth',
+    '/oauth',
+    '/health',
+    '/magic-link',
+];
+
+export const MAX_SERVER_EXTENSION_ROOT_PATH_LENGTH = 128;
+
+function normalizeRoot(rootPath: string): string {
+    const trimmed = rootPath.trim();
+    if (trimmed === '/') {
+        return '/';
+    }
+    return trimmed.replace(/\/+$/, '') || '/';
+}
+
+/**
+ * Returns an error message when `rootPath` is unsafe to mount pre-auth, or `null` when it is usable.
+ * Fail closed: invalid paths must not be mounted.
+ */
+export function validateServerExtensionRootPath(rootPath: string): string | null {
+    const raw = rootPath.trim();
+    if (!raw) {
+        return 'RootPath is empty';
+    }
+    if (!raw.startsWith('/')) {
+        return `RootPath '${raw}' must start with '/'`;
+    }
+    if (raw.length > MAX_SERVER_EXTENSION_ROOT_PATH_LENGTH) {
+        return `RootPath exceeds ${MAX_SERVER_EXTENSION_ROOT_PATH_LENGTH} characters`;
+    }
+    if (/[*?[\](){}]/.test(raw)) {
+        return `RootPath '${raw}' must not contain wildcards or glob characters`;
+    }
+    const normalized = normalizeRoot(raw);
+    if (RESERVED_SERVER_EXTENSION_ROOTS.includes(normalized)) {
+        return `RootPath '${raw}' is reserved`;
+    }
+    for (const prefix of RESERVED_SERVER_EXTENSION_ROOT_PREFIXES) {
+        if (normalized === prefix || normalized.startsWith(`${prefix}/`)) {
+            return `RootPath '${raw}' collides with the reserved prefix '${prefix}'`;
+        }
+    }
+    return null;
+}
+
+/** True when two roots are equal or one is a nested path of the other. */
+export function serverExtensionRootsOverlap(a: string, b: string): boolean {
+    const na = normalizeRoot(a);
+    const nb = normalizeRoot(b);
+    if (na === nb) {
+        return true;
+    }
+    return na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`);
+}
+
+export interface PrepareServerExtensionOptions extends NormalizeServerExtensionOptions {
+    onOverlap?: (message: string) => void;
+}
+
+/**
+ * Post-merge filter used by `serve()`: drop invalid roots (fail closed) and warn when
+ * two *enabled* extensions claim overlapping paths. Disabled entries are kept so the
+ * loader can skip them by DriverClass (host `Enabled: false` stays visible).
+ */
+export function prepareServerExtensionConfigs(
+    configs: readonly ServerExtensionConfig[] | null | undefined,
+    options?: PrepareServerExtensionOptions
+): ServerExtensionConfig[] {
+    const kept: ServerExtensionConfig[] = [];
+    for (const entry of configs ?? []) {
+        const rootError = validateServerExtensionRootPath(entry.RootPath ?? '');
+        if (rootError) {
+            invalid(options, `Dropping server extension '${entry.DriverClass}': ${rootError}`);
+            continue;
+        }
+        kept.push(cloneConfig({ ...entry, RootPath: normalizeRoot(entry.RootPath) }));
+    }
+
+    const enabled = kept.filter((c) => c.Enabled);
+    for (let i = 0; i < enabled.length; i++) {
+        for (let j = i + 1; j < enabled.length; j++) {
+            if (serverExtensionRootsOverlap(enabled[i].RootPath, enabled[j].RootPath)) {
+                options?.onOverlap?.(
+                    `Enabled server extensions '${enabled[i].DriverClass}' (${enabled[i].RootPath}) and '${enabled[j].DriverClass}' (${enabled[j].RootPath}) have overlapping RootPaths`
+                );
+            }
+        }
+    }
+    return kept;
+}
+
+/**
+ * One-line inventory of a server-extension mount. All extension routes are installed
+ * BEFORE MJServer's auth middleware — the operator must be able to see that at boot.
+ */
+export function describeServerExtensionMount(config: ServerExtensionConfig): string {
+    const state = config.Enabled ? 'enabled' : 'disabled';
+    return `${config.DriverClass} at ${config.RootPath} (${state}, PRE-AUTH; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
 }

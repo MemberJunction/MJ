@@ -18,6 +18,8 @@ Extensions are discovered automatically using MemberJunction's standard `@Regist
 
 `@memberjunction/server-bootstrap` collects those declarations and `serve()` merges them with the host `serverExtensions[]`. Host `DriverClass` wins (`Enabled`, `RootPath`, per-key `Settings`). A host entry with `Enabled: false` disables a discovered extension. Host-only extensions (Slack, Teams) stay in the host config.
 
+**Pre-auth.** Extension routes mount *before* MJServer's auth middleware. Boot logs every collected and merged extension as `PRE-AUTH` with its `DriverClass` and `RootPath` so an operator who installed an Open App for its entities can see the HTTP surface. To suppress one, add the same `DriverClass` to host `serverExtensions[]` with `Enabled: false`. Invalid `RootPath` values (`/`, `/graphql`, `/auth`, `/oauth`, `/health`, `/magic-link`, wildcards) are dropped fail-closed rather than mounted. Overlapping enabled roots are logged.
+
 Open Apps therefore do **not** require the operator to copy extension blocks into the host `mj.config.cjs`. The host file is the override layer plus host-only extensions.
 
 ## Installation

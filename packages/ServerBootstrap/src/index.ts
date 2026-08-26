@@ -16,6 +16,7 @@
 
 import { serve, MJServerOptions } from '@memberjunction/server';
 import {
+  describeServerExtensionMount,
   extractServerExtensionsFromModule,
   extractServerExtensionsFromPackageJson,
   type ServerExtensionConfig,
@@ -228,6 +229,10 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
           `${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}` +
           `${extensions.length > 0 ? ` (+${extensions.length} server extension${extensions.length === 1 ? '' : 's'})` : ''}`
       );
+      for (const ext of extensions) {
+        // Inventory is the consent surface: these routes mount BEFORE auth.
+        console.log(`    ${describeServerExtensionMount(ext)}`);
+      }
     } catch (error: unknown) {
       // isResolutionFailure (not a bare code check) because ts-node's ESM shim throws
       // resolution failures with no code at all. The quoted-name guard keeps a missing
