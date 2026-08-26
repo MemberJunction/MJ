@@ -48,6 +48,32 @@ describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () =
     it('is a no-op when the widths already match', () => {
         expect(decideLengthOverlay(255, 255)).toEqual({ Length: 255, changed: false });
     });
+
+    // -1 is MAX/unbounded — the convention both dialects already render as `(MAX)`
+    // (sqlServerDialect/postgresqlDialect: `length === -1` → unbounded). It is the WIDEST width,
+    // so a numeric `>` comparison ranks it as the narrowest and gets the grow-only rule backwards.
+    it('keeps an explicit MAX (-1) — a sampled width must never narrow it', () => {
+        // The failure this prevents: an operator widens a column to MAX because real values exceed
+        // any bounded width, the next discovery samples 4000 chars and silently narrows it back,
+        // and records too long for the column are then SKIPPED WHOLE rather than truncated — so the
+        // data stops arriving with no error on the row.
+        expect(decideLengthOverlay(-1, 4000)).toEqual({ Length: -1, changed: false });
+        expect(decideLengthOverlay(-1, 255)).toEqual({ Length: -1, changed: false });
+    });
+
+    it('adopts MAX when the source itself reports unbounded', () => {
+        expect(decideLengthOverlay(4000, -1)).toEqual({ Length: -1, changed: true });
+        expect(decideLengthOverlay(null, -1)).toEqual({ Length: -1, changed: true });
+    });
+
+    it('is a no-op when both sides are already MAX', () => {
+        expect(decideLengthOverlay(-1, -1)).toEqual({ Length: -1, changed: false });
+    });
+
+    it('still treats "no opinion" as no-op when the persisted width is MAX', () => {
+        expect(decideLengthOverlay(-1, null)).toEqual({ Length: -1, changed: false });
+        expect(decideLengthOverlay(-1, undefined)).toEqual({ Length: -1, changed: false });
+    });
 });
 
 describe('decideBooleanOverlay', () => {

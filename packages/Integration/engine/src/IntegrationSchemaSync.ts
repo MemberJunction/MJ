@@ -179,6 +179,16 @@ export function decideLengthOverlay(
   srcMaxLength: number | null | undefined,
 ): { Length: number | null | undefined; changed: boolean } {
   if (srcMaxLength == null) return { Length: existingLength, changed: false };
+  // -1 is MAX/unbounded — the convention both dialects already render as `(MAX)` (see
+  // sqlServerDialect/postgresqlDialect: `length === -1` → unbounded). It is therefore the WIDEST
+  // possible width, not the narrowest, and a numeric `>` comparison gets that exactly backwards:
+  // any sampled width beats it, so an operator who widened a column to MAX had it silently
+  // narrowed again on the next discovery. Records too long for the re-narrowed column are then
+  // SKIPPED WHOLE (not truncated), so the data simply stops arriving.
+  if (existingLength === -1) return { Length: -1, changed: false };
+  // A source that explicitly reports unbounded wins over any finite persisted width, for the same
+  // grow-only reason the numeric case below exists.
+  if (srcMaxLength === -1) return { Length: -1, changed: existingLength !== -1 };
   if (existingLength == null || srcMaxLength > existingLength) {
     return { Length: srcMaxLength, changed: existingLength !== srcMaxLength };
   }

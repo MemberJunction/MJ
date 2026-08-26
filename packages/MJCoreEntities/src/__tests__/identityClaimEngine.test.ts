@@ -54,6 +54,10 @@ vi.mock('@memberjunction/global', () => ({
 
 const mockClaimEntityInstance = new MockIdentityClaimEntity();
 
+const mockProviderToUse = {
+    GetEntityObject: vi.fn().mockImplementation(() => Promise.resolve(mockClaimEntityInstance))
+};
+
 vi.mock('@memberjunction/core', () => ({
     BaseEngine: class MockBaseEngine {
         private static _inst: unknown;
@@ -63,6 +67,15 @@ vi.mock('@memberjunction/core', () => ({
             return ctor._inst;
         }
         async Load(): Promise<void> {}
+        // The engine resolves entities through its own bound provider (data-access.md Rule #1)
+        // rather than `new Metadata()`, so the double has to expose one — same shape the other
+        // UserInfoEngine specs in this package use.
+        get ProviderToUse() {
+            return mockProviderToUse;
+        }
+        get RunViewProviderToUse() {
+            return mockProviderToUse;
+        }
     },
     RegisterForStartup: () => (target: unknown) => target,
     Metadata: class {
@@ -147,104 +160,8 @@ describe('IdentityClaimEngine', () => {
         });
     });
 
-    describe('CreateClaim', () => {
-        it('creates a new claim with normalized email and default expiration days', async () => {
-            const claim = await IdentityClaimEngine.Instance.CreateClaim({
-                ClaimTypeName: 'EntitlementGrant',
-                NormalizedEmail: '  Jane.Doe@Example.com ',
-                EntityID: 'ent-1',
-                RecordID: 'rec-100',
-                Payload: { courseId: 'c1' }
-            });
-
-            expect(claim).toBeDefined();
-            expect(claim.NormalizedEmail).toBe('jane.doe@example.com');
-            expect(claim.ClaimTypeID).toBe('type-1');
-            expect(claim.Status).toBe('Pending');
-            expect(mockSave).toHaveBeenCalled();
-            expect(mockDriverOnCreate).toHaveBeenCalled();
-        });
-
-        it('throws if email is missing', async () => {
-            await expect(IdentityClaimEngine.Instance.CreateClaim({
-                ClaimTypeName: 'EntitlementGrant',
-                NormalizedEmail: ''
-            })).rejects.toThrow('NormalizedEmail is required');
-        });
-
-        it('throws if claim type is not found', async () => {
-            await expect(IdentityClaimEngine.Instance.CreateClaim({
-                ClaimTypeName: 'UnknownType',
-                NormalizedEmail: 'test@example.com'
-            })).rejects.toThrow('IdentityClaimType not found');
-        });
-    });
-
-    describe('RedeemClaim', () => {
-        const mockUser = { ID: 'user-42', Email: 'jane.doe@example.com' } as unknown as UserInfo;
-
-        it('successfully redeems pending claim and transitions status to Claimed', async () => {
-            mockDriverOnClaim.mockResolvedValueOnce({ Success: true, Data: { enrolled: true } });
-
-            const result = await IdentityClaimEngine.Instance.RedeemClaim('claim-123', mockUser, 'token-abc');
-
-            expect(result.Success).toBe(true);
-            expect(mockDriverOnClaim).toHaveBeenCalledWith(expect.objectContaining({
-                User: mockUser,
-                RedemptionToken: 'token-abc'
-            }));
-            expect(mockClaimEntityInstance.Status).toBe('Claimed');
-            expect(mockClaimEntityInstance.ClaimedByUserID).toBe('user-42');
-            expect(mockClaimEntityInstance.ClaimedAt).toBeInstanceOf(Date);
-            expect(mockSave).toHaveBeenCalled();
-        });
-
-        it('fails if claim is already claimed', async () => {
-            mockClaimEntityInstance.Status = 'Claimed';
-
-            const result = await IdentityClaimEngine.Instance.RedeemClaim('claim-123', mockUser);
-            expect(result.Success).toBe(false);
-            expect(result.ErrorMessage).toContain('not in Pending status');
-        });
-
-        it('marks claim expired if past expiration date and invokes OnExpire', async () => {
-            mockClaimEntityInstance.ExpiresAt = new Date(Date.now() - 10000);
-
-            const result = await IdentityClaimEngine.Instance.RedeemClaim('claim-123', mockUser);
-            expect(result.Success).toBe(false);
-            expect(result.ErrorMessage).toContain('expired');
-            expect(mockClaimEntityInstance.Status).toBe('Expired');
-            expect(mockDriverOnExpire).toHaveBeenCalled();
-        });
-    });
-
-    describe('AutoClaimForUser', () => {
-        const mockUser = { ID: 'user-42', Email: 'jane.doe@example.com' } as unknown as UserInfo;
-
-        it('finds pending claims matching user email and redeems them automatically', async () => {
-            mockDriverOnClaim.mockResolvedValueOnce({ Success: true });
-
-            const results = await IdentityClaimEngine.Instance.AutoClaimForUser(mockUser);
-
-            expect(results).toHaveLength(1);
-            expect(results[0].Success).toBe(true);
-            expect(mockClaimEntityInstance.Status).toBe('Claimed');
-        });
-    });
-
-    describe('RevokeClaim', () => {
-        it('marks claim revoked and invokes driver OnRevoke hook', async () => {
-            await IdentityClaimEngine.Instance.RevokeClaim('claim-123', undefined, 'Admin canceled');
-
-            expect(mockClaimEntityInstance.Status).toBe('Revoked');
-            expect(mockSave).toHaveBeenCalled();
-            expect(mockDriverOnRevoke).toHaveBeenCalled();
-        });
-
-        it('throws if attempting to revoke an already claimed item', async () => {
-            mockClaimEntityInstance.Status = 'Claimed';
-
-            await expect(IdentityClaimEngine.Instance.RevokeClaim('claim-123')).rejects.toThrow('Cannot revoke an already claimed');
-        });
-    });
+    // The claim lifecycle (CreateClaim / RedeemClaim / AutoClaimForUser / RevokeClaim) is no
+    // longer implemented here — it lives only on IdentityClaimEngineServer, which owns the token
+    // hashing, timing-safe comparison, atomic CAS and email dispatch those operations require.
+    // Their specs live in MJCoreEntitiesServer/src/__tests__/IdentityClaimEngineServer.test.ts.
 });
