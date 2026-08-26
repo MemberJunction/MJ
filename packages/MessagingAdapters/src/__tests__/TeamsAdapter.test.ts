@@ -91,12 +91,15 @@ function createMockTurnContext(overrides: Record<string, unknown> = {}): Record<
     };
 }
 
-async function createInitializedAdapter(settings?: Partial<MessagingAdapterSettings>): Promise<TeamsAdapter> {
+async function createInitializedAdapter(
+    settings?: Partial<MessagingAdapterSettings>,
+    agents: Array<{ ID: string; Name: string }> = [{ ID: 'agent-guid-123', Name: 'Default Agent' }]
+): Promise<TeamsAdapter> {
     const { RunView } = await import('@memberjunction/core');
     vi.mocked(RunView).mockImplementation(() => ({
         RunView: vi.fn().mockResolvedValue({
             Success: true,
-            Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }]
+            Results: agents
         })
     }) as ReturnType<typeof vi.fn>);
 
@@ -152,6 +155,42 @@ describe('TeamsAdapter', () => {
 
             expect(msg.IsDirectMessage).toBe(false);
             expect(msg.ThreadID).toBe('conv-group');
+        });
+
+        // Regression: Teams used to leave MentionedAgentNames unset, so `resolveAgent` fell
+        // straight through to the default agent and no other agent was reachable from Teams
+        // at all. These assert the field is POPULATED — the routing decision itself is
+        // BaseMessagingAdapter's and is covered there.
+        it('should extract a mentioned agent name so Teams can route past the default', async () => {
+            const multi = await createInitializedAdapter(undefined, [
+                { ID: 'agent-guid-123', Name: 'Default Agent' },
+                { ID: 'agent-guid-456', Name: 'Sage' },
+            ]);
+            const turnContext = createMockTurnContext({ text: '@Sage hi' });
+            const msg = multi.MapTeamsActivity(turnContext as never);
+
+            expect(msg.MentionedAgentNames).toEqual(['Sage']);
+        });
+
+        it('should extract no agent names when none is mentioned', () => {
+            const turnContext = createMockTurnContext({ text: 'Hello Teams bot' });
+            const msg = adapter.MapTeamsActivity(turnContext as never);
+
+            expect(msg.MentionedAgentNames).toEqual([]);
+        });
+
+        // The bot's own Teams mention arrives as `<at>Name</at>`. If that were matched as an
+        // agent mention, every addressed message would "name" an agent and thread affinity
+        // would key off the bot instead of the human's choice.
+        it('should not treat the bot\'s own <at> mention as an agent mention', async () => {
+            const multi = await createInitializedAdapter(undefined, [
+                { ID: 'agent-guid-123', Name: 'Default Agent' },
+                { ID: 'agent-guid-456', Name: 'Sage' },
+            ]);
+            const turnContext = createMockTurnContext({ text: '<at>Sage</at> what is the status' });
+            const msg = multi.MapTeamsActivity(turnContext as never);
+
+            expect(msg.MentionedAgentNames).toEqual([]);
         });
 
         it('should extract sender email when available', () => {

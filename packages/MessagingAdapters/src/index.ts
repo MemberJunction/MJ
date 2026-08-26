@@ -97,6 +97,7 @@ export {
     buildMetadataFooter as buildTeamsMetadataFooter,
     buildErrorCard as buildTeamsErrorCard,
     buildResponseFormElements as buildTeamsResponseFormElements,
+    buildUnopenableResourceNotes as buildTeamsUnopenableResourceNotes,
 } from './teams/teams-card-builder.js';
 export type { BuildRichCardOptions } from './teams/teams-card-builder.js';
 

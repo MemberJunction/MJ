@@ -100,7 +100,12 @@ export function buildRichAdaptiveCard(
 
     // Response form (structured input from agent)
     if (result?.responseForm?.questions && result.responseForm.questions.length > 0) {
-        body.push(...buildResponseFormElements(result.responseForm));
+        body.push(...buildResponseFormElements(result.responseForm, agent?.Name ?? undefined));
+    }
+
+    // Notes for file commands Teams cannot open (dropped from actions, not rendered dead)
+    if (result?.actionableCommands && result.actionableCommands.length > 0) {
+        body.push(...buildUnopenableResourceNotes(result.actionableCommands));
     }
 
     // Metadata footer
@@ -256,6 +261,48 @@ export function buildArtifactCard(
  * Handles `open:url` and `open:resource` command types.
  * Returns at most 5 action buttons.
  */
+/**
+ * Can Teams actually OPEN this URI from an `Action.OpenUrl`?
+ *
+ * Adaptive Cards silently do nothing for `data:`/`blob:`/`file:` — no error, no navigation — so a
+ * button built over one is indistinguishable from a broken bot. This matters because MJ inlines
+ * file artifacts as `data:<mime>;base64,...` whenever no file storage account is configured, which
+ * is the normal local-dev state: asking for a Word document produced a "Download document" button
+ * that could not work by construction.
+ *
+ * Deliberately NOT Slack's `isButtonSafeURL`: Slack rejects the whole message unless a button URL
+ * is public http(s), so it must also exclude localhost. Teams opens localhost happily — that is how
+ * the "View in MJ Explorer" link works against a dev Explorer — so screening localhost here would
+ * remove working buttons.
+ */
+function isOpenableURI(url: unknown): boolean {
+    return typeof url === 'string' && !/^(data|blob|file):/i.test(url.trim());
+}
+
+/**
+ * Body notes for `open:url` commands whose URI Teams cannot open.
+ *
+ * The button is dropped by {@link buildActionButtons} rather than rendered dead; this names what
+ * was produced and points at the artifact link, which is the one route to the bytes from Teams
+ * (unlike Slack, there is no file-upload path here).
+ */
+export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Record<string, unknown>[] {
+    const labels = commands
+        .slice(0, 5)
+        .filter(cmd => cmd.type === 'open:url' && 'url' in cmd && !isOpenableURI(cmd.url))
+        .map(cmd => cmd.label ?? 'File');
+
+    if (labels.length === 0) return [];
+
+    return labels.map(label => ({
+        type: 'TextBlock',
+        text: `📄 _${label} — open it with "View in MJ Explorer" below._`,
+        wrap: true,
+        isSubtle: true,
+        spacing: 'Small',
+    }));
+}
+
 export function buildActionButtons(
     commands: ActionableCommand[],
     explorerBaseURL?: string
@@ -264,6 +311,9 @@ export function buildActionButtons(
 
     for (const cmd of commands.slice(0, 5)) {
         if (cmd.type === 'open:url' && 'url' in cmd) {
+            if (!isOpenableURI(cmd.url)) continue;
+            // A dead button is worse than no button — see isOpenableURI. The dropped command is
+            // surfaced as a body note by buildUnopenableResourceNotes.
             actions.push({
                 type: 'Action.OpenUrl',
                 title: truncateToLength(cmd.label ?? 'Open Link', 40),
@@ -426,7 +476,10 @@ const NOTIFICATION_ICONS: Record<string, string> = {
  * read-only as a summary for now. Full interactivity is follow-up work
  * (requires Task Modules or Action.Submit webhook handling).
  */
-export function buildResponseFormElements(form: AgentResponseForm): Record<string, unknown>[] {
+export function buildResponseFormElements(
+    form: AgentResponseForm,
+    agentName?: string
+): Record<string, unknown>[] {
     const elements: Record<string, unknown>[] = [];
 
     // Form title
@@ -463,13 +516,20 @@ export function buildResponseFormElements(form: AgentResponseForm): Record<strin
 
     // Submit action rendered as an ActionSet in the body
     // (Action.Submit in an ActionSet is the Adaptive Card pattern for inline forms)
+    // `mj_agent` carries the ASKING agent's name back with the answer. Teams has no thread
+    // history (fetchThreadHistory is a Graph-API TODO returning []), so thread affinity cannot
+    // recover it: a submit with no agent on it resolves to the DEFAULT agent, and the reply to
+    // "@Query Builder ..." arrived from Betty instead. Not read as a form field —
+    // extractFormFields only takes the `mj_form_` prefix.
     elements.push({
         type: 'ActionSet',
         actions: [{
             type: 'Action.Submit',
             title: form.submitLabel ?? 'Submit',
             style: 'positive',
-            data: { action: 'mj:form_submit' },
+            data: agentName
+                ? { action: 'mj:form_submit', mj_agent: agentName }
+                : { action: 'mj:form_submit' },
         }],
     });
 

@@ -93,6 +93,15 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             ThreadID: activity.conversation?.id ?? null,
             IsDirectMessage: activity.conversation?.conversationType === 'personal',
             IsBotMention: this.hasBotMention(activity),
+            // Without this, Teams can only ever reach the DEFAULT agent: `resolveAgent` routes on
+            // MentionedAgentNames, and only the Slack adapter was populating it, so "@Sage hi" in
+            // Teams silently ran the default and logged nothing (the "agent not found" branch needs
+            // an extracted name to report). Worse, `resolveThreadAgent` falls back to matching the
+            // TEXT of thread history, so a later turn in the same conversation could route to the
+            // agent named in an earlier message that the first turn had ignored — the same message
+            // resolving two different ways depending on its position. The matcher strips bot
+            // `<at>` mentions itself, so the raw activity text is what it wants.
+            MentionedAgentNames: this.matchAgentMentions(activity.text ?? ''),
             Timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
             RawEvent: { activity, turnContext } as unknown as Record<string, unknown>
         };
@@ -358,6 +367,13 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             const conversationRef = TurnContext.getConversationReference(activity);
             this.storeConversationRef(activity.conversation?.id ?? '', conversationRef);
 
+            // Route the answer back to the agent that ASKED, not the default. The form card
+            // stamps its owner into the submit payload as `mj_agent` (see
+            // buildResponseFormElements) because Teams has no thread history to recover it from.
+            // NOT matched out of the answer text: a form answer is arbitrary user input, and
+            // name-matching it would let a typed word re-route the reply mid-exchange.
+            const formAgentName = typeof formValues['mj_agent'] === 'string' ? formValues['mj_agent'] : null;
+
             const incomingMessage: IncomingMessage = {
                 MessageID: activityId,
                 Text: messageText,
@@ -368,6 +384,7 @@ export class TeamsAdapter extends BaseMessagingAdapter {
                 ThreadID: activity.conversation?.id ?? null,
                 IsDirectMessage: activity.conversation?.conversationType === 'personal',
                 IsBotMention: true,
+                MentionedAgentNames: formAgentName ? [formAgentName] : undefined,
                 Timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
                 RawEvent: { activity, turnContext } as unknown as Record<string, unknown>,
             };
