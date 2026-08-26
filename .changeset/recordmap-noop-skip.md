@@ -2,4 +2,10 @@
 "@memberjunction/integration-engine": patch
 ---
 
-`SaveRecordMap` skips the write when the map row already points at the same MJ record — the common case on every incremental sync, where the Load + Save it always did were two extra round trips per synced record to change nothing (plus a meaningless `__mj_UpdatedAt` bump on every map row). The batched writer (`RecordMapBatch.flushChunk`) has always skipped this case; the per-record fallback now agrees with it. A row pointing at a *different* MJ record is still rewritten. A new covering index `(CompanyIntegrationID, EntityID, ExternalSystemRecordID) INCLUDE (EntityRecordID)` serves the upsert lookup, the batched chunk read, and the orphan-sweep paging without a key lookup (T-SQL migration; the PG counterpart follows the repo's build-engineer transpilation flow).
+One covering index for every record-map lookup, and a per-record write path that matches the batched one.
+
+Every access path to `CompanyIntegrationRecordMap` resolves a row by `(CompanyIntegrationID, EntityID, ExternalSystemRecordID)` — `RecordMapBatch.readExisting` on the hot path of every sync, `LoadAllRecordMaps` for the orphan sweep, and `SaveRecordMap`'s upsert lookup. The table carried only its two single-column auto-FK indexes, so each read picked one and key-looked-up the rest, once per record per sync on a table holding a row for every record ever synced. A composite with `INCLUDE (EntityRecordID)` serves all three with no key lookup.
+
+Separately, `SaveRecordMap` now applies the rule `RecordMapBatch.flushChunk` has always applied: when the row already maps this external ID to this MJ record, return without loading or saving. A row pointing at a *different* MJ record is still loaded and rewritten, and a missing row is still created — only the genuine no-op is skipped.
+
+Scope note: the apply loop builds a `RecordMapBatch`, so the ordinary incremental path was already filtered and never paid the per-record cost. `SaveRecordMap` is reached from call sites outside the apply loop and as the batch's own per-record fallback when a set-based write fails — which is where it mattered most, since that fallback degraded into two round trips per record.
