@@ -9,7 +9,7 @@ import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-dat
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
-import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
+import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap } from './integration/EntityMapLifecycle.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
@@ -1595,6 +1595,49 @@ const RSU_PENDING_WORK_STALE_MINUTES = 30;
  * starts sync, and marks each row Completed only AFTER its work actually succeeded —
  * so a crash mid-processing leaves the row Pending and re-processable on the next boot.
  */
+/**
+ * Complete a custom-column promotion whose DDL landed before the restart.
+ *
+ * Promotion registers this rather than finishing inline, because the restart is what loads the
+ * regenerated entity classes — so the IntegrationObjectField rows, the field maps and the
+ * overflow→column spread all belong on this side of it, where the columns are real typed
+ * properties rather than dynamic .Get/.Set.
+ *
+ * The work itself lives on the promoter, so promotion logic stays in one class.
+ */
+async function ProcessPromoteColumnsPendingWork(
+  // Typed structurally rather than by name: schema-engine is only reachable here through a dynamic
+  // import (it is a workspace package, not published), so a static type import is not available.
+  // Deriving the payload from CompletePromotion's own signature keeps the two in step regardless.
+  item: { PromotedColumns?: Parameters<IntegrationCustomColumnPromoter['CompletePromotion']>[0] },
+  pendingWorkID: string,
+  rsm: {
+    CompletePendingWork(id: string, user: unknown): Promise<unknown>;
+    FailPendingWork(id: string, message: string, user: unknown): Promise<unknown>;
+  },
+  systemUser: ConstructorParameters<typeof IntegrationCustomColumnPromoter>[0],
+): Promise<void> {
+  const promoted = item.PromotedColumns ?? [];
+  if (promoted.length === 0) {
+    // Nothing to do, but the row must not linger and be retried forever.
+    await rsm.CompletePendingWork(pendingWorkID, systemUser);
+    console.warn('[RSU] promote-columns pending work carried no PromotedColumns — nothing to complete.');
+    return;
+  }
+  try {
+    const promoter = new IntegrationCustomColumnPromoter(systemUser);
+    const columns = await promoter.CompletePromotion(promoted);
+    // Completed only after the work actually succeeded: a crash before this leaves the row
+    // visible and re-processable, which is the whole point of the durable queue.
+    await rsm.CompletePendingWork(pendingWorkID, systemUser);
+    console.log(`[RSU] promote-columns: completed ${columns.length} column(s) across ${promoted.length} entity(ies).`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await rsm.FailPendingWork(pendingWorkID, `promote-columns completion failed: ${msg}`, systemUser);
+    console.error(`[RSU] promote-columns completion failed: ${msg}`);
+  }
+}
+
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
@@ -1623,6 +1666,18 @@ async function processRSUPendingWork(): Promise<void> {
       const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
 
       await Metadata.Provider.Refresh(); // global-provider-ok: server startup recovery — one-shot global cache refresh
+
+      // Custom-column promotion registers its follow-up here rather than finishing inline, because
+      // the restart is what loads the regenerated entity classes. Everything downstream of the
+      // ADD COLUMN — the IntegrationObjectField rows, the field maps, the overflow spread — runs
+      // now, with typed access to the columns that did not exist in the previous process.
+      //
+      // Absent WorkType means apply-objects: every row written before that field existed is one,
+      // and the branch below must keep treating it that way.
+      if (item.WorkType === 'promote-columns') {
+        await ProcessPromoteColumnsPendingWork(item, pendingWorkID, rsm, systemUser);
+        continue;
+      }
 
       // Resolve connector
       const rv = new RunView();
