@@ -50,6 +50,8 @@ import { RecordMapBatch } from './RecordMapBatch.js';
 import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
+import { ComputeExcludedSourceNames } from './SyncDirectives.js';
+import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps } from './FieldMapValidation.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
@@ -2117,6 +2119,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
+        // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
+        // batch below. Empty set on any lookup miss - exclusion can only ever narrow.
+        const excludedSourceNames = this.ResolveExcludedSourceNames(
+            config.companyIntegration.IntegrationID, entityMap.ExternalObjectName);
+        if (excludedSourceNames.size > 0) {
+            logger?.emit('sync.entity-map.exclusions', {
+                externalObjectName: entityMap.ExternalObjectName,
+                excludedFields: Array.from(excludedSourceNames).sort(),
+            });
+        }
         const watermark = await this.runWriteExclusive(() => this.watermarkService.Load(entityMapID, contextUser, 'Pull'));
         logger?.emit('sync.entity-map.start', {
             phase: 'pull-detail',
@@ -2132,6 +2145,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             watermarkType: watermark?.WatermarkType ?? null,
             fullSync: config.fullSync,
         });
+        this.WarnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
 
         // A6: Validate watermark before using it — skip entirely when FullSync requested
         let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
@@ -2473,7 +2487,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
 
             const mapped = this.fieldMappingEngine.Apply(
-                batch.Records, fieldMaps, entityMap.Entity
+                batch.Records, fieldMaps, entityMap.Entity, excludedSourceNames
             );
             // Custom-key stats: aggregate unmapped keys for EVERY mapped record here —
             // before any skip decision — so candidates + sizing stats exist even when the
@@ -2834,6 +2848,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        this.WarnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
         const pushWatermark = await this.watermarkService.Load(entityMapID, contextUser, 'Push');
         const lastPushAt = pushWatermark?.WatermarkValue ?? null;
 
@@ -4537,6 +4552,39 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
+     * Reports ACTIVE field maps whose MJ column does not exist, once per entity map per run.
+     *
+     * `BaseEntity.Set` no-ops on an unknown field — no throw, no log, no dirty flag — so a map
+     * pointing at a column that was never applied (or was renamed) drops its value for every
+     * record while the run reports those records as written. Checking it here costs one metadata
+     * read and happens before the first fetch, so the warning arrives before the wasted work.
+     */
+    private WarnOnUnbindableFieldMaps(
+        entityMap: ICompanyIntegrationEntityMap,
+        fieldMaps: ICompanyIntegrationFieldMap[],
+        logger?: SyncLogger,
+    ): void {
+        const entityName = entityMap.Entity ?? '';
+        // Diagnostics must never be able to fail a run: an unresolvable entity/provider is reported
+        // by the paths that actually need it, and here it simply means there is nothing to check.
+        let entityFieldNames: string[] = [];
+        try {
+            const entityInfo = entityName ? this.ProviderToUse?.EntityByName(entityName) : null;
+            entityFieldNames = entityInfo?.Fields?.map(f => f.Name) ?? [];
+        } catch {
+            return;
+        }
+        const unbindable = FindUnbindableFieldMaps(fieldMaps, entityFieldNames);
+        if (unbindable.length === 0) return;
+        logger?.warning(
+            entityMap.ExternalObjectName ?? entityMap.ID,
+            'FIELD_MAP_DESTINATION_MISSING',
+            DescribeUnbindableFieldMaps(unbindable, entityMap.ExternalObjectName ?? entityMap.ID, entityName),
+            { fieldMaps: unbindable },
+        );
+    }
+
+    /**
      * Sets fields on a BaseEntity instance from a field value map.
      */
     private SetEntityFields(
@@ -5479,6 +5527,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     public GetIntegrationObjectFields(objectID: string): MJIntegrationObjectFieldEntity[] {
         return this.Base.GetIntegrationObjectFields(objectID);
+    }
+
+    /**
+     * Source field names the connector declared as SyncDirective 'Exclude' for one
+     * integration object, read from IntegrationObjectField.Configuration. Empty set
+     * on any lookup miss (unknown object, no fields, no integration id) - a failed
+     * lookup must never widen or narrow the sync beyond its declared behaviour.
+     */
+    public ResolveExcludedSourceNames(integrationID: string | null | undefined, externalObjectName: string): Set<string> {
+        if (!integrationID || !externalObjectName) return new Set<string>();
+        const obj = this.GetIntegrationObject(integrationID, externalObjectName);
+        if (!obj) return new Set<string>();
+        return ComputeExcludedSourceNames(this.GetIntegrationObjectFields(obj.ID));
     }
 
     public GetActiveIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {
