@@ -23,6 +23,8 @@ vi.mock('@memberjunction/core', () => ({
                 'rel-journal': { ID: id, Name: 'MJ_BizApps_Accounting: Journals', ClassName: 'mjBizAppsAccountingJournal', SchemaName: '__mj_BizAppsAccounting' },
                 'rel-unknown': { ID: id, Name: 'Unknown: Things', ClassName: 'UnknownThing', SchemaName: '__mj_BizAppsUnknown' },
                 'rel-noschema': { ID: id, Name: 'No Schema', ClassName: 'NoSchema', SchemaName: '' },
+                'rel-dup-common': { ID: id, Name: 'Dup From Common', ClassName: 'DupPeer', SchemaName: '__mj_BizAppsCommon' },
+                'rel-dup-acct': { ID: id, Name: 'Dup From Accounting', ClassName: 'DupPeer', SchemaName: '__mj_BizAppsAccounting' },
             };
             return byId[id];
         }
@@ -321,6 +323,57 @@ describe('CollectPeerClassImports — core, local skip, collections, grouping', 
         ]);
     });
 
+    it('skips a collection whose class is already in this file', () => {
+        const peers = EntitySubClassGeneratorBase.CollectPeerClassImports(
+            makeEntity([], { RelatedEntities: [makeCollection()] }),
+            new Set(['DealEntity', 'mjBizAppsCommonPersonEntity']),
+        );
+        expect(peers).toEqual([]);
+    });
+
+    it('does not import a collection that falls back to BaseEntity (no RelatedEntityClassName)', () => {
+        const peers = EntitySubClassGeneratorBase.CollectPeerClassImports(
+            makeEntity([], {
+                RelatedEntities: [makeCollection({ RelatedEntityClassName: '' })],
+            }),
+            new Set(['DealEntity']),
+        );
+        expect(peers).toEqual([]);
+    });
+
+    it('resolves a collection peer via EntityByName when RelatedEntityID is missing', () => {
+        const peers = EntitySubClassGeneratorBase.CollectPeerClassImports(
+            makeEntity([], {
+                RelatedEntities: [makeCollection({ RelatedEntityID: null })],
+            }),
+            new Set(['DealEntity']),
+        );
+        expect(peers).toEqual([
+            { className: 'mjBizAppsCommonPersonEntity', packageName: '@mj-biz-apps/common-entities' },
+        ]);
+    });
+
+    it('throws when the related entity has no SchemaName', () => {
+        expect(() =>
+            EntitySubClassGeneratorBase.CollectPeerClassImports(
+                makeEntity([makeField({ Name: 'XID', RelatedEntityID: 'rel-noschema' })]),
+                new Set(['DealEntity']),
+            ),
+        ).toThrow(/has no SchemaName/);
+    });
+
+    it('throws when the same class name resolves to two different packages', () => {
+        expect(() =>
+            EntitySubClassGeneratorBase.CollectPeerClassImports(
+                makeEntity([
+                    makeField({ Name: 'A', RelatedEntityID: 'rel-dup-common' }),
+                    makeField({ Name: 'B', RelatedEntityID: 'rel-dup-acct' }),
+                ]),
+                new Set(['DealEntity']),
+            ),
+        ).toThrow(/resolved to both/);
+    });
+
     it('skips a collection whose RelatedRecordCollection JSON is invalid', () => {
         const peers = EntitySubClassGeneratorBase.CollectPeerClassImports(
             makeEntity([], {
@@ -364,6 +417,21 @@ describe('FormatPeerImportStatements', () => {
         expect(EntitySubClassGeneratorBase.FormatPeerImportStatements(imports)).toEqual([
             "import { AEntity, BEntity } from '@pkg/a';\n",
         ]);
+    });
+
+    it('returns no statements for an empty list', () => {
+        expect(EntitySubClassGeneratorBase.FormatPeerImportStatements([])).toEqual([]);
+    });
+
+    it('emits @memberjunction/core-entities first even when it is not alphabetically first', () => {
+        const statements = EntitySubClassGeneratorBase.FormatPeerImportStatements([
+            { className: 'ZEntity', packageName: '@zzz/z' },
+            { className: 'UserEntity', packageName: '@memberjunction/core-entities' },
+            { className: 'AEntity', packageName: '@aaa/a' },
+        ]);
+        expect(statements[0]).toBe("import { UserEntity } from '@memberjunction/core-entities';\n");
+        expect(statements[1]).toBe("import { AEntity } from '@aaa/a';\n");
+        expect(statements[2]).toBe("import { ZEntity } from '@zzz/z';\n");
     });
 });
 
@@ -464,5 +532,98 @@ describe('generateAllEntitySubClasses — Orders Address use case', () => {
         expect(logError).toHaveBeenCalled();
         const logged = vi.mocked(logError).mock.calls.map((c) => String(c[0])).join('\n');
         expect(logged).toMatch(/entity import: cannot import entity classes from schema '__mj_BizAppsUnknown'/);
+    });
+
+    it('groups Address from two owners in the same file onto one import line', async () => {
+        const writeMock = vi.mocked(fs.writeFileSync);
+        writeMock.mockClear();
+        const second = {
+            ...orderHeaderEntity(),
+            Name: 'MJ_BizApps_Orders: Shipments',
+            ClassName: 'mjBizAppsOrdersShipment',
+            BaseTable: 'Shipment',
+            BaseView: 'vwShipments',
+        };
+        const generator = new EntitySubClassGeneratorBase();
+        const ok = await generator.generateAllEntitySubClasses(
+            {} as Parameters<EntitySubClassGeneratorBase['generateAllEntitySubClasses']>[0],
+            [orderHeaderEntity(), second] as Parameters<EntitySubClassGeneratorBase['generateAllEntitySubClasses']>[1],
+            '/out',
+            true,
+        );
+        expect(ok).toBe(true);
+        const content = String(writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'))![1]);
+        const matches = content.match(/import \{ mjBizAppsCommonAddressEntity \} from '@mj-biz-apps\/common-entities';/g) || [];
+        expect(matches.length).toBe(1);
+    });
+
+    it('core-like file: same-schema collection already in localClassNames emits no peer import', async () => {
+        const writeMock = vi.mocked(fs.writeFileSync);
+        writeMock.mockClear();
+        const pk = {
+            Name: 'ID',
+            CodeName: 'ID',
+            Type: 'uniqueidentifier',
+            SQLFullType: 'uniqueidentifier',
+            AllowsNull: false,
+            ReadOnly: false,
+            IsPrimaryKey: true,
+            AutoIncrement: false,
+            IsVirtual: false,
+            AllowUpdateAPI: true,
+            ValueListType: '',
+            ValueListTypeEnum: 0,
+            EntityFieldValues: [],
+            Status: 'Active',
+            NeedsQuotes: true,
+        };
+        const action = {
+            Name: 'Actions',
+            ClassName: 'Action',
+            SchemaName: '__mj',
+            PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+            Fields: [pk],
+            RelatedEntities: [
+                {
+                    RelatedEntity: 'Action Params',
+                    RelatedEntityJoinField: 'ActionID',
+                    RelatedEntityClassName: 'ActionParam',
+                    RelatedEntityID: 'rel-orders',
+                    Type: 'One To Many',
+                    RelatedRecordCollection: JSON.stringify({ Name: 'Params' }),
+                },
+            ],
+            EntityObjectSubclassName: '',
+            EntityObjectSubclassImport: '',
+            ExternalDataSourceID: null,
+            AllowDeleteAPI: true,
+            AllowCreateAPI: true,
+            AllowUpdateAPI: true,
+            CascadeDeletes: false,
+            IsChildType: false,
+            Status: 'Active',
+            BaseTable: 'Action',
+            BaseView: 'vwActions',
+            Description: '',
+        };
+        const param = {
+            ...action,
+            Name: 'Action Params',
+            ClassName: 'ActionParam',
+            BaseTable: 'ActionParam',
+            BaseView: 'vwActionParams',
+            RelatedEntities: [],
+        };
+        const generator = new EntitySubClassGeneratorBase();
+        const ok = await generator.generateAllEntitySubClasses(
+            {} as Parameters<EntitySubClassGeneratorBase['generateAllEntitySubClasses']>[0],
+            [action, param] as Parameters<EntitySubClassGeneratorBase['generateAllEntitySubClasses']>[1],
+            '/out',
+            true,
+        );
+        expect(ok).toBe(true);
+        const content = String(writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'))![1]);
+        expect(content).toContain('DeclareRelatedRecords<ActionParamEntity>');
+        expect(content).not.toMatch(/import \{[^}]*ActionParamEntity[^}]*\} from /);
     });
 });

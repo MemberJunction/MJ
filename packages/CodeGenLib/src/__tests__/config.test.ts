@@ -189,6 +189,11 @@ describe('thisEmitEntityPackageName', () => {
         expect(thisEmitEntityPackageName('sales', config)).toBe('@myorg/sales-entities');
         expect(thisEmitEntityPackageName('dbo', config)).toBe('mj_generatedentities');
     });
+
+    it('treats an empty string entityPackageName as mj_generatedentities', () => {
+        expect(thisEmitEntityPackageName('dbo', makeConfig(''))).toBe('mj_generatedentities');
+        expect(thisEmitEntityPackageName('dbo', makeConfig('   '))).toBe('mj_generatedentities');
+    });
 });
 
 describe('resolveEntityImportPackage', () => {
@@ -277,6 +282,53 @@ describe('resolveEntityImportPackage', () => {
         const config = ordersPublisher();
         expect(() => resolveEntityImportPackage('', '__mj_BizAppsOrders', config)).toThrow(/empty SchemaName/);
         expect(() => resolveEntityImportPackage('__mj_BizAppsCommon', '', config)).toThrow(/empty SchemaName/);
+    });
+
+    it('treats an empty or whitespace entityImportPackages value as missing and throws', () => {
+        const config = makeConfig('@mj-biz-apps/orders-entities', {
+            entityImportPackages: {
+                '__mj_BizAppsCommon': '   ',
+            },
+        });
+        expect(() => resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
+            /not listed in entityImportPackages/,
+        );
+    });
+
+    it('honors a custom mjCoreSchema instead of assuming __mj', () => {
+        const config = makeConfig('mj_generatedentities', { mjCoreSchema: 'mj_core' });
+        expect(resolveEntityImportPackage('mj_core', 'dbo', config)).toBe('@memberjunction/core-entities');
+        expect(resolveEntityImportPackage('MJ_CORE', 'dbo', config)).toBe('@memberjunction/core-entities');
+        expect(() => resolveEntityImportPackage('__mj', 'dbo', config)).toThrow(/not listed in entityImportPackages/);
+    });
+
+    it('Record entityPackageName with an unmapped foreign schema throws (does not silently resolve)', () => {
+        const config = makeConfig({
+            sales: '@myorg/sales-entities',
+        });
+        expect(() => resolveEntityImportPackage('hr', 'dbo', config)).toThrow(/entityPackageName schema map/);
+        expect(() => resolveEntityImportPackage('hr', 'dbo', config)).toThrow(
+            /cannot import entity classes from schema 'hr'/,
+        );
+    });
+
+    it('Record entityPackageName that maps a foreign schema to this emit\'s package throws', () => {
+        const config = makeConfig({
+            dbo: 'mj_generatedentities',
+            sales: 'mj_generatedentities',
+        });
+        expect(() => resolveEntityImportPackage('sales', 'dbo', config)).toThrow(/this emit's own package/);
+    });
+
+    it('trims package names from the import map', () => {
+        const config = makeConfig('@mj-biz-apps/orders-entities', {
+            entityImportPackages: {
+                '__mj_BizAppsCommon': '  @mj-biz-apps/common-entities  ',
+            },
+        });
+        expect(resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toBe(
+            '@mj-biz-apps/common-entities',
+        );
     });
 });
 
