@@ -2,6 +2,7 @@ import { Metadata, TransactionGroupBase, TransactionItem, TransactionResult, Log
 import pg from 'pg';
 import { PostgreSQLDataProvider } from './PostgreSQLDataProvider.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
+import { GroupByShape, BuildGroupSQL, SplitGroupRows } from './PostgreSQLBatchedSubmit.js';
 
 /**
  * PostgreSQL implementation of the TransactionGroupBase.
@@ -90,18 +91,38 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
         client: pg.PoolClient,
         returnResults: TransactionResult[]
     ): Promise<void> {
-        for (const item of items) {
-            let result: Record<string, unknown>[] | undefined;
-            let bSuccess = false;
+        // NO variable dependencies, so no item needs another to have run first — the condition
+        // under which same-shape items can travel as ONE statement instead of one round trip each.
+        // The functions invoked, and therefore the CRUD procedures, Record Changes writes and save
+        // events they perform, are exactly what the serial path invoked. Only the trip count moves.
+        // See PostgreSQLBatchedSubmit for why grouping is by SHAPE (GenerateSaveSQL emits only the
+        // fields it is saving, so two updates to one entity can differ) and why UNION ALL rather
+        // than concatenation (the extended protocol carries one statement per message).
+        const batchable = items.map(item => ({
+            Instruction: item.Instruction,
+            Params: PGQueryParameterProcessor.ProcessParameters(item.ExtraData?.parameters ?? item.Vars) ?? [],
+        }));
+        const perItemRows: Array<Record<string, unknown>[] | undefined> = new Array(items.length).fill(undefined);
+
+        for (const indexes of GroupByShape(batchable)) {
+            const group = BuildGroupSQL(batchable, indexes);
             try {
-                result = await this.executeItem(client, item);
-                bSuccess = (result != null && result.length > 0);
+                const queryResult = await client.query(group.SQL, group.Params);
+                const split = SplitGroupRows(queryResult.rows as Record<string, unknown>[], indexes);
+                for (const idx of indexes) perItemRows[idx] = split.get(idx) ?? [];
             } catch (e) {
-                returnResults.push(new TransactionResult(item, e, false));
+                // One statement to the server, so a failure fails the whole group — and the
+                // transaction rolls back regardless, which is what the serial path also produced.
+                for (const item of items) returnResults.push(new TransactionResult(item, e, false));
                 const errorMessage = e instanceof Error ? e.message : String(e);
                 throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
             }
-            returnResults.push(new TransactionResult(item, result && result.length > 0 ? result[0] : result, bSuccess));
+        }
+
+        for (let i = 0; i < items.length; i++) {
+            const rows = perItemRows[i];
+            const bSuccess = rows != null && rows.length > 0;
+            returnResults.push(new TransactionResult(items[i], rows && rows.length > 0 ? rows[0] : rows, bSuccess));
         }
     }
 

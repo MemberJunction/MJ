@@ -1,5 +1,6 @@
 ---
 "@memberjunction/sqlserver-dataprovider": patch
+"@memberjunction/postgresql-dataprovider": patch
 ---
 
 `TransactionGroup` submits its items in one round trip instead of one per item.
@@ -21,4 +22,6 @@ Behaviour change worth stating: serially, the client stopped *sending* after the
 
 The `Variables` path, where items genuinely depend on each other's results, stays serial by construction.
 
-PostgreSQL keeps its serial submit for now: its extended protocol permits only one statement per parameterized query, so the equivalent needs a grouped single-statement form rather than concatenation. Tracked as the follow-up.
+PostgreSQL reaches the same place by a different route, because its extended protocol carries only ONE statement per message and node-postgres does not pipeline — so concatenation is unavailable. Items whose instruction is the same shape differ only in their values, so they are combined into a single `UNION ALL`, each branch tagged with its item index and every placeholder renumbered into one continuous sequence. One statement, still fully parameterized, the CRUD function invoked once per branch.
+
+Grouping is by the shape the provider actually emitted — the instruction with its `$n` numbers normalized away — rather than by entity, because `GenerateSaveSQL` emits only the fields it is saving and two updates to one entity can genuinely differ. Consecutive same-shape runs group; anything else is sent alone, exactly as today. Order is never rearranged to make a bigger group.
