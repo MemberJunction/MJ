@@ -546,8 +546,11 @@ export class IntegrationConnectorCreationPipeline {
                             console.log(`[IntrospectPipeline] declared field-less object "${d.Name}" → discovered ${dfields.length} fields via read path`);
                         } catch (err) {
                             const msg = err instanceof Error ? err.message : String(err);
-                            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared field-less "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
-                            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared "${d.Name}": ${msg}`);
+                            // Name WHICH gap sent us down the read path — the branch now covers two
+                            // (no fields at all, and fields but no key), and they need different fixes.
+                            const gap = existing.Fields.length === 0 ? 'field-less' : 'keyless';
+                            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared ${gap} "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
+                            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared ${gap} "${d.Name}": ${msg}`);
                         }
                     }
                     continue;
