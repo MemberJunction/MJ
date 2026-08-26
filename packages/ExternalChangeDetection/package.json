@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/external-change-detection",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.4",
   "description": "Library used by server side applications to determine if changes have been made to entities by external systems/integrations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,12 +20,12 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/encryption": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/sql-dialect": "6.1.0-edge.3",
-    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.3"
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/encryption": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/sql-dialect": "6.1.0-edge.4",
+    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.4"
   },
   "repository": {
     "type": "git",

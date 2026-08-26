@@ -7,6 +7,7 @@ import { SQLUtilityBase } from './sql';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
 
 import { autoIndexForeignKeys, autoIndexSoftPrimaryKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
+import { entityInCustomBaseViewRefreshScope, shouldEmitCascadeForRelatedEntity } from './schema-filters';
 import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -1087,7 +1088,12 @@ export class SQLCodeGenBase {
             modifiedOrNewNames.includes(e.Name) &&
             !e.BaseViewGenerated &&
             e.IncludeInAPI &&
-            !e.VirtualEntity
+            !e.VirtualEntity &&
+            entityInCustomBaseViewRefreshScope(
+                e.SchemaName,
+                configInfo.excludeSchemas ?? [],
+                configInfo.includeSchemas,
+            )
         );
     }
 
@@ -1115,7 +1121,14 @@ export class SQLCodeGenBase {
                     return outer; // fully custom — one view, and it is a standing prerequisite
                 }
                 const inner = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.GeneratedViewName);
-                return inner + '\n' + this.guardOnApplicationOwnedView(e, outer);
+                const rebind = this._dbProvider.generateLayeredOuterRebindSQL(e);
+                const outerSql = outer.trim().length > 0
+                    ? this.guardOnApplicationOwnedView(e, outer)
+                    : '';
+                const rebindSql = rebind.trim().length > 0
+                    ? this.guardOnApplicationOwnedView(e, rebind.trim())
+                    : '';
+                return [inner, outerSql, rebindSql].filter((s) => s && s.trim().length > 0).join('\n');
             })
             .join('\n');
     }
@@ -1876,6 +1889,12 @@ export class SQLCodeGenBase {
             const refreshSQL: string = this._dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
             sOutput += this.guardOnApplicationOwnedView(entity, refreshSQL) + separator;
         }
+        if (entity.HasLayeredBaseView && !entity.VirtualEntity) {
+            const rebindSQL: string = this._dbProvider.generateLayeredOuterRebindSQL(entity);
+            if (rebindSQL.trim().length > 0) {
+                sOutput += this.guardOnApplicationOwnedView(entity, rebindSQL.trim()) + separator;
+            }
+        }
 
         return sOutput + permissionsHeader + this.guardOnApplicationOwnedView(entity, permissionsBody) + separator;
     }
@@ -2273,6 +2292,13 @@ export class SQLCodeGenBase {
 
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
+                if (!shouldEmitCascadeForRelatedEntity(
+                    entity.SchemaName,
+                    e.SchemaName,
+                    configInfo.allowCrossSchemaCascadeDeletes === true,
+                )) {
+                    continue;
+                }
                 for (const ef of e.Fields) {
                     if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         const cascadeSql = await this.generateSingleCascadeOperation(entity, e, ef, pool);
@@ -2413,6 +2439,13 @@ export class SQLCodeGenBase {
 
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
+                if (!shouldEmitCascadeForRelatedEntity(
+                    entity.SchemaName,
+                    e.SchemaName,
+                    configInfo.allowCrossSchemaCascadeDeletes === true,
+                )) {
+                    continue;
+                }
                 for (const ef of e.Fields) {
                     if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         // Skip self-referential foreign keys (e.g., ParentID pointing to same entity)

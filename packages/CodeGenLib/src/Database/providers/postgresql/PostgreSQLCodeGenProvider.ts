@@ -13,7 +13,7 @@ import {
 import { configInfo, mj_core_schema } from '../../../Config/config';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
-import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers, restarLayeredOuterView, buildCreateOrReplaceLayeredOuterViewSQL, LayeredOuterRestarError } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
@@ -29,6 +29,7 @@ import { PostgreSQLCodeGenConnection } from './PostgreSQLCodeGenConnection';
 import * as fs from 'fs';
 import path from 'path';
 import { executeWithFallback } from './viewFallback';
+import type { PGQueryable } from './viewDependencyCapture';
 
 const pgDialect = new PostgreSQLDialect();
 
@@ -200,7 +201,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      */
     generateBaseView(context: BaseViewGenerationContext): string {
         const { entity } = context;
-        this.assertLayeredBaseViewSupported(entity);
         // The GENERATED view — `GeneratedViewName` is BaseView unless the entity layers a custom view
         // over an inner generated one, in which case CodeGen writes the inner name. The CRUD
         // routines keep using getBaseViewName(): they return rows from the PUBLIC view, so a
@@ -1934,18 +1934,10 @@ ORDER BY ordinal_position`;
     }
 
     /**
-     * PostgreSQL has no view-refresh mechanism, so this always returns `false`.
-     *
-     * NOT because PG views track their source automatically — they do not. PG expands `SELECT *`
-     * into an explicit column list at creation and freezes it; a view gains a new underlying column
-     * only when the view itself is recreated. CodeGen gets away without a refresh step because it
-     * emits every generated view with an explicit column list and re-issues `CREATE OR REPLACE` on
-     * every run, so the definition it controls is always current.
-     *
-     * That holds only for views CodeGen writes. A view CodeGen does not own — such as the
-     * application-owned outer view of a layered entity — has no mechanism here to re-resolve it, and
-     * `generateViewRefreshSQL` returning empty is a genuine no-op rather than a cheap one. This is
-     * why {@link generateBaseView} refuses layered entities outright on PostgreSQL.
+     * PostgreSQL has no `sp_refreshview`. Generated views are re-issued with
+     * `CREATE OR REPLACE` (or the 42P16 capture/DROP CASCADE path) every run, so
+     * they do not need a separate refresh step. Layered *outer* views are rebound
+     * via {@link generateLayeredOuterRebindSQL}, not this flag.
      */
     get NeedsViewRefresh(): boolean {
         return false;
@@ -1956,12 +1948,90 @@ ORDER BY ordinal_position`;
         return '';
     }
 
+    /**
+     * Restar `g.*` on the application-owned outer view. Invokes the catalog
+     * function shipped by the PG layered-views migration; no-op if the function
+     * is not installed yet (bootstrap before that migration).
+     */
+    override generateLayeredOuterRebindSQL(entity: EntityInfo): string {
+        if (!entity.HasLayeredBaseView) {
+            return '';
+        }
+        let core = '__mj';
+        try {
+            core = (mj_core_schema() || '__mj').replace(/"/g, '""');
+        } catch {
+            core = '__mj';
+        }
+        const schema = entity.SchemaName.replace(/'/g, "''");
+        const outer = entity.BaseView.replace(/'/g, "''");
+        const inner = entity.GeneratedViewName.replace(/'/g, "''");
+        return `SELECT "${core}"."spRebindLayeredOuterView"('${schema}', '${outer}', '${inner}');`;
+    }
+
+    /**
+     * After the inner generated view is current, restar the application-owned
+     * outer wrapper so `g.*` re-expands. No-op when the entity is not layered
+     * or the outer view does not exist yet (bootstrap pass).
+     */
+    private async rebindLayeredOuterIfPresent(
+        client: PGQueryable,
+        entity: EntityInfo,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        if (!entity.HasLayeredBaseView) {
+            return;
+        }
+        const schemaLit = entity.SchemaName.replace(/'/g, "''").replace(/"/g, '""');
+        const outerLit = entity.BaseView.replace(/'/g, "''").replace(/"/g, '""');
+        const innerLit = entity.GeneratedViewName.replace(/'/g, "''").replace(/"/g, '""');
+        const existsResult = await client.query(
+            `SELECT to_regclass('"${schemaLit}"."${outerLit}"') IS NOT NULL AS present`,
+        );
+        if (!existsResult.rows?.[0]?.['present']) {
+            return;
+        }
+
+        const defResult = await client.query(this.getViewDefinitionSQL(entity.SchemaName, entity.BaseView));
+        const viewDefinition = String(defResult.rows?.[0]?.['ViewDefinition'] ?? defResult.rows?.[0]?.['viewdefinition'] ?? '');
+        if (!viewDefinition) {
+            throw new LayeredOuterRestarError(
+                `Could not read pg_get_viewdef for layered outer view ${entity.SchemaName}.${entity.BaseView}`,
+            );
+        }
+
+        const colResult = await client.query(
+            `SELECT a.attname AS "Name"
+             FROM pg_attribute a
+             JOIN pg_class c ON c.oid = a.attrelid
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = '${schemaLit}'
+               AND c.relname = '${innerLit}'
+               AND a.attnum > 0
+               AND NOT a.attisdropped
+             ORDER BY a.attnum`,
+        );
+        const innerColumns = (colResult.rows ?? []).map((r) => String(r['Name'] ?? r['name'] ?? ''));
+        const restarred = restarLayeredOuterView({
+            viewDefinition,
+            innerViewName: entity.GeneratedViewName,
+            innerColumns,
+        });
+        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(entity.SchemaName, entity.BaseView, restarred);
+        await executeWithFallback({
+            client,
+            schema: entity.SchemaName,
+            viewName: entity.BaseView,
+            createOrReplaceSQL: createSQL,
+            willRegenerate,
+        });
+    }
+
     /** @inheritdoc */
     generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string {
-        // Reached only if a future change enables layering on PG; today generateBaseView throws
-        // first. Implemented properly regardless, so the guard is not a lie if that day comes.
+        // The outer view of a layered entity does not exist on the bootstrap pass.
         const escaped = innerSQL.replace(/'/g, "''");
-        const regclass = `${schema}.${viewName}`.replace(/'/g, "''");
+        const regclass = `"${schema.replace(/"/g, '""')}"."${viewName.replace(/"/g, '""')}"`.replace(/'/g, "''");
         return `DO $if_view_exists$
 BEGIN
   IF to_regclass('${regclass}') IS NOT NULL THEN
@@ -2194,7 +2264,7 @@ WHERE p.prokind IN ('f', 'p')
             await executeWithFallback({
                 client,
                 schema: entity.SchemaName,
-                viewName: entity.BaseView,
+                viewName: entity.GeneratedViewName,
                 createOrReplaceSQL: viewSQL,
                 willRegenerate,
                 // Pass the base table so viewFallback can materialize a stub
@@ -2205,6 +2275,7 @@ WHERE p.prokind IN ('f', 'p')
                 // self-reference until a placeholder exists).
                 baseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
+            await this.rebindLayeredOuterIfPresent(client, entity, willRegenerate);
         } finally {
             client.release();
         }
@@ -2260,11 +2331,12 @@ WHERE p.prokind IN ('f', 'p')
                     await executeWithFallback({
                         client,
                         schema: opts.entity.SchemaName,
-                        viewName: opts.entity.BaseView,
+                        viewName: opts.entity.GeneratedViewName,
                         createOrReplaceSQL: opts.viewSQL,
                         willRegenerate: opts.willRegenerate,
                         baseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
                     });
+                    await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
                 } catch (e) {
                     return {
                         success: false,
@@ -2376,40 +2448,6 @@ WHERE p.prokind IN ('f', 'p')
     /** Gets the base view name for an entity */
     private getBaseViewName(entity: EntityInfo): string {
         return entity.BaseView || `vw_${this.toSnakeCase(entity.CodeName)}`;
-    }
-
-    /**
-     * Refuses layered base views on PostgreSQL, where the arrangement cannot deliver what it
-     * promises.
-     *
-     * Layering exists so an application can add a computed column without inheriting — and then
-     * hand-maintaining — the generated view, the payoff being that a foreign key added later still
-     * shows up on its own. That payoff depends entirely on the application-owned outer view's
-     * `SELECT g.*` being re-resolved after the inner view regenerates. SQL Server does that with
-     * `sp_refreshview`. PostgreSQL expands `*` at creation and freezes it, offers no refresh
-     * equivalent, and CodeGen does not own the outer view, so nothing recreates it.
-     *
-     * The resulting behaviour is worse than plainly broken, it is intermittent: an ADDED column (the
-     * common case) leaves the outer view stale, because `CREATE OR REPLACE` on the inner view
-     * succeeds and never touches dependents. A column RENAME or type change raises 42P16, which
-     * sends CodeGen down the capture/`DROP CASCADE`/replay path — and that incidentally recreates
-     * the outer view, so it picks the new columns up. Same feature, opposite outcomes, decided by
-     * which kind of schema change happened to land that day.
-     *
-     * That is precisely the silent-staleness failure layering was built to eliminate, so this throws
-     * rather than documenting a footgun. Fully custom base views (`BaseViewGenerated = 0` with no
-     * `GeneratedBaseViewName`) are unaffected and keep working on PostgreSQL as before.
-     */
-    private assertLayeredBaseViewSupported(entity: EntityInfo): void {
-        if (!entity.HasLayeredBaseView) return;
-        throw new Error(
-            `Entity "${entity.Name}" sets GeneratedBaseViewName = '${entity.GeneratedBaseViewName}', but layered ` +
-            `base views are not supported on PostgreSQL. PostgreSQL freezes a view's column list at creation and ` +
-            `has no sp_refreshview equivalent, so the application-owned view "${entity.BaseView}" would silently ` +
-            `stop gaining columns that the generated view underneath it picks up. Clear GeneratedBaseViewName and ` +
-            `use a fully custom base view (BaseViewGenerated = 0) instead, accepting that it must be ` +
-            `hand-maintained as the schema changes.`
-        );
     }
 
     /** Builds the WHERE clause for soft-delete filtering */

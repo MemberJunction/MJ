@@ -38,6 +38,7 @@ import type {
 } from './types.js';
 import { ClassifyError, IsRetryableError } from './types.js';
 import { WithRetry } from './RetryRunner.js';
+import { DecideKeylessRefusal, DescribeKeylessRefusal, MissingKeyFieldNames, type KeyFieldLike } from './KeylessRecordGuard.js';
 import { WithTimeout, OperationTimeoutError, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
@@ -49,12 +50,16 @@ import { RecordMapBatch } from './RecordMapBatch.js';
 import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
+import { ComputeExcludedSourceNames } from './SyncDirectives.js';
+import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps } from './FieldMapValidation.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
+import { CollapseDuplicateIdentities } from './BatchIdentity.js';
+import { ResumeConcurrency, RunResumesBounded } from './ResumeConcurrency.js';
 
 /** Default batch size for fetching records from external systems */
 const DEFAULT_BATCH_SIZE = 200;
@@ -651,181 +656,228 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         console.log(`[IntegrationEngine] Found ${orphanedRuns.Results.length} orphaned sync(s) to resume`);
 
-        for (const run of orphanedRuns.Results) {
-            const companyIntegrationID = run.CompanyIntegrationID;
-            const runID = run.ID;
-            const lockKey = companyIntegrationID.toLowerCase();
+        // CONCURRENTLY, because that is how these runs were STARTED.
+        //
+        // This loop used to `await` each resume in turn, which quietly converted a parallel
+        // workload into a queue ordered by whatever RunView happened to return. The slowest
+        // connector became a head-of-line block for every other connector in the workspace — and
+        // a connector that never finishes means the others never start at all.
+        //
+        // Observed live: a restart orphaned three syncs; one resumed and was still going five
+        // hours later, and the other two (99,463 and 13,238 rows) never began. Nothing in their
+        // logs said so, because nothing had failed — they had simply never been reached. From
+        // outside the process a queued run and a crashed one are identical: IsInFlight true,
+        // CompletedAt null, counters frozen at the instant of the restart. The absence of an
+        // error is the only tell.
+        //
+        // Note what is NOT being parallelised. The write section stays serialized by
+        // `runWriteExclusive`, because all maps share one provider connection with singular
+        // transaction state; that is deliberate and unchanged. Per-CompanyIntegration exclusion
+        // stays too, via the `activeSyncs` lock each resume takes. What overlaps here is what
+        // overlapped before the restart: different connectors waiting on different sources.
+        //
+        // Bounded rather than unbounded: a workspace is one Node process, so concurrency buys
+        // overlap on network waiting and not more CPU, and a boot that adopted fifty runs at once
+        // would trade one pathology for another.
+        await RunResumesBounded(
+            orphanedRuns.Results,
+            ResumeConcurrency(),
+            run => this.ResumeOneOrphanedRun(run, prov, rv, contextUser)
+        );
+    }
 
-            // C1: respect the SAME in-process concurrency lock RunSync uses. If a live sync for this
-            // CompanyIntegration is already running (e.g. the scheduler fired during startup), skip the
-            // resume — double-running one CI on the shared provider connection corrupts its singular
-            // transaction state (exactly what runWriteExclusive guards against WITHIN a run). The
-            // get→set pair below has no await between them, so check-and-reserve is atomic on the loop.
-            if (IntegrationEngine.activeSyncs.get(lockKey)) {
-                console.log(`[IntegrationEngine] Skipping resume of run ${runID.substring(0, 8)} — a live sync for ${lockKey} is already running`);
-                continue;
+    /**
+     * Resume ONE orphaned run, end to end: reserve the per-CompanyIntegration lock, claim the run,
+     * work out which entity maps already finished, and execute the rest under a fresh run context.
+     *
+     * Extracted from {@link ResumeOrphanedSyncs}'s loop so several runs can be in flight at once.
+     * NEVER THROWS — every failure path is handled here and recorded on the run row. A resume that
+     * threw out of this method would take a pool slot with it and, worse, could abandon the runs
+     * queued behind it, which is the exact failure this parallelisation exists to remove.
+     *
+     * The check-and-reserve on `activeSyncs` still has no `await` in front of it, so it stays
+     * atomic with several of these in flight: an async function runs synchronously up to its first
+     * await, and the pool always starts one from a synchronous call site.
+     */
+    private async ResumeOneOrphanedRun(
+        run: MJCompanyIntegrationRunEntity,
+        prov: IMetadataProvider,
+        rv: RunView,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const companyIntegrationID = run.CompanyIntegrationID;
+        const runID = run.ID;
+        const lockKey = companyIntegrationID.toLowerCase();
+
+        // C1: respect the SAME in-process concurrency lock RunSync uses. If a live sync for this
+        // CompanyIntegration is already running (e.g. the scheduler fired during startup), skip the
+        // resume — double-running one CI on the shared provider connection corrupts its singular
+        // transaction state (exactly what runWriteExclusive guards against WITHIN a run). The
+        // get→set pair below has no await between them, so check-and-reserve is atomic on the loop.
+        if (IntegrationEngine.activeSyncs.get(lockKey)) {
+            console.log(`[IntegrationEngine] Skipping resume of run ${runID.substring(0, 8)} — a live sync for ${lockKey} is already running`);
+            return;
+        }
+        let resolveResumeLock!: (r: SyncResult) => void;
+        let resumeResult: SyncResult | undefined;
+        IntegrationEngine.activeSyncs.set(lockKey, new Promise<SyncResult>(res => { resolveResumeLock = res; }));
+
+        const ownership = new RunOwnershipService(prov as DatabaseProviderBase, runID, undefined, contextUser);
+        try {
+            // CLAIM BEFORE ADOPTING (PR 1 item 6): a single atomic UPDATE that succeeds only if the
+            // run is still unowned/lapsed. Zero rows = another worker adopted it between our RunView
+            // and now — skip, never double-run. A successful claim BUMPS the fence, so if the
+            // original owner is actually alive-but-slow it aborts at its next boundary check
+            // without writing: the sweep-reclaim is itself the abort signal for the abandoned owner.
+            const claimed = await ownership.Claim();
+            if (!claimed) {
+                console.log(`[IntegrationEngine] Skipping resume of run ${runID.substring(0, 8)} — claim lost (another worker adopted it)`);
+                return;
             }
-            let resolveResumeLock!: (r: SyncResult) => void;
-            let resumeResult: SyncResult | undefined;
-            IntegrationEngine.activeSyncs.set(lockKey, new Promise<SyncResult>(res => { resolveResumeLock = res; }));
 
-            const ownership = new RunOwnershipService(prov as DatabaseProviderBase, runID, undefined, contextUser);
+            // Find which entity MAPS already completed SUCCESSFULLY in this run. We correlate
+            // by EntityMapID (parsed from the detail's RecordID, stamped by CreateRunDetail),
+            // not EntityID — two maps can target the same MJ Entity, so keying on EntityID
+            // could skip a still-pending sibling map. We also require IsSuccess=1: a map that
+            // completed WITH errors (RecordsErrored>0, no throw) must be re-attempted on resume,
+            // otherwise its errored records are silently abandoned.
+            const detailsResult = await rv.RunView<{ RecordID: string; IsSuccess: boolean }>({
+                EntityName: 'MJ: Company Integration Run Details',
+                ExtraFilter: `CompanyIntegrationRunID='${runID}'`,
+                Fields: ['RecordID', 'IsSuccess'],
+                ResultType: 'simple',
+            }, contextUser);
+
+            const completedMapIDs = new Set<string>();
+            if (detailsResult.Success) {
+                for (const d of detailsResult.Results) {
+                    if (!d.IsSuccess) continue; // completed-with-errors → re-attempt on resume
+                    const m = /^EntityMap:([0-9a-fA-F-]+)\|/.exec(d.RecordID ?? '');
+                    // Parse-miss falls open (map treated as not-completed → re-runs): at worst a
+                    // redundant idempotent re-sync, never a silent skip.
+                    if (m) completedMapIDs.add(m[1].toLowerCase());
+                }
+            }
+
+            console.log(
+                `[IntegrationEngine] Resuming run ${runID.substring(0, 8)}... ` +
+                `for ${companyIntegrationID.substring(0, 8)}... ` +
+                `(${completedMapIDs.size} entity maps already completed)`
+            );
+
+            // Recover what this run was ASKED to do. Without this the resume rebuilds config from
+            // the CompanyIntegration alone, so an adopted run silently loses its options — most
+            // damagingly FullSync, which exists precisely to distrust the watermark. An adopted
+            // full sync would resume incrementally, fetch nothing, and report Success.
+            // Unparseable/absent ConfigData falls back to defaults rather than refusing to resume.
+            let resumeOptions: IntegrationSyncOptions | undefined;
+            let resumeTriggerType: SyncTriggerType = 'Scheduled';
             try {
-                // CLAIM BEFORE ADOPTING (PR 1 item 6): a single atomic UPDATE that succeeds only if the
-                // run is still unowned/lapsed. Zero rows = another worker adopted it between our RunView
-                // and now — skip, never double-run. A successful claim BUMPS the fence, so if the
-                // original owner is actually alive-but-slow it aborts at its next boundary check
-                // without writing: the sweep-reclaim is itself the abort signal for the abandoned owner.
-                const claimed = await ownership.Claim();
-                if (!claimed) {
-                    console.log(`[IntegrationEngine] Skipping resume of run ${runID.substring(0, 8)} — claim lost (another worker adopted it)`);
-                    continue;
-                }
-
-                // Find which entity MAPS already completed SUCCESSFULLY in this run. We correlate
-                // by EntityMapID (parsed from the detail's RecordID, stamped by CreateRunDetail),
-                // not EntityID — two maps can target the same MJ Entity, so keying on EntityID
-                // could skip a still-pending sibling map. We also require IsSuccess=1: a map that
-                // completed WITH errors (RecordsErrored>0, no throw) must be re-attempted on resume,
-                // otherwise its errored records are silently abandoned.
-                const detailsResult = await rv.RunView<{ RecordID: string; IsSuccess: boolean }>({
-                    EntityName: 'MJ: Company Integration Run Details',
-                    ExtraFilter: `CompanyIntegrationRunID='${runID}'`,
-                    Fields: ['RecordID', 'IsSuccess'],
-                    ResultType: 'simple',
-                }, contextUser);
-
-                const completedMapIDs = new Set<string>();
-                if (detailsResult.Success) {
-                    for (const d of detailsResult.Results) {
-                        if (!d.IsSuccess) continue; // completed-with-errors → re-attempt on resume
-                        const m = /^EntityMap:([0-9a-fA-F-]+)\|/.exec(d.RecordID ?? '');
-                        // Parse-miss falls open (map treated as not-completed → re-runs): at worst a
-                        // redundant idempotent re-sync, never a silent skip.
-                        if (m) completedMapIDs.add(m[1].toLowerCase());
-                    }
-                }
-
-                console.log(
-                    `[IntegrationEngine] Resuming run ${runID.substring(0, 8)}... ` +
-                    `for ${companyIntegrationID.substring(0, 8)}... ` +
-                    `(${completedMapIDs.size} entity maps already completed)`
-                );
-
-                // Recover what this run was ASKED to do. Without this the resume rebuilds config from
-                // the CompanyIntegration alone, so an adopted run silently loses its options — most
-                // damagingly FullSync, which exists precisely to distrust the watermark. An adopted
-                // full sync would resume incrementally, fetch nothing, and report Success.
-                // Unparseable/absent ConfigData falls back to defaults rather than refusing to resume.
-                let resumeOptions: IntegrationSyncOptions | undefined;
-                let resumeTriggerType: SyncTriggerType = 'Scheduled';
-                try {
-                    const cfg = JSON.parse(run.ConfigData ?? '{}') as { triggerType?: SyncTriggerType; options?: IntegrationSyncOptions | null };
-                    resumeOptions = cfg.options ?? undefined;
-                    if (cfg.triggerType) resumeTriggerType = cfg.triggerType;
-                } catch {
-                    console.warn(`[IntegrationEngine] Run ${runID.substring(0, 8)} has unparseable ConfigData; resuming with defaults`);
-                }
-                if (resumeOptions?.FullSync) {
-                    console.log(`[IntegrationEngine] Run ${runID.substring(0, 8)} was a FULL sync — resuming as full, not incremental`);
-                }
-
-                // Load config and filter to only remaining entity maps (by map ID)
-                const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions);
-                const remainingMaps = config.entityMaps.filter(
-                    em => !completedMapIDs.has(em.ID.toLowerCase())
-                );
-
-                if (remainingMaps.length === 0) {
-                    console.log(`[IntegrationEngine] All entity maps completed for run ${runID.substring(0, 8)}, marking as Success`);
-                    run.EndedAt = new Date();
-                    run.Status = 'Success';
-                    ownership.SyncEntityOwnershipFields(run); // full-row save must not clobber the live claim
-                    await run.Save();
-                    await ownership.Release('Success');
-                    continue;
-                }
-
-                console.log(`[IntegrationEngine] Resuming ${remainingMaps.length} remaining entity maps (of ${config.entityMaps.length} total)`);
-
-                // Replace entityMaps with only the remaining ones
-                config.entityMaps = remainingMaps;
-
-                // Execute remaining maps inside a per-run context: the resume gets its own provider
-                // binding, abort controller, and ownership — identical to a fresh RunSync — so the
-                // heartbeat renews the lease, the batch boundaries fence-check, and FinalizeRun
-                // syncs ownership fields + releases, all through the SAME code paths.
-                const abortController = new AbortController();
-                const progressSnapshot: SyncProgressSnapshot = {
-                    StartedAt: new Date(),
-                    CurrentEntity: '',
-                    EntityMapsTotal: remainingMaps.length,
-                    EntityMapsCompleted: 0,
-                    RecordsProcessed: 0,
-                    RecordsCreated: 0,
-                    RecordsUpdated: 0,
-                    RecordsErrored: 0,
-                    // The run's OWN trigger type, recovered above — not a hardcoded 'Scheduled'. This is
-                    // what IntegrationGetSyncProgress reports back ("Sync in progress (Manual)"), so a
-                    // hardcoded value mislabels every adopted run.
-                    TriggerType: resumeTriggerType,
-                };
-                const runCtx: EngineRunContext = {
-                    provider: prov,
-                    ownership,
-                    abortController,
-                    progressSnapshot,
-                    cancelRequested: false,
-                    ownershipLost: false,
-                };
-                ownership.StartHeartbeat({
-                    onLost: () => { runCtx.ownershipLost = true; abortController.abort(); },
-                    onCancelRequested: () => { runCtx.cancelRequested = true; abortController.abort(); },
-                    progressSupplier: () => JSON.stringify(progressSnapshot),
-                });
-
-                const result = await IntegrationEngine.runContext.run(runCtx, async () => {
-                    const r = await this.ExecuteEntityMaps(config, run, contextUser, undefined, abortController.signal);
-                    r.RunID = runID;
-                    await this.FinalizeRun(run, r, contextUser);
-                    return r;
-                });
-                resumeResult = result;
-
-                console.log(
-                    `[IntegrationEngine] Resume complete for ${runID.substring(0, 8)}: ` +
-                    `${result.RecordsCreated} created, ${result.RecordsUpdated} updated, ` +
-                    `${result.RecordsErrored} errored`
-                );
-            } catch (err) {
-                const errMsg = err instanceof Error ? err.message : String(err);
-                console.error(`[IntegrationEngine] Failed to resume run ${runID.substring(0, 8)}: ${errMsg}`);
-
-                if (err instanceof RunOwnershipLostError) {
-                    // We were fenced out mid-resume — the NEW owner now owns the run row.
-                    // Writing 'Failed' here would clobber the live holder's state.
-                    console.warn(`[IntegrationEngine] Resume of run ${runID.substring(0, 8)} lost ownership — leaving the run row to its new owner`);
-                } else {
-                    // Mark as failed so it doesn't get picked up again
-                    run.EndedAt = new Date();
-                    run.Status = 'Failed';
-                    run.ErrorLog = JSON.stringify([{ ErrorMessage: `Resume failed: ${errMsg}` }]);
-                    ownership.SyncEntityOwnershipFields(run);
-                    await run.Save();
-                    try { await ownership.Release('Failed'); } catch { /* lease will simply expire */ }
-                }
-            } finally {
-                ownership.StopHeartbeat();
-                // Release the C1 lock + unblock any RunSync that began awaiting this resume (RunSync returns
-                // `existing`). Resolve with the real result when we have one, else a benign empty result so no
-                // waiter hangs. Promise resolve is idempotent and the early-exit `continue` also lands here.
-                IntegrationEngine.activeSyncs.delete(lockKey);
-                resolveResumeLock(resumeResult ?? {
-                    Success: false, ErrorMessage: 'Resume produced no result', RecordsProcessed: 0,
-                    RecordsCreated: 0, RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0,
-                    RecordsSkipped: 0, Errors: [], EntityMapResults: [], Duration: 0,
-                });
+                const cfg = JSON.parse(run.ConfigData ?? '{}') as { triggerType?: SyncTriggerType; options?: IntegrationSyncOptions | null };
+                resumeOptions = cfg.options ?? undefined;
+                if (cfg.triggerType) resumeTriggerType = cfg.triggerType;
+            } catch {
+                console.warn(`[IntegrationEngine] Run ${runID.substring(0, 8)} has unparseable ConfigData; resuming with defaults`);
             }
+            if (resumeOptions?.FullSync) {
+                console.log(`[IntegrationEngine] Run ${runID.substring(0, 8)} was a FULL sync — resuming as full, not incremental`);
+            }
+
+            // Load config and filter to only remaining entity maps (by map ID)
+            const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions);
+            const remainingMaps = config.entityMaps.filter(
+                em => !completedMapIDs.has(em.ID.toLowerCase())
+            );
+
+            if (remainingMaps.length === 0) {
+                console.log(`[IntegrationEngine] All entity maps completed for run ${runID.substring(0, 8)}, marking as Success`);
+                run.EndedAt = new Date();
+                run.Status = 'Success';
+                ownership.SyncEntityOwnershipFields(run); // full-row save must not clobber the live claim
+                await run.Save();
+                await ownership.Release('Success');
+                return;
+            }
+
+            console.log(`[IntegrationEngine] Resuming ${remainingMaps.length} remaining entity maps (of ${config.entityMaps.length} total)`);
+
+            // Replace entityMaps with only the remaining ones
+            config.entityMaps = remainingMaps;
+
+            // Execute remaining maps inside a per-run context: the resume gets its own provider
+            // binding, abort controller, and ownership — identical to a fresh RunSync — so the
+            // heartbeat renews the lease, the batch boundaries fence-check, and FinalizeRun
+            // syncs ownership fields + releases, all through the SAME code paths.
+            const abortController = new AbortController();
+            const progressSnapshot: SyncProgressSnapshot = {
+                StartedAt: new Date(),
+                CurrentEntity: '',
+                EntityMapsTotal: remainingMaps.length,
+                EntityMapsCompleted: 0,
+                RecordsProcessed: 0,
+                RecordsCreated: 0,
+                RecordsUpdated: 0,
+                RecordsErrored: 0,
+                // The run's OWN trigger type, recovered above — not a hardcoded 'Scheduled'. This is
+                // what IntegrationGetSyncProgress reports back ("Sync in progress (Manual)"), so a
+                // hardcoded value mislabels every adopted run.
+                TriggerType: resumeTriggerType,
+            };
+            const runCtx: EngineRunContext = {
+                provider: prov,
+                ownership,
+                abortController,
+                progressSnapshot,
+                cancelRequested: false,
+                ownershipLost: false,
+            };
+            ownership.StartHeartbeat({
+                onLost: () => { runCtx.ownershipLost = true; abortController.abort(); },
+                onCancelRequested: () => { runCtx.cancelRequested = true; abortController.abort(); },
+                progressSupplier: () => JSON.stringify(progressSnapshot),
+            });
+
+            const result = await IntegrationEngine.runContext.run(runCtx, async () => {
+                const r = await this.ExecuteEntityMaps(config, run, contextUser, undefined, abortController.signal);
+                r.RunID = runID;
+                await this.FinalizeRun(run, r, contextUser);
+                return r;
+            });
+            resumeResult = result;
+
+            console.log(
+                `[IntegrationEngine] Resume complete for ${runID.substring(0, 8)}: ` +
+                `${result.RecordsCreated} created, ${result.RecordsUpdated} updated, ` +
+                `${result.RecordsErrored} errored`
+            );
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.error(`[IntegrationEngine] Failed to resume run ${runID.substring(0, 8)}: ${errMsg}`);
+
+            if (err instanceof RunOwnershipLostError) {
+                // We were fenced out mid-resume — the NEW owner now owns the run row.
+                // Writing 'Failed' here would clobber the live holder's state.
+                console.warn(`[IntegrationEngine] Resume of run ${runID.substring(0, 8)} lost ownership — leaving the run row to its new owner`);
+            } else {
+                // Mark as failed so it doesn't get picked up again
+                run.EndedAt = new Date();
+                run.Status = 'Failed';
+                run.ErrorLog = JSON.stringify([{ ErrorMessage: `Resume failed: ${errMsg}` }]);
+                ownership.SyncEntityOwnershipFields(run);
+                await run.Save();
+                try { await ownership.Release('Failed'); } catch { /* lease will simply expire */ }
+            }
+        } finally {
+            ownership.StopHeartbeat();
+            // Release the C1 lock + unblock any RunSync that began awaiting this resume (RunSync returns
+            // `existing`). Resolve with the real result when we have one, else a benign empty result so no
+            // waiter hangs. Promise resolve is idempotent and the early-exit `return`s also land here.
+            IntegrationEngine.activeSyncs.delete(lockKey);
+            resolveResumeLock(resumeResult ?? {
+                Success: false, ErrorMessage: 'Resume produced no result', RecordsProcessed: 0,
+                RecordsCreated: 0, RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0,
+                RecordsSkipped: 0, Errors: [], EntityMapResults: [], Duration: 0,
+            });
         }
     }
 
@@ -1060,6 +1112,29 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             entityMapIDsFilter: options?.EntityMapIDs ?? null,
             syncDirectionOverride: options?.SyncDirection ?? null,
         });
+
+        /**
+         * Re-read the IO/IOF catalog before the run starts (also covers resumed runs — both paths land here).
+         *
+         * Everything else a run reads is fresh per run (LoadRunConfiguration and LoadFieldMaps
+         * read CI/entity maps/field maps with BypassCache) — but IntegrationObject and
+         * IntegrationObjectField are served from this engine's BaseEngine arrays, loaded at
+         * process start and auto-refreshed only by IN-PROCESS BaseEntity saves. A catalog edit
+         * made by direct SQL, a sproc-based sync push, or another process is therefore invisible
+         * to syncs until the host restarts — an AccessPath or field-type correction keeps being
+         * ignored run after run with nothing in the log to say why. The apply/evolution
+         * resolvers already do an invalidate+reload for exactly this reason; the sync path
+         * never got the same treatment.
+         *
+         * Only the two catalog arrays are refreshed — not Config(true), which reloads all eight
+         * datasets unfiltered on every run. The loader is called directly with bypassCache=true
+         * because RefreshItem defaults to the local cache — which is the very thing that is
+         * stale. Replacing the arrays is also what invalidates this PR's memoised views: both
+         * the per-object field index and the per-record GetCachedFields memo key on ARRAY
+         * IDENTITY, so they rebuild lazily on first read after the swap.
+         */
+        await IntegrationEngineBase.Instance.RefreshCatalog(contextUser);
+
         const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
         logger.attachIntegrationName(config.companyIntegration.Integration);
         logger.emit('sync.config.loaded', {
@@ -2093,6 +2168,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
+        // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
+        // batch below. Empty set on any lookup miss - exclusion can only ever narrow.
+        const excludedSourceNames = this.ResolveExcludedSourceNames(
+            config.companyIntegration.IntegrationID, entityMap.ExternalObjectName);
+        if (excludedSourceNames.size > 0) {
+            logger?.emit('sync.entity-map.exclusions', {
+                externalObjectName: entityMap.ExternalObjectName,
+                excludedFields: Array.from(excludedSourceNames).sort(),
+            });
+        }
         const watermark = await this.runWriteExclusive(() => this.watermarkService.Load(entityMapID, contextUser, 'Pull'));
         logger?.emit('sync.entity-map.start', {
             phase: 'pull-detail',
@@ -2108,9 +2194,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             watermarkType: watermark?.WatermarkType ?? null,
             fullSync: config.fullSync,
         });
+        this.WarnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
 
         // A6: Validate watermark before using it — skip entirely when FullSync requested
         let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
+        // The value the ROW held before this run touched it — the retract target if a mid-run
+        // durability floor (§8a below) has to be undone after a page-skip gap. Distinct from
+        // initialWatermark, which a fullSync nulls even though the row still holds a real value.
+        const preRunWatermarkValue = watermark?.WatermarkValue ?? null;
         if (initialWatermark && watermark) {
             const watermarkType = (watermark.WatermarkType ?? 'Timestamp') as WatermarkType;
             if (!this.watermarkService.ValidateWatermark(initialWatermark, watermarkType)) {
@@ -2203,6 +2294,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let previousBatchFingerprint: string | undefined;
         let fetchCompletedCleanly = true; // flipped to false if fetch aborted or errored mid-way
         let hadFetchGap = false;          // ≥1 page was skipped after a persistent fetch error (offset/page paging)
+        let watermarkFloorSaved: string | null = null; // §8a durability floor last persisted mid-run (null = none)
         let fetchGapCount = 0;            // CONSECUTIVE skipped pages (reset on any clean fetch)
         const MAX_FETCH_GAPS = 25;        // give up + hold the watermark if this many pages fail in a row (API down)
         let consecutiveEmptyBatches = 0;  // P3-D: detect a connector that pages empty-but-HasMore forever
@@ -2276,6 +2368,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             });
             let batch: FetchBatchResult;
             const fetchStart = Date.now();
+            // ONE multiplicative decrease per throttle EPISODE, not one per rejected attempt.
+            //
+            // A 429 that survives three retries is three rejections but one congestion event — the
+            // same distinction TCP draws when it halves the window once per loss event rather than
+            // once per lost segment. Decreasing on each attempt compounds: at a 0.5 backoff factor
+            // three attempts take the rate to an eighth, five take it to a thirtieth, so a single
+            // throttled fetch could drive a connector to its floor purely as a function of how
+            // generous its retry budget is. The freeze already covers the interval the source asked
+            // for; the decrease is about the rate AFTER that, and one signal deserves one step.
+            let throttleReported = false;
             try {
                 await this.rateLimit(config);
                 // Resilient fetch: bound each attempt with a timeout (a hung vendor API must not
@@ -2302,13 +2404,42 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // retrying — so excluding the whole code would lose real resilience. Only the error
                     // WithTimeout itself minted is excluded.
                     (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
-                    (attempt, err, delayMs) => logger?.emit('sync.fetch.retry', {
-                        externalObjectName: entityMap.ExternalObjectName,
-                        batchIndex: batchCount,
-                        attempt,
-                        delayMs,
-                        error: err instanceof Error ? err.message : String(err),
-                    }),
+                    (attempt, err, delayMs) => {
+                        // Report a throttle NOW, not after the retries are spent. ReportThrottle
+                        // freezes the shared bucket for this CompanyIntegration, so every other
+                        // object fetching concurrently backs off too — reporting it only in the
+                        // catch below meant the rest of the connector kept hammering a source that
+                        // had already said stop.
+                        //
+                        // Once per episode: see `throttleReported` above. Later attempts still get
+                        // their own Retry-After honoured via DelayForError, which is what actually
+                        // paces this loop; what they must not do is halve the rate again.
+                        if (!throttleReported && ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED') {
+                            throttleReported = true;
+                            this.reportRateOutcome(config, err);
+                        }
+                        logger?.emit('sync.fetch.retry', {
+                            externalObjectName: entityMap.ExternalObjectName,
+                            batchIndex: batchCount,
+                            attempt,
+                            delayMs,
+                            error: err instanceof Error ? err.message : String(err),
+                        });
+                    },
+                    {
+                        // Honour the source's own instruction. A 429 usually carries Retry-After;
+                        // blind exponential backoff ignored it and retried early, which is how a
+                        // soft throttle becomes a hard one. Falls back to backoff when the
+                        // connector cannot parse one.
+                        DelayForError: (err) =>
+                            ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED'
+                                ? config.connector.ExtractRetryAfterMs(err)
+                                : undefined,
+                        // A retry must pass through the same gate the first attempt did. The token
+                        // was acquired once before WithRetry, so retries previously bypassed the
+                        // limiter entirely — including the freeze the line above just applied.
+                        BeforeRetry: () => this.rateLimit(config),
+                    },
                 );
                 this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
                 fetchGapCount = 0;                // clean fetch → reset the consecutive fetch-gap counter
@@ -2323,7 +2454,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // other errors don't touch the rate. §5 Gap 2: also flag the map result so the per-layer
                 // AIMD controller reduces in-flight concurrency, not just the per-request token bucket.
                 if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {
-                    this.reportRateOutcome(config, fetchErr);
+                    // Only if the retry hook did not already do it — a fetch that was retried has
+                    // already had its one decrease applied, at the first sign rather than here.
+                    if (!throttleReported) this.reportRateOutcome(config, fetchErr);
                     result.Throttled = true;
                 }
                 console.error(`[IntegrationEngine] FetchChanges error for ${entityMap.ExternalObjectName}: ${errMsg}`);
@@ -2343,6 +2476,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     fetchGapCount++;
                     hadFetchGap = true;
                     fetchCompletedCleanly = false;
+                    // A durability floor written before this gap may sit PAST the hole (the skipped
+                    // page can hold records behind the max watermark seen). Put the row back to what
+                    // it held before this run, exactly what the post-loop hold does for the in-memory
+                    // value — a crash from here on resumes from the pre-run watermark and re-covers
+                    // the gap. Later checkpoints stop writing floors (gate above).
+                    if (watermarkFloorSaved !== null) {
+                        await this.runWriteExclusive(() => this.watermarkService.RestoreValue(entityMapID, preRunWatermarkValue, contextUser));
+                        watermarkFloorSaved = null;
+                    }
                     logger?.warning(
                         entityMap.ExternalObjectName ?? entityMap.ID,
                         'FETCH_PAGE_SKIPPED',
@@ -2448,8 +2590,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 }
             }
 
+            // Within-batch identity, enforced before mapping: two records sharing an ExternalID are
+            // two observations of ONE source record. The write path cannot catch this — it decides
+            // insert-vs-update against the DATABASE, where a first-time identity is absent for both
+            // copies, so both insert and the pair re-inserts every sync. The fingerprint guard above
+            // only sees a batch repeated in FULL. Never silent: a connector emitting duplicate
+            // identities is a defect worth fixing at its source.
+            const identity = CollapseDuplicateIdentities(batch.Records);
+            if (identity.Collapsed > 0) {
+                logger?.warning(
+                    entityMap.ExternalObjectName ?? 'sync',
+                    'DUPLICATE_IDENTITIES_IN_BATCH',
+                    `${entityMap.ExternalObjectName}: ${identity.Collapsed} record(s) repeated an ExternalID already `
+                    + `present in the same batch and were collapsed (last occurrence kept). Two records sharing an `
+                    + `identity are one source record observed twice; writing both would insert duplicate rows that `
+                    + `no later sync could reconcile. Sample: ${identity.SampleIDs.join(', ')}`,
+                    { object: entityMap.ExternalObjectName, collapsed: identity.Collapsed, sample: identity.SampleIDs }
+                );
+            }
+
             const mapped = this.fieldMappingEngine.Apply(
-                batch.Records, fieldMaps, entityMap.Entity
+                identity.Records, fieldMaps, entityMap.Entity, excludedSourceNames
             );
             // Custom-key stats: aggregate unmapped keys for EVERY mapped record here —
             // before any skip decision — so candidates + sizing stats exist even when the
@@ -2565,6 +2726,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // between graceful checkpoints, costing at most ~25 batches of re-fetch on resume.
                 if (isKeysetConnector && currentAfterKey) {
                     await this.runWriteExclusive(() => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
+                }
+                // The WATERMARK twin of the keyset floor above. Without it, a watermark-based
+                // connector had NO durable position at all until the run ended: a SIGKILL / OOM /
+                // container recycle mid-object threw away hours of applied batches and the next run
+                // re-fetched the entire window from the last completed run's watermark. Same safety
+                // argument as the graceful early-exit save below — currentWatermark only ever
+                // advances at the END of a fully-applied batch, so this floor can never point past a
+                // record that was not written. Gated on !hadFetchGap because a skipped page may
+                // contain records BEHIND the max watermark seen (fetch order is not watermark order
+                // on every source), i.e. a hole behind the floor; once a gap exists the floor stops
+                // moving, and the one already written is retracted at the gap site. Skipped for
+                // keyset connectors (their position IS the seek key above) and partition-reconcile
+                // maps (their watermark row stores the rollup snapshot, not a timestamp).
+                if (!isKeysetConnector && !partitionReconcile && !hadFetchGap
+                    && currentWatermark && currentWatermark !== initialWatermark
+                    && currentWatermark !== watermarkFloorSaved) {
+                    const floor = currentWatermark;
+                    await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, floor, contextUser, 'Pull'));
+                    watermarkFloorSaved = floor;
                 }
             }
             // P3-D: a connector returning empty pages with HasMore=true would otherwise spin silently
@@ -2810,6 +2990,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        this.WarnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
         const pushWatermark = await this.watermarkService.Load(entityMapID, contextUser, 'Push');
         const lastPushAt = pushWatermark?.WatermarkValue ?? null;
 
@@ -3416,6 +3597,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const orphans = allMaps.Rows.filter(m => !fetchedExternalIDs.has(m.ExternalSystemRecordID));
         if (orphans.length === 0) return;
 
+        // The sweep is a DELETE PATH and must answer to the same policy as every other delete.
+        // It used to call entity.Delete() unconditionally — its own warning text promised
+        // "archived/deleted" while the code only ever deleted, so a map configured SoftDelete
+        // (or DoNothing) had its rows physically removed by full syncs. DoNothing short-circuits
+        // the whole sweep: the policy says external deletions never touch MJ rows, and saying so
+        // once beats detecting the same "orphans" forever.
+        if (entityMap.DeleteBehavior === 'DoNothing') {
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'ORPHANS_POLICY_SKIPPED',
+                `${orphans.length} record(s) exist in MJ but were not returned by the external system on this ` +
+                `full sync. This map's DeleteBehavior is 'DoNothing', so none were touched.`,
+                { orphanCount: orphans.length },
+            );
+            return;
+        }
+
         console.log(`[IntegrationEngine] Orphan detection for ${entityMap.ExternalObjectName}: ${orphans.length} records in MJ not found in external system`);
         // Surface delete-detection in the structured stream (previously console-only). The orphan
         // COUNT is already in the run counts via RecordsDeleted, but a dedicated warning makes a
@@ -3424,7 +3622,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         logger?.warning(
             entityMap.ExternalObjectName ?? entityMap.ID,
             'ORPHANS_DETECTED',
-            `${orphans.length} record(s) exist in MJ but were not returned by the external system on this full sync — they will be archived/deleted (delete-detection). A large or unexpected count can indicate an incomplete upstream fetch, so review before trusting the deletions.`,
+            `${orphans.length} record(s) exist in MJ but were not returned by the external system on this full sync — ` +
+            `they will be ${entityMap.DeleteBehavior === 'SoftDelete' ? 'archived (SoftDelete)' : 'deleted'} and their record-map rows pruned (delete-detection). ` +
+            `A large or unexpected count can indicate an incomplete upstream fetch, so review before trusting the deletions.`,
             { orphanCount: orphans.length },
         );
 
@@ -3438,11 +3638,39 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(orphan.EntityRecordID, pkFields));
                 if (!loaded) {
                     console.log(`[IntegrationEngine] Orphan ${orphan.EntityRecordID} already deleted from MJ`);
+                    // The map row outlived its record. Nothing anywhere else deletes record-map
+                    // rows, so without this the same "orphan" is re-detected on EVERY subsequent
+                    // full sync and ORPHANS_DETECTED becomes a cumulative counter of history
+                    // rather than a signal about THIS run — observed live as a count that only
+                    // ever grew, sync after sync.
+                    await this.DeleteRecordMapRow(orphan.ID, contextUser);
+                    continue;
+                }
+                if (entityMap.DeleteBehavior === 'SoftDelete') {
+                    // Same archive shape as DeleteRecord's SoftDelete branch: the row stays,
+                    // marked Archived/tombstoned. The MAP row goes either way — the mapping's
+                    // job is done, and keeping it would re-detect this orphan forever.
+                    const fields = entity.Fields ?? [];
+                    const hasField = (n: string) => fields.some(f => f.Name === n);
+                    if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
+                    if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
+                    if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
+                    if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
+                    const archived = await entity.Save();
+                    if (archived) {
+                        result.RecordsDeleted++;
+                        await this.DeleteRecordMapRow(orphan.ID, contextUser);
+                        console.log(`[IntegrationEngine] Archived orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
+                    } else {
+                        const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
+                        console.warn(`[IntegrationEngine] Orphan archive blocked for ${entityMap.Entity} ${orphan.EntityRecordID} — ${reason}`);
+                    }
                     continue;
                 }
                 const deleted = await entity.Delete();
                 if (deleted) {
                     result.RecordsDeleted++;
+                    await this.DeleteRecordMapRow(orphan.ID, contextUser);
                     console.log(`[IntegrationEngine] Deleted orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
                 } else {
                     const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
@@ -3452,6 +3680,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.warn(`[IntegrationEngine] Orphan delete failed for ${entityMap.Entity} ${orphan.EntityRecordID}: ${msg}`);
             }
+        }
+    }
+
+    /**
+     * Removes one 'MJ: Company Integration Record Maps' row after delete-detection has handled
+     * its orphan (deleted, archived, or found already gone). A failure here is logged and
+     * swallowed: the orphan itself was handled, and the worst consequence of a surviving map
+     * row is one redundant re-detection on the next full sync.
+     */
+    private async DeleteRecordMapRow(mapRowID: string, contextUser: UserInfo): Promise<void> {
+        try {
+            const md = this.ProviderToUse;
+            const mapRow = await md.GetEntityObject('MJ: Company Integration Record Maps', contextUser);
+            const loaded = await mapRow.InnerLoad(CompositeKey.FromID(mapRowID));
+            if (!loaded) return;
+            const ok = await mapRow.Delete();
+            if (!ok) {
+                console.warn(`[IntegrationEngine] Record-map prune blocked for ${mapRowID} — ${mapRow.LatestResult?.CompleteMessage ?? 'unknown reason'}`);
+            }
+        } catch (err) {
+            console.warn(`[IntegrationEngine] Record-map prune failed for ${mapRowID}: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -4005,14 +4254,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         try {
             switch (record.ChangeType) {
                 case 'Create': {
-                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
+                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
                     if (outcome === 'updated') result.RecordsUpdated++;
                     else if (outcome === 'skipped') result.RecordsSkipped++;
                     else result.RecordsCreated++;
                     break;
                 }
                 case 'Update':
-                    await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps);
+                    await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps, logger);
                     break;
                 case 'Delete': {
                     const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
@@ -4081,7 +4330,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo,
-        recordMaps?: RecordMapBatch
+        recordMaps?: RecordMapBatch,
+        /** Optional — lets the keyless-key guard below surface on the run's event stream. */
+        keylessLogger?: SyncLogger
     ): Promise<'created' | 'updated' | 'skipped'> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
@@ -4092,6 +4343,37 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // ID), check whether that row already exists before deciding INSERT vs UPDATE. A null mappedPK
         // (e.g. a server-assigned UUID PK not present in the mapped fields) means a genuinely new row.
         const mappedPK = this.extractMappedPrimaryKey(record, pkFields);
+
+        // INVARIANT: a record destined for a SOFT-primary-key table must carry its key.
+        //
+        // A soft PK is INFERRED, not generated — it is the external system's own identifier, stored
+        // as ordinary data with no PRIMARY KEY constraint, no identity, and no unique index (see
+        // DDLGenerator: soft keys get a non-unique index only). So nothing at the database level
+        // rejects a NULL key, and a row written without one can never be matched again: the next
+        // sync's existence check misses it, and inserts another copy. Every pass therefore multiplies
+        // the damage silently — the rows look fully populated, only the key column is empty.
+        //
+        // `mappedPK == null` is legitimate ONLY when the destination generates its own key (an
+        // identity column or a server-assigned UUID), which is why the check is scoped to soft PKs
+        // rather than applied to every table.
+        const keyless = DecideKeylessRefusal(
+            mappedPK,
+            pkFields as ReadonlyArray<KeyFieldLike>,
+            MissingKeyFieldNames(record.MappedFields, pkFields as ReadonlyArray<KeyFieldLike>, serializeKeyValue),
+        );
+        if (keyless.Refuse) {
+            const detail = DescribeKeylessRefusal(record.MJEntityName, keyless.KeyNames);
+            keylessLogger?.emit('sync.record.error', {
+                phase: 'write',
+                externalObjectName: entityMap.ExternalObjectName,
+                externalID: record.ExternalRecord?.ExternalID,
+                error: `KEYLESS_RECORD_REFUSED: ${detail}`,
+            });
+            // Reported even without a logger — silence is the failure mode this guard exists to end.
+            console.error(`[IntegrationEngine] KEYLESS_RECORD_REFUSED: ${detail}`);
+            return 'skipped';
+        }
+
         const existed = mappedPK != null
             ? await entity.InnerLoad(this.BuildEntityPrimaryKey(mappedPK, pkFields))
             : false;
@@ -4199,11 +4481,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         precheckHashes?: Map<string, string>,
         reconciledSkipIds?: string[],
-        recordMaps?: RecordMapBatch
+        recordMaps?: RecordMapBatch,
+        /** Forwarded to CreateRecord's keyless-key guard on the upsert fallback paths. */
+        logger?: SyncLogger
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
             // No matched ID — upsert by PK (insert; or update/skip if the PK already exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -4252,7 +4536,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             // Matched-ID row vanished — fall back to upsert by PK (insert; or update/skip if PK exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -4475,6 +4759,39 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
         }
         return key;
+    }
+
+    /**
+     * Reports ACTIVE field maps whose MJ column does not exist, once per entity map per run.
+     *
+     * `BaseEntity.Set` no-ops on an unknown field — no throw, no log, no dirty flag — so a map
+     * pointing at a column that was never applied (or was renamed) drops its value for every
+     * record while the run reports those records as written. Checking it here costs one metadata
+     * read and happens before the first fetch, so the warning arrives before the wasted work.
+     */
+    private WarnOnUnbindableFieldMaps(
+        entityMap: ICompanyIntegrationEntityMap,
+        fieldMaps: ICompanyIntegrationFieldMap[],
+        logger?: SyncLogger,
+    ): void {
+        const entityName = entityMap.Entity ?? '';
+        // Diagnostics must never be able to fail a run: an unresolvable entity/provider is reported
+        // by the paths that actually need it, and here it simply means there is nothing to check.
+        let entityFieldNames: string[] = [];
+        try {
+            const entityInfo = entityName ? this.ProviderToUse?.EntityByName(entityName) : null;
+            entityFieldNames = entityInfo?.Fields?.map(f => f.Name) ?? [];
+        } catch {
+            return;
+        }
+        const unbindable = FindUnbindableFieldMaps(fieldMaps, entityFieldNames);
+        if (unbindable.length === 0) return;
+        logger?.warning(
+            entityMap.ExternalObjectName ?? entityMap.ID,
+            'FIELD_MAP_DESTINATION_MISSING',
+            DescribeUnbindableFieldMaps(unbindable, entityMap.ExternalObjectName ?? entityMap.ID, entityName),
+            { fieldMaps: unbindable },
+        );
     }
 
     /**
@@ -4774,7 +5091,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegrationID: string,
         entityID: string,
         contextUser: UserInfo
-    ): Promise<{ Rows: Array<{ EntityRecordID: string; ExternalSystemRecordID: string }>; Complete: boolean; Error?: string }> {
+    ): Promise<{ Rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>; Complete: boolean; Error?: string }> {
         const PAGE_SIZE = IntegrationEngine.RecordMapPageSize;
         // Backstop only: at the default page size this is 50M mappings for one
         // (CompanyIntegration, Entity) pair. It exists so a provider that ignores the seek key
@@ -4783,7 +5100,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const filter = `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}'`;
 
         const rv = new RunView();
-        const rows: Array<{ EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        const rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }> = [];
         let afterID: string | undefined;
 
         for (let pageNo = 0; pageNo < MAX_PAGES; pageNo++) {
@@ -4874,16 +5191,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ? quoteTextLiteral(externalID, md.Dialect)
             : `'${externalID.replace(/'/g, "''")}'`;
         const rv = new RunView();
-        const existing = await rv.RunView<{ ID: string }>({
+        const existing = await rv.RunView<{ ID: string; EntityRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
             ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
-            Fields: ['ID'],
+            Fields: ['ID', 'EntityRecordID'],
             MaxRows: 1,
             ResultType: 'simple',
             BypassCache: true, // upsert-by-identity: a stale miss here re-creates a duplicate record map
         }, contextUser);
 
         if (existing.Success && existing.Results.length > 0) {
+            // The row already says exactly this. On an incremental sync that is nearly every record
+            // — mappings are stable — and the Load + Save this path used to do anyway were two more
+            // round trips to change nothing, plus a meaningless __mj_UpdatedAt bump on every synced
+            // record's map row. The batched writer (RecordMapBatch.flushChunk) has always skipped
+            // this case; the per-record fallback now agrees with it.
+            if (existing.Results[0].EntityRecordID === entityRecordID) return;
             const loaded = await recordMap.Load(existing.Results[0].ID);
             if (!loaded) recordMap.NewRecord();
         } else {
@@ -5420,6 +5743,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     public GetIntegrationObjectFields(objectID: string): MJIntegrationObjectFieldEntity[] {
         return this.Base.GetIntegrationObjectFields(objectID);
+    }
+
+    /**
+     * Source field names the connector declared as SyncDirective 'Exclude' for one
+     * integration object, read from IntegrationObjectField.Configuration. Empty set
+     * on any lookup miss (unknown object, no fields, no integration id) - a failed
+     * lookup must never widen or narrow the sync beyond its declared behaviour.
+     */
+    public ResolveExcludedSourceNames(integrationID: string | null | undefined, externalObjectName: string): Set<string> {
+        if (!integrationID || !externalObjectName) return new Set<string>();
+        const obj = this.GetIntegrationObject(integrationID, externalObjectName);
+        if (!obj) return new Set<string>();
+        return ComputeExcludedSourceNames(this.GetIntegrationObjectFields(obj.ID));
     }
 
     public GetActiveIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {

@@ -1359,3 +1359,210 @@ describe('Lazy Config Generation - Integration', () => {
         expect(content).toMatch(/'BaseResourceComponent::BetaPlugin':\s*loadBetaPlugins/);
     });
 });
+
+// =============================================================================
+// RegisterClassEx (options-bag decorator) — issue #3944
+//
+// These drive the REAL generator over a virtual filesystem rather than a local
+// copy of its AST logic, because the bug being guarded against was in the
+// scanner itself: it matched the decorator identifier literally, so every
+// @RegisterClassEx class was silently absent from the manifest — and from the
+// coverage audit built on the same scan.
+// =============================================================================
+
+describe('generateClassRegistrationsManifest - RegisterClassEx decorator', () => {
+    let virtualFiles: Record<string, string>;
+    const appDir = path.resolve('/test-register-ex').replace(/\\/g, '/');
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
+    const pkgDir = `${appDir}/node_modules/@test/panels`;
+
+    /** Package with a src/ tree — the TypeScript-source scan path. */
+    function setupSourcePackage(panelSource: string, declaredClasses: string[]): void {
+        virtualFiles = {
+            [`${appDir}/package.json`]: JSON.stringify({
+                name: 'test-register-ex-app',
+                dependencies: { '@test/panels': '1.0.0' }
+            }, null, 2),
+            [`${pkgDir}/package.json`]: JSON.stringify({
+                name: '@test/panels',
+                version: '1.0.0',
+                types: './dist/index.d.ts',
+                dependencies: {}
+            }),
+            [`${pkgDir}/src/panels.ts`]: panelSource,
+            [`${pkgDir}/dist/index.d.ts`]:
+                declaredClasses.map(c => `export declare class ${c} extends BaseFormPanel {}`).join('\n') + '\n',
+        };
+    }
+
+    const norm = (p: string) => p.replace(/\\/g, '/');
+
+    function wireFsMocks(): void {
+        vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return true;
+            return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
+        });
+
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
+            const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+            (err as NodeJS.ErrnoException).code = 'ENOENT';
+            throw err;
+        });
+
+        vi.mocked(fs.writeFileSync).mockImplementation(() => undefined);
+        vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
+
+        vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
+            const cwd = norm((opts?.cwd as string) || '');
+            const patternStr = Array.isArray(_pattern) ? _pattern.join(',') : _pattern;
+            const wantsTS = patternStr.includes('.ts');
+            const wantsJS = patternStr.includes('js');
+            return Object.keys(virtualFiles).filter(f => {
+                if (!f.startsWith(cwd + '/')) return false;
+                if (wantsTS && f.endsWith('.ts') && !f.endsWith('.d.ts')) return true;
+                if (wantsJS && (f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.cjs')) && !f.endsWith('.d.ts')) return true;
+                return false;
+            });
+        });
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    async function run(options: Record<string, unknown> = {}) {
+        wireFsMocks();
+        return generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            ...options,
+        });
+    }
+
+    it('should detect a TypeScript @RegisterClassEx class and read its key from the options bag', async () => {
+        setupSourcePackage([
+            "import { RegisterClassEx } from '@memberjunction/global';",
+            "@RegisterClassEx(BaseFormPanel, {",
+            "    key: 'content-sources:tag-pipeline',",
+            "    skipNullKeyWarning: true,",
+            "    metadata: { entity: 'MJ: Content Sources', slot: 'after-fields', sortKey: 100 },",
+            "})",
+            "export class TagPipelinePanel extends BaseFormPanel {}",
+        ].join('\n'), ['TagPipelinePanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        const cls = result.classes.find(c => c.className === 'TagPipelinePanel');
+        expect(cls).toBeDefined();
+        expect(cls!.baseClassName).toBe('BaseFormPanel');
+        expect(cls!.key).toBe('content-sources:tag-pipeline');
+    });
+
+    it('should detect a keyless @RegisterClassEx class (metadata-only options bag)', async () => {
+        setupSourcePackage([
+            "import { RegisterClassEx } from '@memberjunction/global';",
+            "@RegisterClassEx(BaseFormPanel, { metadata: { entity: 'MJ: Users' } })",
+            "export class UserRolePanel extends BaseFormPanel {}",
+        ].join('\n'), ['UserRolePanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        const cls = result.classes.find(c => c.className === 'UserRolePanel');
+        expect(cls).toBeDefined();
+        expect(cls!.baseClassName).toBe('BaseFormPanel');
+        expect(cls!.key).toBeUndefined();
+    });
+
+    it('should detect both decorator forms in the same file and emit both in the manifest', async () => {
+        setupSourcePackage([
+            "import { RegisterClass, RegisterClassEx } from '@memberjunction/global';",
+            "@RegisterClass(BaseFormPanel, 'positional-panel')",
+            "export class PositionalPanel extends BaseFormPanel {}",
+            "@RegisterClassEx(BaseFormPanel, { key: 'options-bag-panel' })",
+            "export class OptionsBagPanel extends BaseFormPanel {}",
+        ].join('\n'), ['PositionalPanel', 'OptionsBagPanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(result.classes.map(c => c.className).sort()).toEqual(['OptionsBagPanel', 'PositionalPanel']);
+        expect(result.classes.find(c => c.className === 'PositionalPanel')!.key).toBe('positional-panel');
+        expect(result.classes.find(c => c.className === 'OptionsBagPanel')!.key).toBe('options-bag-panel');
+    });
+
+    it('should ignore a decorator whose name merely starts with RegisterClass', async () => {
+        setupSourcePackage([
+            "@RegisterClassSomethingElse(BaseFormPanel, { key: 'not-a-registration' })",
+            "export class NotRegisteredPanel extends BaseFormPanel {}",
+        ].join('\n'), ['NotRegisteredPanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(result.classes.some(c => c.className === 'NotRegisteredPanel')).toBe(false);
+    });
+
+    it('should leave the key undefined when the options bag key is not a string literal', async () => {
+        setupSourcePackage([
+            "import { RegisterClassEx } from '@memberjunction/global';",
+            "const PANEL_KEY = 'computed-key';",
+            "@RegisterClassEx(BaseFormPanel, { key: PANEL_KEY })",
+            "export class ComputedKeyPanel extends BaseFormPanel {}",
+        ].join('\n'), ['ComputedKeyPanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        const cls = result.classes.find(c => c.className === 'ComputedKeyPanel');
+        expect(cls).toBeDefined();
+        expect(cls!.key).toBeUndefined();
+    });
+
+    it('should detect @RegisterClassEx in compiled __decorate output when scanning dist/', async () => {
+        virtualFiles = {
+            [`${appDir}/package.json`]: JSON.stringify({
+                name: 'test-register-ex-app',
+                dependencies: { '@test/dist-panels': '1.0.0' }
+            }, null, 2),
+            [`${appDir}/node_modules/@test/dist-panels/package.json`]: JSON.stringify({
+                name: '@test/dist-panels',
+                version: '1.0.0',
+                types: './dist/index.d.ts',
+                dependencies: {}
+            }),
+            [`${appDir}/node_modules/@test/dist-panels/dist/index.js`]: [
+                'var __decorate = (this && this.__decorate) || function (d, t, k, desc) { return t; };',
+                'import { RegisterClass, RegisterClassEx } from "@memberjunction/global";',
+                'let DistPositionalPanel = class DistPositionalPanel extends BaseFormPanel {};',
+                'DistPositionalPanel = __decorate([',
+                "    RegisterClass(BaseFormPanel, 'dist-positional')",
+                '], DistPositionalPanel);',
+                'export { DistPositionalPanel };',
+                'let DistOptionsBagPanel = class DistOptionsBagPanel extends BaseFormPanel {};',
+                'DistOptionsBagPanel = __decorate([',
+                "    RegisterClassEx(BaseFormPanel, { key: 'dist-options-bag', metadata: { entity: 'MJ: AI Models' } })",
+                '], DistOptionsBagPanel);',
+                'export { DistOptionsBagPanel };',
+            ].join('\n'),
+            [`${appDir}/node_modules/@test/dist-panels/dist/index.d.ts`]: [
+                'export declare class DistPositionalPanel extends BaseFormPanel {}',
+                'export declare class DistOptionsBagPanel extends BaseFormPanel {}',
+            ].join('\n') + '\n',
+        };
+
+        const result = await run({ scanDist: true });
+
+        expect(result.success).toBe(true);
+        expect(result.classes.map(c => c.className).sort()).toEqual(['DistOptionsBagPanel', 'DistPositionalPanel']);
+        expect(result.classes.find(c => c.className === 'DistOptionsBagPanel')!.key).toBe('dist-options-bag');
+        expect(result.classes.find(c => c.className === 'DistOptionsBagPanel')!.baseClassName).toBe('BaseFormPanel');
+    });
+});

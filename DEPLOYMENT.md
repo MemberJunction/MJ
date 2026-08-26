@@ -783,7 +783,7 @@ This workflow:
 1. Runs migration tests against a fresh SQL Server container
 2. Validates all `@memberjunction/*` packages exist on npm (see Step 5) and carry `repository.url` for provenance
 3. Detects changesets pre-mode and versions accordingly — pre-mode yields the next `X.Y.0-edge.N`; the old migrations-mean-minor auto-detect applies only outside pre-mode
-4. **Guards the version grammar** — an unsuffixed version on this path is a hard error directing you to `publish-lts.yml` (candidates and line builds never ship through `next → main`)
+4. **Guards the version grammar** — an unsuffixed version on this path is a hard error directing you to the LTS path in `publish.yml` (candidates and line builds never ship through `next → main`)
 5. Builds all packages (`pnpm run build`)
 6. Publishes to npm via OIDC with the dist-tag derived from the grammar (`-edge.N` → `--tag edge`); **`latest` never moves here**
 7. Pushes the release commit and the `vX.Y.Z[-edge.N]` tag
@@ -818,7 +818,7 @@ Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 
 > 🐳 **Docker `:latest` means the same thing npm's `latest` means — newest certified.** The workflow's `channel` job reads the version and **skips any prerelease**, so an Edge release publishes npm packages but produces **no Docker image**. Expect `docker.yml` to report a skipped `api` job on every Edge release; that is the guard working, not a failure.
 >
-> **What this means in practice during the Edge era:** nothing auto-publishes to Docker. Certified and line builds ship from `lts/*` through `publish-lts.yml`, which does not trigger this workflow — so a certified image is produced by **dispatching `docker.yml` manually against the certified tag**. The guard keys off version grammar, not the trigger, so a manual dispatch accidentally aimed at `next` is skipped too.
+> **What this means in practice during the Edge era:** nothing auto-publishes to Docker. Certified and line builds ship from `lts/*` through `publish.yml`'s LTS path, which does not trigger this workflow — so a certified image is produced by **dispatching `docker.yml` manually against the certified tag**. The guard keys off version grammar, not the trigger, so a manual dispatch accidentally aimed at `next` is skipped too.
 >
 > **Open:** whether an `:edge` Docker tag is wanted at all, and wiring line publishes to Docker automatically (process doc §15 item 4). Until someone confirms a real need for Edge images, Edge simply doesn't get them.
 
@@ -902,8 +902,8 @@ The `/notes` skill ([`.claude/commands/notes.md`](.claude/commands/notes.md)) bu
 | `test.yml` | PR to `next` | Unit tests |
 | `migrations.yml` | Push to `next` (migrations changed) | Validate migrations |
 | `changes.yml` | PR to `next` or `main` | Validate migration naming & changesets |
-| `publish.yml` | Push to `main` | Version (pre-mode aware), grammar guard, build, publish to npm on the channel dist-tag, GitHub Release, merge-back |
-| `publish-lts.yml` ("Publish LTS line release") | Manual dispatch from an `lts/*` branch | Line patch release: version → build → publish `--tag lts-<line>` → tag + GitHub Release (never latest). Auto-detects npm (`lts/5`) vs pnpm (6.x-era lines) |
+| `publish.yml` (Edge path) | Push to `main`, or dispatch from `main` with `confirm_branch: main` | Version (pre-mode aware), grammar guard, build, publish to npm on the channel dist-tag, GitHub Release, merge-back |
+| `publish.yml` (LTS path) | Manual dispatch **from `next`** with `line_branch: lts/N` + `confirm_branch: lts/N` | Line patch release: the job checks out the line itself, then version → build → publish `--tag lts-<line>` → tag + GitHub Release (never latest). Auto-detects npm (`lts/5`) vs pnpm (6.x-era lines) |
 | `backport.yml` | `backport lts/*` label on a merged `next` PR | Opens the cherry-pick PR against the line branch (conflicts → draft PR) |
 | `release-lines-guard.yml` | PRs touching, and pushes changing, `release-lines.json` | Status-transition legality; direct pushes may change mechanical fields only |
 | `release-test.yml` | Manual dispatch | Release validation suite against a chosen branch |
@@ -920,7 +920,7 @@ The `/notes` skill ([`.claude/commands/notes.md`](.claude/commands/notes.md)) bu
 | **Release notes (canonical)** | [`releases/v<version>.md`](releases/) in this repo — rendered at [docs.memberjunction.org/releases/](https://docs.memberjunction.org/releases/) | **Hand-written via `/notes` in Step 11.** No workflow produces it |
 | Release notes (auto, secondary) | The GitHub Release body (auto-generated "What's Changed" from merged PRs) | `publish.yml` (`gh release create --generate-notes`); `generate-release-notes.yml` additionally writes structured notes into the release PR body |
 | Per-package changelogs | `packages/*/CHANGELOG.md` | changesets, in the `RELEASING: Releasing N package(s)` commit, from each PR's changeset summary |
-| npm packages | `edge` / `lts-<line>` dist-tags — **`latest` moves only at certification** | `publish.yml` / `publish-lts.yml`; `ci/dist-tag-all.mjs` at certification |
+| npm packages | `edge` / `lts-<line>` dist-tags — **`latest` moves only at certification** | `publish.yml` (Edge and LTS paths); `ci/dist-tag-all.mjs` at certification |
 | Git tag `vX.Y.Z[-edge.N]` | repo tags | `ci/commit_push.mjs` |
 | Docker images | Docker Hub `memberjunction/api`, Azure ACR | `docker.yml` — certified builds only; Edge is skipped (see 10b) |
 | API docs | https://docs.memberjunction.org/api | `docs.yml` |
