@@ -59,6 +59,7 @@ import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 import { CollapseDuplicateIdentities } from './BatchIdentity.js';
+import { PagePrefetcher, PrefetchEnabled } from './PagePrefetcher.js';
 import { ResumeConcurrency, RunResumesBounded } from './ResumeConcurrency.js';
 
 /** Default batch size for fetching records from external systems */
@@ -2293,6 +2294,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let batchCount = 0;
         let previousBatchFingerprint: string | undefined;
         let fetchCompletedCleanly = true; // flipped to false if fetch aborted or errored mid-way
+        // Overlaps the next page's download with this page's processing. Cursor-paged connectors
+        // only, and that falls out of the gate rather than being asserted: Start requires a
+        // NextCursor, which offset/page connectors do not produce. See PagePrefetcher for why those
+        // modes cannot participate (gap-skip makes the next position unknowable at prefetch time).
+        const prefetcher = new PagePrefetcher<FetchBatchResult>(PrefetchEnabled());
         let hadFetchGap = false;          // ≥1 page was skipped after a persistent fetch error (offset/page paging)
         let watermarkFloorSaved: string | null = null; // §8a durability floor last persisted mid-run (null = none)
         let fetchGapCount = 0;            // CONSECUTIVE skipped pages (reset on any clean fetch)
@@ -2378,14 +2384,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // generous its retry budget is. The freeze already covers the interval the source asked
             // for; the decrease is about the rate AFTER that, and one signal deserves one step.
             let throttleReported = false;
-            try {
+            // ONE definition of "fetch a page", used both by this iteration and by the prefetch of
+            // the next one — so an overlapped page carries the identical rate token, timeout, retry
+            // predicate, Retry-After honouring and re-acquire that a loop-top fetch does. Two
+            // definitions would be two sets of semantics that drift.
+            const fetchPage = async (pageCtx: FetchContext): Promise<FetchBatchResult> => {
                 await this.rateLimit(config);
                 // Resilient fetch: bound each attempt with a timeout (a hung vendor API must not
                 // hold the sync lock forever) and retry only transient errors (network/throttle/DB).
                 // A non-retryable error (auth, 4xx, parse) throws immediately as before.
-                batch = await WithRetry(
+                return await WithRetry(
                     () => WithTimeout(
-                        config.connector.FetchChanges(ctx),
+                        config.connector.FetchChanges(pageCtx),
                         fetchTimeoutMs,
                         `FetchChanges(${entityMap.ExternalObjectName})`,
                     ),
@@ -2441,6 +2451,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         BeforeRetry: () => this.rateLimit(config),
                     },
                 );
+            };
+
+            try {
+                // Take the page already in flight when it IS this page; otherwise fetch normally.
+                // A miss (gap skip, reset, a connector rewriting its own cursor) discards it rather
+                // than serving a page for the wrong position, which would skip or duplicate records.
+                batch = await (prefetcher.Claim(currentCursor) ?? fetchPage(ctx));
                 this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
                 fetchGapCount = 0;                // clean fetch → reset the consecutive fetch-gap counter
                 // §10: connector type-driven post-processing hook (default no-op) — enforce/normalize
@@ -2448,7 +2465,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 if (batch.Records.length > 0) {
                     batch.Records = batch.Records.map(r => config.connector.PostProcessRecord(r));
                 }
+                // Start the NEXT page now, so it downloads while this one is mapped, matched and
+                // written. Exactly one extra request is ever in flight, and it is the request this
+                // loop was about to make anyway.
+                const nextPageCtx: FetchContext = { ...ctx, CurrentCursor: batch.NextCursor };
+                prefetcher.Start(batch.HasMore, batch.NextCursor, () => fetchPage(nextPageCtx));
             } catch (fetchErr) {
+                // Whatever went wrong, a page fetched against the old position is no longer wanted.
+                prefetcher.Discard();
                 const errMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
                 // A throttle (429 / rate-limit) backs the adaptive limiter off (honoring Retry-After);
                 // other errors don't touch the rate. §5 Gap 2: also flag the map result so the per-layer
