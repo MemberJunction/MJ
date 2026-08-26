@@ -24,6 +24,7 @@ import type {
   MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
+import { ReadFieldSyncDirective, WriteFieldSyncDirective } from './SyncDirectives.js';
 import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
 
 export interface PersistSchemaOptions {
@@ -312,6 +313,14 @@ export interface PersistSchemaResult {
    */
   ObjectMergeLog: ObjectMergeLog[];
   FieldMergeLog: FieldMergeLog[];
+  /**
+   * Names of the objects, and `Object.Field` for the fields, that phase 3 DEACTIVATED because an
+   * authoritative discovery did not observe them. Previously this was a console line and nothing
+   * else, so a declared field disappearing from every subsequent apply had no trace the caller
+   * could surface. Empty unless `DeactivateAbsent` ran.
+   */
+  ObjectsDeactivated: string[];
+  FieldsDeactivated: string[];
 }
 
 /**
@@ -368,6 +377,8 @@ export class IntegrationSchemaSync {
       FieldsUpdated: 0,
       ObjectMergeLog: [],
       FieldMergeLog: [],
+      ObjectsDeactivated: [],
+      FieldsDeactivated: [],
     };
 
     // §D — NO runtime FK-from-stream inference. Foreign keys come ONLY from (a) declared metadata
@@ -498,7 +509,7 @@ export class IntegrationSchemaSync {
         const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', ContextUser);
         if (await obj.InnerLoad(CompositeKey.FromID(id))) {
           obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
-          if (await obj.Save()) deactivated++;
+          if (await obj.Save()) { deactivated++; result.ObjectsDeactivated.push(obj.Name); }
           else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom object ${id}: ${obj.LatestResult?.CompleteMessage ?? 'unknown'}`);
         }
       }
@@ -507,7 +518,11 @@ export class IntegrationSchemaSync {
         const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
         if (await f.InnerLoad(CompositeKey.FromID(id))) {
           f.Status = 'Disabled'; // deactivate, never delete
-          if (await f.Save()) fieldsDeactivated++;
+          if (await f.Save()) {
+            fieldsDeactivated++;
+            const owner = engine.GetIntegrationObjectByID(f.IntegrationObjectID)?.Name ?? f.IntegrationObjectID;
+            result.FieldsDeactivated.push(`${owner}.${f.Name}`);
+          }
           else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom field ${id}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`);
         }
       }
@@ -726,6 +741,18 @@ export class IntegrationSchemaSync {
         existing.Status = 'Active';
         dirty = true;
       }
+      // SyncDirective follows the same rule as every other attribute: a source that STATES
+      // a directive overrides the stored one; a silent source (undefined) keeps whatever is
+      // stored — so a directive set by an operator by hand survives connectors that predate
+      // the feature. Stored in Configuration (JSON), so no DDL is involved.
+      if (srcField.SyncDirective !== undefined) {
+        const nextConfig = WriteFieldSyncDirective(existing.Configuration, srcField.SyncDirective);
+        if (nextConfig !== existing.Configuration
+            && ReadFieldSyncDirective(nextConfig) !== ReadFieldSyncDirective(existing.Configuration)) {
+          existing.Configuration = nextConfig;
+          dirty = true;
+        }
+      }
       const mappedType = MapSourceType(srcField.SourceType);
       const describedAllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
 
@@ -843,6 +870,11 @@ export class IntegrationSchemaSync {
       field.DisplayName = srcField.Label || srcField.Name;
       if (srcField.Description) field.Description = srcField.Description;
       field.Type = MapSourceType(srcField.SourceType);
+      // A declared 'Exclude' lands in Configuration from the first discovery, so the field
+      // never contributes to a single sync. 'Sync'/undefined writes nothing.
+      if (srcField.SyncDirective === 'Exclude') {
+        field.Configuration = WriteFieldSyncDirective(null, 'Exclude');
+      }
       // Persist the discovered length onto IOF.Length so the schema builder sizes the column
       // (nvarchar(N)). Large-text types carry their MAX in the Type ('nvarchar(MAX)') via
       // MapSourceType, so no length is set for them here.

@@ -72,7 +72,8 @@ vi.mock('mssql', () => ({
 
 vi.mock('../Misc/status_logging', () => ({
     logError: vi.fn(),
-    logStatus: vi.fn()
+    logStatus: vi.fn(),
+    logWarning: vi.fn()
 }));
 
 vi.mock('../Database/manage-metadata', () => ({
@@ -84,7 +85,11 @@ vi.mock('../Database/manage-metadata', () => ({
 
 vi.mock('../Config/config', () => ({
     mj_core_schema: '__mj',
-    configInfo: {}
+    configInfo: {},
+    resolveEntityPackageName: () => 'mj_generatedentities',
+    resolveEntityImportPackage: () => {
+        throw new Error('resolveEntityImportPackage should not be called without peer embeds/collections');
+    },
 }));
 
 vi.mock('./sql_logging', () => ({

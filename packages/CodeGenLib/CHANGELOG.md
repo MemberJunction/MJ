@@ -1,5 +1,83 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- bae672c: CodeGen now emits a composite index over an entity's **soft** primary key, closing a gap where nothing in the stack ever indexed one.
+
+  A soft PK exists only in metadata — `IsPrimaryKey` and `IsSoftPrimaryKey` both set, with no `PRIMARY KEY` constraint and no unique index on the table. Integration tables are built that way deliberately, because their keys are _inferred_ and a constraint would reject valid rows whenever an inference is wrong.
+
+  The cost of that choice landed on MJ's own write path. A create calls `InnerLoad` on the key to check for an existing row; a genuinely new record matches nothing; and a not-found lookup cannot short-circuit, so it scans the entire heap before concluding the row is absent. Every create scans the whole table, the table grows, and the scan grows with it — so a sync decays as it runs. Measured live at 345 → 574 → 864 ms per record across consecutive batches of one connector, with nothing saturated (DB CPU 57%, log write 13%, sessions 0, app CPU 5.7%, memory flat).
+
+  Three mechanisms each declined to cover it: the integration DDL generator emits no index on the key columns; `generateForeignKeyIndexes` skips primary keys on the reasoning that "a primary key is already covered by its own index" (true for a real PK, false by definition for a soft one); and the missing-index probe reads `sys.foreign_keys`, which these tables have none of.
+  - One **non-unique composite** index in ordinal order, since the lookup is an equality match on the whole key and uniqueness is exactly what the soft-PK design refuses to assert.
+  - Idempotent (`IF NOT EXISTS` / `sys.indexes` check), so it **backfills existing tables** on the next codegen pass rather than only covering newly created ones.
+  - A key column the dialect cannot index (an unbounded string — `Length: -1`) produces an explanatory comment in the generated file naming the offending column, never a silently absent index.
+  - New `auto_index_soft_primary_keys` setting, defaulting to `true`. Deliberately separate from `auto_index_foreign_keys`: an opinion about indexing foreign keys for joins and filters is not an opinion about the engine's own per-record existence check.
+
+  No effect on entities with a real primary key, which is nearly all of them.
+
+### Patch Changes
+
+- f5e91a7: A new schema gets its Application on PostgreSQL
+
+  `createNewApplication` named the `Application` columns unquoted, and `conditionalInsert` wraps that statement in PG's `DO $$ ... $$` block — which the identifier auto-quoter skips wholesale, since it cannot know whether a dollar-quoted block holds SQL or literal text. `ID` therefore reached PostgreSQL folded to `id`, and the INSERT failed on every run. It failed silently: the method catches, logs and returns null, and its caller logs and carries on, so CodeGen finished green while the schema got no Application and every one of its entities rendered in the UI's "System & Other" bucket. SQL Server resolves the unquoted identifiers case-insensitively, which is why this survived unnoticed since before 5.49.
+
+  The columns are now quoted through `qi()`, matching the sibling `ApplicationRole` insert a few lines below. `conditionalInsertSQL` now documents the pre-quoting contract that makes it the one exception to this file's usual "write identifiers bare, the auto-quoter handles it" convention.
+
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+- f4fedab: `mj codegen manifest`: recognize `@RegisterClassEx` alongside `@RegisterClass`. Both AST scan paths (TypeScript source and compiled `__decorate` output) matched the decorator identifier literally, so every options-bag registration was silently absent from the generated manifest — and from the coverage audit built on the same scan, which therefore could not report the gap either (#3944). Both paths now test set membership and share one key extractor handling either argument shape (positional string literal, or the options bag's `key`). `EntityNameScanner.classifyParentContext` gets the same treatment, plus a case for the options bag's `key` property, scoped to a register decorator's own options object. Regenerating MJ's manifests adds 25 previously invisible `BaseFormPanel` contributions from `@memberjunction/ng-core-entity-forms` and removes none.
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+- 53c341c: Add optional `@IncludedSchemaNames` to CodeGen metadata-heal stored procedures so Open App migrations can positively scope heals without photographing sibling apps. Cascade-delete SQL is intra-schema only unless `allowCrossSchemaCascadeDeletes` is set. Custom-view `sp_refreshview` in the migration log honors `excludeSchemas` and, when set, `includeSchemas`.
+- 6b971ab: Stop generating and applying GRANT files for excludeSchemas entities. Open App CodeGen was failing with "Cannot find the object 'vw…'" on sibling-schema permission files, and the entity-field sequence integrity check was querying those same out-of-scope base views.
+- a1a8989: Add `entityImportPackages` so CodeGen imports peer entity classes (embeds and related-record collections) from the npm package that owns them, instead of self-importing string `entityPackageName`. Unmapped foreign schemas fail the run.
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/external-data-sources@6.1.0-edge.4
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.4
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.4
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.4
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.4
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.4
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.4
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.4
+  - @memberjunction/query-processor@6.1.0-edge.4
+  - @memberjunction/cli-core@6.1.0-edge.4
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.4
+  - @memberjunction/sql-parser@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+  - @memberjunction/config@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

@@ -24,10 +24,14 @@
  * present in the catalog.
  *
  * ── PLATFORM ────────────────────────────────────────────────────────────────────────────────
- * Catalog inspection (LBV2–LBV5) uses `sys.columns` / `sys.sql_modules` and therefore needs
- * `ctx.Pool` (SQL Server). Those checks skip with a loud note when the pool is absent (PostgreSQL
- * run paths, or any path that did not bootstrap mssql). LBV1 and LBV6 are metadata + `RunView`
- * and run on every platform, including PostgreSQL after inner views + restarred outers exist.
+ * Catalog inspection (LBV2–LBV5) runs on BOTH platforms: `sys.columns` / `sys.sql_modules` via
+ * `ctx.Pool` on SQL Server, `pg_catalog` via the provider's `ExecuteSQL` on PostgreSQL. They skip
+ * only when neither seam is reachable. LBV1 and LBV6 are metadata + `RunView` and run everywhere.
+ *
+ * These checks previously skipped on PostgreSQL — and a skipped check still scores 1.0 and counts
+ * as passed, so the bundle reported 6/6 / 100% while only two of six ran. LBV5 was among the
+ * silent ones, which is the one that matters most here: PostgreSQL freezes `g.*` at CREATE VIEW,
+ * so an outer view silently failing to inherit a new inner column is a PG-only failure mode.
  *
  * ── CHECKS ──────────────────────────────────────────────────────────────────────────────────
  *   LBV1 layering metadata is coherent (BaseViewGenerated=0, names differ, EntityInfo agrees)
@@ -64,23 +68,80 @@ function requireLayered(ctx: IntegrationCheckContext): EntityInfo[] {
 }
 
 /**
- * The layered entities, or null when this run cannot reach the physical catalog.
+ * Structural view of the run provider's raw-SQL seam.
  *
- * Only LBV2–LBV5 need `sys.*`. They skip when `ctx.Pool` is absent. The skip is logged with the
- * provider name so a green result is never mistaken for a real one; LBV1 and LBV6 do not depend
- * on the pool, so they run on PostgreSQL as well.
+ * `IMetadataProvider` does not declare either member — both concrete database providers do
+ * (`ExecuteSQL` is the shared seam `UserCache` already relies on to serve SQL Server and
+ * PostgreSQL from one code path). Declared narrowly here rather than widening the interface,
+ * and rather than reaching for `any`.
+ */
+interface CatalogQueryProvider {
+    PlatformKey?: string;
+    ExecuteSQL?<T>(query: string): Promise<T[]>;
+}
+
+/** Which catalog dialect this run can interrogate, and how to reach it. */
+type CatalogAccess =
+    | { kind: 'sqlserver' }
+    | { kind: 'postgresql'; run: <T>(query: string) => Promise<T[]> };
+
+/**
+ * How this run reaches the physical catalog, or null when it cannot.
+ *
+ * SQL Server keeps its original `ctx.Pool` + `sys.*` path untouched. PostgreSQL goes through the
+ * provider's `ExecuteSQL` against `pg_catalog`, so LBV2-LBV5 assert on PG rather than skipping.
+ *
+ * That they skipped was not a cosmetic gap: a skipped check still scored 1.0 and counted as
+ * passed, so IT69 reported 6/6 / 100% on PostgreSQL while only LBV1 and LBV6 ran - including
+ * LBV5, which is precisely the silent-staleness failure PostgreSQL has and SQL Server does not.
+ */
+function catalogAccess(ctx: IntegrationCheckContext): CatalogAccess | null {
+    if (ctx.Pool) {
+        return { kind: 'sqlserver' };
+    }
+    const provider = ctx.Provider as unknown as CatalogQueryProvider;
+    if (provider?.PlatformKey === 'postgresql' && typeof provider.ExecuteSQL === 'function') {
+        const execute = provider.ExecuteSQL.bind(provider);
+        return { kind: 'postgresql', run: execute };
+    }
+    return null;
+}
+
+/**
+ * The layered entities, or null when this run genuinely cannot reach any catalog.
+ *
+ * The skip is logged with the provider name so a green result is never mistaken for a real one.
  */
 function catalogOrSkip(ctx: IntegrationCheckContext, checkId: string): EntityInfo[] | null {
-    if (!ctx.Pool) {
+    if (!catalogAccess(ctx)) {
         const providerName = ctx.Provider?.constructor?.name ?? 'unknown';
-        console.log(`      → ${checkId} SKIPPED (no assertions ran): no mssql pool on this run path (provider '${providerName}') — catalog inspection unavailable`);
+        console.log(`      → ${checkId} SKIPPED (no assertions ran): no catalog access on this run path (provider '${providerName}')`);
         return null;
     }
     return requireLayered(ctx);
 }
 
+/** Single-quote escape for an identifier interpolated into a catalog query as a literal. */
+function sqlLiteral(value: string): string {
+    return value.replace(/'/g, "''");
+}
+
 /** Physical column names for a view, lowercased. Empty set when the object does not exist. */
 async function viewColumns(ctx: IntegrationCheckContext, schema: string, view: string): Promise<Set<string>> {
+    const access = catalogAccess(ctx);
+    if (access?.kind === 'postgresql') {
+        const rows = await access.run<{ name: string }>(
+            `SELECT a.attname AS "name"
+               FROM pg_attribute a
+               JOIN pg_class c ON c.oid = a.attrelid
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = '${sqlLiteral(schema)}'
+                AND c.relname = '${sqlLiteral(view)}'
+                AND a.attnum > 0
+                AND NOT a.attisdropped`
+        );
+        return new Set(rows.map(r => String(r.name).toLowerCase()));
+    }
     const result = await ctx.Pool!.request().query(
         `SELECT c.name FROM sys.columns c
          WHERE c.object_id = OBJECT_ID('[${schema}].[${view}]')`
@@ -88,8 +149,22 @@ async function viewColumns(ctx: IntegrationCheckContext, schema: string, view: s
     return new Set(result.recordset.map((r: { name: string }) => r.name.toLowerCase()));
 }
 
-/** The SQL text of a view, or null when it does not exist. */
+/**
+ * The SQL text of a view, or null when it does not exist.
+ *
+ * PostgreSQL uses `pg_get_viewdef`, not `information_schema.views`: the latter is portable but
+ * SQL Server truncates `VIEW_DEFINITION` at 4000 characters, and the FROM clause LBV3 looks for
+ * sits at the end of the definition - exactly what truncation would drop.
+ */
 async function viewDefinition(ctx: IntegrationCheckContext, schema: string, view: string): Promise<string | null> {
+    const access = catalogAccess(ctx);
+    if (access?.kind === 'postgresql') {
+        const rows = await access.run<{ definition: string | null }>(
+            `SELECT pg_get_viewdef(to_regclass('"${schema.replace(/"/g, '""')}"."${view.replace(/"/g, '""')}"'), true) AS "definition"`
+        );
+        const definition = rows.length > 0 ? rows[0].definition : null;
+        return definition ? String(definition) : null;
+    }
     const result = await ctx.Pool!.request().query(
         `SELECT m.definition FROM sys.sql_modules m
          WHERE m.object_id = OBJECT_ID('[${schema}].[${view}]')`
@@ -171,7 +246,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
                 // The generated view selects from the BASE TABLE. If the outer view did too, CodeGen
                 // has replaced the wrapper with a generated view under the public name — hand-written
                 // SQL destroyed, and nothing would error until somebody looked.
-                const outerSelectsBaseTable = new RegExp(`\\[${e.BaseTable}\\]|\\b${e.BaseTable}\\b\\s+AS\\b`, 'i').test(outer!);
+                const outerSelectsBaseTable = new RegExp(`\\[${e.BaseTable}\\]|"${e.BaseTable}"|\\b${e.BaseTable}\\b\\s+AS\\b`, 'i').test(outer!);
                 Assert(!outerSelectsBaseTable || outer!.toLowerCase().includes(e.GeneratedViewName.toLowerCase()),
                     `${e.Name}: outer view [${e.BaseView}] reads the base table directly and does not reference the inner view — it looks like CodeGen overwrote the application's wrapper`);
                 Assert(inner!.toLowerCase().includes(e.BaseTable.toLowerCase()),
