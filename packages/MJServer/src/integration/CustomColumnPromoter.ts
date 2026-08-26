@@ -83,6 +83,17 @@ const OVERFLOW_SAMPLE_SIZE = 1000;
  */
 const MAX_PROMOTIONS_PER_PASS = 25;
 
+/** Page size for the full-table overflow walks (spread + stale purge). */
+const OVERFLOW_PAGE_SIZE = 500;
+
+/** An already-promoted key whose value is still sitting in the staging JSON — residue, not a candidate. */
+interface StaleOverflowKey {
+    /** The source field name as it appears inside the overflow JSON. */
+    sourceKey: string;
+    /** The real column it was promoted to (the active field map's DestinationFieldName). */
+    columnName: string;
+}
+
 /** A coverage-passing key with its resolved column + what work it still needs (M4: promote OR recover). */
 interface WorkItem {
     candidate: PromotionCandidate;
@@ -193,8 +204,19 @@ export class IntegrationCustomColumnPromoter {
         for (const entityName of syncedEntityNames) {
             try {
                 const planned = await this.planWorkForEntity(companyIntegrationID, entityName, customKeyStats?.[entityName]);
-                if (!planned || planned.work.length === 0) continue; // no overflow / no entity map / already converged
+                if (!planned) continue; // no overflow column / no captured customs / no entity map
                 const { entityInfo, entityMap } = planned;
+
+                // PURGE FIRST — strip already-promoted keys from the staging JSON BEFORE any column is
+                // created, and before the RSU pass that would restart this process. A failed or skipped
+                // sync is not evidence that a column is missing, and leaving the residue in place is what
+                // makes an already-promoted key re-surface as a phantom "new column". Runs even when there
+                // is nothing new to promote, which is the only way pre-existing residue on rows the sync
+                // never rewrites ever gets cleaned rather than endlessly re-detected.
+                if (planned.stale.length > 0) {
+                    await this.purgeStaleOverflowKeys(entityName, entityMap.ID, entityInfo, planned.stale);
+                }
+                if (planned.work.length === 0) continue; // already converged
                 let work = planned.work;
                 // M4a: bound schema churn per pass — the remainder stays captured and promotes next sync.
                 if (work.length > MAX_PROMOTIONS_PER_PASS) {
@@ -361,7 +383,7 @@ export class IntegrationCustomColumnPromoter {
                 // Destination names are CARRIED, never recomputed: uniqueColumnName may have
                 // suffixed one to dodge a collision, and re-deriving it here could pick a different
                 // name than the column the migration actually created.
-                const existingMaps = await this.activeFieldMapSources(entry.EntityMapID);
+                const existingMaps = await this.activeFieldMaps(entry.EntityMapID);
                 const named: WorkItem[] = entry.Columns.map(c => ({
                     candidate: {
                         Key: c.SourceKey,
@@ -406,7 +428,7 @@ export class IntegrationCustomColumnPromoter {
         companyIntegrationID: string,
         entityName: string,
         inRunStats?: CustomKeyStat[],
-    ): Promise<{ entityInfo: EntityInfo; entityMap: { ID: string; ExternalObjectName: string }; work: WorkItem[] } | null> {
+    ): Promise<{ entityInfo: EntityInfo; entityMap: { ID: string; ExternalObjectName: string }; work: WorkItem[]; stale: StaleOverflowKey[] } | null> {
         const entityInfo = this.provider.EntityByName(entityName);
         if (!entityInfo?.SchemaName || !entityInfo.BaseTable) return null;
         // No overflow column on this table (predates the feature) → nothing to promote.
@@ -418,6 +440,13 @@ export class IntegrationCustomColumnPromoter {
         //     out-of-band capture; the hash basis excludes overflow so skips never write it),
         //  3. candidates persisted from prior runs (survive restarts for on-demand listing).
         const overflowJson = await this.scanOverflow(entityName);
+        // Every key literally present in the staging JSON right now. Kept separate from the candidate
+        // set below, which drops low-coverage keys — a stale key must be purged regardless of coverage.
+        const liveOverflowKeys = new Set<string>();
+        for (const raw of overflowJson) {
+            const parsed = this.parseOverflow(raw);
+            if (parsed) for (const k of Object.keys(parsed)) liveOverflowKeys.add(k);
+        }
 
         // U3 note (rkihm-BC review, #3061): this in-repo promotion path passes no `LockUntilFullSync`, so it
         // does NOT yet enforce "hold promotion until a full sync since the last schema change." The lever
@@ -430,7 +459,10 @@ export class IntegrationCustomColumnPromoter {
         for (const c of this.candidatesFromStats(inRunStats)) if (!byKey.has(c.Key)) byKey.set(c.Key, c);
         for (const c of await this.loadPersistedCandidates(companyIntegrationID, entityName)) if (!byKey.has(c.Key)) byKey.set(c.Key, c);
         const passing = [...byKey.values()];
-        if (passing.length === 0) return null;
+        // Nothing captured AND nothing staged — genuinely nothing to look at. A key can be staged
+        // without being a candidate (coverage filtered it out), and that key still needs purging, so
+        // this deliberately does NOT return early on `passing.length === 0` alone.
+        if (passing.length === 0 && liveOverflowKeys.size === 0) return null;
 
         const entityMap = await this.findEntityMap(companyIntegrationID, entityName);
         if (!entityMap) {
@@ -439,9 +471,19 @@ export class IntegrationCustomColumnPromoter {
         }
 
         // Skip fully-terminated keys (column + field map both exist); keep promote (needs column) / recover.
-        const fieldMapSources = await this.activeFieldMapSources(entityMap.ID);
-        const work = this.resolveWorkItems(passing, entityInfo, fieldMapSources);
-        return { entityInfo, entityMap, work };
+        const fieldMaps = await this.activeFieldMaps(entityMap.ID);
+        const work = this.resolveWorkItems(passing, entityInfo, fieldMaps);
+
+        // Keys that are ALREADY promoted (active field map) yet whose value is still sitting in the
+        // staging JSON. These are not candidates — they are residue, and they cannot clear themselves:
+        // the next sync only rewrites a row whose content hash changed, and the hash basis excludes the
+        // overflow column, so a row untouched since before the promotion keeps the key indefinitely.
+        const stale: StaleOverflowKey[] = [];
+        for (const key of liveOverflowKeys) {
+            const columnName = fieldMaps.get(key.toLowerCase());
+            if (columnName) stale.push({ sourceKey: key, columnName });
+        }
+        return { entityInfo, entityMap, work, stale };
     }
 
     /**
@@ -574,15 +616,25 @@ export class IntegrationCustomColumnPromoter {
     private resolveWorkItems(
         passing: PromotionCandidate[],
         entityInfo: EntityInfo,
-        fieldMapSources: ReadonlySet<string>,
+        fieldMaps: ReadonlyMap<string, string>,
     ): WorkItem[] {
         const existingByLower = new Map(entityInfo.Fields.map(f => [f.Name.toLowerCase(), f.Name]));
         const taken = new Set(entityInfo.Fields.map(f => f.Name.toLowerCase()));
         const items: WorkItem[] = [];
         for (const candidate of passing) {
-            const existingCol = existingByLower.get(sanitizeColumnName(candidate.Key).toLowerCase());
+            // An ACTIVE field map is the authoritative proof that this key was already promoted, and it
+            // names the column that was created. Trust it ahead of a re-sanitized guess against the
+            // in-memory field list: that list can predate the ADD COLUMN in THIS process (the promoter
+            // refreshes its own provider, not every other one), and the real column may carry a
+            // collision suffix the guess cannot reproduce. Both misses used to read as "no column yet",
+            // re-offering an already-promoted key to the operator as a brand-new column — and, on
+            // promotion, minting a duplicate `_2` column beside the working one.
+            const mappedDest = fieldMaps.get(candidate.Key.toLowerCase());
+            const hasFieldMap = mappedDest !== undefined;
+            const existingCol =
+                (mappedDest ? existingByLower.get(mappedDest.toLowerCase()) ?? mappedDest : undefined) ??
+                existingByLower.get(sanitizeColumnName(candidate.Key).toLowerCase());
             const hasColumn = !!existingCol;
-            const hasFieldMap = fieldMapSources.has(candidate.Key.toLowerCase());
             if (hasColumn && hasFieldMap) {
                 // Schema + mapping are terminated — but see WorkItem.recoverSpread: an interrupted
                 // spread leaves rows carrying the value only in overflow, and this was the one exit
@@ -597,16 +649,32 @@ export class IntegrationCustomColumnPromoter {
         return items;
     }
 
-    /** Active field-map SOURCE field names for an entity map (lowercased) — for the terminate/recovery check. */
-    private async activeFieldMapSources(entityMapID: string): Promise<ReadonlySet<string>> {
+    /**
+     * Active field maps for an entity map, as `lowercased SourceFieldName -> DestinationFieldName`.
+     *
+     * The destination name is what makes this authoritative: it records the column promotion ACTUALLY
+     * created, which may carry a collision suffix (`_2`) that re-sanitizing the source key can never
+     * reproduce. One query serves the terminate/recovery check, the stale-key detection and the hash
+     * re-baseline, where there used to be two identical queries and a lossier projection.
+     */
+    private async activeFieldMaps(entityMapID: string): Promise<ReadonlyMap<string, string>> {
         const rv = new RunView();
         const res = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
             EntityName: 'MJ: Company Integration Field Maps',
             ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
-            Fields: ['SourceFieldName'],
+            Fields: ['SourceFieldName', 'DestinationFieldName'],
             ResultType: 'simple',
         }, this.user);
-        return new Set(res.Success ? (res.Results ?? []).map(r => (r.SourceFieldName ?? '').toLowerCase()) : []);
+        const maps = new Map<string, string>();
+        if (res.Success) {
+            for (const r of res.Results ?? []) {
+                const source = (r.SourceFieldName ?? '').toLowerCase();
+                // '' destination keeps the key MAPPED for the terminate check while signalling that no
+                // column name is recoverable from it — a `has()` miss and a `get()` of '' are different answers.
+                if (source) maps.set(source, r.DestinationFieldName ?? '');
+            }
+        }
+        return maps;
     }
 
     /** Suffixes _2, _3, … until the sanitized name does not collide with an existing/assigned one. */
@@ -772,10 +840,10 @@ export class IntegrationCustomColumnPromoter {
     /**
      * Spreads the staged overflow JSON values into the freshly-created real columns, then
      * re-baselines the content hash (gaps.md §2 step 3). JS per-row pass — dialect-agnostic (no
-     * cast SQL, which is where PG bugs hide); BaseEntity handles the dialect on write. The overflow
-     * column is intentionally NOT cleared: once the field map exists the key is no longer "unmapped",
-     * so the next sync stops re-capturing it and planPromotions skips the now-existing column — the
-     * stale value self-heals. Bounded to rows that carry overflow, paged, once on the discovery sync.
+     * cast SQL, which is where PG bugs hide); BaseEntity handles the dialect on write. Each promoted
+     * key is also STRIPPED from the staging JSON as it is spread: it is no longer unmapped, and
+     * leaving it behind is what later re-surfaces it as a phantom new column (see
+     * {@link purgeStaleOverflowKeys}). Bounded to rows that carry overflow, paged.
      */
     private async spreadAndRebaseline(
         entityName: string,
@@ -785,58 +853,162 @@ export class IntegrationCustomColumnPromoter {
     ): Promise<void> {
         const hasHashCol = entityInfo.Fields.some(f => f.Name === CONTENT_HASH_COLUMN);
         const mappedDestFields = hasHashCol ? await this.activeDestinationFields(entityMapID) : [];
+        await this.forEachOverflowRow(entityName, entityInfo, row =>
+            this.spreadOneRow(row, named, hasHashCol, mappedDestFields),
+        );
+    }
 
-        let startRow = 0;
-        const pageSize = 500;
+    /**
+     * Removes already-promoted keys from the staging JSON across the WHOLE table, spreading each
+     * value into its real column first if that column is still empty (a row promoted before the
+     * spread ever reached it must not lose the value on the way out).
+     *
+     * This exists because the residue cannot self-heal. The sync rewrites a row only when its content
+     * hash changes, and the hash basis deliberately excludes the overflow column — so a row that has
+     * not changed since before the promotion is never rewritten, keeps the promoted key forever, and
+     * keeps that key showing up in the candidate listing as a new column to add.
+     */
+    private async purgeStaleOverflowKeys(
+        entityName: string,
+        entityMapID: string,
+        entityInfo: EntityInfo,
+        stale: StaleOverflowKey[],
+    ): Promise<void> {
+        const columns = new Set(entityInfo.Fields.map(f => f.Name.toLowerCase()));
+        const purgeable = stale.filter(k => columns.has(k.columnName.toLowerCase()));
+        if (purgeable.length === 0) {
+            // Mapped but no such column in this process's metadata: the map may be newer than the
+            // metadata, so DON'T strip the staged value — that would be the only copy of it.
+            LogStatus(`[CustomColumnPromoter] ${stale.length} mapped key(s) on ${entityName} have no column in current metadata; purge skipped this pass.`);
+            return;
+        }
+        // Same re-baseline as the spread: the promoted columns are already in the field maps, so they
+        // are already part of what the next sync hashes. Backfilling one without re-baselining would
+        // leave every purged row hash-mismatched and force a needless rewrite on the next sync.
+        const hasHashCol = entityInfo.Fields.some(f => f.Name === CONTENT_HASH_COLUMN);
+        const mappedDestFields = hasHashCol ? await this.activeDestinationFields(entityMapID) : [];
+        let rows = 0;
+        await this.forEachOverflowRow(entityName, entityInfo, async row => {
+            const purged = await this.purgeOneRow(row, purgeable, hasHashCol, mappedDestFields);
+            if (purged) rows++;
+            return purged;
+        });
+        LogStatus(`[CustomColumnPromoter] Purged ${purgeable.map(k => k.sourceKey).join(', ')} from the staging JSON of ${rows} row(s) on ${entityName} (already promoted).`);
+    }
+
+    /**
+     * Walks every row of `entityName` whose overflow JSON is non-null, in pages, applying `visit`.
+     *
+     * `visit` reports whether the row LEFT the filtered set (its JSON went null). Those removals shift
+     * every later row toward the front, so the offset advances by rows-seen-minus-rows-removed rather
+     * than by page size — otherwise the walk skips exactly as many rows as it cleans. Ordering is
+     * pinned to the primary key so the offsets refer to a stable sequence across the paged queries.
+     */
+    private async forEachOverflowRow(
+        entityName: string,
+        entityInfo: EntityInfo,
+        visit: (row: BaseEntity) => Promise<boolean>,
+    ): Promise<void> {
+        const orderBy = entityInfo.PrimaryKeys.map(pk => pk.Name).join(', ');
+        let seen = 0;
+        let removed = 0;
         for (;;) {
             const rv = new RunView();
             const res = await rv.RunView<BaseEntity>({
                 EntityName: entityName,
                 ExtraFilter: `${CUSTOM_OVERFLOW_COLUMN} IS NOT NULL`,
+                OrderBy: orderBy.length > 0 ? orderBy : undefined,
                 ResultType: 'entity_object',
-                MaxRows: pageSize,
-                StartRow: startRow,
+                MaxRows: OVERFLOW_PAGE_SIZE,
+                StartRow: seen - removed,
             }, this.user);
             if (!res.Success) {
-                LogError(`[CustomColumnPromoter] Spread scan failed for ${entityName}: ${res.ErrorMessage}`);
+                LogError(`[CustomColumnPromoter] Overflow row scan failed for ${entityName}: ${res.ErrorMessage}`);
                 return;
             }
             const rows = res.Results ?? [];
             for (const row of rows) {
-                await this.spreadOneRow(row, named, hasHashCol, mappedDestFields);
+                if (await visit(row)) removed++;
             }
-            if (rows.length < pageSize) break;
-            startRow += pageSize;
+            seen += rows.length;
+            if (rows.length < OVERFLOW_PAGE_SIZE) break;
         }
     }
 
-    /** Applies the staged values + re-baselined hash to a single row entity and saves it. */
+    /**
+     * Strips the given already-promoted keys from one row's staging JSON, backfilling any real column
+     * that is still empty. Returns true when the row's JSON went null (it left the filtered set).
+     */
+    private async purgeOneRow(
+        row: BaseEntity,
+        stale: StaleOverflowKey[],
+        hasHashCol: boolean,
+        mappedDestFields: string[],
+    ): Promise<boolean> {
+        const overflow = this.parseOverflow(row.Get(CUSTOM_OVERFLOW_COLUMN));
+        if (!overflow) return false;
+        let changed = false;
+        for (const k of stale) {
+            if (!Object.prototype.hasOwnProperty.call(overflow, k.sourceKey)) continue;
+            const current = row.Get(k.columnName);
+            if (current === null || current === undefined) row.Set(k.columnName, overflow[k.sourceKey]);
+            delete overflow[k.sourceKey];
+            changed = true;
+        }
+        if (!changed) return false;
+        const remaining = Object.keys(overflow).length > 0 ? JSON.stringify(overflow) : null;
+        row.Set(CUSTOM_OVERFLOW_COLUMN, remaining);
+        if (hasHashCol) {
+            const mapped: Record<string, unknown> = {};
+            for (const dest of mappedDestFields) mapped[dest] = row.Get(dest);
+            row.Set(CONTENT_HASH_COLUMN, computeContentHash(mapped));
+        }
+        if (!await row.Save()) {
+            LogError(`[CustomColumnPromoter] Overflow purge save failed: ${row.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            return false;
+        }
+        return remaining === null;
+    }
+
+    /**
+     * Applies the staged values + re-baselined hash to a single row entity and saves it. Returns true
+     * when the row's overflow JSON went null (it left the filtered set — see {@link forEachOverflowRow}).
+     */
     private async spreadOneRow(
         row: BaseEntity,
         named: WorkItem[],
         hasHashCol: boolean,
         mappedDestFields: string[],
-    ): Promise<void> {
+    ): Promise<boolean> {
         // Dynamic .Get/.Set is REQUIRED here: these columns were created at runtime and have no
         // generated typed property in this still-running process (full typed access arrives on the
         // post-promotion restart). This is the sanctioned exception to the no-.Get/.Set rule.
         const overflow = this.parseOverflow(row.Get(CUSTOM_OVERFLOW_COLUMN));
-        if (!overflow) return;
+        if (!overflow) return false;
         let changed = false;
         for (const n of named) {
             if (Object.prototype.hasOwnProperty.call(overflow, n.sourceKey)) {
-                // Idempotent spread: only write when the destination is still unset. A freshly-added
+                // Idempotent spread: only WRITE when the destination is still unset. A freshly-added
                 // column is null on first spread (so it fills); an already-backfilled column is left
-                // alone, so a re-run after an interrupted spread finishes the gap without rewriting
-                // settled rows — the recoverSpread path converges to a read-only pass.
+                // alone, so a re-run after an interrupted spread finishes the gap without overwriting
+                // a settled value.
                 const current = row.Get(n.columnName);
                 if (current === null || current === undefined) {
                     row.Set(n.columnName, overflow[n.sourceKey]);
-                    changed = true;
                 }
+                // The STRIP is unconditional, and deliberately outside the guard above: the key now has
+                // a real column and an active field map, so it is no longer unmapped whether or not this
+                // pass was the one that filled it. Leaving it behind relies on a later sync to evict it,
+                // which never happens for a row whose content hash does not change (the hash basis
+                // excludes this column). Stripping is what makes the recovery pass converge — once the
+                // key is gone from the JSON the row drops out of the scan entirely.
+                delete overflow[n.sourceKey];
+                changed = true;
             }
         }
-        if (!changed) return;
+        if (!changed) return false;
+        const remaining = Object.keys(overflow).length > 0 ? JSON.stringify(overflow) : null;
+        row.Set(CUSTOM_OVERFLOW_COLUMN, remaining);
         if (hasHashCol) {
             // Re-baseline to the next-sync value: hash over all active mapped destination columns
             // (now incl. the new ones) as they sit on the row — matches what the next sync computes.
@@ -846,20 +1018,16 @@ export class IntegrationCustomColumnPromoter {
         }
         if (!await row.Save()) {
             LogError(`[CustomColumnPromoter] Spread save failed: ${row.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            return false;
         }
+        return remaining === null;
     }
 
     /** Active field-map destination column names for an entity map (for hash re-baseline). */
     private async activeDestinationFields(entityMapID: string): Promise<string[]> {
-        const rv = new RunView();
-        const res = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
-            EntityName: 'MJ: Company Integration Field Maps',
-            ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
-            Fields: ['DestinationFieldName'],
-            ResultType: 'simple',
-        }, this.user);
-        return res.Success ? (res.Results ?? []).map(r => r.DestinationFieldName).filter(Boolean) : [];
+        return [...(await this.activeFieldMaps(entityMapID)).values()].filter(Boolean);
     }
+
 
     private parseOverflow(raw: unknown): Record<string, unknown> | null {
         if (typeof raw !== 'string' || raw.length === 0) return null;

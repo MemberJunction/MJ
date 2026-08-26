@@ -66,16 +66,20 @@ function workItem(sourceKey: string, opts: Partial<{ needsColumn: boolean; needs
     };
 }
 
-function stubPromoter(provider: IMetadataProvider, planByEntity: Record<string, ReturnType<typeof workItem>[]>) {
+function stubPromoter(
+    provider: IMetadataProvider,
+    planByEntity: Record<string, ReturnType<typeof workItem>[]>,
+    staleByEntity: Record<string, Array<{ sourceKey: string; columnName: string }>> = {},
+) {
     const promoter = new IntegrationCustomColumnPromoter(user, provider) as AnyPromoter;
     const p = promoter as unknown as {
         resolveIntegrationID: unknown; planWorkForEntity: unknown;
         createIntegrationObjectFields: unknown; createFieldMaps: unknown; spreadAndRebaseline: unknown;
-        buildSchemaInput: unknown; activeFieldMapSources: unknown;
+        buildSchemaInput: unknown; activeFieldMaps: unknown; purgeStaleOverflowKeys: unknown;
     };
     // CompletePromotion re-reads the active field maps (it must: post-restart it has no plan to
     // trust). That is a RunView, so it is stubbed at the seam like the other DB touches.
-    p.activeFieldMapSources = vi.fn().mockResolvedValue(new Set<string>());
+    p.activeFieldMaps = vi.fn().mockResolvedValue(new Map<string, string>());
     p.resolveIntegrationID = vi.fn().mockResolvedValue('int-1');
     p.planWorkForEntity = vi.fn().mockImplementation(async (_ci: string, entityName: string) => {
         const work = planByEntity[entityName];
@@ -84,15 +88,18 @@ function stubPromoter(provider: IMetadataProvider, planByEntity: Record<string, 
             entityInfo: { Name: entityName, SchemaName: 'mjc', BaseTable: entityName } as unknown as EntityInfo,
             entityMap: { ID: `em-${entityName}`, ExternalObjectName: entityName.toLowerCase() },
             work,
+            stale: staleByEntity[entityName] ?? [],
         };
     });
     const iof = vi.fn().mockResolvedValue(undefined);
     const maps = vi.fn().mockResolvedValue(undefined);
     const spread = vi.fn().mockResolvedValue(undefined);
+    const purge = vi.fn().mockResolvedValue(undefined);
     p.createIntegrationObjectFields = iof;
     p.createFieldMaps = maps;
     p.spreadAndRebaseline = spread;
-    return { promoter: promoter as IntegrationCustomColumnPromoter, iof, maps, spread };
+    p.purgeStaleOverflowKeys = purge;
+    return { promoter: promoter as IntegrationCustomColumnPromoter, iof, maps, spread, purge };
 }
 
 beforeEach(() => {
@@ -182,6 +189,25 @@ describe('PromoteForSync — one batched RSU pass', () => {
         expect(spread).not.toHaveBeenCalled();
     });
 
+    it('purges stale staged keys BEFORE the pipeline, even with nothing to promote', async () => {
+        // The residue case: every key is already promoted, so there is no work and no DDL — but the
+        // staged JSON still carries the keys and nothing else will ever clear them. The purge must
+        // run anyway, and must run before any migration (it is not evidence a column is missing).
+        const provider = makeProvider();
+        const { promoter, purge } = stubPromoter(
+            provider,
+            { A: [] },
+            { A: [{ sourceKey: 'roundId', columnName: 'roundId' }] },
+        );
+
+        const result = await promoter.PromoteForSync('ci-1', ['A']);
+
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(purge.mock.calls[0][3]).toEqual([{ sourceKey: 'roundId', columnName: 'roundId' }]);
+        expect(runPipelineBatchMock).not.toHaveBeenCalled();
+        expect(result.Promoted).toBe(false);
+    });
+
     it('a spread-recovery-only pass runs NO pipeline and reports no columns added', async () => {
         const provider = makeProvider();
         const { promoter, spread } = stubPromoter(provider, {
@@ -200,26 +226,54 @@ describe('PromoteForSync — one batched RSU pass', () => {
 });
 
 describe('resolveWorkItems — the terminate check becomes spread recovery', () => {
-    function resolve(promoter: IntegrationCustomColumnPromoter, candidates: string[], entityFields: string[], fieldMapSources: string[]) {
+    /** fieldMaps: source key -> the destination column the field map names (as the data records it). */
+    function resolve(
+        promoter: IntegrationCustomColumnPromoter,
+        candidates: string[],
+        entityFields: string[],
+        fieldMaps: Record<string, string>,
+    ) {
         const entityInfo = { Fields: entityFields.map(n => ({ Name: n })) } as unknown as EntityInfo;
         return (promoter as unknown as {
-            resolveWorkItems: (p: Array<{ Key: string }>, e: EntityInfo, f: ReadonlySet<string>) => Array<Record<string, unknown>>;
-        }).resolveWorkItems(candidates.map(Key => ({ Key })), entityInfo, new Set(fieldMapSources.map(f => f.toLowerCase())));
+            resolveWorkItems: (p: Array<{ Key: string }>, e: EntityInfo, f: ReadonlyMap<string, string>) => Array<Record<string, unknown>>;
+        }).resolveWorkItems(
+            candidates.map(Key => ({ Key })),
+            entityInfo,
+            new Map(Object.entries(fieldMaps).map(([k, v]) => [k.toLowerCase(), v])),
+        );
     }
 
     it('a key whose column AND field map exist becomes a recoverSpread item, not a silent skip', () => {
         const promoter = new IntegrationCustomColumnPromoter(user, makeProvider());
-        const items = resolve(promoter, ['roundId'], ['ID', 'roundId'], ['roundId']);
+        const items = resolve(promoter, ['roundId'], ['ID', 'roundId'], { roundId: 'roundId' });
         expect(items).toHaveLength(1);
         expect(items[0]).toMatchObject({ recoverSpread: true, needsColumn: false, needsFieldMap: false, columnName: 'roundId' });
     });
 
     it('a brand-new key still plans column + field map, with no recovery flag', () => {
         const promoter = new IntegrationCustomColumnPromoter(user, makeProvider());
-        const items = resolve(promoter, ['newKey'], ['ID'], []);
+        const items = resolve(promoter, ['newKey'], ['ID'], {});
         expect(items).toHaveLength(1);
         expect(items[0]).toMatchObject({ needsColumn: true, needsFieldMap: true });
         expect(items[0].recoverSpread).toBeFalsy();
+    });
+
+    it('a collision-suffixed column is found via the field map, not re-promoted', () => {
+        // The real column is `roundId_2` — re-sanitizing 'roundId' can never produce that name, so the
+        // old check read "no column yet" and minted a THIRD column beside the working one.
+        const promoter = new IntegrationCustomColumnPromoter(user, makeProvider());
+        const items = resolve(promoter, ['roundId'], ['ID', 'roundId_2'], { roundId: 'roundId_2' });
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({ recoverSpread: true, needsColumn: false, columnName: 'roundId_2' });
+    });
+
+    it('a field map whose column is missing from stale in-process metadata is still terminal', () => {
+        // entityInfo predates the ADD COLUMN in THIS process. The map names the column, so the key is
+        // already promoted — planning another column for it is the duplicate-column bug.
+        const promoter = new IntegrationCustomColumnPromoter(user, makeProvider());
+        const items = resolve(promoter, ['roundId'], ['ID'], { roundId: 'roundId' });
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({ needsColumn: false, needsFieldMap: false, columnName: 'roundId' });
     });
 });
 
@@ -237,21 +291,43 @@ describe('spreadOneRow — idempotent backfill', () => {
     async function spread(row: ReturnType<typeof makeRow>, named: Array<ReturnType<typeof workItem>>) {
         const promoter = new IntegrationCustomColumnPromoter(user, makeProvider());
         await (promoter as unknown as {
-            spreadOneRow: (r: unknown, n: unknown, h: boolean, m: string[]) => Promise<void>;
+            spreadOneRow: (r: unknown, n: unknown, h: boolean, m: string[]) => Promise<boolean>;
         }).spreadOneRow(row, named, false, []);
     }
 
-    it('fills a still-null destination from the overflow JSON and saves', async () => {
+    it('fills a still-null destination from the overflow JSON, strips the key, and saves', async () => {
         const row = makeRow({ __mj_integration_CustomFields: JSON.stringify({ roundId: 42 }), roundId: null });
         await spread(row, [workItem('roundId')]);
         expect(row._data['roundId']).toBe(42);
+        // The key was the only one staged, so the column goes null — the same shape the engine's
+        // own eviction writes, and what drops this row out of the `IS NOT NULL` scan.
+        expect(row._data['__mj_integration_CustomFields']).toBeNull();
         expect(row.Save).toHaveBeenCalledTimes(1);
     });
 
-    it('leaves an already-backfilled destination alone — a recovery re-run does not rewrite settled rows', async () => {
+    it('leaves an already-backfilled VALUE alone but still strips the key', async () => {
+        // The destination is settled, so the value is not rewritten. The key is removed regardless:
+        // it has a column and an active field map, so it is no longer unmapped, and leaving it staged
+        // is exactly what re-offers it as a phantom new column forever.
         const row = makeRow({ __mj_integration_CustomFields: JSON.stringify({ roundId: 42 }), roundId: 99 });
         await spread(row, [workItem('roundId', { recoverSpread: true })]);
         expect(row._data['roundId']).toBe(99);
-        expect(row.Save).not.toHaveBeenCalled();
+        expect(row._data['__mj_integration_CustomFields']).toBeNull();
+        expect(row.Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the still-unmapped keys and reports the row as staying in the scan', async () => {
+        const row = makeRow({
+            __mj_integration_CustomFields: JSON.stringify({ roundId: 42, notYetPromoted: 'x' }),
+            roundId: null,
+        });
+        const promoter = new IntegrationCustomColumnPromoter(user, makeProvider());
+        const left = await (promoter as unknown as {
+            spreadOneRow: (r: unknown, n: unknown, h: boolean, m: string[]) => Promise<boolean>;
+        }).spreadOneRow(row, [workItem('roundId')], false, []);
+        expect(JSON.parse(row._data['__mj_integration_CustomFields'] as string)).toEqual({ notYetPromoted: 'x' });
+        // Still carries overflow, so it is still in the filtered set — the paged walk must NOT count
+        // it as removed or it will skip a later row.
+        expect(left).toBe(false);
     });
 });
