@@ -25,6 +25,14 @@ import {
     CredentialValidationResult,
     CredentialAccessDetails
 } from "./types";
+import {
+    CredentialExpirationConfig,
+    CredentialExpirationEvaluation,
+    CredentialExpiredError,
+    CredentialNotFoundError,
+    DEFAULT_EXPIRATION_CONFIG,
+    evaluateExpiration
+} from "./expiration";
 
 
 
@@ -39,6 +47,7 @@ const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = '9375C9F9-1A58-44D6-9B09-8C6AF071438
  * - Audit logging of all credential access
  * - Field-level encryption via MemberJunction's EncryptionEngine
  * - Per-request credential override support
+ * - Expiration enforcement (see {@link CredentialEngine.ExpirationConfig})
  *
  * All credential access should go through this engine to ensure proper
  * audit logging and consistent credential resolution.
@@ -75,6 +84,13 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     // Ajv JSON Schema validator
     private _ajv: Ajv;
     private _schemaValidators: Map<string, ValidateFunction> = new Map();
+
+    // Expiration policy governing how expired credentials are handled
+    private _expirationConfig: CredentialExpirationConfig = { ...DEFAULT_EXPIRATION_CONFIG };
+
+    // Credential IDs already warned about this process, so a credential resolved
+    // in a hot loop produces one warning rather than one per call. Cleared on refresh.
+    private _expiryWarningsIssued: Set<string> = new Set();
 
     constructor() {
         super();
@@ -133,6 +149,10 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             throw new Error("Entity not found for MJ: Credentials!")
         }
 
+        // Cached credential rows are about to be replaced, so previously issued
+        // warnings no longer describe the data in hand.
+        this._expiryWarningsIssued.clear();
+
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
 
@@ -169,6 +189,55 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     }
 
     // ====================================
+    // Expiration Policy
+    // ====================================
+
+    /**
+     * The active expiration policy.
+     *
+     * Defaults to blocking expired credentials with a 30-day warning window and
+     * no grace period. Set this once at application startup, before any
+     * credential is resolved:
+     *
+     * ```typescript
+     * CredentialEngine.Instance.ExpirationConfig = { policy: 'warn' };
+     * ```
+     *
+     * Assigning a partial object merges it over the current configuration, so
+     * callers can change one knob without restating the others.
+     */
+    public get ExpirationConfig(): CredentialExpirationConfig {
+        return { ...this._expirationConfig };
+    }
+
+    public set ExpirationConfig(config: Partial<CredentialExpirationConfig>) {
+        this._expirationConfig = { ...this._expirationConfig, ...config };
+        // A policy change can make previously suppressed warnings relevant again.
+        this._expiryWarningsIssued.clear();
+    }
+
+    /**
+     * Evaluates a credential's expiry against the clock and the active policy.
+     *
+     * Exposed so consumers that maintain their own credential lists — for
+     * example a caller walking a set of fallback bindings — can ask the same
+     * question the engine asks, instead of comparing dates by hand and drifting
+     * from the engine's warning window and grace period.
+     *
+     * @param credential - The credential to evaluate.
+     * @param policyOverride - Optional per-call policy override.
+     */
+    public getExpirationStatus(
+        credential: MJCredentialEntity,
+        policyOverride?: CredentialExpirationConfig['policy']
+    ): CredentialExpirationEvaluation {
+        const config = policyOverride
+            ? { ...this._expirationConfig, policy: policyOverride }
+            : this._expirationConfig;
+        return evaluateExpiration(credential.ExpiresAt, config);
+    }
+
+    // ====================================
     // Lookup Methods
     // ====================================
 
@@ -183,18 +252,28 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
 
     /**
      * Gets the default credential for a given type.
+     *
+     * Expired credentials are excluded, honoring the documented contract of the
+     * `ExpiresAt` column that an expired credential is treated as inactive. Use
+     * {@link getCredentialById} when you need an expired record regardless.
      */
     public getDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
         const credType = this.getCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
-            UUIDsEqual(c.CredentialTypeID, credType.ID) && c.IsDefault && c.IsActive
+            UUIDsEqual(c.CredentialTypeID, credType.ID) && c.IsDefault && c.IsActive &&
+            this.getExpirationStatus(c).usable
         );
     }
 
     /**
      * Gets a credential by ID.
+     *
+     * Deliberately unfiltered: addressing a credential by its primary key is an
+     * exact request, and administration/rotation tooling must be able to load an
+     * expired record in order to replace it. Check {@link getExpirationStatus}
+     * if you need to know whether the result is still usable.
      */
     public getCredentialById(credentialId: string): MJCredentialEntity | undefined {
         return this._credentials.find(c => UUIDsEqual(c.ID, credentialId));
@@ -202,6 +281,9 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
 
     /**
      * Gets a credential by type and name.
+     *
+     * Expired credentials are excluded, for the same reason as
+     * {@link getDefaultCredentialForType}.
      */
     public getCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
         const credType = this.getCredentialTypeByName(credentialTypeName);
@@ -210,7 +292,8 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         return this._credentials.find(c =>
             UUIDsEqual(c.CredentialTypeID, credType.ID) &&
             c.Name.trim().toLowerCase() === credentialName.trim().toLowerCase() &&
-            c.IsActive
+            c.IsActive &&
+            this.getExpirationStatus(c).usable
         );
     }
 
@@ -231,10 +314,16 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * when the entity is loaded. The decrypted JSON is then parsed and returned
      * as the `values` object.
      *
+     * Expiry is enforced here, at resolution time rather than at cache-load
+     * time: the engine caches credential rows for the life of the process, so a
+     * credential that lapses between two calls must be caught on the second
+     * call, not left live until the next refresh.
+     *
      * @param credentialName - The name of the credential to resolve (e.g., 'OpenAI', 'SendGrid')
      * @param options - Resolution options including contextUser, overrides, and subsystem
      * @returns Resolved credential with decrypted values
-     * @throws Error if credential is not found
+     * @throws {CredentialNotFoundError} if no credential matches the requested name or ID
+     * @throws {CredentialExpiredError} if the credential is past its expiry and the active policy blocks it
      */
     public async getCredential<T extends Record<string, string> = Record<string, string>>(
         credentialName: string,
@@ -244,6 +333,9 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         let credential: MJCredentialEntity | null = null;
         let values: T = {} as T;
         let source: 'database' | 'request' = 'database';
+        // Values supplied by the caller have a lifetime the caller owns, so they
+        // are reported valid unless a database record says otherwise.
+        let expiration: CredentialExpirationEvaluation = evaluateExpiration(null);
 
         try {
             // Ensure engine is loaded
@@ -258,11 +350,24 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             else {
                 credential = this.resolveCredential(credentialName, options);
                 if (credential) {
+                    // Expiry is checked before the values are read, so a blocked
+                    // credential is never decrypted and never reaches the caller.
+                    expiration = this.getExpirationStatus(credential, options.expirationPolicy);
+                    if (!expiration.usable) {
+                        throw new CredentialExpiredError(
+                            credential.Name,
+                            expiration.expiresAt!,
+                            credential.ID,
+                            Math.abs(expiration.daysUntilExpiration ?? 0)
+                        );
+                    }
+                    this.warnIfExpiringOrExpired(credential, expiration);
+
                     // Values field is already decrypted by BaseEntity via field-level encryption
                     values = this.parseCredentialValues(credential.Values) as T;
                     source = 'database';
                 } else {
-                    throw new Error(`Credential not found: ${credentialName}`);
+                    throw new CredentialNotFoundError(credentialName);
                 }
             }
 
@@ -271,7 +376,8 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                 operation: 'Decrypt',
                 subsystem: options.subsystem,
                 success: true,
-                durationMs: Date.now() - startTime
+                durationMs: Date.now() - startTime,
+                expirationStatus: expiration.status
             });
 
             // Update LastUsedAt (fire and forget)
@@ -283,7 +389,9 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                 credential,
                 values,
                 source,
-                expiresAt: credential?.ExpiresAt
+                expiresAt: credential?.ExpiresAt,
+                expirationStatus: expiration.status,
+                daysUntilExpiration: expiration.daysUntilExpiration
             };
 
         } catch (error) {
@@ -293,9 +401,46 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                 subsystem: options.subsystem,
                 success: false,
                 errorMessage: error instanceof Error ? error.message : String(error),
-                durationMs: Date.now() - startTime
+                durationMs: Date.now() - startTime,
+                expirationStatus: expiration.status
             });
             throw error;
+        }
+    }
+
+    /**
+     * Emits a warning for a credential that is expiring soon, or that was let
+     * through while expired under a `'warn'` policy or inside the grace period.
+     *
+     * Warnings are issued once per credential per process so that a credential
+     * resolved inside a hot loop does not flood the log; the set is cleared when
+     * the engine refreshes or the policy changes.
+     */
+    private warnIfExpiringOrExpired(
+        credential: MJCredentialEntity,
+        expiration: CredentialExpirationEvaluation
+    ): void {
+        if (expiration.status === 'valid') {
+            return;
+        }
+        if (this._expiryWarningsIssued.has(credential.ID)) {
+            return;
+        }
+        this._expiryWarningsIssued.add(credential.ID);
+
+        const days = expiration.daysUntilExpiration ?? 0;
+        if (expiration.status === 'expiring-soon') {
+            LogStatus(
+                `Credential '${credential.Name}' expires in ${days} day(s) ` +
+                `(${expiration.expiresAt?.toISOString()}). Rotate it before it lapses.`
+            );
+        } else {
+            const reason = expiration.withinGrace ? 'inside the configured grace period' : "under a 'warn' expiration policy";
+            LogError(
+                `Credential '${credential.Name}' EXPIRED ${Math.abs(days)} day(s) ago ` +
+                `(${expiration.expiresAt?.toISOString()}) but was used anyway ${reason}. ` +
+                `This is not a safe steady state — rotate the credential.`
+            );
         }
     }
 
@@ -480,6 +625,12 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * 1. By ID (if credentialId provided)
      * 2. By name (credentialName parameter)
      * 3. Default for that name
+     *
+     * Expired credentials are deliberately still matched here. Filtering them
+     * out would make an expired credential indistinguishable from a missing one,
+     * and "Credential not found: OpenAI" sends an operator hunting for a record
+     * that exists and merely needs rotating. The caller — {@link getCredential} —
+     * evaluates expiry on the match and raises the specific error instead.
      */
     private resolveCredential(
         credentialName: string,
@@ -723,7 +874,8 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                 operation: details.operation,
                 subsystem: details.subsystem,
                 errorMessage: details.errorMessage,
-                durationMs: details.durationMs
+                durationMs: details.durationMs,
+                expirationStatus: details.expirationStatus
             });
 
             if (credential && this._credentialsEntityId) {
