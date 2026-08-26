@@ -219,16 +219,25 @@ jobs:
     permissions:
       contents: read
     env:
-      # Turbo remote cache — OPT-IN, and inert until someone opts in. An unset TURBO_TOKEN is
-      # exactly how turbo detects "no remote cache", so these need no conditional and change
-      # nothing today. To enable: add a repository SECRET `TURBO_TOKEN` and a repository
-      # VARIABLE `TURBO_TEAM` (plus `TURBO_API` only for a self-hosted cache server). Once set,
-      # a package built by ANY run — a previous PR, a merge, another branch — replays instead of
-      # recompiling, which is the one thing the GitHub-Actions cache cannot do (its entries are
-      # scoped per-ref and can only be read downward from the default branch).
+      # Turbo remote cache. A package built by ANY run — a previous PR, a merge, another branch —
+      # replays instead of recompiling, which is the one thing the GitHub-Actions cache cannot do
+      # (its entries are scoped per-ref and can only be read downward from the default branch).
+      #
+      # Backed by org-level secrets/variables: SECRET `TURBO_TOKEN`, VARIABLE `TURBO_TEAM`, and
+      # SECRET `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. `TURBO_API` is only for a self-hosted cache
+      # server and is deliberately unset. Fork PRs never receive the secrets, so they degrade to a
+      # cold local cache rather than failing — the same inert behavior this block had before the
+      # credentials existed.
+      #
+      # turbo.json sets `remoteCache.signature`, so artifacts are HMAC-signed on upload and
+      # verified on download; anything that fails verification is treated as a cache miss. Every
+      # job that runs turbo needs ALL FOUR vars. A job holding the token but missing the signature
+      # key does NOT fail — it logs `signing artifact failed` and silently uploads nothing, so a
+      # missed job degrades to write-nothing rather than breaking the run.
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     outputs:
       turbo_filter: ${{ steps.scope.outputs.turbo_filter }}
       shards: ${{ steps.plan.outputs.shards }}
@@ -481,6 +490,7 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
       - name: Checkout repo
@@ -577,6 +587,7 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -746,6 +757,7 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
