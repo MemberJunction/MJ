@@ -47,6 +47,19 @@ on:
       # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
       # "matches zero and therefore passes everything" is the precise regression to catch.
       - '.github/scripts/check-codegen-tail.mjs'
+      # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
+      # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
+      # Its suite lives in __tests__ above, but without these entries a PR editing only one of
+      # these workflows runs neither the guard nor anything else. Every way of breaking the cache
+      # wiring is silent — a job drops to "Remote caching disabled" or stops uploading and the
+      # run still goes green — so nothing downstream would catch it either.
+      - '.github/workflows/integration.yml'
+      - '.github/workflows/eds-integration.yml'
+      - '.github/workflows/ci-standards.yml'
+      - '.github/workflows/pg-migrations.yml'
+      - '.github/workflows/claude-pack.yml'
+      - '.github/workflows/release-test.yml'
+      - '.github/workflows/publish.yml'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
