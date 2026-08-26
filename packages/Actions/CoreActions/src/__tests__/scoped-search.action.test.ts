@@ -14,14 +14,6 @@ vi.mock('@memberjunction/global', async () => {
 const searchSpy = vi.fn();
 const permissionResolveSpy = vi.fn();
 const logForbiddenSpy = vi.fn();
-// Returns the agent/user-activatable skill list. Defaults to "contains the stub skill" so the tests
-// written before the gate existed keep exercising what they were written for; the two that care
-// about the gate return an empty list instead.
-const skillMayRunSpy = vi.fn(() => [{ ID: 'skill-1' }]);
-// The agent is a caller-supplied principal too. Defaults to allowed so every pre-existing test keeps
-// exercising what it was written for.
-const agentMayRunSpy = vi.fn(async () => true);
-let agentsInCacheStub: Array<{ ID: string }> = [{ ID: 'agent-1' }];
 
 // Mock the SearchEngine singleton + the SearchScope permission resolver.
 // The resolver mock returns Allowed=true by default so existing tests that
@@ -41,23 +33,11 @@ let agentsInCacheStub: Array<{ ID: string }> = [{ ID: 'agent-1' }];
 // class is still exported by the real module (deprecated) so anything importing it keeps
 // resolving. Both are backed by the SAME spy, so existing assertions on
 // `permissionResolveSpy` are unaffected.
-// The skill activation gate. Loading a skill is not permission to wield it as a principal, so the
-// action intersects it against GetSkillsForAgent(agent, user) — the same call BaseAgent uses to
-// decide whether a requested skill may activate at all.
-vi.mock('@memberjunction/ai-engine-base', () => ({
-    AIEngineBase: {
-        Instance: {
-            Config: async () => undefined,
-            GetSkillsForAgent: (...args: unknown[]) => skillMayRunSpy(...(args as [])),
-            // Cache membership is checked separately from permission so a stale cache reports as a
-            // metadata-load problem rather than an access denial.
-            get Agents() { return agentsInCacheStub; },
-        },
-    },
-    AIAgentPermissionHelper: {
-        HasPermission: (...args: unknown[]) => agentMayRunSpy(...(args as [])),
-    },
-}));
+// NOTE: wieldability — "may this caller actually use this principal?" — is decided by
+// SearchScopePermissionResolver, NOT by this action, so it is covered by that resolver's own tests
+// (SearchEngine/src/permissions/__tests__). The action's job here is to resolve the skill, refuse a
+// malformed one, and hand it to the resolver; mocking the AI engine in this file would only stub a
+// package the action does not import.
 
 vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
@@ -325,6 +305,76 @@ describe('ScopedSearchAction', () => {
             expect(searchSpy).not.toHaveBeenCalled();
         });
 
+        it('passes the tenant into the permission decision, so tenant-scoped grants are not discarded', async () => {
+            // isGrantForTenant DISCARDS a tenant-scoped row when the caller supplies no tenant. Omitting
+            // it threw away every tenant-scoped grant — including a tenant-scoped None, which is an
+            // explicit admin deny, so the deny evaporated and the search was allowed.
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-x', Name: 'X' });
+            const action = new ScopedSearchAction();
+            await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'ScopeID', Value: 'scope-x' },
+                { Name: 'PrimaryScopeRecordID', Value: 'org-77' }
+            ]));
+            expect(permissionResolveSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ PrimaryScopeRecordID: 'org-77' })
+            );
+        });
+
+        it('does not leak the principal NAME back to the caller — the denial is a name oracle otherwise', async () => {
+            // The resolver's Reason names the principal so the AUDIT row can. Echoing it to the caller
+            // lets anyone who can guess ids enumerate the skill and agent catalogues by reading denials.
+            loadedAgentStub.SearchScopeAccess = 'All';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-x', Name: 'X' });
+            permissionResolveSpy.mockResolvedValueOnce({
+                Allowed: false,
+                Level: 'None',
+                Source: 'SkillAssignedNotListed',
+                Reason: "Skill 'Q3 Board Compensation Review' has SearchScopeAccess='Assigned' and this scope is not in its assigned scope list.",
+                toSqlPredicate: () => '1=0',
+            });
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'ScopeID', Value: 'scope-x' }
+            ]));
+            expect(result.Success).toBe(false);
+            expect(result.Message).not.toContain('Q3 Board Compensation Review');
+            // but it must still say enough to act on: the ids the caller sent, and the KIND of refusal
+            expect(result.Message).toContain('agent-1');
+            expect(result.Message).toContain('SkillAssignedNotListed');
+            // and the audit row keeps the full reason, names and all
+            expect(logForbiddenSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ FailureReason: expect.stringContaining('Q3 Board Compensation Review') })
+            );
+        });
+
+        it('reports ACCESS_DENIED when the resolver source is PrincipalNotActivatable', async () => {
+            // The source is named "Principal": it says the PRINCIPAL may not be wielded, not that the
+            // user lacks a grant. Classifying it as PERMISSION_DENIED told calling code the opposite,
+            // and nothing caught that because this one-line list had no test of its own.
+            loadedAgentStub.SearchScopeAccess = 'All';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-x', Name: 'X' });
+            permissionResolveSpy.mockResolvedValueOnce({
+                Allowed: false,
+                Level: 'None',
+                Source: 'PrincipalNotActivatable',
+                Reason: "this user may not run agent 'A' — the fallback does not apply.",
+                toSqlPredicate: () => '1=0',
+            });
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'ScopeID', Value: 'scope-x' }
+            ]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('ACCESS_DENIED');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
         it('passes through to search when the resolver allows', async () => {
             loadedAgentStub.SearchScopeAccess = 'All';
             getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-ok', Name: 'OK' });
@@ -352,8 +402,6 @@ describe('ScopedSearchAction', () => {
         beforeEach(() => {
             loadedSkillStub.ID = 'skill-1';
             loadedSkillStub.Load = async () => true;
-            skillMayRunSpy.mockReturnValue([{ ID: 'skill-1' }]);
-            agentMayRunSpy.mockResolvedValue(true);
             loadedSkillStub.SearchScopeAccess = 'All';
             globalScopeStub = { ID: 'global-id', Name: 'Global', IsGlobal: true };
         });
@@ -367,9 +415,11 @@ describe('ScopedSearchAction', () => {
             ]));
             expect(result.Success).toBe(true);
             expect(searchSpy.mock.calls[0][0].AISkillID).toBeUndefined();
-            // The gate is still consulted, just with no skill.
-            const gateArgs = permissionResolveSpy.mock.calls[0]?.[0] as { Skill?: unknown } | undefined;
-            if (gateArgs) expect(gateArgs.Skill).toBeNull();
+            // The gate is still consulted, just with no skill — assert the call happened rather
+            // than guarding on it, so a silently-skipped gate fails here instead of passing.
+            expect(permissionResolveSpy).toHaveBeenCalled();
+            const gateArgs = permissionResolveSpy.mock.calls[0][0] as { Skill?: unknown };
+            expect(gateArgs.Skill).toBeNull();
         });
 
         it('threads the LOADED skill id onto SearchParams, not the caller\'s string', async () => {
@@ -398,7 +448,7 @@ describe('ScopedSearchAction', () => {
                 { Name: 'AISkillID', Value: SKILL_UUID }
             ]));
             expect(result.Success).toBe(true);
-            const gateArgs = permissionResolveSpy.mock.calls.at(-1)?.[0] as { Skill?: { ID: string } | null };
+            const gateArgs = permissionResolveSpy.mock.calls[permissionResolveSpy.mock.calls.length - 1]?.[0] as { Skill?: { ID: string } | null };
             expect(gateArgs.Skill).not.toBeNull();
             expect(gateArgs.Skill?.ID).toBe('skill-1');
         });
@@ -445,7 +495,7 @@ describe('ScopedSearchAction', () => {
             expect(searchSpy).not.toHaveBeenCalled();
         });
 
-        it('  and refuses any skill it cannot judge, not only the None case', async () => {
+        it('refuses any skill it cannot judge, not only the None case', async () => {
             loadedSkillStub.SearchScopeAccess = 'Assigned';
             loadedAgentStub.SearchScopeAccess = 'All';
             globalScopeStub = undefined;
@@ -459,7 +509,7 @@ describe('ScopedSearchAction', () => {
             expect(searchSpy).not.toHaveBeenCalled();
         });
 
-        it('  but a caller passing NO skill is unaffected, as before this input existed', async () => {
+        it('a caller passing NO skill is unaffected, as before this input existed', async () => {
             loadedAgentStub.SearchScopeAccess = 'All';
             globalScopeStub = undefined;
             const action = new ScopedSearchAction();
@@ -588,22 +638,4 @@ describe('ScopedSearchAction', () => {
         });
     });
 
-    describe('AIAgentID — the agent principal is judged too', () => {
-        // clearAllMocks() clears call history, NOT implementations, so a mockResolvedValue(false)
-        // from a previous test would leak into the pass-through case.
-        beforeEach(() => {
-            agentMayRunSpy.mockResolvedValue(true);
-            skillMayRunSpy.mockReturnValue([{ ID: 'skill-1' }]);
-        });
-
-        it('lets a runnable agent through, which is every existing caller', async () => {
-            loadedAgentStub.SearchScopeAccess = 'All';
-            const action = new ScopedSearchAction();
-            const result = await run(action, mkParams([
-                { Name: 'Query', Value: 'q' },
-                { Name: 'AgentID', Value: 'agent-1' }
-            ]));
-            expect(result.Success).toBe(true);
-        });
-    });
 });

@@ -146,7 +146,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional AI Skill this search is running under, supplied per call. Threaded onto SearchParams.AISkillID, which ScopeDimensionResolver binds as Principals.SkillID for a dimension's expansion query. That slot already existed and nothing populated it, so a scope whose bound depends on the active skill could never resolve one. Caller-supplied, and JUDGED rather than trusted: the skill must be one this agent could actually activate for this user, its own SearchScopeAccess is evaluated by the permission gate, and a value that is not a UUID or will not load is refused. Note an expansion query is server-authored SQL but MJ renders query parameters through Nunjucks with autoescape off, so containment is the query author's responsibility plus the gate above -- not a property of the parameter being server-side.",
+            "Description": "Optional AI Skill this search runs under. Pass it when the search should be scoped to the skill the agent is currently acting through; omit it otherwise and no skill principal applies. The skill is judged, not trusted: it must be one this agent can activate for this user, its own SearchScopeAccess is evaluated, and a value that is not a UUID or will not load is refused rather than ignored.",
             "IsRequired": false
           },
           "primaryKey": {

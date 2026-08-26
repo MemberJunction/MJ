@@ -172,12 +172,21 @@ A third optional input, `AISkillID`, is **not** a SearchContext value and does n
 |---|---|---|
 | `AISkillID` | string (UUID) | The AI Skill this search runs under. Threaded onto `SearchParams.AISkillID` → `Principals.SkillID`, which a dimension's expansion query can bind. Also handed to `ResolveEffectivePermission`, so the skill's own `SearchScopeAccess` applies. |
 
-Two consequences worth being explicit about, because a skill is a principal that can both widen and deny:
+Four consequences worth being explicit about, because a skill is a principal that can both widen and deny:
 
 - **It is judged.** `AISkill.SearchScopeAccess` can reject a scope the user's roles allow (`None`, or `Assigned` without this scope listed) and can grant one they do not (`All`). The action resolves and passes the skill *before* the permission gate, so those rules fire — and denial rows are attributed to it.
 - **A bad value fails closed.** A non-UUID, or an ID that will not load, is rejected with `INVALID_PARAM` rather than being dropped. Silently continuing would bind an unjudged ID into the expansion query.
+- **The caller must be allowed to use it on this agent.** Loading a skill is not permission to wield it as a principal. Because `SkillUnscopedAll` grants `Search` on any scope, and AISkill permissions are open by default (no permission rows means everyone may View and Run), an unchecked ID would be a scope grant for the asking. `SearchScopePermissionResolver` intersects the skill against `GetSkillsForAgent(agent, user)` — agent-accepted ∩ user-permitted ∩ Active, the same call `BaseAgent.preActivateRequestedSkills` gates real activation on — and refuses with `PrincipalNotActivatable`, which the action returns as `ACCESS_DENIED`, attributed to the skill in the Forbidden log.
 
-- **The caller must be allowed to use it on this agent.** Loading a skill is not permission to wield it as a principal. Because `SkillUnscopedAll` grants `Search` on any scope, and AISkill permissions are open by default (no permission rows means everyone may View and Run), an unchecked ID would be a scope grant for the asking. The action intersects the skill against `GetSkillsForAgent(agent, user)` — agent-accepted ∩ user-permitted ∩ Active, the same call `BaseAgent.preActivateRequestedSkills` gates real activation on — and denies with `ACCESS_DENIED`, attributed to the skill in the Forbidden log. The **calling agent** is gated the same way — `AgentID` is a caller-supplied parameter too, and `AgentUnscopedAll` grants `Search` as a fallback when the user has no per-scope grant — so the action requires Run on the agent as well. `ExplainScope` applies both gates, so a preview cannot promise what the search would refuse.
+  The two principals are judged at **different points, for a reason**. A skill is judged wherever it is named, because a skill is only ever supplied to steer: it binds into `Principals.SkillID` and, for a `restricts: true` dimension, the expansion query's output *is* the bound — so judging it only at the `All` fallback would let a user who holds their own grant name any skill and widen with it. An agent is judged only where it **widens** (its `All` fallback), because elsewhere `AIAgentID` is attribution — the pre-execution RAG path threads it purely so `SearchExecutionLog` can attribute the search, and gating that would turn an analytics field into a retrieval outage. `ExplainScope` applies both gates, so a preview cannot promise what the search would refuse.
+
+- **Containment of a principal id is the QUERY AUTHOR's job, not the platform's.** An expansion query
+  is server-authored SQL, but MJ renders query parameters through Nunjucks with `autoescape: false`
+  (`QueryParameterProcessor`), so escaping is opt-in — `| sqlString`, or a declared validation chain.
+  The gate above decides *whether* a principal may steer the bound; it does not make the id safe to
+  interpolate. Write the predicate so a malformed value narrows rather than widens: e.g.
+  `TRY_CONVERT(uniqueidentifier, …)`, which degrades anything unparseable to NULL and therefore
+  to an empty bound.
 
 Omit the input and the principal is null, which is the behaviour for every caller that does not pass it.
 

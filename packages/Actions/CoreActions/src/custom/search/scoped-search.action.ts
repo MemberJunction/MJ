@@ -123,7 +123,6 @@ export class ScopedSearchAction extends BaseAction {
             const requestedScopeID = this.getStringParam(params, "scopeid");
 
 
-
             // 1b. Resolve the SKILL PRINCIPAL FIRST, because two later steps need it: the gate is
             // what judges it, and every denial row wants it attributed.
             // `AISkill.SearchScopeAccess` can DENY a scope the user's roles allow ('None', or
@@ -332,6 +331,16 @@ export class ScopedSearchAction extends BaseAction {
                 'ACCESS_DENIED');
         }
         const permResolver = GetSearchScopePermissionResolver();
+        // THE TENANT BELONGS IN THE PERMISSION DECISION, NOT ONLY IN THE SEARCH.
+        //
+        // `applicableGrants` narrows to rows whose own PrimaryScopeRecordID matches the caller's
+        // tenant, and `isGrantForTenant` DISCARDS a tenant-scoped row when the caller supplies no
+        // tenant at all. Omitting it here meant every tenant-scoped grant was thrown away before the
+        // decision — which cuts both ways, and the second way is a fail-open: a tenant-scoped
+        // PermissionLevel='None' (an explicit admin deny) was discarded too, so a user holding any
+        // NULL-tenant role grant had that deny silently evaporate. `ExplainScope` passed the tenant
+        // and denied correctly, so preview and search disagreed in both directions.
+        const primaryScopeRecordID = this.getStringParam(params, "primaryscoperecordid");
         const verdict = await permResolver.ResolveEffectivePermission({
             User: params.ContextUser,
             SearchScopeID: scopeID,
@@ -339,6 +348,7 @@ export class ScopedSearchAction extends BaseAction {
             // A skill is a principal in the same sense the agent is. Omitting it left
             // SkillNone / SkillAssignedNotListed / SkillUnscopedAll unable to fire at all.
             Skill: skill,
+            PrimaryScopeRecordID: primaryScopeRecordID ?? null,
             ContextUser: params.ContextUser,
         });
         if (!verdict.Allowed) {
@@ -357,9 +367,14 @@ export class ScopedSearchAction extends BaseAction {
             // would even be inconsistent with ITSELF, since SearchScopeAccess='None' caught
             // structurally above returns ACCESS_DENIED while the same value reached through the
             // resolver would return PERMISSION_DENIED.
+            //
+            // PrincipalNotActivatable belongs here for the same reason and by its own name: it says
+            // the PRINCIPAL may not be wielded, not that the user lacks a grant. Leaving it out
+            // classified the one source this PR adds as user-side, against the rule stated above.
             const isPrincipalDenial =
                 verdict.Source === 'AgentNone' || verdict.Source === 'AgentAssignedNotListed'
-                || verdict.Source === 'SkillNone' || verdict.Source === 'SkillAssignedNotListed';
+                || verdict.Source === 'SkillNone' || verdict.Source === 'SkillAssignedNotListed'
+                || verdict.Source === 'PrincipalNotActivatable';
             await SearchEngine.Instance.LogForbiddenSearch({
                 Query: query,
                 ScopeIDs: [scopeID],
@@ -371,8 +386,21 @@ export class ScopedSearchAction extends BaseAction {
                 // (SkillNone / SkillAssignedNotListed), so a NULL here loses the cause.
                 AISkillID: skill?.ID ?? null,
             });
+            // THE AUDIT ROW ABOVE KEEPS THE FULL REASON. THE CALLER GETS BACK ONLY WHAT IT SENT.
+            //
+            // `verdict.Reason` names the principal — "Skill 'Q3 Board Compensation Review' has
+            // SearchScopeAccess='Assigned'..." — so echoing it verbatim turns a denial into a name
+            // oracle over the skill and agent catalogues for anyone who can guess ids. Commit
+            // An earlier revision closed exactly this on the structural-veto path, which returns the id the
+            // caller supplied; the resolver-produced denials still echoed the name. `Source` is a
+            // fixed enum, so it tells the caller (and a model deciding what to do next) which KIND of
+            // refusal this was without disclosing anything it did not already have.
+            // (the full reason, principal names and all, is already logged at the top of this branch
+            //  and written to the Forbidden audit row above — this is only the caller-facing half)
+            const supplied = [`AgentID '${agent.ID}'`, skill ? `AISkillID '${skill.ID}'` : null]
+                .filter(Boolean).join(' and ');
             return this.createErrorResult(
-                `Forbidden: ${verdict.Reason}`,
+                `Forbidden: refused for ${supplied} on scope '${scopeID}' (${verdict.Source}).`,
                 isPrincipalDenial ? 'ACCESS_DENIED' : 'PERMISSION_DENIED'
             );
         }
@@ -392,8 +420,9 @@ export class ScopedSearchAction extends BaseAction {
                 StartTime: startTime,
                 ContextUser: params.ContextUser,
                 AIAgentID: agent.ID,
-                // Attribute the denial to the skill too. A skill can BE the reason for it
-                // (SkillNone / SkillAssignedNotListed), so a NULL here loses the cause.
+                // Attribute to the skill as well, consistent with the denial rows above. The
+                // cause HERE is the Read level, not the skill — SkillNone/SkillAssignedNotListed
+                // deny outright and can never reach this branch.
                 AISkillID: skill?.ID ?? null,
             });
             return this.createErrorResult(`Forbidden: ${reason}`, 'PERMISSION_DENIED');

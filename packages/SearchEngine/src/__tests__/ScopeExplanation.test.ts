@@ -13,20 +13,31 @@
  *  2. **`SummarizeExplanation`** — the human-readable rendering, including the case where
  *     entitlement was not evaluated at all.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// The explain path now mirrors the action's skill gate, so it needs the same engine call. Only this
-// file is affected — vi.mock is per-file.
-const skillsForAgentSpy = vi.fn(() => [{ ID: 'skill-1', Name: 'Test Skill' }]);
-const agentPermsSpy = vi.fn(async () => ({ canView: true, canRun: true, canEdit: false, canDelete: false, isOwner: false }));
-vi.mock('@memberjunction/aiengine', () => ({
-    AIEngine: {
-        Instance: {
-            Config: async () => undefined,
-            GetSkillsForAgent: (...args: unknown[]) => skillsForAgentSpy(...(args as [])),
-            GetUserAgentPermissions: (...args: unknown[]) => agentPermsSpy(...(args as [])),
-        },
-    },
+// The explain path resolves entitlement through this seam. Mocking it lets these tests assert what
+// `explainEntitlement` HANDS the resolver — the parity claim — without standing up a permission
+// corpus. The resolver's own rules (including which principals it judges, and where) are covered by
+// its own test file, SearchScopePermissionResolver.test.ts.
+//
+// NOTE: this file deliberately does NOT mock '@memberjunction/aiengine' — with the resolver
+// stubbed, nothing on the explain path ever reaches AIEngine, so such a mock would be inert
+// scaffolding.
+//
+// importOriginal is spread so the mock stays partial-but-safe: this module exports types and the
+// resolver class as well, and the first VALUE import added to that graph would otherwise be
+// undefined at runtime with no obvious cause.
+type ResolvedPermission = {
+    Allowed: boolean; Level: string; Source: string; Reason: string; toSqlPredicate: () => string;
+};
+// Annotated rather than inferred: without this the literal initializer narrows toSqlPredicate to
+// () => '1=1', and a test returning '1=0' fails to typecheck.
+const resolveSpy = vi.fn(async (_input: unknown): Promise<ResolvedPermission> => ({
+    Allowed: true, Level: 'Search', Source: 'DirectGrant', Reason: 'ok', toSqlPredicate: () => '1=1',
+}));
+vi.mock('../permissions/SearchScopePermissionResolver', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    GetSearchScopePermissionResolver: () => ({ ResolveEffectivePermission: resolveSpy }),
 }));
 
 import { ScopeDimensionResolver } from '../generic/ScopeDimensionResolver';
@@ -251,14 +262,64 @@ describe('explain mirrors the action\'s skill gate', () => {
             return id ? ({ ID: id, Name: id } as unknown as T) : null;
         }
         public Explain(input: { AIAgentID?: string; AISkillID?: string }, user: UserInfo) {
-            return this.explainEntitlement('scope-1', input, user);
+            return this.explainEntitlement('scope-1', { ScopeIDs: ['scope-1'], ...input }, user);
         }
     }
 
+    beforeEach(() => {
+        resolveSpy.mockClear();
+        resolveSpy.mockResolvedValue({
+            Allowed: true, Level: 'Search', Source: 'DirectGrant', Reason: 'ok', toSqlPredicate: () => '1=1',
+        });
+    });
 
+    it('hands BOTH loaded principals to the resolver, so preview is judged like the search', async () => {
+        const probe = new EntitlementProbe();
+        await probe.Explain({ AIAgentID: 'agent-1', AISkillID: 'skill-1' }, USER);
+        expect(resolveSpy).toHaveBeenCalledTimes(1);
+        const passed = resolveSpy.mock.calls[0][0] as { Agent: { ID: string } | null; Skill: { ID: string } | null };
+        expect(passed.Agent?.ID).toBe('agent-1');
+        expect(passed.Skill?.ID).toBe('skill-1');
+    });
 
+    it('reports a wieldability refusal rather than showing the fallback as a grant', async () => {
+        resolveSpy.mockResolvedValue({
+            Allowed: false, Level: 'None', Source: 'PrincipalNotActivatable',
+            Reason: 'this user may not run agent', toSqlPredicate: () => '1=0',
+        });
+        const probe = new EntitlementProbe();
+        const out = await probe.Explain({ AIAgentID: 'agent-1', AISkillID: 'skill-1' }, USER);
+        expect(out.Allowed).toBe(false);
+        expect(out.Source).toBe('PrincipalNotActivatable');
+    });
 
+    it('refuses a principal that was NAMED but would not load, instead of binding it raw', async () => {
+        // loadPrincipal returns null both for "nothing supplied" and "supplied but nonexistent".
+        // Conflating them let an unloadable id reach the expansion query unjudged, while the action
+        // refused the same input with INVALID_PARAM.
+        class UnloadableProbe extends SearchEngine {
+            protected override async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(): Promise<T | null> {
+                return null;
+            }
+            public Explain(input: { AIAgentID?: string; AISkillID?: string }, user: UserInfo) {
+                return this.explainEntitlement('scope-1', { ScopeIDs: ['scope-1'], ...input }, user);
+            }
+        }
+        const out = await new UnloadableProbe().Explain({ AISkillID: 'no-such-skill' }, USER);
+        expect(out.Allowed).toBe(false);
+        expect(out.Source).toBe('PrincipalNotActivatable');
+        expect(out.Reason).toMatch(/could not be loaded/);
+        // and the resolver was never consulted — there was nothing legitimate to ask it about
+        expect(resolveSpy).not.toHaveBeenCalled();
+    });
+
+    it('reads a resolver failure as denied — an explanation must never fail open', async () => {
+        resolveSpy.mockRejectedValue(new Error('permission store unreachable'));
+        const probe = new EntitlementProbe();
+        const out = await probe.Explain({ AIAgentID: 'agent-1' }, USER);
+        expect(out.Allowed).toBe(false);
+        expect(out.Reason).toMatch(/reported as denied/);
+    });
 
 
 });
-

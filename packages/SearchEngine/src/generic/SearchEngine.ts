@@ -66,6 +66,7 @@ import {
     EntitlementExplanation,
 } from './ScopeExplanation';
 import { GetSearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
+import type { SearchScopePermissionSource } from '../permissions/SearchScopePermissionResolver';
 
 /**
  * Collects lane problems keyed by the lane's **row ID** instead of throwing.
@@ -919,8 +920,37 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // the explanation announce "dimension resolution FAILED". The admin then goes and fixes a
             // dimension that was never broken. `PrincipalNotActivatable` is exactly the distinction
             // needed to tell those two cases apart.
+            // EVERY principal-side refusal drops the principals, not just one of them.
+            //
+            // The rule stated above is "drop them ONLY when the principals are what was refused", and
+            // `PrincipalNotActivatable` was the only source honouring it. `AgentNone`,
+            // `AgentAssignedNotListed`, `SkillNone` and `SkillAssignedNotListed` are equally
+            // principal-side — the principal IS the reason — yet their ids were still bound into the
+            // expansion query. This is the same set the Scoped Search action classifies as
+            // ACCESS_DENIED rather than PERMISSION_DENIED, for the same reason.
+            // A TOTAL MAP, NOT A LIST: `SearchScopePermissionSource` is a closed union, so writing
+            // this as `Record<Source, boolean>` makes the compiler demand an answer for any source
+            // added later. As a `string[]` a new principal-side source would silently default to
+            // "bind it" — which is the exact defect this block exists to fix, re-openable by an
+            // unrelated edit.
+            const IS_PRINCIPAL_SIDE: Record<SearchScopePermissionSource, boolean> = {
+                PrincipalNotActivatable: true,
+                AgentNone: true,
+                AgentAssignedNotListed: true,
+                SkillNone: true,
+                SkillAssignedNotListed: true,
+                // Grant-only sources: unreachable while `Allowed` is false, listed for totality.
+                AgentUnscopedAll: false,
+                SkillUnscopedAll: false,
+                // User-side: dropping principals here would drive the expansion query with nulls,
+                // making a required dimension throw and the explanation announce a failure that is
+                // not real. `DirectGrant` covers the explicit-None deny, which is still user-side.
+                DirectGrant: false,
+                RoleGrant: false,
+                NoGrant: false,
+            };
             const principalsJudged =
-                entitlement.Allowed || entitlement.Source !== 'PrincipalNotActivatable';
+                entitlement.Allowed || !IS_PRINCIPAL_SIDE[entitlement.Source];
             if (!principalsJudged && (input.AIAgentID || input.AISkillID)) {
                 diagnostics.push(
                     'principals were NOT bound into dimension resolution: entitlement denied them, '
@@ -972,7 +1002,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         };
     }
 
-    /** Resolve entitlement for the dry run, including the skill and tenant principals. *
+    /** Resolve entitlement for the dry run, including the skill and tenant principals.
      * `protected`, like {@link principalsFrom}, so a test can drive it without weak-typed casts.
      */
     protected async explainEntitlement(
@@ -987,13 +1017,39 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             PrimaryScopeRecordID: input.SearchContext?.PrimaryScopeRecordID ?? null,
         };
         try {
-            // No gate here on purpose. The principals are judged inside ResolveEffectivePermission,
+            // No ENTITLEMENT gate here on purpose — that judgement belongs to
+            // ResolveEffectivePermission. (The loadability check just below is a different thing: it
+            // refuses an id that names nothing, which the resolver could not judge either way.)
+            // The principals are judged inside ResolveEffectivePermission,
             // where a principal actually widens — so the preview and the search reach the same
             // verdict because they run the same code, not because two copies agree.
             const [agent, skill] = await Promise.all([
                 this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
                 this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
             ]);
+
+            // A PRINCIPAL THAT WAS NAMED BUT WOULD NOT LOAD IS A REFUSAL, NOT AN ABSENCE.
+            //
+            // `loadPrincipal` returns null both when nothing was supplied and when what was supplied
+            // does not exist. Letting the second case fall through as null means the resolver never
+            // sees a principal, so its rules never fire, and a user with their own grant is reported
+            // ALLOWED — after which `principalsJudged` is true and `principalsFrom(input)` binds the
+            // caller's RAW id string into the expansion query, unjudged. That is precisely what the
+            // action refuses with INVALID_PARAM rather than "continuing with a null skill", and a
+            // preview that promises what the search refuses is worse than no preview.
+            const unloadable =
+                (input.AIAgentID && !agent) ? `agent '${input.AIAgentID}'`
+                : (input.AISkillID && !skill) ? `skill '${input.AISkillID}'`
+                : null;
+            if (unloadable) {
+                return {
+                    Allowed: false,
+                    Level: 'None',
+                    Source: 'PrincipalNotActivatable',
+                    Reason: `${unloadable} was supplied but could not be loaded, so it cannot be judged. The Scoped Search action refuses this with INVALID_PARAM, and the SearchKnowledge resolvers refuse an unloadable agent the same way — preview and enforcement agree.`,
+                    Principals: principals,
+                };
+            }
 
             const permission = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
                 User: contextUser,
@@ -1013,6 +1069,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         } catch (e) {
             // A resolver failure must read as "denied", never as "allowed" — an explanation that
             // fails open would be worse than no explanation at all.
+            // NOTE: Source 'NoGrant' is user-side, so the caller's principals are still bound into
+            // dimension resolution even though nothing judged them — reaching here requires the
+            // permission store itself to be failing. Revisit if ExplainScope gains a production caller.
             const msg = e instanceof Error ? e.message : String(e);
             return {
                 Allowed: false,
@@ -1024,7 +1083,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
     }
 
-    /** Load an agent or skill principal by ID; null when no ID was supplied. *
+    /** Load an agent or skill principal by ID; null when no ID was supplied.
      * `protected` so a test can substitute principal loading; see {@link explainEntitlement}.
      */
     protected async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
