@@ -283,6 +283,39 @@ class ActionComponent { }
             expect(findings).toHaveLength(1);
             expect(findings[0].PatternKind).toBe('RegisterClass');
         });
+
+        // The options-bag decorator form puts the key inside an object literal,
+        // so the literal's parent is a property assignment rather than the
+        // decorator call — a shape the positional-only check could not see
+        // (issue #3944).
+        it('should detect the key of @RegisterClassEx(BaseEntity, { key: "OldName" })', () => {
+            const src = `
+@RegisterClassEx(BaseEntity, { key: 'Actions' })
+class ActionEntity extends BaseEntity { }
+`;
+            const findings = scanFile('test.ts', src, renameMap);
+            expect(findings).toHaveLength(1);
+            expect(findings[0].PatternKind).toBe('RegisterClass');
+            expect(findings[0].OldName).toBe('Actions');
+        });
+
+        it('should rewrite the key of a @RegisterClassEx decorator', () => {
+            const src = `
+@RegisterClassEx(BaseEntity, { key: 'Actions', skipNullKeyWarning: true })
+class ActionEntity extends BaseEntity { }
+`;
+            const findings = scanFile('test.ts', src, renameMap);
+            const fixed = fixFile(src, findings);
+            expect(fixed).toContain("key: 'MJ: Actions'");
+        });
+
+        it('should NOT treat a bare `key` property outside a register decorator as an entity name', () => {
+            const src = `
+const config = { key: 'Actions' };
+`;
+            const findings = scanFile('test.ts', src, renameMap);
+            expect(findings).toHaveLength(0);
+        });
     });
 
     // ---- Multiple findings in one file ----
