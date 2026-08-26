@@ -609,6 +609,24 @@ export class IntegrationConnectorCreationPipeline {
         for (const fieldLog of persistResult.FieldMergeLog) {
             emitter.fieldAdded(fieldLog.ObjectName, fieldLog.FieldName, fieldLog.EffectiveSource);
         }
+        // A comprehensive refresh deactivates declared objects/fields it did not observe. That is
+        // the intended behaviour, but it is also the point where a connector's declared field stops
+        // being materialized by every later apply — so say which ones, on the progress stream the
+        // caller is already reading, instead of only in a server console line.
+        if (persistResult.ObjectsDeactivated.length > 0 || persistResult.FieldsDeactivated.length > 0) {
+            emitter.warning(
+                'Persist',
+                'DECLARED_ROWS_DEACTIVATED',
+                `${persistResult.ObjectsDeactivated.length} object(s) and ${persistResult.FieldsDeactivated.length} ` +
+                `field(s) were declared but not observed by this authoritative discovery, so they were deactivated ` +
+                `(never deleted) and will not be materialized by a later apply until they are observed again or ` +
+                `re-enabled.`,
+                {
+                    objects: persistResult.ObjectsDeactivated,
+                    fields: persistResult.FieldsDeactivated,
+                },
+            );
+        }
         emitter.stageComplete('Persist', {
             processed: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,
             succeeded: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,
