@@ -10446,7 +10446,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 2,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "CerebrasLLM",
             "APIName": "zai-glm-4.7",
             "MaxInputTokens": 128000,
@@ -10518,14 +10518,15 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "StartedAt": "2025-12-23T00:00:00.000Z",
-            "Status": "Active",
+            "EndedAt": "2026-08-17T00:00:00.000Z",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2.25,
             "OutputPricePerUnit": 2.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Cerebras inference pricing for GLM-4.7 as of January 2026. Preview model for evaluation purposes. Delivers ~1,000 tokens/second. Pay-as-you-go tier starts at $10 with generous rate limits (24M tokens/day).",
+            "Comments": "Cerebras inference pricing for GLM-4.7 as of January 2026. Preview model for evaluation purposes. Delivers ~1,000 tokens/second. Pay-as-you-go tier starts at $10 with generous rate limits (24M tokens/day). DEPRECATED 2026-08-17: Cerebras retired GLM-4.7 from the inference cloud; only GPT-OSS-120B remains as a production-sanctioned model on Cerebras. Traffic should be routed to OpenRouter (`z-ai/glm-4.7`) or Fireworks.ai (`accounts/fireworks/models/glm-4p7`) instead. Sources: https://inference-docs.cerebras.ai/models/overview",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -21914,6 +21915,61 @@
     "sync": {
       "lastModified": "2026-08-20T22:30:02.886Z",
       "checksum": "fe5d66e91dddaffa754cfc160730178e7050a472e02f2ca47fa1fb61fba9c30f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5.3",
+      "PowerRank": 23,
+      "Description": "Z.AI (Zhipu AI) flagship LLM released 2026-08-14, successor to GLM-5.2. 743B base parameters. Reported leader on CyberGym and AutomationBench evaluations at launch. Open weights staged behind safety review at launch time. AS OF 2026-08-24: no per-token API rate has been published on the Z.AI pricing page — model is available only through the GLM Coding Plan ($18/mo starting) and Z.AI's ZCode agent. Direct-API and inference-provider pricing will be added once Zhipu posts the rate card. Sources: https://emergent.sh/news/glm-53-officially-launched ; https://models.dev/models/zhipuai/glm-5.3/ ; https://www.explainx.ai/blog/glm-5-3-launch-cyber-defense-benchmarks-august-2026",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 5,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.2"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "71C76AEE-E6A0-4B4D-8349-E06856B7DCC3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "z-ai/glm-5.3",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A6A6D2F5-BA61-469C-B334-1486E9D40E0F"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": []
+    },
+    "primaryKey": {
+      "ID": "D5DC6B04-AA19-459A-9ED3-D44B2C42D6A5"
     }
   }
 ]

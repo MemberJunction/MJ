@@ -28,7 +28,9 @@
   "optionalDependencies": {
     "@memberjunction/skyway-core": "^0.6.2",
     "@memberjunction/skyway-postgres": "^0.6.2",
-    "@memberjunction/skyway-sqlserver": "^0.6.2"
+    "@memberjunction/skyway-sqlserver": "^0.6.2",
+    "mssql": "^11.0.1",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "@types/semver": "^7.5.8",

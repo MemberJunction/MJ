@@ -42,7 +42,14 @@ vi.mock('../Database/manage-metadata', () => ({
     ValidatorResult: class {},
     ManageMetadataBase: class { static generatedValidators: unknown[] = []; },
 }));
-vi.mock('../Config/config', () => ({ mj_core_schema: '__mj', configInfo: {} }));
+vi.mock('../Config/config', () => ({
+    mj_core_schema: '__mj',
+    configInfo: {},
+    resolveEntityPackageName: () => 'mj_generatedentities',
+    resolveEntityImportPackage: () => {
+        throw new Error('resolveEntityImportPackage should not be called without peer embeds/collections');
+    },
+}));
 vi.mock('./sql_logging', () => ({ SQLLogging: class {} }));
 vi.mock('../Misc/util', () => ({
     makeDir: vi.fn(),

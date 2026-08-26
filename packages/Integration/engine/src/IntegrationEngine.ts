@@ -1060,6 +1060,29 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             entityMapIDsFilter: options?.EntityMapIDs ?? null,
             syncDirectionOverride: options?.SyncDirection ?? null,
         });
+
+        /**
+         * Re-read the IO/IOF catalog before the run starts (also covers resumed runs — both paths land here).
+         *
+         * Everything else a run reads is fresh per run (LoadRunConfiguration and LoadFieldMaps
+         * read CI/entity maps/field maps with BypassCache) — but IntegrationObject and
+         * IntegrationObjectField are served from this engine's BaseEngine arrays, loaded at
+         * process start and auto-refreshed only by IN-PROCESS BaseEntity saves. A catalog edit
+         * made by direct SQL, a sproc-based sync push, or another process is therefore invisible
+         * to syncs until the host restarts — an AccessPath or field-type correction keeps being
+         * ignored run after run with nothing in the log to say why. The apply/evolution
+         * resolvers already do an invalidate+reload for exactly this reason; the sync path
+         * never got the same treatment.
+         *
+         * Only the two catalog arrays are refreshed — not Config(true), which reloads all eight
+         * datasets unfiltered on every run. The loader is called directly with bypassCache=true
+         * because RefreshItem defaults to the local cache — which is the very thing that is
+         * stale. Replacing the arrays is also what invalidates this PR's memoised views: both
+         * the per-object field index and the per-record GetCachedFields memo key on ARRAY
+         * IDENTITY, so they rebuild lazily on first read after the swap.
+         */
+        await IntegrationEngineBase.Instance.RefreshCatalog(contextUser);
+
         const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
         logger.attachIntegrationName(config.companyIntegration.Integration);
         logger.emit('sync.config.loaded', {
