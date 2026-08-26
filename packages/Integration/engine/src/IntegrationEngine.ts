@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity} from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
@@ -82,6 +82,16 @@ interface EngineRunContext {
     cancelRequested: boolean;
     /** True once a boundary/heartbeat discovered the lease was reclaimed — writes must stop. */
     ownershipLost: boolean;
+    /**
+     * The batch's write group, when the connection opted into batched writes.
+     *
+     * Present only for the span of one apply batch. Enrolling an entity in it makes `Save()` defer
+     * its WRITE to `Submit()` while still running everything else `Save()` does — validation, row
+     * scope, `GenerateSaveSQL` producing the generated CRUD procedure call, and `OnAfterSaveExecute`
+     * when the result returns. It rides the run context rather than a parameter for the reason
+     * stated above: the entity is constructed several frames below the code that owns the batch.
+     */
+    writeGroup?: TransactionGroupBase;
 }
 
 /**
@@ -330,9 +340,41 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private static readonly runContext = new AsyncLocalStorage<EngineRunContext>();
 
+    /**
+     * The connection's opt-in write mode, from `CompanyIntegration.Configuration`.
+     *
+     * Returns `''` for absent, unparseable or wrongly-typed configuration. Every failure mode
+     * therefore lands on the proven per-record path: a connection has to ASK for batched writes,
+     * and a malformed request is not an ask.
+     */
+    private ReadWriteMode(companyIntegration: MJCompanyIntegrationEntity): string {
+        try {
+            const raw = companyIntegration.Get('Configuration') as string | null;
+            if (!raw) return '';
+            const parsed = JSON.parse(raw) as { writeMode?: unknown };
+            return typeof parsed.writeMode === 'string' ? parsed.writeMode : '';
+        } catch {
+            return '';
+        }
+    }
+
     /** The current run's context, when called from inside a sync run. */
     private get currentRunContext(): EngineRunContext | undefined {
         return IntegrationEngine.runContext.getStore();
+    }
+
+    /**
+     * Defers this entity's write into the batch's group, when the connection asked for that.
+     *
+     * A no-op when no group is active, which is every existing caller — an entity constructed
+     * outside a batched apply saves immediately, exactly as before. What this does NOT do is skip
+     * any part of the save: `Save()` still validates, still checks row scope, still renders the
+     * generated procedure call, and still fires its post-save hook. Only the moment the SQL travels
+     * changes, and the group is what makes N of them travel together.
+     */
+    private enrolInWriteGroup(entity: BaseEntity): void {
+        const group = this.currentRunContext?.writeGroup;
+        if (group) entity.TransactionGroup = group;
     }
 
     /**
@@ -3953,15 +3995,43 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 let reconciledSkipIds: string[] = [];
 
                 if (useTransaction) {
-                    await provider.BeginTransaction();
+                    // Two ways to make this batch atomic, and they differ ONLY in how the writes
+                    // travel. `BeginTransaction` + per-record `Save()` sends one statement per
+                    // record; a TransactionGroup defers each `Save()` to `Submit()`, which sends
+                    // them together. Everything `Save()` does either way — validation, row scope,
+                    // the generated CRUD procedure, Record Changes, `OnAfterSaveExecute` — is
+                    // identical, because the group defers the WRITE and nothing else.
+                    //
+                    // Opt-in per connection, and it fails closed: an absent, unparseable or
+                    // unrecognised `writeMode` keeps the proven path, so the default never changes
+                    // underneath an existing tenant.
+                    const batched = this.ReadWriteMode(companyIntegration) === 'batched';
+                    const writeGroup = batched ? await provider.CreateTransactionGroup() : null;
+                    const runCtx = this.currentRunContext;
+                    if (writeGroup && runCtx) runCtx.writeGroup = writeGroup;
+                    if (!writeGroup) await provider.BeginTransaction();
                     try {
                         for (const record of batch) {
                             result.RecordsProcessed++;
                             await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
                         }
-                        await provider.CommitTransaction();
+                        if (writeGroup) {
+                            // The group holds every deferred write; Submit is where they land, in
+                            // one transaction. A false return means the group failed as a whole —
+                            // routed into the same catch, so the fallback below is reached by both
+                            // shapes rather than only by a throw.
+                            if (runCtx) runCtx.writeGroup = undefined;
+                            const submitted = await writeGroup.Submit();
+                            if (!submitted) throw new Error('Batched write group did not commit');
+                        } else {
+                            await provider.CommitTransaction();
+                        }
                     } catch (err) {
-                        await provider.RollbackTransaction();
+                        if (runCtx) runCtx.writeGroup = undefined;
+                        // A group that failed has already rolled itself back and there is no
+                        // provider-level transaction open to roll back — calling it would throw
+                        // over the real error.
+                        if (!batched) await provider.RollbackTransaction();
                         // The batch transaction rolled back; the skip-IDs collected during the failed attempt
                         // never committed. Reset and let the per-record retry re-collect only what commits.
                         reconciledSkipIds = [];
@@ -4336,6 +4406,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<'created' | 'updated' | 'skipped'> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
 
@@ -4531,6 +4602,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
@@ -4703,6 +4775,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
