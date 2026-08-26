@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/open-app-engine",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: MJ Open App Engine - packaging, distribution, and installation system for MJ Open Apps.",
   "type": "module",
   "main": "dist/index.js",
@@ -16,10 +16,10 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/sql-dialect": "6.1.0-edge.3",
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/sql-dialect": "6.1.0-edge.4",
     "@octokit/rest": "^21.1.1",
     "semver": "^7.7.1",
     "simple-git": "^3.27.0",
