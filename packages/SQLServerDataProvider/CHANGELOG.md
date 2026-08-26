@@ -1,5 +1,51 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 6cbed1d: Keep the `UserCache` export alive for published consumers.
+
+  `UserCache` moved to `@memberjunction/generic-database-provider` so `Refresh` could be
+  dialect-neutral, but the old export was removed outright — a breaking change for anything already
+  importing it from `@memberjunction/sqlserver-dataprovider`. Re-exported here and marked
+  `@deprecated`, pointing at the new home.
+
+  The failure mode is quiet, which is why it went unnoticed: an Open App whose server package imports
+  the missing symbol throws a SyntaxError during bootstrap, MJAPI carries on starting, and the only
+  visible symptom is that the app is absent.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/queue@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/encryption@6.1.0-edge.4
+  - @memberjunction/query-processor@6.1.0-edge.4
+  - @memberjunction/ai-vectordb@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes
