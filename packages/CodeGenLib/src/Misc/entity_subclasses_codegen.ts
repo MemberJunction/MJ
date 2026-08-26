@@ -6,7 +6,7 @@ import ts from 'typescript';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { logError, logStatus, logWarning } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
-import { mj_core_schema, resolveEntityPackageName } from '../Config/config';
+import { mj_core_schema, resolveEntityImportPackage, type ConfigInfo } from '../Config/config';
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 
@@ -61,6 +61,15 @@ function SafeCodeName(field: EntityFieldInfo): string {
  * `RelatedEntity` and `RelatedEntityJoinField` are deliberately absent — they are columns on the
  * same `EntityRelationship` row, and duplicating them here would create two sources of truth.
  */
+/**
+ * A generated subclass that is referenced from this file (embed or related-record
+ * collection) but is not itself being emitted here, so it must be imported.
+ */
+export type PeerClassImport = {
+  className: string;
+  packageName: string;
+};
+
 export type RelatedRecordCollectionConfig = {
   /** Generated property name on the entity subclass, e.g. `Lines`. Must be a valid TS identifier. */
   Name: string;
@@ -191,18 +200,21 @@ export class EntitySubClassGeneratorBase {
       // Only consider entities that actually emit a class: generateEntitySubClass skips PK-less entities
       // (returns ''), so hoisting their import would leave a dangling/unused import (a build error under
       // a downstream consumer's noUnusedLocals). Match that skip condition here.
-      const localClassNames = new Set(
-        entities.filter((e) => e.PrimaryKeys.length > 0).map((e) => `${e.ClassName}Entity`),
-      );
-      const subclassImports: string = [...new Set(
-        entities
-          .filter((e) => e.PrimaryKeys.length > 0)
-          .flatMap((e) => [
-            this.resolveEntityBaseClass(e).importStatement,
-            ...EntitySubClassGeneratorBase.CollectEmbeddedImports(e, localClassNames),
-          ])
-          .filter((s) => s.length > 0)
+      const entitiesWithPK = entities.filter((e) => e.PrimaryKeys.length > 0);
+      const localClassNames = new Set(entitiesWithPK.map((e) => `${e.ClassName}Entity`));
+      const baseClassImports: string = [...new Set(
+        entitiesWithPK
+          .map((e) => this.resolveEntityBaseClass(e).importStatement)
+          .filter((s) => s.length > 0),
       )].join('');
+      // Collect every embed + related-record-collection peer across the file, then emit
+      // one grouped `import { A, B } from 'pkg'` per npm package. Per-entity import
+      // lines would duplicate packages (Address on two owners → two import lines).
+      const peerImports = entitiesWithPK.flatMap((e) =>
+        EntitySubClassGeneratorBase.CollectPeerClassImports(e, localClassNames),
+      );
+      const peerImportStatements = EntitySubClassGeneratorBase.FormatPeerImportStatements(peerImports).join('');
+      const subclassImports = `${baseClassImports}${peerImportStatements}`;
       const allContent = `${this.generateEntitySubClassFileHeader()} \n ${subclassImports}${zodContent} \n ${sContent}`;
 
       makeDir(directory);
@@ -210,6 +222,8 @@ export class EntitySubClassGeneratorBase {
 
       return true;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError(message);
       console.error(err);
       return false;
     }
@@ -959,39 +973,126 @@ ${fields}
   }
 
   /**
-   * Import statements for embedded peers that live in another generated file.
-   *
-   * @param entity - The owning entity.
-   * @param localClassNames - Class names already emitted in this file.
+   * One peer class that must be imported because it is referenced by an embed or
+   * related-record collection and is not being emitted in this file.
    */
-  public static CollectEmbeddedImports(entity: EntityInfo, localClassNames: Set<string>): string[] {
-    const declared = (entity.Fields ?? []).filter(
-      f => f.EmbeddedRecord && String(f.EmbeddedRecord).trim().length > 0 && f.RelatedEntityID,
-    );
-    if (declared.length === 0) {
-      return [];
+  public static CollectPeerClassImports(
+    entity: EntityInfo,
+    localClassNames: Set<string>,
+    config?: ConfigInfo,
+  ): PeerClassImport[] {
+    const owningSchema = (entity.SchemaName ?? '').trim();
+    if (!owningSchema) {
+      throw new Error(
+        `[CodeGen] entity import: entity '${entity.Name}' has no SchemaName; cannot resolve peer import packages.`,
+      );
     }
+
     const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-    const imports: string[] = [];
-    const seen = new Set<string>();
-    for (const field of declared) {
-      const related = md.EntityByID(field.RelatedEntityID);
+    const byClass = new Map<string, string>();
+
+    const addPeer = (className: string | undefined, relatedSchema: string | undefined, context: string) => {
+      if (!className || className === 'BaseEntity') {
+        return;
+      }
+      if (localClassNames.has(className)) {
+        return;
+      }
+      const schema = (relatedSchema ?? '').trim();
+      if (!schema) {
+        throw new Error(
+          `[CodeGen] entity import: ${context} refers to class '${className}' but the related entity has no SchemaName. ` +
+          `CodeGen cannot pick an npm package to import it from.`,
+        );
+      }
+      const packageName = resolveEntityImportPackage(schema, owningSchema, config);
+      const existing = byClass.get(className);
+      if (existing && existing !== packageName) {
+        throw new Error(
+          `[CodeGen] entity import: class '${className}' resolved to both '${existing}' and '${packageName}' on entity '${entity.Name}'.`,
+        );
+      }
+      byClass.set(className, packageName);
+    };
+
+    for (const field of (entity.Fields ?? []).filter(
+      (f) => f.EmbeddedRecord && String(f.EmbeddedRecord).trim().length > 0 && f.RelatedEntityID,
+    )) {
+      const related = md.EntityByID?.(field.RelatedEntityID);
       if (!related) {
         continue;
       }
-      const className = `${related.ClassName}Entity`;
-      if (localClassNames.has(className) || seen.has(className)) {
+      addPeer(
+        `${related.ClassName}Entity`,
+        related.SchemaName,
+        `${entity.Name}.${field.Name} (embedded record)`,
+      );
+    }
+
+    for (const relationship of (entity.RelatedEntities ?? []).filter(
+      (r) => r.RelatedRecordCollection && r.RelatedRecordCollection.trim().length > 0,
+    )) {
+      const parsed = EntitySubClassGeneratorBase.ParseRelatedRecordCollectionConfig(entity, relationship);
+      if (!parsed) {
         continue;
       }
-      seen.add(className);
-      const coreSchema = typeof mj_core_schema === 'function' ? mj_core_schema() : String(mj_core_schema);
-      const pkg =
-        related.SchemaName && related.SchemaName.toLowerCase() === String(coreSchema).toLowerCase()
-          ? '@memberjunction/core-entities'
-          : resolveEntityPackageName(related.SchemaName);
-      imports.push(`import { ${className} } from '${pkg}';\n`);
+      const relatedBase = relationship.RelatedEntityClassName?.trim();
+      if (!relatedBase) {
+        continue;
+      }
+      let related: { SchemaName?: string } | undefined;
+      if (relationship.RelatedEntityID && typeof md.EntityByID === 'function') {
+        related = md.EntityByID(relationship.RelatedEntityID);
+      }
+      if (!related && relationship.RelatedEntity && typeof md.EntityByName === 'function') {
+        related = md.EntityByName(relationship.RelatedEntity);
+      }
+      addPeer(
+        `${relatedBase}Entity`,
+        related?.SchemaName,
+        `${entity.Name} → ${relationship.RelatedEntity} (related-record collection)`,
+      );
     }
-    return imports;
+
+    return [...byClass.entries()].map(([className, packageName]) => ({ className, packageName }));
+  }
+
+  /**
+   * Groups peer imports into one `import { A, B } from 'pkg'` line per npm package.
+   * `@memberjunction/core-entities` is emitted first; remaining packages are alphabetical.
+   */
+  public static FormatPeerImportStatements(imports: PeerClassImport[]): string[] {
+    const byPackage = new Map<string, Set<string>>();
+    for (const item of imports) {
+      if (!item.className || !item.packageName) {
+        continue;
+      }
+      let set = byPackage.get(item.packageName);
+      if (!set) {
+        set = new Set();
+        byPackage.set(item.packageName, set);
+      }
+      set.add(item.className);
+    }
+    const packages = [...byPackage.keys()].sort((a, b) => {
+      if (a === '@memberjunction/core-entities') return -1;
+      if (b === '@memberjunction/core-entities') return 1;
+      return a.localeCompare(b);
+    });
+    return packages.map((pkg) => {
+      const names = [...byPackage.get(pkg)!].sort((a, b) => a.localeCompare(b));
+      return `import { ${names.join(', ')} } from '${pkg}';\n`;
+    });
+  }
+
+  /**
+   * @deprecated Use {@link CollectPeerClassImports} + {@link FormatPeerImportStatements}.
+   * Kept so existing call sites still compile; includes related-record collections as well as embeds.
+   */
+  public static CollectEmbeddedImports(entity: EntityInfo, localClassNames: Set<string>, config?: ConfigInfo): string[] {
+    return EntitySubClassGeneratorBase.FormatPeerImportStatements(
+      EntitySubClassGeneratorBase.CollectPeerClassImports(entity, localClassNames, config),
+    );
   }
 
   /**
