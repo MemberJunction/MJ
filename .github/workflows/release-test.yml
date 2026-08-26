@@ -55,6 +55,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TURBO_CACHE_DIR: .turbo/cache
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Rationale and setup
+      # instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
