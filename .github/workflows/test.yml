@@ -47,6 +47,22 @@ on:
       # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
       # "matches zero and therefore passes everything" is the precise regression to catch.
       - '.github/scripts/check-codegen-tail.mjs'
+      # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
+      # remote-cache configuration"), and its own suite lives in __tests__ above.
+      - '.github/scripts/check-turbo-cache-env.mjs'
+      # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
+      # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
+      # Its suite lives in __tests__ above, but without these entries a PR editing only one of
+      # these workflows runs neither the guard nor anything else. Every way of breaking the cache
+      # wiring is silent — a job drops to "Remote caching disabled" or stops uploading and the
+      # run still goes green — so nothing downstream would catch it either.
+      - '.github/workflows/integration.yml'
+      - '.github/workflows/eds-integration.yml'
+      - '.github/workflows/ci-standards.yml'
+      - '.github/workflows/pg-migrations.yml'
+      - '.github/workflows/claude-pack.yml'
+      - '.github/workflows/release-test.yml'
+      - '.github/workflows/publish.yml'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -219,16 +235,25 @@ jobs:
     permissions:
       contents: read
     env:
-      # Turbo remote cache — OPT-IN, and inert until someone opts in. An unset TURBO_TOKEN is
-      # exactly how turbo detects "no remote cache", so these need no conditional and change
-      # nothing today. To enable: add a repository SECRET `TURBO_TOKEN` and a repository
-      # VARIABLE `TURBO_TEAM` (plus `TURBO_API` only for a self-hosted cache server). Once set,
-      # a package built by ANY run — a previous PR, a merge, another branch — replays instead of
-      # recompiling, which is the one thing the GitHub-Actions cache cannot do (its entries are
-      # scoped per-ref and can only be read downward from the default branch).
+      # Turbo remote cache. A package built by ANY run — a previous PR, a merge, another branch —
+      # replays instead of recompiling, which is the one thing the GitHub-Actions cache cannot do
+      # (its entries are scoped per-ref and can only be read downward from the default branch).
+      #
+      # Backed by org-level secrets/variables: SECRET `TURBO_TOKEN`, VARIABLE `TURBO_TEAM`, and
+      # SECRET `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. `TURBO_API` is only for a self-hosted cache
+      # server and is deliberately unset. Fork PRs never receive the secrets, so they degrade to a
+      # cold local cache rather than failing — the same inert behavior this block had before the
+      # credentials existed.
+      #
+      # turbo.json sets `remoteCache.signature`, so artifacts are HMAC-signed on upload and
+      # verified on download; anything that fails verification is treated as a cache miss. Every
+      # job that runs turbo needs ALL FOUR vars. A job holding the token but missing the signature
+      # key does NOT fail — it logs `signing artifact failed` and silently uploads nothing, so a
+      # missed job degrades to write-nothing rather than breaking the run.
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     outputs:
       turbo_filter: ${{ steps.scope.outputs.turbo_filter }}
       shards: ${{ steps.plan.outputs.shards }}
@@ -242,6 +267,14 @@ jobs:
           filter: blob:none
 
       - uses: ./.github/actions/mj-setup
+
+      # Assert the remote-cache env is coherent BEFORE anything expensive runs. Turbo prints
+      # nothing when signing works, so without this the only evidence the cache is healthy is a
+      # hit rate nobody baselined. Fails on token-without-key (reads the cache, uploads nothing)
+      # and token-without-team; stays green with no token at all, which is the correct and
+      # expected state on fork PRs.
+      - name: Verify turbo remote-cache configuration
+        run: node .github/scripts/check-turbo-cache-env.mjs
 
       # Turbo's cache is the single biggest lever on this workflow's runtime. Runners are
       # ephemeral, so without this every run reported `0 cached` and rebuilt all ~300 packages
@@ -481,6 +514,7 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
       - name: Checkout repo
@@ -577,6 +611,7 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -746,6 +781,7 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
