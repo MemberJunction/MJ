@@ -47,6 +47,9 @@ on:
       # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
       # "matches zero and therefore passes everything" is the precise regression to catch.
       - '.github/scripts/check-codegen-tail.mjs'
+      # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
+      # remote-cache configuration"), and its own suite lives in __tests__ above.
+      - '.github/scripts/check-turbo-cache-env.mjs'
       # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
       # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
       # Its suite lives in __tests__ above, but without these entries a PR editing only one of
@@ -264,6 +267,14 @@ jobs:
           filter: blob:none
 
       - uses: ./.github/actions/mj-setup
+
+      # Assert the remote-cache env is coherent BEFORE anything expensive runs. Turbo prints
+      # nothing when signing works, so without this the only evidence the cache is healthy is a
+      # hit rate nobody baselined. Fails on token-without-key (reads the cache, uploads nothing)
+      # and token-without-team; stays green with no token at all, which is the correct and
+      # expected state on fork PRs.
+      - name: Verify turbo remote-cache configuration
+        run: node .github/scripts/check-turbo-cache-env.mjs
 
       # Turbo's cache is the single biggest lever on this workflow's runtime. Runners are
       # ephemeral, so without this every run reported `0 cached` and rebuilt all ~300 packages
