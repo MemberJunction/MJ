@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/record-set-processor-base",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: Record Set Processor Base - interfaces, types, and source adapters for batched, resumable record-set processing. Client-safe.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,8 +17,8 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3"
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

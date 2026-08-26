@@ -20,7 +20,7 @@
   "author": "",
   "license": "BUSL-1.1",
   "devDependencies": {
-    "@memberjunction/cli": "6.1.0-edge.3",
+    "@memberjunction/cli": "6.1.0-edge.4",
     "dotenv": "17.2.4",
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
@@ -28,15 +28,15 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.3",
-    "@memberjunction/communication-sendgrid": "6.1.0-edge.3",
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/messaging-adapters": "6.1.0-edge.3",
-    "@memberjunction/server": "6.1.0-edge.3",
-    "@memberjunction/server-bootstrap": "6.1.0-edge.3",
-    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.3",
-    "@memberjunction/templates": "6.1.0-edge.3",
+    "@memberjunction/ai": "6.1.0-edge.4",
+    "@memberjunction/communication-sendgrid": "6.1.0-edge.4",
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/messaging-adapters": "6.1.0-edge.4",
+    "@memberjunction/server": "6.1.0-edge.4",
+    "@memberjunction/server-bootstrap": "6.1.0-edge.4",
+    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.4",
+    "@memberjunction/templates": "6.1.0-edge.4",
     "class-validator": "^0.14.3",
     "mj_generatedactions": "1.0.0",
     "mj_generatedentities": "1.0.0"
