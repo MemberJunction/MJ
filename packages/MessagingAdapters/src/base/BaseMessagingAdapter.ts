@@ -1119,6 +1119,7 @@ export abstract class BaseMessagingAdapter {
         if (typeof uploader === 'function') {
             const attachments = [
                 ...(result.mediaOutputs ?? []),
+                ...this.collectFileOutputAttachments(result),
                 ...this.collectInlineFileAttachments(result),
             ];
             if (attachments.length > 0) {
@@ -1129,6 +1130,35 @@ export abstract class BaseMessagingAdapter {
                 }
             }
         }
+    }
+
+    /**
+     * Collect the files an agent produced, from the run's own `fileOutputs`.
+     *
+     * This is the canonical source — `fileOutputs` is what MJ turns into file artifacts — and it
+     * carries the real filename and MIME type rather than leaving them to be guessed. Entries
+     * already saved to storage (`fileId`, no `fileData`) are skipped: those have a durable
+     * location, and re-uploading their bytes to chat is not this method's job.
+     *
+     * Preferred over {@link collectInlineFileAttachments}, which depends on the model choosing to
+     * emit a `data:` URI — it does so only sometimes, so relying on it meant a generated document
+     * reached chat on one run and not the next.
+     */
+    protected collectFileOutputAttachments(result: ExecuteAgentResult): UploadableFile[] {
+        const outputs = (result as { fileOutputs?: unknown }).fileOutputs;
+        if (!Array.isArray(outputs)) return [];
+
+        return outputs
+            .filter((o): o is { fileName?: string; mimeType?: string; fileData: string } =>
+                !!o && typeof (o as { fileData?: unknown }).fileData === 'string'
+                && (o as { fileData: string }).fileData.length > 0)
+            .map((o) => ({
+                modality: 'file',
+                mimeType: o.mimeType,
+                data: o.fileData,
+                fileName: o.fileName,
+                label: o.fileName,
+            }));
     }
 
     /**

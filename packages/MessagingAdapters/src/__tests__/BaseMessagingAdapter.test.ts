@@ -504,6 +504,44 @@ describe('BaseMessagingAdapter', () => {
             expect(adapter.Uploads[0].label).toBe('Download Document');
         });
 
+        it('uploads a file from the run\'s fileOutputs (the canonical source)', async () => {
+            // fileOutputs is what MJ turns into file artifacts and carries the real filename and
+            // MIME type. Relying on the model to emit a data: URI instead meant a generated
+            // document reached chat on one run and not the next.
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: { Message: 'Your PDF is ready.' },
+                    fileOutputs: [
+                        { fileName: 'MJ-Power.pdf', mimeType: 'application/pdf', fileData: Buffer.from('%PDF-1.7').toString('base64'), sizeBytes: 8 },
+                    ],
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            await adapter.HandleMessage(createMessage({ IsDirectMessage: true }));
+
+            expect(adapter.Uploads).toHaveLength(1);
+            expect(adapter.Uploads[0].fileName).toBe('MJ-Power.pdf');
+            expect(adapter.Uploads[0].mimeType).toBe('application/pdf');
+            expect(Buffer.from(adapter.Uploads[0].data!, 'base64').toString()).toBe('%PDF-1.7');
+        });
+
+        it('skips a fileOutput already saved to storage', async () => {
+            // Those have a durable location; re-uploading their bytes to chat is not this path's job.
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: { Message: 'Saved to storage.' },
+                    fileOutputs: [{ fileName: 'stored.pdf', mimeType: 'application/pdf', fileId: 'file-guid-1' }],
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            await adapter.HandleMessage(createMessage({ IsDirectMessage: true }));
+            expect(adapter.Uploads).toHaveLength(0);
+        });
+
         it('uploads generated media alongside inlined files', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
