@@ -60,6 +60,7 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -85,6 +86,15 @@ jobs:
       # Restore-only (test.yml's backstop is the canonical writer). Without this
       # the job pays a ~11-minute cold build that pushed the old 30-min timeout
       # past its limit before the suite even started.
+      # This job runs BOTH standalone and as a reusable workflow called by publish.yml. Secrets
+      # are not inherited across `uses:`, so the publish path silently ran with an empty
+      # TURBO_TOKEN until `secrets: inherit` was added at the call site — while `vars.TURBO_TEAM`
+      # propagated and made it look configured. This preflight is what makes that class of
+      # regression fail loudly here instead of quietly costing the slowest run in the repo its
+      # cache.
+      - name: Verify turbo remote-cache configuration
+        run: node .github/scripts/check-turbo-cache-env.mjs
+
       - name: Restore turbo build cache
         uses: actions/cache/restore@v4
         with:
