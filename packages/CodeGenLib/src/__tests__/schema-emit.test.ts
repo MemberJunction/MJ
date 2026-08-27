@@ -132,6 +132,25 @@ describe('schema-emit', () => {
       expect(dirty).toBeInstanceOf(Set);
       expect((dirty as Set<string>).size).toBe(0);
     });
+
+    it('marks a deleted entity\'s schema dirty even though the entity is gone from metadata', () => {
+      // The deleted entity is absent from `entities`, so a name-based signal could never
+      // resolve its schema — only the name captured at deletion time can.
+      expect(resolveDirtySchemasForEmit(entities, [], false, true, ['billing'])).toEqual(new Set(['billing']));
+    });
+
+    it('unions deleted schemas with new/modified entity schemas', () => {
+      expect(resolveDirtySchemasForEmit(entities, ['Invoices'], false, true, ['retired']))
+        .toEqual(new Set(['billing', 'retired']));
+    });
+
+    it('ignores blank deleted schema names', () => {
+      expect(resolveDirtySchemasForEmit(entities, [], false, true, ['', '   '])).toEqual(new Set());
+    });
+
+    it('still rebuilds everything when dirtySchemaOnly is off, deletions included', () => {
+      expect(resolveDirtySchemasForEmit(entities, [], false, false, ['billing'])).toBe('all');
+    });
   });
 
   describe('mapLimit', () => {

@@ -16,7 +16,9 @@ import {
   buildSchemaBarrel,
   groupEntitiesBySchema,
   mapLimit,
+  emitSchemaFile,
   pruneOrphanedSchemaFiles,
+  resolveSchemaEmitOptions,
   sanitizeSchemaFileName,
   schemasToEmit,
 } from './schema-emit';
@@ -308,24 +310,14 @@ export class EntitySubClassGeneratorBase {
     return `${this.generateEntitySubClassFileHeader(includeLoadModule)} \n ${subclassImports}${zodContent} \n ${sContent}`;
   }
 
+  /** Delegates so both generators share one set of defaults; override to change them. */
   protected resolveEmitOptions(options?: SchemaEmitOptions): Required<SchemaEmitOptions> {
-    const defaults = configInfo?.fileEmit;
-    return {
-      perSchema: options?.perSchema ?? defaults?.perSchema ?? true,
-      dirtySchemas: options?.dirtySchemas ?? 'all',
-      parallel: options?.parallel ?? defaults?.parallel ?? true,
-      concurrency: options?.concurrency ?? defaults?.concurrency ?? 8,
-      writeIfChanged: options?.writeIfChanged ?? defaults?.writeIfChanged ?? true,
-    };
+    return resolveSchemaEmitOptions(options, configInfo?.fileEmit);
   }
 
+  /** Delegates so both generators write identically; override to change that. */
   protected emitFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
-    if (useWriteIfChanged) {
-      writeFileIfChanged(filePath, content);
-      return;
-    }
-    makeDir(path.dirname(filePath));
-    fs.writeFileSync(filePath, content);
+    emitSchemaFile(filePath, content, useWriteIfChanged);
   }
 
   public generateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {

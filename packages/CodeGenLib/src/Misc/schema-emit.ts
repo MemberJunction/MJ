@@ -11,6 +11,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import { writeFileIfChanged } from './file-write';
+
 export type DirtySchemaSet = Set<string> | 'all';
 
 export interface SchemaEmitOptions {
@@ -101,11 +103,22 @@ export function resolveDirtySchemasForEmit(
   dirtyEntityNames: Iterable<string>,
   skipDB: boolean,
   dirtySchemaOnly: boolean,
+  deletedEntitySchemas: Iterable<string> = [],
 ): DirtySchemaSet {
   if (skipDB || !dirtySchemaOnly) {
     return 'all';
   }
-  return collectDirtySchemas(entities, dirtyEntityNames);
+  const schemas = collectDirtySchemas(entities, dirtyEntityNames);
+  // Deletion arrives as a schema, not an entity name: by the time this runs the entity is gone
+  // from `entities`, so `collectDirtySchemas` could never resolve it. Union it in directly, or
+  // the schema is not rebuilt and the dead class survives on disk.
+  for (const schema of deletedEntitySchemas) {
+    const trimmed = (schema ?? '').trim();
+    if (trimmed.length > 0) {
+      schemas.add(trimmed);
+    }
+  }
+  return schemas;
 }
 
 export function collectDirtySchemas(
@@ -230,4 +243,44 @@ export function pruneOrphanedSchemaFiles(directory: string, schemas: readonly st
     fs.unlinkSync(path.join(directory, name));
   }
   return orphans;
+}
+
+/**
+ * Fill in a partial {@link SchemaEmitOptions} from config defaults.
+ *
+ * Shared by both generators so the defaults cannot drift between entity subclasses and
+ * GraphQL resolvers — they must agree, or one emits per-schema while the other emits a
+ * monolith and the two rosters stop lining up.
+ *
+ * `parallel` / `concurrency` are resolved for every caller even though only the entity
+ * generator uses them: its per-schema assembly is async (each file awaits its entities),
+ * while GraphQL assembly is synchronous, so there is nothing to overlap there.
+ */
+export function resolveSchemaEmitOptions(
+  options: SchemaEmitOptions | undefined,
+  defaults: SchemaEmitOptions | undefined,
+): Required<SchemaEmitOptions> {
+  return {
+    perSchema: options?.perSchema ?? defaults?.perSchema ?? true,
+    dirtySchemas: options?.dirtySchemas ?? 'all',
+    parallel: options?.parallel ?? defaults?.parallel ?? true,
+    concurrency: options?.concurrency ?? defaults?.concurrency ?? 8,
+    writeIfChanged: options?.writeIfChanged ?? defaults?.writeIfChanged ?? true,
+  };
+}
+
+/**
+ * Write one emitted file, honouring the write-if-changed setting.
+ *
+ * Shared for the same reason as {@link resolveSchemaEmitOptions}: both generators must treat
+ * an unchanged file identically, or one leaves mtimes alone while the other churns them and
+ * downstream incremental builds see phantom work.
+ */
+export function emitSchemaFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
+  if (useWriteIfChanged) {
+    writeFileIfChanged(filePath, content);
+    return;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content);
 }

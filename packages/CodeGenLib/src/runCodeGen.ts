@@ -59,19 +59,33 @@ export class RunCodeGenBase {
    */
   protected commandFailures: Array<{ context: string; message: string }> = [];
 
-  /** Record any failed entries from a BEFORE/AFTER command batch, paired by index. */
-  protected recordCommandFailures(phase: string, cmds: CommandInfo[], results: CommandExecutionResult[]): void {
+  /**
+   * Record any failed entries from a BEFORE/AFTER command batch, paired by index.
+   *
+   * Returns just this batch's failures. Callers log what they get back rather than walking
+   * `commandFailures`, which accumulates across phases — iterating the whole array in the
+   * AFTER handler re-logged every BEFORE failure a second time.
+   */
+  protected recordCommandFailures(
+    phase: string,
+    cmds: CommandInfo[],
+    results: CommandExecutionResult[],
+  ): Array<{ context: string; message: string }> {
+    const recorded: Array<{ context: string; message: string }> = [];
     results.forEach((r, i) => {
       if (!r.success) {
         const cmd = cmds[i];
         const cmdText = cmd ? [cmd.command, ...(cmd.args ?? [])].join(' ').trim() : `command #${i + 1}`;
         const detail = formatCommandFailureDetail(r);
-        this.commandFailures.push({
+        const failure = {
           context: `${phase} command`,
           message: detail ? `\`${cmdText}\` failed: ${detail}` : `\`${cmdText}\` failed`,
-        });
+        };
+        this.commandFailures.push(failure);
+        recorded.push(failure);
       }
     });
+    return recorded;
   }
 
   /**
@@ -234,9 +248,9 @@ export class RunCodeGenBase {
           const results = await runCommandsObject.runCommands(beforeCommands);
           if (results.some((r) => !r.success)) {
             logError('ERROR running one or more BEFORE commands');
-            this.recordCommandFailures('BEFORE', beforeCommands, results);
+            const recorded = this.recordCommandFailures('BEFORE', beforeCommands, results);
             pipelineSuccess = false;
-            for (const failure of this.commandFailures) {
+            for (const failure of recorded) {
               logError(failure.message);
               reporter.note(failure.message);
             }
@@ -434,9 +448,9 @@ export class RunCodeGenBase {
         const results = await runCommandsObject.runCommands(afterCommands);
         if (results.some((r) => !r.success)) {
           failSpinner('ERROR running one or more AFTER commands');
-          this.recordCommandFailures('AFTER', afterCommands, results);
+          const recorded = this.recordCommandFailures('AFTER', afterCommands, results);
           pipelineSuccess = false;
-          for (const failure of this.commandFailures) {
+          for (const failure of recorded) {
             logError(failure.message);
             reporter.note(failure.message);
           }
@@ -495,6 +509,7 @@ export class RunCodeGenBase {
         [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList],
         skipDB,
         fileEmit?.dirtySchemaOnly !== false,
+        ManageMetadataBase.deletedEntitySchemaList,
       ),
     };
   }
