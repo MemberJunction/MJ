@@ -17233,6 +17233,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJEntityEntity_IEntityConfiguration
         * * Description: Optional JSON configuration bag for this entity (shape = IEntityConfiguration). Nested UI.Form holds generated-form chrome: Layout (accordion | left-nav | auto) and AutoLeftNavAt. NULL / omitted keys = today's behavior (accordion; every DisplayInForm relationship is first-class). Expand by adding a property on the interface — no schema change. Anything the engine filters or joins on stays a column; anything the UI or a BaseFormPolicy consumes at render time belongs here.`),
+    IsTotalSpecialization: z.boolean().describe(`
+        * * Field Name: IsTotalSpecialization
+        * * Display Name: Is Total Specialization
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Completeness constraint for ISA (table-per-type) specialization on this parent/superclass entity — the EER pair to AllowMultipleSubtypes (disjointness). 0 = partial specialization: a superclass record may exist without belonging to any subclass (the default, and the pre-feature behaviour). 1 = total specialization: every superclass record must belong to a subclass, so the entity-layer save refuses to persist a standalone superclass record (a direct parent save with no subclass row for its primary key); the record must be created through a subclass, which persists the superclass and subclass rows together. Well-defined for disjoint specialization (a single required subtype); has no effect on entities that are not parent types or that permit overlapping subtypes.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -80877,6 +80883,20 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
         this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: IsTotalSpecialization
+    * * Display Name: Is Total Specialization
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Completeness constraint for ISA (table-per-type) specialization on this parent/superclass entity — the EER pair to AllowMultipleSubtypes (disjointness). 0 = partial specialization: a superclass record may exist without belonging to any subclass (the default, and the pre-feature behaviour). 1 = total specialization: every superclass record must belong to a subclass, so the entity-layer save refuses to persist a standalone superclass record (a direct parent save with no subclass row for its primary key); the record must be created through a subclass, which persists the superclass and subclass rows together. Well-defined for disjoint specialization (a single required subtype); has no effect on entities that are not parent types or that permit overlapping subtypes.
+    */
+    get IsTotalSpecialization(): boolean {
+        return this.Get('IsTotalSpecialization');
+    }
+    set IsTotalSpecialization(value: boolean) {
+        this.Set('IsTotalSpecialization', value);
     }
 
     /**
