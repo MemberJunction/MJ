@@ -4110,8 +4110,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
                         // Degrade to per-record application so the failure isolates to the poison
                         // record(s) and every good record in this batch still commits.
+                        // A batched batch runs concurrently with other entity maps, so the
+                        // per-record fallback must NOT open a provider transaction — that state
+                        // is global to the shared provider. Auto-commit instead; see the
+                        // `useProviderTransaction` doc on applyRecordsIndividually.
                         await this.applyRecordsIndividually(
-                            batch, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps
+                            batch, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps,
+                            !batchedWrites
                         );
                     }
                 } else {
@@ -4280,20 +4285,48 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         logger: SyncLogger | undefined,
         precheckHashes: Map<string, string> | undefined,
         reconciledSkipIds?: string[],
-        recordMaps?: RecordMapBatch
+        recordMaps?: RecordMapBatch,
+        // When false, each record is applied WITHOUT a provider transaction (auto-commit).
+        //
+        // The provider holds its transaction state — `_transactionDepth`, the active
+        // `Transaction`, the savepoint counter — as SINGLE FIELDS on the one shared provider
+        // instance. `BeginTransaction` from two concurrently-syncing entity maps therefore
+        // races that counter: the second caller sees depth 2, issues `SAVE TRANSACTION` against
+        // a transaction the first caller may have already committed, and the leaked depth then
+        // fails every subsequent query on the connection with "Transaction has not begun".
+        //
+        // That is safe ONLY while the engine owns the provider exclusively, i.e. sequential
+        // sync (`useTransaction === true`). The batched path is not sequential, and it does not
+        // need a transaction here either: `ApplySingleRecord` performs exactly ONE write
+        // (Create | Update | Delete — record-maps are queued into `RecordMapBatch` and flushed
+        // set-based later), so there is nothing for a transaction to make atomic. A single
+        // statement either commits or it does not, and `WithRetry`'s next attempt starts clean
+        // without a rollback of a transaction that never held anything.
+        //
+        // This mirrors exactly what the concurrent non-batched path already does: it applies
+        // records through the SAME `ApplySingleRecord` with no transaction at all, and has run
+        // at concurrency > 1 in production.
+        useProviderTransaction: boolean = true
     ): Promise<void> {
         const provider = this.ProviderToUse as DatabaseProviderBase;
 
         for (const record of batch) {
             result.RecordsProcessed++;
             try {
-                // §10 — apply in its own transaction, with bounded inline retry for PROVABLY-TRANSIENT
-                // save failures (NETWORK_TIMEOUT / RATE_LIMIT_EXCEEDED / DATABASE_ERROR per IsRetryableError).
-                // Each attempt rolls back on throw so the next starts clean; a deadlock/momentary timeout
-                // self-heals here. A PERMANENT error (validation/FK/duplicate/config) is NOT retried — it
-                // throws straight out to the dead-letter path below.
+                // §10 — bounded inline retry for PROVABLY-TRANSIENT save failures
+                // (NETWORK_TIMEOUT / RATE_LIMIT_EXCEEDED / DATABASE_ERROR per IsRetryableError).
+                // A PERMANENT error (validation/FK/duplicate/config) is NOT retried — it throws
+                // straight out to the dead-letter path below.
                 await WithRetry(
                     async () => {
+                        if (!useProviderTransaction) {
+                            // Auto-commit: never touches shared provider transaction state, so
+                            // concurrent entity maps cannot corrupt each other. See the parameter doc.
+                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
+                            return;
+                        }
+                        // Sequential path, unchanged: apply in its own transaction so a deadlock or
+                        // momentary timeout rolls back and the next attempt starts clean.
                         await provider.BeginTransaction();
                         try {
                             await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
