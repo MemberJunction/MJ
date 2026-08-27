@@ -28,3 +28,9 @@ Each batch keeps its OWN group, in its own `AsyncLocalStorage` scope. Assigning 
 
 Nesting the mutex is deliberately avoided rather than merely unused: the inner call waits on a chain that already contains the outer one, so it would hang instead of erroring. Under the outer mutex the writes are already serialized and run inline; the batched path takes it per write. That hazard is covered by a test, because a deadlock leaves nothing to read.
 
+Batching follows `writeMode`, not concurrency.
+
+Gating the decision on `useTransaction` — which is `getSyncConcurrency(config) <= 1` — would have meant batching only ever engaged at concurrency 1, the exact tradeoff this change exists to remove. Raising concurrency would silently drop every record back onto the per-record pool, and nothing in the sync reports that: throughput simply fails to improve, which is indistinguishable from the feature not helping.
+
+Batching is a property of how the writes travel; concurrency is a property of how many maps fetch at once. They are independent, so the decision follows `writeMode` alone and the batch-atomic branch is entered whenever writes are batched. A batched batch is atomic by construction — the group is one transaction — so entering that branch is what it already meant; at concurrency above 1 the atomicity is per entity map, and a group failure still degrades to the record-by-record retry.
+

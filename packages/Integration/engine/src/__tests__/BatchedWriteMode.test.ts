@@ -132,3 +132,21 @@ describe('per-batch write groups', () => {
         expect(seen).toContain(groupB);
     });
 });
+
+describe('batching is independent of concurrency', () => {
+    it('does not require concurrency 1 — the gate that made them exclusive is gone', async () => {
+        // The regression this pins: `batchedWrites = useTransaction && …` meant batching only ever
+        // engaged at syncConcurrency <= 1, so raising concurrency silently dropped every record
+        // back onto the per-record pool. Nothing in the sync reports that; throughput just fails
+        // to improve, which is indistinguishable from the feature not helping.
+        const src = await import('node:fs').then(fs =>
+            fs.readFileSync(new URL('../IntegrationEngine.ts', import.meta.url), 'utf8'));
+
+        // The decision follows writeMode alone.
+        expect(src).toMatch(/const batchedWrites = this\.ReadWriteMode\(companyIntegration\) === 'batched';/);
+        expect(src).not.toMatch(/const batchedWrites = useTransaction &&/);
+
+        // And the batch-atomic branch is reachable when batched, whatever the concurrency.
+        expect(src).toMatch(/if \(useTransaction \|\| batchedWrites\) \{/);
+    });
+});

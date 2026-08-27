@@ -4001,7 +4001,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // transaction is still in flight at a time — the invariant is unchanged — but maps
             // overlap everywhere else, and each keeps its OWN group, so a poison record fails the
             // map that owns it instead of every map that happened to be batching alongside it.
-            const batchedWrites = useTransaction && this.ReadWriteMode(companyIntegration) === 'batched';
+            // Deliberately NOT gated on `useTransaction`. That gate is
+            // `getSyncConcurrency(config) <= 1`, so keeping it here would mean batching only ever
+            // happened at concurrency 1 — the exact tradeoff this change exists to remove.
+            // Batching is a property of how the writes TRAVEL; concurrency is a property of how
+            // many maps fetch at once. They are independent.
+            const batchedWrites = this.ReadWriteMode(companyIntegration) === 'batched';
 
             // NEVER nest `runWriteExclusive`: the inner call waits on a chain that already contains
             // the outer one, which deadlocks. Under the outer mutex the writes are already
@@ -4018,7 +4023,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // all of them in ONE set-based touch after the batch (instead of a frozen-forever stamp).
                 let reconciledSkipIds: string[] = [];
 
-                if (useTransaction) {
+                // Batched writes make a batch atomic by construction — the group is one
+                // transaction — so this branch is entered for them regardless of concurrency. At
+                // concurrency > 1 the atomicity is per entity map, and a group failure still
+                // degrades to the record-by-record retry below.
+                if (useTransaction || batchedWrites) {
                     // Two ways to make this batch atomic, and they differ ONLY in how the writes
                     // travel. `BeginTransaction` + per-record `Save()` sends one statement per
                     // record; a TransactionGroup defers each `Save()` to `Submit()`, which sends
