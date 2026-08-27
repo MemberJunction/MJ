@@ -473,8 +473,21 @@ const configInfoSchema = z.object({
    * exclude list naming every other installed app — a list that is O(N²) to maintain and, more
    * importantly, cannot name schemas the app does not know about (such as a client's own schemas in
    * a deployed instance).
+   *
+   * The in-memory compile into `excludeSchemas` is for THIS CodeGen run only (which entities to
+   * generate). Heal stored-procedure EXEC statements logged into migrations use authored
+   * `excludeSchemas` plus `@IncludedSchemaNames` from this list — they must not snapshot sibling
+   * apps that happened to be installed on the publisher database.
    */
   includeSchemas: z.string().array().optional(),
+  /**
+   * When true, CodeGen cascade-delete SQL walks FKs pointing at the entity in
+   * EVERY schema in metadata. Default false: only same-schema children.
+   * Turning this on (and CascadeDeletes on an entity) will bake consumer
+   * schemas into a publisher's delete proc — a dangerous escape hatch.
+   * Leave off for Open Apps.
+   */
+  allowCrossSchemaCascadeDeletes: z.boolean().default(false),
   excludeTables: tableInfoSchema.array().default([
     { schema: '%', table: 'sys%' },
     { schema: '%', table: 'flyway_schema_history' }
