@@ -1,5 +1,108 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- a2c528f: Geocoding no longer re-attempts an address it has already determined has no location.
+
+  `ProcessMapping` skipped only on `Status === 'success'`. A row marked permanently not-geocodable — an address that genuinely has no location, like "Conference Room B" — fell through to a full re-attempt on **every pass**, even with the source hash unchanged: mark pending (a write), geocode (nothing to find), mark failed (another write). Per record, forever, for an answer already on file. On a synced entity with geo-typed columns that is three round trips per record per sync, and CodeGen enables geocoding automatically on address-like columns, so it applies to entities nobody opted in.
+
+  `UpdateNotGeocodable`'s own comment describes the intended behaviour exactly — _"Mark as not_geocodable so the retry job skips it. If the user later edits the address, the hash will change and SyncIfChanged will re-attempt."_ The hash **is** the re-attempt condition; it just was not being honoured for that outcome.
+  - New `IsSettledGeoCode(status, retryCount)` in `geo-core`, plus a named `PERMANENT_SKIP_RETRY_COUNT` for the sentinel that was previously a bare `9999`. Settled means success **or** permanently not-geocodable; a plain `failed` is still transient and still retried, which is the retry job's purpose.
+  - `ExistingGeoCodeInfo` gains `RetryCount` — without it a batch caller cannot tell the two kinds of `failed` apart. The scheduled geocoding job now selects and populates it.
+  - The batch path decides from the map **before** loading anything, so an unchanged settled record costs zero round trips. `FindExistingGeoCode`'s comment already claimed it avoided the load when the hash was unchanged; it never checked, and loaded unconditionally.
+
+  No change for a record whose address changed, whose geocode succeeded, or whose failure was transient.
+
+- 7857d8e: Add `@memberjunction/network-utils` and remove `axios` from the repository.
+
+  The SSRF guard added for the web/HTTP actions was Actions-specific but the concern is not, so it
+  moves into a new dependency-free, Node-only package (`node:dns` + `node:net` only) that any
+  server-side package can depend on: `AssertPublicUrl`, `SafeFetch`, `IsBlockedIPAddress`, `SSRFError`.
+
+  The same package ships `HttpClient` / `HttpRequest` — a native-`fetch` HTTP client that replaces
+  `axios` across all 11 packages that used it. Consolidating on one client removes the third-party
+  dependency and puts the SSRF guard one option flag (`ValidateUrl`) away from every outbound call
+  site, which was impossible when each package reached for `axios` directly.
+
+  Also fixes an SSRF sink the original pass missed: the `API Rate Limiter` action takes a
+  caller-controlled URL and returns the response body, and is now guarded.
+
+  Public exports use `PascalCase`, per repo convention.
+
+- faac5b5: Add SSRF protection to server-side web/HTTP actions: private, loopback, link-local (incl. cloud metadata 169.254.169.254), and reserved IP ranges are now blocked, and redirects are re-validated per hop.
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [a2c528f]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/geo-core@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/network-utils@6.1.0-edge.4
+  - @memberjunction/content-autotagging@6.1.0-edge.4
+  - @memberjunction/ai-betty-bot@6.1.0-edge.4
+  - @memberjunction/ai-agents@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-vector-sync@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/search-engine@6.1.0-edge.4
+  - @memberjunction/ai-agent-manager@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/record-set-processor@6.1.0-edge.4
+  - @memberjunction/clustering-engine@6.1.0-edge.4
+  - @memberjunction/ai-mcp-client@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/communication-engine@6.1.0-edge.4
+  - @memberjunction/external-change-detection@6.1.0-edge.4
+  - @memberjunction/lists@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/react-linter@6.1.0-edge.4
+  - @memberjunction/esignature@6.1.0-edge.4
+  - @memberjunction/code-execution@6.1.0-edge.4
+  - @memberjunction/record-set-processor-base@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/lists-base@6.1.0-edge.4
+  - @memberjunction/export-engine@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

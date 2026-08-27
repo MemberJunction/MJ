@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-schema-builder",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction Integration Schema Builder - file-emission-only DDL generation for integration tables",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,11 +14,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/integration-engine": "6.1.0-edge.3",
-    "@memberjunction/schema-engine": "6.1.0-edge.3",
-    "@memberjunction/sql-dialect": "6.1.0-edge.3"
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/integration-engine": "6.1.0-edge.4",
+    "@memberjunction/schema-engine": "6.1.0-edge.4",
+    "@memberjunction/sql-dialect": "6.1.0-edge.4"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

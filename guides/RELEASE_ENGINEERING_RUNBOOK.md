@@ -82,7 +82,7 @@ Pointing the button at a prep branch would fix the first problem and make the se
 Merging a reviewed PR is already a single click, and `publish.yml` does everything after
 the push — so there was nothing left for a button to add.
 
-`publish-lts.yml` (operation 3) remains a button and is unaffected: line patches ship
+The LTS line release (operation 3) remains a button and is unaffected: line patches ship
 backported fixes that were already reviewed on `next`.
 
 ---
@@ -119,15 +119,24 @@ exit/version/re-enter dance. Avoid; cut the tip.
 
 ## 3. LTS line patch release
 
-One button. Actions → **"Publish LTS line release"** → pick the **line branch** (`lts/5`,
-`lts/6.1`, …) in the branch selector → type the same branch name in the confirmation box →
-Run workflow. The confirmation exists because the branch picker defaults to `next`, and
-this workflow must never run there (it refuses, but don't rely on the refusal).
+One button, but read the inputs before you press it: the workflow is **`publish.yml`**, and
+you dispatch it **from `next`** — not from the line. Actions → **"Build and publish new
+package versions"** → leave the branch selector on `next` → set `line_branch` to the line
+(`lts/5`, `lts/6.1`, …) → type the same value into `confirm_branch` → Run workflow. The job
+checks out the line branch itself.
+
+There is no `publish-lts.yml`. It was retired because npm trusted publishing (OIDC) is scoped
+per package to the workflow **filename** `publish.yml`; a second publishing file would mean a
+second trusted publisher entered by hand on ~300 packages. The line is a **parameter rather
+than the ref** for a second reason: the maintained copy of the workflow always runs, so a
+release can never execute stale workflow code that was never backported to the line. Picking
+an `lts/*` ref in the dialog cannot silently do the wrong thing either — that ref's
+`publish.yml` has no `line_branch` input, so GitHub rejects the dispatch outright.
 
 The workflow automates the verified manual sequence: `changeset version` (normal mode —
 backported changesets resolve to a patch, or a minor pre-certification in the bootstrap
 era) → lockfile refresh → build → `changeset publish --tag lts-<line>` (tag derived from
-the branch name) → push the release commit + git tag to the line branch → GitHub Release
+`line_branch`) → push the release commit + git tag to the line branch → GitHub Release
 with `make_latest: false`. It refuses pre-mode leakage, empty changesets, and
 prerelease-shaped versions, and asserts afterward that npm `latest` did not move.
 
@@ -141,12 +150,21 @@ the package manager per branch; match it when working by hand.)
 
 Hard rules, either path: line publishes never merge to `main` or back to `next`; `latest`
 never moves here; GitHub Releases from a line stay `make_latest: false` until the line is
-the newest certified. **Do not `workflow_dispatch` the routine `publish.yml` from a line
-branch** — verified unsafe (dry-check 2026-08-01): its publish step would land on `latest`
-and its main-gated steps silently skip.
+the newest certified. **Dispatch from `next` and name the line in `line_branch`; never
+dispatch from the line ref itself.**
+
+That rule reads the same as the old one but for a different reason, so it is worth stating
+plainly: the 2026-08-01 dry-check found the *then-current* `publish.yml` unsafe to dispatch
+from a line, because its publish step ran a bare `changeset publish` (no `--tag`, so a line
+build would have landed on `latest`) and its `main`-gated steps silently skipped. The
+dedicated `publish-lts` job and the dispatch guard fixed exactly that. What survives is the
+ref discipline: dispatch the maintained copy, not whatever the line happens to carry.
 
 DB-touching line changes need their §12 label (`metadata-migration`, `codegen-repair`, or
-`security-exception`) — the line guard enforces this on `lts/*` PRs.
+`security-exception`). The line guard that is supposed to enforce this on `lts/*` PRs is
+**not built yet** (process doc §15 item 6), so today the label is a review convention and
+the human reading the migration diff is the only control. Do not treat a green line PR as
+evidence that the labels were checked.
 
 **Release notes for a line release do go live** — this is the one operation where they do,
 because the docs site builds the certified line. But they have to *reach* the line branch:
