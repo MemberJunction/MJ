@@ -5215,16 +5215,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ? quoteTextLiteral(externalID, md.Dialect)
             : `'${externalID.replace(/'/g, "''")}'`;
         const rv = new RunView();
-        const existing = await rv.RunView<{ ID: string }>({
+        const existing = await rv.RunView<{ ID: string; EntityRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
             ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
-            Fields: ['ID'],
+            Fields: ['ID', 'EntityRecordID'],
             MaxRows: 1,
             ResultType: 'simple',
             BypassCache: true, // upsert-by-identity: a stale miss here re-creates a duplicate record map
         }, contextUser);
 
         if (existing.Success && existing.Results.length > 0) {
+            // The row already says exactly this. On an incremental sync that is nearly every record
+            // — mappings are stable — and the Load + Save this path used to do anyway were two more
+            // round trips to change nothing, plus a meaningless __mj_UpdatedAt bump on every synced
+            // record's map row. The batched writer (RecordMapBatch.flushChunk) has always skipped
+            // this case; the per-record fallback now agrees with it.
+            if (existing.Results[0].EntityRecordID === entityRecordID) return;
             const loaded = await recordMap.Load(existing.Results[0].ID);
             if (!loaded) recordMap.NewRecord();
         } else {

@@ -1,5 +1,21 @@
 # @memberjunction/ng-feedback
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [a1a8989]
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ng-base-types@6.1.0-edge.4
+  - @memberjunction/ng-shared-generic@6.1.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.4
+  - @memberjunction/ng-ui-components@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

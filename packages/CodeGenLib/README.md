@@ -71,7 +71,7 @@ flowchart TD
 - **Extensible Architecture**: Every generator (`SQLCodeGenBase`, `EntitySubClassGeneratorBase`, `AngularClientGeneratorBase`, etc.) can be subclassed and overridden via MJ's class factory
 - **Zod Validation Schemas**: Generates Zod schemas from SQL CHECK constraints with proper union types and refinements
 - **Recursive Foreign Key & Hierarchy Traversal Engine**: Automatically detects self-referential foreign keys and generates a 4-routine TVF suite (`GetHierarchyMeta`, `GetDescendants`, `GetAncestors`, `GetRootID`), 5 computed base-view columns (`Root<Field>`, `<Field>Depth`, `<Field>Path`, `<Field>IsLeaf`, `<Field>ChildCount`), and strongly typed TypeScript entity traversal methods (`GetDescendants()`, `GetAncestors()`, `GetChildren()`). See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md).
-- **Cascade Delete Generation**: Produces cursor-based cascade delete procedures that call child entity stored procedures, respecting business logic at every level
+- **Cascade Delete Generation**: Produces cursor-based cascade delete procedures that call child entity stored procedures, respecting business logic at every level. Default is **intra-schema only**; `allowCrossSchemaCascadeDeletes` (off) is required to walk FKs in other schemas.
 - **Force Regeneration**: Surgically regenerate specific SQL objects for specific entities without requiring schema changes
 - **Class Registration Manifests**: Prevents tree-shaking of `@RegisterClass`-decorated classes by generating static import manifests
 - **SQL Migration Logging**: Outputs all generated SQL as Flyway-compatible migration files with schema placeholder support
@@ -317,7 +317,8 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `SQLOutput` | Controls Flyway migration file generation from SQL logging |
 | `commands` | Shell commands to run before/after generation (typically package builds) |
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
-| `includeSchemas` | Opt-in positive scope: generate only these schemas (resolved into `excludeSchemas`) |
+| `includeSchemas` | Opt-in positive scope: generate only these schemas (resolved into `excludeSchemas` **for this run**). Heal SQL logged into migrations uses `@IncludedSchemaNames` from this list plus authored `excludeSchemas` — never a snapshot of sibling apps on the publisher DB. |
+| `allowCrossSchemaCascadeDeletes` | Default **false**. Cascade-delete SQL is intra-schema only. `true` restores the old walk of every FK pointing at the entity, including other Open Apps. Dangerous; leave off. |
 | `entityPackageName` | String: npm package this emit writes. Record: install-time host map (those schemas are also skipped for local generation) |
 | `entityImportPackages` | Schema → npm map for peer classes this emit does **not** generate (embeds + related-record collections). See below. |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |

@@ -1,5 +1,217 @@
 # Change Log - @memberjunction/server
 
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+### Patch Changes
+
+- b08d696: Custom-column promotion now clears the staging JSON, and stops re-offering columns it already created.
+
+  Two defects made an already-promoted source field come back to the operator as a brand-new "column to add", indefinitely:
+  - **The staged value was never removed.** `__mj_integration_CustomOverflow` was left untouched on promotion, on the assumption that the next sync would evict the key once a field map existed. It does not: a sync rewrites a row only when its content hash changes, and the hash basis deliberately excludes the overflow column — so any row unchanged since before the promotion keeps the promoted key forever. Promotion now strips each key from the JSON in the same write that spreads it, and a new purge pass sweeps the whole table for keys that are already mapped but still staged. That pass runs _before_ any new column is created, and runs even when there is nothing new to promote, so pre-existing residue is cleaned rather than re-detected. Backfilled columns re-baseline the content hash exactly as the spread does, so purging never provokes a rewrite on the next sync.
+  - **The "already promoted?" check ignored the field map's destination.** It re-sanitized the source key and looked that up in the in-process `EntityField` list. That list can predate the `ADD COLUMN` in a given process, and the real column may carry a collision suffix (`_2`) the re-sanitized guess cannot reproduce; either miss read as "no column yet". The active field map's `DestinationFieldName` — the authoritative record of what was created — is now consulted first, and the query that reads it serves the hash re-baseline too instead of running twice.
+
+  Also fixes offset paging over the overflow rows: the walk is ordered by primary key and advances by rows-seen-minus-rows-removed, so cleaning a row no longer causes the scan to skip a later one.
+
+  The purge is bounded to 1000 written rows per pass. Each purged row costs one `BaseEntity.Save()` — around nine serialized round trips, the only write shape available today — so an unbounded sweep of a large table would hold the post-sync promotion callback open for a long time. The budget bounds writes, not the scan, so a later pass still reaches residue further down the table; residue is inert while it waits, because the field-map-first terminate check already stops a mapped key being re-offered as a new column.
+
+- 78e2667: Fix a memory leak in `SessionManager.heartbeatLastWrite`: it was a plain, unbounded `Map`, but `SessionManager` is constructed fresh by every resolver that needs one plus `SessionJanitor`'s own instance, so a session heartbeated on one instance but closed via a different one (the common case for crashed tabs, dropped connections, and any disconnect that never round-trips an explicit close mutation, reconciled by the janitor's sweeps) left its entry there forever. `heartbeatLastWrite` is now bounded with `MJLruCache` (maxSize 5,000, ttlMs 4h), mirroring the same fix already applied to `RealtimeClientSessionService.promptRunWriteChains`.
+- 8f199e2: Identity Claims: ship the redemption surface and close the trust gaps.
+  - New `IdentityClaimRedemptionResolver` (MJServer): `RedeemIdentityClaim` /
+    `AutoClaimPendingIdentityClaims` mutations and `GetMyPendingIdentityClaims` query, with an
+    in-memory per-user rate limit on redemption attempts.
+  - New Explorer `/claims/redeem` page (explorer-core) — the landing target of claim emails'
+    `?id=..&token=..` links, previously a dead URL.
+  - Automatic claim-on-login: `getUserPayload` now fires `AutoClaimForUser` once per issued
+    token (deduped alongside the session audit), so pending claims addressed to a user's email
+    attach at sign-in.
+  - Email-verification gate: the OIDC `email_verified` claim is read off the verified JWT onto
+    `UserPayload.emailVerified` and threaded into redemption — an IdP that explicitly asserts
+    an unverified email can no longer redeem by email match (the token path still works).
+  - `IdentityClaimType.Configuration` is now read: `RequireVerifiedEmail`, `RequireToken`, and
+    `AutoClaim` gates (typed as `IdentityClaimTypeConfiguration` on the client engine).
+  - `IdentityClaimType.IsActive` is now enforced on both create and redeem.
+  - `GetPendingClaimsForEmail` uses `EscapeSQLString` and a platform-neutral expiry literal
+    (was `GETUTCDATE()`, SQL Server-only); `RevokeClaim` checks its save result and skips the
+    driver's `OnRevoke` when the revocation did not persist.
+
+- 7857d8e: Add `@memberjunction/network-utils` and remove `axios` from the repository.
+
+  The SSRF guard added for the web/HTTP actions was Actions-specific but the concern is not, so it
+  moves into a new dependency-free, Node-only package (`node:dns` + `node:net` only) that any
+  server-side package can depend on: `AssertPublicUrl`, `SafeFetch`, `IsBlockedIPAddress`, `SSRFError`.
+
+  The same package ships `HttpClient` / `HttpRequest` — a native-`fetch` HTTP client that replaces
+  `axios` across all 11 packages that used it. Consolidating on one client removes the third-party
+  dependency and puts the SSRF guard one option flag (`ValidateUrl`) away from every outbound call
+  site, which was impossible when each package reached for `axios` directly.
+
+  Also fixes an SSRF sink the original pass missed: the `API Rate Limiter` action takes a
+  caller-controlled URL and returns the response body, and is now guarded.
+
+  Public exports use `PascalCase`, per repo convention.
+
+- ebbc4e7: Custom-column promotion is one RSU pass, and an interrupted spread is no longer a dead end. `PromoteForSync` used to run the full RSU pipeline (migrate + CodeGen + compile) once per entity — a sync touching N entities with candidates paid N passes where `RunPipelineBatch` exists to pay one; it now plans all entities first, runs one batch (one lock, one CodeGen, one compile, one restart signal), refreshes provider metadata once, then finishes each entity whose DDL landed (a failed migration leaves its entity captured for retry without stopping the others). Separately, a run interrupted between ADD COLUMN and the value spread used to leave rows carrying the value only in the overflow JSON forever — the column and field map existed, so the terminate check skipped the key as done, and capture had stopped because the key was no longer unmapped. Such keys are now spread-recovery work items: no DDL, no metadata writes, never surfaced as UI candidates or counted as columns added — they only finish the backfill, and the spread is idempotent (writes only still-unset destinations), so recovery converges to a read-only pass.
+
+  Promotion also stops skipping the restart and the git commit, and completes its work the way the apply-objects path already does.
+
+  It hardcoded `SkipRestart: true, SkipGitCommit: true` — the only place in the repo either flag was forced rather than passed in. Every integration entry point takes them as arguments defaulting to `false` (`IntegrationApplySchema` / `ApplySchemaBatch` / `ApplyAll` / `ApplyAllBatch`), so adding tables, removing tables, refreshing schema and first-time setup all commit and restart; promotion was the outlier. Both fields are optional and RSU gates on `!inputs.every(i => i.SkipGitCommit)`, so omitting them **is** the default — no caller or platform change is needed.
+
+  Skipping the restart was not laziness, though: `pm2 restart` kills the process, so the IntegrationObjectField rows, the field maps and the overflow→column spread could not run after it. The fix is the pattern the apply path already uses — register the follow-up durably as `RSUPendingWork`, let the restart happen, and let the post-restart consumer finish. `RSUPendingWork` gains a `WorkType` discriminator (absent means `apply-objects`, so rows written before it are untouched) and a `PromotedColumns` payload carrying the resolved destination names. Those names are carried rather than recomputed because `uniqueColumnName` may have suffixed one to avoid a collision, and re-deriving it post-restart could pick a different name than the column the migration actually created.
+
+  What this buys beyond correctness: the spread now runs with the regenerated entity classes loaded, so it writes through real typed columns instead of the dynamic `.Get`/`.Set` the pre-restart path documents as "the sanctioned exception"; the columns reach GraphQL, so the UI that requested them can read them; and the migration and generated code reach the repository, instead of the database carrying columns git has no record of — observed live, where a workspace's promoted columns were present only because a later schema refresh happened to re-emit them as `ADD COLUMN IF NOT EXISTS`.
+
+  Because promotion now runs as one batched pass, this costs one restart and one commit for the whole promotion rather than one per entity. The inline phase remains as the fallback for a pass that needed no DDL, and therefore no restart — mirroring the apply path, which likewise finishes inline only when the restart did not occur.
+
+- 0aa2b91: Reactivating a connection no longer blocks on a live schema introspect, and stops reporting a failed refresh as a clean zero-count one.
+
+  `IntegrationReactivateConnection` was the last schema-refresh path still awaiting the pipeline inline. Its two sibling mutations already gained `awaitSchemaRefresh` plus a detached launch; reactivate never did, and kept a hand-rolled copy of the message the shared builders exist to fix.
+  - **Reactivation no longer scans the source.** `runSchemaRefresh` now defaults to **false**: resuming a connection and rescanning its schema are separate decisions that this mutation used to fuse. A one-click resume would spend minutes of a vendor's rate budget on an introspect nobody asked for, and the catalog is usually exactly as current as it was when the connection was paused. `IntegrationRefreshConnectorSchema` remains the operation for "rescan now"; pass `runSchemaRefresh: true` to get both. **This changes what an existing caller gets by default** — a client that passes only `companyIntegrationID` will now reactivate without a refresh.
+  - **When a refresh IS requested, it is detached by default.** Reactivation is durably committed before the refresh begins — the mutation returns as soon as the connection is actually active, naming the run to tail. Holding the response open for the minutes a live introspect takes cannot make the reactivation more true, and a load balancer that terminates a held request at a fixed ceiling turns a succeeded operation into a reported failure with no run ID to check. Create and Update keep blocking by default, because there the caller is sitting on a wizard form and the counts are the answer they asked for. `awaitSchemaRefresh: true` restores blocking here.
+  - **Failed refreshes say so.** The inline path formatted its counts unconditionally, and a pipeline that fails returns rather than throws with every count at zero — so a refresh that died at the credential check reported "0 created, 0 updated, 0 PK-unresolved", indistinguishable from a source with nothing new. Reactivate now goes through the same `describeFinishedRefresh` the other two use, so a failure is named as one.
+
+  Also surfaces apply-time warnings for declared integration rows an apply silently leaves out: an `IntegrationObject`/`IntegrationObjectField` that a rediscovery or a schema-limit breach set to `Disabled` is excluded from the source schema the apply materializes, so the table appears without the column — or a requested object is not created at all — and nothing in the output said why.
+
+- a09bfb5: security: refuse ad-hoc SQL for scope-limited sessions, and escape the filters `ResolverBase` builds itself
+
+  **Ad-hoc SQL (`AdhocQueryResolver.ExecuteAdhocQuery`).** The resolver runs a raw `SELECT` on the read-only pool — it does not go through `RunView`, entity permissions, or row-level security, so the per-session confinement a magic-link principal relies on (expressed as `{{ScopeResourceID}}` / `{{ScopeResourceType}}` RLS tokens substituted on the entity-read path) does not exist on this path at all. An anonymous magic-link guest or a resource-scoped magic-link session could therefore read the whole database outside its granted scope. Those principals are now refused before a data source is acquired, via a new `IsScopeLimitedPrincipal` predicate exported from `@memberjunction/server`. Ordinary authenticated users — the intended consumers, via `GraphQLDataProvider` — are unaffected.
+
+  **`ResolverBase` filter building.** `findBy` (reachable through `UserByEmail`, `FileByName`, `UserViewsByName` and the other by-value resolvers) and the inline view-name lookup in `RunViewByNameGeneric` interpolated client-supplied values into `ExtraFilter` without escaping. `ExtraFilter` is screened by `SQLExpressionValidator`, which blocks stacked statements, `UNION`, comments and `WAITFOR`, so the residual exposure was a same-clause boolean tautology rather than arbitrary SQL — now closed with `EscapeSQLString`. `findBy`'s unquoted slot (numeric and boolean fields, where there is no quote to escape and a string value would simply _be_ SQL) now rejects anything that is not a real number or boolean instead of interpolating it.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [f5e91a7]
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [a2c528f]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [f4fedab]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [6b971ab]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [bae672c]
+- Updated dependencies [faac5b5]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/codegen-lib@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/integration-schema-builder@6.1.0-edge.4
+  - @memberjunction/core-actions@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/integration-engine-base@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/network-utils@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.4
+  - @memberjunction/actions-apollo@6.1.0-edge.4
+  - @memberjunction/doc-utils@6.1.0-edge.4
+  - @memberjunction/ai-agents@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/computer-use@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/tag-engine@6.1.0-edge.4
+  - @memberjunction/computer-use-engine@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-bridge-server@6.1.0-edge.4
+  - @memberjunction/remote-browser-server@6.1.0-edge.4
+  - @memberjunction/ai-vector-sync@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/communication-ms-graph@6.1.0-edge.4
+  - @memberjunction/livekit-room-server@6.1.0-edge.4
+  - @memberjunction/queue@6.1.0-edge.4
+  - @memberjunction/search-engine@6.1.0-edge.4
+  - @memberjunction/templates@6.1.0-edge.4
+  - @memberjunction/testing-engine@6.1.0-edge.4
+  - @memberjunction/ai-agent-manager@6.1.0-edge.4
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/task-graph@6.1.0-edge.4
+  - @memberjunction/ai-agent-manager-actions@6.1.0-edge.4
+  - @memberjunction/clustering-engine@6.1.0-edge.4
+  - @memberjunction/tag-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-mcp-client@6.1.0-edge.4
+  - @memberjunction/ai-bridge-base@6.1.0-edge.4
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.4
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.4
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.4
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.4
+  - @memberjunction/remote-browser-base@6.1.0-edge.4
+  - @memberjunction/api-keys@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/communication-engine@6.1.0-edge.4
+  - @memberjunction/entity-communications-base@6.1.0-edge.4
+  - @memberjunction/entity-communications-server@6.1.0-edge.4
+  - @memberjunction/notifications@6.1.0-edge.4
+  - @memberjunction/communication-sendgrid@6.1.0-edge.4
+  - @memberjunction/credentials@6.1.0-edge.4
+  - @memberjunction/encryption@6.1.0-edge.4
+  - @memberjunction/external-change-detection@6.1.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.4
+  - @memberjunction/lists@6.1.0-edge.4
+  - @memberjunction/data-context@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/record-comparison@6.1.0-edge.4
+  - @memberjunction/scheduling-actions@6.1.0-edge.4
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.4
+  - @memberjunction/scheduling-engine@6.1.0-edge.4
+  - @memberjunction/schema-engine@6.1.0-edge.4
+  - @memberjunction/testing-engine-base@6.1.0-edge.4
+  - @memberjunction/version-history@6.1.0-edge.4
+  - @memberjunction/esignature@6.1.0-edge.4
+  - @memberjunction/remote-browser-cdp@6.1.0-edge.4
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.4
+  - @memberjunction/ai-vectordb@6.1.0-edge.4
+  - @memberjunction/auth-providers@6.1.0-edge.4
+  - @memberjunction/component-registry-client-sdk@6.1.0-edge.4
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.4
+  - @memberjunction/data-context-server@6.1.0-edge.4
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.4
+  - @memberjunction/redis-provider@6.1.0-edge.4
+  - @memberjunction/scheduling-base-types@6.1.0-edge.4
+  - @memberjunction/server-extensions-core@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+  - @memberjunction/config@6.1.0-edge.4
+  - @memberjunction/lists-base@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes
