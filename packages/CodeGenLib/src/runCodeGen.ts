@@ -408,6 +408,57 @@ export class RunCodeGenBase {
             return false;
           }
         }
+
+        // Metadata/view coherence. The CRUD validator asks "can the runtime WRITE this
+        // entity"; this asks the prior question — "can it READ it at all".
+        //
+        // A field the metadata declares but the base view does not produce makes every
+        // read of that entity fail with `column "X" does not exist`. Grids render that
+        // as an empty result rather than an error, so the entity looks like it holds no
+        // data. Nothing else in the pipeline notices, and the condition is permanent for
+        // any schema in `excludeSchemas` (CodeGen emits permissions only for those, so
+        // there is no regeneration pass to repair the view) — which by convention
+        // includes `__mj` on essentially every install.
+        //
+        // Reported, not fatal, by default: existing installs may already carry this drift
+        // and failing their next codegen run would be worse than telling them about it.
+        // Set MJ_CODEGEN_STRICT_FIELD_RESOLUTION=true to make it a hard gate; that is the
+        // intended default once fleets are clean.
+        try {
+          startSpinner('Validating entity fields resolve against their base views...');
+          const baseline = md.Entities.filter(e => e.IncludeInAPI);
+          const gaps = await sqlCodeGenObject.DBProvider.validateEntityFieldsResolve(conn, baseline);
+          if (gaps.length > 0) {
+            const affected = new Set(gaps.map(g => `${g.schema}.${g.entity}`));
+            const list = gaps
+              .map(g => `  - [${g.schema}] ${g.entity} → ${g.baseView} does not produce "${g.field}"${g.isVirtual ? ' (virtual)' : ''}`)
+              .join('\n');
+            const strict = process.env.MJ_CODEGEN_STRICT_FIELD_RESOLUTION === 'true';
+            const summary =
+              `${gaps.length} declared field(s) across ${affected.size} entity(ies) are not produced by their base view.\n` +
+              `Every read of these entities fails with 'column ... does not exist'. A grid shows that as\n` +
+              `"no data" rather than an error, so the entity appears empty while its table is full.\n` +
+              `${list}\n\n` +
+              `Cause: a migration added the column to the base TABLE and registered the EntityField, but did\n` +
+              `not rebuild the base VIEW. For schemas listed in excludeSchemas (typically __mj) CodeGen never\n` +
+              `regenerates the view, so this does not self-heal.\n` +
+              `Fix: rebuild the affected base view(s). PostgreSQL permits appending columns in place via\n` +
+              `CREATE OR REPLACE VIEW, so no DROP/CASCADE is required.`;
+            if (strict) {
+              failSpinner(`Field-resolution validation FAILED: ${gaps.length} unreadable field(s)`);
+              logError(summary);
+              return false;
+            }
+            warnSpinner(`Field-resolution validation found ${gaps.length} unreadable field(s)`);
+            logWarning(summary);
+          } else {
+            succeedSpinner('Entity fields all resolve against their base views');
+          }
+        } catch (e) {
+          // Never fail the run on the validator's own error — it is a reporter.
+          warnSpinner('Field-resolution validation could not run');
+          logWarning(`Field-resolution validator threw: ${e instanceof Error ? e.message : String(e)}`);
+        }
         // Surface upstream SQL-pipeline failure even if validator passed: a
         // green validator just means whatever DID get generated is consistent;
         // it doesn't whitewash an upstream batch error.

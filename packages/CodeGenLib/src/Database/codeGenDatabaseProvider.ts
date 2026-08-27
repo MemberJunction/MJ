@@ -1613,6 +1613,129 @@ export abstract class CodeGenDatabaseProvider {
             !existing.has(`${e.schema.toLowerCase()}.${e.expectedRoutine.toLowerCase()}`)
         );
     }
+
+    /**
+     * Cross-check every entity's declared fields against the columns its base view
+     * actually produces.
+     *
+     * A field the metadata promises but the view cannot emit is not a cosmetic
+     * inconsistency: the runtime selects fields by name, so the first read of that
+     * entity fails with `column "X" does not exist`. Grids surface that as an empty
+     * result rather than an error, so the entity simply appears to hold no data — a
+     * failure mode that can persist for months without anyone seeing a stack trace.
+     *
+     * This drift is created whenever a migration adds a column to a base TABLE and
+     * registers an EntityField for it without also rebuilding the base VIEW. CodeGen
+     * would normally repair that on its next run, but `excludeSchemas` skips SQL
+     * generation entirely for excluded schemas (permissions only) — and `__mj` is in
+     * that list by convention on essentially every install. So for the core schema
+     * there is no regeneration pass to lean on, and the drift is permanent.
+     *
+     * Deliberately NOT filtered by `excludeSchemas`: excluded schemas are precisely
+     * where nothing else is watching.
+     *
+     * Read-only — this reports, it does not repair.
+     */
+    async validateEntityFieldsResolve(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<FieldResolutionGap[]> {
+        const relevant = entities.filter(e => !e.VirtualEntity && e.BaseView && e.SchemaName);
+        if (relevant.length === 0) return [];
+
+        const schemas = Array.from(new Set(relevant.map(e => e.SchemaName)));
+        const sql = this.getViewColumnsBySchemaSQL(schemas);
+        if (!sql || !sql.trim()) return [];
+
+        const result = await pool.query(sql);
+        // schema.view -> set of column names, all lower-cased so the comparison is
+        // dialect-neutral (PG stores as-written, SQL Server folds by collation).
+        const actual = new Map<string, Set<string>>();
+        for (const row of result.recordset) {
+            const schemaName = String(row.schema_name ?? '').toLowerCase();
+            const viewName = String(row.view_name ?? '').toLowerCase();
+            const columnName = String(row.column_name ?? '').toLowerCase();
+            if (!schemaName || !viewName || !columnName) continue;
+            const key = `${schemaName}.${viewName}`;
+            let set = actual.get(key);
+            if (!set) { set = new Set<string>(); actual.set(key, set); }
+            set.add(columnName);
+        }
+
+        const gaps: FieldResolutionGap[] = [];
+        for (const entity of relevant) {
+            const key = `${entity.SchemaName.toLowerCase()}.${entity.BaseView.toLowerCase()}`;
+            const columns = actual.get(key);
+            // No entry at all means the view does not exist. That is a different fault
+            // with its own diagnostics; reporting every field of a missing view as a gap
+            // would bury the real signal.
+            if (!columns) continue;
+            for (const field of entity.Fields) {
+                if (!columns.has(field.Name.toLowerCase())) {
+                    gaps.push({
+                        entity: entity.Name,
+                        schema: entity.SchemaName,
+                        baseView: entity.BaseView,
+                        field: field.Name,
+                        isVirtual: !!field.IsVirtual,
+                    });
+                }
+            }
+        }
+        return gaps;
+    }
+
+    /**
+     * Dialect SQL returning every view column in the given schemas as
+     * `{ schema_name, view_name, column_name }`.
+     *
+     * `information_schema.columns` restricted to views is standard in both dialects,
+     * so the base implementation serves both; override only if a dialect needs a
+     * catalog-specific path.
+     */
+    protected getViewColumnsBySchemaSQL(schemas: string[]): string {
+        if (!schemas || schemas.length === 0) return '';
+        // Case-INSENSITIVE on both sides, deliberately.
+        //
+        // The caller keys and looks up its map with `.toLowerCase()`, so matching the
+        // catalog verbatim here left the two halves disagreeing about case. On
+        // PostgreSQL an unquoted schema is folded to lowercase in the catalog, so an
+        // entity whose SchemaName is stored with any other casing matched no rows,
+        // fell into the "view does not exist" skip, and was silently dropped from
+        // validation — a validator reporting nothing, which is the exact failure this
+        // check exists to end.
+        //
+        // LOWER() on both sides rather than lowercasing only the list: that is correct
+        // whichever way the schema was actually created (PG folds unquoted, keeps
+        // quoted; SQL Server stores as-written and usually compares case-insensitively
+        // by collation), and it makes the SQL agree with the JS by construction rather
+        // than by coincidence. The cost is a scan of information_schema over a handful
+        // of schemas, which is nothing.
+        const list = schemas.map(s => `'${s.toLowerCase().replace(/'/g, "''")}'`).join(', ');
+        return `SELECT c.table_schema AS schema_name, c.table_name AS view_name, c.column_name AS column_name
+                  FROM information_schema.columns c
+                  JOIN information_schema.views v
+                    ON v.table_schema = c.table_schema AND v.table_name = c.table_name
+                 WHERE LOWER(c.table_schema) IN (${list})`;
+    }
+}
+
+/**
+ * One entity field that the metadata promises but the entity's base view does not
+ * produce. The runtime selects fields by name, so each of these makes the entity
+ * unreadable — and a grid renders that as "no data" rather than an error.
+ */
+export interface FieldResolutionGap {
+    /** Entity.Name (e.g. "MJ: Entities") */
+    entity: string;
+    /** Entity.SchemaName (e.g. "__mj") */
+    schema: string;
+    /** Entity.BaseView (e.g. "vwEntities") */
+    baseView: string;
+    /** EntityField.Name that the view does not expose. */
+    field: string;
+    /** True for join-sourced/computed fields, false for plain base-table columns. */
+    isVirtual: boolean;
 }
 
 /**

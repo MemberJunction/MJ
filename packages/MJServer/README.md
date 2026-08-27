@@ -886,7 +886,7 @@ MJServer supports a plugin architecture that enables auto-discovery and lifecycl
 
 1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core`
 2. Extensions register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`
-3. Configuration in `mj.config.cjs` defines which extensions to load
+3. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass` and is also where host-only extensions (Slack, Teams) live.
 4. MJServer's `ServerExtensionLoader` discovers and initializes all enabled extensions at startup
 
 ### Configuration
