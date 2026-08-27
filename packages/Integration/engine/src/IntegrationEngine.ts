@@ -3982,11 +3982,35 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // otherwise load one-by-one. For a watermark-less re-sync where nothing changed,
             // this lets UpdateRecord skip every per-record load. Best-effort: undefined → the
             // existing dirty-flag path runs unchanged.
-            // Serialize the per-batch DB-write across concurrently-synced streams (shared provider
-            // connection ⇒ one transaction at a time). Fetch already happened in parallel upstream;
-            // only this write section is mutually exclusive. A throw inside (e.g. SchemaNotGenerated)
-            // propagates out to fail-stop this entity map, exactly as before.
-            await this.runWriteExclusive(async () => {
+            // WHAT ACTUALLY NEEDS THE MUTEX.
+            //
+            // The shared provider connection holds one transaction at a time, so the section that
+            // OWNS a transaction must be mutually exclusive. `BeginTransaction` + per-record
+            // `Save()` owns one for the whole batch, and stays serialized exactly as before.
+            //
+            // A batched batch does not. A `TransactionGroup` is an in-memory list until `Submit()`:
+            // enrolling an entity validates, checks row scope and renders the CRUD procedure call,
+            // then parks it — no statement travels, no transaction is open. Only `Submit` touches
+            // the connection. Holding the mutex across the whole apply block was therefore
+            // serializing work that never needed it, and that is what made batching and concurrency
+            // mutually exclusive: maps could not overlap on the part where the time actually goes
+            // (fetch, paging, transform, enrolment) because they were queued behind each other's
+            // writes.
+            //
+            // So the batched path takes the mutex only around the writes themselves. One
+            // transaction is still in flight at a time — the invariant is unchanged — but maps
+            // overlap everywhere else, and each keeps its OWN group, so a poison record fails the
+            // map that owns it instead of every map that happened to be batching alongside it.
+            const batchedWrites = useTransaction && this.ReadWriteMode(companyIntegration) === 'batched';
+
+            // NEVER nest `runWriteExclusive`: the inner call waits on a chain that already contains
+            // the outer one, which deadlocks. Under the outer mutex the writes are already
+            // serialized, so they run inline; without it they take the mutex individually.
+            const serializeWrite = batchedWrites
+                ? <T,>(fn: () => Promise<T>): Promise<T> => this.runWriteExclusive(fn)
+                : <T,>(fn: () => Promise<T>): Promise<T> => fn();
+
+            const applyOneBatch = async () => {
                 const precheckHashes = await this.PrefetchContentHashes(batch, contextUser);
 
                 // PKs of records the content-hash fast path skipped this batch — still present and
@@ -4005,33 +4029,54 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // Opt-in per connection, and it fails closed: an absent, unparseable or
                     // unrecognised `writeMode` keeps the proven path, so the default never changes
                     // underneath an existing tenant.
-                    const batched = this.ReadWriteMode(companyIntegration) === 'batched';
-                    const writeGroup = batched ? await provider.CreateTransactionGroup() : null;
+                    const writeGroup = batchedWrites ? await provider.CreateTransactionGroup() : null;
                     const runCtx = this.currentRunContext;
-                    if (writeGroup && runCtx) runCtx.writeGroup = writeGroup;
                     if (!writeGroup) await provider.BeginTransaction();
-                    try {
+
+                    // EACH BATCH GETS ITS OWN GROUP, IN ITS OWN CONTEXT SCOPE.
+                    //
+                    // Assigning onto the shared run context would be a single slot: the moment two
+                    // maps overlap — which narrowing the mutex now allows — the second would
+                    // overwrite the first's group and enrol its records into the wrong batch.
+                    // Entering a nested AsyncLocalStorage scope instead gives every concurrent
+                    // batch its own `writeGroup`, inherited by the ApplySingleRecord frames below
+                    // that actually construct the entities, and torn down with the scope.
+                    //
+                    // Per-batch groups are also what keeps failures isolated: a poison record fails
+                    // the group its own map owns, and every other map in flight is untouched.
+                    const runBatch = async () => {
                         for (const record of batch) {
                             result.RecordsProcessed++;
                             await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
+                        }
+                    };
+                    try {
+                        if (writeGroup && runCtx) {
+                            await IntegrationEngine.runContext.run({ ...runCtx, writeGroup }, runBatch);
+                        } else {
+                            await runBatch();
                         }
                         if (writeGroup) {
                             // The group holds every deferred write; Submit is where they land, in
                             // one transaction. A false return means the group failed as a whole —
                             // routed into the same catch, so the fallback below is reached by both
                             // shapes rather than only by a throw.
-                            if (runCtx) runCtx.writeGroup = undefined;
-                            const submitted = await writeGroup.Submit();
+                            //
+                            // This is the ONLY part of a batched batch that touches the connection,
+                            // so it is the only part that takes the write mutex.
+                            const submitted = await serializeWrite(() => writeGroup.Submit());
                             if (!submitted) throw new Error('Batched write group did not commit');
                         } else {
                             await provider.CommitTransaction();
                         }
                     } catch (err) {
-                        if (runCtx) runCtx.writeGroup = undefined;
+                        // No shared slot to clear: the group lived in the batch's own context
+                        // scope, which has already unwound.
+                        //
                         // A group that failed has already rolled itself back and there is no
                         // provider-level transaction open to roll back — calling it would throw
                         // over the real error.
-                        if (!batched) await provider.RollbackTransaction();
+                        if (!batchedWrites) await provider.RollbackTransaction();
                         // The batch transaction rolled back; the skip-IDs collected during the failed attempt
                         // never committed. Reset and let the per-record retry re-collect only what commits.
                         reconciledSkipIds = [];
@@ -4105,15 +4150,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // LastReconciledAt for every content-hash-skipped row in ONE set-based touch.
                 // Best-effort — a touch failure must never break the sync.
                 if (reconciledSkipIds.length > 0) {
-                    await this.TouchLastReconciledAt(entityMap, reconciledSkipIds, contextUser, logger);
+                    await serializeWrite(() => this.TouchLastReconciledAt(entityMap, reconciledSkipIds, contextUser, logger));
                 }
 
                 // Write the batch's record maps set-based, now that the records they point at are
                 // committed. Deliberately AFTER the transaction rather than inside it: the mapping
                 // is derived data that the next sync can re-establish by primary key, and keeping
                 // it out of the write transaction keeps that transaction as short as possible.
-                await this.FlushRecordMaps(recordMaps, entityMap, logger);
-            });
+                await serializeWrite(() => this.FlushRecordMaps(recordMaps, entityMap, logger));
+            };
+
+            // Batched: overlap freely, serializing only the writes above. Otherwise: the whole
+            // block stays under the mutex, because it owns a provider transaction throughout.
+            if (batchedWrites) await applyOneBatch();
+            else await this.runWriteExclusive(applyOneBatch);
         }
     }
 

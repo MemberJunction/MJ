@@ -15,3 +15,16 @@ Opt-in per connection via `Configuration.writeMode === 'batched'`, and it fails 
 The group rides the run's `AsyncLocalStorage` context rather than a threaded parameter, for the reason that context already exists: the entity is constructed several frames below the code that owns the batch.
 
 Requires the batched submit in `@memberjunction/sqlserver-dataprovider` and `@memberjunction/postgresql-dataprovider` to be the thing that makes it one round trip; without those a group is atomic but still serial, which is today's behaviour.
+
+Batched writes no longer force concurrency 1.
+
+The write mutex existed because the shared provider connection holds one transaction at a time, and it wrapped the whole apply block. For `BeginTransaction` + per-record `Save()` that is right — the transaction is open across the batch. For a batched batch it is not: a `TransactionGroup` is an in-memory list until `Submit()`, so enrolling an entity validates, checks row scope, renders the CRUD procedure call and parks it without a statement travelling or a transaction opening. Only `Submit` touches the connection.
+
+So the whole apply block was being serialized on account of work that never needed it, and the cost was the thing batching exists for: maps could not overlap on fetching, paging, transforming or enrolling, because they were queued behind each other's writes.
+
+The batched path now takes the mutex only around the writes — the group's `Submit`, the reconciled-skip touch, and the record-map flush. One transaction is still in flight at a time, so the invariant is unchanged; what changes is that everything which never touched the connection now runs in parallel.
+
+Each batch keeps its OWN group, in its own `AsyncLocalStorage` scope. Assigning onto the shared run context would be a single slot, and the moment two maps overlap the second would overwrite the first's group and enrol its records into the wrong batch. Per-batch scoping also keeps failures isolated: a poison record fails the group its own map owns, and a map applying alongside it is untouched — no shared transaction means no way for one map to make another fail.
+
+Nesting the mutex is deliberately avoided rather than merely unused: the inner call waits on a chain that already contains the outer one, so it would hang instead of erroring. Under the outer mutex the writes are already serialized and run inline; the batched path takes it per write. That hazard is covered by a test, because a deadlock leaves nothing to read.
+
