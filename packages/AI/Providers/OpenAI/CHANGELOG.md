@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai-openai
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [a5f92d2]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes
