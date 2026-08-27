@@ -16,6 +16,7 @@ import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { applyIncludeSchemaScope } from "./schema-scope";
+import { buildHealSchemaRoutineParams, getAuthoredExcludeSchemas, snapshotAuthoredExcludeSchemas } from "./heal-schema-params";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
@@ -2190,6 +2191,11 @@ export class ManageMetadataBase {
             return false;
          }
       }
+
+      // Authored exclude list (sys, staging, …) must be captured BEFORE includeSchemas is
+      // compiled into excludeSchemas. Heal EXEC statements use that original list plus
+      // @IncludedSchemaNames — never the sibling snapshot of this machine's database.
+      snapshotAuthoredExcludeSchemas(configInfo.excludeSchemas);
 
       // Resolve the opt-in `includeSchemas` positive scope into excludeSchemas, BEFORE the exclude
       // snapshot below and before createNewEntities() runs. The universe is queried from the DATABASE
@@ -4683,7 +4689,13 @@ export class ManageMetadataBase {
       if (ag.featureEnabled('EntityDescriptions')) {
          // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
-            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${e}'`);
+            // Every literal in this function is doubled-quote escaped. The description below is
+            // FREE TEXT FROM AN LLM — prose about business entities contains apostrophes as a
+            // matter of course, and one unescaped quote aborts the whole CodeGen run with
+            // "Unclosed quotation mark" (SQL Server) at the very end of an otherwise-complete
+            // pass. '' doubling is correct on both supported dialects.
+            const esc = (s: string) => s.replace(/'/g, "''");
+            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${esc(e)}'`);
             const data = dataResult.recordset;
             const fieldsResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} WHERE EntityID='${data[0].ID}'`);
             const fields = fieldsResult.recordset;
@@ -4697,7 +4709,7 @@ export class ManageMetadataBase {
             );
 
             if (result?.entityDescription && result.entityDescription.length > 0) {
-               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
+               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${esc(result.entityDescription)}' WHERE Name = '${esc(e)}'`;
                await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
             }
             else {
@@ -4760,7 +4772,11 @@ export class ManageMetadataBase {
     */
    protected async setDefaultColumnWidthWhereNeeded(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spSetDefaultColumnWidthWhereNeeded', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spSetDefaultColumnWidthWhereNeeded', heal.values, heal.names);
          await this.LogSQLAndExecute(pool, sSQL, `SQL text to set default column width where needed`, true);
          return true;
       }
@@ -5024,7 +5040,11 @@ export class ManageMetadataBase {
    }
    protected async updateExistingEntitiesFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntitiesFromSchema', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntitiesFromSchema', heal.values, heal.names);
          const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to update existing entities from schema`, true);
          // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
          // add these to the modified entity list if they're not already in there
@@ -5055,14 +5075,13 @@ export class ManageMetadataBase {
          // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
          // a table variable via STRING_SPLIT and joins once. This avoids both per-entity
          // round-trips (slow) and parallel calls (page-level lock contention on EntityField).
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+            entityIDs,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', heal.values, heal.names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
-         const params = isScoped
-            ? [`'${excludeSchemas.join(',')}'`, `'${entityIDs!.join(',')}'`]
-            : [`'${excludeSchemas.join(',')}'`];
-         const paramNames = isScoped
-            ? ['ExcludedSchemaNames', 'EntityIDs']
-            : ['ExcludedSchemaNames'];
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', params, paramNames);
          const label = isScoped
             ? `SQL text to update existing entity fields from schema (${entityIDs!.length} scoped entities)`
             : `SQL text to update existing entity fields from schema`;
@@ -5090,7 +5109,11 @@ export class ManageMetadataBase {
     */
    protected async updateSchemaInfoFromDatabase(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateSchemaInfoFromDatabase', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateSchemaInfoFromDatabase', heal.values, heal.names);
          const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to sync schema info from database schemas`, true);
 
          if (result && result.length > 0) {
@@ -5197,14 +5220,13 @@ export class ManageMetadataBase {
          // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
          // a table variable via STRING_SPLIT and filters once. Avoids both per-entity
          // round-trips and parallel calls (page-level lock contention on EntityField).
+         const heal = buildHealSchemaRoutineParams({
+            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+            includeSchemas: configInfo.includeSchemas,
+            entityIDs,
+         });
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', heal.values, heal.names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
-         const params = isScoped
-            ? [`'${excludeSchemas.join(',')}'`, `'${entityIDs!.join(',')}'`]
-            : [`'${excludeSchemas.join(',')}'`];
-         const paramNames = isScoped
-            ? ['ExcludedSchemaNames', 'EntityIDs']
-            : ['ExcludedSchemaNames'];
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', params, paramNames);
          const label = isScoped
             ? `SQL text to delete unneeded entity fields (${entityIDs!.length} scoped entities)`
             : `SQL text to delete unneeded entity fields`;

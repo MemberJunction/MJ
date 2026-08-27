@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/network-utils",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: Server-side network utilities - SSRF-safe URL validation and a dependency-free HTTP client built on native fetch. Node only.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
