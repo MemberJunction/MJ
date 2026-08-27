@@ -1,5 +1,11 @@
 # @memberjunction/sql-dialect
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

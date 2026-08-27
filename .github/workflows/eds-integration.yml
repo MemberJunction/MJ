@@ -39,6 +39,16 @@ jobs:
     name: Postgres reference driver (integration)
     runs-on: ubuntu-latest
 
+    env:
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml. Every driver job below
+      # carries the same three vars.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+
     services:
       postgres:
         image: postgres:17
@@ -92,6 +102,12 @@ jobs:
     name: MongoDB driver (integration)
     runs-on: ubuntu-latest
 
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+
     services:
       mongo:
         image: mongo:7
@@ -141,6 +157,12 @@ jobs:
   sqlserver-driver-integration:
     name: SQL Server driver (integration)
     runs-on: ubuntu-latest
+
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
     services:
       sqlserver:
@@ -214,6 +236,12 @@ jobs:
     name: MySQL driver (integration)
     runs-on: ubuntu-latest
 
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+
     services:
       mysql:
         image: mysql:8
@@ -260,6 +288,12 @@ jobs:
   oracle-driver-integration:
     name: Oracle driver (integration)
     runs-on: ubuntu-latest
+
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
     services:
       oracle:
@@ -320,6 +354,11 @@ jobs:
     # so bound it explicitly — a hung handshake shouldn't burn the default 6-hour cap.
     timeout-minutes: 15
     if: github.event_name == 'workflow_dispatch'
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -364,6 +403,11 @@ jobs:
     # burn the default 6-hour cap.
     timeout-minutes: 15
     if: github.event_name == 'workflow_dispatch'
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4

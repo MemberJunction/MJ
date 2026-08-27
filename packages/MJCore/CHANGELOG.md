@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/core
 
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+- 53c341c: Add optional `@IncludedSchemaNames` to CodeGen metadata-heal stored procedures so Open App migrations can positively scope heals without photographing sibling apps. Cascade-delete SQL is intra-schema only unless `allowCrossSchemaCascadeDeletes` is set. Custom-view `sp_refreshview` in the migration log honors `excludeSchemas` and, when set, `includeSchemas`.
+
+### Patch Changes
+
+- e2ad3c0: `ProviderBase`'s write-invalidation fan-out now re-subscribes when the `MJGlobal` event bus is replaced. Its one-time wiring guard was a boolean, which cannot detect that `MJGlobal.Reset()` (or clearing the singleton from the global object store) has swapped `_events$` for a fresh `Subject` — leaving the fan-out attached to the discarded bus for the rest of the process, so `RunView` dedup/linger entries silently stopped being invalidated after a save, with no error. The guard now keys on the bus reference, unsubscribes the stale subscription when the bus changes, and is re-checked on every call so already-registered long-lived providers re-wire as well.
+- 8ad04e8: Fix a memory leak in `ProviderBase.ensureInflightViewInvalidation()`: it subscribed to `MJGlobal`'s process-wide event bus once per provider instance and never unsubscribed. Since MJServer mints a fresh provider on every GraphQL request (and the task-graph dispatcher mints one per task execution), this pinned one more provider object graph on the bus per request/task, forever. The subscription is now wired once per process and fans out to live provider instances via `WeakRef`, so creating more providers no longer adds more permanent subscribers.
+- a1a8989: Add `entityImportPackages` so CodeGen imports peer entity classes (embeds and related-record collections) from the npm package that owns them, instead of self-importing string `entityPackageName`. Unmapped foreign schemas fail the run.
+- Updated dependencies [4586215]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [647bd71]
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

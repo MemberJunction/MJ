@@ -1304,6 +1304,21 @@ export abstract class CodeGenDatabaseProvider {
     abstract generateViewRefreshSQL(schema: string, viewName: string): string;
 
     /**
+     * SQL that rebinds a layered entity's application-owned outer view after the
+     * inner generated view has been rewritten. SQL Server: empty here — the
+     * outer is `sp_refreshview`'d via {@link generateViewRefreshSQL}. PostgreSQL:
+     * a call to `__mj.spRebindLayeredOuterView` that restars `g.*` from
+     * `pg_get_viewdef` so newly added inner columns appear on the wrapper.
+     *
+     * Default is empty: platforms that do not need a distinct rebind step leave
+     * it alone. Must be a complete statement. The caller guards it on the outer
+     * view existing (bootstrap pass).
+     */
+    generateLayeredOuterRebindSQL(_entity: EntityInfo): string {
+        return '';
+    }
+
+    /**
      * Wraps `innerSQL` so it runs only when the named view already exists.
      *
      * Used for objects CodeGen refreshes or grants on but does NOT create — specifically the
