@@ -132,3 +132,21 @@ describe('MJNumericInputComponent — disabled state (DOM, ngModel host)', () =>
     expect(nativeControl().disabled).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The same defect in its broadest form — no Angular Forms anywhere. With no `ngModel` /
+ * `formControl` on the element, `setDisabledState()` is never called at all, so the gate was left
+ * at its initialiser and `[Disabled]` was completely inert: the control rendered fully enabled and
+ * responded to gestures. `Disabled` only ever worked as a side effect of a forms binding happening
+ * to compose it in, which is why this is the widest case and the cheapest one to regress.
+ */
+describe('MJNumericInputComponent — Disabled with no Angular Forms binding (DOM)', () => {
+  it('honours [Disabled] on its own, with no ngModel present', () => {
+    const f = renderComponentFixture(MJNumericInputComponent, { inputs: { Disabled: true } });
+
+    expect(f.componentInstance.IsDisabled, 'the gate must follow the input unaided').toBe(true);
+    expect((f.nativeElement.querySelector('input.mj-numeric-input') as HTMLInputElement).disabled).toBe(true);
+  });
+});

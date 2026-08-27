@@ -207,3 +207,24 @@ describe('MJDropdownComponent — disabled state (DOM, ngModel host)', () => {
     expect(control().IsDisabled, 'released by both sources ⇒ usable').toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The same defect in its broadest form — no Angular Forms anywhere. With no `ngModel` /
+ * `formControl` on the element, `setDisabledState()` is never called at all, so the gate was left
+ * at its initialiser and `[Disabled]` was completely inert: the control rendered fully enabled and
+ * responded to gestures. `Disabled` only ever worked as a side effect of a forms binding happening
+ * to compose it in, which is why this is the widest case and the cheapest one to regress.
+ */
+describe('MJDropdownComponent — Disabled with no Angular Forms binding (DOM)', () => {
+  it('honours [Disabled] on its own, with no ngModel present', () => {
+    const f = render({ Disabled: true });
+
+    expect(f.componentInstance.IsDisabled, 'the gate must follow the input unaided').toBe(true);
+    expect(trigger(f).classList.contains('mj-dropdown--disabled')).toBe(true);
+
+    open(f);
+    expect(f.componentInstance.IsOpen, 'a disabled dropdown must not open').toBe(false);
+  });
+});

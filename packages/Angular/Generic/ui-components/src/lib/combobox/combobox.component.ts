@@ -271,9 +271,11 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
   /**
    * Recompute the gate from both of its sources. Called whenever either changes.
    *
-   * Angular invokes `setDisabledState()` exactly once for a plain `ngModel` binding (at CVA
-   * registration), so composing the two sources only at that moment would freeze whatever
-   * `Disabled` happened to be then — leaving the control permanently stuck in that state.
+   * `IsDisabled` is derived state, and the only thing that assigned it was `setDisabledState()`.
+   * The forms-driven half was in fact fine — `setUpControl` also wires `registerOnDisabledChange`,
+   * so that hook fires on every `control.disable()`/`enable()`, not just at registration. What had
+   * no recompute path at all was the `Disabled` @Input: a plain field, so the gate froze at
+   * whatever the first compose produced and every later change to the input was dropped.
    */
   private syncDisabled(): void {
     const disabled = this.disabledInput || this.formDisabled;

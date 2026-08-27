@@ -171,3 +171,29 @@ describe('MJSwitchComponent — disabled state (DOM, ngModel host)', () => {
     expect(nativeControl().disabled).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The same defect in its broadest form — no Angular Forms anywhere. With no `ngModel` /
+ * `formControl` on the element, `setDisabledState()` is never called at all, so the gate was left
+ * at its initialiser and `[Disabled]` was completely inert: the control rendered fully enabled and
+ * responded to gestures. `Disabled` only ever worked as a side effect of a forms binding happening
+ * to compose it in, which is why this is the widest case and the cheapest one to regress.
+ */
+describe('MJSwitchComponent — Disabled with no Angular Forms binding (DOM)', () => {
+  it('honours [Disabled] on its own, with no ngModel present', () => {
+    const fixture = TestBed.createComponent(MJSwitchComponent);
+    fixture.componentRef.setInput('Disabled', true);
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector('button.mj-switch') as HTMLButtonElement;
+
+    expect(fixture.componentInstance.IsDisabled, 'the gate must follow the input unaided').toBe(true);
+    expect(button.disabled).toBe(true);
+    expect(button.classList.contains('mj-switch--disabled')).toBe(true);
+
+    fixture.componentInstance.Toggle();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.Value, 'a disabled switch must not toggle').toBe(false);
+  });
+});
