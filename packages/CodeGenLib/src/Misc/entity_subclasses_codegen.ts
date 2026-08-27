@@ -16,6 +16,7 @@ import {
   buildSchemaBarrel,
   groupEntitiesBySchema,
   mapLimit,
+  pruneOrphanedSchemaFiles,
   sanitizeSchemaFileName,
   schemasToEmit,
 } from './schema-emit';
@@ -236,6 +237,12 @@ export class EntitySubClassGeneratorBase {
         this.emitFile(filePath, content, emit.writeIfChanged);
       });
       EmitStats.AddAssembleMs(Date.now() - assembleStarted);
+
+      // Before the barrel, so the directory and the barrel always agree.
+      const pruned = pruneOrphanedSchemaFiles(schemasDir, schemas);
+      if (pruned.length > 0) {
+        logStatus(`   Removed ${pruned.length} orphaned entity schema file(s): ${pruned.join(', ')}`);
+      }
 
       const barrel = buildSchemaBarrel(
         schemas,

@@ -10,7 +10,7 @@ import {
 } from '@memberjunction/sql-dialect';
 import fs from 'fs';
 import path from 'path';
-import { logError } from './status_logging';
+import { logError, logStatus } from './status_logging';
 import { configInfo, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt } from './util';
 import { writeFileIfChanged } from './file-write';
@@ -19,6 +19,7 @@ import {
   SchemaEmitOptions,
   buildSchemaBarrel,
   groupEntitiesBySchema,
+  pruneOrphanedSchemaFiles,
   sanitizeSchemaFileName,
   schemasToEmit,
 } from './schema-emit';
@@ -79,6 +80,12 @@ export class GraphQLServerGeneratorBase {
         );
       }
       EmitStats.AddAssembleMs(Date.now() - assembleStarted);
+
+      // Before the barrel, so the directory and the barrel always agree.
+      const pruned = pruneOrphanedSchemaFiles(schemasDir, schemas);
+      if (pruned.length > 0) {
+        logStatus(`   Removed ${pruned.length} orphaned GraphQL schema file(s): ${pruned.join(', ')}`);
+      }
 
       const barrel = buildSchemaBarrel(
         schemas,

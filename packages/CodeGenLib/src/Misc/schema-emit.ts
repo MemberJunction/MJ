@@ -8,6 +8,9 @@
  * keys off the schema.
  */
 
+import fs from 'fs';
+import path from 'path';
+
 export type DirtySchemaSet = Set<string> | 'all';
 
 export interface SchemaEmitOptions {
@@ -191,4 +194,40 @@ export function buildSchemaBarrel(
     .map((schema) => `export * from './${dir}/${sanitizeSchemaFileName(schema)}.js';`)
     .join('\n');
   return `${extraHeader}${exports}\n`;
+}
+
+/**
+ * Names of files in a per-schema emit directory that no live schema claims.
+ *
+ * Kept pure and separate from the deletion so the decision is testable without a
+ * filesystem. `fileNames` is a plain directory listing; `schemas` is every schema in the
+ * run, not just the dirty subset.
+ */
+export function selectOrphanedSchemaFiles(fileNames: readonly string[], schemas: readonly string[]): string[] {
+  const live = new Set(schemas.map((schema) => `${sanitizeSchemaFileName(schema)}.ts`));
+  return fileNames.filter((name) => name.endsWith('.ts') && !live.has(name)).sort();
+}
+
+/**
+ * Delete per-schema files that no live schema claims, returning what was removed.
+ *
+ * A schema that empties out — its last table dropped — leaves its file on disk. The barrel
+ * stops exporting it, which is not enough: `tsc` still compiles it through `include`, the
+ * class-registration manifest still globs it into the registry, and the CodeGen-tail guard
+ * reads every `.ts` in the directory regardless of what the barrel names. So a deleted
+ * entity keeps a live `@RegisterClass` registration and inflates the roster the guard
+ * compares. The old monolith could not drift this way; it was rewritten in full every run.
+ *
+ * Safe under dirty-schema regen: `schemas` is the full set for the run, so a schema that
+ * simply was not dirty this time is still live and is never pruned.
+ */
+export function pruneOrphanedSchemaFiles(directory: string, schemas: readonly string[]): string[] {
+  if (!fs.existsSync(directory)) {
+    return [];
+  }
+  const orphans = selectOrphanedSchemaFiles(fs.readdirSync(directory), schemas);
+  for (const name of orphans) {
+    fs.unlinkSync(path.join(directory, name));
+  }
+  return orphans;
 }

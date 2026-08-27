@@ -61,7 +61,12 @@ vi.mock('fs', async () => {
             existsSync: vi.fn().mockReturnValue(true),
             mkdirSync: vi.fn(),
             writeFileSync: vi.fn(),
-            readFileSync: vi.fn().mockReturnValue('')
+            readFileSync: vi.fn().mockReturnValue(''),
+            // Per-schema emit lists its output directory to prune files no live schema
+            // claims. existsSync is stubbed true above, so without these the pruner
+            // reaches the real filesystem.
+            readdirSync: vi.fn().mockReturnValue([]),
+            unlinkSync: vi.fn()
         }
     };
 });
@@ -109,6 +114,10 @@ describe('EntitySubClassGeneratorBase', () => {
     beforeEach(() => {
         generator = new EntitySubClassGeneratorBase();
         vi.clearAllMocks();
+        // clearAllMocks drops return values too. Per-schema emit lists its output directory
+        // to prune files no live schema claims, so a case that stubs existsSync true reaches
+        // readdirSync — and an unset mock returns undefined, not an empty listing.
+        vi.mocked(fs.readdirSync).mockReturnValue([]);
     });
 
     describe('generateEntitySubClassFileHeader', () => {

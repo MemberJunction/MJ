@@ -5,6 +5,7 @@ import {
   groupEntitiesBySchema,
   mapLimit,
   resolveDirtySchemasForEmit,
+  selectOrphanedSchemaFiles,
   sanitizeSchemaFileName,
   schemaKey,
   schemaNameMatches,
@@ -149,6 +150,31 @@ describe('schema-emit', () => {
       expect(result).toEqual([10, 20, 30, 40]);
       expect(maxLive).toBeLessThanOrEqual(2);
       expect(seen).toHaveLength(4);
+    });
+  });
+
+  describe('selectOrphanedSchemaFiles', () => {
+    it('keeps a file for every live schema, dirty or not', () => {
+      const files = ['__mj.ts', 'crm.ts', 'billing.ts'];
+      expect(selectOrphanedSchemaFiles(files, ['__mj', 'crm', 'billing'])).toEqual([]);
+    });
+
+    it('reports a file whose schema is gone', () => {
+      const files = ['__mj.ts', 'retired.ts'];
+      expect(selectOrphanedSchemaFiles(files, ['__mj'])).toEqual(['retired.ts']);
+    });
+
+    it('matches on the sanitized name, not the raw schema name', () => {
+      const files = [`${sanitizeSchemaFileName('MJ_BizApps.Orders')}.ts`];
+      expect(selectOrphanedSchemaFiles(files, ['MJ_BizApps.Orders'])).toEqual([]);
+    });
+
+    it('ignores non-TypeScript files so nothing unrelated is deleted', () => {
+      expect(selectOrphanedSchemaFiles(['__mj.ts', 'README.md', '.gitignore'], ['__mj'])).toEqual([]);
+    });
+
+    it('treats an empty schema set as everything orphaned', () => {
+      expect(selectOrphanedSchemaFiles(['a.ts', 'b.ts'], [])).toEqual(['a.ts', 'b.ts']);
     });
   });
 });
