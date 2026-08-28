@@ -1137,12 +1137,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private handleActionableCommand(command: ActionableCommand): void {
     if (command.type === 'open:resource') {
       const resourceCommand = command as OpenResourceCommand;
-      if (resourceCommand.resourceType === 'Record' && resourceCommand.entityName) {
-        const compositeKey = new CompositeKey([{
-          FieldName: 'ID',
-          Value: resourceCommand.resourceId
-        }]);
-        this.navigationService.OpenEntityRecord(resourceCommand.entityName, compositeKey);
+      if (resourceCommand.resourceType === 'Record') {
+        // Record opens are emitted as openEntityRecord from mj-conversation-chat-area
+        // (composite-key aware). Handling them here too would open the record twice.
+        return;
       } else if (resourceCommand.resourceType === 'Report' || resourceCommand.resourceType === 'Dashboard') {
         // Reports and dashboards from agents are stored as conversation artifacts.
         // Find the most recent artifact in the active conversation and open it.
