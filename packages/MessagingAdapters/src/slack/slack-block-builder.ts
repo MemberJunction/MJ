@@ -434,10 +434,16 @@ function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: strin
       }
       break;
     case 'Dashboard':
+      // `resourceId` is optional on the shared UICommand type (a Record can key off
+      // `keys` instead), but these kinds have nothing to link to without it. Fall
+      // through to `null` like the Record case rather than emit `/undefined`.
+      if (!cmd.resourceId) break;
       return `${base}/resource/dashboard/${encodeURIComponent(cmd.resourceId)}`;
     case 'Report':
+      if (!cmd.resourceId) break;
       return `${base}/resource/report/${encodeURIComponent(cmd.resourceId)}`;
     case 'View':
+      if (!cmd.resourceId) break;
       return `${base}/resource/view/${encodeURIComponent(cmd.resourceId)}`;
   }
 
