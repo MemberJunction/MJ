@@ -48,6 +48,9 @@ vi.mock('fs', async () => {
             ...actual,
             existsSync: vi.fn().mockReturnValue(true),
             writeFileSync: vi.fn(),
+            // The emit path routes through writeFileIfChanged, which creates the output
+            // directory before writing. Unmocked, that hits the real filesystem at '/out'.
+            mkdirSync: vi.fn(),
         },
     };
 });
@@ -504,6 +507,11 @@ describe('generateAllEntitySubClasses — Orders Address use case', () => {
             [orderHeaderEntity()] as Parameters<EntitySubClassGeneratorBase['generateAllEntitySubClasses']>[1],
             '/out',
             true,
+            // These cases assert on the hoisted import block, which `assembleEntitySubclassFile`
+            // builds identically for either layout. Pin the monolith so the assertion can read one
+            // file instead of tracking where per-schema emit — the default since schema-scale
+            // CodeGen — would have put it.
+            { perSchema: false },
         );
         expect(ok).toBe(true);
         const call = writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'));
@@ -527,6 +535,11 @@ describe('generateAllEntitySubClasses — Orders Address use case', () => {
             [entity] as Parameters<EntitySubClassGeneratorBase['generateAllEntitySubClasses']>[1],
             '/out',
             true,
+            // These cases assert on the hoisted import block, which `assembleEntitySubclassFile`
+            // builds identically for either layout. Pin the monolith so the assertion can read one
+            // file instead of tracking where per-schema emit — the default since schema-scale
+            // CodeGen — would have put it.
+            { perSchema: false },
         );
         expect(ok).toBe(false);
         expect(logError).toHaveBeenCalled();
@@ -550,6 +563,11 @@ describe('generateAllEntitySubClasses — Orders Address use case', () => {
             [orderHeaderEntity(), second] as Parameters<EntitySubClassGeneratorBase['generateAllEntitySubClasses']>[1],
             '/out',
             true,
+            // These cases assert on the hoisted import block, which `assembleEntitySubclassFile`
+            // builds identically for either layout. Pin the monolith so the assertion can read one
+            // file instead of tracking where per-schema emit — the default since schema-scale
+            // CodeGen — would have put it.
+            { perSchema: false },
         );
         expect(ok).toBe(true);
         const content = String(writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'))![1]);
@@ -620,6 +638,11 @@ describe('generateAllEntitySubClasses — Orders Address use case', () => {
             [action, param] as Parameters<EntitySubClassGeneratorBase['generateAllEntitySubClasses']>[1],
             '/out',
             true,
+            // These cases assert on the hoisted import block, which `assembleEntitySubclassFile`
+            // builds identically for either layout. Pin the monolith so the assertion can read one
+            // file instead of tracking where per-schema emit — the default since schema-scale
+            // CodeGen — would have put it.
+            { perSchema: false },
         );
         expect(ok).toBe(true);
         const content = String(writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'))![1]);
