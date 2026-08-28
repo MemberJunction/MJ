@@ -13,7 +13,7 @@ import { IntegrationEngine } from '../IntegrationEngine.js';
 import type { RunConfiguration } from '../IntegrationEngine.js';
 
 type GateHost = {
-    getFetchGate: (config: RunConfiguration) => { ceiling: number; controller: { Cap: number }; inFlight: number; waiters: unknown[] };
+    getFetchGate: (config: RunConfiguration) => { ceiling: number; controller: { Cap: number }; inFlight: number; waiters: unknown[] } | undefined;
     withFetchGate: <T>(config: RunConfiguration, fn: () => Promise<T>) => Promise<T>;
     reportRateOutcome: (config: RunConfiguration, throttledErr?: unknown) => void;
 };
@@ -61,16 +61,33 @@ describe('adaptive fetch gate', () => {
         expect(done).toBe(12);
     });
 
-    it('defaults to MaxConcurrencyHint, then to 5', () => {
+    it('uses the connector MaxConcurrencyHint as the ceiling when no override is set', () => {
         const host = makeHost();
-        expect(host.getFetchGate(makeConfig('H1', 2)).controller.Cap).toBe(2);
-        expect(host.getFetchGate(makeConfig('H2')).controller.Cap).toBe(5);
+        expect(host.getFetchGate(makeConfig('H1', 2))?.controller.Cap).toBe(2);
+    });
+
+    it('is OPT-IN: no declared ceiling means no gate and fully ungated fetches', async () => {
+        // A connector that never declared a concurrency hint has never shown concurrency-governed
+        // throttling — capping it by default would newly constrain fan-outs that run fine today.
+        const host = makeHost();
+        const config = makeConfig('U1'); // no hint, no fetchConcurrency
+        expect(host.getFetchGate(config)).toBeUndefined();
+        let inFlight = 0;
+        let maxSeen = 0;
+        const work = () => host.withFetchGate(config, async () => {
+            inFlight++;
+            maxSeen = Math.max(maxSeen, inFlight);
+            await tick();
+            inFlight--;
+        });
+        await Promise.all(Array.from({ length: 12 }, work));
+        expect(maxSeen).toBe(12); // all simultaneous — behavior identical to before the gate existed
     });
 
     it('halves the cap when a throttle is reported — including connector-reported ones', () => {
         const host = makeHost();
         const config = makeConfig('T1', undefined, 8);
-        const gate = host.getFetchGate(config);
+        const gate = host.getFetchGate(config)!;
         expect(gate.controller.Cap).toBe(8);
         // This is the same entry point ctx.RateLimitReport routes to, so a throttle the
         // connector absorbed inside its own retry still teaches the gate.
@@ -83,7 +100,7 @@ describe('adaptive fetch gate', () => {
     it('creeps back up on clean outcomes, never past the ceiling', () => {
         const host = makeHost();
         const config = makeConfig('G1', undefined, 6);
-        const gate = host.getFetchGate(config);
+        const gate = host.getFetchGate(config)!;
         host.reportRateOutcome(config, new Error('429'));
         expect(gate.controller.Cap).toBe(3);
         for (let i = 0; i < 10; i++) host.reportRateOutcome(config);

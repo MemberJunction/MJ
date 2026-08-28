@@ -2040,11 +2040,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private _fetchGates?: Map<string, { ceiling: number; controller: AdaptiveConcurrencyController; inFlight: number; waiters: (() => void)[] }>;
 
-    private getFetchGate(config: RunConfiguration): { ceiling: number; controller: AdaptiveConcurrencyController; inFlight: number; waiters: (() => void)[] } {
+    private getFetchGate(config: RunConfiguration): { ceiling: number; controller: AdaptiveConcurrencyController; inFlight: number; waiters: (() => void)[] } | undefined {
+        // OPT-IN: the gate only exists when someone declared a ceiling — a per-connection
+        // `fetchConcurrency` override or the connector's own MaxConcurrencyHint. A connector that
+        // declares neither has never exhibited concurrency-governed throttling, and imposing a
+        // default cap on it would newly constrain fan-outs (lanes × prefetch) that run fine
+        // ungated today. No declaration → no gate → behavior identical to before this feature.
+        const declared = this.getConfigOverrides(config).fetchConcurrency
+            ?? config.connector.MaxConcurrencyHint;
+        if (declared == null) return undefined;
         this._fetchGates ??= new Map();
         const key = config.companyIntegration.ID as string;
-        const ceiling = Math.max(1, this.getConfigOverrides(config).fetchConcurrency
-            ?? config.connector.MaxConcurrencyHint ?? 5);
+        const ceiling = Math.max(1, declared);
         let gate = this._fetchGates.get(key);
         if (!gate || gate.ceiling !== ceiling) {
             gate = { ceiling, controller: new AdaptiveConcurrencyController({ start: ceiling, min: 1, max: ceiling }), inFlight: 0, waiters: [] };
@@ -2060,6 +2067,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private async withFetchGate<T>(config: RunConfiguration, fn: () => Promise<T>): Promise<T> {
         const gate = this.getFetchGate(config);
+        if (!gate) return fn();   // no declared ceiling → ungated, exactly as before
         while (gate.inFlight >= gate.controller.Cap) {
             await new Promise<void>((resolve) => gate.waiters.push(resolve));
         }
