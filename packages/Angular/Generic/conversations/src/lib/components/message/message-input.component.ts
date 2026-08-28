@@ -1762,7 +1762,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         await this.applyAgentFailureToDetail(
           conversationManagerMessage,
           userMessage,
-          'Sage',
+          this.converationManagerAgent?.Name || 'Sage',
           result,
           'failed',
         );
