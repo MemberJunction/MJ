@@ -685,6 +685,12 @@ export type ExecuteAgentResult<P = any> = {
      * fire-and-forget timeout). Prefer `agentRun.ErrorMessage` when the run exists.
      */
     errorMessage?: string;
+    /**
+     * True when the fire-and-forget mutation returned an ACK before the transport
+     * died (server has the run). False when the request never left the browser.
+     * Undefined when the caller does not know.
+     */
+    requestAcknowledged?: boolean;
     /** Optional payload returned by the agent */
     payload?: P;
     /**

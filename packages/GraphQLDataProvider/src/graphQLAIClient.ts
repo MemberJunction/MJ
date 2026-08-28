@@ -308,6 +308,7 @@ export class GraphQLAIClient {
         sourceArtifactId?: string,
         sourceArtifactVersionId?: string
     ): Promise<ExecuteAgentResult> {
+        let requestAcknowledged = false;
         try {
             const mutation = this.buildRunAIAgentMutation();
             const variables = this.prepareAgentVariables(params, sourceArtifactId, sourceArtifactVersionId);
@@ -321,7 +322,13 @@ export class GraphQLAIClient {
                 variables,
                 mutationFieldName: 'RunAIAgent',
                 operationLabel: 'RunAIAgent',
-                validateAck: (ack) => ack?.success === true,
+                validateAck: (ack) => {
+                    const ok = ack?.success === true;
+                    if (ok) {
+                        requestAcknowledged = true;
+                    }
+                    return ok;
+                },
                 isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
                 // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
@@ -332,10 +339,10 @@ export class GraphQLAIClient {
                     if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
                 },
                 onStall: () => this.reconcileAgentRun(runIdRef.id ? `ID='${runIdRef.id}'` : undefined),
-                createErrorResult: (msg) => this.createAgentErrorResult(msg),
+                createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
         } catch (e) {
-            return this.handleAgentError(e);
+            return this.handleAgentError(e, requestAcknowledged);
         }
     }
 
@@ -460,19 +467,22 @@ export class GraphQLAIClient {
      * @returns An error result
      * @private
      */
-    private handleAgentError(e: unknown): ExecuteAgentResult {
+    private handleAgentError(e: unknown, requestAcknowledged = false): ExecuteAgentResult {
         const error = e as Error;
         const errorMessage = error?.message || String(e);
         LogError(`Error running AI agent: ${errorMessage}`);
 
-        // Provide a meaningful error message that helps the user understand what happened.
         // CORS/network errors from Azure proxy timeouts appear as "Failed to fetch".
+        // That string also fires when the initial mutation never leaves the browser —
+        // only rewrite it to "may still be running" when the server already ACKed.
         const isFetchError = errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError');
         const isTimeoutError = errorMessage.includes('timed out') || errorMessage.includes('timeout');
 
         let userMessage: string;
-        if (isFetchError) {
+        if (isFetchError && requestAcknowledged) {
             userMessage = 'Lost connection to the server. The agent may still be running. Please refresh to check the latest status.';
+        } else if (isFetchError) {
+            userMessage = 'Could not reach the server. The request may not have started. Please try again.';
         } else if (isTimeoutError) {
             userMessage = errorMessage; // Already has a helpful message from the completion timeout
         } else {
@@ -482,7 +492,8 @@ export class GraphQLAIClient {
         return {
             success: false,
             agentRun: undefined,
-            errorMessage: userMessage
+            errorMessage: userMessage,
+            requestAcknowledged,
         } as ExecuteAgentResult;
     }
 
@@ -515,6 +526,7 @@ export class GraphQLAIClient {
     public async RunAIAgentFromConversationDetail(
         params: RunAIAgentFromConversationDetailParams
     ): Promise<ExecuteAgentResult> {
+        let requestAcknowledged = false;
         try {
             const mutation = this.buildConversationDetailMutation();
             const variables = this.prepareConversationDetailVariables(params);
@@ -525,7 +537,13 @@ export class GraphQLAIClient {
                 variables,
                 mutationFieldName: 'RunAIAgentFromConversationDetail',
                 operationLabel: 'RunAIAgentFromConversationDetail',
-                validateAck: (ack) => ack?.success === true,
+                validateAck: (ack) => {
+                    const ok = ack?.success === true;
+                    if (ok) {
+                        requestAcknowledged = true;
+                    }
+                    return ok;
+                },
                 isCompletionEvent: (parsed) =>
                     this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
@@ -539,10 +557,10 @@ export class GraphQLAIClient {
                 // the shared session stream: that key is operation-specific, so concurrent
                 // conversation-detail runs on one session can never cross-resolve to each other.
                 onStall: () => this.reconcileAgentRun(`ConversationDetailID='${params.conversationDetailId}'`),
-                createErrorResult: (msg) => this.createAgentErrorResult(msg),
+                createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
         } catch (e) {
-            return this.handleAgentError(e);
+            return this.handleAgentError(e, requestAcknowledged);
         }
     }
 
@@ -740,14 +758,17 @@ export class GraphQLAIClient {
                 return parsedResult;
             }
         }
-        // Fallback: construct a minimal result from the event data — always carry
-        // errorMessage so the chat bubble never has to say "Unknown error".
+        // Fallback: construct a minimal result from the event data. Only stamp an
+        // errorMessage when the event is not a success — a successful completion
+        // with no payload is still success, not a failure.
+        const success = Boolean(data.success);
+        const fromEvent = (typeof data.errorMessage === 'string' && data.errorMessage)
+            ? data.errorMessage
+            : undefined;
         return {
-            success: Boolean(data.success),
+            success,
             agentRun: undefined,
-            errorMessage: (typeof data.errorMessage === 'string' && data.errorMessage)
-                ? data.errorMessage
-                : 'Agent execution ended without a result payload',
+            errorMessage: fromEvent ?? (success ? undefined : 'Agent execution ended without a result payload'),
         } as ExecuteAgentResult;
     }
 
@@ -840,11 +861,12 @@ export class GraphQLAIClient {
     /**
      * Create an error ExecuteAgentResult for fire-and-forget failures.
      */
-    private createAgentErrorResult(errorMessage: string): ExecuteAgentResult {
+    private createAgentErrorResult(errorMessage: string, requestAcknowledged = false): ExecuteAgentResult {
         return {
             success: false,
             agentRun: undefined,
             errorMessage,
+            requestAcknowledged,
         } as ExecuteAgentResult;
     }
 

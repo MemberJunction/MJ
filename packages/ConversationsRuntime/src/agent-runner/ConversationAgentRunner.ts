@@ -33,6 +33,7 @@ import {
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
     MJAIAgentEntityExtended,
+    coerceFailedExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 
@@ -233,18 +234,17 @@ export class ConversationAgentRunner {
             const errorMsg = runResult.ErrorMessage ?? 'Agent execution failed';
             console.error('[ConversationAgentRunner] Agent execution failed:', errorMsg);
             this.context.Notification.Notify('error', errorMsg, 5_000);
-            const failed = (runResult.Result ?? { success: false, errorMessage: errorMsg }) as ExecuteAgentResult;
-            if (!failed.errorMessage) {
-                failed.errorMessage = errorMsg;
-            }
-            return failed;
+            return coerceFailedExecuteAgentResult(
+                runResult.Result as ExecuteAgentResult | null | undefined,
+                errorMsg,
+            );
         } catch (error) {
             const errorMsg =
                 'Error processing message through agent: ' +
                 (error instanceof Error ? error.message : String(error));
             console.error('[ConversationAgentRunner] Error processing message:', error);
             this.context.Notification.Notify('error', errorMsg, 5_000);
-            return { success: false, errorMessage: errorMsg } as ExecuteAgentResult;
+            return coerceFailedExecuteAgentResult(undefined, errorMsg);
         } finally {
             this._activeRunCount = Math.max(0, this._activeRunCount - 1);
             this._isProcessing$.next(this._activeRunCount > 0);

@@ -78,7 +78,16 @@ vi.mock('@memberjunction/ai-agent-client', () => {
     };
 });
 
-vi.mock('@memberjunction/ai-core-plus', () => ({}));
+vi.mock('@memberjunction/ai-core-plus', () => ({
+    coerceFailedExecuteAgentResult: (result: { errorMessage?: string | null; agentRun?: { ErrorMessage?: string | null } | null } | null | undefined, fallback: string) => ({
+        ...(result ?? {}),
+        success: false as const,
+        errorMessage:
+            result?.agentRun?.ErrorMessage?.trim() ||
+            result?.errorMessage?.trim() ||
+            fallback,
+    }),
+}));
 
 vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a: string, b: string): boolean =>
@@ -300,6 +309,26 @@ describe('ConversationAgentRunner', () => {
             expect(notify).toHaveBeenCalledOnce();
             expect(notify.mock.calls[0][0]).toBe('error');
             expect(notify.mock.calls[0][1]).toContain('timeout');
+        });
+
+        it('forces success false when the envelope failed but Result.success is still true', async () => {
+            const source = { success: true, payload: { x: 1 } };
+            hoisted.sessionRun.mockResolvedValue({
+                Success: false,
+                ErrorMessage: 'envelope failed',
+                Result: source,
+            });
+
+            const result = await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+            });
+
+            expect(result?.success).toBe(false);
+            expect(result?.errorMessage).toBe('envelope failed');
+            expect(result?.payload).toEqual({ x: 1 });
+            expect(source.success).toBe(true);
         });
 
         it('surfaces a notification and returns a failed ExecuteAgentResult when the session throws', async () => {

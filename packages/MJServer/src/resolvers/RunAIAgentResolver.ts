@@ -392,6 +392,11 @@ export class RunAIAgentResolver extends ResolverBase {
         taskGraphDebug?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
+        // Best-effort handle for persistInFlightAgentFailure. Populated from a
+        // progress event carrying metadata.agentRun, or from the successful
+        // result. A throw before the first such event leaves this null, so the
+        // run is not marked Failed — the early-failure case we most want to
+        // persist, but we have no run object yet.
         const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
 
         try {
@@ -569,11 +574,8 @@ export class RunAIAgentResolver extends ResolverBase {
         errorMessage: string
     ): Promise<void> {
         try {
-            const user = this.GetUserFromPayload(userPayload);
-            if (!user) {
-                return;
-            }
             if (run && run.Status === 'Running') {
+                await run.EnsureSaveComplete();
                 run.Status = 'Failed';
                 run.ErrorMessage = errorMessage;
                 run.CompletedAt = new Date();
@@ -581,12 +583,17 @@ export class RunAIAgentResolver extends ResolverBase {
                     LogError(`Failed to persist Failed status on in-flight AIAgentRun ${run.ID}`);
                 }
             }
+            const user = this.GetUserFromPayload(userPayload);
+            if (!user) {
+                return;
+            }
             if (conversationDetailId) {
                 const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
                     'MJ: Conversation Details',
                     user
                 );
                 if (await detail.Load(conversationDetailId) && detail.Status === 'In-Progress') {
+                    await detail.EnsureSaveComplete();
                     detail.Status = 'Error';
                     detail.Message = errorMessage;
                     detail.Error = errorMessage;
