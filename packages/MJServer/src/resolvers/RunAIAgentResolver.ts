@@ -392,7 +392,8 @@ export class RunAIAgentResolver extends ResolverBase {
         taskGraphDebug?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
-        
+        const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
+
         try {
             LogStatus(`=== RUNNING AI AGENT FOR ID: ${agentId} ===`);
 
@@ -422,10 +423,6 @@ export class RunAIAgentResolver extends ResolverBase {
             // (AIAgentRun, AIAgentRunSteps, AIAgentRequests, AIPromptRuns) never share the global
             // singleton's transaction state with concurrent requests (e.g. conversation deletes).
             const agentRunner = new AgentRunner(p);
-
-            // Track agent run for streaming (use ref to update later). Reuse the caller-supplied
-            // ref when provided so the fire-and-forget liveness pulse can observe the run.
-            const agentRunRef = runRef ?? { current: null as any };
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
@@ -539,11 +536,15 @@ export class RunAIAgentResolver extends ResolverBase {
         } catch (error) {
             const executionTime = Date.now() - startTime;
             LogError(`AI Agent run failed:`, undefined, error);
-            
-            // Create error payload
+            const errorMessage = (error as Error).message || 'Unknown error occurred';
+
+            // Fire-and-forget clients otherwise leave the run Running and the
+            // conversation detail In-Progress (Explorer red-pill timer).
+            await this.persistInFlightAgentFailure(p, userPayload, agentRunRef.current, conversationDetailId, errorMessage);
+
             const errorResult = {
                 success: false,
-                errorMessage: (error as Error).message || 'Unknown error occurred',
+                errorMessage,
                 executionTimeMs: executionTime
             };
             
@@ -553,6 +554,49 @@ export class RunAIAgentResolver extends ResolverBase {
                 executionTimeMs: executionTime,
                 result: JSON.stringify(errorResult)
             };
+        }
+    }
+
+    /**
+     * When executeAIAgent throws after the run/detail exist, close them so Explorer
+     * does not leave a red-pill timer on Status=Running / ConversationDetail In-Progress.
+     */
+    private async persistInFlightAgentFailure(
+        provider: DatabaseProviderBase,
+        userPayload: UserPayload,
+        run: MJAIAgentRunEntityExtended | null | undefined,
+        conversationDetailId: string | undefined,
+        errorMessage: string
+    ): Promise<void> {
+        try {
+            const user = this.GetUserFromPayload(userPayload);
+            if (!user) {
+                return;
+            }
+            if (run && run.Status === 'Running') {
+                run.Status = 'Failed';
+                run.ErrorMessage = errorMessage;
+                run.CompletedAt = new Date();
+                if (!(await run.Save())) {
+                    LogError(`Failed to persist Failed status on in-flight AIAgentRun ${run.ID}`);
+                }
+            }
+            if (conversationDetailId) {
+                const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
+                    user
+                );
+                if (await detail.Load(conversationDetailId) && detail.Status === 'In-Progress') {
+                    detail.Status = 'Error';
+                    detail.Message = errorMessage;
+                    detail.Error = errorMessage;
+                    if (!(await detail.Save())) {
+                        LogError(`Failed to persist Error on conversation detail ${conversationDetailId}`);
+                    }
+                }
+            }
+        } catch (persistError) {
+            LogError(`persistInFlightAgentFailure failed: ${persistError}`, undefined, persistError);
         }
     }
 

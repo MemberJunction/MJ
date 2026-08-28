@@ -3,7 +3,8 @@
  *
  * Covers: default-agent resolution failure surfaces a notification + returns null,
  * successful run returns the underlying ExecuteAgentResult, agent failure surfaces
- * a notification + returns null, isProcessing$ toggles around the call, candidate
+ * a notification + returns a failed ExecuteAgentResult (so the chat bubble can
+ * show the real error instead of "Unknown error"), isProcessing$ toggles around the call, candidate
  * agent filtering excludes the resolved agent / non-Active / Sub-Agent invocation
  * modes / agents with ParentID.
  */
@@ -286,7 +287,7 @@ describe('ConversationAgentRunner', () => {
             withAgents(sageAgent);
         });
 
-        it('surfaces a notification and returns null when the session reports failure', async () => {
+        it('surfaces a notification and returns a failed ExecuteAgentResult when the session reports failure', async () => {
             hoisted.sessionRun.mockResolvedValue({ Success: false, ErrorMessage: 'timeout' });
 
             const result = await runner.processMessage({
@@ -295,13 +296,13 @@ describe('ConversationAgentRunner', () => {
                 conversationDetailId: 'cd1',
             });
 
-            expect(result).toBeNull();
+            expect(result).toEqual({ success: false, errorMessage: 'timeout' });
             expect(notify).toHaveBeenCalledOnce();
             expect(notify.mock.calls[0][0]).toBe('error');
             expect(notify.mock.calls[0][1]).toContain('timeout');
         });
 
-        it('surfaces a notification and returns null when the session throws', async () => {
+        it('surfaces a notification and returns a failed ExecuteAgentResult when the session throws', async () => {
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
             try {
                 hoisted.sessionRun.mockRejectedValue(new Error('network'));
@@ -312,7 +313,8 @@ describe('ConversationAgentRunner', () => {
                     conversationDetailId: 'cd1',
                 });
 
-                expect(result).toBeNull();
+                expect(result?.success).toBe(false);
+                expect(result?.errorMessage).toContain('network');
                 expect(notify).toHaveBeenCalledOnce();
                 expect(notify.mock.calls[0][1]).toContain('network');
             } finally {

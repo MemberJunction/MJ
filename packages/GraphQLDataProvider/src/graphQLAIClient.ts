@@ -732,12 +732,22 @@ export class GraphQLAIClient {
         const data = parsed.data as Record<string, unknown>;
         const resultJson = data.result as string | undefined;
         if (resultJson) {
-            return SafeJSONParse(resultJson) as ExecuteAgentResult;
+            const parsedResult = SafeJSONParse(resultJson) as ExecuteAgentResult | null;
+            if (parsedResult) {
+                if (!parsedResult.errorMessage && typeof data.errorMessage === 'string') {
+                    parsedResult.errorMessage = data.errorMessage;
+                }
+                return parsedResult;
+            }
         }
-        // Fallback: construct a minimal result from the event data
+        // Fallback: construct a minimal result from the event data — always carry
+        // errorMessage so the chat bubble never has to say "Unknown error".
         return {
-            success: data.success as boolean,
+            success: Boolean(data.success),
             agentRun: undefined,
+            errorMessage: (typeof data.errorMessage === 'string' && data.errorMessage)
+                ? data.errorMessage
+                : 'Agent execution ended without a result payload',
         } as ExecuteAgentResult;
     }
 

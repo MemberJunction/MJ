@@ -14,7 +14,7 @@ import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMet
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility, agentFailureMessage, isDisconnectWhileAgentMayStillBeRunning } from '@memberjunction/ai-core-plus';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { AiComposerComponent } from '../composer/ai-composer.component';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -2195,8 +2195,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         } else {
           // Retry also failed - show error with manual retry option
-          conversationManagerMessage.Error = retryResult?.agentRun?.ErrorMessage || null;
-          await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** failed after retry\n\n${retryResult?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
+          const retryDetail = agentFailureMessage(retryResult);
+          conversationManagerMessage.Error = retryDetail;
+          await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** failed after retry\n\n${retryDetail}`, 'Error');
 
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         }
@@ -2336,11 +2337,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
-        // Agent failed
-        statusMessage.Error = continuityResult?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(statusMessage, `❌ **${agentName}** failed during refinement\n\n${continuityResult?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(statusMessage, userMessage, agentName, continuityResult, 'failed during refinement');
       }
     } catch (error) {
       console.error(`❌ Error in agent continuity with ${agentName}:`, error);
@@ -2463,24 +2460,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         }
       } else {
-        // Agent failed - update the existing message instead of creating a new one
-        agentResponseMessage.Error = result?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(agentResponseMessage, `❌ **@${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, result);
       }
     } catch (error) {
       console.error(`❌ Error invoking mentioned agent ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
-
-      // Update the existing agent response message if it was created
       if (agentResponseMessage) {
-        agentResponseMessage.Error = String(error);
-        await this.updateConversationDetail(agentResponseMessage, `❌ **@${agentName}** encountered an error\n\n${String(error)}`, 'Error');
+        await this.applyAgentFailureToDetail(
+          agentResponseMessage,
+          userMessage,
+          agentName,
+          { success: false, errorMessage: error instanceof Error ? error.message : String(error) } as ExecuteAgentResult,
+        );
+      } else {
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -2670,24 +2664,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
-        // Agent failed - update the existing message instead of creating a new one
-        agentResponseMessage.Error = result?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, result);
       }
     } catch (error) {
       console.error(`❌ Error continuing with agent ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
-
-      // Update the existing agent response message if it was created
       if (agentResponseMessage) {
-        agentResponseMessage.Error = String(error);
-        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
+        await this.applyAgentFailureToDetail(
+          agentResponseMessage,
+          userMessage,
+          agentName,
+          { success: false, errorMessage: error instanceof Error ? error.message : String(error) } as ExecuteAgentResult,
+        );
+      } else {
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -2723,6 +2714,39 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       });
       console.log(`✅ Conversation renamed to: "${result.Name}"`);
     }
+  }
+
+  /**
+   * Persist an agent failure onto the response bubble.
+   *
+   * A dropped HTTP/WebSocket path used to return `null` from invokeSubAgent, so
+   * the bubble said "Unknown error" while the AIAgentRun stayed Running and the
+   * timer kept ticking. If the transport text says the agent may still be
+   * running, keep In-Progress so later progress/completion can land.
+   */
+  private async applyAgentFailureToDetail(
+    agentResponseMessage: MJConversationDetailEntity,
+    userMessage: MJConversationDetailEntity,
+    agentName: string,
+    result: ExecuteAgentResult | null | undefined,
+    failedVerb = 'failed',
+  ): Promise<void> {
+    const detail = agentFailureMessage(result);
+    if (isDisconnectWhileAgentMayStillBeRunning(detail)) {
+      await this.updateConversationDetail(
+        agentResponseMessage,
+        `⏳ **${agentName}** is still running on the server.\n\n${detail}`,
+        'In-Progress',
+      );
+      return;
+    }
+    agentResponseMessage.Error = detail;
+    await this.updateConversationDetail(
+      agentResponseMessage,
+      `❌ **${agentName}** ${failedVerb}\n\n${detail}`,
+      'Error',
+    );
+    await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
   }
 
   /**

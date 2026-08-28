@@ -425,19 +425,25 @@ export class ConversationAgentService {
 
       if (runResult.Success && runResult.Result) {
         return runResult.Result as ExecuteAgentResult;
-      } else if (!runResult.Success) {
-        const errorMsg = `Sub-agent "${agentName}" failed: ${runResult.ErrorMessage || 'unknown error'}`;
-        console.error(errorMsg);
-        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-        return null;
       }
 
-      return null;
+      const failed = (runResult.Result ?? {
+        success: false,
+        errorMessage: runResult.ErrorMessage || `Sub-agent "${agentName}" failed`,
+      }) as ExecuteAgentResult;
+      failed.success = false;
+      if (!failed.errorMessage) {
+        failed.errorMessage = runResult.ErrorMessage || `Sub-agent "${agentName}" failed`;
+      }
+      const errorMsg = `Sub-agent "${agentName}" failed: ${failed.errorMessage}`;
+      console.error(errorMsg);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
+      return failed;
     } catch (error) {
       const errorMsg = `Error invoking sub-agent "${agentName}": ` + (error instanceof Error ? error.message : String(error));
       console.error(`Error invoking sub-agent "${agentName}":`, error);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-      return null;
+      return { success: false, errorMessage: errorMsg } as ExecuteAgentResult;
     }
   }
 
