@@ -518,6 +518,22 @@ export class ManageMetadataBase {
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
    }
+   private static _deletedEntitySchemaList: string[] = [];
+   /**
+    * Schemas that lost an entity during this run.
+    *
+    * Deletion cannot be reported the way new/modified entities are. Those lists carry entity
+    * NAMES, which downstream code resolves to a schema by looking the entity up in live
+    * metadata — and a deleted entity is, by then, no longer there to look up. So the schema is
+    * captured here at deletion time instead.
+    *
+    * Without this the schema is never marked dirty, its per-schema file is never rebuilt, and
+    * the dead class keeps a live `@RegisterClass` registration on disk. The old monolith could
+    * not drift this way: it was rewritten in full every run.
+    */
+   public static get deletedEntitySchemaList(): string[] {
+      return this._deletedEntitySchemaList;
+   }
    private static _entitiesRequiringViewRegen: ViewRegenEntry[] = [];
    /**
     * Entities that had late-phase changes requiring their base views to be
@@ -3965,6 +3981,11 @@ export class ManageMetadataBase {
                   const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID'], true);
                   await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove entity ${e.Name}`);
                   logStatus(`      > Removed metadata for table ${e.SchemaName}.${e.BaseTable}`);
+                  // Recorded only after the delete succeeds, so a failed removal (logged below for
+                  // an admin to handle) does not mark a schema dirty for an entity still present.
+                  if (e.SchemaName && e.SchemaName.trim().length > 0) {
+                     ManageMetadataBase._deletedEntitySchemaList.push(e.SchemaName.trim());
+                  }
 
                   // next up we need to remove the spCreate, spDelete, spUpdate, BaseView, and FullTextSearchFunction, if provided.
                   // We only remoe these artifcacts when they are generated which is info we have in the BaseViewGenerated, spCreateGenerated, etc. fields
