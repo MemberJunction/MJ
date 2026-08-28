@@ -12,6 +12,7 @@
  * designer code (agents, executor, and actions).
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
 import type { TableDefinition } from '@memberjunction/schema-engine';
 
 // ─── Payload ────────────────────────────────────────────────────────────────
@@ -351,20 +352,14 @@ export const UDT_SETTINGS = {
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
 /**
- * Escape a string value for safe embedding in a SQL single-quoted literal
+ * Escapes a string value for safe inclusion in a SQL string literal
  * (used in RunView `ExtraFilter` strings).
  *
- * Replaces every single-quote with two single-quotes, which is the ANSI SQL
- * standard escaping mechanism supported by both SQL Server and PostgreSQL.
+ * **Do not use for identifier names** (table/column names) — those require bracket or
+ * double-quote quoting and are handled by SchemaEngine's `ValidateIdentifier()`.
  *
- * **Do not use for identifier names** (table/column names) — those require
- * bracket or double-quote quoting and are handled by SchemaEngine's
- * `ValidateIdentifier()`.
- *
- * @example
- * // User-supplied name embedded in a RunView filter
- * const filter = `Name = '${escapeSqlLiteral(entityName)}'`;
+ * @deprecated Import `EscapeSQLString` from `@memberjunction/global` instead — it is the one
+ * canonical escaper. This alias remains only so external callers do not break; it will be
+ * removed in the next major.
  */
-export function escapeSqlLiteral(value: string): string {
-    return value.replace(/'/g, "''");
-}
+export const escapeSqlLiteral = (value: string | null | undefined): string => EscapeSQLString(value);

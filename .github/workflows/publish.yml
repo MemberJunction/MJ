@@ -55,6 +55,21 @@ on:
         description: 'Double-entry confirmation, required for every dispatch: type the line branch again for a line release, or "main" for a manual Edge publish (which must be dispatched from main).'
         required: false
         default: ''
+      # dbImpact recorded in release-lines.json for a LINE release (process doc §12).
+      # A line patch is normally code-only. If this one carries a labeled migration, say so
+      # here — the append step cross-checks the claim against the migrations actually in the
+      # release range and fails on a false `none`, so leaving the default alone cannot
+      # quietly write a wrong ledger entry.
+      db_impact:
+        description: 'LTS path: dbImpact for this line release.'
+        required: false
+        default: 'none'
+        type: choice
+        options:
+          - none
+          - metadata
+          - repair
+          - schema
 
 
 permissions:
@@ -168,6 +183,12 @@ jobs:
     # validated by the line branch's own CI on the backport PRs.
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     uses: ./.github/workflows/release-test.yml
+    # A reusable workflow receives NO secrets unless the caller passes them — `secrets:` is not
+    # inherited by default. Without this, release-test.yml's unit-tests job saw an empty
+    # TURBO_TOKEN on the publish path and silently ran with the remote cache disabled, while
+    # `vars.TURBO_TEAM` (a variable, not a secret) propagated fine and made it LOOK configured.
+    # The release gate is the slowest run in the repo and the one that most wants a warm cache.
+    secrets: inherit
 
   build-and-publish:
     name: Build and publish new versions of NPM packages
@@ -489,6 +510,41 @@ jobs:
           git log -n1
           pnpm run mergemain:update-lock
 
+      # release-lines.json bookkeeping. Process doc §4.1 says publish workflows append the
+      # mechanical fields (`newest`, and the per-release `releases` ledger) via direct push.
+      # That was documented and never built, so the file drifted from the registry the moment
+      # anything shipped: `edge.newest` was still null after 6.1.0-edge.0 through edge.3, and
+      # 5.51.1 published on 2026-08-19 and was recorded by hand a week later.
+      #
+      # It writes to `next`, never to `main`. A push to main is this workflow's own Edge
+      # trigger, so a bookkeeping commit there would start a publish that consumes whatever
+      # changesets are banked on main. `next` carries no publish trigger, and main inherits
+      # the entry at the next release through the merge step above. The step above has already
+      # pushed HEAD:next, so HEAD is the branch tip here.
+      #
+      # LAST step in the job, deliberately, and fatal rather than continue-on-error. The
+      # packages are on npm by the time this runs, so a failure means "released, not yet
+      # recorded" — recoverable by hand — while a red run is the only signal that the ledger
+      # is behind. [skip ci] keeps a predictable two-field JSON edit from re-running every
+      # gate; `--mode push` proves the edit touched nothing else before it is committed.
+      - name: Record the release in release-lines.json
+        if: ${{ env.BRANCH == 'main' }}
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          if ! PREV=$(git describe --tags --abbrev=0 "${VERSION}^"); then
+            echo "::error::cannot resolve the release tag preceding ${VERSION}; record ${VERSION#v} in release-lines.json by hand"
+            exit 1
+          fi
+          echo "::notice::classifying dbImpact over ${PREV}..${VERSION}"
+          git fetch origin next
+          node ci/append-release-line.mjs --version "${VERSION#v}" --since "$PREV" --until "$VERSION"
+          node ci/validate-release-lines.mjs --base origin/next --mode push
+          git add release-lines.json
+          git commit -m "chore: record ${VERSION#v} in release-lines.json [skip ci]"
+          git push origin HEAD:next
+
   # ---------------------------------------------------------------------------
   # LTS line release (guides/RELEASE_ENGINEERING_RUNBOOK.md operation 3;
   # plans/lts-process.md §5.2 rule 3 / §14.1). Ported verbatim in behavior from
@@ -766,5 +822,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref next
+
+      # Same bookkeeping as the edge path above — see that step for why it writes to `next`,
+      # why it is last, and why it is fatal. One difference: this job is checked out on the
+      # LINE branch, whose own release-lines.json is inert (`"lines": {}`) because the source
+      # of truth lives on next/main. So it switches to next before editing, and pushes there.
+      #
+      # dbImpact comes from the dispatch input rather than being classified, because on a line
+      # the operator already made that call when they applied the §12 label. The script still
+      # cross-checks it against the migrations in the range and refuses a `none` that
+      # contradicts them.
+      - name: Record the line release in release-lines.json
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          DB_IMPACT: ${{ github.event.inputs.db_impact }}
+        run: |
+          set -euo pipefail
+          if ! PREV=$(git describe --tags --abbrev=0 "${VERSION}^"); then
+            echo "::error::cannot resolve the release tag preceding ${VERSION}; record ${VERSION#v} in release-lines.json by hand"
+            exit 1
+          fi
+          git fetch origin next
+          git checkout -B record-release-lines origin/next
+          node ci/append-release-line.mjs --version "${VERSION#v}" --db-impact "${DB_IMPACT:-none}" --since "$PREV" --until "$VERSION"
+          node ci/validate-release-lines.mjs --base origin/next --mode push
+          git add release-lines.json
+          git commit -m "chore: record ${VERSION#v} in release-lines.json [skip ci]"
+          git push origin HEAD:next
 
 

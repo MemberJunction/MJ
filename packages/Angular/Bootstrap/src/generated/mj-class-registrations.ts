@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (405 classes)
+// @memberjunction/core-entities (407 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -273,6 +273,8 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -535,9 +537,24 @@ import {
     ClusterViewType,
 } from '@memberjunction/ng-clustering';
 
-// @memberjunction/ng-core-entity-forms (21 classes)
+// @memberjunction/ng-core-entity-forms (46 classes)
 import {
+    AIAgentCategoryHeaderPanel,
+    AIAgentCategoryHierarchyPanel,
+    AIAgentCategoryOverviewPanel,
+    AIPromptCategoryHierarchyPanel,
+    ActionCategoryHierarchyPanel,
+    CompanyHeaderPanel,
+    CompanyOverviewPanel,
+    ContentItemHierarchyPanel,
+    ConversationHeaderPanel,
+    ConversationOverviewPanel,
+    DashboardCategoryHierarchyPanel,
+    EmployeeHeaderPanel,
+    EmployeeOverviewPanel,
+    FileCategoryHierarchyPanel,
     FlowAgentFormSectionComponent,
+    ListCategoryHierarchyPanel,
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
@@ -558,6 +575,16 @@ import {
     MJTestRunFormComponentExtended,
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
+    ProjectHierarchyPanel,
+    QueryCategoryHierarchyPanel,
+    RecordProcessCategoryHierarchyPanel,
+    SkillHierarchyPanel,
+    TagHierarchyPanel,
+    TemplateCategoryHierarchyPanel,
+    TestSuiteHierarchyPanel,
+    UserHeaderPanel,
+    UserOverviewPanel,
+    UserViewCategoryHierarchyPanel,
 } from '@memberjunction/ng-core-entity-forms';
 
 // @memberjunction/ng-dashboard-viewer (8 classes)
@@ -973,6 +1000,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -1189,7 +1218,22 @@ export const CLASS_REGISTRATIONS: any[] = [
     MapViewType,
     TimelineViewType,
     ClusterViewType,
+    AIAgentCategoryHeaderPanel,
+    AIAgentCategoryHierarchyPanel,
+    AIAgentCategoryOverviewPanel,
+    AIPromptCategoryHierarchyPanel,
+    ActionCategoryHierarchyPanel,
+    CompanyHeaderPanel,
+    CompanyOverviewPanel,
+    ContentItemHierarchyPanel,
+    ConversationHeaderPanel,
+    ConversationOverviewPanel,
+    DashboardCategoryHierarchyPanel,
+    EmployeeHeaderPanel,
+    EmployeeOverviewPanel,
+    FileCategoryHierarchyPanel,
     FlowAgentFormSectionComponent,
+    ListCategoryHierarchyPanel,
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
@@ -1210,6 +1254,16 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTestRunFormComponentExtended,
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
+    ProjectHierarchyPanel,
+    QueryCategoryHierarchyPanel,
+    RecordProcessCategoryHierarchyPanel,
+    SkillHierarchyPanel,
+    TagHierarchyPanel,
+    TemplateCategoryHierarchyPanel,
+    TestSuiteHierarchyPanel,
+    UserHeaderPanel,
+    UserOverviewPanel,
+    UserViewCategoryHierarchyPanel,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
     QueryConfigPanelComponent,
@@ -1351,7 +1405,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 620;
+export const CLASS_REGISTRATIONS_COUNT = 647;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
