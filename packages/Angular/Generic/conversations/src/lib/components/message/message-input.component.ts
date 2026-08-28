@@ -410,8 +410,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   // Bounded poll after a post-ACK disconnect keeps In-Progress. The GraphQLAIClient
   // stall reconciler only runs while invokeSubAgent is waiting; once it returns,
   // this watch is the bound so a dead socket cannot leave the red-pill timer forever.
+  // Must outlast the server: Skip RequestManager defaults to 30 minutes
+  // (REQUEST_MAX_AGE_MS). Giving up earlier unregisters the streaming callback
+  // so a later server Complete never lands and the bubble stays Error.
   private static readonly IN_FLIGHT_WATCH_INTERVAL_MS = 15_000;
-  private static readonly IN_FLIGHT_WATCH_MAX_ATTEMPTS = 6;
+  // 30 min / 15 s. Must stay ≥ Skip RequestManager REQUEST_MAX_AGE_MS (30 min).
+  private static readonly IN_FLIGHT_WATCH_MAX_ATTEMPTS = 120;
   private inFlightWatches = new Map<string, ReturnType<typeof setInterval>>();
 
   // Track pending attachments from the input box
@@ -2240,8 +2244,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       } else {
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
-      conversationManagerMessage.Error = catchResult.errorMessage;
-      await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** encountered an error\n\n${catchResult.errorMessage}`, 'Error');
+      const catchDisposition = agentFailureDisposition(catchResult);
+      if (catchDisposition.status === 'Error') {
+        conversationManagerMessage.Error = catchDisposition.message;
+        await this.updateConversationDetail(
+          conversationManagerMessage,
+          `❌ **${agentName}** encountered an error\n\n${catchDisposition.message}`,
+          'Error',
+        );
+      }
     }
   }
 

@@ -78,16 +78,12 @@ vi.mock('@memberjunction/ai-agent-client', () => {
     };
 });
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
-    coerceFailedExecuteAgentResult: (result: { errorMessage?: string | null; agentRun?: { ErrorMessage?: string | null } | null } | null | undefined, fallback: string) => ({
-        ...(result ?? {}),
-        success: false as const,
-        errorMessage:
-            result?.agentRun?.ErrorMessage?.trim() ||
-            result?.errorMessage?.trim() ||
-            fallback,
-    }),
-}));
+vi.mock('@memberjunction/ai-core-plus', async () => {
+    // Import the helper from source so this test exercises the real function
+    // without loading @memberjunction/ai-core-plus (which pulls BaseEntity).
+    const { coerceFailedExecuteAgentResult } = await import('../../../AI/CorePlus/src/agent-failure-message');
+    return { coerceFailedExecuteAgentResult };
+});
 
 vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a: string, b: string): boolean =>

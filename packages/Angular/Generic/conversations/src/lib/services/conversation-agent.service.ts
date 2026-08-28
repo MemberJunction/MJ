@@ -439,7 +439,7 @@ export class ConversationAgentService {
       const errorMsg = `Error invoking sub-agent "${agentName}": ` + (error instanceof Error ? error.message : String(error));
       console.error(`Error invoking sub-agent "${agentName}":`, error);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-      return coerceFailedExecuteAgentResult(undefined, errorMsg);
+      return coerceFailedExecuteAgentResult<ExecuteAgentResult>(undefined, errorMsg);
     }
   }
 

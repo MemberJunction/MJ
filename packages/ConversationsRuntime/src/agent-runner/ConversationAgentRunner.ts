@@ -244,7 +244,7 @@ export class ConversationAgentRunner {
                 (error instanceof Error ? error.message : String(error));
             console.error('[ConversationAgentRunner] Error processing message:', error);
             this.context.Notification.Notify('error', errorMsg, 5_000);
-            return coerceFailedExecuteAgentResult(undefined, errorMsg);
+            return coerceFailedExecuteAgentResult<ExecuteAgentResult>(undefined, errorMsg);
         } finally {
             this._activeRunCount = Math.max(0, this._activeRunCount - 1);
             this._isProcessing$.next(this._activeRunCount > 0);
