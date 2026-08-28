@@ -2140,6 +2140,76 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
     }
 
+    /**
+     * One governed vendor fetch: rate-limit token, adaptive fetch gate, per-attempt timeout,
+     * transient-only retry with Retry-After pacing, and ONE multiplicative decrease per throttle
+     * EPISODE (not per rejected attempt — a 429 that survives three retries is three rejections
+     * but one congestion event, the same distinction TCP draws when it halves the window once per
+     * loss event). Extracted so the loop-top fetch and the pipelined prefetch (which starts the
+     * next page while the current one is processed) share EXACTLY the same pacing and error
+     * semantics — a prefetched page must be indistinguishable from a loop-top fetch to the vendor.
+     *
+     * Retry predicate: our OWN timeout is terminal for this page (WithTimeout is a Promise.race
+     * with no cancellation, so the abandoned attempt keeps running — retrying stacks a second full
+     * page of vendor requests on a source already too slow to finish one); a transport error is
+     * not (a reset socket IS worth retrying). A throttle honors the source's Retry-After via
+     * DelayForError, and every retry re-passes the rate limiter via BeforeRetry so it cannot
+     * bypass a freeze the throttle just applied.
+     */
+    private async governedFetch(
+        config: RunConfiguration,
+        ctx: FetchContext,
+        objectName: string,
+        fetchTimeoutMs: number,
+        batchIndex: number,
+        logger?: SyncLogger,
+    ): Promise<FetchBatchResult> {
+        let throttleReported = false;
+        try {
+            await this.rateLimit(config);
+            return await this.withFetchGate(config, () => WithRetry(
+                () => WithTimeout(
+                    config.connector.FetchChanges(ctx),
+                    fetchTimeoutMs,
+                    `FetchChanges(${objectName})`,
+                ),
+                undefined,
+                (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
+                (attempt, err, delayMs) => {
+                    // Report a throttle NOW, not after the retries are spent. ReportThrottle
+                    // freezes the shared bucket for this CompanyIntegration, so every other
+                    // object fetching concurrently backs off too. Once per episode; later
+                    // attempts still get their own Retry-After honoured via DelayForError.
+                    if (!throttleReported && ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED') {
+                        throttleReported = true;
+                        this.reportRateOutcome(config, err);
+                    }
+                    logger?.emit('sync.fetch.retry', {
+                        externalObjectName: objectName,
+                        batchIndex,
+                        attempt,
+                        delayMs,
+                        error: err instanceof Error ? err.message : String(err),
+                    });
+                },
+                {
+                    DelayForError: (err) =>
+                        ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED'
+                            ? config.connector.ExtractRetryAfterMs(err)
+                            : undefined,
+                    BeforeRetry: () => this.rateLimit(config),
+                },
+            ));
+        } catch (err) {
+            // Retries spent (or none applicable). If the terminal error is itself the throttle
+            // and the retry hook never saw one, apply the episode's one decrease here.
+            if (!throttleReported && ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED') {
+                this.reportRateOutcome(config, err);
+            }
+            throw err;
+        }
+    }
+
     /** Minimum ms between outbound requests for this integration (Integration.BatchRequestWaitTime; 0 = disabled). */
     private getRequestSpacingMs(config: RunConfiguration): number {
         try {
@@ -2458,6 +2528,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ?? PositiveInt(config.connector.FetchChangesTimeoutMs)
             ?? DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs;
 
+        // Pipelined prefetch state: at most ONE page in flight ahead of processing, keyed by the
+        // cursor it was built from so a drifted position (gap-skip/reset) discards it instead of
+        // consuming the wrong page. If the loop exits with a prefetch still in flight, the promise
+        // settles in the background and its result is discarded (its .catch keeps that silent).
+        let prefetchedNext: { key: string; promise: Promise<FetchBatchResult> } | null = null;
+
         while (hasMore) {
             if (abortSignal?.aborted) {
                 console.log(`[IntegrationEngine] Sync cancelled for ${entityMap.ExternalObjectName} after ${recordsInMap} records — saving watermark`);
@@ -2503,79 +2579,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             });
             let batch: FetchBatchResult;
             const fetchStart = Date.now();
-            // ONE multiplicative decrease per throttle EPISODE, not one per rejected attempt.
-            //
-            // A 429 that survives three retries is three rejections but one congestion event — the
-            // same distinction TCP draws when it halves the window once per loss event rather than
-            // once per lost segment. Decreasing on each attempt compounds: at a 0.5 backoff factor
-            // three attempts take the rate to an eighth, five take it to a thirtieth, so a single
-            // throttled fetch could drive a connector to its floor purely as a function of how
-            // generous its retry budget is. The freeze already covers the interval the source asked
-            // for; the decrease is about the rate AFTER that, and one signal deserves one step.
-            let throttleReported = false;
             try {
-                await this.rateLimit(config);
-                // Resilient fetch: bound each attempt with a timeout (a hung vendor API must not
-                // hold the sync lock forever) and retry only transient errors (network/throttle/DB).
-                // A non-retryable error (auth, 4xx, parse) throws immediately as before.
-                batch = await this.withFetchGate(config, () => WithRetry(
-                    () => WithTimeout(
-                        config.connector.FetchChanges(ctx),
-                        fetchTimeoutMs,
-                        `FetchChanges(${entityMap.ExternalObjectName})`,
-                    ),
-                    undefined,
-                    // OUR OWN timeout is terminal for this page; a transport error is not.
-                    //
-                    // `WithTimeout` is a `Promise.race` with no cancellation, so the abandoned attempt
-                    // keeps running. Retrying meant a second full page of vendor requests overlapping
-                    // the first, then a third — up to 3x the load on a source that was already too slow
-                    // to finish once, which is a good way to earn a real 429 (and THAT does cut
-                    // concurrency). And the retry could not succeed on its merits anyway: the same work
-                    // under the same budget exceeds it again.
-                    //
-                    // Deliberately `instanceof` rather than the classified code. `ClassifyError` folds
-                    // `econnreset` in with timeouts under `NETWORK_TIMEOUT`, and a reset socket IS worth
-                    // retrying — so excluding the whole code would lose real resilience. Only the error
-                    // WithTimeout itself minted is excluded.
-                    (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
-                    (attempt, err, delayMs) => {
-                        // Report a throttle NOW, not after the retries are spent. ReportThrottle
-                        // freezes the shared bucket for this CompanyIntegration, so every other
-                        // object fetching concurrently backs off too — reporting it only in the
-                        // catch below meant the rest of the connector kept hammering a source that
-                        // had already said stop.
-                        //
-                        // Once per episode: see `throttleReported` above. Later attempts still get
-                        // their own Retry-After honoured via DelayForError, which is what actually
-                        // paces this loop; what they must not do is halve the rate again.
-                        if (!throttleReported && ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED') {
-                            throttleReported = true;
-                            this.reportRateOutcome(config, err);
-                        }
-                        logger?.emit('sync.fetch.retry', {
-                            externalObjectName: entityMap.ExternalObjectName,
-                            batchIndex: batchCount,
-                            attempt,
-                            delayMs,
-                            error: err instanceof Error ? err.message : String(err),
-                        });
-                    },
-                    {
-                        // Honour the source's own instruction. A 429 usually carries Retry-After;
-                        // blind exponential backoff ignored it and retried early, which is how a
-                        // soft throttle becomes a hard one. Falls back to backoff when the
-                        // connector cannot parse one.
-                        DelayForError: (err) =>
-                            ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED'
-                                ? config.connector.ExtractRetryAfterMs(err)
-                                : undefined,
-                        // A retry must pass through the same gate the first attempt did. The token
-                        // was acquired once before WithRetry, so retries previously bypassed the
-                        // limiter entirely — including the freeze the line above just applied.
-                        BeforeRetry: () => this.rateLimit(config),
-                    },
-                ));
+                if (prefetchedNext && prefetchedNext.key === (currentCursor ?? '')) {
+                    // The page already in flight IS this page — consume it. The rate limiter, the
+                    // fetch gate, the timeout/retry envelope, and once-per-episode throttle
+                    // reporting all ran inside governedFetch when the prefetch was launched, so
+                    // consuming it here adds no vendor pressure and loses no error semantics.
+                    const inFlight = prefetchedNext;
+                    prefetchedNext = null;
+                    batch = await inFlight.promise;
+                } else {
+                    prefetchedNext = null; // position drifted (gap-skip/reset) — discard the stale prefetch
+                    batch = await this.governedFetch(config, ctx, entityMap.ExternalObjectName, fetchTimeoutMs, batchCount, logger);
+                }
                 this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
                 fetchGapCount = 0;                // clean fetch → reset the consecutive fetch-gap counter
                 // §10: connector type-driven post-processing hook (default no-op) — enforce/normalize
@@ -2583,15 +2599,38 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 if (batch.Records.length > 0) {
                     batch.Records = batch.Records.map(r => config.connector.PostProcessRecord(r));
                 }
+                // Pipelined prefetch (cursor-paged connectors): the next cursor is known the
+                // moment a page arrives, so start downloading page N+1 while page N is mapped and
+                // written — the shorter leg hides under the longer (~20-30% cycle reduction
+                // measured at a ~6s fetch / ~1-2s process split). Cursor mode ONLY: offset/page
+                // modes interact with the gap-skip resume logic and stay serial. Kill switch:
+                // MJ_INTEGRATION_PREFETCH=off.
+                if ((process.env.MJ_INTEGRATION_PREFETCH ?? 'on') !== 'off' && batch.HasMore === true && batch.NextCursor) {
+                    // Built from the ADVANCED position, exactly as the loop-top rebuild does.
+                    // Spreading ctx with only CurrentCursor once left AfterKeyValue (and
+                    // CurrentOffset) stale, so a keyset connector's "next" page re-ran the
+                    // previous seek: page N+1 was page N again, the duplicate-batch fingerprint
+                    // killed the walk, and every keyset object stopped at exactly two server pages.
+                    const nextCtx: FetchContext = {
+                        ...ctx,
+                        CurrentPage: batch.NextPage,
+                        CurrentOffset: batch.NextOffset,
+                        CurrentCursor: batch.NextCursor,
+                        AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
+                    };
+                    const nextPage = this.governedFetch(config, nextCtx, entityMap.ExternalObjectName, fetchTimeoutMs, batchCount + 1, logger);
+                    nextPage.catch(() => { /* surfaces when awaited next iteration; never an unhandled rejection */ });
+                    prefetchedNext = { key: batch.NextCursor, promise: nextPage };
+                }
             } catch (fetchErr) {
                 const errMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
                 // A throttle (429 / rate-limit) backs the adaptive limiter off (honoring Retry-After);
                 // other errors don't touch the rate. §5 Gap 2: also flag the map result so the per-layer
                 // AIMD controller reduces in-flight concurrency, not just the per-request token bucket.
                 if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {
-                    // Only if the retry hook did not already do it — a fetch that was retried has
-                    // already had its one decrease applied, at the first sign rather than here.
-                    if (!throttleReported) this.reportRateOutcome(config, fetchErr);
+                    // The adaptive decrease already happened inside governedFetch (once per
+                    // throttle episode); here we only flag the map result so the per-layer AIMD
+                    // controller reduces in-flight concurrency too.
                     result.Throttled = true;
                 }
                 console.error(`[IntegrationEngine] FetchChanges error for ${entityMap.ExternalObjectName}: ${errMsg}`);
