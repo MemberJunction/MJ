@@ -42,6 +42,7 @@
 
 // Base adapter and types
 export { BaseMessagingAdapter } from './base/BaseMessagingAdapter.js';
+export type { UploadableFile } from './base/BaseMessagingAdapter.js';
 export {
     MessagingAdapterSettings,
     IncomingMessage,

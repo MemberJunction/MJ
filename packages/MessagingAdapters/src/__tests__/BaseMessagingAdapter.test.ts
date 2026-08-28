@@ -193,11 +193,16 @@ class TestAdapter extends BaseMessagingAdapter {
     protected async uploadMediaOutputs(_message: IncomingMessage, files: readonly { mimeType?: string; fileName?: string; label?: string; data?: string }[]): Promise<void> {
         this.Uploads.push(...files);
     }
+
+    public get PlatformName(): string { return 'TestPlatform'; }
 }
 
 /** A TestAdapter whose platform routes every thread reply to every app (Slack-like). */
-class MultiBotTestAdapter extends TestAdapter {
-    public get PlatformName(): string { return 'TestPlatform'; }
+class MultiBotTestAdapter extends TestAdapter {}
+
+/** A TestAdapter whose platform delivers a thread reply only to the addressed bot (Teams-like). */
+class SingleBotTestAdapter extends TestAdapter {
+    protected respondsToUnaddressedThreadReplies(): boolean { return true; }
 }
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
@@ -353,6 +358,19 @@ describe('BaseMessagingAdapter', () => {
             await adapter.HandleMessage(msg);
             expect(adapter.FinalMessages.length + adapter.FinalUpdates.length).toBe(0);
             expect(adapter.TypeIndicatorShown).toBe(false); // no indicator before declining
+        });
+
+        // The Teams override: that platform delivers a thread reply only to the bot it is
+        // addressed to, so the gate is unnecessary there and would suppress valid replies.
+        it('does not apply the gate on a platform that routes replies to one bot', async () => {
+            const single = new SingleBotTestAdapter(defaultSettings);
+            await single.Initialize();
+            single.MockThreadHistory = [
+                createMessage({ MessageID: 't1', SenderID: 'user-1', Text: 'starting a thread' }),
+                createMessage({ MessageID: 't2', SenderID: OTHER_BOT, Text: "I'm Sage", RawEvent: { bot_id: 'B999' } }),
+            ];
+            await single.HandleMessage(createMessage({ MessageID: 'm9', ThreadID: 't1', Text: 'thanks!' }));
+            expect(single.FinalMessages.length + single.FinalUpdates.length).toBe(1);
         });
 
         it('answers an un-mentioned thread reply when it already posted in that thread', async () => {
@@ -525,6 +543,31 @@ describe('BaseMessagingAdapter', () => {
             expect(adapter.Uploads[0].fileName).toBe('MJ-Power.pdf');
             expect(adapter.Uploads[0].mimeType).toBe('application/pdf');
             expect(Buffer.from(adapter.Uploads[0].data!, 'base64').toString()).toBe('%PDF-1.7');
+        });
+
+        it('uploads a file once when fileOutputs and an inlined data: URI carry it', async () => {
+            // A document action puts the file in fileOutputs, and the model routinely repeats the
+            // same base64 back as an open:url command. Un-deduped, Slack got the file twice and
+            // both copies counted against the per-reply cap.
+            const bytes = Buffer.from('%PDF-1.7').toString('base64');
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: { Message: 'Your PDF is ready.' },
+                    fileOutputs: [
+                        { fileName: 'MJ-Power.pdf', mimeType: 'application/pdf', fileData: bytes, sizeBytes: 8 },
+                    ],
+                    actionableCommands: [
+                        { type: 'open:url', label: 'Download document', url: `data:application/pdf;base64,${bytes}` },
+                    ],
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            await adapter.HandleMessage(createMessage({ IsDirectMessage: true }));
+
+            expect(adapter.Uploads).toHaveLength(1);
+            expect(adapter.Uploads[0].fileName).toBe('MJ-Power.pdf'); // the fileOutputs one wins
         });
 
         it('skips a fileOutput already saved to storage', async () => {

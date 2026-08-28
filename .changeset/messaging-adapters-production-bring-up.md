@@ -51,7 +51,11 @@ Defects found running the adapters against a real MJ app — one Slack app per a
 - `MentionedAgentNames` is populated, so a named agent is reachable at all — previously
   every Teams turn ran the default agent.
 - Response forms route the answer back to the agent that asked, via `mj_agent`.
-- Adaptive Card buttons over `data:`/`blob:`/`file:` URIs, which Teams silently ignores,
-  are replaced by a note pointing at the artifact link.
+- Buttons are built only over `http:`/`https:` URLs. Teams silently ignores `data:`/`blob:`/`file:`
+  (so "Download document" was dead by construction whenever MJ inlined the artifact) and hands
+  unknown schemes such as `javascript:` or `ms-msdt:` to the OS URI handler, so the check is an
+  allow-list. Dropped buttons become a note pointing at the artifact link; localhost stays allowed.
+- A response form's submitted agent name is validated against the known agents before it is used
+  to route, rather than trusted from the client-controlled submit payload.
 - Deep links no longer assume `resourceId` is present, now that a Record can be
   addressed by `keys`.

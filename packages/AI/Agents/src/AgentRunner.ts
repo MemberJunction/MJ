@@ -39,6 +39,15 @@ interface ArtifactVersionRow {
 }
 
 /**
+ * Identifies an artifact (and the version) that a run created.
+ */
+export interface CreatedArtifactInfo {
+    artifactId: string;
+    versionId: string;
+    versionNumber: number;
+}
+
+/**
  * AgentRunner provides a thin wrapper for executing AI agents.
  * 
  * This class handles:
@@ -57,14 +66,6 @@ interface ArtifactVersionRow {
  * });
  * ```
  */
-/**
- * Identifies an artifact (and the version) that a run created.
- */
-export interface CreatedArtifactInfo {
-    artifactId: string;
-    versionId: string;
-    versionNumber: number;
-}
 
 /**
  * Choose the artifact a run should be represented by.

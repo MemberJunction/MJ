@@ -372,7 +372,15 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             // buildResponseFormElements) because Teams has no thread history to recover it from.
             // NOT matched out of the answer text: a form answer is arbitrary user input, and
             // name-matching it would let a typed word re-route the reply mid-exchange.
-            const formAgentName = typeof formValues['mj_agent'] === 'string' ? formValues['mj_agent'] : null;
+            // Validated against the known agents rather than trusted: the submit payload is
+            // client-controlled, and every other producer of MentionedAgentNames yields a name
+            // drawn from availableAgents. An unchecked value would reach the "no agent named X"
+            // reply, echoing arbitrary text into a shared channel under the bot's identity.
+            const claimedAgent = formValues['mj_agent'];
+            const formAgentName = typeof claimedAgent === 'string'
+                && this.availableAgents.some((a) => a.Name === claimedAgent)
+                ? claimedAgent
+                : null;
 
             const incomingMessage: IncomingMessage = {
                 MessageID: activityId,

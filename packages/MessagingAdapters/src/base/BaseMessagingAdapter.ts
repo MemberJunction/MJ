@@ -10,9 +10,11 @@
  */
 
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { ChatMessage } from '@memberjunction/ai';
-import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { ChatMessage, parseBase64DataUrl } from '@memberjunction/ai';
+import { ExecuteAgentParams, ExecuteAgentResult, FileOutputRef, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { MJArtifactEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     MessagingAdapterSettings,
@@ -35,6 +37,23 @@ interface ConversationAgentResult {
     artifactId?: string;
     /** The MJ Conversation ID for this interaction. */
     conversationId?: string;
+}
+
+/**
+ * A binary output to deliver as a platform file: either a generated `MediaOutput` or a file the
+ * agent inlined as a `data:` URI. `fileName`, when present, wins over any derived name.
+ *
+ * Deliberately not `Pick<MediaOutput, ...>`: `MediaOutput.modality` is `MediaModality`
+ * (`'Image' | 'Audio' | 'Video'`), and a file attachment is none of those.
+ */
+export interface UploadableFile {
+    modality?: string;
+    mimeType?: string;
+    /** Base64-encoded bytes. */
+    data?: string;
+    label?: string;
+    /** Preferred name; when absent the adapter derives one from `label` and the MIME type. */
+    fileName?: string;
 }
 
 /**
@@ -79,28 +98,15 @@ interface ConversationAgentResult {
  * This gives proper per-user permission scoping without a separate auth flow.
  * Falls back to the configured service account email if no MJ user matches.
  */
-/**
- * A binary output to deliver as a platform file: either a generated `MediaOutput` or a file the
- * agent inlined as a `data:` URI. `fileName`, when present, wins over any derived name.
- */
-export interface UploadableFile {
-    modality?: string;
-    mimeType?: string;
-    /** Base64-encoded bytes. */
-    data?: string;
-    label?: string;
-    /** Preferred name; when absent the adapter derives one from `label` and the MIME type. */
-    fileName?: string;
-}
-
-/**
- * Optional per-platform file upload. Implemented by adapters whose platform can accept file
- * uploads (see `SlackAdapter.uploadMediaOutputs`); absent elsewhere, in which case binary output
- * is simply not delivered as files.
- */
-export type MediaUploader = (message: IncomingMessage, files: readonly UploadableFile[]) => Promise<void>;
 
 export abstract class BaseMessagingAdapter {
+    /**
+     * Optional per-platform file upload. Implemented by adapters whose platform can accept file
+     * uploads (see `SlackAdapter.uploadMediaOutputs`); absent elsewhere, in which case binary
+     * output is simply not delivered as files.
+     */
+    protected uploadMediaOutputs?(message: IncomingMessage, files: readonly UploadableFile[]): Promise<void>;
+
     /** Extension settings from `mj.config.cjs`. */
     protected settings: MessagingAdapterSettings;
 
@@ -195,13 +201,13 @@ export abstract class BaseMessagingAdapter {
             await this.safeShowTypingIndicator(message);
         }
 
-        // 5. Determine which agent to use (uses thread history for agent affinity)
+        // 6. Determine which agent to use (uses thread history for agent affinity)
         const { agent, multiAgentNote } = await this.resolveAgent(message, contextUser, threadHistory);
 
-        // 6. Build conversation messages from thread history
+        // 7. Build conversation messages from thread history
         const conversationMessages = this.buildConversationMessages(threadHistory, message);
 
-        // 7. Run the agent with streaming
+        // 8. Run the agent with streaming
         await this.executeAgentAndRespond(message, agent, contextUser, conversationMessages, multiAgentNote);
     }
 
@@ -307,10 +313,10 @@ export abstract class BaseMessagingAdapter {
      */
     protected async isUserVisibleArtifact(artifactId: string, contextUser: UserInfo): Promise<boolean> {
         try {
-            const res = await new RunView().RunView<{ Visibility?: string }>(
+            const res = await new RunView().RunView<{ Visibility?: MJArtifactEntity['Visibility'] }>(
                 {
                     EntityName: 'MJ: Artifacts',
-                    ExtraFilter: `ID = '${artifactId.replace(/'/g, "''")}'`,
+                    ExtraFilter: `ID = '${EscapeSQLString(artifactId)}'`,
                     Fields: ['ID', 'Visibility'],
                     ResultType: 'simple',
                     MaxRows: 1,
@@ -339,7 +345,7 @@ export abstract class BaseMessagingAdapter {
      * should override.
      */
     protected isBotAuthored(message: IncomingMessage): boolean {
-        const raw = message.RawEvent as Record<string, unknown> | undefined;
+        const raw = message.RawEvent;
         if (raw && typeof raw === 'object') {
             if (raw['bot_id'] || raw['bot_profile']) return true;
             if (raw['subtype'] === 'bot_message') return true;
@@ -1115,16 +1121,25 @@ export abstract class BaseMessagingAdapter {
         //
         // Failures are logged and swallowed: the text reply has already posted, and an upload
         // problem must not turn a delivered answer into an error.
-        const uploader = (this as { uploadMediaOutputs?: MediaUploader }).uploadMediaOutputs;
-        if (typeof uploader === 'function') {
-            const attachments = [
+        if (this.uploadMediaOutputs) {
+            // De-duplicated by payload, in preference order. A document action puts the file in
+            // `fileOutputs` AND the model often repeats the same base64 back as an `open:url`
+            // command, so an un-deduped union uploads the identical file twice — and both copies
+            // count against the platform's per-reply file cap.
+            const attachments: UploadableFile[] = [];
+            const seen = new Set<string>();
+            for (const file of [
                 ...(result.mediaOutputs ?? []),
                 ...this.collectFileOutputAttachments(result),
                 ...this.collectInlineFileAttachments(result),
-            ];
+            ]) {
+                if (file.data && seen.has(file.data)) continue;
+                if (file.data) seen.add(file.data);
+                attachments.push(file);
+            }
             if (attachments.length > 0) {
                 try {
-                    await uploader.call(this, message, attachments);
+                    await this.uploadMediaOutputs(message, attachments);
                 } catch (error) {
                     LogError('Failed to upload agent output files (the text reply already posted):', undefined, error);
                 }
@@ -1145,13 +1160,8 @@ export abstract class BaseMessagingAdapter {
      * reached chat on one run and not the next.
      */
     protected collectFileOutputAttachments(result: ExecuteAgentResult): UploadableFile[] {
-        const outputs = (result as { fileOutputs?: unknown }).fileOutputs;
-        if (!Array.isArray(outputs)) return [];
-
-        return outputs
-            .filter((o): o is { fileName?: string; mimeType?: string; fileData: string } =>
-                !!o && typeof (o as { fileData?: unknown }).fileData === 'string'
-                && (o as { fileData: string }).fileData.length > 0)
+        return (result.fileOutputs ?? [])
+            .filter((o: FileOutputRef): o is FileOutputRef & { fileData: string } => !!o.fileData)
             .map((o) => ({
                 modality: 'file',
                 mimeType: o.mimeType,
@@ -1170,20 +1180,23 @@ export abstract class BaseMessagingAdapter {
      */
     protected collectInlineFileAttachments(result: ExecuteAgentResult): UploadableFile[] {
         const files: UploadableFile[] = [];
-        const commands = (result as { actionableCommands?: unknown }).actionableCommands;
-        if (!Array.isArray(commands)) return files;
 
-        for (const raw of commands) {
-            const cmd = raw as { url?: unknown; label?: unknown; fileName?: unknown };
-            if (typeof cmd?.url !== 'string') continue;
-            const match = /^data:([^;,]+);base64,(.+)$/i.exec(cmd.url.trim());
-            if (!match) continue;
+        for (const cmd of result.actionableCommands ?? []) {
+            if (cmd.type !== 'open:url') continue;
+            // The scheme is lower-cased first: the guard that DROPS these buttons is
+            // case-insensitive, so an upper-case `DATA:` URI would otherwise be suppressed as a
+            // link and never collected as a file — the note would promise an attachment that
+            // never arrives.
+            const parsed = parseBase64DataUrl(cmd.url.trim().replace(/^data:/i, 'data:'));
+            if (!parsed) continue;
             files.push({
                 modality: 'file',
-                mimeType: match[1],
-                data: match[2],
-                label: typeof cmd.label === 'string' ? cmd.label : undefined,
-                fileName: typeof cmd.fileName === 'string' ? cmd.fileName : undefined,
+                mimeType: parsed.mediaType,
+                data: parsed.data,
+                label: cmd.label,
+                // Not part of OpenURLCommand — document actions attach it opportunistically,
+                // so it is read off-contract rather than assumed.
+                fileName: (cmd as { fileName?: string }).fileName,
             });
         }
         return files;

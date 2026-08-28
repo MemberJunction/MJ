@@ -1,9 +1,9 @@
-import { resolveDeepLinkParam } from './chat-deeplink-params.js';
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { resolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';

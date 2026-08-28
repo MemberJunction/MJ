@@ -14,7 +14,7 @@
  */
 
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
-import { splitMarkdownIntoSections } from '../base/message-formatter.js';
+import { isOpenableURI, splitMarkdownIntoSections } from '../base/message-formatter.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -257,29 +257,6 @@ export function buildArtifactCard(
 }
 
 /**
- * Build Action.OpenUrl buttons from actionable commands.
- * Handles `open:url` and `open:resource` command types.
- * Returns at most 5 action buttons.
- */
-/**
- * Can Teams actually OPEN this URI from an `Action.OpenUrl`?
- *
- * Adaptive Cards silently do nothing for `data:`/`blob:`/`file:` — no error, no navigation — so a
- * button built over one is indistinguishable from a broken bot. This matters because MJ inlines
- * file artifacts as `data:<mime>;base64,...` whenever no file storage account is configured, which
- * is the normal local-dev state: asking for a Word document produced a "Download document" button
- * that could not work by construction.
- *
- * Deliberately NOT Slack's `isButtonSafeURL`: Slack rejects the whole message unless a button URL
- * is public http(s), so it must also exclude localhost. Teams opens localhost happily — that is how
- * the "View in MJ Explorer" link works against a dev Explorer — so screening localhost here would
- * remove working buttons.
- */
-function isOpenableURI(url: unknown): boolean {
-    return typeof url === 'string' && !/^(data|blob|file):/i.test(url.trim());
-}
-
-/**
  * Body notes for `open:url` commands whose URI Teams cannot open.
  *
  * The button is dropped by {@link buildActionButtons} rather than rendered dead; this names what
@@ -303,6 +280,11 @@ export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Rec
     }));
 }
 
+/**
+ * Build Action.OpenUrl buttons from actionable commands.
+ * Handles `open:url` and `open:resource` command types.
+ * Returns at most 5 action buttons.
+ */
 export function buildActionButtons(
     commands: ActionableCommand[],
     explorerBaseURL?: string

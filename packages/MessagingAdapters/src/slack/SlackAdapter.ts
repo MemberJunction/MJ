@@ -194,10 +194,6 @@ export class SlackAdapter extends BaseMessagingAdapter {
     }
 
     /**
-     * Send the final formatted response. If a "Thinking..." message exists
-     * (no streaming occurred), update it in-place instead of posting a new message.
-     */
-    /**
      * Extensions for MIME types whose subtype is not a usable file extension.
      *
      * `mimeType.split('/')[1]` yields "vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -218,6 +214,17 @@ export class SlackAdapter extends BaseMessagingAdapter {
         'image/jpeg': 'jpg',
         'image/svg+xml': 'svg',
     };
+
+    /**
+     * Extensions recognised as already present on a filename.
+     *
+     * Derived from the map above so the two cannot drift, plus common types an agent may name
+     * directly without our having a MIME mapping for them.
+     */
+    private static readonly KNOWN_FILE_EXTENSIONS: ReadonlySet<string> = new Set([
+        ...Object.values(SlackAdapter.EXTENSION_BY_MIME_TYPE),
+        'jpeg', 'png', 'gif', 'webp', 'html', 'zip', 'mp3', 'mp4', 'wav', 'xml', 'yaml',
+    ]);
 
     /**
      * Upload an agent's binary output as real Slack files, threaded under the reply.
@@ -242,7 +249,11 @@ export class SlackAdapter extends BaseMessagingAdapter {
             const preferredName = (file.fileName?.trim() || file.label || `generated-${file.modality ?? 'media'}`)
                 .replace(/[^\w.-]+/g, '_')
                 .slice(0, 80) || 'generated-file';
-            const filename = /\.[A-Za-z0-9]{1,5}$/.test(preferredName)
+            // Only treat a trailing token as an extension if it IS one: a bare
+            // /\.[A-Za-z0-9]{1,5}$/ reads "Q3 Report v1.2" as already-extensioned and uploads it
+            // without .docx — the unopenable blob the mapping above exists to prevent.
+            const trailing = /\.([A-Za-z0-9]{1,5})$/.exec(preferredName)?.[1]?.toLowerCase();
+            const filename = trailing && SlackAdapter.KNOWN_FILE_EXTENSIONS.has(trailing)
                 ? preferredName
                 : `${preferredName}.${extension}`;
 
@@ -256,6 +267,10 @@ export class SlackAdapter extends BaseMessagingAdapter {
         }
     }
 
+    /**
+     * Send the final formatted response. If a "Thinking..." message exists
+     * (no streaming occurred), update it in-place instead of posting a new message.
+     */
     protected async sendFinalMessage(originalMessage: IncomingMessage, response: FormattedResponse): Promise<void> {
         const key = this.threadKey(originalMessage);
         const thinkingId = this.thinkingMessageIds.get(key);
@@ -371,9 +386,10 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * the rich content. Keeping it short avoids `msg_too_long` when blocks are large.
      */
     private truncateForSlackFallback(text: string): string {
-        const MAX_FALLBACK = 4000;
-        if (text.length <= MAX_FALLBACK) return text;
-        return text.slice(0, MAX_FALLBACK - 30) + '\n\n(See full response above)';
+        // Same ceiling as the primary path: Slack refuses a `text` field past ~4,000, and this
+        // fallback is what sendFinalMessage/updateFinalMessage actually post.
+        if (text.length <= SlackAdapter.MAX_TEXT_LENGTH) return text;
+        return text.slice(0, SlackAdapter.MAX_TEXT_LENGTH - 30) + '\n\n(See full response above)';
     }
 
     /**

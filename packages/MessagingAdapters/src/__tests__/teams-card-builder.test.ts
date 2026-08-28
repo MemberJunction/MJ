@@ -437,6 +437,19 @@ describe('teams-card-builder', () => {
             expect(actions[0]['url']).toBe('https://example.com/a.docx');
         });
 
+        // Security: Teams desktop hands an unrecognised scheme to the OS URI handler, so the
+        // guard is an allow-list rather than a deny-list naming the inert schemes. A deny-list
+        // that listed only data:/blob:/file: let every one of these through as a real button.
+        it.each([
+            ['javascript:', 'javascript:alert(1)'],
+            ['vbscript:', 'vbscript:msgbox(1)'],
+            ['an OS handler scheme', 'ms-msdt:/id PCWDiagnostic'],
+            ['file:', 'file:///etc/passwd'],
+        ])('should not render a button for %s', (_label, url) => {
+            const cmds = [{ type: 'open:url', label: 'Click me', url }];
+            expect(buildActionButtons(cmds as never)).toEqual([]);
+        });
+
         // Teams opens localhost fine (that is how the dev Explorer link works), so unlike Slack
         // it must NOT be screened out.
         it('should keep localhost buttons that Slack would reject', () => {

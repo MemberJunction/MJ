@@ -12,6 +12,7 @@
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
 import { LogStatus } from '@memberjunction/core';
 import { markdownToBlocks } from './slack-formatter.js';
+import { isOpenableURI } from '../base/message-formatter.js';
 
 /** Slack enforces a hard 50-block limit per message. */
 const SLACK_MAX_BLOCKS = 50;
@@ -311,28 +312,6 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
 }
 
 /**
- * Build action buttons from agent actionable commands.
- *
- * Handles both command types:
- * - `open:url` → Slack URL button (opens external link)
- * - `open:resource` → Deep-link button to MJ Explorer if `explorerBaseURL` is configured,
- *   otherwise rendered as an informational context block showing entity/resource info
- *
- * Returns an array of blocks (may include both action and context blocks).
- */
-/**
- * Can this URI be opened from a chat client at all?
- *
- * `data:` (and `blob:`/`file:`) URIs cannot. Agents do emit them: MJ's document actions inline a
- * whole generated file as `data:<mime>;base64,...` when no file storage account is configured.
- * Rendered into a message that becomes thousands of unclickable characters the user would have to
- * copy by hand — and it breaches Slack's message length limit, failing the whole reply.
- */
-function isOpenableURI(url: unknown): boolean {
-  return typeof url === 'string' && !/^(data|blob|file):/i.test(url.trim());
-}
-
-/**
  * Is this URL valid inside a Slack **block element**?
  *
  * Slack rejects the ENTIRE message with `invalid_blocks: invalid url` when a button's `url` is not
@@ -354,6 +333,16 @@ function isButtonSafeURL(url: unknown): boolean {
   }
 }
 
+/**
+ * Build action buttons from agent actionable commands.
+ *
+ * Handles both command types:
+ * - `open:url` → Slack URL button (opens external link)
+ * - `open:resource` → Deep-link button to MJ Explorer if `explorerBaseURL` is configured,
+ *   otherwise rendered as an informational context block showing entity/resource info
+ *
+ * Returns an array of blocks (may include both action and context blocks).
+ */
 export function buildActionButtons(commands: ActionableCommand[], explorerBaseURL?: string): Record<string, unknown>[] {
   const blocks: Record<string, unknown>[] = [];
   const buttons: Record<string, unknown>[] = [];
@@ -676,7 +665,7 @@ export function buildResponseForm(form: AgentResponseForm): Record<string, unkno
     elements: [
       {
         type: 'button',
-        text: { type: 'plain_text', text: form.submitLabel ?? 'Fill Out Form', emoji: true },
+        text: { type: 'plain_text', text: truncateToLength(form.submitLabel ?? 'Fill Out Form', SLACK_BUTTON_TEXT_MAX_LENGTH), emoji: true },
         action_id: 'mj:form_modal:open',
         value: formJson.length <= 2000 ? formJson : 'too_large',
         style: 'primary',
@@ -714,7 +703,7 @@ export function buildFormModal(form: AgentResponseForm): Record<string, unknown>
     type: 'modal',
     callback_id: 'mj:form_modal:submit',
     title: { type: 'plain_text', text: truncateToLength(form.title ?? 'Form', 24) },
-    submit: { type: 'plain_text', text: form.submitLabel ?? 'Submit' },
+    submit: { type: 'plain_text', text: truncateToLength(form.submitLabel ?? 'Submit', SLACK_BUTTON_TEXT_MAX_LENGTH) },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks: modalBlocks,
   };
@@ -930,9 +919,6 @@ function appendTruncationNotice(blocks: Record<string, unknown>[], storeKey?: st
 }
 
 /**
- * Truncate a string to a given length with ellipsis.
- */
-/**
  * Slack's maximum length for a modal input's `placeholder` text.
  *
  * Exceeding it fails the whole `views.open` call with `invalid_arguments`
@@ -942,6 +928,17 @@ function appendTruncationNotice(blocks: Record<string, unknown>[], storeKey?: st
  */
 const SLACK_PLACEHOLDER_MAX_LENGTH = 150;
 
+/**
+ * Slack's maximum length for button and modal submit text.
+ *
+ * Same failure mode as the placeholder above, from the same cause: `submitLabel` is
+ * agent-authored free text, and an over-long one fails the whole `views.open`.
+ */
+const SLACK_BUTTON_TEXT_MAX_LENGTH = 24;
+
+/**
+ * Truncate a string to a given length with ellipsis.
+ */
 function truncateToLength(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength - 3) + '...';
