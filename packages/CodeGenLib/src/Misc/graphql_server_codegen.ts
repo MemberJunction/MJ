@@ -10,9 +10,22 @@ import {
 } from '@memberjunction/sql-dialect';
 import fs from 'fs';
 import path from 'path';
-import { logError } from './status_logging';
-import { mjCoreSchema, resolveEntityPackageName } from '../Config/config';
+import { logError, logStatus } from './status_logging';
+import { configInfo, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt } from './util';
+import { writeFileIfChanged } from './file-write';
+import { EmitStats } from './emit-stats';
+import {
+  SchemaEmitOptions,
+  buildSchemaBarrel,
+  groupEntitiesBySchema,
+  emitSchemaFile,
+  pruneOrphanedSchemaFiles,
+  resolveSchemaEmitOptions,
+  sanitizeSchemaFileName,
+  schemasToEmit,
+} from './schema-emit';
+
 
 /**
  * This class is responsible for generating the GraphQL Server resolvers and types for the entities, you can sub-class this class to extend/modify the logic, make sure to use @memberjunction/global RegisterClass decorator
@@ -23,29 +36,108 @@ export class GraphQLServerGeneratorBase {
     entities: EntityInfo[],
     outputDirectory: string,
     generatedEntitiesImportLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    options?: SchemaEmitOptions,
   ): boolean {
-    const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
-    let sRet: string = '';
     try {
-      sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal);
+      const emit = this.resolveEmitOptions(options);
+      makeDir(outputDirectory);
 
-      for (let i: number = 0; i < entities.length; ++i) {
-        sRet += this.generateServerEntityString(
-          entities[i],
-          false,
+      if (!emit.perSchema) {
+        const content = this.assembleGraphQLServerFile(
+          entities,
           generatedEntitiesImportLibrary,
-          excludeRelatedEntitiesExternalToSchema
+          excludeRelatedEntitiesExternalToSchema,
+        );
+        this.emitFile(path.join(outputDirectory, 'generated.ts'), content, emit.writeIfChanged);
+        return true;
+      }
+
+      const grouped = groupEntitiesBySchema(entities);
+      const schemas = [...grouped.keys()].sort((a, b) => a.localeCompare(b));
+      const schemasDir = path.join(outputDirectory, 'graphql-schemas');
+      makeDir(schemasDir);
+
+      const toEmit = schemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
+        fs.existsSync(path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`)),
+      );
+      const emitSet = new Set(toEmit);
+      for (const schemaName of schemas) {
+        EmitStats.RecordSchemaEmit(emitSet.has(schemaName));
+      }
+
+      const assembleStarted = Date.now();
+      for (const schemaName of toEmit) {
+        const schemaEntities = grouped.get(schemaName) ?? [];
+        const content = this.assembleGraphQLServerFile(
+          schemaEntities,
+          generatedEntitiesImportLibrary,
+          excludeRelatedEntitiesExternalToSchema,
+          true,
+        );
+        this.emitFile(
+          path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`),
+          content,
+          emit.writeIfChanged,
         );
       }
-      makeDir(outputDirectory);
-      fs.writeFileSync(path.join(outputDirectory, 'generated.ts'), sRet);
+      EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
+      // Before the barrel, so the directory and the barrel always agree.
+      const pruned = pruneOrphanedSchemaFiles(schemasDir, schemas);
+      if (pruned.length > 0) {
+        logStatus(`   Removed ${pruned.length} orphaned GraphQL schema file(s): ${pruned.join(', ')}`);
+      }
+
+      const barrel = buildSchemaBarrel(
+        schemas,
+        'graphql-schemas',
+        `/********************************************************************************
+* GraphQL server barrel — AUTO GENERATED. Do not edit.
+* Re-exports one file per schema.
+*
+**********************************************************************************/
+`,
+      );
+      this.emitFile(path.join(outputDirectory, 'generated.ts'), barrel, emit.writeIfChanged);
       return true;
     } catch (err) {
       logError(err as string);
       return false;
     }
+  }
+
+  /**
+   * Build one GraphQL server file — a single schema, or the legacy monolith when
+   * per-schema emit is turned off.
+   */
+  public assembleGraphQLServerFile(
+    entities: EntityInfo[],
+    generatedEntitiesImportLibrary: string,
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    fromSchemaSubdir: boolean = false,
+  ): string {
+    const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
+    let sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal, fromSchemaSubdir);
+    for (const entity of entities) {
+      sRet += this.generateServerEntityString(
+        entity,
+        false,
+        generatedEntitiesImportLibrary,
+        excludeRelatedEntitiesExternalToSchema,
+      );
+    }
+    return sRet;
+  }
+
+  /** Delegates so both generators share one set of defaults; override to change them. */
+  protected resolveEmitOptions(options?: SchemaEmitOptions): Required<SchemaEmitOptions> {
+    return resolveSchemaEmitOptions(options, configInfo?.fileEmit);
+  }
+
+  /** Delegates so both generators write identically; override to change that. */
+  protected emitFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
+    emitSchemaFile(filePath, content, useWriteIfChanged);
   }
 
   protected _graphQLTypeSuffix = '_';
@@ -118,7 +210,7 @@ export class GraphQLServerGeneratorBase {
     }
   }
 
-  public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isInternal: boolean): string {
+  public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isInternal: boolean, fromSchemaSubdir: boolean = false): string {
     let sRet: string = `/********************************************************************************
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
@@ -137,7 +229,7 @@ import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberj
 import { MaxLength } from 'class-validator';
 ${
   isInternal
-    ? `import { mj_core_schema } from '../config.js';\n`
+    ? `import { mj_core_schema } from '${fromSchemaSubdir ? '../../config.js' : '../config.js'}';\n`
     : `import * as mj_core_schema_server_object_types from '@memberjunction/server'`
 }
 
