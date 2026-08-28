@@ -457,6 +457,14 @@ const allowCachingBySchemaSchema = z.object({
   AllowCaching: z.boolean(),
 });
 
+export type NewEntityDefaultsBySchema = z.infer<typeof newEntityDefaultsBySchemaSchema>;
+const newEntityDefaultsBySchemaSchema = z.object({
+  SchemaName: z.string(),
+  TrackRecordChanges: z.boolean().optional(),
+  SupportsGeoCoding: z.boolean().optional(),
+  AutoUpdateSupportsGeoCoding: z.boolean().optional(),
+});
+
 const newEntityDefaultsSchema = z.object({
   TrackRecordChanges: z.boolean().default(true),
   AuditRecordAccess: z.boolean().default(false),
@@ -473,6 +481,27 @@ const newEntityDefaultsSchema = z.object({
   IncludeFirstNFieldsAsDefaultInView: z.number().default(5),
   PermissionDefaults: newEntityPermissionDefaultsSchema,
   NameRulesBySchema: newEntityNameRulesBySchema.array().default([]),
+  /**
+   * Creation-time value for Entity.SupportsGeoCoding. Left unset (the default), the column is
+   * omitted from the INSERT and the database default applies — zero behavior change.
+   */
+  SupportsGeoCoding: z.boolean().optional(),
+  /**
+   * Creation-time value for Entity.AutoUpdateSupportsGeoCoding. Setting this to false at
+   * creation permanently shields the entity from the geo auto-detect pass (which respects the
+   * flag as a lock), so address-like columns never flip SupportsGeoCoding on. Left unset, the
+   * column is omitted from the INSERT and the database default applies.
+   */
+  AutoUpdateSupportsGeoCoding: z.boolean().optional(),
+  /**
+   * Per-schema overrides for creation-time entity flags. When CodeGen creates a new Entity row,
+   * the schema is matched (case-insensitive, `${mj_core_schema}` placeholder supported) against
+   * this list and the matching entry's values win over the global defaults above. The intended
+   * use is integration mirror schemas — entities that exist to receive high-volume synced data
+   * and should not pay per-record side trips: set TrackRecordChanges, SupportsGeoCoding, and
+   * AutoUpdateSupportsGeoCoding to false for those schemas.
+   */
+  DefaultsBySchema: newEntityDefaultsBySchemaSchema.array().default([]),
   /**
    * Per-schema overrides for the AllowCaching default. When CodeGen creates a new
    * Entity row, the schema is matched (case-insensitive) against this list and the
@@ -927,6 +956,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     UserViewMaxRows: 1000,
     AddToApplicationWithSchemaName: true,
     IncludeFirstNFieldsAsDefaultInView: 5,
+    DefaultsBySchema: [],
     PermissionDefaults: {
       AutoAddPermissionsForNewEntities: true,
       Permissions: [

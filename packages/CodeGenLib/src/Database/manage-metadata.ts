@@ -6573,6 +6573,7 @@ export class ManageMetadataBase {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.EntityDescription ? `'${newEntity.EntityDescription.replace(/'/g, "''")}'` : null;
       const allowCaching = this.resolveAllowCachingForSchema(newEntity.SchemaName);
+      const entityFlags = this.resolveNewEntityFlagsForSchema(newEntity.SchemaName);
       const q = (name: string) => this.qi(name);
       const sSQLInsert = `
       INSERT INTO ${this.qs(mj_core_schema(), 'Entity')} (
@@ -6587,7 +6588,9 @@ export class ManageMetadataBase {
          ${q('IncludeInAPI')},
          ${q('AllowUserSearchAPI')},
          ${q('AllowCaching')}
-         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + q('TrackRecordChanges')}
+         ${entityFlags.TrackRecordChanges === undefined ? '' : ', ' + q('TrackRecordChanges')}
+         ${entityFlags.SupportsGeoCoding === undefined ? '' : ', ' + q('SupportsGeoCoding')}
+         ${entityFlags.AutoUpdateSupportsGeoCoding === undefined ? '' : ', ' + q('AutoUpdateSupportsGeoCoding')}
          ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + q('AuditRecordAccess')}
          ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + q('AuditViewRuns')}
          ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + q('AllowAllRowsAPI')}
@@ -6610,7 +6613,9 @@ export class ManageMetadataBase {
          ${this.boolLit(true)},
          ${newEntityDefaults.AllowUserSearchAPI === undefined ? this.boolLit(true) : this.boolLit(newEntityDefaults.AllowUserSearchAPI)},
          ${this.boolLit(allowCaching)}
-         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.TrackRecordChanges)}
+         ${entityFlags.TrackRecordChanges === undefined ? '' : ', ' + this.boolLit(entityFlags.TrackRecordChanges)}
+         ${entityFlags.SupportsGeoCoding === undefined ? '' : ', ' + this.boolLit(entityFlags.SupportsGeoCoding)}
+         ${entityFlags.AutoUpdateSupportsGeoCoding === undefined ? '' : ', ' + this.boolLit(entityFlags.AutoUpdateSupportsGeoCoding)}
          ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AuditRecordAccess)}
          ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AuditViewRuns)}
          ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowAllRowsAPI)}
@@ -6632,6 +6637,32 @@ export class ManageMetadataBase {
     * `${mj_core_schema}` placeholder is expanded so core-schema rules apply
     * regardless of how the core schema is named in this deployment.
     */
+   /**
+    * Resolves the effective creation-time entity flags for a schema: the global
+    * newEntityDefaults values, overridden per-schema by a matching DefaultsBySchema entry
+    * (case-insensitive; `${mj_core_schema}` placeholder supported — same matching rules as
+    * AllowCachingBySchema). An undefined flag means "omit the column from the INSERT and let
+    * the database default apply". The per-schema override exists for integration mirror
+    * schemas, whose entities receive high-volume synced data and should not pay per-record
+    * side trips (record-change rows, geocoding lookups) on every write.
+    */
+   protected resolveNewEntityFlagsForSchema(schemaName: string): { TrackRecordChanges?: boolean; SupportsGeoCoding?: boolean; AutoUpdateSupportsGeoCoding?: boolean } {
+      const defaults = configInfo.newEntityDefaults;
+      const overrides = defaults.DefaultsBySchema ?? [];
+      const match = overrides.find(entry => {
+         let candidate = entry.SchemaName;
+         if (candidate?.trim().toLowerCase() === '${mj_core_schema}') {
+            candidate = mj_core_schema();
+         }
+         return candidate.trim().toLowerCase() === schemaName.trim().toLowerCase();
+      });
+      return {
+         TrackRecordChanges: match?.TrackRecordChanges ?? defaults.TrackRecordChanges,
+         SupportsGeoCoding: match?.SupportsGeoCoding ?? defaults.SupportsGeoCoding,
+         AutoUpdateSupportsGeoCoding: match?.AutoUpdateSupportsGeoCoding ?? defaults.AutoUpdateSupportsGeoCoding,
+      };
+   }
+
    protected resolveAllowCachingForSchema(schemaName: string): boolean {
       const defaults = configInfo.newEntityDefaults;
       const overrides = defaults.AllowCachingBySchema ?? [];
