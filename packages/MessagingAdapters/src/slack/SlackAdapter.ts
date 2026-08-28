@@ -252,15 +252,15 @@ export class SlackAdapter extends BaseMessagingAdapter {
         'image/svg+xml': 'svg',
     };
 
+    /** A reply delivers files, it does not become a file dump. Mirrors the media-block limit. */
+    private static readonly MAX_UPLOADS_PER_REPLY = 5;
+
     /**
      * Extensions recognised as already present on a filename.
      *
      * Derived from the map above so the two cannot drift, plus common types an agent may name
      * directly without our having a MIME mapping for them.
      */
-    /** A reply delivers files, it does not become a file dump. Mirrors the media-block limit. */
-    private static readonly MAX_UPLOADS_PER_REPLY = 5;
-
     private static readonly KNOWN_FILE_EXTENSIONS: ReadonlySet<string> = new Set([
         ...Object.values(SlackAdapter.EXTENSION_BY_MIME_TYPE),
         'jpeg', 'png', 'gif', 'webp', 'html', 'zip', 'mp3', 'mp4', 'wav', 'xml', 'yaml',
@@ -293,7 +293,9 @@ export class SlackAdapter extends BaseMessagingAdapter {
         for (const file of batch) {
 
             const mimeType = (file.mimeType ?? 'image/png').toLowerCase();
-            const extension = SlackAdapter.EXTENSION_BY_MIME_TYPE[mimeType]
+            const extension = (Object.hasOwn(SlackAdapter.EXTENSION_BY_MIME_TYPE, mimeType)
+                ? SlackAdapter.EXTENSION_BY_MIME_TYPE[mimeType]
+                : undefined)
                 ?? (mimeType.split('/')[1] ?? 'bin').split('+')[0];
             const preferredName = (file.fileName?.trim() || file.label || `generated-${file.modality ?? 'media'}`)
                 .replace(/[^\w.-]+/g, '_')

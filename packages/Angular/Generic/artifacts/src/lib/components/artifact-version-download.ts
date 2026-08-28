@@ -39,17 +39,29 @@ export function buildVersionDownload(
   const dataUri = /^data:([^;,]+);base64,(.*)$/is.exec(content.trim());
   if (dataUri) {
     const [, uriMimeType, base64] = dataUri;
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
+    // `atob` throws on malformed base64 that still matched the pattern. The caller only logs, so
+    // an unguarded throw turns "download" into a click that does nothing at all; falling through
+    // to the text path at least hands the user the bytes that are stored.
+    let binary: string | null = null;
+    try {
+      binary = atob(base64);
+    } catch {
+      binary = null;
     }
-    return {
-      data: bytes,
-      mimeType: uriMimeType,
-      // The stored FileName already carries the correct extension; only fall back when absent.
-      fileName: fileName?.trim() || `${artifactName ?? 'artifact'}_v${versionNumber ?? 1}`,
-    };
+    if (binary !== null) {
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return {
+        data: bytes,
+        mimeType: uriMimeType,
+        // The stored FileName already carries the correct extension; only fall back when absent.
+        fileName: fileName?.trim() || `${artifactName ?? 'artifact'}_v${versionNumber ?? 1}`,
+      };
+    }
+    // Fall through to the text path below: a click that hands over the stored bytes beats one
+    // that silently does nothing.
   }
 
   // Text content — unchanged from the original behaviour, but honour a real filename when present.

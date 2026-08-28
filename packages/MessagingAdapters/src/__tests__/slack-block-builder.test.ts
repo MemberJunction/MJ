@@ -808,6 +808,22 @@ describe('slack-block-builder', () => {
     });
 
 
+    describe('label-less commands', () => {
+        // `label` is required on OpenURLCommand but the value is model-authored JSON. A throw in
+        // the builder propagates out of HandleMessage, which has no try/catch — the agent runs to
+        // completion and the user sees nothing at all, not even an error.
+        it('does not throw when an open:url command has no label', () => {
+            const cmds = [{ type: 'open:url', url: 'data:application/pdf;base64,QQ==' }];
+            expect(() => buildActionButtons(cmds as never)).not.toThrow();
+        });
+
+        it('names the file anyway', () => {
+            const cmds = [{ type: 'open:url', url: 'data:application/pdf;base64,QQ==' }];
+            const blocks = buildActionButtons(cmds as never);
+            expect(JSON.stringify(blocks)).toContain('Generated file');
+        });
+    });
+
     describe('modal placeholder limits', () => {
         // Slack rejects the whole views.open call with invalid_arguments when a placeholder
         // exceeds 150 characters, so the modal never opens and the button looks dead — the only
@@ -821,6 +837,29 @@ describe('slack-block-builder', () => {
                 .filter((p): p is Record<string, unknown> => !!p)
                 .map((p) => p['text'] as string);
         }
+
+        // Regression: the surrogate-safe rewrite measured with UTF-16 `.length` but sliced by
+        // CODE POINT, so 24 code points of emoji became 48 units — over the limit the cap exists
+        // to enforce, reintroducing the very views.open failure it was written to prevent.
+        it('respects the limit in UTF-16 units, not code points', () => {
+            const form = {
+                title: 'Emoji form',
+                questions: [{ id: 'q1', label: '\u{1F44D}'.repeat(200), type: { type: 'unknown_kind' } }],
+            };
+            for (const p of placeholdersOf(buildFormModal(form as never))) {
+                expect(p.length).toBeLessThanOrEqual(LIMIT);
+            }
+        });
+
+        it('never leaves half a surrogate pair at the cut', () => {
+            const form = {
+                title: 'Emoji form',
+                questions: [{ id: 'q1', label: '\u{1F44D}'.repeat(200), type: { type: 'unknown_kind' } }],
+            };
+            for (const p of placeholdersOf(buildFormModal(form as never))) {
+                expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(p)).toBe(false);
+            }
+        });
 
         it('truncates a long question label in the generated placeholder', () => {
             const form = {

@@ -207,9 +207,6 @@ class TestAdapter extends BaseMessagingAdapter {
     }
 }
 
-/** A TestAdapter whose platform routes every thread reply to every app (Slack-like). */
-class MultiBotTestAdapter extends TestAdapter {}
-
 /** A TestAdapter whose platform delivers a thread reply only to the addressed bot (Teams-like). */
 class SingleBotTestAdapter extends TestAdapter {
     protected respondsToUnaddressedThreadReplies(): boolean { return true; }
@@ -353,7 +350,7 @@ describe('BaseMessagingAdapter', () => {
         const OTHER_BOT = 'BOT999';
 
         beforeEach(async () => {
-            adapter = new MultiBotTestAdapter(defaultSettings);
+            adapter = new TestAdapter(defaultSettings);
             await adapter.Initialize();
         });
 

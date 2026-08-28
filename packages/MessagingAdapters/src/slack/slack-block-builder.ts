@@ -288,13 +288,18 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
 
   // "View Full" button if URL is available. A non-public URL here fails the entire message
   // (see isButtonSafeURL), so anything not button-safe degrades to a mrkdwn link.
-  if (artifact.URL && !isButtonSafeURL(artifact.URL)) {
-    if (isOpenableURI(artifact.URL)) {
-      blocks.push({
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: `<${artifact.URL}|View Full Report>` }],
-      });
-    }
+  if (artifact.URL && !isButtonSafeURL(artifact.URL) && isOpenableURI(artifact.URL)) {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `<${artifact.URL}|View Full Report>` }],
+    });
+  } else if (artifact.URL && !isButtonSafeURL(artifact.URL)) {
+    // Neither postable as a button nor openable as a link (a `data:` or `file:` artifact URL).
+    // Say so rather than rendering nothing at all, which read as the report having no link.
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_Full report is not linkable from Slack._' }],
+    });
   } else if (artifact.URL) {
     blocks.push({
       type: 'actions',
@@ -358,13 +363,13 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
         // Matches BaseMessagingAdapter.collectInlineFileAttachments, which parses the same shape.
         resourceInfoItems.push(
           isHarvestableFileURI(cmd.url)
-            ? `📄 _${escapeMrkdwn(cmd.label)} — attached to this reply._`
-            : `📄 _${escapeMrkdwn(cmd.label)} — not linkable from Slack._`
+            ? `📄 _${escapeMrkdwn(cmd.label) || 'Generated file'} — attached to this reply._`
+            : `📄 _${escapeMrkdwn(cmd.label) || 'Generated file'} — not linkable from Slack._`
         );
       } else if (isButtonSafeURL(cmd.url)) {
         buttons.push(buildURLButton(cmd.label, cmd.url, buttons.length));
       } else {
-        resourceInfoItems.push(`<${cmd.url}|${escapeMrkdwn(cmd.label)}>`);
+        resourceInfoItems.push(`<${cmd.url}|${escapeMrkdwn(cmd.label) || 'Open link'}>`);
       }
     } else if (cmd.type === 'open:resource') {
       const resourceCmd = cmd as OpenResourceCommand;
@@ -374,7 +379,7 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
       } else if (deepLink) {
         // Not button-safe (a localhost Explorer, typical in local dev) — a mrkdwn link is
         // accepted where a button URL is not, and still resolves for whoever can reach it.
-        resourceInfoItems.push(`<${deepLink}|${escapeMrkdwn(cmd.label)}>`);
+        resourceInfoItems.push(`<${deepLink}|${escapeMrkdwn(cmd.label) || 'Open resource'}>`);
       } else {
         resourceInfoItems.push(formatResourceInfo(resourceCmd));
       }
@@ -915,7 +920,11 @@ function isHarvestableFileURI(url: unknown): boolean {
  * A link is `<url|label>`, so an agent-authored label containing `>` closes the link early and
  * the rest of it leaks out as literal text.
  */
-function escapeMrkdwn(text: string): string {
+function escapeMrkdwn(text: string | null | undefined): string {
+  // `label` is declared required on OpenURLCommand but the value is model-authored JSON, and a
+  // throw here propagates all the way out of HandleMessage — the agent runs, and the user sees
+  // nothing at all. Every other label site in this file defends the same way.
+  if (!text) return '';
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\|/g, '&#124;');
 }
 
@@ -940,7 +949,15 @@ const SLACK_BUTTON_TEXT_MAX_LENGTH = 75;
  */
 function truncateToLength(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  // Sliced by code point, not code unit: cutting mid-surrogate leaves a lone half that renders
-  // as a replacement character.
-  return Array.from(text).slice(0, maxLength - 3).join('') + '...';
+  // Slack counts UTF-16 units, so the BUDGET is counted in units — but the string is walked by
+  // code point so a cut never strands half a surrogate pair. Slicing by code point alone would
+  // overshoot the limit (24 code points of emoji is 48 units) and fail `views.open` outright,
+  // which is the failure this cap exists to prevent.
+  const budget = maxLength - 3;
+  let out = '';
+  for (const ch of text) {
+    if (out.length + ch.length > budget) break;
+    out += ch;
+  }
+  return out + '...';
 }

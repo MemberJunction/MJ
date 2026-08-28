@@ -335,15 +335,6 @@ export abstract class BaseMessagingAdapter {
     }
 
     /**
-     * Was this history message written by ANY bot (not just this one)?
-     *
-     * Thread affinity and conversation context must both ignore other bots' messages: an agent's
-     * reply names itself in prose, which the mention matcher would read as a user request, and as
-     * a 'user' turn it feeds one agent's self-description into another's context. The default
-     * inspects the platform's raw event for a bot marker; platforms that expose this differently
-     * should override.
-     */
-    /**
      * Was this message posted by THIS bot?
      *
      * Not a bare `=== getBotUserId()`. A platform may publish more than one identifier for the
@@ -357,13 +348,22 @@ export abstract class BaseMessagingAdapter {
         return !!senderId && !!botUserId && senderId === botUserId;
     }
 
+    /**
+     * Was this history message written by ANY bot (not just this one)?
+     *
+     * Thread affinity and conversation context must both ignore other bots' messages: an agent's
+     * reply names itself in prose, which the mention matcher would read as a user request, and as
+     * a 'user' turn it feeds one agent's self-description into another's context.
+     *
+     * The default is `false` because the marker is platform-specific — see `SlackAdapter`, which
+     * reads the Events API's `bot_id`/`bot_profile`/`bot_message` fields.
+     */
     protected isBotAuthored(_message: IncomingMessage): boolean {
         return false;
     }
 
     /**
-     * Does this platform deliver thread replies to every installed app, rather than only to the
-     * bot being addressed?
+     * May this bot answer a thread reply that did not address it?
      *
      * `false` (the default) enables the multi-bot thread gate in {@link HandleMessage}: with one
      * app per agent, an un-mentioned thread reply would otherwise be answered by every bot in the
