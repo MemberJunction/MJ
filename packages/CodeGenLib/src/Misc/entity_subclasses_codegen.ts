@@ -6,9 +6,22 @@ import ts from 'typescript';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { logError, logStatus, logWarning } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
-import { mj_core_schema, resolveEntityImportPackage, type ConfigInfo } from '../Config/config';
+import { configInfo, mj_core_schema, resolveEntityImportPackage, type ConfigInfo } from '../Config/config';
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
+import { writeFileIfChanged } from './file-write';
+import { EmitStats } from './emit-stats';
+import {
+  SchemaEmitOptions,
+  buildSchemaBarrel,
+  groupEntitiesBySchema,
+  mapLimit,
+  emitSchemaFile,
+  pruneOrphanedSchemaFiles,
+  resolveSchemaEmitOptions,
+  sanitizeSchemaFileName,
+  schemasToEmit,
+} from './schema-emit';
 
 /**
  * Narrow typed view over a parsed `ts.SourceFile` exposing the internal-but-stable
@@ -182,44 +195,67 @@ export class EntitySubClassGeneratorBase {
    *
    * @param pool
    * @param entities
-   * @param directory 
+   * @param directory
    * @param skipDBUpdate - when set to true, no updates are written back to the database - which happens after code generation when newly generated code from AI has been generated, but in the case where this flag is true, we don't ever write back to the DB because the assumption is we are only emitting code to the file that was already in the DB.
-   * @returns 
+   * @param options - per-schema emit / dirty-schema / parallelism. Defaults come from `configInfo.fileEmit`.
+   * @returns
    */
-  public async generateAllEntitySubClasses(pool: CodeGenConnection, entities: EntityInfo[], directory: string, skipDBUpdate: boolean): Promise<boolean> {
+  public async generateAllEntitySubClasses(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    directory: string,
+    skipDBUpdate: boolean,
+    options?: SchemaEmitOptions,
+  ): Promise<boolean> {
     try {
-      // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
-      const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
-      let sContent: string = "";
-      for (const e of entities) {
-        sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
-      }
-      // Hoist the base-class imports (e.g. ReadOnlyExternalBaseEntity for external entities, or custom
-      // subclass imports) into the file header, de-duplicated. Emitting each once — instead of once per
-      // entity — prevents a TS2300 duplicate-identifier error in files with 2+ external entities.
-      // Only consider entities that actually emit a class: generateEntitySubClass skips PK-less entities
-      // (returns ''), so hoisting their import would leave a dangling/unused import (a build error under
-      // a downstream consumer's noUnusedLocals). Match that skip condition here.
-      const entitiesWithPK = entities.filter((e) => e.PrimaryKeys.length > 0);
-      const localClassNames = new Set(entitiesWithPK.map((e) => `${e.ClassName}Entity`));
-      const baseClassImports: string = [...new Set(
-        entitiesWithPK
-          .map((e) => this.resolveEntityBaseClass(e).importStatement)
-          .filter((s) => s.length > 0),
-      )].join('');
-      // Collect every embed + related-record-collection peer across the file, then emit
-      // one grouped `import { A, B } from 'pkg'` per npm package. Per-entity import
-      // lines would duplicate packages (Address on two owners → two import lines).
-      const peerImports = entitiesWithPK.flatMap((e) =>
-        EntitySubClassGeneratorBase.CollectPeerClassImports(e, localClassNames),
-      );
-      const peerImportStatements = EntitySubClassGeneratorBase.FormatPeerImportStatements(peerImports).join('');
-      const subclassImports = `${baseClassImports}${peerImportStatements}`;
-      const allContent = `${this.generateEntitySubClassFileHeader()} \n ${subclassImports}${zodContent} \n ${sContent}`;
-
+      const emit = this.resolveEmitOptions(options);
       makeDir(directory);
-      fs.writeFileSync(path.join(directory, 'entity_subclasses.ts'), allContent);
 
+      if (!emit.perSchema) {
+        const allContent = await this.assembleEntitySubclassFile(pool, entities, skipDBUpdate, true);
+        this.emitFile(path.join(directory, 'entity_subclasses.ts'), allContent, emit.writeIfChanged);
+        return true;
+      }
+
+      const grouped = groupEntitiesBySchema(entities);
+      const schemas = [...grouped.keys()].sort((a, b) => a.localeCompare(b));
+      const schemasDir = path.join(directory, 'entities');
+      makeDir(schemasDir);
+
+      const toEmit = schemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
+        fs.existsSync(path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`)),
+      );
+      const emitSet = new Set(toEmit);
+      for (const schemaName of schemas) {
+        EmitStats.RecordSchemaEmit(emitSet.has(schemaName));
+      }
+
+      const concurrency = emit.parallel ? emit.concurrency : 1;
+      const assembleStarted = Date.now();
+      await mapLimit(toEmit, concurrency, async (schemaName) => {
+        const schemaEntities = grouped.get(schemaName) ?? [];
+        const content = await this.assembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
+        const filePath = path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`);
+        this.emitFile(filePath, content, emit.writeIfChanged);
+      });
+      EmitStats.AddAssembleMs(Date.now() - assembleStarted);
+
+      // Before the barrel, so the directory and the barrel always agree.
+      const pruned = pruneOrphanedSchemaFiles(schemasDir, schemas);
+      if (pruned.length > 0) {
+        logStatus(`   Removed ${pruned.length} orphaned entity schema file(s): ${pruned.join(', ')}`);
+      }
+
+      const barrel = buildSchemaBarrel(
+        schemas,
+        'entities',
+        `export const loadModule = () => {
+  // no-op — importing this barrel loads every per-schema module via the re-exports below
+}
+
+`,
+      );
+      this.emitFile(path.join(directory, 'entity_subclasses.ts'), barrel, emit.writeIfChanged);
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -229,15 +265,73 @@ export class EntitySubClassGeneratorBase {
     }
   }
 
-  public generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
-import { z } from "zod";
+  /**
+   * Build the TypeScript source for one emit file (one schema, or the legacy monolith).
+   * Hoists and de-duplicates two kinds of import into the file header: the generated
+   * base class each entity extends, and the embedded-record peers an entity references.
+   * Emitting each once per file — instead of once per entity — prevents a TS2300
+   * duplicate-identifier error in a file holding 2+ external entities.
+   *
+   * Entities without primary keys are excluded because {@link generateEntitySubClass}
+   * emits nothing for them; hoisting their imports would leave an unused import that
+   * fails a downstream consumer's `noUnusedLocals`.
+   */
+  public async assembleEntitySubclassFile(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    skipDBUpdate: boolean,
+    includeLoadModule: boolean,
+  ): Promise<string> {
+    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
+    let sContent = '';
+    for (const e of entities) {
+      sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
+    }
+    // Only entities that actually emit a class: generateEntitySubClass skips PK-less entities
+    // (returns ''), so hoisting their imports would leave a dangling/unused import that fails a
+    // downstream consumer's noUnusedLocals.
+    const entitiesWithPK = entities.filter((e) => e.PrimaryKeys.length > 0);
+    const localClassNames = new Set(entitiesWithPK.map((e) => `${e.ClassName}Entity`));
+    // De-duplicated so a file holding 2+ external entities does not emit
+    // `import { ReadOnlyExternalBaseEntity }` twice (TS2300).
+    const baseClassImports: string = [...new Set(
+      entitiesWithPK
+        .map((e) => this.resolveEntityBaseClass(e).importStatement)
+        .filter((s) => s.length > 0),
+    )].join('');
+    // Collect every embed + related-record-collection peer across the file, then emit
+    // one grouped `import { A, B } from 'pkg'` per npm package. Per-entity import
+    // lines would duplicate packages (Address on two owners → two import lines).
+    const peerImports = entitiesWithPK.flatMap((e) =>
+      EntitySubClassGeneratorBase.CollectPeerClassImports(e, localClassNames),
+    );
+    const peerImportStatements = EntitySubClassGeneratorBase.FormatPeerImportStatements(peerImports).join('');
+    const subclassImports = `${baseClassImports}${peerImportStatements}`;
+    return `${this.generateEntitySubClassFileHeader(includeLoadModule)} \n ${subclassImports}${zodContent} \n ${sContent}`;
+  }
 
+  /** Delegates so both generators share one set of defaults; override to change them. */
+  protected resolveEmitOptions(options?: SchemaEmitOptions): Required<SchemaEmitOptions> {
+    return resolveSchemaEmitOptions(options, configInfo?.fileEmit);
+  }
+
+  /** Delegates so both generators write identically; override to change that. */
+  protected emitFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
+    emitSchemaFile(filePath, content, useWriteIfChanged);
+  }
+
+  public generateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
+    const loadModule = includeLoadModule
+      ? `
 export const loadModule = () => {
   // no-op, only used to ensure this file is a valid module and to allow easy loading
 }
-
+`
+      : '';
+    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
+import { RegisterClass } from "@memberjunction/global";
+import { z } from "zod";
+${loadModule}
     `;
   }
 

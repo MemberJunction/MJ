@@ -61,7 +61,12 @@ vi.mock('fs', async () => {
             existsSync: vi.fn().mockReturnValue(true),
             mkdirSync: vi.fn(),
             writeFileSync: vi.fn(),
-            readFileSync: vi.fn().mockReturnValue('')
+            readFileSync: vi.fn().mockReturnValue(''),
+            // Per-schema emit lists its output directory to prune files no live schema
+            // claims. existsSync is stubbed true above, so without these the pruner
+            // reaches the real filesystem.
+            readdirSync: vi.fn().mockReturnValue([]),
+            unlinkSync: vi.fn()
         }
     };
 });
@@ -109,6 +114,10 @@ describe('EntitySubClassGeneratorBase', () => {
     beforeEach(() => {
         generator = new EntitySubClassGeneratorBase();
         vi.clearAllMocks();
+        // clearAllMocks drops return values too. Per-schema emit lists its output directory
+        // to prune files no live schema claims, so a case that stubs existsSync true reaches
+        // readdirSync — and an unset mock returns undefined, not an empty listing.
+        vi.mocked(fs.readdirSync).mockReturnValue([]);
     });
 
     describe('generateEntitySubClassFileHeader', () => {
@@ -130,6 +139,12 @@ describe('EntitySubClassGeneratorBase', () => {
         it('should include loadModule export', () => {
             const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('export const loadModule');
+        });
+
+        it('omits loadModule from a per-schema file so the barrel owns the symbol', () => {
+            const header = generator.generateEntitySubClassFileHeader(false);
+            expect(header).not.toContain('export const loadModule');
+            expect(header).toContain('import { z } from "zod"');
         });
 
         it('should import from @memberjunction/core', () => {
@@ -312,7 +327,29 @@ describe('EntitySubClassGeneratorBase', () => {
             // Regression (fix C): the import was previously emitted inline per external entity, so a file
             // with 2+ external entities produced duplicate `import { ReadOnlyExternalBaseEntity }` lines
             // → TS2300 duplicate identifier. The assembler now hoists + de-duplicates subclass imports.
-            // (fs is mocked, so we capture the content passed to writeFileSync rather than a real file.)
+            // Two entities in the SAME schema share one per-schema file.
+            const writeMock = vi.mocked(fs.writeFileSync);
+            writeMock.mockClear();
+            const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
+            const bronze2 = makeEntity({ Name: 'Bronze Quotes', ClassName: 'BronzeQuotes', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'quotes', SchemaName: 'bronze', BaseTable: 'quotes', BaseView: 'vwBronzeQuotes' });
+            const ok = await generator.generateAllEntitySubClasses(
+                {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
+                [bronze, bronze2] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
+                '/out',
+                true
+            );
+            expect(ok).toBe(true);
+            const schemaCall = writeMock.mock.calls.find((c) => String(c[0]).endsWith('bronze.ts'));
+            expect(schemaCall).toBeTruthy();
+            const content = String(schemaCall![1]);
+            const importMatches = content.match(/import \{ ReadOnlyExternalBaseEntity \} from '@memberjunction\/core-entities';/g) || [];
+            expect(importMatches.length).toBe(1); // exactly one, not one-per-entity
+            expect((content.match(/extends ReadOnlyExternalBaseEntity/g) || []).length).toBe(2); // both still extend it
+            const barrelCall = writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'));
+            expect(String(barrelCall![1])).toContain("export * from './entities/bronze.js'");
+        });
+
+        it('emits one TypeScript file per schema plus a barrel', async () => {
             const writeMock = vi.mocked(fs.writeFileSync);
             writeMock.mockClear();
             const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
@@ -324,12 +361,46 @@ describe('EntitySubClassGeneratorBase', () => {
                 true
             );
             expect(ok).toBe(true);
-            const call = writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'));
-            expect(call).toBeTruthy();
-            const content = String(call![1]);
-            const importMatches = content.match(/import \{ ReadOnlyExternalBaseEntity \} from '@memberjunction\/core-entities';/g) || [];
-            expect(importMatches.length).toBe(1); // exactly one, not one-per-entity
-            expect((content.match(/extends ReadOnlyExternalBaseEntity/g) || []).length).toBe(2); // both still extend it
+            const written = writeMock.mock.calls.map((c) => String(c[0]));
+            expect(written.some((p) => p.endsWith('entities/bronze.ts'))).toBe(true);
+            expect(written.some((p) => p.endsWith('entities/silver.ts'))).toBe(true);
+            expect(written.some((p) => p.endsWith('entity_subclasses.ts'))).toBe(true);
+        });
+
+        it('skips schema files that exist when the dirty set is empty', async () => {
+            vi.mocked(fs.existsSync).mockReturnValue(true);
+            const writeMock = vi.mocked(fs.writeFileSync);
+            writeMock.mockClear();
+            const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
+            const ok = await generator.generateAllEntitySubClasses(
+                {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
+                [bronze] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
+                '/out',
+                true,
+                { dirtySchemas: new Set() },
+            );
+            expect(ok).toBe(true);
+            const written = writeMock.mock.calls.map((c) => String(c[0]));
+            expect(written.some((p) => p.endsWith('entities/bronze.ts'))).toBe(false);
+            expect(written.some((p) => p.endsWith('entity_subclasses.ts'))).toBe(true);
+        });
+
+        it('can still emit the historical single-file monolith', async () => {
+            const writeMock = vi.mocked(fs.writeFileSync);
+            writeMock.mockClear();
+            const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
+            const ok = await generator.generateAllEntitySubClasses(
+                {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
+                [bronze] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
+                '/out',
+                true,
+                { perSchema: false },
+            );
+            expect(ok).toBe(true);
+            const monolith = writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'));
+            expect(monolith).toBeTruthy();
+            expect(String(monolith![1])).toContain('extends ReadOnlyExternalBaseEntity');
+            expect(String(monolith![1])).not.toContain("export * from './entities/");
         });
     });
 
