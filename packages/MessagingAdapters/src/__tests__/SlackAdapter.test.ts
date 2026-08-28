@@ -103,7 +103,7 @@ async function createInitializedAdapter(): Promise<SlackAdapter> {
 
 describe('SlackAdapter', () => {
     beforeEach(() => {
-        mocks.authTest.mockReset().mockResolvedValue({ user_id: 'UBOTID123' });
+        mocks.authTest.mockReset().mockResolvedValue({ user_id: 'UBOTID123', bot_id: 'BBOTID456' });
         mocks.postMessage.mockReset().mockResolvedValue({ ts: 'posted-ts-1' });
         mocks.chatUpdate.mockReset().mockResolvedValue({ ok: true });
         mocks.conversationsReplies.mockReset().mockResolvedValue({ messages: [] });
@@ -307,6 +307,35 @@ describe('SlackAdapter', () => {
             await adapter.HandleMessage(msg);
 
             expect(mocks.usersInfo).toHaveBeenCalledWith({ user: 'U_ALICE' });
+        });
+    });
+
+    describe('self-identification (bot_id vs user_id)', () => {
+        // Slack returns TWO identifiers for one bot, and which one appears in history depends on
+        // how the message was posted. `chat:write.customize` — required for per-agent identity,
+        // and used on every agent reply — makes the post come back as `subtype: 'bot_message'`
+        // with a `bot_id` and NO `user`, so fetchThreadHistory records the B… id. Comparing only
+        // against auth.test()'s U… id therefore never matched this adapter's own replies.
+        const self = (a: SlackAdapter, id: string | null | undefined): boolean =>
+            (a as unknown as { isSelf(s: string | null | undefined): boolean }).isSelf(id);
+
+        it('recognises its own reply posted under a username override', async () => {
+            const adapter = await createInitializedAdapter();
+            // The identity fetchThreadHistory actually produces for this adapter's own replies.
+            expect(self(adapter, 'BBOTID456')).toBe(true);
+        });
+
+        it('still recognises the plain user_id identity', async () => {
+            const adapter = await createInitializedAdapter();
+            expect(self(adapter, 'UBOTID123')).toBe(true);
+        });
+
+        it('does not mistake another bot or a user for itself', async () => {
+            const adapter = await createInitializedAdapter();
+            expect(self(adapter, 'BOTHERBOT')).toBe(false);
+            expect(self(adapter, 'UHUMAN001')).toBe(false);
+            expect(self(adapter, '')).toBe(false);
+            expect(self(adapter, undefined)).toBe(false);
         });
     });
 

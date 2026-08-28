@@ -19,6 +19,12 @@ Defects found running the adapters against a real MJ app — one Slack app per a
   channels: thread replies are answered only by the addressed bot, bot-authored
   messages are excluded from history and thread affinity, and a new
   `DisableDelegation` setting stops a pinned bot from handing off.
+- A bot recognises its own replies. Slack publishes two identifiers for one bot and
+  returns the `bot_id` (with no `user`) for any message posted with a username
+  override — which every agent reply uses, since per-agent identity is the point of
+  one app per agent. Comparing only against `auth.test()`'s `user_id` therefore never
+  matched, so the thread gate above declined threads the bot was actively holding and
+  the agent lost its own turns from context.
 
 **Delivery**
 

@@ -309,9 +309,11 @@ export class SlackMessagingExtension extends BaseServerExtension {
         // (with its full modal build/submit path) was wired only to the HTTP route, which
         // additionally needs a SigningSecret that Socket Mode deployments have no reason to set.
         //
-        // Both the envelope type and the inner payload types are subscribed: which one the Socket
-        // Mode client emits depends on its version, and a silent miss here is exactly the failure
-        // being fixed. Handlers are idempotent per event, so an overlap costs nothing.
+        // Only the envelope type is subscribed. @slack/socket-mode emits the INNER event type for
+        // an `events_api` envelope and the ENVELOPE type for everything else, and Slack labels
+        // every block action and view submission `interactive` — so 'block_actions' and
+        // 'view_submission' subscriptions never fire, and had they fired, a view submission would
+        // have run the agent twice.
         const handleInteractiveEnvelope = async ({ body, ack }: { body?: Record<string, unknown>; ack: () => Promise<void> }) => {
             await ack();
             if (!this.interactClient || !this.adapter) {

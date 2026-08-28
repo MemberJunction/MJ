@@ -46,6 +46,8 @@ export class SlackAdapter extends BaseMessagingAdapter {
 
     /** The bot's own Slack user ID (e.g., `U0123456`). */
     private botUserID: string = '';
+    /** The `B…` id Slack reports for posts made with a username/icon override. */
+    private botID: string = '';
 
     /**
      * Message IDs of "Thinking..." indicators, keyed by `channelId:threadTs`.
@@ -107,6 +109,10 @@ export class SlackAdapter extends BaseMessagingAdapter {
     protected async onInitialize(): Promise<void> {
         const authResult = await this.client.auth.test();
         this.botUserID = authResult.user_id as string;
+        // Captured alongside user_id because they are NOT interchangeable in history: a reply
+        // posted with a username override (which every agent reply uses) returns `bot_id` and no
+        // `user`, so fetchThreadHistory records the B… id while auth.test() reports the U… one.
+        this.botID = (authResult.bot_id as string) ?? '';
     }
 
     /**
@@ -124,6 +130,20 @@ export class SlackAdapter extends BaseMessagingAdapter {
             if (raw['subtype'] === 'bot_message') return true;
         }
         return false;
+    }
+
+    /**
+     * Either identifier counts as this bot.
+     *
+     * `chat:write.customize` is required for per-agent identity, and a post made with it comes
+     * back as `subtype: 'bot_message'` with a `bot_id` and no `user`. Comparing only against
+     * `user_id` therefore never matched this adapter's own replies — which silently made the
+     * multi-bot thread gate decline threads this bot was actively holding, and dropped the
+     * agent's own turns from its context.
+     */
+    protected isSelf(senderId: string | null | undefined): boolean {
+        if (!senderId) return false;
+        return senderId === this.botUserID || (!!this.botID && senderId === this.botID);
     }
 
     protected getBotUserId(): string {
@@ -238,6 +258,9 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * Derived from the map above so the two cannot drift, plus common types an agent may name
      * directly without our having a MIME mapping for them.
      */
+    /** A reply delivers files, it does not become a file dump. Mirrors the media-block limit. */
+    private static readonly MAX_UPLOADS_PER_REPLY = 5;
+
     private static readonly KNOWN_FILE_EXTENSIONS: ReadonlySet<string> = new Set([
         ...Object.values(SlackAdapter.EXTENSION_BY_MIME_TYPE),
         'jpeg', 'png', 'gif', 'webp', 'html', 'zip', 'mp3', 'mp4', 'wav', 'xml', 'yaml',
@@ -257,8 +280,17 @@ export class SlackAdapter extends BaseMessagingAdapter {
     protected async uploadMediaOutputs(originalMessage: IncomingMessage, files: readonly UploadableFile[]): Promise<void> {
         const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
         // Capped to mirror the media-block limit — a reply should not become a file dump.
-        for (const file of files.slice(0, 5)) {
-            if (!file || typeof file.data !== 'string' || file.data.length === 0) continue;
+        // Filtered BEFORE the cap, not inside the loop: an entry carrying only a URL has no bytes
+        // to upload, and counting it against the budget silently shrank how many real files got
+        // through.
+        const deliverable = files.filter(
+            (f): f is UploadableFile & { data: string } => !!f && typeof f.data === 'string' && f.data.length > 0);
+        const batch = deliverable.slice(0, SlackAdapter.MAX_UPLOADS_PER_REPLY);
+        if (deliverable.length > batch.length) {
+            LogStatus(`Slack: delivering ${batch.length} of ${deliverable.length} generated files (per-reply cap)`);
+        }
+
+        for (const file of batch) {
 
             const mimeType = (file.mimeType ?? 'image/png').toLowerCase();
             const extension = SlackAdapter.EXTENSION_BY_MIME_TYPE[mimeType]

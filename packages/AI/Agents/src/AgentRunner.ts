@@ -48,6 +48,21 @@ export interface CreatedArtifactInfo {
 }
 
 /**
+ * Choose the artifact a run should be represented by.
+ *
+ * A FILE artifact wins over the payload artifact: the file is the deliverable the user asked for
+ * (a .docx, a .pdf), while the payload artifact is a snapshot of the agent's internal state.
+ * Callers surface this as a single "open the artifact" affordance, so a document-generating run
+ * used to point at raw JSON. With several files, the first is the primary one.
+ */
+export function selectPrimaryArtifact(
+    fileArtifacts: readonly CreatedArtifactInfo[] | undefined,
+    payloadArtifact: CreatedArtifactInfo | undefined
+): CreatedArtifactInfo | undefined {
+    return fileArtifacts?.[0] ?? payloadArtifact;
+}
+
+/**
  * AgentRunner provides a thin wrapper for executing AI agents.
  * 
  * This class handles:
@@ -66,22 +81,6 @@ export interface CreatedArtifactInfo {
  * });
  * ```
  */
-
-/**
- * Choose the artifact a run should be represented by.
- *
- * A FILE artifact wins over the payload artifact: the file is the deliverable the user asked for
- * (a .docx, a .pdf), while the payload artifact is a snapshot of the agent's internal state.
- * Callers surface this as a single "open the artifact" affordance, so a document-generating run
- * used to point at raw JSON. With several files, the first is the primary one.
- */
-export function selectPrimaryArtifact(
-    fileArtifacts: readonly CreatedArtifactInfo[] | undefined,
-    payloadArtifact: CreatedArtifactInfo | undefined
-): CreatedArtifactInfo | undefined {
-    return fileArtifacts?.[0] ?? payloadArtifact;
-}
-
 export class AgentRunner {
     private readonly _provider: IMetadataProvider;
 

@@ -98,7 +98,6 @@ export interface UploadableFile {
  * This gives proper per-user permission scoping without a separate auth flow.
  * Falls back to the configured service account email if no MJ user matches.
  */
-
 export abstract class BaseMessagingAdapter {
     /**
      * Optional per-platform file upload. Implemented by adapters whose platform can accept file
@@ -186,7 +185,7 @@ export abstract class BaseMessagingAdapter {
             const botUserId = this.getBotUserId();
             const addressed = message.IsBotMention === true
                 || (!!botUserId && typeof message.Text === 'string' && message.Text.includes(botUserId));
-            const inThread = !!botUserId && threadHistory.some((m) => m.SenderID === botUserId);
+            const inThread = threadHistory.some((m) => this.isSelf(m.SenderID));
             if (!addressed && !inThread) {
                 LogStatus(
                     `${this.PlatformName}: not answering thread ${message.ThreadID} — this bot was not ` +
@@ -344,6 +343,20 @@ export abstract class BaseMessagingAdapter {
      * inspects the platform's raw event for a bot marker; platforms that expose this differently
      * should override.
      */
+    /**
+     * Was this message posted by THIS bot?
+     *
+     * Not a bare `=== getBotUserId()`. A platform may publish more than one identifier for the
+     * same bot and return a different one depending on how the message was posted — on Slack a
+     * post carrying a `username`/`icon_url` override comes back with a `bot_id` and NO `user`,
+     * and this adapter sets that override on every agent reply so the agent answers under its own
+     * name. Platforms with that split override this; the default is a single-identifier compare.
+     */
+    protected isSelf(senderId: string | null | undefined): boolean {
+        const botUserId = this.getBotUserId();
+        return !!senderId && !!botUserId && senderId === botUserId;
+    }
+
     protected isBotAuthored(_message: IncomingMessage): boolean {
         return false;
     }
@@ -648,15 +661,13 @@ export abstract class BaseMessagingAdapter {
     private resolveThreadAgent(threadHistory: IncomingMessage[]): MJAIAgentEntityExtended | null {
         if (threadHistory.length === 0) return null;
 
-        const botUserId = this.getBotUserId();
-
         // Walk through thread messages (oldest first) looking for user messages with agent mentions
         for (const msg of threadHistory) {
             // Skip bot messages — this bot's own, AND any other bot's. Another agent's reply
             // names that agent in its own prose ("I'm Sage, ..."), which the mention matcher
             // below reads as a user asking for it, letting one bot steal a thread that belongs
             // to another. Only humans establish thread affinity.
-            if (msg.SenderID === botUserId || this.isBotAuthored(msg)) continue;
+            if (this.isSelf(msg.SenderID) || this.isBotAuthored(msg)) continue;
 
             // Check for agent mentions in this message
             const mentions = msg.MentionedAgentNames ?? this.matchAgentMentions(msg.Text);
@@ -1189,9 +1200,9 @@ export abstract class BaseMessagingAdapter {
                 mimeType: parsed.mediaType,
                 data: parsed.data,
                 label: cmd.label,
-                // Not part of OpenURLCommand — document actions attach it opportunistically,
-                // so it is read off-contract rather than assumed.
-                fileName: (cmd as { fileName?: string }).fileName,
+                // No fileName: `OpenURLCommand` does not declare one, nothing in the repo emits
+                // one, and the model-facing command contract never mentions the field — so the
+                // adapter derives the name from the label and the MIME type instead.
             });
         }
         return files;
@@ -1315,15 +1326,14 @@ export abstract class BaseMessagingAdapter {
         history: IncomingMessage[],
         currentMessage: IncomingMessage
     ): ChatMessage[] {
-        const botUserId = this.getBotUserId();
         const messages: ChatMessage[] = [];
 
         for (const msg of history) {
             // Another bot's message is neither this agent's own turn nor anything the user said.
             // Left as a 'user' turn it fed a different agent's self-description into this
             // agent's context, and the model imitated it.
-            if (msg.SenderID !== botUserId && this.isBotAuthored(msg)) continue;
-            const role = msg.SenderID === botUserId ? 'assistant' : 'user';
+            if (!this.isSelf(msg.SenderID) && this.isBotAuthored(msg)) continue;
+            const role = this.isSelf(msg.SenderID) ? 'assistant' : 'user';
             const content = role === 'user' ? this.stripBotMention(msg.Text) : msg.Text;
             if (content.trim()) {
                 messages.push({ role, content });

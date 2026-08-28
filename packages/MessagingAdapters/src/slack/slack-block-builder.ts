@@ -10,6 +10,7 @@
  */
 
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
+import { parseBase64DataUrl } from '@memberjunction/ai';
 import { LogStatus } from '@memberjunction/core';
 import { markdownToBlocks } from './slack-formatter.js';
 import { buildExplorerDeepLink, isOpenableURI } from '../base/message-formatter.js';
@@ -351,10 +352,15 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
   for (const cmd of commands.slice(0, 5)) {
     if (cmd.type === 'open:url' && 'url' in cmd) {
       if (!isOpenableURI(cmd.url)) {
-        // Name the file rather than dumping it: the adapter uploads inlined file data as a real
-        // attachment (see BaseMessagingAdapter.collectInlineFileAttachments), so the bytes still
-        // reach the user — as a download, not as text to copy.
-        resourceInfoItems.push(`📄 _${cmd.label} — attached to this reply._`);
+        // Only PROMISE an attachment when one will actually be harvested. The drop-guard fires on
+        // any non-http(s) scheme, but only a base64 `data:` URI yields bytes — a `blob:`, `file:`
+        // or unparseable `data:` would otherwise render "attached to this reply" beside nothing.
+        // Matches BaseMessagingAdapter.collectInlineFileAttachments, which parses the same shape.
+        resourceInfoItems.push(
+          isHarvestableFileURI(cmd.url)
+            ? `📄 _${escapeMrkdwn(cmd.label)} — attached to this reply._`
+            : `📄 _${escapeMrkdwn(cmd.label)} — not linkable from Slack._`
+        );
       } else if (isButtonSafeURL(cmd.url)) {
         buttons.push(buildURLButton(cmd.label, cmd.url, buttons.length));
       } else {
@@ -400,7 +406,7 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
 function buildURLButton(label: string | undefined, url: string, index: number): Record<string, unknown> {
   return {
     type: 'button',
-    text: { type: 'plain_text', text: truncateToLength(label ?? `Link ${index + 1}`, 75), emoji: true },
+    text: { type: 'plain_text', text: truncateToLength(label ?? `Link ${index + 1}`, SLACK_BUTTON_TEXT_MAX_LENGTH), emoji: true },
     action_id: `mj:action_${index}`,
     url
   };
@@ -671,7 +677,7 @@ export function buildFormModal(form: AgentResponseForm): Record<string, unknown>
     type: 'modal',
     callback_id: 'mj:form_modal:submit',
     title: { type: 'plain_text', text: truncateToLength(form.title ?? 'Form', 24) },
-    submit: { type: 'plain_text', text: truncateToLength(form.submitLabel ?? 'Submit', SLACK_BUTTON_TEXT_MAX_LENGTH) },
+    submit: { type: 'plain_text', text: truncateToLength(form.submitLabel ?? 'Submit', SLACK_MODAL_SUBMIT_MAX_LENGTH) },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks: modalBlocks,
   };
@@ -723,7 +729,7 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
         type: 'radio_buttons',
         action_id: `mj:form_field:${question.id}`,
         options: opts.slice(0, 10).map((opt) => ({
-          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), SLACK_BUTTON_TEXT_MAX_LENGTH) },
           value: String(opt.value),
         })),
       };
@@ -735,7 +741,7 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
         type: 'static_select',
         action_id: `mj:form_field:${question.id}`,
         options: opts.slice(0, 100).map((opt) => ({
-          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), SLACK_BUTTON_TEXT_MAX_LENGTH) },
           value: String(opt.value),
         })),
       };
@@ -747,7 +753,7 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
         type: 'checkboxes',
         action_id: `mj:form_field:${question.id}`,
         options: opts.slice(0, 10).map((opt) => ({
-          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), SLACK_BUTTON_TEXT_MAX_LENGTH) },
           value: String(opt.value),
         })),
       };
@@ -897,6 +903,13 @@ function appendTruncationNotice(blocks: Record<string, unknown>[], storeKey?: st
 const SLACK_PLACEHOLDER_MAX_LENGTH = 150;
 
 /**
+ * Will `collectInlineFileAttachments` actually get bytes out of this URI?
+ */
+function isHarvestableFileURI(url: unknown): boolean {
+  return typeof url === 'string' && parseBase64DataUrl(url.trim().replace(/^data:/i, 'data:')) !== null;
+}
+
+/**
  * Escape the three characters that carry meaning inside Slack mrkdwn.
  *
  * A link is `<url|label>`, so an agent-authored label containing `>` closes the link early and
@@ -907,12 +920,20 @@ function escapeMrkdwn(text: string): string {
 }
 
 /**
- * Slack's maximum length for button and modal submit text.
+ * Slack's maximum length for a modal view's `submit` text.
  *
  * Same failure mode as the placeholder above, from the same cause: `submitLabel` is
  * agent-authored free text, and an over-long one fails the whole `views.open`.
  */
-const SLACK_BUTTON_TEXT_MAX_LENGTH = 24;
+const SLACK_MODAL_SUBMIT_MAX_LENGTH = 24;
+
+/**
+ * Slack's maximum length for a message button's text.
+ *
+ * Three times the modal-submit limit — applying 24 here would cut an agent-authored label to 21
+ * characters plus an ellipsis for no reason, since a message button is not part of a view.
+ */
+const SLACK_BUTTON_TEXT_MAX_LENGTH = 75;
 
 /**
  * Truncate a string to a given length with ellipsis.
