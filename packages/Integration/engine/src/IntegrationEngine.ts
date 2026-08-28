@@ -2016,6 +2016,68 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /** Per-integration request-spacing chain for the rate limiter (keyed by IntegrationID → last scheduled time). */
     private readonly _rateLimiters = new Map<string, RateLimiter>();
 
+    /**
+     * Per-connection gate on SIMULTANEOUS vendor fetches — adaptive, throttle-detected.
+     *
+     * Vendors govern by concurrent requests per ACCOUNT (NetSuite's base tier is 5), and the
+     * punishment for exceeding the grant is served INSIDE the fetch: the request is rejected
+     * and the retry's backoff burns tens of seconds while every resource metric reads idle.
+     * Measured live: a tight cluster of ~31.5s fetch durations on an account whose grant was 5
+     * while the engine had ~16 requests in flight (lanes x prefetch).
+     *
+     * The gate caps in-flight fetches per connection so the overflow queues CLIENT-side for
+     * milliseconds instead of SERVER-side for seconds. Sync concurrency (how many entity maps
+     * run at once) is deliberately NOT reduced — only simultaneous wire calls are.
+     *
+     * The cap is adaptive (AIMD): it starts at `Configuration.fetchConcurrency ??
+     * connector.MaxConcurrencyHint ?? 5`, HALVES whenever a throttle is detected, and creeps
+     * back up by 1 per clean fetch. Throttles reach it from both directions: fetch-level
+     * RATE_LIMIT errors the engine sees itself, and throttles the connector absorbs inside
+     * its own retry loop and reports via `ctx.RateLimitReport` — both land in
+     * `reportRateOutcome`, which feeds this controller. The gate therefore FINDS the
+     * account's real grant with zero configuration, and scales up automatically on accounts
+     * with a larger one.
+     */
+    private _fetchGates?: Map<string, { ceiling: number; controller: AdaptiveConcurrencyController; inFlight: number; waiters: (() => void)[] }>;
+
+    private getFetchGate(config: RunConfiguration): { ceiling: number; controller: AdaptiveConcurrencyController; inFlight: number; waiters: (() => void)[] } {
+        this._fetchGates ??= new Map();
+        const key = config.companyIntegration.ID as string;
+        const ceiling = Math.max(1, this.getConfigOverrides(config).fetchConcurrency
+            ?? config.connector.MaxConcurrencyHint ?? 5);
+        let gate = this._fetchGates.get(key);
+        if (!gate || gate.ceiling !== ceiling) {
+            gate = { ceiling, controller: new AdaptiveConcurrencyController({ start: ceiling, min: 1, max: ceiling }), inFlight: 0, waiters: [] };
+            this._fetchGates.set(key, gate);
+        }
+        return gate;
+    }
+
+    /**
+     * Runs `fn` holding one slot of the connection's fetch gate. A whole retry episode holds a
+     * single slot — retries of a throttled call must not add pressure to the account that just
+     * throttled us. FIFO: waiters resolve in arrival order as slots free or the cap grows.
+     */
+    private async withFetchGate<T>(config: RunConfiguration, fn: () => Promise<T>): Promise<T> {
+        const gate = this.getFetchGate(config);
+        while (gate.inFlight >= gate.controller.Cap) {
+            await new Promise<void>((resolve) => gate.waiters.push(resolve));
+        }
+        gate.inFlight++;
+        try {
+            return await fn();
+        } finally {
+            gate.inFlight--;
+            // Wake as many waiters as the CURRENT cap allows — it may have grown (or shrunk)
+            // while they slept; each woken waiter re-checks the cap before taking a slot.
+            while (gate.waiters.length > 0 && gate.inFlight < gate.controller.Cap) {
+                const next = gate.waiters.shift();
+                if (next) next();
+                else break;
+            }
+        }
+    }
+
     /** Minimum ms between outbound requests for this integration (Integration.BatchRequestWaitTime; 0 = disabled). */
     private getRequestSpacingMs(config: RunConfiguration): number {
         try {
@@ -2054,7 +2116,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private getConfigOverrides(config: RunConfiguration): {
         maxConcurrency?: number; rateLimitTokensPerSec?: number; rateLimitBurst?: number; discoveryTimeBudgetMs?: number;
-        fetchTimeoutMs?: number;
+        fetchTimeoutMs?: number; fetchConcurrency?: number;
     } {
         try {
             const raw = config.companyIntegration.Configuration;
@@ -2066,6 +2128,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 rateLimitBurst: PositiveInt(p.rateLimitBurst),
                 discoveryTimeBudgetMs: PositiveInt(p.discoveryTimeBudgetMs),
                 fetchTimeoutMs: PositiveInt(p.fetchTimeoutMs),
+                // Ceiling on SIMULTANEOUS vendor fetches for this connection (see getFetchGate).
+                fetchConcurrency: PositiveInt(p.fetchConcurrency),
             };
         } catch { return {}; }
     }
@@ -2102,6 +2166,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private reportRateOutcome(config: RunConfiguration, throttledErr?: unknown): void {
         const key = config.companyIntegration.ID as string;
+        // The adaptive fetch gate learns from the SAME signal: a clean outcome creeps the
+        // in-flight cap up by 1; a throttle halves it. This is what makes the gate find the
+        // account's real concurrency grant with zero configuration — including throttles the
+        // connector absorbed inside its own retry and surfaced via ctx.RateLimitReport.
+        const gate = this._fetchGates?.get(key);
+        if (gate) {
+            if (throttledErr === undefined) gate.controller.OnSuccess();
+            else gate.controller.OnThrottleOrError();
+        }
         const rl = this._rateLimiters.get(key);
         if (!rl) return;
         if (throttledErr === undefined) { rl.ReportSuccess(key); return; }
@@ -2383,7 +2456,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // Resilient fetch: bound each attempt with a timeout (a hung vendor API must not
                 // hold the sync lock forever) and retry only transient errors (network/throttle/DB).
                 // A non-retryable error (auth, 4xx, parse) throws immediately as before.
-                batch = await WithRetry(
+                batch = await this.withFetchGate(config, () => WithRetry(
                     () => WithTimeout(
                         config.connector.FetchChanges(ctx),
                         fetchTimeoutMs,
@@ -2440,7 +2513,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         // limiter entirely — including the freeze the line above just applied.
                         BeforeRetry: () => this.rateLimit(config),
                     },
-                );
+                ));
                 this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
                 fetchGapCount = 0;                // clean fetch → reset the consecutive fetch-gap counter
                 // §10: connector type-driven post-processing hook (default no-op) — enforce/normalize
