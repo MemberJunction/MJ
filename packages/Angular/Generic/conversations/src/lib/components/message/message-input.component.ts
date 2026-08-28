@@ -407,16 +407,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private completionTimestamps = new Map<string, number>();
   // Track registered streaming callbacks for cleanup
   private registeredCallbacks = new Map<string, (progress: MessageProgressUpdate) => Promise<void>>();
-  // Bounded poll after a post-ACK disconnect keeps In-Progress. The GraphQLAIClient
-  // stall reconciler only runs while invokeSubAgent is waiting; once it returns,
-  // this watch is the bound so a dead socket cannot leave the red-pill timer forever.
-  // Must outlast the server: Skip RequestManager defaults to 30 minutes
-  // (REQUEST_MAX_AGE_MS). Giving up earlier unregisters the streaming callback
-  // so a later server Complete never lands and the bubble stays Error.
-  private static readonly IN_FLIGHT_WATCH_INTERVAL_MS = 15_000;
-  // 30 min / 15 s. Must stay ≥ Skip RequestManager REQUEST_MAX_AGE_MS (30 min).
-  private static readonly IN_FLIGHT_WATCH_MAX_ATTEMPTS = 120;
-  private inFlightWatches = new Map<string, ReturnType<typeof setInterval>>();
+  // After a post-ACK disconnect, keep observing ConversationDetail.Status until
+  // the *server* writes Complete/Error (MaxTimePerRun terminates the run).
+  // Back off 5s → 15s → 60s so we bound polling cost, not invent a client
+  // verdict. Do not paint Error here — that would unregister the streaming
+  // callback and make a later server Complete sticky-wrong until reload.
+  private static readonly IN_FLIGHT_WATCH_BACKOFF_MS = [5_000, 15_000, 60_000] as const;
+  private inFlightWatches = new Map<string, ReturnType<typeof setTimeout>>();
 
   // Track pending attachments from the input box
   private pendingAttachments: PendingAttachment[] = [];
@@ -1765,7 +1762,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         await this.applyAgentFailureToDetail(
           conversationManagerMessage,
           userMessage,
-          this.converationManagerAgent?.Name || 'Sage',
+          'Sage',
           result,
           'failed',
         );
@@ -2769,9 +2766,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * A dropped HTTP/WebSocket path used to return `null` from invokeSubAgent, so
    * the bubble said "Unknown error" while the AIAgentRun stayed Running and the
    * timer kept ticking. If the transport ACKed the mutation and then died, keep
-   * In-Progress so a later completion event (or the bounded watch below) can
-   * land. The GraphQLAIClient stall reconciler only covers the wait inside
-   * invokeSubAgent; once that returns, {@link startInFlightDetailWatch} is the bound.
+   * In-Progress so a later completion event (or {@link startInFlightDetailWatch})
+   * can land. ConversationDetail.Status is the server's claim; the client only
+   * renders it. The GraphQLAIClient stall reconciler covers the wait inside
+   * invokeSubAgent; once that returns, the watch observes the detail until the
+   * server writes a terminal status (MaxTimePerRun).
    *
    * Always completes the user message — the user turn finished regardless of
    * what the agent is doing.
@@ -2794,7 +2793,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       // terminal server status (Complete/Error) — starting it would race the
       // just-completed bubble.
       if (agentResponseMessage.Status === 'In-Progress') {
-        this.startInFlightDetailWatch(agentResponseMessage, agentName, disposition.message);
+        this.startInFlightDetailWatch(agentResponseMessage);
       }
       await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       return;
@@ -2808,28 +2807,27 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
   }
 
-  private startInFlightDetailWatch(
-    detail: MJConversationDetailEntity,
-    agentName: string,
-    disconnectMessage: string,
-  ): void {
+  private startInFlightDetailWatch(detail: MJConversationDetailEntity): void {
     if (!detail.ID) {
       return;
     }
     this.stopInFlightDetailWatch(detail.ID);
-    let attempts = 0;
-    const handle = setInterval(() => {
-      void this.pollInFlightDetail(detail, agentName, disconnectMessage, ++attempts);
-    }, MessageInputComponent.IN_FLIGHT_WATCH_INTERVAL_MS);
+    this.scheduleInFlightDetailPoll(detail, 0);
+  }
+
+  private scheduleInFlightDetailPoll(detail: MJConversationDetailEntity, step: number): void {
+    const delays = MessageInputComponent.IN_FLIGHT_WATCH_BACKOFF_MS;
+    const delay = delays[Math.min(step, delays.length - 1)];
+    const handle = setTimeout(() => {
+      void this.pollInFlightDetail(detail, step);
+    }, delay);
     this.inFlightWatches.set(detail.ID, handle);
   }
 
-  private async pollInFlightDetail(
-    detail: MJConversationDetailEntity,
-    agentName: string,
-    disconnectMessage: string,
-    attempts: number,
-  ): Promise<void> {
+  private async pollInFlightDetail(detail: MJConversationDetailEntity, step: number): Promise<void> {
+    if (!this.inFlightWatches.has(detail.ID)) {
+      return;
+    }
     try {
       await detail.Load(detail.ID);
       if (detail.Status === 'Complete' || detail.Status === 'Error') {
@@ -2841,28 +2839,23 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     } catch (e) {
       console.warn(`[InFlightWatch] Failed to reload conversation detail ${detail.ID}:`, e);
     }
-    if (attempts >= MessageInputComponent.IN_FLIGHT_WATCH_MAX_ATTEMPTS) {
-      this.stopInFlightDetailWatch(detail.ID);
-      detail.Error = disconnectMessage;
-      await this.updateConversationDetail(
-        detail,
-        `⏳ **${agentName}** may still be running on the server. Please refresh to check the latest status.\n\n${disconnectMessage}`,
-        'Error',
-      );
+    if (!this.inFlightWatches.has(detail.ID)) {
+      return;
     }
+    this.scheduleInFlightDetailPoll(detail, step + 1);
   }
 
   private stopInFlightDetailWatch(detailId: string): void {
     const handle = this.inFlightWatches.get(detailId);
     if (handle) {
-      clearInterval(handle);
+      clearTimeout(handle);
       this.inFlightWatches.delete(detailId);
     }
   }
 
   private clearInFlightWatches(): void {
     for (const handle of this.inFlightWatches.values()) {
-      clearInterval(handle);
+      clearTimeout(handle);
     }
     this.inFlightWatches.clear();
   }

@@ -37,7 +37,7 @@ describe('isDisconnectWhileAgentMayStillBeRunning', () => {
 
     it('is false for a genuine pipeline failure', () => {
         expect(isDisconnectWhileAgentMayStillBeRunning(
-            "Pipeline failed at step 'Execute Sub-Agent: Skip: Data Expert'"
+            "Pipeline failed at step 'Execute Sub-Agent: Specialist'"
         )).toBe(false);
     });
 
@@ -74,10 +74,10 @@ describe('agentFailureDisposition', () => {
 
     it('paints Error for a real agent failure', () => {
         expect(agentFailureDisposition({
-            errorMessage: "Pipeline failed at step 'Execute Sub-Agent: Skip: Data Expert'",
+            errorMessage: "Pipeline failed at step 'Execute Sub-Agent: Specialist'",
         })).toEqual({
             status: 'Error',
-            message: "Pipeline failed at step 'Execute Sub-Agent: Skip: Data Expert'",
+            message: "Pipeline failed at step 'Execute Sub-Agent: Specialist'",
         });
     });
 });
