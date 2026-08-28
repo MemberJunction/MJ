@@ -14,7 +14,7 @@
  */
 
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
-import { isOpenableURI, splitMarkdownIntoSections } from '../base/message-formatter.js';
+import { buildExplorerDeepLink, isOpenableURI, splitMarkdownIntoSections } from '../base/message-formatter.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -666,37 +666,6 @@ function buildMediaElements(mediaOutputs: MediaOutput[]): Record<string, unknown
         }));
 }
 
-/**
- * Build a deep link URL into MJ Explorer for an `open:resource` command.
- */
-function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
-    if (!explorerBaseURL) return null;
-    const base = explorerBaseURL.replace(/\/+$/, '');
-
-    switch (cmd.resourceType) {
-        case 'Record':
-            if (cmd.entityName && cmd.resourceId) {
-                const entity = encodeURIComponent(cmd.entityName);
-                const id = encodeURIComponent(cmd.resourceId);
-                return `${base}/resource/record/${entity}/${id}`;
-            }
-            break;
-        case 'Dashboard':
-            // `resourceId` is optional on the shared UICommand type (a Record can key off
-            // `keys` instead), but these kinds have nothing to link to without it. Fall
-            // through to `null` like the Record case rather than emit `/undefined`.
-            if (!cmd.resourceId) break;
-            return `${base}/resource/dashboard/${encodeURIComponent(cmd.resourceId)}`;
-        case 'Report':
-            if (!cmd.resourceId) break;
-            return `${base}/resource/report/${encodeURIComponent(cmd.resourceId)}`;
-        case 'View':
-            if (!cmd.resourceId) break;
-            return `${base}/resource/view/${encodeURIComponent(cmd.resourceId)}`;
-    }
-
-    return null;
-}
 
 /**
  * Assemble the final Adaptive Card JSON structure.

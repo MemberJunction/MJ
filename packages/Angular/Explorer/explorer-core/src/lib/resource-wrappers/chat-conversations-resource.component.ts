@@ -526,8 +526,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     const search = typeof window !== 'undefined' ? window.location.search : '';
     const conversationId = resolveDeepLinkParam('conversationId', search, qp, config.conversationId as string);
     const artifactId = resolveDeepLinkParam('artifactId', search, qp, config.artifactId as string);
-    const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
-      : config.versionNumber ? (config.versionNumber as number) : null;
+    // Resolved the same URL-first way as artifactId above: pairing a URL artifact with the
+    // previous visit's version number would open the wrong version of the right artifact.
+    const rawVersion = resolveDeepLinkParam(
+      'versionNumber', search, qp, config.versionNumber != null ? String(config.versionNumber) : undefined);
+    const versionNumber = rawVersion ? parseInt(rawVersion, 10) : null;
 
     // Set pending artifact if provided
     if (artifactId) {

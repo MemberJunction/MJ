@@ -12,7 +12,7 @@
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
 import { LogStatus } from '@memberjunction/core';
 import { markdownToBlocks } from './slack-formatter.js';
-import { isOpenableURI } from '../base/message-formatter.js';
+import { buildExplorerDeepLink, isOpenableURI } from '../base/message-formatter.js';
 
 /** Slack enforces a hard 50-block limit per message. */
 const SLACK_MAX_BLOCKS = 50;
@@ -358,7 +358,7 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
       } else if (isButtonSafeURL(cmd.url)) {
         buttons.push(buildURLButton(cmd.label, cmd.url, buttons.length));
       } else {
-        resourceInfoItems.push(`<${cmd.url}|${cmd.label}>`);
+        resourceInfoItems.push(`<${cmd.url}|${escapeMrkdwn(cmd.label)}>`);
       }
     } else if (cmd.type === 'open:resource') {
       const resourceCmd = cmd as OpenResourceCommand;
@@ -368,7 +368,7 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
       } else if (deepLink) {
         // Not button-safe (a localhost Explorer, typical in local dev) — a mrkdwn link is
         // accepted where a button URL is not, and still resolves for whoever can reach it.
-        resourceInfoItems.push(`<${deepLink}|${cmd.label}>`);
+        resourceInfoItems.push(`<${deepLink}|${escapeMrkdwn(cmd.label)}>`);
       } else {
         resourceInfoItems.push(formatResourceInfo(resourceCmd));
       }
@@ -406,38 +406,6 @@ function buildURLButton(label: string | undefined, url: string, index: number): 
   };
 }
 
-/**
- * Build a deep link URL into MJ Explorer for an `open:resource` command.
- * Returns null if no explorer base URL is configured.
- */
-function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
-  if (!explorerBaseURL) return null;
-  const base = explorerBaseURL.replace(/\/+$/, '');
-
-  switch (cmd.resourceType) {
-    case 'Record':
-      if (cmd.entityName && cmd.resourceId) {
-        const entity = encodeURIComponent(cmd.entityName);
-        const id = encodeURIComponent(cmd.resourceId);
-        return `${base}/resource/record/${entity}/${id}`;
-      }
-      break;
-    case 'Dashboard':
-      // `resourceId` is optional on the shared UICommand type (a Record can key off
-      // `keys` instead), but these kinds have nothing to link to without it. Fall
-      // through to `null` like the Record case rather than emit `/undefined`.
-      if (!cmd.resourceId) break;
-      return `${base}/resource/dashboard/${encodeURIComponent(cmd.resourceId)}`;
-    case 'Report':
-      if (!cmd.resourceId) break;
-      return `${base}/resource/report/${encodeURIComponent(cmd.resourceId)}`;
-    case 'View':
-      if (!cmd.resourceId) break;
-      return `${base}/resource/view/${encodeURIComponent(cmd.resourceId)}`;
-  }
-
-  return null;
-}
 
 /**
  * Format an `open:resource` command as descriptive text for a context block.
@@ -929,6 +897,16 @@ function appendTruncationNotice(blocks: Record<string, unknown>[], storeKey?: st
 const SLACK_PLACEHOLDER_MAX_LENGTH = 150;
 
 /**
+ * Escape the three characters that carry meaning inside Slack mrkdwn.
+ *
+ * A link is `<url|label>`, so an agent-authored label containing `>` closes the link early and
+ * the rest of it leaks out as literal text.
+ */
+function escapeMrkdwn(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\|/g, '&#124;');
+}
+
+/**
  * Slack's maximum length for button and modal submit text.
  *
  * Same failure mode as the placeholder above, from the same cause: `submitLabel` is
@@ -941,5 +919,7 @@ const SLACK_BUTTON_TEXT_MAX_LENGTH = 24;
  */
 function truncateToLength(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength - 3) + '...';
+  // Sliced by code point, not code unit: cutting mid-surrogate leaves a lone half that renders
+  // as a replacement character.
+  return Array.from(text).slice(0, maxLength - 3).join('') + '...';
 }

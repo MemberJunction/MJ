@@ -195,6 +195,16 @@ class TestAdapter extends BaseMessagingAdapter {
     }
 
     public get PlatformName(): string { return 'TestPlatform'; }
+
+    /**
+     * Modelled on Slack, whose Events API marks bot messages with `bot_id`. The base class
+     * deliberately answers `false` — the question is platform-specific — so a test platform has
+     * to state its own convention, exactly as SlackAdapter does.
+     */
+    protected isBotAuthored(message: IncomingMessage): boolean {
+        const raw = message.RawEvent;
+        return !!(raw && typeof raw === 'object' && (raw['bot_id'] || raw['subtype'] === 'bot_message'));
+    }
 }
 
 /** A TestAdapter whose platform routes every thread reply to every app (Slack-like). */

@@ -344,12 +344,7 @@ export abstract class BaseMessagingAdapter {
      * inspects the platform's raw event for a bot marker; platforms that expose this differently
      * should override.
      */
-    protected isBotAuthored(message: IncomingMessage): boolean {
-        const raw = message.RawEvent;
-        if (raw && typeof raw === 'object') {
-            if (raw['bot_id'] || raw['bot_profile']) return true;
-            if (raw['subtype'] === 'bot_message') return true;
-        }
+    protected isBotAuthored(_message: IncomingMessage): boolean {
         return false;
     }
 

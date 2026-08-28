@@ -3,6 +3,7 @@
  * @description Shared formatting utilities used by all platform-specific formatters.
  */
 
+import { OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { MarkdownSection } from './types.js';
 
 /**
@@ -246,4 +247,38 @@ export function isOpenableURI(url: unknown): boolean {
     } catch {
         return false;
     }
+}
+
+/**
+ * Build an MJ Explorer deep link for an `open:resource` command.
+ *
+ * Returns `null` when there is nothing safe to link to — no configured Explorer base URL, or a
+ * resource kind whose identifier is absent. `resourceId` is optional on the shared `UICommand`
+ * type (a Record can be addressed by `keys` instead), so every branch checks it rather than
+ * emitting a `/resource/dashboard/undefined` URL that 404s on click.
+ */
+export function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
+    if (!explorerBaseURL) return null;
+    const base = explorerBaseURL.replace(/\/+$/, '');
+
+    switch (cmd.resourceType) {
+        case 'Record':
+            if (cmd.entityName && cmd.resourceId) {
+                const entity = encodeURIComponent(cmd.entityName);
+                const id = encodeURIComponent(cmd.resourceId);
+                return `${base}/resource/record/${entity}/${id}`;
+            }
+            break;
+        case 'Dashboard':
+            if (!cmd.resourceId) break;
+            return `${base}/resource/dashboard/${encodeURIComponent(cmd.resourceId)}`;
+        case 'Report':
+            if (!cmd.resourceId) break;
+            return `${base}/resource/report/${encodeURIComponent(cmd.resourceId)}`;
+        case 'View':
+            if (!cmd.resourceId) break;
+            return `${base}/resource/view/${encodeURIComponent(cmd.resourceId)}`;
+    }
+
+    return null;
 }

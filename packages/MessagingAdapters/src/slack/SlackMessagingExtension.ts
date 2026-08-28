@@ -328,9 +328,12 @@ export class SlackMessagingExtension extends BaseServerExtension {
                 LogError('Error handling Slack interaction (Socket Mode):', undefined, error);
             }
         };
+        // Only 'interactive'. For an events_api envelope the SDK emits the INNER event type
+        // (`message`, `app_mention`); for every other envelope it emits the envelope type itself,
+        // and Slack labels all block actions and view submissions `interactive`. Subscribing to
+        // 'block_actions'/'view_submission' as well never fired — and had it fired, a view
+        // submission would have run the agent twice.
         this.socketModeClient.on('interactive', handleInteractiveEnvelope);
-        this.socketModeClient.on('block_actions', handleInteractiveEnvelope);
-        this.socketModeClient.on('view_submission', handleInteractiveEnvelope);
 
         await this.socketModeClient.start();
         LogStatus('Slack Socket Mode connected');

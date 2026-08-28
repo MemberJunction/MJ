@@ -13,7 +13,7 @@
 
 import { WebClient, type KnownBlock } from '@slack/web-api';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseMessagingAdapter, type UploadableFile } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { buildRichResponse, buildErrorBlocks, buildAgentContextBlock, buildDivider } from './slack-block-builder.js';
@@ -107,6 +107,23 @@ export class SlackAdapter extends BaseMessagingAdapter {
     protected async onInitialize(): Promise<void> {
         const authResult = await this.client.auth.test();
         this.botUserID = authResult.user_id as string;
+    }
+
+    /**
+     * Was this history message written by ANY bot, not just this one?
+     *
+     * Slack's Events API marks them three different ways depending on how the message was posted:
+     * a `bot_id`, a `bot_profile`, or the `bot_message` subtype. Kept here rather than on the base
+     * class because these are Slack payload fields; other platforms answer the question their own
+     * way.
+     */
+    protected isBotAuthored(message: IncomingMessage): boolean {
+        const raw = message.RawEvent;
+        if (raw && typeof raw === 'object') {
+            if (raw['bot_id'] || raw['bot_profile']) return true;
+            if (raw['subtype'] === 'bot_message') return true;
+        }
+        return false;
     }
 
     protected getBotUserId(): string {
@@ -257,13 +274,19 @@ export class SlackAdapter extends BaseMessagingAdapter {
                 ? preferredName
                 : `${preferredName}.${extension}`;
 
-            await this.client.files.uploadV2({
-                channel_id: originalMessage.ChannelID,
-                thread_ts: threadTs,
-                file: Buffer.from(file.data, 'base64'),
-                filename,
-                title: file.label ?? file.fileName ?? undefined,
-            });
+            try {
+                await this.client.files.uploadV2({
+                    channel_id: originalMessage.ChannelID,
+                    thread_ts: threadTs,
+                    file: Buffer.from(file.data, 'base64'),
+                    filename,
+                    title: file.label ?? file.fileName ?? undefined,
+                });
+            } catch (error) {
+                // Per file: one rejected upload (a bad MIME type, a size cap) must not cost the
+                // user the other files in the same reply.
+                LogError(`Failed to upload ${filename} to Slack:`, undefined, error);
+            }
         }
     }
 

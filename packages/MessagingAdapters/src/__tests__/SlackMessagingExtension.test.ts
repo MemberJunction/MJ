@@ -222,8 +222,12 @@ describe('SlackMessagingExtension', () => {
 
             const eventNames = socketMocks.on.mock.calls.map((call: string[]) => call[0]);
             expect(eventNames).toContain('interactive');
-            expect(eventNames).toContain('block_actions');
-            expect(eventNames).toContain('view_submission');
+            // Only that one. For an events_api envelope the SDK emits the INNER event type; for
+            // every other envelope it emits the envelope type, and Slack labels all block actions
+            // and view submissions 'interactive'. Subscribing to those names never fired, and a
+            // view submission that DID double-fire would run the agent twice.
+            expect(eventNames).not.toContain('block_actions');
+            expect(eventNames).not.toContain('view_submission');
         });
 
         it('routes a Socket Mode interaction payload to the interaction handler', async () => {
