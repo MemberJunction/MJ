@@ -1,5 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
-import { CANONICAL_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestCompare extends Command {
   static description = 'Compare test runs for regression detection';
@@ -49,7 +49,7 @@ export default class TestCompare extends Command {
       description: 'Compare two results.json files directly (no DB). Pass twice: --from-json PREV --from-json CURR',
       multiple: true,
     }),
-    format: CANONICAL_FORMAT_FLAG,
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',

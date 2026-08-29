@@ -2,6 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
+import { failOnNonInteractive, requireInteractive } from '../../../lib/interactive-guard.js';
 
 export default class AgentsRun extends Command {
   static description = 'Execute an AI agent with a prompt or start interactive chat';
@@ -48,13 +49,29 @@ export default class AgentsRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { AgentService, OutputFormatter, ConversationService } = await import('@memberjunction/ai-cli');
-
     const { flags, metadata } = await this.parse(AgentsRun);
 
     if (!flags.prompt && !flags.chat) {
       this.error('Either --prompt or --chat flag is required');
     }
+
+    // --chat is a REPL that reads stdin turn by turn: interactive by nature, with no
+    // flag that could stand in for the conversation. Spawned or piped it would sit on
+    // stdin forever, so refuse before loading anything and name the flag that does work
+    // headlessly. Checked here — ahead of the service import — so the refusal costs
+    // nothing and cannot be mistaken for a startup failure.
+    if (flags.chat) {
+      try {
+        requireInteractive(
+          'Interactive chat mode',
+          'Use --prompt "<your prompt>" for a single non-interactive execution, or re-run --chat at an interactive terminal.'
+        );
+      } catch (error) {
+        failOnNonInteractive(this, error);
+      }
+    }
+
+    const { AgentService, OutputFormatter, ConversationService } = await import('@memberjunction/ai-cli');
 
     const service = new AgentService();
     const formatter = new OutputFormatter(resolveLegacyFormat({
@@ -67,7 +84,6 @@ export default class AgentsRun extends Command {
 
     try {
       if (flags.chat) {
-        // Interactive chat mode
         const conversationService = new ConversationService();
         await conversationService.startChat(flags.agent, undefined, {
           verbose: flags.verbose,

@@ -42,26 +42,21 @@ export default class FileReset extends Command {
           this.error('No mj.config.cjs found in current directory or parent directories');
         }
       
-        // Stop spinner before provider initialization
+        // Stop spinner before the input phase
         spinner.stop();
-      
-        // Initialize data provider
-        await initializeProvider(mjConfig);
-      
-        // Initialize sync engine
-        const syncEngine = await getSyncEngine(getSystemUser());
-      
-        // Show success after initialization
-        if (flags.verbose) {
-          spinner.succeed('Configuration and metadata loaded');
-        } else {
-          spinner.stop();
-        }
-      
+
+        // Everything from here to the confirmation is pure input gathering: which
+        // sections, which directory, and the go-ahead. None of it needs a database.
+        // Resolving it BEFORE initializeProvider means a run that is missing
+        // --sections/--all fails in milliseconds naming the flag, instead of opening
+        // a connection and loading the whole sync engine first only to refuse. That
+        // matters most for the caller who cannot answer a prompt — an agent or CI job
+        // gets the actionable error without ever touching the database.
+
         // Determine sections to reset
         let sectionsToReset: string[] = [];
         const availableSections = ['primaryKey', 'sync'];
-      
+
         if (flags.all) {
           sectionsToReset = availableSections;
         } else if (flags.sections) {
@@ -124,10 +119,21 @@ export default class FileReset extends Command {
             return;
           }
         }
-      
+
+        // Input is settled and the user has agreed — only now is the database worth
+        // opening.
+        await initializeProvider(mjConfig);
+        await getSyncEngine(getSystemUser());
+
+        if (flags.verbose) {
+          spinner.succeed('Configuration and metadata loaded');
+        } else {
+          spinner.stop();
+        }
+
         // Create file reset service and execute
         const fileResetService = new FileResetService();
-      
+
         spinner.start('Resetting file metadata...');
       
         // Map selected sections to service options

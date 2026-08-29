@@ -13,7 +13,12 @@ import {
 } from '@memberjunction/installer';
 
 import { LegacyInstaller } from '../../lib/legacy-install.js';
-import { NonInteractiveError, requireInteractive, withNonInteractiveHandling } from '../../lib/interactive-guard.js';
+import {
+  NonInteractiveError,
+  failOnNonInteractive,
+  requireInteractive,
+  withNonInteractiveHandling,
+} from '../../lib/interactive-guard.js';
 
 export default class Install extends Command {
   static description = 'Install MemberJunction from a GitHub release';
@@ -116,8 +121,9 @@ export default class Install extends Command {
   }): Promise<void> {
     const engine = new InstallerEngine();
     const fast = flags.fast ?? false;
+    const yes = flags.yes ?? false;
 
-    this.wireEventHandlers(engine, flags.verbose ?? false);
+    this.wireEventHandlers(engine, flags.verbose ?? false, yes);
 
     const plan = await engine.CreatePlan({
       Tag: flags.tag,
@@ -132,6 +138,19 @@ export default class Install extends Command {
       this.renderDryRun(plan);
       return;
     }
+
+    // Preflight, deliberately placed here: CreatePlan is pure and --dry-run has already
+    // returned, so nothing has touched disk yet, and a dry run stays usable headlessly.
+    //
+    // The engine asks its questions from inside the phases — the version picker and the
+    // not-empty-directory confirmation both live in Scaffold — so a guard that only
+    // fires when a prompt is emitted fires AFTER files have been written. Refusing here
+    // instead leaves the target directory untouched.
+    //
+    // --yes is the condition because it is what the engine itself keys on: every prompt
+    // in the installer is short-circuited by it. --config alone is not enough — it can
+    // supply configure-phase values but does not suppress the scaffold-phase questions.
+    this.requireAnswerableInstall(yes);
 
     this.renderHeader();
 
@@ -152,16 +171,24 @@ export default class Install extends Command {
   // Event wiring — bridges engine events to CLI output + inquirer prompts
   // ---------------------------------------------------------------------------
 
-  private wireEventHandlers(engine: InstallerEngine, verbose: boolean): void {
-    engine.On('prompt', (event: PromptEvent) => {
-      // The emitter neither awaits nor catches this promise, so a rejection escaping
-      // here becomes an unhandled rejection — Node prints a stack trace and kills the
-      // process, which is exactly the opposite of the actionable error the guard inside
-      // handlePromptEvent is meant to produce. Catch it at the boundary. (Rejecting
-      // also means the event is never Resolve()d, so the engine would otherwise sit
-      // waiting on an answer that can never arrive.)
-      void this.handlePromptEvent(event).catch((e: unknown) => this.abortOnPromptFailure(e));
-    });
+  private wireEventHandlers(engine: InstallerEngine, verbose: boolean, yes: boolean): void {
+    // Under --yes the engine installs its own catch-all prompt listener that resolves
+    // anything unexpected with its default — the safety net that keeps Docker and CI
+    // runs from hanging. Registering an interactive bridge alongside it would make the
+    // two fight: ours runs first, refuses (no terminal), and exits(1) before the net
+    // can answer, turning a working headless install into a hard failure. So under
+    // --yes we simply don't bridge, and the engine's net owns every prompt.
+    if (!yes) {
+      engine.On('prompt', (event: PromptEvent) => {
+        // The emitter neither awaits nor catches this promise, so a rejection escaping
+        // here becomes an unhandled rejection — Node prints a stack trace and kills the
+        // process, which is exactly the opposite of the actionable error the guard inside
+        // handlePromptEvent is meant to produce. Catch it at the boundary. (Rejecting
+        // also means the event is never Resolve()d, so the engine would otherwise sit
+        // waiting on an answer that can never arrive.)
+        void this.handlePromptEvent(event).catch((e: unknown) => this.abortOnPromptFailure(e));
+      });
+    }
 
     engine.On('phase:start', (event: PhaseStartEvent) => {
       this.log(chalk.cyan(`\u25b8 ${event.Description}`));
@@ -198,6 +225,28 @@ export default class Install extends Command {
         this.log(chalk.yellow(`    \u2192 ${event.Error.SuggestedFix}`));
       }
     });
+  }
+
+  /**
+   * Fails before the first byte is written when this run will be asked questions it
+   * cannot answer.
+   *
+   * Deliberately conservative: it only refuses the combination that is *guaranteed* to
+   * dead-end — no terminal to prompt on and no `--yes` to skip the prompts. A terminal
+   * run is untouched, and `--yes` is untouched, so nothing that works today starts
+   * failing.
+   */
+  private requireAnswerableInstall(yes: boolean): void {
+    if (yes) return;
+
+    try {
+      requireInteractive(
+        'Answers to the installer\'s setup questions (version, target directory, configuration)',
+        'Pass --yes to accept defaults and install the latest version unattended, adding --tag and --config to pin the version and supply settings.'
+      );
+    } catch (error) {
+      failOnNonInteractive(this, error);
+    }
   }
 
   /**

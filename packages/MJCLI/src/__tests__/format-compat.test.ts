@@ -3,6 +3,7 @@ import { FORMAT_ENV } from '@memberjunction/cli-core';
 import {
   resolveLegacyFormat,
   CANONICAL_FORMAT_FLAG,
+  TEST_FORMAT_FLAG,
   TEST_FORMAT_MAP,
   AI_FORMAT_MAP,
 } from '../lib/format-compat';
@@ -50,6 +51,24 @@ describe('CANONICAL_FORMAT_FLAG', () => {
 
   it('claims no short char, so it cannot deepen the existing -o/-f collision', () => {
     expect(CANONICAL_FORMAT_FLAG.char).toBeUndefined();
+  });
+});
+
+describe('TEST_FORMAT_FLAG', () => {
+  // Regression: swapping `mj test *` onto the char-less canonical flag silently removed
+  // the `-f` shorthand those commands had always had, so `mj test run -f json` started
+  // failing with "Nonexistent flag". Widening the accepted VALUES must never narrow the
+  // accepted SPELLINGS.
+  it('keeps the -f shorthand the mj test family has always had', () => {
+    expect(TEST_FORMAT_FLAG.char).toBe('f');
+  });
+
+  it('accepts exactly the same values as the canonical flag', () => {
+    expect(TEST_FORMAT_FLAG.options).toEqual(CANONICAL_FORMAT_FLAG.options);
+  });
+
+  it('declares no default either, so TTY detection still decides', () => {
+    expect(TEST_FORMAT_FLAG.default).toBeUndefined();
   });
 });
 

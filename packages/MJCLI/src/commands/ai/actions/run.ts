@@ -1,6 +1,5 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
-import chalk from 'chalk';
 import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class ActionsRun extends Command {
@@ -73,17 +72,9 @@ export default class ActionsRun extends Command {
 
     try {
       if (flags['dry-run']) {
-        // For dry-run, just show what would be executed
-        this.log(chalk.yellow('Dry-run mode: Action would be executed with these parameters:'));
-        this.log(chalk.cyan(`Action: ${flags.name}`));
-        if (Object.keys(params).length > 0) {
-          this.log(chalk.cyan('Parameters:'));
-          for (const [key, value] of Object.entries(params)) {
-            this.log(`  ${key}: ${value}`);
-          }
-        } else {
-          this.log(chalk.gray('No parameters provided'));
-        }
+        // Route the dry run through the same formatter as a real run, so --format=json
+        // describes the planned execution as data instead of a coloured paragraph.
+        this.log(formatter.formatActionDryRun(flags.name, params));
       } else {
         // Execute action
         const spinner = ora();

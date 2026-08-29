@@ -33,12 +33,36 @@ import { NormalizeFormatAlias, ResolveOutputFormat, type OutputFormat } from '@m
  * Note `char` is omitted — `-f` and `-o` already mean other things in these
  * families, and quietly rebinding a short flag is how the `-o` collision started.
  */
+const FORMAT_VALUES = ['text', 'json', 'md', 'human', 'console', 'markdown', 'compact', 'table'];
+
+const FORMAT_DESCRIPTION =
+  'Output format: text (human), json (machine-readable), md (Markdown). ' +
+  'Defaults to human output on a terminal and json when stdout is piped. ' +
+  'Legacy spellings (console/markdown/compact/table) are accepted.';
+
 export const CANONICAL_FORMAT_FLAG = Flags.string({
-  options: ['text', 'json', 'md', 'human', 'console', 'markdown', 'compact', 'table'],
-  description:
-    'Output format: text (human), json (machine-readable), md (Markdown). ' +
-    'Defaults to human output on a terminal and json when stdout is piped. ' +
-    'Legacy spellings (console/markdown/compact/table) are accepted.',
+  options: FORMAT_VALUES,
+  description: FORMAT_DESCRIPTION,
+});
+
+/**
+ * The same flag for `mj test *`, which has always spelled its format flag
+ * `--format` **with a `-f` shorthand**.
+ *
+ * Widening the accepted *values* must not narrow the accepted *spellings*: dropping
+ * `char` would silently break every script that runs `mj test run -f json` — exactly
+ * the class of unannounced breakage this compatibility layer exists to prevent. `-f`
+ * is unclaimed across all six `mj test` commands, so restoring it collides with nothing.
+ *
+ * The `mj ai` family deliberately does NOT get this: `--format` is brand new there
+ * (its historical flag is `--output`/`-o`), so there is no `-f` to preserve, and
+ * `mj ai audit agent-run` already binds `-f` to `--file` — an output FILE path, so
+ * pointing it at a format would repeat the exact `-o` ambiguity described above.
+ */
+export const TEST_FORMAT_FLAG = Flags.string({
+  char: 'f',
+  options: FORMAT_VALUES,
+  description: FORMAT_DESCRIPTION,
 });
 
 /** Inputs to {@link resolveLegacyFormat}. */

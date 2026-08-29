@@ -1,5 +1,5 @@
 import { Command, Flags } from '@oclif/core';
-import { CANONICAL_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestList extends Command {
   static description = 'List available tests, suites, and types';
@@ -33,7 +33,7 @@ export default class TestList extends Command {
       char: 's',
       description: 'Filter by status',
     }),
-    format: CANONICAL_FORMAT_FLAG,
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',

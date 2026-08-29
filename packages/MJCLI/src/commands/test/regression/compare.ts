@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import { isInsideMonorepo, spawnInherit } from '../../../lib/regression/docker-helpers.js';
-import { CANONICAL_FORMAT_FLAG } from '../../../lib/format-compat.js';
+import { TEST_FORMAT_FLAG } from '../../../lib/format-compat.js';
 
 const REGRESSION_RESULTS_DIR = 'docker/regression/test-results';
 const EXTERNAL_RESULTS_DIR = 'test-results';
@@ -23,7 +23,7 @@ export default class TestRegressionCompare extends Command {
       description: 'Show only differences.',
       default: false,
     }),
-    format: CANONICAL_FORMAT_FLAG,
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path.',
