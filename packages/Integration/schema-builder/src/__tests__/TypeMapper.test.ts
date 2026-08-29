@@ -70,6 +70,23 @@ describe('TypeMapper', () => {
             expect(mapper.MapSourceType('string', 'sqlserver', nonPk)).toBe('NVARCHAR(750)');
         });
 
+        it('honours an explicit MaxLength of -1 as MAX/unbounded', () => {
+            // -1 is the convention both dialects already render as unbounded (see
+            // sqlServerDialect/postgresqlDialect: `length === -1`). It previously failed the
+            // `MaxLength > 0` test in boundedStringLength and fell through to the 255 floor — so
+            // asking for MAX produced the NARROWEST possible column, and records longer than 255
+            // chars were then skipped whole at sync time.
+            const unbounded = MakeField({ MaxLength: -1 });
+            expect(mapper.MapSourceType('string', 'sqlserver', unbounded)).toBe('NVARCHAR(MAX)');
+            expect(mapper.MapSourceType('string', 'postgresql', unbounded)).toBe('TEXT');
+        });
+
+        it('never lets an unbounded PRIMARY-KEY column through — MAX cannot be indexed', () => {
+            // Math.min(-1, 450) is -1, so the cap had to special-case MAX rather than compare.
+            const unboundedPk = MakeField({ MaxLength: -1, IsPrimaryKey: true });
+            expect(mapper.MapSourceType('string', 'sqlserver', unboundedPk)).toBe('NVARCHAR(450)');
+        });
+
         it('should stay BOUNDED for a declared length comfortably under the ceiling (SQL Server)', () => {
             // 3000 + 300 headroom = 3300 ≤ 4000 → NVARCHAR(3300), bounded. The dialect only spills to
             // its OWN unbounded type when the sized value genuinely exceeds the dialect's bounded ceiling.
