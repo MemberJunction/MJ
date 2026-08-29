@@ -14859,6 +14859,9 @@ importers:
       '@memberjunction/ai':
         specifier: 6.1.0-edge.4
         version: link:../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.1.0-edge.4
+        version: link:../../AI/CorePlus
       '@memberjunction/ai-realtime-client':
         specifier: 6.1.0-edge.4
         version: link:../../AI/RealtimeClient

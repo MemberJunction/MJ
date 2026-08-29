@@ -229,11 +229,12 @@ export class AgentRunner {
             throw new Error('contextUser is required for RunAgentInConversation');
         }
 
+        let agentResponseDetail: MJConversationDetailEntity | undefined;
+
         try {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
-            let agentResponseDetail: MJConversationDetailEntity | undefined;
 
             // If conversationDetailId is provided, use it (UI-created agent response detail)
             if (options.conversationDetailId) {
@@ -633,6 +634,17 @@ export class AgentRunner {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             LogError(`RunAgentInConversation failed: ${errorMessage}`, undefined, error);
+            if (agentResponseDetail && agentResponseDetail.Status === 'In-Progress') {
+                try {
+                    await agentResponseDetail.EnsureSaveComplete();
+                    agentResponseDetail.Status = 'Error';
+                    agentResponseDetail.Message = errorMessage;
+                    agentResponseDetail.Error = errorMessage;
+                    await agentResponseDetail.Save();
+                } catch (persistError) {
+                    LogError(`Failed to persist Error on conversation detail after agent crash: ${persistError}`, undefined, persistError);
+                }
+            }
             throw error;
         }
     }
