@@ -10,6 +10,7 @@
  * paths receive a provider whose `Dialect.PlatformKey` matches the real database.
  */
 import ora from 'ora-classic';
+import { isInteractiveRun } from '../lib/interactive-guard.js';
 import { input, confirm, select, password } from '@inquirer/prompts';
 import { createRequire } from 'node:module';
 import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
@@ -130,10 +131,12 @@ export async function buildOrchestratorContext(
   const provider = await ensureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
-  // Only wire interactive prompt callbacks for a real TTY when not explicitly disabled.
+  // Only wire interactive prompt callbacks when this run is actually allowed to prompt.
   // Their ABSENCE signals headless mode to in-process hook modules (e.g. the setup wizard),
   // which then fall back to env/defaults instead of blocking on @inquirer (which errors in CI).
-  const wantPrompts = interactive && process.stdin.isTTY === true;
+  // `interactive` is the per-command opt-out (--non-interactive); isInteractiveRun() is the
+  // global rule: a real terminal unless --no-interactive / CI says otherwise.
+  const wantPrompts = interactive && isInteractiveRun();
 
   return {
     ContextUser: contextUser,
