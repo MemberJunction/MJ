@@ -142,6 +142,11 @@ describe('IdentityClaimEngineServer', () => {
     let testProvider: IMetadataProvider;
 
     beforeEach(() => {
+        // This suite's vitest config does not set restoreMocks, and several tests spy on the
+        // SINGLETON engine's own methods (RedeemClaim, GetPendingClaimsForEmail). Without an
+        // explicit restore, a leaked instance spy silently replaces the real implementation
+        // for every later test in the file.
+        vi.restoreAllMocks();
         mockDriver = new MockDriver();
         testProvider = {
             PlatformKey: 'sqlserver',
@@ -339,7 +344,7 @@ describe('IdentityClaimEngineServer', () => {
             testProvider
         );
         expect(redeemResult.Success).toBe(false);
-        expect(redeemResult.ErrorMessage).toContain('Authenticated user email does not match');
+        expect(redeemResult.ErrorMessage).toContain('requires either a matching verified email');
         expect(mockDriver.onClaimCalled).toBe(false);
     });
 
@@ -363,7 +368,7 @@ describe('IdentityClaimEngineServer', () => {
             'wrong-token'
         );
         expect(redeemResult.Success).toBe(false);
-        expect(redeemResult.ErrorMessage).toContain('Authenticated user email does not match');
+        expect(redeemResult.ErrorMessage).toContain('requires either a matching verified email');
         expect(mockDriver.onClaimCalled).toBe(false);
     });
 
@@ -492,9 +497,10 @@ describe('IdentityClaimEngineServer', () => {
         expect(results).toHaveLength(2);
         // Each claim goes through RedeemClaim rather than being transitioned directly, so the
         // email/token gate, atomic CAS and driver error handling all still apply. The email
-        // lookup that found them is a convenience, not the boundary.
-        expect(redeem).toHaveBeenCalledWith('claim-a', user, testProvider);
-        expect(redeem).toHaveBeenCalledWith('claim-b', user, testProvider);
+        // lookup that found them is a convenience, not the boundary. No token is ever presented
+        // (auto-claim has none), and the transport's EmailVerified assertion is passed through.
+        expect(redeem).toHaveBeenCalledWith('claim-a', user, testProvider, undefined, undefined);
+        expect(redeem).toHaveBeenCalledWith('claim-b', user, testProvider, undefined, undefined);
     });
 
     it('should revoke a claim and invoke driver OnRevoke', async () => {
@@ -508,5 +514,184 @@ describe('IdentityClaimEngineServer', () => {
         await engine.RevokeClaim('claim-123');
         expect(mockClaim.Status).toBe('Revoked');
         expect(mockDriver.onRevokeCalled).toBe(true);
+    });
+
+    it('should NOT invoke driver OnRevoke when the revocation save fails', async () => {
+        const engine = IdentityClaimEngineServer.Instance;
+        const mockClaim = createMockClaim({ Status: 'Pending' });
+        mockClaim.Save = vi.fn().mockResolvedValue(false);
+
+        vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+
+        await engine.RevokeClaim('claim-123');
+        // The claim is still live in the database — running teardown against it would be wrong.
+        expect(mockDriver.onRevokeCalled).toBe(false);
+    });
+
+    describe('IsActive enforcement', () => {
+        it('CreateClaim refuses an inactive claim type', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByName').mockReturnValue(
+                createMockClaimType({ IsActive: false })
+            );
+
+            await expect(engine.CreateClaim({
+                ClaimTypeName: 'TestClaim',
+                NormalizedEmail: 'claimant@example.com',
+                SendEmail: false
+            })).rejects.toThrow(/inactive/);
+        });
+
+        it('RedeemClaim refuses a claim whose type is inactive', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim({ NormalizedEmail: 'claimant@example.com' });
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByID').mockReturnValue(
+                createMockClaimType({ IsActive: false })
+            );
+
+            const res = await engine.RedeemClaim('claim-123', createMockUser(), testProvider);
+            expect(res.Success).toBe(false);
+            expect(res.ErrorMessage).toContain('inactive');
+            expect(mockDriver.onClaimCalled).toBe(false);
+        });
+    });
+
+    describe('email verification gate', () => {
+        it('refuses email-match redemption when the IdP asserted the email is UNVERIFIED', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim({ NormalizedEmail: 'claimant@example.com' });
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+
+            const res = await engine.RedeemClaim(
+                'claim-123',
+                createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }),
+                testProvider,
+                undefined,
+                { EmailVerified: false }
+            );
+            expect(res.Success).toBe(false);
+            expect(mockDriver.onClaimCalled).toBe(false);
+        });
+
+        it('still redeems via token when the email is unverified', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const rawToken = 'verified-by-possession-token';
+            const tokenHash = crypto.createHash('sha256').update(rawToken).digest('base64url');
+            const mockClaim = createMockClaim({
+                NormalizedEmail: 'claimant@example.com',
+                MetadataJSON: JSON.stringify({ TokenHash: tokenHash })
+            });
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+
+            const res = await engine.RedeemClaim(
+                'claim-123',
+                createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }),
+                testProvider,
+                rawToken,
+                { EmailVerified: false }
+            );
+            expect(res.Success).toBe(true);
+            expect(mockDriver.onClaimCalled).toBe(true);
+        });
+
+        it('allows email-match when verification state is unknown (backward compatible)', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim({ NormalizedEmail: 'claimant@example.com' });
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+
+            const res = await engine.RedeemClaim(
+                'claim-123',
+                createMockUser({ ID: 'user-456', Email: 'claimant@example.com' }),
+                testProvider
+            );
+            expect(res.Success).toBe(true);
+        });
+    });
+
+    describe('claim type Configuration gates', () => {
+        it('RequireVerifiedEmail demands a positive IdP assertion for email-match', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim({ NormalizedEmail: 'claimant@example.com' });
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByID').mockReturnValue(
+                createMockClaimType({ Configuration: JSON.stringify({ RequireVerifiedEmail: true }) } as Partial<MJIdentityClaimTypeEntity>)
+            );
+
+            // Unknown verification state → refused for this type
+            const unknown = await engine.RedeemClaim('claim-123', createMockUser(), testProvider);
+            expect(unknown.Success).toBe(false);
+
+            // Positive assertion → allowed
+            const verified = await engine.RedeemClaim('claim-123', createMockUser(), testProvider, undefined, { EmailVerified: true });
+            expect(verified.Success).toBe(true);
+        });
+
+        it('RequireToken refuses email-match even with a verified email; token still works', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const rawToken = 'required-token-abcdef';
+            const tokenHash = crypto.createHash('sha256').update(rawToken).digest('base64url');
+            const mockClaim = createMockClaim({
+                NormalizedEmail: 'claimant@example.com',
+                MetadataJSON: JSON.stringify({ TokenHash: tokenHash })
+            });
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByID').mockReturnValue(
+                createMockClaimType({ Configuration: JSON.stringify({ RequireToken: true }) } as Partial<MJIdentityClaimTypeEntity>)
+            );
+
+            const emailOnly = await engine.RedeemClaim('claim-123', createMockUser(), testProvider, undefined, { EmailVerified: true });
+            expect(emailOnly.Success).toBe(false);
+
+            const withToken = await engine.RedeemClaim('claim-123', createMockUser(), testProvider, rawToken);
+            expect(withToken.Success).toBe(true);
+        });
+
+        it('malformed Configuration JSON degrades to permissive defaults rather than bricking redemption', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim({ NormalizedEmail: 'claimant@example.com' });
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByID').mockReturnValue(
+                createMockClaimType({ Configuration: '{not valid json' } as Partial<MJIdentityClaimTypeEntity>)
+            );
+
+            const res = await engine.RedeemClaim('claim-123', createMockUser(), testProvider);
+            expect(res.Success).toBe(true);
+        });
+    });
+
+    describe('AutoClaimForUser type filtering', () => {
+        it('skips types that opted out of auto-claim or that require a token', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const pending = [
+                createMockClaim({ ID: 'claim-auto', ClaimTypeID: '11111111-1111-1111-1111-111111111111', NormalizedEmail: 'claimant@example.com' }),
+                createMockClaim({ ID: 'claim-optout', ClaimTypeID: '33333333-3333-3333-3333-333333333333', NormalizedEmail: 'claimant@example.com' }),
+                createMockClaim({ ID: 'claim-tokenreq', ClaimTypeID: '44444444-4444-4444-4444-444444444444', NormalizedEmail: 'claimant@example.com' })
+            ];
+
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByID').mockImplementation((id: string) => {
+                if (id === '33333333-3333-3333-3333-333333333333') {
+                    return createMockClaimType({ ID: id, Configuration: JSON.stringify({ AutoClaim: false }) } as Partial<MJIdentityClaimTypeEntity>);
+                }
+                if (id === '44444444-4444-4444-4444-444444444444') {
+                    return createMockClaimType({ ID: id, Configuration: JSON.stringify({ RequireToken: true }) } as Partial<MJIdentityClaimTypeEntity>);
+                }
+                return createMockClaimType({ ID: id });
+            });
+
+            vi.spyOn(engine, 'GetPendingClaimsForEmail').mockResolvedValue(
+                pending as unknown as MJIdentityClaimEntity[]
+            );
+            const redeem = vi
+                .spyOn(engine, 'RedeemClaim')
+                .mockResolvedValue({ Success: true });
+
+            const user = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
+            const results = await engine.AutoClaimForUser(user, testProvider, { EmailVerified: true });
+
+            expect(results).toHaveLength(1);
+            expect(redeem).toHaveBeenCalledTimes(1);
+            expect(redeem).toHaveBeenCalledWith('claim-auto', user, testProvider, undefined, { EmailVerified: true });
+        });
     });
 });

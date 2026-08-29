@@ -151,10 +151,7 @@ export async function buildOrchestratorContext(
       TrustServerCertificate: config.dbTrustServerCertificate,
       RequestTimeout: config.dbRequestTimeout,
     },
-    GitHubOptions: {
-      Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
-      TokenMap: filterDefinedTokens(config.openApps?.github?.tokens),
-    },
+    GitHubOptions: buildGitHubOptions(config),
     RepoRoot: process.cwd(),
     MJVersion: getMJVersion(),
     ServerPackagePath: config.openApps?.serverPackagePath,
@@ -246,6 +243,24 @@ interface OrchestratorContextShape {
  * Filters a token map from config, removing entries where the env var resolved to undefined.
  * This happens when mj.config.cjs references process.env.SOME_TOKEN but the var isn't set.
  */
+/**
+ * Builds the GitHub client options every `mj app *` command should use: the default token PLUS the
+ * per-repo `TokenMap`.
+ *
+ * Shared so no command can build a partial `{ Token }` of its own. A command that omits `TokenMap`
+ * silently loses access to any private repo whose token is configured per-repo rather than globally
+ * — and for a read-only check that shows up as "up to date" (a 404 is indistinguishable from
+ * "no releases"), not as an error.
+ */
+export function buildGitHubOptions(config: {
+  openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
+}): { Token?: string; TokenMap?: Record<string, string> } {
+  return {
+    Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
+    TokenMap: filterDefinedTokens(config.openApps?.github?.tokens),
+  };
+}
+
 function filterDefinedTokens(tokens: Record<string, string | undefined> | undefined): Record<string, string> | undefined {
   if (!tokens) return undefined;
   const filtered: Record<string, string> = {};

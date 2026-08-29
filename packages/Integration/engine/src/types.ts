@@ -565,6 +565,26 @@ export interface SourceFieldInfo {
     IsForeignKey?: boolean;
     /** If FK, which source object it references (null if not a FK). */
     ForeignKeyTarget: string | null;
+    /**
+     * How the sync engine should treat this field.
+     *
+     * - undefined / 'Sync' — normal behaviour (map, hash, persist).
+     * - 'Exclude' — the field is stripped from every fetched record BEFORE field
+     *   mapping. It reaches neither the mapped row, nor the CustomOverflow column,
+     *   nor the content-hash basis, so it stops influencing change detection.
+     *
+     * For payload a connector knows to be worthless or redundant at the field level:
+     * vendor UI state riding along on every record (Totara `preferences` — file-picker
+     * recents on 100% of rows), cosmetic configuration (`courseformatoptions`), or an
+     * embedded collection that re-derives an object already synced in its own right
+     * (`enrolledcourses` re-deriving Enrolled_Users). Exclusion — not field-map
+     * deactivation, which merely REROUTES the value into CustomOverflow, from which
+     * the custom-column promoter can resurrect it.
+     *
+     * Persisted into IntegrationObjectField.Configuration (JSON) by schema sync, so
+     * no migration is needed and existing installs pick it up on their next sync.
+     */
+    SyncDirective?: 'Sync' | 'Exclude';
 }
 
 /** One foreign key relationship in a source object. */
