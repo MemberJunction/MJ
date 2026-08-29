@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, SocialPost, SocialAnalytics, MediaFile } from '../../base/base-social.action';
 import { LogStatus, RunView } from '@memberjunction/core';
-import axios from 'axios';
+import { HttpPost, IsHttpError } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { CredentialEngine } from '@memberjunction/credentials';
@@ -412,25 +412,25 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     }
 
     try {
-      const response = await axios.post<GraphQLResponse<T>>(
+      const response = await HttpPost<GraphQLResponse<T>>(
         this.apiBaseUrl,
         { query, variables },
         {
-          headers: {
+          Headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000,
+          Timeout: 30000,
         },
       );
 
-      this.throwOnGraphQLErrors(response.data);
+      this.throwOnGraphQLErrors(response.Data);
 
-      if (!response.data.data) {
+      if (!response.Data.data) {
         throw new Error('No data in Buffer GraphQL response');
       }
 
-      return response.data.data;
+      return response.Data.data;
     } catch (error) {
       return this.handleExecutionError<T>(error, query, variables, 0);
     }
@@ -446,11 +446,11 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
   private async handleExecutionError<T>(error: unknown, query: string, variables: Record<string, unknown> | undefined, retryCount: number): Promise<T> {
     if (error instanceof BufferGraphQLError) throw error;
 
-    if (axios.isAxiosError(error) && error.response?.status === 429) {
+    if (IsHttpError(error) && error.Status === 429) {
       if (retryCount >= MAX_RATE_LIMIT_RETRIES) {
         throw new Error(`Buffer API rate limit exceeded after ${MAX_RATE_LIMIT_RETRIES} retries`);
       }
-      const retryAfter = error.response.headers['retry-after'];
+      const retryAfter = error.Headers['retry-after'];
       const seconds = retryAfter ? parseInt(String(retryAfter)) || 60 : 60;
       await this.handleRateLimit(seconds);
       try {
@@ -761,8 +761,8 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     if (error instanceof BufferGraphQLError) {
       return this.mapGraphQLErrorCode(error);
     }
-    if (axios.isAxiosError(error) && error.response) {
-      return this.mapHttpStatusCode(error.response.status, error.response.data);
+    if (IsHttpError(error) && error.Status) {
+      return this.mapHttpStatusCode(error.Status, error.Data);
     }
     return 'PLATFORM_ERROR';
   }

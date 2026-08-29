@@ -15,6 +15,7 @@ import {
   replaceAllSpaces,
   IsOnlyTimezoneShift,
   EscapeHTML,
+  EscapeSQLString,
   HighlightSearchMatches,
 } from '../util';
 
@@ -36,6 +37,52 @@ describe('GetGlobalObjectStore', () => {
       store[testKey] = 'test-value';
       expect(store[testKey]).toBe('test-value');
       delete store[testKey];
+    }
+  });
+
+  // The three cases above predate the memoised `typeof` probe and pass either way: they assert
+  // the result is non-null, defined, and writable. The ones below pin what actually changed.
+
+  it('resolves to Node\'s global object, not merely something non-null', () => {
+    expect(GetGlobalObjectStore()).toBe(global);
+  });
+
+  it('is memoised — every call returns the identical reference', () => {
+    const first = GetGlobalObjectStore();
+    const second = GetGlobalObjectStore();
+    expect(second).toBe(first);
+    expect(GetGlobalObjectStore()).toBe(first);
+  });
+
+  it('answers from the memo after the environment changes, by design', async () => {
+    // The environment is fixed at startup, which is what makes memoising sound. Stated as a test
+    // because it is the one surprise the memo introduces: a caller that installs a `window`
+    // mid-process still gets the answer computed on first call. If this ever needs to change,
+    // it is a deliberate decision, not an accident.
+    const before = GetGlobalObjectStore();
+    const g = globalThis as unknown as { window?: unknown };
+    g.window = { installed: 'later' };
+    try {
+      expect(GetGlobalObjectStore()).toBe(before);
+    } finally {
+      delete g.window;
+    }
+  });
+
+  it('treats a declared-but-null window as absent and falls through to global', async () => {
+    // `typeof null === 'object'`, so a bare `typeof window !== 'undefined'` probe would accept a
+    // null window and memoise it as the store — permanently, for the life of the process. SSR
+    // shims that null out `window` exist in the wild, and MJ is embedded by callers whose
+    // environment we do not control. Needs a fresh module so the memo is unset.
+    const g = globalThis as unknown as { window?: unknown };
+    g.window = null;
+    vi.resetModules();
+    try {
+      const fresh = await import('../util');
+      expect(fresh.GetGlobalObjectStore()).toBe(global);
+    } finally {
+      delete g.window;
+      vi.resetModules();
     }
   });
 });
@@ -703,3 +750,26 @@ describe('HighlightSearchMatches', () => {
     expect(HighlightSearchMatches('<i>x</i>', '   ')).toBe('&lt;i&gt;x&lt;/i&gt;');
   });
 });
+
+describe('EscapeSQLString', () => {
+  it('escapes single quotes by doubling them', () => {
+    expect(EscapeSQLString("O'Brien")).toBe("O''Brien");
+    expect(EscapeSQLString("user's 'name'")).toBe("user''s ''name''");
+  });
+
+  it('strips null bytes to prevent injection', () => {
+    expect(EscapeSQLString("test\0injection")).toBe("testinjection");
+    expect(EscapeSQLString("user\0' OR '1'='1")).toBe("user'' OR ''1''=''1");
+  });
+
+  it('handles null and undefined safely', () => {
+    expect(EscapeSQLString(null)).toBe('');
+    expect(EscapeSQLString(undefined)).toBe('');
+  });
+
+  it('handles empty string and clean strings', () => {
+    expect(EscapeSQLString('')).toBe('');
+    expect(EscapeSQLString('plain.email@example.com')).toBe('plain.email@example.com');
+  });
+});
+

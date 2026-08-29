@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { LinkedInBaseAction, LinkedInAnalytics } from '../linkedin-base.action';
+import { LinkedInAnalytics, LinkedInBaseAction, LinkedInCollectionResponse, LinkedInPostSummary } from '../linkedin-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialAnalytics } from '../../../base/base-social.action';
@@ -108,12 +108,20 @@ export class LinkedInGetPostAnalyticsAction extends LinkedInBaseAction {
                 }
             }
 
-            const response = await this.axiosInstance.get('/organizationalEntityShareStatistics', { params });
+            const response = await this.httpClient.Get<LinkedInCollectionResponse<LinkedInAnalytics>>('/organizationalEntityShareStatistics', { Query: params });
 
-            if (response.data.elements && response.data.elements.length > 0) {
-                const stats = response.data.elements[0];
+            if (response.Data.elements && response.Data.elements.length > 0) {
+                const stats = response.Data.elements[0];
                 return {
-                    totalShareStatistics: stats.totalShareStatistics || {},
+                    totalShareStatistics: stats.totalShareStatistics || {
+                        impressionCount: 0,
+                        clickCount: 0,
+                        engagement: 0,
+                        likeCount: 0,
+                        commentCount: 0,
+                        shareCount: 0,
+                        uniqueImpressionsCount: 0
+                    },
                     timeRange: timeRange ? {
                         start: new Date(timeRange.start).getTime(),
                         end: new Date(timeRange.end || Date.now()).getTime()
@@ -134,17 +142,17 @@ export class LinkedInGetPostAnalyticsAction extends LinkedInBaseAction {
     private async getPersonalPostAnalytics(shareId: string): Promise<LinkedInAnalytics> {
         try {
             // For personal posts, we need to fetch the post itself to get basic engagement metrics
-            const response = await this.axiosInstance.get(`/ugcPosts/${shareId}`);
+            const response = await this.httpClient.Get<LinkedInPostSummary>(`/ugcPosts/${shareId}`);
             
-            if (response.data) {
+            if (response.Data) {
                 // Extract available metrics from the post data
                 return {
                     totalShareStatistics: {
                         impressionCount: 0, // Not available for personal posts
                         clickCount: 0, // Not available for personal posts
-                        engagement: response.data.likesSummary?.totalLikes || 0 + response.data.commentsSummary?.totalComments || 0,
-                        likeCount: response.data.likesSummary?.totalLikes || 0,
-                        commentCount: response.data.commentsSummary?.totalComments || 0,
+                        engagement: response.Data.likesSummary?.totalLikes || 0 + response.Data.commentsSummary?.totalComments || 0,
+                        likeCount: response.Data.likesSummary?.totalLikes || 0,
+                        commentCount: response.Data.commentsSummary?.totalComments || 0,
                         shareCount: 0, // Not directly available
                         uniqueImpressionsCount: 0 // Not available for personal posts
                     }
