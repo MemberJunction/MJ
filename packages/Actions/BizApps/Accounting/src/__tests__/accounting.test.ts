@@ -8,7 +8,16 @@ vi.mock('@memberjunction/actions', () => ({
 }));
 
 vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target
+    RegisterClass: () => (target: unknown) => target,
+    UUIDsEqual: (a: string, b: string) => a === b,
+    EscapeSQLString: (value: string | null | undefined) => String(value ?? '').replace(/'/g, "''"),
+    MJGlobal: {
+        Instance: {
+            ClassFactory: {
+                TryCreateInstance: vi.fn(() => ({ Resolved: false, Instance: null })),
+            },
+        },
+    },
 }));
 
 vi.mock('@memberjunction/core', () => ({
@@ -181,6 +190,31 @@ describe('BaseAccountingAction', () => {
         it('should return undefined for missing env var', () => {
             const result = action['getCredentialFromEnv']('COMP1', 'MISSING_KEY');
             expect(result).toBeUndefined();
+        });
+    });
+
+    describe('resolveCompanyAccountingIntegration', () => {
+        it('should quote CompanyID so ExtraFilter cannot be injected', async () => {
+            const { RunView } = await import('@memberjunction/core');
+            const runViewFn = vi.fn().mockResolvedValue({
+                Success: true,
+                Results: [{
+                    ID: 'ci-1',
+                    CompanyID: 'comp-1',
+                    IntegrationID: 'int-1',
+                    Integration: 'QuickBooks Online',
+                }],
+            });
+            vi.mocked(RunView).mockImplementation(function (this: unknown) {
+                return { RunView: runViewFn };
+            } as never);
+
+            await action['resolveCompanyAccountingIntegration']("abc' OR 1=1--", {} as never);
+
+            const filter = runViewFn.mock.calls[0][0].ExtraFilter as string;
+            expect(filter).toContain("CompanyID = 'abc'' OR 1=1--'");
+            expect(filter).toContain("'QuickBooks Online'");
+            expect(filter).toContain("'Microsoft Dynamics 365 Business Central'");
         });
     });
 });
