@@ -253,10 +253,19 @@ QBO `GetDimensions`: there is no dimensions API. The plugin maps **Class** and
 **Department**. Empty `values` is success, not an error, when the company does
 not use that list.
 
-BC `CreateJournalEntry`: GET `journals` (param `JournalCode`, else first journal
-with no `balancingAccountNumber` / code `GENERAL` or `DEFAULT`) → POST each line
-to `journals({id})/journalLines` (`amount` = +debit / −credit) → POST
-`journals({id})/Microsoft.NAV.post`. All-or-nothing at the ERP.
+BC `CreateJournalEntry`: GET `journals` (param `JournalCode`, else GENERAL/DEFAULT
+or first journal **without** a `balancingAccountNumber`) → POST each line to
+`journals({id})/journalLines` (`amount` = +debit / −credit) → POST
+`journals({id})/Microsoft.NAV.post`. If a line POST or the batch post throws,
+lines created in **this call** are DELETEd so they do not sit in the journal
+for the next post.
+
+`Microsoft.NAV.post` posts the **whole BC journal**, not just this call's lines.
+Two concurrent `CreateJournalEntry` calls against the same journal code can
+therefore post each other's in-flight lines, and the loser gets no error. That
+is BC's journal model, not a bug in the plugin. Mitigations: give each post
+its own journal (`JournalCode`), or serialize posts per journal code. Do not
+run overlapping posts into one shared GENERAL journal.
 
 ## Credentials (unchanged)
 
