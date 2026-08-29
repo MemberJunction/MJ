@@ -91,6 +91,19 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
 }
 
 /**
+ * Escape every regex metacharacter in `literal` so it can be interpolated into a
+ * `RegExp` and match itself.
+ *
+ * The configured schema name is data, not pattern: SQL Server and PostgreSQL both
+ * permit `$` in an identifier, and interpolating one raw silently changes what the
+ * pattern means — a `$` becomes an end-anchor, so the pattern matches nothing and
+ * the conversion quietly emits nothing. See issue #3171.
+ */
+export function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Remove comments, keeping code and string literals intact.
  *
  * Use this before matching a pattern that decides what a batch IS or what it names. Matching the

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-googlemeet",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: Google Meet Realtime Bridge driver. Connects the realtime agent engine to a Google Meet meeting (audio in/out, diarized roster, participant mute) via an injectable Google Meet Media API seam, and contributes a Meeting Controls facilitator channel. Note: the Google Meet Media API is early-access/allowlisted and offers NO hand-raise.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,12 +15,12 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/ai-bridge-base": "6.1.0-edge.2"
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/ai-bridge-base": "6.1.0-edge.4"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

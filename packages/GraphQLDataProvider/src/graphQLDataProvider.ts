@@ -513,10 +513,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const d = await this.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
-            const u = this.ConvertBackToMJFields(d.CurrentUser);
-            const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
-            u.MJUserRoles_UserIDArray = roles;
-            const userInfo = new UserInfo(this, {...u, UserRoles: roles}); // need to pass in the UserRoles as a separate property that is what is expected here
+            const convertedUser = this.ConvertBackToMJFields(d.CurrentUser) as Record<string, unknown> & {
+                Roles?: Record<string, unknown>[];
+            };
+            const { Roles: rawRoles, ...userFields } = convertedUser;
+            const roles = (rawRoles ?? []).map((r: Record<string, unknown>) => this.ConvertBackToMJFields(r));
+            // Drop the transport `Roles` field so UserInfo only sees the converted UserRoles copy.
+            const userInfo = new UserInfo(this, {...userFields, UserRoles: roles});
 
             // Auto-stamp TenantContext from the batched CurrentUserTenantContext query.
             // The server serializes whatever TenantContext the middleware set.
@@ -2624,6 +2627,96 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Executes a GraphQL query/mutation with real upload progress tracking via XMLHttpRequest.
+     * Useful for large payload mutations such as file uploads where byte-level progress reporting is required.
+     */
+    public static async ExecuteGQLWithProgress<T = unknown>(
+        query: string,
+        variables: Record<string, unknown>,
+        onProgress?: (event: { loaded: number; total: number; percent: number }) => void,
+        refreshTokenIfNeeded: boolean = true
+    ): Promise<T> {
+        return GraphQLDataProvider.Instance.ExecuteGQLWithProgress<T>(query, variables, onProgress, refreshTokenIfNeeded);
+    }
+
+    /**
+     * Executes a GraphQL query/mutation with real upload progress tracking via XMLHttpRequest.
+     */
+    public async ExecuteGQLWithProgress<T = unknown>(
+        query: string,
+        variables: Record<string, unknown>,
+        onProgress?: (event: { loaded: number; total: number; percent: number }) => void,
+        refreshTokenIfNeeded: boolean = true
+    ): Promise<T> {
+        if (!this._configData?.URL) {
+            throw new Error('GraphQLDataProvider is not configured with a URL.');
+        }
+
+        const url = this._configData.URL;
+        const payload = JSON.stringify({ query, variables });
+
+        return new Promise<T>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+
+            if (this._sessionId) {
+                xhr.setRequestHeader('x-session-id', this._sessionId);
+            }
+            if (this._configData?.Token) {
+                xhr.setRequestHeader('authorization', 'Bearer ' + this._configData.Token);
+            }
+            if (this._configData?.MJAPIKey) {
+                xhr.setRequestHeader('x-mj-api-key', this._configData.MJAPIKey);
+            }
+            if (this._configData?.UserAPIKey) {
+                xhr.setRequestHeader('x-api-key', this._configData.UserAPIKey);
+            }
+            for (const [key, value] of this._dynamicHeaders) {
+                xhr.setRequestHeader(key, value);
+            }
+
+            if (xhr.upload && onProgress) {
+                xhr.upload.onprogress = (evt) => {
+                    if (evt.lengthComputable && evt.total > 0) {
+                        const percent = Math.min(100, Math.round((evt.loaded / evt.total) * 100));
+                        onProgress({ loaded: evt.loaded, total: evt.total, percent });
+                    }
+                };
+            }
+
+            xhr.onload = async () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const json = JSON.parse(xhr.responseText) as { data?: T; errors?: Array<{ message?: string; extensions?: { code?: string } }> };
+                        if (json.errors && json.errors.length > 0) {
+                            const error = json.errors[0];
+                            const code = error?.extensions?.code?.toUpperCase()?.trim();
+                            if (code === 'JWT_EXPIRED' && refreshTokenIfNeeded) {
+                                await this.RefreshToken();
+                                resolve(await this.ExecuteGQLWithProgress<T>(query, variables, onProgress, false));
+                                return;
+                            }
+                            reject(new Error(error.message || 'GraphQL Error'));
+                        } else {
+                            resolve(json.data as T);
+                        }
+                    } catch (err) {
+                        reject(err);
+                    }
+                } else {
+                    reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText}`));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during request'));
+            xhr.onabort = () => reject(new Error('Request aborted'));
+
+            xhr.send(payload);
+        });
+    }
+
+    /**
      * Executes the GQL query with the provided variables. If the token is expired, it will attempt to refresh the token and then re-execute the query. If the token is expired and the refresh fails, it will throw an error.
      * @param query 
      * @param variables 
@@ -2859,7 +2952,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        MJUserRoles_UserIDArray {
+        Roles {
             ${this.userRoleInfoString()}
         }
     }

@@ -499,10 +499,12 @@ export const AiCostChecks: NamedCheck[] = [
                     noPriceConfigured++;
                     continue;
                 }
-                // UsageTypeID is NOT NULL with a default of Tokens, so an unresolvable value is a real
-                // fault rather than an unset column — counted separately instead of defaulted to
-                // Tokens, which would attribute it to a pricing gap it has nothing to do with.
-                const measure = engine.UsageTypeName(row.UsageTypeID);
+                // An unset UsageTypeID means token-billed — every run predating the column is — so it
+                // resolves to Tokens the same way the storage seam does. A value that IS set but is
+                // absent from the catalog is a real fault (a deleted row, a stale cache), counted
+                // separately instead of defaulted, which would attribute it to a pricing gap it has
+                // nothing to do with.
+                const measure = row.UsageTypeID ? engine.UsageTypeName(row.UsageTypeID) : 'Tokens';
                 if (measure === null) {
                     unresolvableMeasure++;
                     continue;

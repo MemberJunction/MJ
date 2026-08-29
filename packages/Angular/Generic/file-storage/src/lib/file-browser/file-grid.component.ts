@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { FileStorageEngineBase, StorageAccountWithProvider } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Represents a file or folder item in the grid
@@ -208,9 +209,23 @@ export class FileGridComponent implements OnInit, OnChanges {
   public multiProviderSearchResults: MultiProviderSearchResult | null = null;
 
   /**
+   * Preview modal state
+   */
+  public showPreviewModal: boolean = false;
+  public previewItem: FileGridItem | null = null;
+  public previewUrl: string | null = null;
+  public isLoadingPreview: boolean = false;
+  public previewMediaType: string = 'unknown';
+
+  /**
    * GraphQL client for file storage operations
    */
   private storageClient: GraphQLFileStorageClient;
+
+  /**
+   * Global notifications service for user toast feedback
+   */
+  protected notifications = inject(MJNotificationService);
 
   constructor() {
     this.storageClient = new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
@@ -457,7 +472,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
   /**
    * Handles double-click on an item
-   * For folders, navigate into them. For files, open/download them.
+   * For folders, navigate into them. For files, open in-browser preview.
    */
   public onItemDoubleClick(item: FileGridItem): void {
     if (item.type === 'folder') {
@@ -465,15 +480,15 @@ export class FileGridComponent implements OnInit, OnChanges {
       console.log('[FileGrid] Navigating to folder:', item.key);
       this.folderNavigate.emit(item.key);
     } else {
-      // Download file
-      this.downloadFile(item);
+      // Open in-browser preview
+      this.openPreview(item);
     }
   }
 
   /**
    * Downloads a file by creating a pre-authenticated download URL
    */
-  private async downloadFile(item: FileGridItem): Promise<void> {
+  public async downloadFile(item: FileGridItem): Promise<void> {
     if (!this.account) {
       return;
     }
@@ -489,31 +504,16 @@ export class FileGridComponent implements OnInit, OnChanges {
       console.log('[FileGrid] Download URL created:', downloadUrl ? 'success' : 'failed');
 
       if (downloadUrl) {
-        // Trigger browser download
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = item.name;
-        link.target = '_blank'; // Open in new tab as fallback
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        console.log('[FileGrid] File download initiated:', item.name);
+        // Open file in new browser tab for viewing/download
+        window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+        this.notifications.CreateSimpleNotification(`Opening ${item.name}...`, 'info');
       } else {
-        console.error('[FileGrid] Failed to get download URL');
-        this.errorMessage = 'Failed to generate download URL';
+        this.notifications.CreateSimpleNotification('Failed to generate download URL', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error downloading file:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to download file: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to download')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to download ${item.name}: ${errorMessage}`, 'error');
     }
   }
 
@@ -707,7 +707,7 @@ export class FileGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Uploads a single file
+   * Uploads a single file using server-side MJ Storage (supports all providers)
    */
   private async uploadSingleFile(file: File, current: number, total: number): Promise<void> {
     if (!this.account) {
@@ -719,48 +719,39 @@ export class FileGridComponent implements OnInit, OnChanges {
     this.uploadProgress = 0;
 
     try {
-      // Construct the full object name with folder path
-      // Remove trailing slash from folderPath to avoid double slashes
-      let objectName: string;
-      if (this.folderPath) {
-        const cleanPath = this.folderPath.endsWith('/')
-          ? this.folderPath.slice(0, -1)
-          : this.folderPath;
-        objectName = `${cleanPath}/${file.name}`;
-      } else {
-        objectName = file.name;
+      let cleanPath = '';
+      if (this.folderPath && this.folderPath !== '/') {
+        cleanPath = this.folderPath.endsWith('/') ? this.folderPath.slice(0, -1) : this.folderPath;
+        if (cleanPath.startsWith('/')) {
+          cleanPath = cleanPath.substring(1);
+        }
       }
 
-      console.log('[FileGrid] Getting upload URL for:', objectName);
+      console.log('[FileGrid] Uploading file via MJ Storage:', { name: file.name, path: cleanPath });
+      const base64Data = await this.readFileAsBase64(file);
 
-      // Get pre-authenticated upload URL
-      const uploadData = await this.storageClient.CreatePreAuthUploadUrl(
-        this.account.account.ID,
-        objectName,
-        file.type || 'application/octet-stream'
-      );
+      const result = await this.storageClient.UploadFile({
+        FileName: file.name,
+        Base64Data: base64Data,
+        MimeType: file.type || 'application/octet-stream',
+        AccountID: this.account.account.ID,
+        PathPrefix: cleanPath || undefined,
+      });
 
-      console.log('[FileGrid] Got upload URL:', uploadData.uploadUrl);
+      if (!result.Success) {
+        throw new Error(result.ErrorMessage || 'Upload failed');
+      }
 
-      // Upload the file using XMLHttpRequest to track progress
-      await this.uploadFileToUrl(file, uploadData.uploadUrl, this.account?.provider?.ServerDriverKey);
-
-      console.log('[FileGrid] File uploaded successfully:', file.name);
-
+      this.uploadProgress = 100;
+      console.log('[FileGrid] File uploaded successfully via MJ Storage:', file.name);
     } catch (error) {
       console.error('[FileGrid] Error uploading file:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      // Check if this is an unsupported operation error (e.g., Google Drive doesn't support pre-auth uploads)
-      if (errorMessage.includes('not supported')) {
-        this.errorMessage = `Upload not supported for ${this.account?.account.Name || 'this account'}. Try using a different storage account.`;
-      } else {
-        this.errorMessage = `Failed to upload ${file.name}: ${errorMessage}`;
-      }
+      this.errorMessage = `Failed to upload ${file.name}: ${errorMessage}`;
 
       // Clear error after 5 seconds
       setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to upload') || this.errorMessage?.startsWith('Upload not supported')) {
+        if (this.errorMessage?.startsWith('Failed to upload')) {
           this.errorMessage = null;
         }
       }, 5000);
@@ -769,6 +760,26 @@ export class FileGridComponent implements OnInit, OnChanges {
       this.uploadProgress = 0;
       this.uploadingFileName = '';
     }
+  }
+
+  /**
+   * Reads a browser File object as a base64 encoded string
+   */
+  private readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result === 'string') {
+          const base64 = result.substring(result.indexOf(',') + 1);
+          resolve(base64);
+        } else {
+          reject(new Error('Failed to read file as base64 string'));
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
   }
 
   /**
@@ -865,9 +876,12 @@ export class FileGridComponent implements OnInit, OnChanges {
       if (success) {
         console.log('[FileGrid] Folder created successfully:', folderPath);
 
+        const createdName = this.newFolderName.trim();
         // Close dialog and refresh
         this.showNewFolderDialog = false;
         this.newFolderName = '';
+
+        this.notifications.CreateSimpleNotification(`Created folder "${createdName}"`, 'success');
 
         // Notify parent that folder structure changed
         this.folderStructureChanged.emit();
@@ -875,19 +889,12 @@ export class FileGridComponent implements OnInit, OnChanges {
         // Refresh the file grid
         this.loadItems();
       } else {
-        this.errorMessage = 'Failed to create folder';
+        this.notifications.CreateSimpleNotification('Failed to create folder', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error creating folder:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to create folder: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to create')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to create folder: ${errorMessage}`, 'error');
     } finally {
       this.isCreatingFolder = false;
     }
@@ -951,13 +958,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         // Check if we deleted a folder (before clearing itemToDelete)
         const wasFolder = this.itemToDelete.type === 'folder';
-
-        console.log('[FileGrid] Item details:', {
-          type: this.itemToDelete.type,
-          name: this.itemToDelete.name,
-          key: this.itemToDelete.key,
-          wasFolder
-        });
+        const deletedName = this.itemToDelete.name;
 
         // Close dialog
         this.showDeleteDialog = false;
@@ -965,6 +966,8 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         // Clear selection
         this.selectedItems = [];
+
+        this.notifications.CreateSimpleNotification(`Deleted "${deletedName}"`, 'info');
 
         // If we deleted a folder, notify parent that folder structure changed
         if (wasFolder) {
@@ -977,19 +980,12 @@ export class FileGridComponent implements OnInit, OnChanges {
         this.loadItems();
       } else {
         console.error('[FileGrid] Delete operation returned false');
-        this.errorMessage = `Failed to delete ${this.itemToDelete.type}`;
+        this.notifications.CreateSimpleNotification(`Failed to delete ${this.itemToDelete.type}`, 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error deleting item:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to delete: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to delete')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to delete: ${errorMessage}`, 'error');
     } finally {
       this.isDeleting = false;
     }
@@ -1067,6 +1063,8 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         // Check if we renamed a folder (before clearing itemToRename)
         const wasFolder = this.itemToRename.type === 'folder';
+        const oldName = this.itemToRename.name;
+        const newName = this.newItemName.trim();
 
         // Close dialog
         this.showRenameDialog = false;
@@ -1075,6 +1073,8 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         // Clear selection
         this.selectedItems = [];
+
+        this.notifications.CreateSimpleNotification(`Renamed "${oldName}" to "${newName}"`, 'success');
 
         // If we renamed a folder, notify parent that folder structure changed
         if (wasFolder) {
@@ -1087,19 +1087,12 @@ export class FileGridComponent implements OnInit, OnChanges {
         this.loadItems();
       } else {
         console.error('[FileGrid] Rename operation returned false');
-        this.errorMessage = `Failed to rename ${this.itemToRename.type}`;
+        this.notifications.CreateSimpleNotification(`Failed to rename ${this.itemToRename.type}`, 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error renaming item:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to rename: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to rename')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to rename: ${errorMessage}`, 'error');
     } finally {
       this.isRenaming = false;
     }
@@ -1124,12 +1117,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
     // Can only download files, not folders
     if (item.type === 'folder') {
-      this.errorMessage = 'Cannot download folders. Please select a file.';
-      setTimeout(() => {
-        if (this.errorMessage?.includes('Cannot download folders')) {
-          this.errorMessage = null;
-        }
-      }, 3000);
+      this.notifications.CreateSimpleNotification('Cannot download folders. Please select a file.', 'warning');
       return;
     }
 
@@ -1148,30 +1136,16 @@ export class FileGridComponent implements OnInit, OnChanges {
       );
 
       if (downloadUrl) {
-        console.log('[FileGrid] Download URL created, initiating download');
-
-        // Create a temporary anchor element to trigger download
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = item.name;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        console.log('[FileGrid] Download URL created, opening in new tab');
+        window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+        this.notifications.CreateSimpleNotification(`Opening ${item.name}...`, 'info');
       } else {
-        this.errorMessage = 'Failed to create download URL';
+        this.notifications.CreateSimpleNotification('Failed to create download URL', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error downloading file:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to download: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to download')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to download: ${errorMessage}`, 'error');
     }
   }
 
@@ -1233,21 +1207,17 @@ export class FileGridComponent implements OnInit, OnChanges {
         // Clear selection
         this.selectedItems = [];
 
+        this.notifications.CreateSimpleNotification('Item copied successfully', 'success');
+
         // Refresh the file grid
         this.loadItems();
       } else {
-        this.errorMessage = 'Failed to copy item';
+        this.notifications.CreateSimpleNotification('Failed to copy item', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error copying item:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to copy: ${errorMessage}`;
-
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to copy')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to copy: ${errorMessage}`, 'error');
     } finally {
       this.isCopying = false;
     }
@@ -1317,6 +1287,8 @@ export class FileGridComponent implements OnInit, OnChanges {
         // Clear selection
         this.selectedItems = [];
 
+        this.notifications.CreateSimpleNotification('Item moved successfully', 'success');
+
         // If we moved a folder, notify parent that folder structure changed
         if (wasFolder) {
           this.folderStructureChanged.emit();
@@ -1325,18 +1297,12 @@ export class FileGridComponent implements OnInit, OnChanges {
         // Refresh the file grid
         this.loadItems();
       } else {
-        this.errorMessage = 'Failed to move item';
+        this.notifications.CreateSimpleNotification('Failed to move item', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error moving item:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to move: ${errorMessage}`;
-
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to move')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to move: ${errorMessage}`, 'error');
     } finally {
       this.isMoving = false;
     }
@@ -1405,12 +1371,7 @@ export class FileGridComponent implements OnInit, OnChanges {
         .filter(a => !UUIDsEqual(a.account.ID, this.account?.account.ID));
 
       if (this.availableAccounts.length === 0) {
-        this.errorMessage = 'No other storage accounts available';
-        setTimeout(() => {
-          if (this.errorMessage?.includes('No other storage accounts')) {
-            this.errorMessage = null;
-          }
-        }, 3000);
+        this.notifications.CreateSimpleNotification('No other storage accounts available', 'warning');
         return;
       }
 
@@ -1422,7 +1383,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
     } catch (error) {
       console.error('[FileGrid] Error loading accounts:', error);
-      this.errorMessage = 'Failed to load storage accounts';
+      this.notifications.CreateSimpleNotification('Failed to load storage accounts', 'error');
     }
   }
 
@@ -1511,18 +1472,12 @@ export class FileGridComponent implements OnInit, OnChanges {
 
       // Show results
       if (failedCopies.length === 0) {
-        this.errorMessage = `Successfully copied to ${successfulCopies.length} account${successfulCopies.length > 1 ? 's' : ''}: ${successfulCopies.join(', ')}`;
+        this.notifications.CreateSimpleNotification(`Successfully copied to ${successfulCopies.length} account${successfulCopies.length > 1 ? 's' : ''}`, 'success');
       } else if (successfulCopies.length === 0) {
-        this.errorMessage = `Copy failed for all accounts: ${failedCopies.map(f => `${f.account} (${f.error})`).join(', ')}`;
+        this.notifications.CreateSimpleNotification(`Copy failed for all accounts: ${failedCopies.map(f => f.account).join(', ')}`, 'error');
       } else {
-        this.errorMessage = `Copied to ${successfulCopies.length} account(s). Failed: ${failedCopies.map(f => f.account).join(', ')}`;
+        this.notifications.CreateSimpleNotification(`Copied to ${successfulCopies.length} account(s). Failed: ${failedCopies.map(f => f.account).join(', ')}`, 'warning');
       }
-
-      setTimeout(() => {
-        if (this.errorMessage?.includes('copied') || this.errorMessage?.includes('Copy failed')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
 
       // Close dialog
       this.showCopyToProviderDialog = false;
@@ -1534,13 +1489,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     } catch (error) {
       console.error('[FileGrid] Error copying to accounts:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Copy failed: ${errorMessage}`;
-
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Copy failed')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Copy failed: ${errorMessage}`, 'error');
     } finally {
       this.isCopyingToAccount = false;
       this.copyToAccountProgress = null;
@@ -1723,5 +1672,158 @@ export class FileGridComponent implements OnInit, OnChanges {
    */
   public formatSearchResultDate(dateStr: string): string {
     return new Date(dateStr).toLocaleString();
+  }
+
+  /**
+   * Determines media category for a file item
+   */
+  public getMediaType(item: FileGridItem): string {
+    const ext = item.name.split('.').pop()?.toLowerCase() || '';
+    const mime = item.contentType?.toLowerCase() || '';
+
+    if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) {
+      return 'image';
+    }
+    if (mime === 'application/pdf' || ext === 'pdf') {
+      return 'pdf';
+    }
+    if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a'].includes(ext)) {
+      return 'audio';
+    }
+    if (mime.startsWith('video/') || ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext)) {
+      return 'video';
+    }
+    if (['json', 'ts', 'js', 'html', 'css', 'scss', 'xml', 'yaml', 'yml', 'md', 'sql', 'py', 'java', 'c', 'cpp'].includes(ext)) {
+      return 'code';
+    }
+    if (mime.startsWith('text/') || ['txt', 'log', 'csv'].includes(ext)) {
+      return 'text';
+    }
+    if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) {
+      return 'document';
+    }
+    return 'unknown';
+  }
+
+  /**
+   * Gets specific badge class for media type
+   */
+  public getItemColorClass(item: FileGridItem): string {
+    if (item.type === 'folder') {
+      return 'mj-file-thumb--folder';
+    }
+    const mediaType = this.getMediaType(item);
+    return `mj-file-thumb--${mediaType}`;
+  }
+
+  /**
+   * Generates clickable path breadcrumbs
+   */
+  public getPathBreadcrumbs(): Array<{ name: string; path: string }> {
+    const raw = (this.folderPath || '').trim();
+    if (!raw || raw === '/') {
+      return [{ name: 'Root', path: '/' }];
+    }
+    const clean = raw.startsWith('/') ? raw.substring(1) : raw;
+    const parts = clean.split('/').filter((p) => p.trim().length > 0);
+    const crumbs: Array<{ name: string; path: string }> = [
+      { name: 'Root', path: '/' },
+    ];
+    let currentPath = '';
+    for (const part of parts) {
+      currentPath += '/' + part;
+      crumbs.push({ name: part, path: currentPath });
+    }
+    return crumbs;
+  }
+
+  /**
+   * Navigates to a specific breadcrumb path
+   */
+  public navigateToBreadcrumb(path: string): void {
+    this.folderNavigate.emit(path);
+  }
+
+  /**
+   * Toggles selection of a file/folder item
+   */
+  public toggleItemSelection(item: FileGridItem, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    const idx = this.selectedItems.indexOf(item.key);
+    if (idx >= 0) {
+      this.selectedItems = this.selectedItems.filter((k) => k !== item.key);
+    } else {
+      this.selectedItems = [...this.selectedItems, item.key];
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Selects all current filtered items
+   */
+  public selectAll(): void {
+    this.selectedItems = this.filteredItems.map((i) => i.key);
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Clears selection
+   */
+  public deselectAll(): void {
+    this.selectedItems = [];
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Checks if all items are selected
+   */
+  public areAllSelected(): boolean {
+    return (
+      this.filteredItems.length > 0 &&
+      this.selectedItems.length === this.filteredItems.length
+    );
+  }
+
+  /**
+   * Opens in-browser preview modal
+   */
+  public async openPreview(item: FileGridItem): Promise<void> {
+    if (item.type === 'folder' || !this.account) {
+      return;
+    }
+
+    this.previewItem = item;
+    this.previewMediaType = this.getMediaType(item);
+    this.showPreviewModal = true;
+    this.isLoadingPreview = true;
+    this.previewUrl = null;
+    this.cdr.markForCheck();
+
+    try {
+      const itemPath = this.constructItemPath(item);
+      const url = await this.storageClient.CreatePreAuthDownloadUrl(
+        this.account.account.ID,
+        itemPath
+      );
+      this.previewUrl = url;
+    } catch (err) {
+      console.error('[FileGrid] Preview error:', err);
+    } finally {
+      this.isLoadingPreview = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Closes the preview modal
+   */
+  public closePreview(): void {
+    this.showPreviewModal = false;
+    this.previewItem = null;
+    this.previewUrl = null;
+    this.isLoadingPreview = false;
+    this.cdr.markForCheck();
   }
 }

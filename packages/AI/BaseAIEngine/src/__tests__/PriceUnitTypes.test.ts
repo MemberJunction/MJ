@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 /**
  * Unit tests for PriceUnitTypes
  *
@@ -533,60 +533,42 @@ describe('ModelUsageUnitKind vs. the AIUsageType catalog', () => {
      * the driver lookup, matches nothing, and is refused as unpriceable. Silent, and only on the
      * rows that use the new measure.
      *
-     * That is why this test reads the migration rather than restating its contents. A hand-copied
+     * That is why this test reads the seed file rather than restating its contents. A hand-copied
      * list here would drift the moment someone adds a row, which is precisely the event it exists
      * to catch.
      */
     /**
-     * Resolved by SUFFIX rather than by full filename.
-     *
-     * A migration's leading timestamp is not stable: `Check migrations` requires it to exceed every
-     * timestamp already on the base branch, so a long-lived branch has to re-date its migration
-     * whenever `next` moves past it. Hardcoding the full name means every such rename silently breaks
-     * this test — and this is the test that pins `ModelUsageUnitKind` against the seeded catalog, so
-     * breaking it is exactly what must not happen quietly.
+     * The catalog is declarative metadata, not a migration INSERT — type-table rows are seeded
+     * through `mj sync push`, which is both better documentation than SQL and the form a reviewer
+     * can diff against the rest of the catalog. Reading the JSON therefore reads the actual source
+     * of the rows, with no timestamped filename to keep in step.
      */
-    const MIGRATIONS_DIR = resolve(__dirname, '../../../../../migrations/v6');
-    const MIGRATION_SUFFIX = '__AIPromptRun_Continuous_Units.sql';
-    const MIGRATION = (() => {
-        const matches = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(MIGRATION_SUFFIX));
-        if (matches.length !== 1) {
-            throw new Error(
-                `expected exactly one migration ending in ${MIGRATION_SUFFIX} under ${MIGRATIONS_DIR}, ` +
-                `found ${matches.length}: ${matches.join(', ')}`
-            );
-        }
-        return join(MIGRATIONS_DIR, matches[0]);
-    })();
+    const USAGE_TYPE_SEED = resolve(__dirname, '../../../../../metadata/ai-usage-types/.ai-usage-types.json');
 
-    /** The names the migration actually seeds into AIUsageType. */
+    /** The names actually seeded into AIUsageType. */
     function seededUsageTypeNames(): string[] {
-        const sql = readFileSync(MIGRATION, 'utf-8');
-        const insert = sql.indexOf('INSERT INTO ${flyway:defaultSchema}.AIUsageType');
-        expect(insert, 'the AIUsageType seed INSERT must exist in the migration').toBeGreaterThan(-1);
-        // Each seeded row is `(@UsageTypeX, 'Name', '...')` — take the first quoted literal per row.
-        const block = sql.slice(insert, sql.indexOf('GO', insert));
-        return [...block.matchAll(/\(\s*@UsageType\w+\s*,\s*'([^']+)'/g)].map((m) => m[1]);
+        const records: Array<{ fields?: { Name?: string } }> = JSON.parse(readFileSync(USAGE_TYPE_SEED, 'utf-8'));
+        return records.map((r) => r.fields?.Name).filter((n): n is string => typeof n === 'string');
     }
 
-    it('carries every usage type the migration seeds', () => {
+    it('carries every usage type the metadata seeds', () => {
         const seeded = seededUsageTypeNames();
 
-        expect(seeded.length, 'the seed INSERT should have been parsed').toBeGreaterThan(0);
+        expect(seeded.length, 'the AI Usage Types seed file should have been parsed').toBeGreaterThan(0);
         for (const name of seeded) {
             expect(
                 MODEL_USAGE_UNIT_KINDS as readonly string[],
-                `AIUsageType seeds '${name}', so ModelUsageUnitKind must carry it or every run ` +
+                `AI Usage Types seeds '${name}', so ModelUsageUnitKind must carry it or every run ` +
                 `recorded in that measure is silently unpriceable`
             ).toContain(name);
         }
     });
 
-    it('seeds Tokens, which the NOT NULL default on AIModelCost.UsageTypeID depends on', () => {
-        // The column is `NOT NULL CONSTRAINT DF_AIModelCost_UsageTypeID DEFAULT '<Tokens id>'`.
-        // If that row stopped being seeded the default would point at a non-existent parent and the
-        // foreign key would reject every insert — including the ones the release-time metadata-sync
-        // migration makes through the pre-existing stored procedure.
+    it('seeds Tokens, which every measure-less run and cost row is read as', () => {
+        // Tokens is the measure an unset `AIPromptRun.UsageTypeID` is read as, and the one the
+        // follow-up migration that tightens the column to NOT NULL will default to. If the row
+        // stopped being seeded, that backfill would point at a non-existent parent and the foreign
+        // key would reject it.
         expect(seededUsageTypeNames()).toContain('Tokens');
     });
 

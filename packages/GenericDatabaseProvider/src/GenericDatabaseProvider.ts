@@ -1315,7 +1315,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             },
             contextUser,
         );
-        const row = res.Success && res.Results?.length > 0 ? res.Results[0] : null;
+        // A FAILED lookup must not masquerade as "no materialization exists" — see MaterializationLookupFailed
+        // for why the two must stay distinguishable. Falling back to the LIVE base view is correct in BOTH
+        // cases; only the silence was the defect.
+        if (this.MaterializationLookupFailed(res, `entity "${entityInfo.Name}" (base-view materialization status)`)) {
+            return entityInfo.BaseView;
+        }
+        const row = res.Results?.length > 0 ? res.Results[0] : null;
         if (row?.Status !== 'Active') return entityInfo.BaseView;
         // Use the AUTHORITATIVE wrapper-view name persisted on the row rather than re-deriving
         // materialized_vw<CodeName>: the row's ViewName is what the mint/migration actually created, so it stays
@@ -1324,6 +1330,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // Fall back to the convention only if the row somehow lacks a ViewName. (SchemaName stays the entity's —
         // base-view materialization always mints into the source entity's own schema.)
         return row.ViewName?.trim() || `materialized_vw${entityInfo.CodeName}`;
+    }
+
+    /**
+     * Reports whether a materialization-metadata `RunView` FAILED, logging the failure when it did.
+     *
+     * Every materialization read path falls back to LIVE data when it cannot confirm an Active snapshot, and
+     * that fallback is correct — live data is always right, materialization is a transparent optimization,
+     * never a correctness dependency. The defect this guards is the **silence**: `RunView` signals an
+     * authorization or query failure through `Success === false` rather than by throwing, so collapsing a
+     * failure into the same branch as the legitimate "no materialization row exists" case makes the two
+     * indistinguishable to operator and caller alike.
+     *
+     * That matters because read access to the materialization entities is role-gated (`CanRead` is granted
+     * only to the UI / Developer / Integration roles). A user on a restricted role — including MJ's
+     * magic-link / external-access pattern — therefore has every one of these lookups fail, and so
+     * permanently reads LIVE data for every `DataSource:'Materialized'` request, while an admin issuing the
+     * identical request is served the snapshot. Two users, different data, no error surfaced to either.
+     * Logging leaves the safe fallback intact but makes the divergence diagnosable.
+     *
+     * @param result the `RunView` result to inspect (structurally a `RunViewResult`).
+     * @param context human-readable description of what was being resolved, for the log message.
+     * @returns `true` if the lookup failed and the caller should take its live-data fallback; `false` otherwise.
+     */
+    protected MaterializationLookupFailed(result: { Success: boolean; ErrorMessage: string }, context: string): boolean {
+        if (result.Success) return false;
+        LogError(
+            `GenericDatabaseProvider: materialization metadata lookup failed for ${context} — falling back to LIVE data. ` +
+                `The fallback is safe (live data is always correct), but the snapshot will NEVER be served for this caller. ` +
+                `The most likely cause is the current user's roles lacking CanRead on the materialization entities. ` +
+                `Error: ${result.ErrorMessage || 'unknown error'}`,
+        );
+        return true;
     }
 
     /**
@@ -2072,7 +2110,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         rawSafeTerm: string,
     ): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
-            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+            // Function replacement: the term is end-user input, so `$&`/`` $` ``/`$'`/`$$`
+            // in it must be data, not splice directives. See issue #3171.
+            return field.UserSearchParamFormatAPI.replace('{0}', () => rawSafeTerm);
         }
         if (!this.isTextSearchableType(field)) return '';
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
@@ -2149,7 +2189,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                             if (innerViewEntity) {
                                 const innerWhere = await this.RenderViewWhereClause(innerViewEntity, user, stack);
                                 const innerSQL = `SELECT ${this.QuoteIdentifier(innerViewEntity.ViewEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerViewEntity.ViewEntityInfo.SchemaName, innerViewEntity.ViewEntityInfo.BaseView)} WHERE (${innerWhere})`;
-                                sWhere = sWhere.replace(match, innerSQL);
+                                // Function replacement — `innerSQL` is generated SQL that can
+                                // legitimately contain `$`. See issue #3171.
+                                sWhere = sWhere.replace(match, () => innerSQL);
                             } else throw new Error(`View ID ${variableValue} not found in metadata`);
                         } else {
                             throw new Error(`Unknown variable ${variableName} as part of template match ${match} in view where clause`);
@@ -3500,7 +3542,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             },
             contextUser,
         );
-        if (!linkRes.Success || !linkRes.Results || linkRes.Results.length === 0) return null; // query not materialized → live
+        // Same failure-vs-absence distinction as the base-view path: a permission/query failure here would
+        // otherwise be indistinguishable from "this query is not materialized", silently pinning the caller to
+        // live data forever. Still fall back to live (correct either way) — just not silently.
+        if (this.MaterializationLookupFailed(linkRes, `query "${query.Name}" (materialization join lookup)`)) return null;
+        if (!linkRes.Results || linkRes.Results.length === 0) return null; // query not materialized → live
         const matId = linkRes.Results[0].MaterializedResultID;
         if (!matId) return null;                                       // query not materialized → live
         // Ordering fidelity: buildMaterializedReadQuery emits no ORDER BY, and the snapshot was built with the
@@ -3531,7 +3577,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             },
             contextUser,
         );
-        if (!res.Success || !res.Results || res.Results.length === 0) return null;
+        if (this.MaterializationLookupFailed(res, `query "${query.Name}" (materialization metadata)`)) return null;
+        if (!res.Results || res.Results.length === 0) return null;
         const mat = res.Results[0];
         if (mat.Status !== 'Active') return null;                 // Building / DriftHold / stale → live
         if (mat.ParamMode !== 'RowFilterBroad') return null;      // None / PerValueCache → live (this path only serves Bucket 1)

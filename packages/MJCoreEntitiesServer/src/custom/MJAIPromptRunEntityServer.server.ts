@@ -21,8 +21,8 @@ export type RecordedRunUsage = {
     tokensCacheWrite: number;
     tokensCompletion: number;
     /**
-     * Null means the run was token-billed — OR that a set `UsageTypeID` could not be resolved.
-     * The two are separated before this type is built; see `RecordedUsage`.
+     * Null means a set `UsageTypeID` could not be resolved against the loaded catalog — never an
+     * unset column, which is read as `Tokens` before this type is built; see `RecordedUsage`.
      */
     unitsKind: ModelUsageUnitKind | null;
     inputUnits: number;
@@ -61,10 +61,10 @@ export function normalizeRecordedUsage(
     driverUnitKind: ModelUsageUnitKind
 ): NormalizeUsageResult {
     // Units whose measure could not be RESOLVED name nothing: nothing says what they are counted in,
-    // so there is no driver they can honestly be handed to. Since UsageTypeID went NOT NULL this is
-    // no longer "the producer forgot to set it" — the column always holds something — it is an id
-    // absent from the loaded catalog: a deleted row or a stale cache. Falling through would treat
-    // them as Tokens and price the run's (zero) token counts, writing Cost = 0 for billed work.
+    // so there is no driver they can honestly be handed to. This is not "the producer forgot to set
+    // it" — an unset column is read as Tokens at the storage seam and caught by the next guard — it
+    // is an id absent from the loaded catalog: a deleted row or a stale cache. Falling through would
+    // treat them as Tokens and price the run's (zero) token counts, writing Cost = 0 for billed work.
     if (recorded.unitsKind == null && (recorded.inputUnits > 0 || recorded.outputUnits > 0)) {
         return {
             ok: false,
@@ -75,10 +75,9 @@ export function normalizeRecordedUsage(
 
     const recordedKind: ModelUsageUnitKind = recorded.unitsKind ?? 'Tokens';
 
-    // The state the NOT NULL column introduced, and the one the guard above USED to cover.
-    //
-    // `UsageTypeID` defaults to Tokens, so "the producer never said what these units are" and "the
-    // producer said they are tokens" are now the same row. Units counted in anything are not token
+    // "The producer never said what these units are" and "the producer said they are tokens" arrive
+    // here as the same value, because an unset `UsageTypeID` is read as Tokens at the storage seam.
+    // Both are refused for the same reason: units counted in anything are not token
     // counts — `TokensPrompt`/`TokensCompletion` carry those — so populated units against the Tokens
     // measure is a contradiction, not a quantity to price.
     //
@@ -286,19 +285,19 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
      * This run's recorded usage, with nulls collapsed to zero for the pure helpers above.
      *
      * `UsageTypeID` is resolved to its measure NAME here, through the engine's cached catalog, so
-     * the pure functions never see a foreign key. Two different situations both produce a null:
-     * the column is unset (token-billed, the ordinary case), or it is set to an id the catalog does
-     * not contain. The second is logged, because it is a real fault — a stale cache or a deleted
-     * row — that would otherwise be indistinguishable from an ordinary token-billed run. It is
-     * deliberately NOT defaulted to 'Tokens': `normalizeRecordedUsage` refuses a null measure
-     * whenever units were recorded, which is the safe direction, and defaulting here would price
-     * seconds as tokens and write a confident zero.
+     * the pure functions never see a foreign key. This is the ONE seam that reads an unset column
+     * as `Tokens`, and it is the only place allowed to: the column is nullable until the release
+     * after the AI Usage Types seed ships, and every row written before it existed was token-billed
+     * — the schema had no way to say anything else.
+     *
+     * A SET id that the catalog does not contain is a different situation and stays null: that is a
+     * real fault — a stale cache or a deleted row — so it is logged, and `normalizeRecordedUsage`
+     * refuses to price units recorded against it. Collapsing the two would price seconds as tokens
+     * and write a confident zero.
      */
     protected RecordedUsage(): RecordedRunUsage {
-        const usageTypeName = AIEngineBase.Instance.UsageTypeName(this.UsageTypeID);
+        const usageTypeName = this.UsageTypeID ? AIEngineBase.Instance.UsageTypeName(this.UsageTypeID) : 'Tokens';
         if (usageTypeName === null) {
-            // UsageTypeID is NOT NULL with a default of Tokens, so an unresolvable value is always a
-            // real fault — a stale cache or a deleted catalog row — never an ordinary unset column.
             LogError(
                 `AIPromptRun ${this.ID} references usage type ${this.UsageTypeID}, which is not in the ` +
                 `loaded catalog; its units cannot be priced.`

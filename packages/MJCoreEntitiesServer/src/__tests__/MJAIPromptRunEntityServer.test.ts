@@ -131,10 +131,11 @@ describe('normalizeRecordedUsage', () => {
     });
 
     it('refuses units recorded without a usage type rather than pricing them as tokens', () => {
-        // Now the UNRESOLVABLE-id case rather than the forgot-to-set case: UsageTypeID is NOT NULL,
-        // so a null measure here means the id is absent from the loaded catalog (deleted row, stale
-        // cache). Treating the run as token-billed would price its zero token counts and persist
-        // Cost = 0 for work that was actually billed — B60's failure mode through a different door.
+        // The UNRESOLVABLE-id case rather than the forgot-to-set case: an unset UsageTypeID is read
+        // as Tokens at the storage seam, so a null measure reaching here means the id is absent from
+        // the loaded catalog (deleted row, stale cache). Treating the run as token-billed would price
+        // its zero token counts and persist Cost = 0 for work that was actually billed — B60's
+        // failure mode through a different door.
         const result = normalizeRecordedUsage(usage({ unitsKind: null, inputUnits: 5400 }), 'Tokens');
 
         expect(result.ok).toBe(false);
@@ -143,10 +144,10 @@ describe('normalizeRecordedUsage', () => {
         }
     });
 
-    it('refuses units recorded against the Tokens measure — the state NOT NULL introduced', () => {
-        // The case the null guard above used to cover. UsageTypeID defaults to Tokens, so "never set
-        // a measure" and "said Tokens" are now the same row. Units counted in anything are not token
-        // counts, so this is a contradiction rather than a quantity.
+    it('refuses units recorded against the Tokens measure', () => {
+        // The case the null guard above used to cover. An unset UsageTypeID is read as Tokens, so
+        // "never set a measure" and "said Tokens" arrive here identically. Units counted in anything
+        // are not token counts, so this is a contradiction rather than a quantity.
         //
         // Reachable only for a model that ALSO has an active token-priced row: the measure filter
         // would otherwise find no Tokens row and refuse at selection. With one, the token row is

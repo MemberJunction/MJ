@@ -8,8 +8,12 @@
  * RuntimeSchemaManager.
  */
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { Octokit } from '@octokit/rest';
+// Already a dependency of this package (package.json) and already used by
+// install/install-orchestrator.ts. Version parsing, precedence and prerelease detection all come
+// from here rather than being hand-rolled, so the next semver edge case is the library's problem.
+import semver from 'semver';
 
 /**
  * Options for configuring the GitHub client.
@@ -279,6 +283,10 @@ export async function FetchManifestFromGitHub(
 /**
  * Lists available releases for a GitHub repository.
  *
+ * Paginated: a repo with more than one page of releases would otherwise be silently
+ * truncated at 100, so an app whose stable release has fallen past that boundary would
+ * resolve as having no releases at all.
+ *
  * @param repoUrl - GitHub repository URL
  * @param options - GitHub client options
  * @returns List of releases sorted by creation date (newest first)
@@ -293,13 +301,20 @@ export async function ListGitHubReleases(
     }
 
     try {
-        const { data } = await CreateOctokit(repoUrl, options).repos.listReleases({ owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
-        return data.map(r => ({
-            TagName: r.tag_name,
-            PreRelease: r.prerelease,
-            Draft: r.draft,
-            CreatedAt: r.created_at
-        }));
+        // Memoized on the same (repo, token) key and TTL as the tag path. Pagination is required for
+        // correctness — truncating at 100 hid the newest version entirely — but it made every call
+        // cost one request per page, and both GetLatestVersion and ResolveVersionRange call this. A
+        // page cap instead would reintroduce exactly the silent truncation the pagination removed.
+        return await MemoizedFetch(releaseListCache, FetchCacheKey(repoUrl, parsed, options), async () => {
+            const octokit = CreateOctokit(repoUrl, options);
+            const data = await octokit.paginate(octokit.repos.listReleases, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
+            return data.map(r => ({
+                TagName: r.tag_name,
+                PreRelease: r.prerelease,
+                Draft: r.draft,
+                CreatedAt: r.created_at
+            }));
+        });
     }
     catch (error: unknown) {
         // Surface a 403/429 (rate limit / access denied) instead of swallowing it into an empty
@@ -321,6 +336,42 @@ export async function ListGitHubReleases(
  *                  directory is resolved relative to it (`<subpath>/<migrationsPath>`).
  * @returns Download result with file list or error details
  */
+/** Bounded so a pathological or adversarial tree cannot walk forever. Generous vs any real repo. */
+const MAX_MIGRATION_DIRECTORY_DEPTH = 6;
+
+/**
+ * Every `.sql` file under `root`, with its path relative to `root` (#3858) — the same set skyway's
+ * recursive glob applies locally, which is the whole point: what installs must be what runs.
+ */
+async function listSqlFilesRecursive(
+    octokit: ReturnType<typeof CreateOctokit>,
+    owner: string,
+    repo: string,
+    root: string,
+    ref: string | undefined,
+    currentDir?: string,
+    depth = 0
+): Promise<{ path: string; relativePath: string }[]> {
+    if (depth > MAX_MIGRATION_DIRECTORY_DEPTH) {
+        throw new Error(
+            `Migration directory nesting exceeds ${MAX_MIGRATION_DIRECTORY_DEPTH} levels under '${root}' — `
+            + `refusing to walk further. No real migration layout is this deep.`);
+    }
+    const items = await ListDirectory(octokit, owner, repo, currentDir ?? root, ref);
+    const out: { path: string; relativePath: string }[] = [];
+    for (const item of items) {
+        if (item.type === 'file' && item.name.endsWith('.sql')) {
+            // Relative to the ORIGINAL root, however deep — this is the on-disk path, so nested
+            // structure survives and two same-named migrations in different subdirectories land in
+            // different places instead of silently overwriting each other.
+            out.push({ path: item.path, relativePath: item.path.slice(root.length).replace(/^\/+/, '') });
+        } else if (item.type === 'dir') {
+            out.push(...await listSqlFilesRecursive(octokit, owner, repo, root, ref, item.path, depth + 1));
+        }
+    }
+    return out;
+}
+
 export async function DownloadMigrations(
     repoUrl: string,
     version: string | undefined,
@@ -340,21 +391,37 @@ export async function DownloadMigrations(
     const octokit = CreateOctokit(repoUrl, options);
 
     try {
-        const items = await ListDirectory(octokit, parsed.Owner, parsed.Repo, cleanPath, ref);
-        const sqlFiles = items.filter(item => item.type === 'file' && item.name.endsWith('.sql'));
+        // RECURSIVE (#3858): skyway's scanner globs recursively, so a migration in a subdirectory
+        // is applied by a local `mj migrate` and looks correct — and was never downloaded and never
+        // ran on a host, with both sides reporting success. The walk mirrors what the scanner
+        // sees, and relative paths are PRESERVED on disk: flattening `file.name` would let two
+        // same-named migrations in different subdirectories silently overwrite each other.
+        const sqlFiles = await listSqlFilesRecursive(octokit, parsed.Owner, parsed.Repo, cleanPath, ref);
         if (sqlFiles.length === 0) {
-            return { Success: true, LocalPath: localDir, Files: [] };
-        }
-
-        if (!existsSync(localDir)) {
-            mkdirSync(localDir, { recursive: true });
+            // ZERO FILES IS A FAILURE (#3858). This function is only called because a manifest
+            // declared migrations; an app that says it has migrations and ships none is a defect.
+            // The old `Success: true, Files: []` let an install proceed past the migration phase,
+            // record the app as installed, and leave the host with an EMPTY schema and a green
+            // result — the one path where the migration phase failed soft.
+            return {
+                Success: false,
+                ErrorMessage: `No .sql files found under '${cleanPath}' (ref: ${ref ?? 'default branch'}). `
+                    + `The manifest declares a migrations directory, so an empty download is a defect — `
+                    + `check 'migrations.directory' in mj-app.json and that the tag's tree contains it.`,
+            };
         }
 
         const downloadedFiles: string[] = [];
         for (const file of sqlFiles) {
             const content = await FetchFileContent(octokit, parsed.Owner, parsed.Repo, file.path, ref);
-            writeFileSync(join(localDir, file.name), content, 'utf-8');
-            downloadedFiles.push(file.name);
+            // file.relativePath, not file.name — see the header note on same-named migrations.
+            const target = join(localDir, file.relativePath);
+            const targetDir = dirname(target);
+            if (!existsSync(targetDir)) {
+                mkdirSync(targetDir, { recursive: true });
+            }
+            writeFileSync(target, content, 'utf-8');
+            downloadedFiles.push(file.relativePath);
         }
 
         return { Success: true, LocalPath: localDir, Files: downloadedFiles };
@@ -383,15 +450,46 @@ export async function GetLatestVersion(
     // releases — go straight to the scoped tag line.
     if (!ScopedTagPrefix(subpath ?? ParseGitHubUrl(repoUrl)?.Subpath)) {
         const releases = await ListGitHubReleases(repoUrl, options);
-        const stable = releases.find(r => !r.PreRelease && !r.Draft);
-        if (stable) {
-            return stable.TagName.replace(/^v/, '');
+        // GitHub returns releases newest-CREATED first, which is not newest-VERSION first: a patch
+        // backported to an older line after a major ships is the most recent release but the lower
+        // version, and `find` would offer it as the upgrade target. Order by semver precedence
+        // instead — but ONLY across tag names that really are repo-wide versions. A scoped release
+        // name (`@scope/pkg@1.3.0`) is not one; running the comparator over those reshuffles
+        // meaningless values into a different meaningless answer.
+        //
+        // When NOTHING here is a repo-wide version, this path has no answer to give and must say
+        // so. Returning the first scoped release instead hands back a string that is not a version
+        // at all (`@memberjunction/connector-nimble-ams@1.3.2`), which can never equal the app's
+        // installed version — so it reads as a permanent "update available" pointing at a target
+        // `mj app upgrade` would then act on. Falling through to the tag path is the honest
+        // outcome: for a repo-wide app that path matches only `v?<semver>` tags and correctly
+        // resolves to null when a repo tags nothing repo-wide.
+        // Normalize to the semver CORE, not the tag text. Returning the tag verbatim let build
+        // metadata through (`v1.2.3+build.7` → `'1.2.3+build.7'`), which can never equal an installed
+        // `1.2.3` and so reads as a permanent "update available".
+        //
+        // Prereleases are excluded by the version STRING, not only by GitHub's `prerelease` flag. The
+        // flag is a checkbox a maintainer can forget: tag `v2.1.0-rc.1`, leave the box unticked, and
+        // a release-guarded-by-boolean path offers a release candidate as the upgrade target for an
+        // installed app — the exact outcome this stable preference exists to prevent. Guarding on both
+        // also makes the two paths below agree, which they previously did not.
+        const versioned = releases
+            .filter(r => !r.PreRelease && !r.Draft)
+            .map(r => SemverCore(r.TagName))
+            .filter((v): v is string => v !== null);
+        const stable = versioned.filter(v => semver.prerelease(v) === null);
+        const candidates = stable.length > 0 ? stable : versioned;
+        if (candidates.length > 0) {
+            return candidates.sort(semver.rcompare)[0];
         }
     }
 
     const tags = await ListGitHubTags(repoUrl, options, subpath);
     if (tags.length > 0) {
-        return tags[0].replace(/^v/, '');
+        // Same stable preference as the releases path above: never offer a prerelease as the version
+        // an installed app should upgrade to, unless nothing stable is tagged at all.
+        const stableTag = tags.find(t => !IsPrereleaseVersion(t));
+        return (stableTag ?? tags[0]).replace(/^v/, '');
     }
 
     return null;
@@ -399,7 +497,20 @@ export async function GetLatestVersion(
 
 /**
  * Lists semver tags for a GitHub repository, sorted by version descending.
- * Only returns tags matching the `v{major}.{minor}.{patch}` pattern.
+ * Only returns tags matching the `v{major}.{minor}.{patch}` pattern (optionally with a
+ * prerelease suffix), or `<subpath>@{major}.{minor}.{patch}` in a multi-app repo.
+ *
+ * Two constraints of that pattern are worth stating, because they are load-bearing rather than
+ * incidental: a prerelease identifier may NOT contain a hyphen (`-rc.1` matches, `-rc-1` does not),
+ * and build metadata is rejected outright (`v1.2.3+build.7` is not a tag this returns). The second
+ * is why only the RELEASES path could ever surface a `+build` string as a version — this path cannot
+ * produce one.
+ *
+ * Returns the tag TEXT as matched (`v1.0.7`), not a normalized core: `ValidateGitHubTag` and
+ * external callers depend on that shape. Only the ordering is semver-derived.
+ *
+ * Paginated: GitHub returns tags in its own order (not semver order), so truncating at the
+ * first 100 could hide the newest version entirely in a repo that tags many apps.
  *
  * @param repoUrl - GitHub repository URL
  * @param options - GitHub client options
@@ -416,19 +527,29 @@ export async function ListGitHubTags(
     }
 
     const prefix = ScopedTagPrefix(subpath ?? parsed.Subpath);
-    const semver = '\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?';
+    // Named to avoid shadowing the imported `semver` library below. Kept as a regex rather than
+    // delegating to `semver.valid` because this also has to LOCATE the version inside a scoped tag
+    // (`<prefix>@1.2.3`); `SemverCore` then normalizes whatever it captures.
+    const SEMVER_PATTERN = '\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?';
     // Multi-app repo: match this connector's scoped tags `<prefix>@<semver>` and return the versions.
     // Single-app repo: match repo-wide `v<semver>` tags as before.
     const pattern = prefix
-        ? new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@(${semver})$`)
-        : new RegExp(`^(v?${semver})$`);
+        ? new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@(${SEMVER_PATTERN})$`)
+        : new RegExp(`^(v?${SEMVER_PATTERN})$`);
 
     try {
-        const { data } = await CreateOctokit(repoUrl, options).repos.listTags({ owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
-        return data
-            .map(t => t.name.match(pattern)?.[1])
+        // Returns the matched TAG TEXT (`v1.0.7`), unchanged from before — callers and
+        // `ValidateGitHubTag` rely on that shape. Only the ORDER changes: sorting goes through the
+        // normalized core, because `semver.rcompare` throws on anything it cannot parse. Tags whose
+        // core will not parse are dropped rather than left to poison the sort, which is what the old
+        // NaN-returning comparator did.
+        return (await FetchRepoTagNames(repoUrl, parsed, options))
+            .map(name => name.match(pattern)?.[1])
             .filter((v): v is string => v != null)
-            .sort((a, b) => compareSemver(b, a));
+            .map(tag => ({ Tag: tag, Core: SemverCore(tag) }))
+            .filter((t): t is { Tag: string; Core: string } => t.Core !== null)
+            .sort((a, b) => semver.rcompare(a.Core, b.Core))
+            .map(t => t.Tag);
     }
     catch (error: unknown) {
         // Surface a 403/429 (rate limit / access denied) instead of swallowing it into an empty
@@ -436,6 +557,139 @@ export async function ListGitHubTags(
         ThrowIfRateLimitedOrForbidden(error, 'listing tags');
         return [];
     }
+}
+
+/**
+ * How long a fetched tag list stays reusable. Deliberately short: this exists to collapse the
+ * redundant fetches inside ONE sweep, not to act as a durable cache. A newly pushed tag becomes
+ * visible within this window, so a long-lived process cannot pin a stale answer.
+ */
+const TAG_CACHE_TTL_MS = 60_000;
+
+/** One memoized paginated fetch: the in-flight promise plus when it stops being reusable. */
+type FetchCacheEntry<T> = { ExpiresAt: number; Value: Promise<T> };
+
+/**
+ * Cached tag-name fetches, keyed by repository AND resolved token.
+ *
+ * Holds the IN-FLIGHT PROMISE, not the settled array. Caching the resolved value only collapses
+ * requests for a caller that awaits between apps: `mj app check-updates` happens to be a sequential
+ * `for…of`, so it saw the full benefit, but a `Promise.all` sweep starts every fetch before any has
+ * resolved and got no benefit at all — measured as 18 HTTP calls against 2. That left the saving
+ * contingent on a loop shape in a package this one does not own, with no test that would fail if it
+ * changed. Sharing the promise makes it hold either way.
+ */
+const tagListCache = new Map<string, FetchCacheEntry<string[]>>();
+
+/**
+ * Cached release fetches, same keying and lifetime as {@link tagListCache}.
+ *
+ * `ListGitHubReleases` is fully paginated, so without this a single-app repo with 2,000 releases
+ * costs 20 sequential requests on EVERY `GetLatestVersion` call — against an unauthenticated budget
+ * of 60/hour. `ResolveVersionRange` calls it too, once per version-range resolution. Pagination
+ * fixed the correctness problem (silent truncation at 100) and created this cost one; memoizing is
+ * the other half. Capping pages instead would reintroduce the truncation the pagination removed.
+ */
+const releaseListCache = new Map<string, FetchCacheEntry<GitHubRelease[]>>();
+
+/**
+ * Upper bound on distinct (repo, token) pairs held per cache.
+ *
+ * The caches are only swept on write, so without a bound they grow for the life of the process —
+ * and each key embeds a token, which is not something to retain indefinitely. Generous relative to
+ * any real sweep (an install set is single- or low-double-digit apps), so eviction is a backstop
+ * rather than something a normal run reaches.
+ */
+const FETCH_CACHE_MAX_ENTRIES = 64;
+
+/**
+ * Drops every cached tag AND release list. Exported for tests and for any caller that has just
+ * pushed a tag or published a release and needs the next lookup to reflect it immediately.
+ *
+ * Named for tags because that is what it originally cleared; it clears both, because a "clear" that
+ * left stale releases behind would be a trap.
+ */
+export function ClearGitHubTagCache(): void {
+    tagListCache.clear();
+    releaseListCache.clear();
+}
+
+/**
+ * Returns the cached fetch for `cacheKey`, or starts one and caches it.
+ *
+ * Shared by the tag and release paths so the promise-sharing, rejection handling and eviction rules
+ * cannot drift apart between them.
+ *
+ * @returns A COPY of the resolved array — the cached promise is shared by every joiner, so handing
+ *   back the same array would let one caller's in-place sort corrupt what the others see.
+ */
+async function MemoizedFetch<T>(
+    cache: Map<string, FetchCacheEntry<T[]>>,
+    cacheKey: string,
+    fetcher: () => Promise<T[]>
+): Promise<T[]> {
+    const now = Date.now();
+
+    const cached = cache.get(cacheKey);
+    if (cached && cached.ExpiresAt > now) {
+        return [...(await cached.Value)];
+    }
+
+    // Evict expired entries, then the oldest, until within the bound. Map iterates in insertion
+    // order, so the first keys are the oldest.
+    for (const [key, entry] of cache) {
+        if (entry.ExpiresAt <= now) cache.delete(key);
+    }
+    while (cache.size >= FETCH_CACHE_MAX_ENTRIES) {
+        const oldest = cache.keys().next();
+        if (oldest.done) break;
+        cache.delete(oldest.value);
+    }
+
+    const inFlight = fetcher();
+    // Published BEFORE anything awaits it, so concurrent callers join this fetch instead of each
+    // starting their own. A rejection is deleted rather than left to be replayed for the rest of the
+    // TTL: a rate-limited or forbidden call must still surface through
+    // ThrowIfRateLimitedOrForbidden on the next attempt.
+    cache.set(cacheKey, { ExpiresAt: now + TAG_CACHE_TTL_MS, Value: inFlight });
+    inFlight.catch(() => { cache.delete(cacheKey); });
+
+    return [...(await inFlight)];
+}
+
+/** The full identity of a fetch: the repository plus the token it would be made with. */
+function FetchCacheKey(repoUrl: string, parsed: { Owner: string; Repo: string }, options: GitHubClientOptions): string {
+    // NUL as the delimiter: it cannot appear in an owner, a repo name or a token, so the two halves
+    // can never be confused for one another. Written as the ESCAPE rather than a literal byte — a raw
+    // NUL in the source makes the whole file read as binary to grep, `file`, code search and diff
+    // viewers, which hides it from exactly the tools a reviewer uses.
+    return `${parsed.Owner}/${parsed.Repo}\u0000${ResolveToken(repoUrl, options) ?? ''}`;
+}
+
+/**
+ * Fetches every page of a repository's tag names, reusing a recent result for the same repository.
+ *
+ * The filtering above is per-app (each app matches its own `<prefix>@<semver>` line) but the fetch
+ * is per-REPOSITORY, so a sweep like `mj app check-updates` over several apps that share one repo
+ * was paying for the full paginated walk once per app. Against `MemberJunction/Integrations` — 9
+ * installed apps, 4 pages of tags — that measured 36 HTTP requests where 4 suffice, and the cost
+ * grows with the repo's tag count on every release.
+ *
+ * The key includes the RESOLVED token, not just the repository: a list fetched with a token that
+ * can see a private repository must never be served to a caller who did not supply that token.
+ * Only successful fetches are stored, so a rate-limited or forbidden call is never cached and
+ * still surfaces through {@link ThrowIfRateLimitedOrForbidden} on the next attempt.
+ */
+async function FetchRepoTagNames(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions
+): Promise<string[]> {
+    return MemoizedFetch(tagListCache, FetchCacheKey(repoUrl, parsed, options), async () => {
+        const octokit = CreateOctokit(repoUrl, options);
+        const data = await octokit.paginate(octokit.repos.listTags, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
+        return data.map(t => t.name);
+    });
 }
 
 /**
@@ -474,16 +728,35 @@ export async function ValidateGitHubTag(
 }
 
 /**
- * Compares two semver version strings (with optional 'v' prefix).
- * Returns negative if a < b, positive if a > b, zero if equal.
+ * The semver core of a tag name, or `null` when the tag is not itself a version.
+ *
+ * This is the single normalization point for every version string this module returns or sorts, and
+ * it is deliberately `semver.valid` rather than a local regex:
+ *
+ *  - It strips a leading `v` AND build metadata, returning the canonical core. That matters: a
+ *    release tagged `v1.2.3+build.7` used to come back verbatim, and `'1.2.3+build.7'` can never
+ *    equal an installed `1.2.3`, so it read as a permanent "update available" pointing at a target
+ *    `mj app upgrade` would then act on.
+ *  - It rejects anything that merely CONTAINS a version. A scoped release name such as
+ *    `@memberjunction/connector-wild-apricot@1.3.0` is not a repo-wide version, and ordering those
+ *    by semver precedence produces an ordering with no meaning (the `-` inside `wild-apricot` reads
+ *    as a prerelease delimiter).
+ *
+ * `semver` is already a dependency of this package and already imported by
+ * `install/install-orchestrator.ts`, which uses this same `valid()`-filter-then-compare shape.
  */
-function compareSemver(a: string, b: string): number {
-    const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
-    const pa = parse(a);
-    const pb = parse(b);
-    for (let i = 0; i < 3; i++) {
-        const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-        if (diff !== 0) return diff;
-    }
-    return 0;
+function SemverCore(tagName: string): string | null {
+    return semver.valid(tagName, { loose: false }) ?? semver.valid(tagName.replace(/^v/, ''));
+}
+
+/**
+ * True when a version string carries a prerelease suffix (e.g. `1.2.0-beta.1`).
+ *
+ * Total by construction: an unparseable string has no prerelease, so it is not one. `semver.compare`
+ * throws on invalid input, which is why every sort in this module filters through {@link SemverCore}
+ * first rather than relying on the comparator to be forgiving.
+ */
+export function IsPrereleaseVersion(version: string): boolean {
+    const core = SemverCore(version);
+    return core !== null && semver.prerelease(core) !== null;
 }

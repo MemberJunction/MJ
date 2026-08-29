@@ -9,7 +9,7 @@ import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-dat
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
-import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
+import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap } from './integration/EntityMapLifecycle.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
@@ -57,14 +57,17 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
-import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, SetVerboseLogging } from '@memberjunction/core';
-import { getSystemUser } from './auth/index.js';
+import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
+import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
+import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
+import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
+import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
@@ -78,9 +81,13 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/server-extensions-core';
+import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount } from '@memberjunction/server-extensions-core';
+import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
+import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
+
+export { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
 /**
  * Returns the configured database platform from the `DB_PLATFORM` environment
@@ -100,6 +107,10 @@ export function getDbType(): DatabasePlatform {
 
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
+// Named re-export so Open App generated resolvers get a live ESM binding for
+// Int/Float/ID. `export *` from type-graphql can leave these undefined for
+// later importers, which makes schema build fail on ViewResult.RowCount.
+export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
@@ -135,6 +146,7 @@ export * from './resolvers/RunClusterAnalysisResolver.js';
 export * from './resolvers/GenerateSeedTaxonomyResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/IntegrationProgressResolver.js';
+export * from './resolvers/IdentityClaimRedemptionResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
@@ -209,6 +221,13 @@ import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
+  /**
+   * Server-extension configs discovered from installed Open App server packages
+   * (`dynamicPackages.server[]`). Merged with host `mj.config.cjs` `serverExtensions[]`
+   * at load time — host `DriverClass` wins. Omit (or pass `[]`) for host-only loading,
+   * which is the historical `serve()` behavior.
+   */
+  serverExtensions?: ServerExtensionConfig[];
 };
 
 const localPath = (p: string) => {
@@ -339,6 +358,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
     await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
+
+    // Both provider sources have now had their turn — config/env at module load, metadata via
+    // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
+    validateAuthProvidersRegistered();
 
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
@@ -490,11 +513,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       startupLog.LogIf('verbose', 'Read-only Connection Pool has been initialized.');
     }
 
-    const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval / 1000); // convert ms to seconds (checkRefreshIntervalSeconds)
+    // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
+    const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
     await setupSQLServerClient(config, { mode: startupMode.mode });
+
+    // See the note on the PostgreSQL path above: this is the first point at which both the
+    // config/env providers and the metadata catalog have been registered.
+    validateAuthProvidersRegistered();
     lap('Metadata + Provider Setup', tPhase);
     startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap
@@ -525,7 +553,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         await codegenPool.connect();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
-        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, cacheRefreshInterval / 1000); // convert ms to seconds (checkRefreshIntervalSeconds)
+        // Same ms→seconds seam as the main provider config above — see providerConfigUnits.ts
+        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
@@ -836,6 +865,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     })
   );
 
+  // Give Runtime Schema Update runs the same durable, tailable event stream as syncs and connector
+  // builds. `IntegrationRunKind` has always had an 'RSU' kind and RUN_KIND_TO_TOPIC has always
+  // mapped it to an 'RSU' channel, but nothing published to it — the only live signal was polling
+  // RuntimeSchemaUpdateStatus, which reports the current step and keeps no history, and which goes
+  // silent entirely across the API restart the pipeline performs on itself. Registered AFTER the
+  // publish hook above so the first RSU event also reaches live subscribers.
+  RegisterRSUProgressBridge();
+
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
   // originated from a GraphQL mutation or internal server-side code (agents, actions,
@@ -1108,7 +1145,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
       publicUrl: oauthPublicUrl,
       successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
-      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
+      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`,
+      // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
+      allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
     });
     oauthAuthenticatedRouter = authenticatedRouter;
 
@@ -1245,7 +1284,28 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // These must be registered before the unified auth middleware so webhook
   // requests aren't rejected for lacking an MJ bearer token.
   const extensionLoader = new ServerExtensionLoader();
-  const extensionConfigs = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
+  // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
+  // (and remains the only source for host-only extensions such as Slack/Teams).
+  // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
+  // so a new pre-auth app.use(...) in serve() must also be added to
+  // coreReservedServerExtensionRoots() — otherwise an Open App can claim it.
+  const extensionConfigs = prepareServerExtensionConfigs(
+    mergeServerExtensionConfigs(
+      options?.serverExtensions ?? [],
+      (configInfo.serverExtensions ?? []) as ServerExtensionConfig[],
+    ),
+    {
+      onInvalid: (message) => LogError(message),
+      onOverlap: (message) => LogStatus(message),
+      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
+    },
+  );
+  // These routes mount BEFORE createUnifiedAuthMiddleware. Name every one so an
+  // operator who installed an Open App for its entities can see the pre-auth HTTP
+  // surface and suppress it with host serverExtensions[].Enabled = false.
+  for (const cfg of extensionConfigs) {
+    LogStatus(`Server extension ${describeServerExtensionMount(cfg)}`);
+  }
   if (extensionConfigs.length > 0) {
     await extensionLoader.LoadExtensions(app, extensionConfigs);
   }
@@ -1256,6 +1316,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const allHealthy = results.length === 0 || results.every(r => r.Healthy);
     res.status(allHealthy ? 200 : 503).json({ extensions: results });
   });
+
+  // ─── Public authentication-provider catalog (PUBLIC, before auth mw) ──────
+  // The browser needs the provider list BEFORE it holds a token, so this is necessarily
+  // unauthenticated and must mount ahead of the auth middleware. It publishes only the
+  // non-secret allow-list (see AuthProviderEngine.GetPublicCatalog) — the same values a
+  // single-provider SPA already compiled into its bundle.
+  app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), createAuthProviderCatalogRouter());
+  startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(createUnifiedAuthMiddleware(dataSources));
@@ -1352,6 +1420,20 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     } catch (error) {
       console.error('❌ Failed to start scheduled jobs service:', error);
       // Don't throw - allow server to start even if scheduled jobs fail
+    }
+  }
+
+  // Initialize and start the integration sync worker if enabled (PR 1 item 8).
+  // Off by default — deployments that don't opt in keep running syncs inline.
+  let integrationSyncWorker: IntegrationSyncWorkerService | null = null;
+  if (configInfo.integrationSyncWorker?.enabled) {
+    try {
+      integrationSyncWorker = new IntegrationSyncWorkerService(configInfo.integrationSyncWorker);
+      await integrationSyncWorker.Initialize();
+      integrationSyncWorker.Start();
+    } catch (error) {
+      console.error('❌ Failed to start integration sync worker:', error);
+      // Don't throw — an unavailable worker must not prevent the API from serving
     }
   }
 
@@ -1481,6 +1563,17 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       }
     }
 
+    // Stop the integration sync worker's polling. In-flight runs finish on their own —
+    // their leases are heartbeat-renewed, and killing them here would only strand rows.
+    if (integrationSyncWorker?.IsRunning) {
+      try {
+        integrationSyncWorker.Stop();
+        console.log(`✅ Integration sync worker stopped (${integrationSyncWorker.InFlightCount} run(s) still in flight)`);
+      } catch (error) {
+        console.error('❌ Error stopping integration sync worker:', error);
+      }
+    }
+
     // Drain anything self-registered with ShutdownRegistry — QueueManager,
     // future engines/services with timers/intervals/listeners. Each is
     // responsible for being idempotent and not throwing.
@@ -1520,14 +1613,74 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 };
 
 /**
- * Process pending RSU work left from a pre-restart Apply All.
- * Reads pending work files, creates entity maps + field maps, starts sync.
+ * Age at which an unprocessed `MJ: RSU Pending Works` row is reported as stranded.
+ * A row older than this survived at least one full restart cycle without being completed.
  */
+const RSU_PENDING_WORK_STALE_MINUTES = 30;
+
+/**
+ * Process pending RSU work left from a pre-restart Apply All.
+ * Reads the durable `MJ: RSU Pending Works` queue, creates entity maps + field maps,
+ * starts sync, and marks each row Completed only AFTER its work actually succeeded —
+ * so a crash mid-processing leaves the row Pending and re-processable on the next boot.
+ */
+/**
+ * Complete a custom-column promotion whose DDL landed before the restart.
+ *
+ * Promotion registers this rather than finishing inline, because the restart is what loads the
+ * regenerated entity classes — so the IntegrationObjectField rows, the field maps and the
+ * overflow→column spread all belong on this side of it, where the columns are real typed
+ * properties rather than dynamic .Get/.Set.
+ *
+ * The work itself lives on the promoter, so promotion logic stays in one class.
+ */
+async function ProcessPromoteColumnsPendingWork(
+  // Typed structurally rather than by name: schema-engine is only reachable here through a dynamic
+  // import (it is a workspace package, not published), so a static type import is not available.
+  // Deriving the payload from CompletePromotion's own signature keeps the two in step regardless.
+  item: { PromotedColumns?: Parameters<IntegrationCustomColumnPromoter['CompletePromotion']>[0] },
+  pendingWorkID: string,
+  rsm: {
+    CompletePendingWork(id: string, user: unknown): Promise<unknown>;
+    FailPendingWork(id: string, message: string, user: unknown): Promise<unknown>;
+  },
+  systemUser: ConstructorParameters<typeof IntegrationCustomColumnPromoter>[0],
+): Promise<void> {
+  const promoted = item.PromotedColumns ?? [];
+  if (promoted.length === 0) {
+    // Nothing to do, but the row must not linger and be retried forever.
+    await rsm.CompletePendingWork(pendingWorkID, systemUser);
+    console.warn('[RSU] promote-columns pending work carried no PromotedColumns — nothing to complete.');
+    return;
+  }
+  try {
+    const promoter = new IntegrationCustomColumnPromoter(systemUser);
+    const columns = await promoter.CompletePromotion(promoted);
+    // Completed only after the work actually succeeded: a crash before this leaves the row
+    // visible and re-processable, which is the whole point of the durable queue.
+    await rsm.CompletePendingWork(pendingWorkID, systemUser);
+    console.log(`[RSU] promote-columns: completed ${columns.length} column(s) across ${promoted.length} entity(ies).`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await rsm.FailPendingWork(pendingWorkID, `promote-columns completion failed: ${msg}`, systemUser);
+    console.error(`[RSU] promote-columns completion failed: ${msg}`);
+  }
+}
+
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
-  const pendingItems = await rsm.ReadAndClearPendingWork();
+
+  // Get system user for server-side operations — needed to read the queue itself
+  const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+  if (!systemUser) {
+    console.warn(`[RSU] No system user found — cannot process pending work`);
+    return;
+  }
+
+  // Rows older than this were left behind by an earlier process and are surfaced as stale.
+  const pendingItems = await rsm.ReadPendingWork(systemUser, RSU_PENDING_WORK_STALE_MINUTES);
   if (pendingItems.length === 0) return;
 
   console.log(`[RSU] Processing ${pendingItems.length} pending work item(s) from pre-restart...`);
@@ -1535,17 +1688,25 @@ async function processRSUPendingWork(): Promise<void> {
   // Wait a moment for metadata to be fully loaded
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  for (const item of pendingItems) {
+  for (const pending of pendingItems) {
+    const pendingWorkID = pending.ID;
+    const item = pending.Work;
     try {
       const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
-      // Get system user for server-side operations
-      const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
-      if (!systemUser) {
-        console.warn(`[RSU] No system user found, skipping pending work for ${item.CompanyIntegrationID}`);
-        continue;
-      }
 
       await Metadata.Provider.Refresh(); // global-provider-ok: server startup recovery — one-shot global cache refresh
+
+      // Custom-column promotion registers its follow-up here rather than finishing inline, because
+      // the restart is what loads the regenerated entity classes. Everything downstream of the
+      // ADD COLUMN — the IntegrationObjectField rows, the field maps, the overflow spread — runs
+      // now, with typed access to the columns that did not exist in the previous process.
+      //
+      // Absent WorkType means apply-objects: every row written before that field existed is one,
+      // and the branch below must keep treating it that way.
+      if (item.WorkType === 'promote-columns') {
+        await ProcessPromoteColumnsPendingWork(item, pendingWorkID, rsm, systemUser);
+        continue;
+      }
 
       // Resolve connector
       const rv = new RunView();
@@ -1556,6 +1717,7 @@ async function processRSUPendingWork(): Promise<void> {
       }, systemUser);
       const companyIntegration = ciResult.Results[0];
       if (!companyIntegration) {
+        await rsm.FailPendingWork(pendingWorkID, `CompanyIntegration ${item.CompanyIntegrationID} not found`, systemUser);
         console.warn(`[RSU] CompanyIntegration ${item.CompanyIntegrationID} not found`);
         continue;
       }
@@ -1568,11 +1730,13 @@ async function processRSUPendingWork(): Promise<void> {
       }, systemUser);
       const integrationEntity = integrationResult.Results[0];
       if (!integrationEntity) {
+        await rsm.FailPendingWork(pendingWorkID, `Integration entity for ${integrationName} not found`, systemUser);
         console.warn(`[RSU] Integration entity for ${integrationName} not found`);
         continue;
       }
       const connector = ConnectorFactory.Resolve(integrationEntity);
       if (!connector) {
+        await rsm.FailPendingWork(pendingWorkID, `Connector for ${integrationName} not found`, systemUser);
         console.warn(`[RSU] Connector for ${integrationName} not found`);
         continue;
       }
@@ -1797,8 +1961,13 @@ async function processRSUPendingWork(): Promise<void> {
           console.warn(`[RSU] Schedule creation failed: ${schedErr}`);
         }
       }
+
+      // Only NOW is the work durably done — close the row out.
+      await rsm.CompletePendingWork(pendingWorkID, systemUser);
     } catch (err) {
-      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${message}`);
+      await rsm.FailPendingWork(pendingWorkID, message, systemUser);
     }
   }
 

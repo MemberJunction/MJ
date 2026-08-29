@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (403 classes)
+// @memberjunction/core-entities (407 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -264,7 +264,6 @@ import {
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
-    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -304,6 +303,7 @@ import {
     MJArtifactVersionEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
@@ -426,8 +426,11 @@ import {
     MJFileStorageAccountEntity,
     MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
+    MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -492,6 +495,7 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -613,16 +617,12 @@ import {
     MJEntityDocumentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
-// @memberjunction/ai-engine-base (8 classes)
+// @memberjunction/ai-engine-base (4 classes)
 import {
-    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
-    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
-    TimePerHourPriceUnitType,
-    TimePerMinutePriceUnitType,
 } from '@memberjunction/ai-engine-base';
 
 // @memberjunction/ai-recommendations-rex (1 classes)
@@ -974,7 +974,7 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/scheduling-engine (8 classes)
+// @memberjunction/scheduling-engine (9 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -982,11 +982,12 @@ import {
     AgentScheduledJobDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
+    MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (41 classes)
+// @memberjunction/core-entities-server (42 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1016,6 +1017,7 @@ import {
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
+    MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
@@ -1324,7 +1326,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
-    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -1364,6 +1365,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJArtifactVersionEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
@@ -1486,8 +1488,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFileStorageAccountEntity,
     MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
+    MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -1552,6 +1557,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -1663,14 +1669,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
     MJEntityDocumentEntityExtended,
-    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
-    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
-    TimePerHourPriceUnitType,
-    TimePerMinutePriceUnitType,
     RexRecommendationsProvider,
     DataContextItemServer,
     MJLibraryEntityExtended,
@@ -1918,6 +1920,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentScheduledJobDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
+    MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1948,6 +1951,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
+    MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
@@ -2119,7 +2123,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 912;
+export const CLASS_REGISTRATIONS_COUNT = 914;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

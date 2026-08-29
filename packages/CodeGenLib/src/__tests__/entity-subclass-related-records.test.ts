@@ -42,7 +42,14 @@ vi.mock('../Database/manage-metadata', () => ({
     ValidatorResult: class {},
     ManageMetadataBase: class { static generatedValidators: unknown[] = []; },
 }));
-vi.mock('../Config/config', () => ({ mj_core_schema: '__mj', configInfo: {} }));
+vi.mock('../Config/config', () => ({
+    mj_core_schema: '__mj',
+    configInfo: {},
+    resolveEntityPackageName: () => 'mj_generatedentities',
+    resolveEntityImportPackage: () => {
+        throw new Error('resolveEntityImportPackage should not be called without peer embeds/collections');
+    },
+}));
 vi.mock('./sql_logging', () => ({ SQLLogging: class {} }));
 vi.mock('../Misc/util', () => ({
     makeDir: vi.fn(),
@@ -166,8 +173,8 @@ describe('GenerateRelatedRecordCollections — emission', () => {
         // silently-authoritative source of truth for values that already have columns.
         const relationship = withConfig({
             Name: 'Lines',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...({ RelatedEntity: 'WRONG: Entity', RelatedEntityJoinField: 'WrongField' } as any),
+            // Keys the config type deliberately does not declare — the point of the test.
+            ...({ RelatedEntity: 'WRONG: Entity', RelatedEntityJoinField: 'WrongField' } as unknown as Partial<RelatedRecordCollectionConfig>),
         });
         const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(makeEntity([relationship]));
 

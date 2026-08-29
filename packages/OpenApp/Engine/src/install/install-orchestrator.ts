@@ -18,16 +18,16 @@ import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-bu
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
-import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
+import { CreateAppSchema, DropAppSchema, SchemaExists } from './schema-manager.js';
 import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { NormalizeUUID, EscapeSQLString } from '@memberjunction/global';
 import type { MJEntityEntity, MJEntityFieldEntity, MJApplicationEntity } from '@memberjunction/core-entities';
 import {
   RecordAppInstallation,
@@ -44,7 +44,7 @@ import {
   UpdateAppRecord,
   SetAppStep,
 } from './history-recorder.js';
-import type { InstallStep, UpgradeStep, RemoveStep } from '../types/open-app-types.js';
+import type { InstallStep, UpgradeStep, RemoveStep, InstalledAppInfo } from '../types/open-app-types.js';
 
 /**
  * Ordered checkpoint sequences for the resumable phase of each action. `IsStepDone` tells the
@@ -880,11 +880,36 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 7: Update server config if changed
     if (!IsStepDone(UPGRADE_STEP_ORDER, resumeCheckpoint, 'ConfigUpdated')) {
+      // ADD first, then prune. HandleServerConfig is add-only and idempotent — correct for
+      // install, but on upgrade it leaves the config converging on the union of every version ever
+      // installed. A package the new version dropped keeps its dynamicPackages.server entry, and
+      // the server loader then tries to import a package that may no longer be built or present.
+      // The prune is what makes the config match THIS manifest exactly.
+      //
+      // The two steps converge on the same config in either order — the keep-set IS the new
+      // manifest, so a prune running after the adds keeps precisely what was just written, and a
+      // renamed startupExport is retargeted either way (prune-first rewrites the value and the add
+      // is then a no-op; add-first is the no-op and the prune rewrites it).
+      //
+      // The order is chosen for the FAILURE case, which is NOT symmetric. These are two separate
+      // writes to the same files with no rollback between them, so a failure in the second one is
+      // observable. Adding first leaves that window at (old ∪ new): every entry the running server
+      // needs is still present and it keeps booting — exactly the pre-prune behavior. Pruning
+      // first would leave a SUBSET of both versions, with the old version's dropped entries
+      // already gone and the new version's never written, so a server that restarts before the
+      // operator retries loses the app's registrations entirely.
       const configResult = HandleServerConfig(manifest, context);
       if (!configResult.Success) {
         await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime, previousVersion);
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
+      }
+
+      const pruneResult = PruneStaleServerConfig(existingApp, manifest, context);
+      if (!pruneResult.Success) {
+        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', pruneResult.ErrorMessage ?? 'Config prune failed', startTime, previousVersion);
+        await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, pruneResult.ErrorMessage ?? 'Config prune failed');
       }
       await SetAppStep(context.ContextUser, existingApp.ID, 'ConfigUpdated', undefined, manifest.version);
     }
@@ -1657,30 +1682,49 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  // Live DB platform — selects the Skyway provider for RunAppMigrations below.
-  const platform = context.DatabaseProvider.Dialect.PlatformKey;
+  try {
+    // Live DB platform — selects the Skyway provider for RunAppMigrations below.
+    const platform = context.DatabaseProvider.Dialect.PlatformKey;
 
-  // Platform-aware download with PG fallback (uses `<directory>-pg/` on Postgres when present,
-  // else the declared directory) + subpath-aware for multi-app repos.
-  const downloadResult = await DownloadAppMigrations(manifest, context, tempDir, subpath);
+    // Platform-aware download with PG fallback (uses `<directory>-pg/` on Postgres when present,
+    // else the declared directory) + subpath-aware for multi-app repos.
+    const downloadResult = await DownloadAppMigrations(manifest, context, tempDir, subpath);
 
-  if (!downloadResult.Success) {
-    return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
+    if (!downloadResult.Success) {
+      return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
+    }
+
+    context.Callbacks?.OnProgress?.('Migration', `Running ${downloadResult.Files?.length ?? 0} migration(s)...`);
+
+    const migrationResult = await RunAppMigrations({
+      MigrationsDir: tempDir,
+      SchemaName: manifest.schema.name,
+      DatabaseConfig: context.DatabaseConfig,
+      MJCoreSchema: context.MJCoreSchema,
+      ExtraPlaceholders: context.MigrationPlaceholders,
+      // Select the Skyway provider matching the live DB platform.
+      Platform: platform,
+    });
+
+    return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
+  } finally {
+    // Downloaded .sql files are consumed by the run above; leaving them behind accumulates a
+    // copy of every app's migrations in the OS temp dir on every install/upgrade.
+    CleanupTempDir(tempDir, 'Migration', context);
   }
+}
 
-  context.Callbacks?.OnProgress?.('Migration', `Running ${downloadResult.Files?.length ?? 0} migration(s)...`);
-
-  const migrationResult = await RunAppMigrations({
-    MigrationsDir: tempDir,
-    SchemaName: manifest.schema.name,
-    DatabaseConfig: context.DatabaseConfig,
-    MJCoreSchema: context.MJCoreSchema,
-    ExtraPlaceholders: context.MigrationPlaceholders,
-    // Select the Skyway provider matching the live DB platform.
-    Platform: platform,
-  });
-
-  return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
+/**
+ * Removes a temp directory the engine created for a download. Best-effort by design: a cleanup
+ * failure must never fail — or mask the result of — the operation that created the directory.
+ */
+function CleanupTempDir(tempDir: string, phase: string, context: OrchestratorContext): void {
+  try {
+    rmSync(tempDir, { recursive: true, force: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnWarn?.(phase, `Could not remove temp directory '${tempDir}': ${message}`);
+  }
 }
 
 /**
@@ -1705,40 +1749,45 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
-  const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
-  if (!download.Success) {
-    return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
-  }
-  // DownloadMigrations only writes .sql; sort by filename so a numbered teardown runs in order.
-  const files = (download.Files ?? []).filter((f) => f.endsWith('.sql')).sort();
-  if (files.length === 0) {
-    context.Callbacks?.OnWarn?.('Metadata', `No teardown scripts in '${dir}' — this app's rows in the shared core schema will NOT be retired on remove.`);
-    return { Success: true };
-  }
-
-  const mjSchema = context.MJCoreSchema ?? '__mj';
-  context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
-  // Atomic: the inverse-DELETEs across all teardown files run in ONE transaction so a mid-list
-  // failure rolls back the whole teardown rather than leaving the app's rows half-retired (some
-  // files committed, some not) — which would orphan rows AND block a clean reinstall.
-  await context.DatabaseProvider.BeginTransaction();
   try {
-    for (const file of files) {
-      const sql = readFileSync(join(tempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
-      if (sql.trim()) {
-        await context.DatabaseProvider.ExecuteSQL(sql);
-      }
+    context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
+    const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
+    if (!download.Success) {
+      return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
     }
-    await context.DatabaseProvider.CommitTransaction();
-  } catch (error: unknown) {
-    await context.DatabaseProvider.RollbackTransaction();
-    const message = error instanceof Error ? error.message : String(error);
-    return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}' (rolled back): ${message}` };
-  }
+    // DownloadMigrations only writes .sql; sort by filename so a numbered teardown runs in order.
+    const files = (download.Files ?? []).filter((f) => f.endsWith('.sql')).sort();
+    if (files.length === 0) {
+      context.Callbacks?.OnWarn?.('Metadata', `No teardown scripts in '${dir}' — this app's rows in the shared core schema will NOT be retired on remove.`);
+      return { Success: true };
+    }
 
-  context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
-  return { Success: true };
+    const mjSchema = context.MJCoreSchema ?? '__mj';
+    context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
+    // Atomic: the inverse-DELETEs across all teardown files run in ONE transaction so a mid-list
+    // failure rolls back the whole teardown rather than leaving the app's rows half-retired (some
+    // files committed, some not) — which would orphan rows AND block a clean reinstall.
+    await context.DatabaseProvider.BeginTransaction();
+    try {
+      for (const file of files) {
+        const sql = readFileSync(join(tempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
+        if (sql.trim()) {
+          await context.DatabaseProvider.ExecuteSQL(sql);
+        }
+      }
+      await context.DatabaseProvider.CommitTransaction();
+    } catch (error: unknown) {
+      await context.DatabaseProvider.RollbackTransaction();
+      const message = error instanceof Error ? error.message : String(error);
+      return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}' (rolled back): ${message}` };
+    }
+
+    context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
+    return { Success: true };
+  } finally {
+    // The downloaded teardown scripts have been executed above; don't leave them in the OS temp dir.
+    CleanupTempDir(tempDir, 'Metadata', context);
+  }
 }
 
 /**
@@ -1825,6 +1874,66 @@ async function HandlePackageInstallation(
   if (!installResult.Success) {
     return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
   }
+  return { Success: true };
+}
+
+/**
+ * Removes the config references a NEW version of an app no longer declares, so the upgrade path
+ * converges on the target manifest instead of on the union of every version ever installed.
+ *
+ * Two independent kinds of staleness:
+ * 1. **Dropped packages** — an entry in `dynamicPackages.server` / `.client` whose package is gone
+ *    from the manifest. The server loader / client bootstrap would still try to import it.
+ * 2. **A renamed schema** — `entityPackageName` and `excludeSchemas` are keyed by schema name, and
+ *    the Add* functions key off the NEW name, so the OLD name's mapping and exclusion survive
+ *    forever. CodeGen then keeps skipping discovery for a schema the app no longer owns.
+ *
+ * The previous manifest is read from the persisted `ManifestJSON` (the documented source of truth).
+ * If it cannot be parsed we prune what we can from the new manifest and warn — never fail the
+ * upgrade over an unreadable historical record.
+ */
+function PruneStaleServerConfig(
+  existingApp: InstalledAppInfo,
+  manifest: MJAppManifest,
+  context: OrchestratorContext
+): InternalResult {
+  const pruneResult = PruneDynamicPackagesNotInManifest(context.RepoRoot, manifest, context.ServerPackagePath);
+  if (!pruneResult.Success) {
+    return { Success: false, ErrorMessage: pruneResult.ErrorMessage };
+  }
+  for (const w of pruneResult.Warnings ?? []) {
+    context.Callbacks?.OnWarn?.('Config', `Skipped a config file while pruning: ${w}`);
+  }
+
+  let previousSchemaName: string | undefined;
+  try {
+    previousSchemaName = (JSON.parse(existingApp.ManifestJSON) as MJAppManifest).schema?.name;
+  } catch {
+    context.Callbacks?.OnWarn?.(
+      'Config',
+      `Could not parse the previously-installed manifest for '${existingApp.Name}', so a schema rename could not be detected. ` +
+      `If the app's schema name changed, remove the old entityPackageName mapping and excludeSchemas entry by hand.`
+    );
+    return { Success: true };
+  }
+
+  const newSchemaName = manifest.schema?.name;
+  if (!previousSchemaName || previousSchemaName === newSchemaName) {
+    return { Success: true };
+  }
+
+  const mappingResult = RemoveEntityPackageMapping(context.RepoRoot, previousSchemaName, context.ServerPackagePath);
+  if (!mappingResult.Success) {
+    return { Success: false, ErrorMessage: mappingResult.ErrorMessage };
+  }
+  const excludeResult = RemoveExcludeSchema(context.RepoRoot, previousSchemaName, context.ServerPackagePath);
+  if (!excludeResult.Success) {
+    return { Success: false, ErrorMessage: excludeResult.ErrorMessage };
+  }
+  context.Callbacks?.OnProgress?.(
+    'Config',
+    `Schema renamed ${previousSchemaName} -> ${newSchemaName ?? '(none)'}; removed the old schema's config references.`
+  );
   return { Success: true };
 }
 
@@ -2026,7 +2135,7 @@ export async function RemoveAppEntityMetadata(
 ): Promise<{ Success: boolean; ErrorMessage?: string }> {
   try {
     const rv = new RunView();
-    const escaped = EscapeSqlString(schemaName);
+    const escaped = EscapeSQLString(schemaName);
 
     // Migration-declared Application IDs (normalized). A link-less nav Application can exist even
     // with zero entities, so these are honored on both the no-entities early-out and after teardown.
@@ -2075,7 +2184,7 @@ export async function RemoveAppEntityMetadata(
     }
 
     const entityIds = entityResult.Results.map((e) => e.ID);
-    const idList = entityIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+    const idList = entityIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
 
     // Capture the app's OWN Application row(s) NOW — before the ApplicationEntity links below
     // are torn down — so they can be cleaned up post-teardown (see DeleteAppOwnedApplications). An
@@ -2121,7 +2230,7 @@ export async function RemoveAppEntityMetadata(
       if (!fieldResult.Success) {
         throw new Error(`Failed to query entity fields for schema '${schemaName}': ${fieldResult.ErrorMessage}`);
       }
-      const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(f.ID)}'`).join(',');
+      const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSQLString(f.ID)}'`).join(',');
 
       // Queue FK-dependent deletes in dependency order (children before parents).
       if (fieldIdList.length > 0) {
@@ -2200,13 +2309,12 @@ async function ExtractDeclaredApplicationIds(
   } catch {
     return [];
   } finally {
-    // Clean up the downloaded-migrations temp dir (best-effort — never mask the result).
+    // Same shared helper as the migration and teardown sites, rather than a third hand-rolled
+    // `try { rmSync } catch {}`. The inline version swallowed a cleanup failure silently; the helper
+    // reports it through OnWarn, so "temp dir could not be removed" is visible in one place instead
+    // of being invisible in one of three lookalike blocks.
     if (tempDir) {
-      try {
-        rmSync(tempDir, { recursive: true, force: true });
-      } catch {
-        /* best-effort cleanup */
-      }
+      CleanupTempDir(tempDir, 'Metadata', context);
     }
   }
 }
@@ -2236,7 +2344,7 @@ async function FindAppOwnedApplications(rv: RunView, contextUser: UserInfo, enti
   }
   // Re-read ALL links for the candidates: an Application is "owned" only if EVERY one of its
   // links is to an entity we're removing (otherwise it groups another app's entities too).
-  const candList = candidateIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+  const candList = candidateIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
   const allLinks = await rv.RunView<{ ApplicationID: string; EntityID: string }>(
     { EntityName: 'MJ: Application Entities', ExtraFilter: `ApplicationID IN (${candList})`, Fields: ['ApplicationID', 'EntityID'], ResultType: 'simple' },
     contextUser,
@@ -2264,7 +2372,7 @@ async function DeleteAppOwnedApplications(rv: RunView, applicationIds: string[],
   if (applicationIds.length === 0) {
     return;
   }
-  const idList = applicationIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+  const idList = applicationIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
   const appsResult = await rv.RunView<MJApplicationEntity>(
     { EntityName: 'MJ: Applications', ExtraFilter: `ID IN (${idList})`, ResultType: 'entity_object' },
     contextUser,

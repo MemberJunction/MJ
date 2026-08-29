@@ -1,5 +1,5 @@
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { Metadata } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/core';
 import type {
     MJCompanyIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -17,6 +17,7 @@ import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalField
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions } from './types.js';
+import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
 
 /** Options for the creation/refresh pipeline run. */
 export interface ConnectorCreationPipelineOptions {
@@ -58,6 +59,29 @@ export interface ConnectorCreationPipelineOptions {
      * false so it never disables what it didn't look at. Threaded to PersistDiscoveredSchema.
      */
     DeactivateAbsent?: boolean;
+    /**
+     * Hard ceiling for the WHOLE run. Default {@link DEFAULT_RUN_DEADLINE_MS}; 0 disables it.
+     *
+     * Every other budget in this system bounds something INSIDE a stage, and none of them can preempt
+     * an `await` that never settles. A connector's `outOfTime()` is only checked BETWEEN requests; an
+     * HTTP abort signal governs only its own request; the discovery sample budget is spent by the code
+     * reading the stream. There is always one more layer able to stall — and when one does, this
+     * pipeline waits on it forever.
+     *
+     * Forever is literal. `complete()` and `fail()` are the only writers of `result.json` and both sit
+     * inside the try/catch around the stages, so a stage that never returns reaches neither. Since
+     * `isInFlight` is computed as "result.json is absent", the run then reports itself running for the
+     * rest of time: no client can learn otherwise and no retry clears it.
+     *
+     * Observed live 2026-08-12 three times on one connector: ConnectionTest completes in ~1s, Introspect
+     * starts, and the event stream is flat for ten minutes and counting — against a reference run that
+     * finished the entire pipeline in 3m53s.
+     *
+     * This does NOT stop the stalled work; a promise is not cancellable, so it keeps running until the
+     * process ends. It stops WAITING on it, so the run fails honestly, writes its artifact, and becomes
+     * retryable. A reported failure you can act on beats silence you cannot.
+     */
+    RunDeadlineMs?: number;
 }
 
 /** Outcome of a single pipeline invocation. */
@@ -99,8 +123,41 @@ export interface ConnectorCreationPipelineResult {
  * `__mj.Entity`. The pipeline emits `entity.skipped-no-pk` events for visibility.
  */
 export class IntegrationConnectorCreationPipeline {
-    /** In-flight runs by CompanyIntegrationID — coalesces a concurrent duplicate onto the same promise. */
-    private static readonly inFlightRuns = new Map<string, Promise<ConnectorCreationPipelineResult>>();
+    /**
+     * In-flight runs by CompanyIntegrationID — coalesces a concurrent duplicate onto the same promise.
+     *
+     * Carries `at` because the entry is removed in a `finally`, which only fires when the promise
+     * SETTLES. A run that hangs therefore owns this slot forever, and every later refresh for that
+     * connector takes the `if (inFlight) return inFlight` path and attaches to a promise that will
+     * never resolve. No new run starts, no run.start is emitted, nothing reaches the workspace log —
+     * from outside the request simply vanishes, and the connector is unrefreshable until the process
+     * restarts.
+     *
+     * That is the whole explanation for behaviour that looked random for two days: a fresh process
+     * discovers in ~4 minutes; one hang poisons the slot; every attempt after it hangs; a restart
+     * clears the map and it "works again" until the next hang. Observed live 2026-08-12 — a run stuck
+     * at EventCount 5 with healthy runs on either side of it.
+     *
+     * Coalescing is right for concurrent callers, but it is only SAFE if runs terminate, and nothing
+     * guarantees that. So the entry expires: past {@link IN_FLIGHT_MAX_AGE_MS} a caller stops trusting
+     * it and runs fresh. That does not stop the stalled work (a promise is not cancellable) — it stops
+     * one hang from costing every future attempt.
+     */
+    private static readonly inFlightRuns = new Map<string, { promise: Promise<ConnectorCreationPipelineResult>; at: number }>();
+    /**
+     * How long a coalescing entry may be trusted before a new caller runs fresh instead of joining it.
+     *
+     * Generous on purpose: a legitimate large discovery must still coalesce, and re-running one is
+     * expensive. This is not a run deadline — it bounds how long ONE hang can hijack other people's
+     * requests, nothing more.
+     */
+    private static readonly IN_FLIGHT_MAX_AGE_MS = 20 * 60_000;
+    /**
+     * Default whole-run ceiling. Deliberately far above any healthy run — the reference Totara run
+     * completes in under four minutes and a large Salesforce-backed catalog in tens — so this only ever
+     * fires on work that has genuinely stopped, never on work that is merely big.
+     */
+    private static readonly DEFAULT_RUN_DEADLINE_MS = 45 * 60_000;
     /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
     private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
     /** Default coalesce window (ms) when the env override is unset/invalid. */
@@ -126,6 +183,15 @@ export class IntegrationConnectorCreationPipeline {
      * per CompanyIntegration and hand both callers the same result — no double introspect/persist/
      * classify, no double live API calls, and the resolver still gets a real summary. A legitimate
      * re-refresh later (outside the window) runs fresh.
+     *
+     * COALESCING vs. A CALLER-SUPPLIED `RunID`. A coalesced call never reaches `runInternal`, so
+     * `opts.RunID` is not the ID of the run that served it. That is fine for a caller who awaits the
+     * result (it gets the real `RunID` back), but NOT for a caller that already handed `opts.RunID` to
+     * a client as "the run to tail" — for that client, the ID would resolve to a run directory that
+     * never gets created, and `IntegrationTailRunEvents` would answer "Run not found" forever, which
+     * is indistinguishable from "the run hasn't opened its stream yet". So whenever a caller supplied
+     * a `RunID` and coalescing served a different run, we publish a terminal ALIAS run under the
+     * requested ID pointing at the run that actually did the work. See {@link honourRequestedRunID}.
      */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
         const ciID = opts.CompanyIntegration?.ID;
@@ -133,20 +199,126 @@ export class IntegrationConnectorCreationPipeline {
 
         const cls = IntegrationConnectorCreationPipeline;
         const inFlight = cls.inFlightRuns.get(ciID);
-        if (inFlight) return inFlight; // a concurrent run is already going — share it
+        if (inFlight) {
+            if (Date.now() - inFlight.at < cls.IN_FLIGHT_MAX_AGE_MS) {
+                // A concurrent run is already going — share it, but THROUGH honourRequestedRunID so a
+                // caller that supplied its own RunID still gets that ID published as a tailable alias.
+                // Returning `inFlight.promise` directly (as this branch did before the rebase) discards
+                // the requested ID, which is exactly the defect #3354 fixed: the client polls a run
+                // directory that is never created and reads "Run not found" forever, indistinguishable
+                // from "hasn't started yet".
+                return this.honourRequestedRunID(opts, await inFlight.promise);
+            }
+            // Too old to be believed. Evicted rather than awaited: joining it is how one hang made a
+            // connector permanently unrefreshable. The stalled work carries on unattended — nothing
+            // here can cancel it — but this caller gets a real run instead of inheriting the stall.
+            LogError(
+                `[ConnectorCreationPipeline] Discarding an in-flight run for ${ciID} that has not settled in ` +
+                `${Math.round((Date.now() - inFlight.at) / 60000)}min — starting a fresh run. The previous run is ` +
+                `stuck and will never terminate; its artifact stays in-flight until the workspace restarts.`
+            );
+            cls.inFlightRuns.delete(ciID);
+        }
 
         cls.pruneRecentRuns();
         const recent = cls.recentRuns.get(ciID);
-        if (recent) return recent.result; // a run just completed (within the window) — reuse it
+        if (recent) return this.honourRequestedRunID(opts, recent.result); // just completed — reuse it
 
         const promise = this.runInternal(opts);
-        cls.inFlightRuns.set(ciID, promise);
+        cls.inFlightRuns.set(ciID, { promise, at: Date.now() });
         try {
             const result = await promise;
             cls.recentRuns.set(ciID, { result, at: Date.now() });
             return result;
         } finally {
-            cls.inFlightRuns.delete(ciID);
+            // Only clear the slot if it is still OURS. An eviction above may have handed it to a newer
+            // run; deleting blindly would drop that entry and let a third caller start yet another
+            // duplicate.
+            if (cls.inFlightRuns.get(ciID)?.promise === promise) {
+                cls.inFlightRuns.delete(ciID);
+            }
+        }
+    }
+
+    /**
+     * Keeps a caller-supplied `opts.RunID` tailable even when coalescing served the call from a
+     * DIFFERENT run.
+     *
+     * Why this exists: `IntegrationCreateConnection`/`IntegrationUpdateConnection` can launch the
+     * refresh detached — they mint a run ID, hand it to the client as "tail this", and only then call
+     * `Run()`. On create, the connection's `IsActive` false→true Save has ALREADY awaited a full
+     * pipeline run for the same CompanyIntegration (MJCompanyIntegrationEntityServer), so the
+     * resolver's call lands inside the coalesce window every time. Without this, the minted ID names
+     * a run directory that is never created: the detached promise RESOLVES (so the launcher's
+     * rejection handler never fires) and the client polls `IntegrationTailRunEvents` forever on
+     * `Run '<id>' not found`, which reads exactly like "not started yet".
+     *
+     * So: publish a real, terminal, one-stage run under the requested ID whose events name the run
+     * that actually did the work. The tail resolves, carries the served run's outcome, and
+     * `data.servedByRunID` lets a client hop to the full stream. The returned result is the served
+     * run unchanged — a caller that awaits still gets the true `RunID`.
+     */
+    private async honourRequestedRunID(
+        opts: ConnectorCreationPipelineOptions,
+        served: ConnectorCreationPipelineResult
+    ): Promise<ConnectorCreationPipelineResult> {
+        const requested = opts.RunID;
+        if (!requested || requested === served.RunID) return served;
+        await this.publishCoalescedAlias(requested, opts, served);
+        return served;
+    }
+
+    /**
+     * Writes the alias run described in {@link honourRequestedRunID}. Best-effort: an artifact-write
+     * failure must never turn a schema refresh that genuinely succeeded into a thrown error, so this
+     * only logs. The alias mirrors the served run's success/failure so a client tailing it cannot
+     * read a failed refresh as a clean one.
+     */
+    private async publishCoalescedAlias(
+        requestedRunID: string,
+        opts: ConnectorCreationPipelineOptions,
+        served: ConnectorCreationPipelineResult
+    ): Promise<void> {
+        try {
+            const emitter = new IntegrationProgressEmitter({
+                runID: requestedRunID,
+                runKind: 'ConnectorCreation',
+                integrationID: opts.CompanyIntegration.IntegrationID,
+                companyIntegrationID: opts.CompanyIntegration.ID,
+                triggerType: opts.TriggerType ?? 'Pipeline',
+                startedAt: new Date().toISOString(),
+                expectedStages: ['Coalesced'],
+                context: { servedByRunID: served.RunID, coalesced: true },
+            }, { rootDir: opts.ArtifactRootDir, consoleMirror: opts.ConsoleMirror });
+
+            const pointer = `A schema refresh for this connection was already running (or had just ` +
+                `completed), so this request was served by run ${served.RunID} instead of starting a ` +
+                `second live introspect. Tail that run for the full event stream.`;
+            emitter.runStart(pointer);
+            emitter.stageComplete('Coalesced', { processed: 1, succeeded: served.Success ? 1 : 0 });
+
+            if (served.Success) {
+                const p = served.PersistResult;
+                await emitter.complete(
+                    `${pointer} Outcome: ${p?.ObjectsCreated ?? 0} objects created, ` +
+                    `${p?.ObjectsUpdated ?? 0} updated, ${served.UnresolvedObjects.length} unresolved PKs.`
+                );
+            } else {
+                emitter.stageError('Coalesced', served.FailureMessage ?? 'no reason reported', {
+                    code: 'coalesced-run-failed',
+                    servedByRunID: served.RunID,
+                });
+                await emitter.fail(
+                    `${pointer} That run FAILED: ${served.FailureMessage ?? 'no reason reported'}`,
+                    'coalesced-run-failed'
+                );
+            }
+            await emitter.flush();
+        } catch (err) {
+            console.warn(
+                `[IntegrationConnectorCreationPipeline] Could not publish coalesced-run alias ` +
+                `${requestedRunID} → ${served.RunID}: ${err instanceof Error ? err.message : String(err)}`
+            );
         }
     }
 
@@ -179,13 +351,48 @@ export class IntegrationConnectorCreationPipeline {
             rootDir: opts.ArtifactRootDir,
             consoleMirror: opts.ConsoleMirror,
         });
+        const startedMs = Date.now();
         emitter.runStart(`Connector creation pipeline started for ${opts.CompanyIntegration.Integration ?? '(integration)'} run=${runID}`);
 
+        // THE RUN MUST END. Raced rather than awaited: a stage that never settles cannot be cancelled,
+        // but it can be stopped being waited on — which is the difference between a run that fails and
+        // one that is in-flight forever. See RunDeadlineMs.
+        const deadlineMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+        // The default is 45min, but RunDeadlineMs is a public knob and a caller may set seconds — in
+        // which case rounding to minutes reported the failure as a "deadline of 0min", which reads as
+        // a bug in the pipeline rather than the limit the caller actually asked for.
+        const deadlineLabel = deadlineMs >= 60_000
+            ? `${Math.round(deadlineMs / 60_000)}min`
+            : `${(deadlineMs / 1000).toFixed(deadlineMs % 1000 === 0 ? 0 : 1)}s`;
+        let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+        const withDeadline = async <T>(stage: string, work: Promise<T>): Promise<T> => {
+            if (deadlineMs <= 0) return work;
+            const remaining = deadlineMs - (Date.now() - startedMs);
+            if (remaining <= 0) {
+                throw new Error(`Run deadline of ${deadlineLabel} exceeded before stage "${stage}" could start.`);
+            }
+            return Promise.race([
+                work,
+                new Promise<never>((_, reject) => {
+                    deadlineTimer = setTimeout(
+                        () => reject(new Error(
+                            `Stage "${stage}" did not finish within the run deadline of ` +
+                            `${deadlineLabel}. The work may still be running on this ` +
+                            `process — it cannot be cancelled — but the run is being failed so it stops ` +
+                            `reporting itself in-flight and can be retried.`)),
+                        remaining,
+                    );
+                    // Never hold the process open for a deadline nobody is waiting on.
+                    (deadlineTimer as unknown as { unref?: () => void }).unref?.();
+                }),
+            ]).finally(() => { if (deadlineTimer) clearTimeout(deadlineTimer); }) as Promise<T>;
+        };
+
         try {
-            await this.StageConnectionTest(emitter, opts);
-            const sourceSchema = await this.StageIntrospect(emitter, opts);
-            const persistResult = await this.StagePersist(emitter, opts, sourceSchema);
-            const { verdicts, unresolved } = await this.StagePKClassify(emitter, opts);
+            await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
+            const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
+            const persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
+            const { verdicts, unresolved } = await withDeadline('PKClassify', this.StagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
                 processed: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,
@@ -289,10 +496,22 @@ export class IntegrationConnectorCreationPipeline {
                     // for that object never landed. Discover its fields over the read path and populate the
                     // existing declared object IN PLACE so it becomes syncable.
                     const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
-                    if (existing && existing.Fields.length === 0) {
+                    // SAMPLE UNCONDITIONALLY. This used to run only for a declared object with no
+                    // fields — a gate on the wrong question, because streaming answers three and a
+                    // declaration can only pre-answer one of them. A declared key IS authoritative;
+                    // which fields the source actually sends, and how wide their values are, only
+                    // the data knows. An object declared with fields and a key was therefore never
+                    // sampled: its undeclared columns arrived later through the overflow path one
+                    // sync at a time, and its widths were whatever the catalog guessed — which is a
+                    // truncation, or a migration written by hand afterwards.
+                    //
+                    // The merge is one-directional (see DeclaredSampleMerge): sampling fills gaps
+                    // and widens, never overrides. A fetch failure leaves the declaration exactly
+                    // as it was, so the worst case is the behaviour that shipped before.
+                    if (existing) {
                         try {
                             const dfields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
-                            existing.Fields = dfields.map(f => ({
+                            const sampled = dfields.map(f => ({
                                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
                                 IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
                                 Precision: f.Precision ?? null, Scale: f.Scale ?? null, DefaultValue: f.DefaultValue ?? null,
@@ -300,15 +519,43 @@ export class IntegrationConnectorCreationPipeline {
                                 IsPrimaryKey: f.IsPrimaryKey, IsUniqueKey: f.IsUniqueKey, IsReadOnly: f.IsReadOnly,
                                 IsForeignKey: f.IsForeignKey, ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                             }));
-                            existing.PrimaryKeyFields = dfields.filter(f => f.IsPrimaryKey).map(f => f.Name);
-                            existing.Relationships = dfields
-                                .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
-                                .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' }));
-                            console.log(`[IntrospectPipeline] declared field-less object "${d.Name}" → discovered ${dfields.length} fields via read path`);
+                            if (existing.Fields.length === 0) {
+                                // Nothing was declared, so there is nothing to defer to — the
+                                // sample is the whole truth, exactly as before this change.
+                                existing.Fields = sampled;
+                                existing.PrimaryKeyFields = dfields.filter(f => f.IsPrimaryKey).map(f => f.Name);
+                                existing.Relationships = dfields
+                                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                                    .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' }));
+                                console.log(`[IntrospectPipeline] declared field-less object "${d.Name}" → discovered ${dfields.length} field(s) via read path`);
+                            } else {
+                                const merged = MergeDeclaredWithSample(existing.Fields, sampled);
+                                existing.Fields = merged.Fields;
+                                // Only when the declaration named no key at all — a declared key
+                                // stays authoritative even if the sample nominates another column,
+                                // which is how a child table ends up keyed on its parent's FK.
+                                if (merged.AdoptedKeyNames.length > 0) {
+                                    existing.PrimaryKeyFields = merged.AdoptedKeyNames;
+                                }
+                                // Relationships come from the declaration when there is one; a
+                                // sampled FK target is a guess and must not rewrite a stated graph.
+                                const parts = [
+                                    merged.AddedFieldNames.length ? `added ${merged.AddedFieldNames.length} undeclared field(s): ${merged.AddedFieldNames.join(', ')}` : null,
+                                    merged.WidenedFieldNames.length ? `widened ${merged.WidenedFieldNames.length}: ${merged.WidenedFieldNames.join(', ')}` : null,
+                                    merged.AdoptedKeyNames.length ? `adopted key [${merged.AdoptedKeyNames.join(', ')}]` : null,
+                                ].filter(Boolean);
+                                console.log(`[IntrospectPipeline] declared object "${d.Name}" sampled ${dfields.length} field(s) — ${parts.length ? parts.join('; ') : 'declaration already matched the data'}`);
+                            }
                         } catch (err) {
                             const msg = err instanceof Error ? err.message : String(err);
-                            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared field-less "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
-                            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared "${d.Name}": ${msg}`);
+                            // The declaration stands exactly as it was — the worst case of sampling
+                            // failing is the behaviour that shipped before it. Say which was lost so
+                            // an operator can tell "no columns at all" from "possibly narrow ones".
+                            const lost = existing.Fields.length === 0
+                                ? 'object has NO fields and cannot be synced until this succeeds'
+                                : 'keeping the declared fields; undeclared columns and true widths are unknown for this run';
+                            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared "${d.Name}" — ${lost}: ${msg}`, { code: 'discover-fields-failed' });
+                            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared "${d.Name}" — ${lost}: ${msg}`);
                         }
                     }
                     continue;
@@ -402,6 +649,24 @@ export class IntegrationConnectorCreationPipeline {
         }
         for (const fieldLog of persistResult.FieldMergeLog) {
             emitter.fieldAdded(fieldLog.ObjectName, fieldLog.FieldName, fieldLog.EffectiveSource);
+        }
+        // A comprehensive refresh deactivates declared objects/fields it did not observe. That is
+        // the intended behaviour, but it is also the point where a connector's declared field stops
+        // being materialized by every later apply — so say which ones, on the progress stream the
+        // caller is already reading, instead of only in a server console line.
+        if (persistResult.ObjectsDeactivated.length > 0 || persistResult.FieldsDeactivated.length > 0) {
+            emitter.warning(
+                'Persist',
+                'DECLARED_ROWS_DEACTIVATED',
+                `${persistResult.ObjectsDeactivated.length} object(s) and ${persistResult.FieldsDeactivated.length} ` +
+                `field(s) were declared but not observed by this authoritative discovery, so they were deactivated ` +
+                `(never deleted) and will not be materialized by a later apply until they are observed again or ` +
+                `re-enabled.`,
+                {
+                    objects: persistResult.ObjectsDeactivated,
+                    fields: persistResult.FieldsDeactivated,
+                },
+            );
         }
         emitter.stageComplete('Persist', {
             processed: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,

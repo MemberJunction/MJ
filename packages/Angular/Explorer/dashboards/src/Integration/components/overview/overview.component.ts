@@ -315,7 +315,8 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
   GetSparklineDotClass(run: { Status: string }): string {
     if (run.Status === 'Success') return 'spark-dot spark-green';
     if (run.Status === 'Failed') return 'spark-dot spark-red';
-    if (run.Status === 'In Progress' || run.Status === 'Pending') return 'spark-dot spark-amber';
+    // 'Queued' joins the work-outstanding states; 'Cancelled' falls through to neutral gray below.
+    if (run.Status === 'In Progress' || run.Status === 'Pending' || run.Status === 'Queued') return 'spark-dot spark-amber';
     return 'spark-dot spark-gray';
   }
 

@@ -1,30 +1,84 @@
 [
   {
+    "_comments": [
+      "UsageTypeID is the base measure a billing unit is a quantity of; UnitsPerBillingUnit is how",
+      "many of that measure make ONE billed unit, so cost = (quantity / UnitsPerBillingUnit) *",
+      "PricePerUnit. Both columns are added (nullable) by the AIPromptRun_Continuous_Units",
+      "migration and populated here rather than by an UPDATE in that migration, so the values are",
+      "reviewable data instead of SQL.",
+      "The four token/image rows below the first two shipped in the v3 baseline and were never",
+      "tracked as metadata; they are declared here with their baseline IDs and text so the push",
+      "updates the existing rows rather than creating duplicates."
+    ],
     "fields": {
       "Name": "Per Minute",
       "Description": "Time-based pricing billed per minute of session/audio time — the unit realtime voice and speech models (e.g. GPT-Realtime-Translate, GPT-Realtime-Whisper, conversational-agent platforms) publish their rates in. Cost rows using this unit express the price per ONE minute; consumers multiply by elapsed minutes (fractional minutes pro-rate).",
-      "DriverClass": "TimePerMinute"
+      "DriverClass": "TimePerMinute",
+      "UsageTypeID": "@lookup:MJ: AI Usage Types.Name=Seconds",
+      "UnitsPerBillingUnit": 60
     },
     "primaryKey": {
       "ID": "847D106C-19EB-4034-92BC-15B158C3CB12"
-    },
-    "sync": {
-      "lastModified": "2026-06-16T01:17:23.344Z",
-      "checksum": "bb4a73b8026ef610d874fc4a74c5313922e89e1130567b0e9f1ca435d2c7bc40"
     }
   },
   {
     "fields": {
       "Name": "Per Hour",
       "Description": "Time-based pricing billed per hour — for hourly-billed model capacity (e.g. dedicated/provisioned realtime endpoints). Cost rows using this unit express the price per ONE hour; consumers pro-rate fractional hours.",
-      "DriverClass": "TimePerHour"
+      "DriverClass": "TimePerHour",
+      "UsageTypeID": "@lookup:MJ: AI Usage Types.Name=Seconds",
+      "UnitsPerBillingUnit": 3600
     },
     "primaryKey": {
       "ID": "513164F2-2DCB-4885-AADC-B3FF07F38087"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Per 1M Tokens",
+      "Description": "Pricing calculated per million tokens processed. This is the standard unit for most modern LLMs including OpenAI GPT-4, Anthropic Claude, and Google models.",
+      "DriverClass": "PerMillionTokens",
+      "UsageTypeID": "@lookup:MJ: AI Usage Types.Name=Tokens",
+      "UnitsPerBillingUnit": 1000000
     },
-    "sync": {
-      "lastModified": "2026-06-16T01:17:23.357Z",
-      "checksum": "b91573dfa8574b7ac41ce2ab76244a55fe594cfdf2c6c104b59f77213c9a57c0"
+    "primaryKey": {
+      "ID": "54208f7d-331c-40ab-84e8-163338ee9ea1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Per 1K Tokens",
+      "Description": "Pricing calculated per thousand tokens processed. Common for older models and some specialized providers.",
+      "DriverClass": "PerThousandTokens",
+      "UsageTypeID": "@lookup:MJ: AI Usage Types.Name=Tokens",
+      "UnitsPerBillingUnit": 1000
+    },
+    "primaryKey": {
+      "ID": "7d9ae8a6-5051-4cf1-a261-178958b03fd2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Per 100K Tokens",
+      "Description": "Pricing calculated per hundred thousand tokens processed. Used by some providers as an intermediate pricing tier.",
+      "DriverClass": "PerHundredThousandTokens",
+      "UsageTypeID": "@lookup:MJ: AI Usage Types.Name=Tokens",
+      "UnitsPerBillingUnit": 100000
+    },
+    "primaryKey": {
+      "ID": "e09e39ed-6ca0-47a1-9b81-d581312efdf4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Per Image",
+      "Description": "Price per generated image",
+      "DriverClass": "PerImage",
+      "UsageTypeID": "@lookup:MJ: AI Usage Types.Name=Images",
+      "UnitsPerBillingUnit": 1
+    },
+    "primaryKey": {
+      "ID": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
     }
   }
 ]
