@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpError, HttpPost, IsHttpError } from "@memberjunction/network-utils";
 import { getApiIntegrationsConfig } from "../../config";
 
 /** One result from Tavily's /search endpoint. */
@@ -182,23 +182,21 @@ export class TavilySearchAction extends BaseAction {
         }
 
         try {
-            const response = await axios.post<TavilyAPIResponse>(
+            // A plain object body is JSON-encoded with its Content-Type by HttpPost itself.
+            const response = await HttpPost<TavilyAPIResponse>(
                 TavilySearchAction.ENDPOINT,
                 requestBody,
                 {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json'
-                    },
-                    timeout: 60000
+                    Headers: { 'Authorization': `Bearer ${apiKey}` },
+                    Timeout: 60000
                 }
             );
 
-            if (!response.data) {
+            if (!response.Data) {
                 return this.createErrorResult("Empty response from Tavily API", "EMPTY_RESPONSE");
             }
 
-            const results = (response.data.results ?? []).map((item): TavilySearchResultItem => {
+            const results = (response.Data.results ?? []).map((item): TavilySearchResultItem => {
                 const mapped: TavilySearchResultItem = {
                     title: item.title ?? '',
                     url: item.url ?? '',
@@ -214,7 +212,7 @@ export class TavilySearchAction extends BaseAction {
                 return mapped;
             });
 
-            const answer = response.data.answer ?? '';
+            const answer = response.Data.answer ?? '';
 
             this.addOutputParam(params, 'Results', results);
             this.addOutputParam(params, 'ResultCount', results.length);
@@ -228,7 +226,7 @@ export class TavilySearchAction extends BaseAction {
                 maxResults,
                 results,
                 answer,
-                responseTime: response.data.response_time,
+                responseTime: response.Data.response_time,
             });
 
             // Zero results is a real answer to a narrow query, not a failure — a
@@ -242,9 +240,12 @@ export class TavilySearchAction extends BaseAction {
                     : `Tavily returned ${results.length} result(s) for '${query}'.`
             };
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const status = error.response?.status;
-                const detail = this.describeAxiosError(error.response?.data) || error.message;
+            // Status 0 is HttpError's "the request never produced a response" — a timeout or a
+            // network failure. That is not an API answer, so it is reported as SEARCH_FAILED below
+            // rather than dressed up as an API_ERROR with no status.
+            if (IsHttpError(error) && error.Status > 0) {
+                const status = error.Status;
+                const detail = this.describeErrorBody(error.Data) || error.message;
 
                 if (status === 401 || status === 403) {
                     return this.createErrorResult(
@@ -275,7 +276,7 @@ export class TavilySearchAction extends BaseAction {
     }
 
     /** Pull whatever explanation the error body carries, without assuming a shape. */
-    private describeAxiosError(data: unknown): string {
+    private describeErrorBody(data: unknown): string {
         if (typeof data === 'string') return data.slice(0, 500);
         if (data && typeof data === 'object') {
             const record = data as Record<string, unknown>;

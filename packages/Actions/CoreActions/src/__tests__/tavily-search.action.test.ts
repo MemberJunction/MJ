@@ -25,14 +25,25 @@ vi.mock('@memberjunction/actions-base', () => ({}));
 
 const post = vi.fn();
 
-vi.mock('axios', () => ({
-    default: {
-        post: (...args: unknown[]) => post(...args),
-        // The real helper reads the marker property the same way, so a plain object
-        // carrying it is indistinguishable from a genuine AxiosError here.
-        isAxiosError: (e: unknown) => Boolean((e as { isAxiosError?: boolean })?.isAxiosError),
-    },
-}));
+// The fake HttpError is defined INSIDE the factory: vi.mock is hoisted above every top-level
+// statement, so a class declared out here would not exist yet when the factory runs. The test
+// reaches it by importing `HttpError` from the mocked module below, which resolves to this class.
+vi.mock('@memberjunction/network-utils', () => {
+    /** The shape the real HttpError carries (Status / Data / message), so the action's IsHttpError
+     *  branch and its Status-0 "no response" distinction are exercised exactly as in production. */
+    class FakeHttpError extends Error {
+        constructor(public readonly Status: number, public readonly Data: unknown, message: string) {
+            super(message);
+            this.name = 'HttpError';
+        }
+    }
+    return {
+        HttpPost: (...args: unknown[]) => post(...args),
+        HttpError: FakeHttpError,
+        IsHttpError: (e: unknown) => e instanceof FakeHttpError,
+    };
+});
+import { HttpError as FakeHttpError } from '@memberjunction/network-utils';
 
 const apiKey = { value: 'tvly-test-key' as string | undefined };
 
@@ -68,12 +79,12 @@ function sentBody(): Record<string, unknown> {
 }
 
 function sentHeaders(): Record<string, string> {
-    return (post.mock.calls[0][2] as { headers: Record<string, string> }).headers;
+    return (post.mock.calls[0][2] as { Headers: Record<string, string> }).Headers;
 }
 
-/** An error shaped like the one axios throws on a non-2xx response. */
+/** An error shaped like the one HttpPost throws on a non-2xx response. */
 function httpError(status: number, data: unknown, message = `Request failed with status code ${status}`) {
-    return { isAxiosError: true, response: { status, data }, message };
+    return new (FakeHttpError as unknown as new (s: number, d: unknown, m: string) => Error)(status, data, message);
 }
 
 const RESULT_A = {
@@ -91,7 +102,7 @@ const RESULT_B = {
 };
 
 function ok(data: unknown) {
-    post.mockResolvedValueOnce({ data });
+    post.mockResolvedValueOnce({ Data: data, Status: 200 });
 }
 
 beforeEach(() => {
@@ -430,7 +441,7 @@ describe('TavilySearchAction — errors', () => {
         expect(result.Message).toMatch(/Internal error/);
     });
 
-    it('uses the axios message when the error body explains nothing', async () => {
+    it('uses the HTTP error message when the error body explains nothing', async () => {
         post.mockRejectedValueOnce(httpError(503, undefined, 'socket hang up'));
         const { result } = await run({ Query: 'dues' });
         expect(result.ResultCode).toBe('API_ERROR');
@@ -443,12 +454,14 @@ describe('TavilySearchAction — errors', () => {
         expect(result.Message).toMatch(/gateway exploded/);
     });
 
-    it('reports a non-HTTP failure, such as a timeout with no response, distinctly', async () => {
-        post.mockRejectedValueOnce(new Error('timeout of 60000ms exceeded'));
+    it('reports a request that never got a response, such as a timeout, distinctly', async () => {
+        // HttpPost surfaces a timeout or network failure as an HttpError with Status 0 — there is no
+        // API answer to classify, so it must not be reported as an API_ERROR with no status.
+        post.mockRejectedValueOnce(httpError(0, undefined, 'Request to https://api.tavily.com/search timed out after 60000ms'));
         const { result } = await run({ Query: 'dues' });
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('SEARCH_FAILED');
-        expect(result.Message).toMatch(/timeout of 60000ms exceeded/);
+        expect(result.Message).toMatch(/timed out after 60000ms/);
     });
 
     it('reports a thrown non-Error without losing what was thrown', async () => {
