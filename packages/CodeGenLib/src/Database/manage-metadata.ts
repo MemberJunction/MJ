@@ -4955,14 +4955,28 @@ export class ManageMetadataBase {
     * following INSERT can use the real BaseView column_id without colliding on
     * UQ_EntityField_EntityID_Sequence. The +100000 band is unique-safe; the
     * subsequent spUpdateExistingEntityFieldsFromSchema rewrite brings every row
-    * (parked and new) back to live catalog order. Skip rows already parked so a
-    * second pass in the same run does not add 100000 twice.
+    * (parked and new) back to live catalog order.
+    *
+    * Parks ONLY when nothing on the entity is parked yet, which is what makes a second
+    * emission for the same entity in the same run a no-op. `Sequence < 100000` alone does
+    * not achieve that: after the first park the rows below the band are precisely the ones
+    * the first pass just INSERTED at their catalog ordinals, so a second park lifts THOSE
+    * into the band — onto the row the first park moved from the same ordinal, and the
+    * migration dies on UQ_EntityField_EntityID_Sequence with a duplicate at 100000+ordinal.
+    * Reachable whenever an entity gains fields in both CodeGen passes: pass 1 for the real
+    * columns, pass 2 for the denormalized name column a new foreign key introduces.
     */
    protected parkEntityFieldSequencesSQL(entityID: string): string {
-      return `UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+      const table = this.qs(mj_core_schema(), 'EntityField');
+      return `UPDATE ${table}
          SET ${this.qi('Sequence')} = ${this.qi('Sequence')} + 100000
        WHERE ${this.qi('EntityID')} = '${entityID}'
-         AND ${this.qi('Sequence')} < 100000;`;
+         AND ${this.qi('Sequence')} < 100000
+         AND NOT EXISTS (
+             SELECT 1 FROM ${table}
+              WHERE ${this.qi('EntityID')} = '${entityID}'
+                AND ${this.qi('Sequence')} >= 100000
+         );`;
    }
 
    protected parseDefaultValue(sqlDefaultValue: string): string {
