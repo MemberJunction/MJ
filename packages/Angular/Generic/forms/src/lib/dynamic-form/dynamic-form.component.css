@@ -1,11 +1,13 @@
+/* NOTE (lts/5): clip-fix subset of #4085 only — that PR also widened this card to
+   720px, which stays on `next`. See the matching note in dynamic-form-field.component.css. */
 .dynamic-form {
   margin-top: 16px;
   display: block;
-  /* Sizes to content, so a short form stays compact — but agent-authored labels are
-     often sentence-length, so give the card enough room before its contents have to wrap. */
   width: fit-content;
+  /* as a flex item the card would otherwise refuse to shrink below its content and
+     overflow a narrow message column; inert everywhere else */
   min-width: 0;
-  max-width: 720px;
+  max-width: 600px;
 }
 
 /* Simple Choice Mode */

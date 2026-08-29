@@ -1,3 +1,11 @@
+/* NOTE (lts/5): this file carries the clip-fix subset of #4085 only. That PR also
+   restyled the form — card 600->720px, medium field 450->560px, 14px option labels,
+   and top-aligned option controls with their nudges — and those changes render
+   differently for deployments that were never clipping, so they stay on `next` and
+   are deliberately absent here. Every rule below is a no-op unless the element is
+   already overflowing. Expect a conflict when cherry-picking this file again; take
+   the wrap/min-width rules and leave the sizing and typography behind. */
+
 .form-question {
   margin-bottom: 16px;
 }
@@ -92,7 +100,6 @@
   max-width: 100%;
   white-space: normal;
   text-align: left;
-  line-height: 1.3;
 }
 
 .buttongroup-option i {
@@ -109,7 +116,7 @@
 .radio-option,
 .checkbox-option {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   /* Basis is the option's own content width, but it may shrink: short options share a
      row, while an option too wide for the row takes the row to itself and wraps its
@@ -119,35 +126,24 @@
   max-width: 100%;
 }
 
-.radio-option > input,
-.checkbox-option > input {
-  flex: 0 0 auto;
-  /* nudge the control onto the first text line now that options are top-aligned */
-  margin-top: 3px;
-}
-
 .radio-label,
 .checkbox-label {
   cursor: pointer;
   user-select: none;
   margin: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
-  /* the only text in the form that had no size of its own — it inherited the host app's
-     body size (~16px) while every sibling control here is 14px */
-  font-size: 14px;
   /* without this the label is stuck at its content width and cannot wrap */
   min-width: 0;
-  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
 .radio-label i,
 .checkbox-label i {
   color: var(--mj-text-secondary);
+  /* keep the icon at its intrinsic size when a long label puts the row under pressure */
   flex: 0 0 auto;
-  margin-top: 2px;
 }
 
 .validation-error {
@@ -231,7 +227,7 @@
 
 /* Medium fields - for names, cities, phone numbers (DEFAULT) */
 .input-container.width-medium {
-  max-width: 560px;
+  max-width: 450px;
 }
 
 .input-container.width-medium .question-input,
@@ -261,33 +257,17 @@
 }
 
 /* Auto-width - for dropdowns, radio, checkbox (sizes to content) */
+/* The 350px cap stays as-is on this line: a long selected label degrades to the
+   ellipsis above rather than being cut mid-word, so widening the container is a
+   layout improvement, not part of the clip fix. See #4085 on `next`. */
 .input-container.width-auto {
-  max-width: 100%;
+  max-width: 350px;
   min-width: 150px;
   width: auto;
 }
 
-/* widthHint: 'auto' is legal on any question type, and this container used to cap
-   every control it held at 350px. Keep that cap as the default so lifting it off the
-   container changes only the controls this fix targets — not sliders, date ranges or
-   the markdown panel, which also live here. */
-.input-container.width-auto > * {
-  max-width: 350px;
-}
-
-/* The select sizes to its widest option rather than to a fixed cap, so a long
-   selected label stays readable; the container is what bounds it. */
-.input-container.width-auto > .question-dropdown {
-  width: auto;
-  max-width: 100%;
-}
-
-/* Choice groups need the full width to lay their options out — that is the whole
-   point of the wrapping rules above. */
-.input-container.width-auto > .question-radio-group,
-.input-container.width-auto > .question-checkbox-group,
-.input-container.width-auto > .question-buttongroup {
-  max-width: 100%;
+.input-container.width-auto .question-dropdown {
+  width: 100%;
 }
 
 /* Responsive adjustments for smaller screens */
@@ -296,11 +276,6 @@
   .input-container.width-medium,
   .input-container.width-wide,
   .input-container.width-auto {
-    max-width: 100%;
-  }
-
-  /* release the width-auto child cap too, or it binds where the container no longer does */
-  .input-container.width-auto > * {
     max-width: 100%;
   }
 }

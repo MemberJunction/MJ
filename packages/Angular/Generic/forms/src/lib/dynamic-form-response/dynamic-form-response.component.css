@@ -1,5 +1,8 @@
 /* ==================== Form Response Display ==================== */
 
+/* NOTE (lts/5): clip-fix subset of #4085 only — the restyle half of that PR stays on
+   `next`. See the matching note in dynamic-form-field.component.css. */
+
 .form-response-pill {
   transition: all 0.2s ease;
 }
@@ -7,7 +10,7 @@
 /* Single field - inline pill */
 .form-response-pill.single-field {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
   vertical-align: middle;
   gap: 6px;
   padding: 4px 12px;
@@ -22,15 +25,14 @@
   /* A chosen option can be a full sentence — wrap it instead of running past the message. */
   max-width: 100%;
   white-space: normal;
-  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
 .form-response-pill.single-field i {
   font-size: 11px;
   opacity: 0.95;
+  /* keep the icon at its intrinsic size when a long answer puts the pill under pressure */
   flex: 0 0 auto;
-  margin-top: 3px;
 }
 
 /* Multi-field - card layout */
