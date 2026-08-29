@@ -615,6 +615,102 @@ describe('CreateBusinessCentralJournalEntryAction', () => {
     expect(outParam(result, 'DocNumber')).toBe('JE-9');
     expect(outParam(result, 'TotalAmount')).toBe(100);
   });
+
+  it('should DELETE lines created in this call if a later POST fails', async () => {
+    let linePosts = 0;
+    const spy = vi.spyOn(action as never, 'makeBCRequest').mockImplementation((async (endpoint: string, method: string) => {
+      if (endpoint === 'journals') {
+        return { value: [{ id: 'j-1', code: 'GENERAL', balancingAccountNumber: null }] };
+      }
+      if (String(endpoint).includes('journalLines') && method === 'POST') {
+        linePosts += 1;
+        if (linePosts >= 2) {
+          throw new Error('line 2 failed');
+        }
+        return { id: `line-${linePosts}`, documentNumber: 'JE-9' };
+      }
+      if (String(endpoint).startsWith('journalLines(') && method === 'DELETE') {
+        return undefined;
+      }
+      throw new Error(`unexpected ${method} ${endpoint}`);
+    }) as never);
+
+    const result = await run(
+      action,
+      inputs({
+        CompanyID: 'comp-1',
+        Lines: [
+          { accountNumber: '1000', debit: 100 },
+          { accountNumber: '2000', credit: 100 },
+        ],
+      }),
+    );
+
+    expect(result.Success).toBe(false);
+    expect(result.Message).toBe('line 2 failed');
+    expect(spy.mock.calls.map((c) => [c[1], c[0]])).toEqual([
+      ['GET', 'journals'],
+      ['POST', 'journals(j-1)/journalLines'],
+      ['POST', 'journals(j-1)/journalLines'],
+      ['DELETE', 'journalLines(line-1)'],
+    ]);
+  });
+
+  it('should error when JournalCode matches nothing', async () => {
+    vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({
+      value: [{ id: 'j-1', code: 'GENERAL', balancingAccountNumber: null }],
+    } as never);
+
+    const result = await run(action, inputs({
+      CompanyID: 'comp-1',
+      JournalCode: 'GENERAL2',
+      Lines: [
+        { accountNumber: '1000', debit: 100 },
+        { accountNumber: '2000', credit: 100 },
+      ],
+    }));
+
+    expect(result.Success).toBe(false);
+    expect(result.Message).toContain("JournalCode 'GENERAL2' does not exist");
+  });
+
+  it('should refuse a journal that has a balancing account', async () => {
+    vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({
+      value: [{ id: 'j-1', code: 'CASH', balancingAccountNumber: '1010' }],
+    } as never);
+
+    const result = await run(action, inputs({
+      CompanyID: 'comp-1',
+      Lines: [
+        { accountNumber: '1000', debit: 100 },
+        { accountNumber: '2000', credit: 100 },
+      ],
+    }));
+
+    expect(result.Success).toBe(false);
+    expect(result.Message).toMatch(/balancing account/i);
+  });
+
+  it('should send accountNumber and omit accountId when both are present', async () => {
+    const spy = vi.spyOn(action as never, 'makeBCRequest').mockImplementation((async (endpoint: string) => {
+      if (endpoint === 'journals') {
+        return { value: [{ id: 'j-1', code: 'GENERAL', balancingAccountNumber: null }] };
+      }
+      return { id: 'line-1' };
+    }) as never);
+
+    await run(action, inputs({
+      CompanyID: 'comp-1',
+      Lines: [
+        { accountNumber: '1000', accountId: 'stale-guid', debit: 100 },
+        { accountNumber: '2000', credit: 100 },
+      ],
+    }));
+
+    const firstLine = spy.mock.calls[1][2] as Record<string, unknown>;
+    expect(firstLine.accountNumber).toBe('1000');
+    expect(firstLine.accountId).toBeUndefined();
+  });
 });
 
 // ─── Business Central: GetAccountBalances ───────────────────────────────────

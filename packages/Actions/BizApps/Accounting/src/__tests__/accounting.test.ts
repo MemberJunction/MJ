@@ -172,10 +172,14 @@ describe('BaseAccountingAction', () => {
     });
 
     describe('getCommonAccountingParams', () => {
-        it('should return three common params', () => {
+        it('should return CompanyID, FiscalYear, AccountingPeriod, IntegrationName', () => {
             const params = action['getCommonAccountingParams']();
-            expect(params).toHaveLength(3);
-            expect(params.map((p: { Name: string }) => p.Name)).toEqual(['CompanyID', 'FiscalYear', 'AccountingPeriod']);
+            expect(params.map((p: { Name: string }) => p.Name)).toEqual([
+                'CompanyID',
+                'FiscalYear',
+                'AccountingPeriod',
+                'IntegrationName',
+            ]);
         });
     });
 
@@ -213,8 +217,44 @@ describe('BaseAccountingAction', () => {
 
             const filter = runViewFn.mock.calls[0][0].ExtraFilter as string;
             expect(filter).toContain("CompanyID = 'abc'' OR 1=1--'");
+            expect(filter).toContain('IsActive = 1');
             expect(filter).toContain("'QuickBooks Online'");
             expect(filter).toContain("'Microsoft Dynamics 365 Business Central'");
+        });
+
+        it('should fail with AMBIGUOUS_ACCOUNTING_INTEGRATION when two ERPs are active', async () => {
+            const { RunView } = await import('@memberjunction/core');
+            const runViewFn = vi.fn().mockResolvedValue({
+                Success: true,
+                Results: [
+                    { ID: 'ci-1', CompanyID: 'comp-1', IntegrationID: 'int-1', Integration: 'Microsoft Dynamics 365 Business Central' },
+                    { ID: 'ci-2', CompanyID: 'comp-1', IntegrationID: 'int-2', Integration: 'QuickBooks Online' },
+                ],
+            });
+            vi.mocked(RunView).mockImplementation(function (this: unknown) {
+                return { RunView: runViewFn };
+            } as never);
+
+            await expect(action['resolveCompanyAccountingIntegration']('comp-1', {} as never))
+                .rejects.toMatchObject({ resultCode: 'AMBIGUOUS_ACCOUNTING_INTEGRATION' });
+        });
+
+        it('should select the named integration when IntegrationName is passed', async () => {
+            const { RunView } = await import('@memberjunction/core');
+            const runViewFn = vi.fn().mockResolvedValue({
+                Success: true,
+                Results: [
+                    { ID: 'ci-2', CompanyID: 'comp-1', IntegrationID: 'int-2', Integration: 'QuickBooks Online' },
+                ],
+            });
+            vi.mocked(RunView).mockImplementation(function (this: unknown) {
+                return { RunView: runViewFn };
+            } as never);
+
+            const resolved = await action['resolveCompanyAccountingIntegration']('comp-1', {} as never, 'QuickBooks Online');
+            expect(resolved.Name).toBe('QuickBooks Online');
+            expect(runViewFn.mock.calls[0][0].ExtraFilter).toContain("'QuickBooks Online'");
+            expect(runViewFn.mock.calls[0][0].ExtraFilter).not.toContain('Business Central');
         });
     });
 });
