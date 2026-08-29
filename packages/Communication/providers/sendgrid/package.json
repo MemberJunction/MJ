@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/communication-sendgrid",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: SendGrid Provider for the MJ Communication Framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,10 +20,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/communication-types": "6.1.0-edge.4",
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
     "@sendgrid/mail": "^8.1.6",
     "dotenv": "^17.2.4"
   },
