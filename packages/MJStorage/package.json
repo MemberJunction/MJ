@@ -33,6 +33,7 @@
     "@memberjunction/core-entities": "6.1.0-edge.4",
     "@memberjunction/credentials": "6.1.0-edge.4",
     "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/network-utils": "6.1.0-edge.4",
     "@microsoft/mgt-element": "^4.6.0",
     "@microsoft/mgt-msal2-provider": "^4.6.0",
     "@microsoft/mgt-sharepoint-provider": "^4.6.0",

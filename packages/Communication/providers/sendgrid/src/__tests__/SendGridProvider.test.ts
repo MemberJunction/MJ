@@ -59,6 +59,16 @@ vi.mock('../config', () => ({
   __API_KEY: 'env-sendgrid-key',
 }));
 
+const drainResponseBodyMock = vi.fn();
+
+vi.mock('@memberjunction/network-utils', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/network-utils');
+  return {
+    ...actual,
+    DrainResponseBody: (...args: unknown[]) => drainResponseBodyMock(...args),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
@@ -75,6 +85,7 @@ describe('SendGridProvider', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    drainResponseBodyMock.mockReset();
     provider = new SendGridProvider();
   });
 
@@ -168,6 +179,51 @@ describe('SendGridProvider', () => {
       });
 
       expect(mockSetApiKey).toHaveBeenCalledWith('SG.custom-key');
+    });
+  });
+
+  describe('DeleteSubscription — response body draining (memory-leak regression)', () => {
+    /**
+     * A failed Inbound Parse delete already read `resp.text()` before this fix — the leak was
+     * on the two SUCCESS branches (`resp.ok` or 404-already-gone), which returned immediately
+     * without ever consuming the response body. Under Node's native `fetch` (undici), that
+     * pins the connection out of the keep-alive pool until GC finalizes it.
+     */
+    let originalFetch: typeof globalThis.fetch;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it('drains the response body on a successful delete', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', text: async () => '' }) as unknown as typeof fetch;
+
+      const result = await provider.DeleteSubscription({ SubscriptionID: 'parse.example.com' });
+
+      expect(result.Success).toBe(true);
+      expect(drainResponseBodyMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('drains the response body when the mapping is already gone (404, idempotent success)', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found', text: async () => '' }) as unknown as typeof fetch;
+
+      const result = await provider.DeleteSubscription({ SubscriptionID: 'parse.example.com' });
+
+      expect(result.Success).toBe(true);
+      expect(drainResponseBodyMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not double-drain on a genuine failure — the error branch reads the body itself', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error', text: async () => 'boom' }) as unknown as typeof fetch;
+
+      const result = await provider.DeleteSubscription({ SubscriptionID: 'parse.example.com' });
+
+      expect(result.Success).toBe(false);
+      expect(drainResponseBodyMock).not.toHaveBeenCalled();
     });
   });
 
