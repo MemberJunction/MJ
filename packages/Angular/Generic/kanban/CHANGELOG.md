@@ -1,5 +1,25 @@
 # @memberjunction/ng-kanban
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [4586215]
+- Updated dependencies [a5f92d2]
+  - @memberjunction/global@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- c83f0d3: Gantt and Kanban emit double-click so host surfaces can open the underlying entity record without fighting DHTMLX's default lightbox.
+- Updated dependencies [834f8d7]
+- Updated dependencies [cefc302]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1bd9674]
+  - @memberjunction/global@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

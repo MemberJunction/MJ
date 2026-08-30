@@ -425,7 +425,7 @@ describe('install:claude via spawned bin/run.js — --json purity', () => {
         expect(res.stdout).not.toContain('MemberJunction'); // figlet banner on wide terminals
     }, TEST_TIMEOUT_MS);
 
-    it('pretty mode (no --json) DOES include the banner — regression-safe', () => {
+    it('pretty mode over a pipe drops the banner but keeps the human report', () => {
         if (!existsSync(BIN)) return;
         const res = spawnSync(
             process.execPath,
@@ -435,10 +435,17 @@ describe('install:claude via spawned bin/run.js — --json purity', () => {
         // Surface a real hang distinctly from an assertion failure.
         expect(res.error, `CLI subprocess errored/timed out: ${res.error?.message}`).toBeUndefined();
         expect(res.status).toBe(0);
-        // One of the two banner forms must be present
-        const hasBanner =
-            res.stdout.includes('~ M e m b e r J u n c t i o n ~') ||
-            res.stdout.includes('MemberJunction');
-        expect(hasBanner).toBe(true);
+
+        // spawnSync pipes stdout, so there is no TTY. Under the agent-first contract a
+        // pipe is itself the request for clean output: chrome is suppressed with no flag
+        // required, exactly as `--json` would. (The banner-on-a-terminal path is covered
+        // in prerun-banner.test.ts, which can stub isTTY without needing a pty here.)
+        expect(res.stdout).not.toContain('~ M e m b e r J u n c t i o n ~');
+        expect(res.stdout).not.toContain('MemberJunction');
+
+        // What must NOT change: pretty mode is still the human report, not JSON. Dropping
+        // the banner is a chrome change; it must not silently turn this into --json.
+        expect(res.stdout).toContain('Claude Code pack');
+        expect(() => JSON.parse(res.stdout)).toThrow();
     }, TEST_TIMEOUT_MS);
 });

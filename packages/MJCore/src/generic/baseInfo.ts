@@ -37,6 +37,16 @@ export abstract class BaseInfo {
                         (this as Record<string, unknown>)[key] = initData[key];
                     }
                 }
+                else {
+                    const lowerUnderscoreKey = `_${key.charAt(0).toLowerCase()}${key.slice(1)}`;
+                    const underscoreKey = `_${key}`;
+                    if (Object.prototype.hasOwnProperty.call(this, lowerUnderscoreKey)) {
+                        (this as Record<string, unknown>)[lowerUnderscoreKey] = initData[key];
+                    }
+                    else if (Object.prototype.hasOwnProperty.call(this, underscoreKey)) {
+                        (this as Record<string, unknown>)[underscoreKey] = initData[key];
+                    }
+                }
             }
         }
     }
@@ -75,13 +85,15 @@ export abstract class BaseInfo {
                 continue;
             }
             // Private backing field — expose via its public getter if one exists with the same name minus the underscore
-            const publicKey = key.slice(1);
-            if (!publicKey) continue;
+            const lowerKey = key.slice(1);
+            const pascalKey = lowerKey ? lowerKey.charAt(0).toUpperCase() + lowerKey.slice(1) : '';
+            if (!lowerKey) continue;
             let proto = Object.getPrototypeOf(this);
             while (proto && proto !== Object.prototype) {
-                const desc = Object.getOwnPropertyDescriptor(proto, publicKey);
+                const targetKey = Object.prototype.hasOwnProperty.call(proto, pascalKey) ? pascalKey : lowerKey;
+                const desc = Object.getOwnPropertyDescriptor(proto, targetKey);
                 if (desc && typeof desc.get === 'function') {
-                    result[publicKey] = self[publicKey];
+                    result[targetKey] = self[targetKey];
                     break;
                 }
                 proto = Object.getPrototypeOf(proto);

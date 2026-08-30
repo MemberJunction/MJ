@@ -16,6 +16,7 @@ export * from "./generic/entityTransactionScope";
 export * from "./generic/entityCompanion";
 export * from "./generic/entitySavePlan";
 export * from "./generic/relatedRecordCollection";
+export * from "./generic/embeddedRecord";
 export * from "./generic/relatedRecordBatchLoader";
 export * from "./generic/saveEntityGraphOperation";
 export * from "./generic/BaseEntitySaveQueue";
@@ -45,6 +46,7 @@ export * from "./generic/explorerNavigationItem";
 export * from "./generic/compositeKey";
 export * from "./generic/authEvaluator";
 export * from "./generic/metadataUtil";
+export * from "./generic/schemaHydration";
 export * from "./generic/authTypes";
 export * from "./generic/graphqlTypeNames";
 
@@ -61,6 +63,7 @@ export * from "./generic/column-descriptors";
 export * from "./generic/data-table";
 export * from "./generic/data-snapshot";
 export * from "./generic/permissionInterfaces";
+export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter

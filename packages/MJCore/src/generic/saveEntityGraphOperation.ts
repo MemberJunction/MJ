@@ -168,7 +168,7 @@ export class SaveEntityGraphOperation extends BaseRemotableOperation<SaveEntityG
         return {
             Success: true,
             Fields: root.GetAll(),
-            Companions: await root.SerializeCompanions(),
+            Companions: await root.SerializeCompanions('result'),
         };
     }
 

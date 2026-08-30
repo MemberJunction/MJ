@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/conversations-runtime",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: Framework-agnostic Conversations Runtime — orchestration, mention parsing, overlay/workspace bridge, default-agent resolution, client-tool registry, sessions observability. Pure TypeScript, zero UX dependencies. Consumable from browser (Angular widget, React, Vue, etc.) or server (Node workers, CLI tools, test harnesses).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,15 +14,15 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai-agent-client": "6.1.0-edge.2",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
-    "@memberjunction/ai-engine-base": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/graphql-dataprovider": "6.1.0-edge.2",
+    "@memberjunction/ai-agent-client": "6.1.0-edge.4",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.4",
+    "@memberjunction/ai-engine-base": "6.1.0-edge.4",
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/graphql-dataprovider": "6.1.0-edge.4",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

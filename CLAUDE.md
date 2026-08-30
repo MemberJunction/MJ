@@ -129,6 +129,10 @@ After making code changes, **always compile the affected package** and fix all T
 
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
 
+**Never stage or commit local host artifacts**: Never commit `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) to the repository. They belong strictly to local running environments.
+
+**Migration authoring structure**: Hand-written DDL at top (`ALTER TABLE`, extended properties) → at least 50 blank lines → standard CodeGen comment block → appended CodeGen output (`EntityField` INSERT with apply-time sequence, procs, views, permissions). Never do ad-hoc inline metadata updates in migrations; manage metadata via `metadata/*.json` seed files (`mj sync push`).
+
 ---
 
 ## Where the rest of the guidance lives
