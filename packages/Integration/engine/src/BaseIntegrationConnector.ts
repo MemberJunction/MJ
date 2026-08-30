@@ -20,6 +20,8 @@ import type {
     ListContext,
     ListResult,
 } from './types.js';
+import { ClassifyError } from './types.js';
+import { ExtractRetryAfterFromError } from './RetryAfter.js';
 import {
     discoverFromStream,
     pickKeyFromStats,
@@ -29,6 +31,7 @@ import {
 } from './StreamingDiscovery.js';
 import { AdaptiveConcurrencyController, RunAdaptive, type AdaptiveItemOutcome } from './AdaptiveConcurrency.js';
 import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
+import { DiscoveryWatchdog } from './DiscoveryWatchdog.js';
 
 /** Result of testing a connection to an external system */
 export interface ConnectionTestResult {
@@ -521,8 +524,25 @@ export abstract class BaseIntegrationConnector {
      * Parse a Retry-After / rate-limit signal out of a failed response or thrown error into
      * milliseconds so the engine can back off precisely. Return `undefined` when the error is not a
      * throttle (or carries no hint).
+     *
+     * The default reads the standard `Retry-After` header (RFC 9110 §10.2.3 — the header a 429 and a
+     * 503 carry), in both its delay-seconds and HTTP-date forms, from wherever the HTTP client put
+     * it. That is not a heuristic and not vendor-specific: there is one correct reading of it, and
+     * every HTTP connector benefits from having it read.
+     *
+     * This used to return `undefined` unconditionally, and no connector in this repo overrode it —
+     * so the engine's limiter never learned a delay any vendor had actually stated, and discovery's
+     * throttle check (which asked this and only this) concluded "not a throttle" for every 429 MJ
+     * ever received.
+     *
+     * Override when the vendor signals its delay somewhere non-standard — in the response body, or
+     * in prose (PheedLoop's "Expected available in N second"). Deliberately not parsed here:
+     * guessing a duration out of message text risks inventing one, and a wrong Retry-After is worse
+     * than none, since it freezes the token bucket for a made-up interval.
      */
-    public ExtractRetryAfterMs(_error: unknown): number | undefined { return undefined; }
+    public ExtractRetryAfterMs(error: unknown): number | undefined {
+        return ExtractRetryAfterFromError(error);
+    }
 
     /**
      * Highest SAFE per-layer concurrency the source tolerates (plan.md §7 peak parallelization) — the
@@ -751,21 +771,44 @@ export abstract class BaseIntegrationConnector {
         // an app setting and a process restart. Same precedence as the others now:
         // explicit opts > per-connection Configuration > operator env > default.
         const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
+        // Announce intent AND cost. Until now only the FAILURE branch below said anything, so a
+        // healthy-but-slow object, an object grinding out its whole time budget, and one that will
+        // never return were indistinguishable from outside the process. The watchdog names whatever
+        // is still in flight while it runs; the budget marker on the way out separates "slow source"
+        // from "this object can never satisfy its stop condition".
+        const watchdog = DiscoveryWatchdog.Instance;
+        const startedMs = Date.now();
+        const deadlineMs = startedMs + timeBudgetMs;
+        const watchKey = watchdog.Start(objectName, deadlineMs);
+        console.log(`[DiscoverFieldsViaFetch] -> "${objectName}" budget=${timeBudgetMs}ms maxRecords=${maxRecords} batch=${batchSize}`);
         try {
-            return await this.DiscoverFieldsViaStream(
+            const fields = await this.DiscoverFieldsViaStream(
                 this.DiscoverySampleRecordStream(
                     companyIntegration, objectName, contextUser, batchSize, maxRecords,
                     // The SAME budget the stream consumer is given, now also reaching the producer —
                     // the consumer can only act between FetchChanges calls, which is no help at all
                     // when one call fans out into thousands of requests internally.
-                    Date.now() + timeBudgetMs,
+                    deadlineMs,
+                    watchKey,
                 ),
                 { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
             );
+            const tookMs = Date.now() - startedMs;
+            const seen = watchdog.Peek(watchKey);
+            console.log(
+                `[DiscoverFieldsViaFetch] <- "${objectName}" ${tookMs}ms fields=${fields.length} ` +
+                `records=${seen?.Records ?? '?'} pages=${seen?.Pages ?? '?'}` +
+                (tookMs >= timeBudgetMs * 0.9
+                    ? '  *** EXHAUSTED ITS TIME BUDGET — the source never yielded enough for it to stop on ***'
+                    : ''),
+            );
+            return fields;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.warn(`[DiscoverFieldsViaFetch] read-path discovery failed for "${objectName}" (${msg}); falling back to single-sample DiscoverFields.`);
+            console.warn(`[DiscoverFieldsViaFetch] <- FAILED "${objectName}" after ${Date.now() - startedMs}ms (${msg}); falling back to single-sample DiscoverFields.`);
             return this.DiscoverFields(companyIntegration, objectName, contextUser);
+        } finally {
+            watchdog.End(watchKey);
         }
     }
 
@@ -786,6 +829,8 @@ export abstract class BaseIntegrationConnector {
          * Optional so existing overrides of this method keep compiling and keep their current behaviour.
          */
         deadlineMs?: number,
+        /** Watchdog key for this sample, when the caller registered one. Diagnostics only. */
+        watchKey?: string,
     ): AsyncGenerator<Record<string, unknown>> {
         let ctx: FetchContext = {
             CompanyIntegration: companyIntegration,
@@ -800,22 +845,51 @@ export abstract class BaseIntegrationConnector {
             SampleTargetRecords: maxRecords,
             DeadlineMs: deadlineMs,
         };
+        const watchdog = DiscoveryWatchdog.Instance;
         let yielded = 0;
-        for (;;) {
-            const batch = await this.FetchChanges(ctx);
-            for (const rec of batch.Records) {
-                yield rec.Fields;
-                if (++yielded >= maxRecords) return;
+        let page = 0;
+        try {
+            for (;;) {
+                page++;
+                watchdog.Note(watchKey, { Stage: `FetchChanges#${page}` });
+                const pageStartedMs = Date.now();
+                const batch = await this.FetchChanges(ctx);
+                console.log(
+                    `[DiscoverySampleStream] "${objectName}" page ${page} -> ${batch.Records.length} record(s) ` +
+                    `in ${Date.now() - pageStartedMs}ms (HasMore=${!!batch.HasMore}, yieldedSoFar=${yielded}/${maxRecords})`,
+                );
+                watchdog.Note(watchKey, { Stage: 'inferring', Pages: page, Records: yielded + batch.Records.length });
+                for (const rec of batch.Records) {
+                    yield rec.Fields;
+                    if (++yielded >= maxRecords) {
+                        console.log(`[DiscoverySampleStream] "${objectName}" stop=SAMPLE_TARGET_MET at ${yielded} record(s) after ${page} page(s)`);
+                        return;
+                    }
+                }
+                if (!batch.HasMore) {
+                    console.log(`[DiscoverySampleStream] "${objectName}" stop=SOURCE_EXHAUSTED at ${yielded} record(s) after ${page} page(s)`);
+                    break;
+                }
+                // STOP AT THE DEADLINE. The deadline is handed to the connector so it can bound its own
+                // internal fan-out, but a connector that ignores it (every connector predating the
+                // marker) keeps returning HasMore=true and this loop keeps asking — the budget the
+                // caller set is then enforced by nothing at all. This is the one place the sampler can
+                // always honour it: between pages, having kept everything collected so far.
+                if (deadlineMs !== undefined && Date.now() >= deadlineMs) {
+                    console.log(`[DiscoverySampleStream] "${objectName}" stop=DEADLINE at ${yielded} record(s) after ${page} page(s)`);
+                    return;
+                }
+                ctx = {
+                    ...ctx,
+                    WatermarkValue: null,
+                    CurrentPage: batch.NextPage,
+                    CurrentOffset: batch.NextOffset,
+                    CurrentCursor: batch.NextCursor,
+                    AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
+                };
             }
-            if (!batch.HasMore) break;
-            ctx = {
-                ...ctx,
-                WatermarkValue: null,
-                CurrentPage: batch.NextPage,
-                CurrentOffset: batch.NextOffset,
-                CurrentCursor: batch.NextCursor,
-                AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
-            };
+        } finally {
+            watchdog.Note(watchKey, { Stage: 'stream-closed' });
         }
     }
 
@@ -1024,7 +1098,29 @@ export abstract class BaseIntegrationConnector {
                 // U11 — determinate discovery progress: a skipped object still advances the bar.
                 try { options?.OnProgress?.(succeeded + skipped, total); } catch { /* progress must never break introspection */ }
                 // A real rate-limit failure cuts the in-flight cap (AIMD); a plain describe error does not.
-                return { ok: false, throttled: this.ExtractRetryAfterMs(err) !== undefined };
+                //
+                // `ExtractRetryAfterMs` alone is not enough to make that distinction. Its base
+                // implementation returns `undefined`, and NO connector in this repo overrides it — so
+                // asking only that question answered "not a throttle" for every connector MJ ships, and
+                // discovery kept all 8 describes in flight straight through a vendor's 429s. That is the
+                // shape of a brittle discovery: the source says slow down, the fan-out doesn't, more
+                // objects fail, and the enumeration comes back short for a reason that was transient.
+                //
+                // `ClassifyError` reads the error's own text ('rate limit' / 'throttl' / '429'), which
+                // costs a connector nothing to benefit from — the same classifier the sync fetch path at
+                // IntegrationEngine already uses for exactly this decision. Keep `ExtractRetryAfterMs`
+                // first: a connector that DOES parse the vendor's header gives a precise signal, and this
+                // is a fallback under it, not a replacement for it.
+                const retryAfterMs = this.ExtractRetryAfterMs(err);
+                const throttled = retryAfterMs !== undefined || ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED';
+                if (throttled) {
+                    console.log(JSON.stringify({
+                        ts: new Date().toISOString(), event: 'introspect.object.throttled',
+                        objectName: obj.Name, total, retryAfterMs: retryAfterMs ?? null,
+                        source: retryAfterMs !== undefined ? 'connector' : 'classifier',
+                    }));
+                }
+                return { ok: false, throttled };
             }
             console.log(JSON.stringify({
                 ts: new Date().toISOString(), event: 'introspect.object.complete',

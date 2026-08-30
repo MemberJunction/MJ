@@ -18,6 +18,7 @@ import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { RecordTagsModule } from '@memberjunction/ng-record-tags';
+import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -71,6 +72,7 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
     ListManagementModule,
     EntityViewerModule,
     RecordTagsModule,
+    FileStorageModule,
     MJReactModule,
     MarkdownModule,
     CodeEditorModule,

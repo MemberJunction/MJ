@@ -61,6 +61,23 @@ describe('ParseEntityRelationshipConfiguration', () => {
         expect(parsed?.UI?.inclusion).toBe('Primary');
         expect(parsed?.UI?.join?.fields).toEqual(['BillToPersonID', 'ShipToPersonID']);
     });
+
+    // EntityRelationshipInfo.Configuration parses lazily and hands back an object, so the
+    // already-parsed form reaches these helpers as often as the raw string does. Passing one
+    // through must be an identity, not a re-parse — otherwise every caller reading
+    // RelatedFormRoleCandidate.Configuration silently degrades to null.
+    it('passes an already-parsed configuration through unchanged', () => {
+        const config = { UI: { inclusion: 'Primary' as const, sortKey: 42 } };
+        const parsed = ParseEntityRelationshipConfiguration(config);
+        expect(parsed).toBe(config);
+    });
+
+    it('returns null for nullish input in either form', () => {
+        expect(ParseEntityRelationshipConfiguration(null)).toBeNull();
+        expect(ParseEntityRelationshipConfiguration(undefined)).toBeNull();
+        expect(ParseEntityRelationshipConfiguration('')).toBeNull();
+        expect(ParseEntityRelationshipConfiguration('   ')).toBeNull();
+    });
 });
 
 describe('ReadRelationshipInclusion / ReadRelationshipJoinFields', () => {
@@ -79,6 +96,20 @@ describe('ReadRelationshipInclusion / ReadRelationshipJoinFields', () => {
         expect(ReadRelationshipSortKey(JSON.stringify({ UI: { sortKey: 90 } }))).toBe(90);
         expect(ReadRelationshipSortKey(JSON.stringify({ UI: { inclusion: 'Primary' } }))).toBeNull();
         expect(ReadRelationshipSortKey(null)).toBeNull();
+    });
+
+    // The parsed form is what RelatedFormRoleCandidate.Configuration actually carries once it
+    // has been populated from EntityRelationshipInfo — both shapes must read identically.
+    it('reads the same values from a parsed bag as from its JSON string', () => {
+        const config = {
+            UI: { inclusion: 'Primary' as const, sortKey: 90, join: { fields: ['BillToPersonID'] } },
+        };
+        expect(ReadRelationshipInclusion(config)).toBe(ReadRelationshipInclusion(JSON.stringify(config)));
+        expect(ReadRelationshipSortKey(config)).toBe(ReadRelationshipSortKey(JSON.stringify(config)));
+        expect(ReadRelationshipJoinFields(config)).toEqual(ReadRelationshipJoinFields(JSON.stringify(config)));
+        expect(ReadRelationshipInclusion(config)).toBe('Primary');
+        expect(ReadRelationshipSortKey(config)).toBe(90);
+        expect(ReadRelationshipJoinFields(config)).toEqual(['BillToPersonID']);
     });
 
     it('returns null when the bag is Auto', () => {

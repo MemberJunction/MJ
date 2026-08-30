@@ -1,5 +1,9 @@
 # @memberjunction/config
 
+## 6.1.0-edge.4
+
+## 6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ## 6.1.0-edge.1

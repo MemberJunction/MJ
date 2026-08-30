@@ -1,12 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { RunViewParams } from '@memberjunction/core';
 import type { EntityInfo } from '@memberjunction/core';
+import type { BaseEntity } from '@memberjunction/core';
 import type { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterDataLoadEventArgs } from '@memberjunction/ng-entity-viewer';
 import { renderComponentFixture, capture } from '@memberjunction/ng-test-utils';
 import { ExplorerEntityDataGridComponent } from './explorer-entity-data-grid.component';
 import { RelatedGridHeightPx } from './related-grid-height';
+import { FormRecordRefreshCoordinator } from './form-record-refresh.coordinator';
 
 /**
  * DOM coverage for <mj-explorer-entity-data-grid> — the CodeGen-emitted related-entity grid wrapper
@@ -41,6 +43,7 @@ class StubInnerGrid {
   @Output() AfterRowClick = new EventEmitter<AfterRowClickEventArgs>();
   @Output() AfterDataLoad = new EventEmitter<AfterDataLoadEventArgs>();
   @Output() NewRecordTabRequested = new EventEmitter<{ entityInfo: EntityInfo; defaultValues: Record<string, unknown> }>();
+  Refresh = vi.fn(async () => {});
 }
 
 const PARAMS: RunViewParams = { EntityName: 'Accounts' };
@@ -145,6 +148,23 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     expect(host.style.height).toBe(`${RelatedGridHeightPx(2)}px`);
   });
 
+  it('sizes to rows and respects MaxHeight when Height="fit-content"', () => {
+    const f = render({ Height: 'fit-content', MaxHeight: 300 });
+    const host = f.debugElement.nativeElement as HTMLElement;
+
+    inner(f).AfterDataLoad.emit({ loadedRowCount: 1 } as unknown as AfterDataLoadEventArgs);
+    f.detectChanges();
+    expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300));
+    expect(inner(f).Height).toBe(RelatedGridHeightPx(1, 300));
+    expect(host.style.height).toBe(`${RelatedGridHeightPx(1, 300)}px`);
+
+    inner(f).AfterDataLoad.emit({ loadedRowCount: 20 } as unknown as AfterDataLoadEventArgs);
+    f.detectChanges();
+    expect(f.componentInstance.ResolvedHeight).toBe(300);
+    expect(inner(f).Height).toBe(300);
+    expect(host.style.height).toBe('300px');
+  });
+
   it('translates a new-record request into a Navigate event', () => {
     const f = render();
     const nav = capture(f.componentInstance.Navigate);
@@ -153,5 +173,55 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
       defaultValues: { Status: 'Active' },
     });
     expect(nav).toEqual([{ Kind: 'new-record', EntityName: 'Accounts', DefaultValues: { Status: 'Active' } }]);
+  });
+
+  describe('parent-form refresh fan-out', () => {
+    const OriginalIO = globalThis.IntersectionObserver;
+
+    afterEach(() => {
+      globalThis.IntersectionObserver = OriginalIO;
+    });
+
+    it('forwards Refresh() to the inner grid', async () => {
+      const f = render();
+      await f.componentInstance.Refresh();
+      expect(inner(f).Refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('reloads an already-visible grid when the parent record refreshes', async () => {
+      const coordinator = new FormRecordRefreshCoordinator();
+      const f = renderComponentFixture(ExplorerEntityDataGridComponent, {
+        imports: [StubInnerGrid],
+        declarations: [ExplorerEntityDataGridComponent],
+        providers: [{ provide: FormRecordRefreshCoordinator, useValue: coordinator }],
+        inputs: { Params: PARAMS, DeferLoadUntilVisible: false },
+      });
+      coordinator.Notify({} as BaseEntity);
+      await Promise.resolve();
+      expect(inner(f).Refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not load a never-seen deferred grid on parent refresh', async () => {
+      globalThis.IntersectionObserver = class {
+        observe(): void { /* never intersect */ }
+        unobserve(): void { /* noop */ }
+        disconnect(): void { /* noop */ }
+        takeRecords(): IntersectionObserverEntry[] { return []; }
+        root = null;
+        rootMargin = '';
+        thresholds = [];
+      } as unknown as typeof IntersectionObserver;
+
+      const coordinator = new FormRecordRefreshCoordinator();
+      const f = renderComponentFixture(ExplorerEntityDataGridComponent, {
+        imports: [StubInnerGrid],
+        declarations: [ExplorerEntityDataGridComponent],
+        providers: [{ provide: FormRecordRefreshCoordinator, useValue: coordinator }],
+        inputs: { Params: PARAMS, DeferLoadUntilVisible: true },
+      });
+      coordinator.Notify({} as BaseEntity);
+      await Promise.resolve();
+      expect(inner(f).Refresh).not.toHaveBeenCalled();
+    });
   });
 });
