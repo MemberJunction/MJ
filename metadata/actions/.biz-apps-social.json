@@ -188,6 +188,34 @@
             "lastModified": "2025-12-30T23:06:57.696Z",
             "checksum": "86994929cf056040e8f19fd28fa373da656c0e365752c39c92f72134228bba05"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CredentialID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: Credentials record id to publish under a DIFFERENT Buffer identity than the tenant's own token. Omit to use the CompanyIntegration's token. An unreadable credential fails the action with INVALID_CREDENTIAL rather than silently falling back.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1CB27940-2FD1-4E50-9994-ECA1C3AF759A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PlatformMetadata",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Optional per-service metadata passed through to Buffer, accepted as an object or a JSON string. Carries things like LinkedIn @mention annotations. Unparseable JSON fails the action rather than being dropped, because posting the text without its annotations publishes something different from what the caller composed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "335FFA20-B1B5-4351-9556-ECA1D11259EB"
+          }
         }
       ],
       "MJ: Action Result Codes": [
