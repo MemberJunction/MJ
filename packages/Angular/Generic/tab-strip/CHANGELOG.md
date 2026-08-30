@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@6.1.0-edge.4
+- @memberjunction/ng-ui-components@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [6ecfaa0]
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/ng-container-directives@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

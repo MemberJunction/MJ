@@ -7,6 +7,7 @@ export * from './lib/custom/custom-forms.module';
 
 // Custom entity form components (must be individually exported for manifest builder)
 export { MJEntityFormComponentExtended } from './lib/custom/Entities/entity-form.component';
+export { MJFileFormComponentExtended } from './lib/custom/Files/file-form.component';
 export { MJEntityActionFormComponentExtended } from './lib/custom/EntityActions/entityaction.form.component';
 export { MJTemplateFormComponentExtended } from './lib/custom/Templates/templates-form.component';
 export { MJAIPromptFormComponentExtended } from './lib/custom/AIPrompts/ai-prompt-form.component';
@@ -52,3 +53,6 @@ export { NewAgentDialogService } from './lib/custom/AIAgents/new-agent-dialog.se
 
 // Flow Agent components
 export { FlowAgentFormSectionComponent } from './lib/custom/AIAgents/FlowAgentType/flow-agent-form-section.component';
+
+// Visual Hierarchy & Taxonomy Form Panels
+export * from './lib/custom/HierarchyPanels/hierarchy-form-panels';

@@ -347,6 +347,21 @@ export class EntityField {
                     }
                 }
             }
+
+            // Value-list validation (MJ issue #3969): a field whose ValueListType is `List` carries an
+            // EXHAUSTIVE set of legal values in metadata, and for an `IN (...)` CHECK constraint that
+            // list is the only runtime representation CodeGen produces — so without this rung an
+            // out-of-list value reached the database as a raw constraint violation attributed to no
+            // field, on every path that is not a form. Which modes and value types the rule applies
+            // to, how values are compared, and why, all live in
+            // EntityFieldInfo.ValueIsPermittedByValueList: the normalized set of legal values is
+            // derived from immutable metadata SHARED by every EntityField instance of this field, so
+            // it is built once per field rather than rebuilt on every record's validation.
+            if (!ef.ValueIsPermittedByValueList(this.Value)) {
+                result.Success = false;
+                const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
+                result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
+            }
         }
 
         return result;
@@ -1217,6 +1232,9 @@ export abstract class BaseEntity<T = unknown> {
 
         this._childEntity = childEntity;
 
+        // Capture any pending modifications on this entity or its ancestors before child InnerLoad
+        const dirtySnapshots = this.captureChainDirtyState();
+
         // Load the child's record using our shared PK
         const loaded = await childEntity.InnerLoad(this.PrimaryKey);
         if (!loaded) {
@@ -1225,9 +1243,36 @@ export abstract class BaseEntity<T = unknown> {
             return;
         }
 
+        // Re-apply any pending modifications so child hydration does not overwrite unsaved in-memory edits
+        this.restoreChainDirtyState(dirtySnapshots);
+
         // Recursively discover grandchildren (child may also be a parent type)
         // InitializeChildEntity is idempotent via _childEntityDiscoveryDone flag
         await childEntity.InitializeChildEntity();
+    }
+
+    private captureChainDirtyState(): Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> {
+        const snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> = [];
+        let curr: BaseEntity | null = this;
+        while (curr) {
+            const dirtyFields = curr.Fields.filter(f => f.Dirty).map(f => ({
+                name: f.Name,
+                value: f.Value,
+            }));
+            if (dirtyFields.length > 0) {
+                snapshots.push({ entity: curr, dirtyFields });
+            }
+            curr = curr._parentEntity;
+        }
+        return snapshots;
+    }
+
+    private restoreChainDirtyState(snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }>): void {
+        for (const snap of snapshots) {
+            for (const df of snap.dirtyFields) {
+                snap.entity.Set(df.name, df.value);
+            }
+        }
     }
 
     /**
@@ -1318,7 +1363,12 @@ export abstract class BaseEntity<T = unknown> {
      * values are present (via {@link UpdateSavedStateFromPrimaryKeys}).
      *
      * The parent chain is handled recursively: if this entity has an IS-A parent, the
-     * parent is hydrated first (deepest ancestor first) via SetMany's built-in routing.
+     * parent is hydrated first (deepest ancestor first). Each level only receives the
+     * fields it owns — a child's view row is the union of every ancestor plus its own
+     * columns, and passing that whole row to the parent used to trip
+     * `WarningManager` ("fields were not found in entity definitions") for every
+     * child-only column. That is how loading `Accounting Company Profiles` as
+     * entity objects produced a `MJ: Companies` missing-field dump at MJAPI boot.
      *
      * @param data - A plain object whose properties map to field names on this entity
      *               (and potentially parent entities in the IS-A chain).
@@ -1337,9 +1387,24 @@ export abstract class BaseEntity<T = unknown> {
         // Populate this entity's fields. SetMany also routes parent field values to
         // _parentEntity via the IS-A routing block (which now includes PK fields).
         // replaceOldValues=true ensures OldValue matches Value (no false dirty flags).
-        // ignoreNonExistentFields=true because data may contain fields from other
-        // entities in the chain that don't exist on this entity.
-        this.SetMany(data, true, true, true);
+        // ignoreNonExistentFields=true remains as a safety net; ownedFieldsFrom already
+        // dropped columns that belong to another level of the IS-A chain.
+        this.SetMany(this.ownedFieldsFrom(data), true, true, true);
+    }
+
+    /**
+     * Columns on `data` that this entity actually defines (by field name or CodeName).
+     * Used by {@link Hydrate} so an IS-A ancestor is not asked to SetMany its child's
+     * extra view columns.
+     */
+    private ownedFieldsFrom(data: Record<string, unknown>): Record<string, unknown> {
+        const owned: Record<string, unknown> = {};
+        for (const key of Object.keys(data)) {
+            if (this.GetFieldByName(key) || this.GetFieldByCodeName(key)) {
+                owned[key] = data[key];
+            }
+        }
+        return owned;
     }
 
     // ─── Entity Companions ──────────────────────────────────────────────────────
@@ -3644,7 +3709,11 @@ export abstract class BaseEntity<T = unknown> {
     private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            this.SetMany(data, false, true, true); // set the new values from the data returned from the save, this will also reset the old values
+            const fieldData = (data instanceof BaseEntity || (data && typeof data.GetAll === 'function')) ? data.GetAll() : data;
+            // IS-A GetAll() merges the parent, including parent virtuals this entity
+            // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
+            // this entity defines, and ignore anything leftover.
+            this.SetMany(this.ownedFieldsFrom(fieldData), true, true, true);
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
@@ -3689,7 +3758,9 @@ export abstract class BaseEntity<T = unknown> {
 
         // Cache it via this entity's provider so the cache lives on the right connection.
         const md = this.ProviderToUse as unknown as IMetadataProvider;
-        md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        if (typeof md?.SetCachedRecordName === 'function') {
+            md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        }
     }
 
     /**
@@ -4916,4 +4987,122 @@ export abstract class BaseEntity<T = unknown> {
     public ResetVectors(): void {
         this._vectors.clear();
     }
+
+    /**
+     * Resolves the recursive foreign key field for this entity. If `parentFieldName` is provided,
+     * finds that specific field. Otherwise defaults to 'ParentID' if present, or the first
+     * self-referencing foreign key field found on the entity.
+     */
+    protected getRecursiveForeignKeyField(parentFieldName?: string): EntityFieldInfo | null {
+        if (!this.EntityInfo) return null;
+        if (this.PrimaryKeys.length !== 1) {
+            LogError(`BaseEntity hierarchy methods: Entity '${this.EntityInfo.Name}' has ${this.PrimaryKeys.length} primary key fields. MemberJunction hierarchy traversal requires a single-column primary key.`);
+            return null;
+        }
+        const fields = this.EntityInfo.Fields ?? [];
+        if (parentFieldName) {
+            const match = fields.find(f => f.Name.toLowerCase() === parentFieldName.toLowerCase() || f.CodeName.toLowerCase() === parentFieldName.toLowerCase());
+            return match ?? null;
+        }
+        // Check for field explicitly configured with IsHierarchy = true first
+        const explicitHierarchyField = fields.find(f => f.IsHierarchy && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
+        if (explicitHierarchyField) return explicitHierarchyField;
+
+        // Check for 'ParentID' self-referencing foreign key next
+        const parentIdField = fields.find(f => f.Name.toLowerCase() === 'parentid' && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
+        if (parentIdField) return parentIdField;
+
+        // Fall back to first recursive foreign key field
+        return fields.find(f => f.RelatedEntityID && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name)) ?? null;
+    }
+
+    /**
+     * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+     * @param optionsOrMaxDepth Optional maximum relative depth to retrieve, or an options object.
+     * @returns Array of descendant entity instances ordered by hierarchy depth.
+     */
+    public async GetDescendants<T extends BaseEntity = this>(options?: { parentFieldName?: string; maxDepth?: number } | number): Promise<T[]> {
+        const maxDepth = typeof options === 'number' ? options : options?.maxDepth;
+        const parentFieldName = typeof options === 'object' ? options?.parentFieldName : undefined;
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetDescendants(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const rootId = this.Get(pkName);
+        if (!rootId) return [];
+
+        const rootFieldName = `Root${fkField.Name}`;
+        const depthFieldName = `${fkField.Name}Depth`;
+        const filter = maxDepth != null
+            ? `${rootFieldName} = '${rootId}' AND ${depthFieldName} <= ${maxDepth}`
+            : `${rootFieldName} = '${rootId}'`;
+
+        const rv = new RunView();
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: filter,
+            OrderBy: `${depthFieldName} ASC`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
+
+    /**
+     * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+     * @param parentFieldName Optional recursive foreign key field name (defaults to 'ParentID' or the first recursive FK found).
+     * @returns Array of ancestor entity instances ordered from root down to parent.
+     */
+    public async GetAncestors<T extends BaseEntity = this>(parentFieldName?: string): Promise<T[]> {
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetAncestors(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const currentId = this.Get(pkName);
+        const pathFieldName = `${fkField.Name}Path`;
+        const depthFieldName = `${fkField.Name}Depth`;
+        const path = this.Get(pathFieldName) as string | null | undefined;
+        if (!path) return [];
+
+        const rawIds = path.split('/').filter(id => id.length > 0 && id !== currentId);
+        if (rawIds.length === 0) return [];
+
+        const rv = new RunView();
+        const idList = rawIds.map(id => `'${id}'`).join(',');
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: `${pkName} IN (${idList})`,
+            OrderBy: `${depthFieldName} ASC`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
+
+    /**
+     * Retrieves all direct child records of this record using a single RunView query.
+     * @param parentFieldName Optional recursive foreign key field name (defaults to 'ParentID' or the first recursive FK found).
+     * @returns Array of direct child entity instances.
+     */
+    public async GetChildren<T extends BaseEntity = this>(parentFieldName?: string): Promise<T[]> {
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetChildren(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const currentId = this.Get(pkName);
+        if (!currentId) return [];
+
+        const rv = new RunView();
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: `${fkField.Name} = '${currentId}'`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
 }
+

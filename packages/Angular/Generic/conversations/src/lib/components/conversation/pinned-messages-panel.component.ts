@@ -8,7 +8,20 @@ import { MJConversationDetailEntity } from '@memberjunction/core-entities';
   styleUrls: ['./pinned-messages-panel.component.css']
 })
 export class PinnedMessagesPanelComponent {
-  @Input() public pinnedMessages: MJConversationDetailEntity[] = [];
+  /**
+   * Readonly because the chat area hands over the window store's own pin array by reference —
+   * a stable reference between real changes is what keeps this input from re-firing every
+   * change detection cycle. The panel renders it; it never mutates it.
+   */
+  @Input() public pinnedMessages: readonly MJConversationDetailEntity[] = [];
+
+  /**
+   * True during the panel's first open, while its rows are being fetched.
+   *
+   * Pins are no longer loaded during conversation open — the open path reads only a count —
+   * so the panel can now render before its contents exist.
+   */
+  @Input() public isLoading = false;
 
   @Output() public closed = new EventEmitter<void>();
   @Output() public jumpRequested = new EventEmitter<string>(); // emits messageId

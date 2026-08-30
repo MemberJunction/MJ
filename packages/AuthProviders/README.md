@@ -383,4 +383,4 @@ A `GraphQLError` with `extensions.code = 'JWT_EXPIRED'` and `extensions.expiryDa
 
 ## License
 
-ISC — part of the [MemberJunction](https://github.com/MemberJunction/MJ) monorepo.
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.
