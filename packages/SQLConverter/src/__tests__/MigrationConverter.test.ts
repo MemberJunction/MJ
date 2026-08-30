@@ -31,6 +31,13 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
     // …and it is surfaced as a gap so the CLI fails the run rather than shipping an empty file.
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+    // Promoted for the same reason a fully-gapped file is: an empty body must never be written as
+    // a discoverable .pg.sql. Pinned because the two promotions are computed separately — the
+    // hollow check reads `transpiled.unhandled`, which does NOT contain the synthetic row added
+    // just above, so this case cannot ride on that one by accident.
+    expect(r.status).toBe('needs-hand-authoring');
+    // And it is NOT described as a gapped conversion — nothing became a gap here.
+    expect(r.notes.some((n) => n.includes('every translatable statement became a conversion gap'))).toBe(false);
   });
 
   it('does NOT flag a normal conversion; reports source/emitted counts', async () => {
