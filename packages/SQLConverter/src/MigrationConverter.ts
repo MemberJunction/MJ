@@ -138,6 +138,18 @@ export interface MigrationConversionResult {
 export interface ConvertMigrationOptions {
   /** Target schema substituted for `${flyway:defaultSchema}` in the output (default '__mj'). */
   schema?: string;
+  /**
+   * MJ core schema substituted for `${mjSchema}` in the output (default '__mj').
+   *
+   * Distinct from `schema`: an Open App migration says `${flyway:defaultSchema}` for its OWN
+   * schema and `${mjSchema}` for core, and the two differ for every app (e.g.
+   * `__mj_bizappscommon` vs `__mj`). Both must be resolved, because committed `.pg.sql` files
+   * carry literal schemas — Flyway placeholder substitution is not relied on for PostgreSQL —
+   * and because `--bake-codegen` executes the converted body against the working database as it
+   * goes, where an unresolved macro is a hard error (`relation "${mjSchema}.Entity" does not
+   * exist`) that halts the whole bake chain.
+   */
+  coreSchema?: string;
   /** Emit the standard `.pg.sql` provenance header (default true). */
   includeHeader?: boolean;
   /**
@@ -372,6 +384,7 @@ export async function convertMigration(
 
   const transpiled = await options.transpiler.transpile(kept.tsql);
   const schema = options.schema ?? '__mj';
+  const coreSchema = options.coreSchema ?? '__mj';
 
   const emittedStatements = transpiled.sql.filter((s) => s.trim().length > 0).length;
   const accountingLeak = transpiled.unhandled.some((u) => u.kind === 'ACCOUNTING-LEAK');
@@ -393,7 +406,7 @@ export async function convertMigration(
     notes.push('Reconciliation: kept T-SQL produced empty output with no reported gap — surfaced as a conversion gap.');
   }
 
-  const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true);
+  const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true, coreSchema);
 
   return {
     fileName: kept.fileName,
@@ -421,6 +434,7 @@ function assemblePgSQL(
   transpiled: MJTranspileResult,
   schema: string,
   includeHeader: boolean,
+  coreSchema: string,
 ): string {
   const parts: string[] = [];
   if (includeHeader) parts.push(pgHeader(kept.fileName));
@@ -438,8 +452,16 @@ function assemblePgSQL(
   // sentinel, should it ever leak.
   return parts
     .join('\n\n')
-    .replaceAll('${flyway:defaultSchema}', schema)
-    .replaceAll('__mj_flyway_default_schema__', schema)
+    // Replacement FUNCTIONS, not strings: a string replacement expands $$, $&, $` , $' and
+    // $1-$99, so any '$' in a schema name would be executed rather than inserted (issue #3171).
+    // A schema name is unlikely to carry one, but the function form costs nothing and removes
+    // the question.
+    .replaceAll('${flyway:defaultSchema}', () => schema)
+    .replaceAll('__mj_flyway_default_schema__', () => schema)
+    // `${mjSchema}` names MJ CORE, not the app's own schema, so it resolves to a different value
+    // and was previously left in the output — surviving into the file AND into the SQL that
+    // `--bake-codegen` executes against the working database (issue #3838).
+    .replaceAll('${mjSchema}', () => coreSchema)
     .concat('\n');
 }
 
