@@ -533,6 +533,20 @@ export class RealtimeSessionService {
   private segmentIndex = 0;
   /** How often crash-recovery shards are flushed during a recording. */
   private static readonly SegmentFlushMs = 15000;
+
+  // ── Server-side liveness ───────────────────────────────────────────────────
+  /**
+   * Interval that tells the server this session is still in use, or `null` when no session is
+   * running. See {@link startLivenessPulse} for why the server cannot work this out itself.
+   */
+  private livenessTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * How often the client asserts liveness. Comfortably under `SessionJanitor`'s
+   * `closeThresholdMinutes` (15 by default) so several pulses must be missed in a row before a
+   * live session is reaped, and well above `SessionManager`'s heartbeat write-coalescing window
+   * so the DB sees at most a trickle of writes per session.
+   */
+  private static readonly LivenessPulseMs = 60000;
   /**
    * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
    * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
@@ -867,6 +881,10 @@ export class RealtimeSessionService {
         sessionId: this.agentSessionId,
         channelNames: this._activeChannels$.value.map(c => c.ChannelName),
       });
+
+      // Same place, same reason: the session is connected and its id is known, which is exactly
+      // the window in which the server needs to be told it is alive.
+      this.startLivenessPulse();
     } catch (error) {
       await this.failSessionStart(error);
     }
@@ -1033,6 +1051,63 @@ export class RealtimeSessionService {
     if (this.segmentTimer) {
       clearInterval(this.segmentTimer);
       this.segmentTimer = null;
+    }
+  }
+
+  /**
+   * Starts telling the server this session is still in use (#3533).
+   *
+   * **Why the server cannot work this out on its own.** In the client-direct topology the audio
+   * goes browser → provider over WebRTC. The server sees the mint, a few channel actions in the
+   * first seconds, and then nothing at all — so `SessionManager.RecordActivity` stops being
+   * reached while the conversation is still going. `LastActiveAt` freezes ~45 seconds in, and
+   * `SessionJanitor` — which cannot distinguish an active call from an abandoned one — force-closes
+   * it at `closeThresholdMinutes`, mid-sentence, taking the user's surfaces with it. A session
+   * whose channels are all client-side (whiteboard, media) goes quiet from the server's point of
+   * view almost immediately.
+   *
+   * The browser is the only participant that knows the call is alive, so it is the one that has to
+   * say so. Raising `closeThresholdMinutes` is not the fix — it just makes the janitor slower at
+   * its real job (reaping rows orphaned by a crash) without making liveness observable.
+   *
+   * The pulse is best-effort by design: a failed beat is logged and skipped, never surfaced to the
+   * user and never allowed to end the session. Losing one beat costs nothing because the threshold
+   * is many beats wide; turning a transient network blip into a visible error would be a worse
+   * failure than the one this fixes. Write amplification is bounded on the server side too, where
+   * `SessionManager.Heartbeat` coalesces persisted writes.
+   */
+  private startLivenessPulse(): void {
+    this.stopLivenessPulse();
+    this.livenessTimer = setInterval(() => { void this.pulseLiveness(); }, RealtimeSessionService.LivenessPulseMs);
+  }
+
+  /** Stops the liveness pulse. Idempotent — safe on a session that never started one. */
+  private stopLivenessPulse(): void {
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer);
+      this.livenessTimer = null;
+    }
+  }
+
+  /**
+   * One liveness beat. Reads the session id at fire time rather than closing over it, so a beat
+   * that fires during teardown finds `null` and does nothing instead of resurrecting a closed row.
+   */
+  private async pulseLiveness(): Promise<void> {
+    const agentSessionId = this.agentSessionId;
+    if (!agentSessionId) {
+      return;
+    }
+    const mutation = `
+      mutation AgentSessionHeartbeat($agentSessionId: String!) {
+        AgentSessionHeartbeat(agentSessionId: $agentSessionId)
+      }
+    `;
+    try {
+      await this.gql().ExecuteGQL(mutation, { agentSessionId });
+    } catch (error) {
+      // Best-effort: the next beat is 60s away and the janitor threshold is many beats wide.
+      console.warn('[RealtimeSession] Liveness pulse failed (session continues):', error);
     }
   }
 
@@ -2503,6 +2578,9 @@ export class RealtimeSessionService {
    * @param closeServerSession when true, calls `CloseAgentSession` on the server.
    */
   private async teardown(closeServerSession: boolean): Promise<void> {
+    // First: stop asserting liveness. A pulse racing the close would re-stamp LastActiveAt on a
+    // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
+    this.stopLivenessPulse();
     this.teardownDelegationProgress();
 
     // Channels first: flush any unsaved channel state WHILE the live session id is still
