@@ -640,16 +640,19 @@ export default class MigrateConvert extends Command {
     // that exist in 6.x. Failure to read the catalog degrades coercion rather than stopping the
     // run, so it warns loudly instead of aborting.
     try {
-      const { rows } = await ds.connection.query(
+      // `CodeGenConnection.query` takes SQL only — no parameter array — so the two schema names are
+      // inlined as literals. They are configuration identifiers rather than user input, and are
+      // escaped by doubling any single quote so a schema name cannot terminate the literal.
+      const schemaList = [MJ_CORE_SCHEMA, schema].map((n) => `'${n.replaceAll("'", "''")}'`).join(', ');
+      const { recordset } = await ds.connection.query(
         `SELECT table_name, column_name
            FROM information_schema.columns
-          WHERE data_type = 'boolean' AND table_schema = ANY($1::text[])`,
-        [[MJ_CORE_SCHEMA, schema]],
+          WHERE data_type = 'boolean' AND table_schema IN (${schemaList})`,
       );
       // The dialect's registry keys are LOWERCASED [table, column] pairs.
-      const catalogBitCols: BitColumnRef[] = rows.map((r: { table_name: string; column_name: string }) => [
-        r.table_name.toLowerCase(),
-        r.column_name.toLowerCase(),
+      const catalogBitCols: BitColumnRef[] = recordset.map((r) => [
+        String(r.table_name).toLowerCase(),
+        String(r.column_name).toLowerCase(),
       ]);
       transpiler.addExtraBitColumns(catalogBitCols);
       if (catalogBitCols.length === 0) {
