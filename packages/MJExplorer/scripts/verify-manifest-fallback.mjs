@@ -21,7 +21,31 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const manifestPath = resolve(here, '../src/app/generated/class-registrations-manifest.ts');
-const configPath = resolve(here, '../mj.config.cjs');
+
+/**
+ * `mj.config.cjs` sits at the ROOT of the workspace, not beside the package — in this monorepo
+ * that is three levels above this script, and on a host it is wherever the host's root is. Looking
+ * for it as a sibling of package.json finds nothing anywhere, which does not fail: it leaves the
+ * required list empty, so every manifest trivially "covers" it and the guard reports success
+ * having checked nothing. That is the same green-build-nothing-verified shape this script exists
+ * to remove, so the config is located by walking up instead of assumed to be adjacent.
+ */
+function findWorkspaceConfig(startDir) {
+  let dir = startDir;
+  for (;;) {
+    const candidate = resolve(dir, 'mj.config.cjs');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+const configPath = findWorkspaceConfig(resolve(here, '..'));
 
 if (!existsSync(manifestPath)) {
   process.stderr.write(
@@ -39,7 +63,12 @@ if (manifest.trim().length === 0) {
 
 /** Enabled client dynamic packages the manifest MUST know about, or the fallback is unsafe. */
 let required = [];
-if (existsSync(configPath)) {
+if (configPath === null) {
+  // Distinct from an unreadable config, and it must not read as "verified": there is nothing to
+  // check the manifest against, so say that rather than announcing coverage of an empty list.
+  process.stderr.write(`[manifest] warning: no mj.config.cjs found above ${resolve(here, '..')}; ` +
+    `cannot check dynamic-package coverage.\n`);
+} else {
   try {
     const require_ = createRequire(import.meta.url);
     const config = require_(configPath);
