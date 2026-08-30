@@ -1,5 +1,38 @@
 # @memberjunction/open-app-engine
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 8643a3d: `DownloadMigrations` fetches what skyway will actually run, and an empty download fails instead of passing.
+
+  Two defects in the same function. It listed the migrations directory **non-recursively**, while the local scanner (`RuntimeSchemaManager.collectFilesRecursively`) walks the tree — so a migration in a subdirectory applied correctly under a local `mj migrate`, was never downloaded to a host, and both sides reported success. The walk now mirrors the scanner, preserves each file's path relative to the migrations root (flattening `file.name` would let two same-named migrations in different subdirectories overwrite each other), and is bounded to 6 levels so a pathological tree cannot be walked forever.
+
+  Second, zero `.sql` files returned `Success: true, Files: []`. This function is only reached because a manifest declared a migrations directory, so an empty download is a defect — and treating it as success let an install proceed past the migration phase, record the app as installed, and leave the host with an empty schema and a green result. It now fails with a message naming `migrations.directory` in `mj-app.json` and the ref that was searched.
+
+- 50860ad: Fix `spRebindLayeredOuterView` on PostgreSQL, which could never restar a layered outer view. It shipped with an undeclared `v_starred` variable — PL/pgSQL compiles the whole body on first call, so every invocation failed, including the `spRebindLayeredOuterViewsInSchema` call Open App's metadata refresh issues first in its batch (aborting the field-heal statements behind it). Removing that dead write exposed a second defect: single-argument `btrim()` strips spaces but not newlines, and `pg_get_viewdef` pretty-prints, so the SELECT-item scan stopped after one column and rebuilt the view as `SELECT g.*, <every inner column again>` — rejected as `column ... specified more than once`. Both are corrected in a new pg-only migration. Also makes integration checks LBV2–LBV5 run on PostgreSQL instead of silently skipping while still scoring as passed.
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

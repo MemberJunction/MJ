@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readJobSteps, stepCondition, readJobNeeds } from './lib/workflow.mjs';
 
 // Pins WHERE the dynamic-replace gate runs in .github/workflows/test.yml, and under what
 // condition. Both have already regressed once each, silently, in ways only visible by reading
@@ -17,72 +15,58 @@ import { fileURLToPath } from 'node:url';
 // which is why both regressions survived review. Assert the shape here rather than trusting
 // the next person to re-derive it.
 //
-// Deliberately parses by hand instead of importing `yaml`: this directory is not an npm
-// workspace and declares no dependencies, so a bare `yaml` import resolves only by walking up
-// to a parent node_modules that exists on some checkouts and not in CI.
-
-const WORKFLOW = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'workflows', 'test.yml');
+// The 2026-08-24 split into build/shard jobs turned regression #1 into a STRUCTURAL guarantee
+// rather than an ordering convention: the gate now lives in the `guards` job, which declares no
+// `needs:` and runs no build at all, so no build or test outcome can precede it. That property
+// is what the first test below pins — it is stronger than "appears earlier in the file", which
+// is all the old ordering assertion could check.
 
 const GUARD = 'Dynamic-replace guard';
-const BUILD = 'Build + run unit tests';
-
-/**
- * Split the `test` job's step list into `{ name, body }` records, in file order.
- *
- * Steps are the 6-space `      - name:` entries; a step's body runs to the next such entry.
- * Scanning stops at the next top-level job so the `coverage` job's steps can't leak in.
- */
-function readTestJobSteps() {
-    const lines = readFileSync(WORKFLOW, 'utf8').split('\n');
-    const steps = [];
-    let inTestJob = false;
-    let current = null;
-
-    for (const line of lines) {
-        const jobMatch = /^  ([A-Za-z0-9_-]+):\s*$/.exec(line);
-        if (jobMatch) {
-            if (current) steps.push(current);
-            current = null;
-            inTestJob = jobMatch[1] === 'test';
-            continue;
-        }
-        if (!inTestJob) continue;
-
-        const stepMatch = /^ {6}- name: (.+?)\s*$/.exec(line);
-        if (stepMatch) {
-            if (current) steps.push(current);
-            current = { name: stepMatch[1], body: [] };
-            continue;
-        }
-        if (current) current.body.push(line);
-    }
-    if (current) steps.push(current);
-    return steps;
-}
 
 describe('test.yml — dynamic-replace gate placement', () => {
-    const steps = readTestJobSteps();
+    const steps = readJobSteps('guards');
     const names = steps.map((s) => s.name);
 
-    it('parses the test job into steps (guards the parser itself)', () => {
+    it('parses the guards job into steps (guards the parser itself)', () => {
         expect(names).toContain(GUARD);
-        expect(names).toContain(BUILD);
-        // The coverage job also has a "Build" step; make sure it was not swept in.
+        expect(names).toContain('DOM-spec placement guard');
+        // Other jobs also have steps; make sure none were swept in.
+        expect(names).not.toContain('Run unit tests');
         expect(names).not.toContain('Run tests with coverage');
     });
 
-    it('runs the gate before the build, not after it', () => {
-        expect(names.indexOf(GUARD)).toBeLessThan(names.indexOf(BUILD));
+    it('lives in a job that cannot be blocked by the build or the test tier', () => {
+        // No `needs:` == nothing can make this job wait, or skip, on someone else's failure.
+        expect(readJobNeeds('guards')).toEqual([]);
+    });
+
+    it('runs in a job that never builds — so a broken build cannot silence it', () => {
+        const bodies = steps.map((s) => s.body.join('\n')).join('\n');
+        expect(bodies).not.toMatch(/turbo run build/);
+        expect(bodies).not.toMatch(/pnpm run build/);
     });
 
     it('runs the gate even when an earlier step has already failed', () => {
         const guard = steps.find((s) => s.name === GUARD);
-        const condition = guard.body.map((l) => /^ {8}if:\s*(.+?)\s*$/.exec(l)?.[1]).find(Boolean);
+        const condition = stepCondition(guard);
 
         // The default (`if: success()`) is what silenced it — anything relying on every
         // upstream step having passed reintroduces the regression.
         expect(condition, `"${GUARD}" must declare an \`if:\` — without one it inherits success() and unrelated upstream failures skip it`).toBeDefined();
         expect(condition).toMatch(/cancelled\(\)/);
         expect(condition).not.toMatch(/success\(\)/);
+    });
+
+    // The same silencing trap applies to every gate sharing the job — that is exactly how the
+    // Generic DOM ratchet muted the dynamic-replace guard in regression #2. Each gate here is
+    // independent and must report its own verdict.
+    it('gives every gate in the job the same independence', () => {
+        const gates = steps.filter((s) => s.name !== 'Checkout repo');
+        expect(gates.length).toBeGreaterThan(4);
+        for (const gate of gates) {
+            const condition = stepCondition(gate);
+            expect(condition, `"${gate.name}" must declare an \`if:\` so another gate's failure cannot skip it`).toBeDefined();
+            expect(condition, `"${gate.name}" condition`).toMatch(/cancelled\(\)/);
+        }
     });
 });

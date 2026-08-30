@@ -82,6 +82,37 @@ export class Metadata {
     }
 
     /**
+     * Distinct schema names in the catalog, in first-seen order. The catalog
+     * itself is never sharded — this is a projection for hydrate-by-schema
+     * callers (agent context, MCP, per-schema emit).
+     */
+    public SchemaNames(): string[] {
+        const seen = new Set<string>();
+        const names: string[] = [];
+        for (const entity of this.Entities) {
+            const name = (entity.SchemaName ?? '').trim() || 'unknown';
+            const key = name.toLowerCase();
+            if (!seen.has(key)) {
+                seen.add(key);
+                names.push(name);
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Entities in one schema. Matching is case-insensitive and trimmed.
+     * Does not hit the database — it filters the already-loaded catalog.
+     */
+    public EntitiesInSchema(schemaName: string): EntityInfo[] {
+        const key = (schemaName ?? '').trim().toLowerCase();
+        if (key.length === 0) {
+            return [];
+        }
+        return this.Entities.filter((e) => (e.SchemaName ?? '').trim().toLowerCase() === key);
+    }
+
+    /**
      * Helper method to find an entity by name in a case insensitive manner.  
      * @param entityName 
      */

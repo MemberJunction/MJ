@@ -71,7 +71,7 @@ flowchart TD
 - **Extensible Architecture**: Every generator (`SQLCodeGenBase`, `EntitySubClassGeneratorBase`, `AngularClientGeneratorBase`, etc.) can be subclassed and overridden via MJ's class factory
 - **Zod Validation Schemas**: Generates Zod schemas from SQL CHECK constraints with proper union types and refinements
 - **Recursive Foreign Key & Hierarchy Traversal Engine**: Automatically detects self-referential foreign keys and generates a 4-routine TVF suite (`GetHierarchyMeta`, `GetDescendants`, `GetAncestors`, `GetRootID`), 5 computed base-view columns (`Root<Field>`, `<Field>Depth`, `<Field>Path`, `<Field>IsLeaf`, `<Field>ChildCount`), and strongly typed TypeScript entity traversal methods (`GetDescendants()`, `GetAncestors()`, `GetChildren()`). See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md).
-- **Cascade Delete Generation**: Produces cursor-based cascade delete procedures that call child entity stored procedures, respecting business logic at every level
+- **Cascade Delete Generation**: Produces cursor-based cascade delete procedures that call child entity stored procedures, respecting business logic at every level. Default is **intra-schema only**; `allowCrossSchemaCascadeDeletes` (off) is required to walk FKs in other schemas.
 - **Force Regeneration**: Surgically regenerate specific SQL objects for specific entities without requiring schema changes
 - **Class Registration Manifests**: Prevents tree-shaking of `@RegisterClass`-decorated classes by generating static import manifests
 - **SQL Migration Logging**: Outputs all generated SQL as Flyway-compatible migration files with schema placeholder support
@@ -317,9 +317,39 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `SQLOutput` | Controls Flyway migration file generation from SQL logging |
 | `commands` | Shell commands to run before/after generation (typically package builds) |
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
+| `includeSchemas` | Opt-in positive scope: generate only these schemas (resolved into `excludeSchemas` **for this run**). Heal SQL logged into migrations uses `@IncludedSchemaNames` from this list plus authored `excludeSchemas` — never a snapshot of sibling apps on the publisher DB. |
+| `allowCrossSchemaCascadeDeletes` | Default **false**. Cascade-delete SQL is intra-schema only. `true` restores the old walk of every FK pointing at the entity, including other Open Apps. Dangerous; leave off. |
+| `entityPackageName` | String: npm package this emit writes. Record: install-time host map (those schemas are also skipped for local generation) |
+| `entityImportPackages` | Schema → npm map for peer classes this emit does **not** generate (embeds + related-record collections). See below. |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |
 | `additionalSchemaInfo` | Path to JSON file with soft PK/FK definitions and schema prefix rules |
 | `dbPlatform` | Database backend selector. See **Database Platform Selection** below. |
+
+### Peer entity imports (`entityImportPackages`)
+
+Embedded records and related-record collections type the generated subclass against the **related** entity class (`DeclareEmbeddedRecord<AddressEntity>`, `DeclareRelatedRecords<PersonEntity>`). When that class is not emitted in the current file, CodeGen must `import` it from the npm package that owns it.
+
+Those are three different knobs. Do not overload `entityPackageName`:
+
+| Knob | Meaning |
+|------|---------|
+| `includeSchemas` | What this run **generates** |
+| string `entityPackageName` | The npm package this run **writes** those classes into |
+| Record `entityPackageName` | Install-time **host** map. Listed schemas are also skipped for local generation (`getExternalEntitySchemas`). Converting a publisher's string `entityPackageName` into this Record silently re-routes every unmapped schema. |
+| `entityImportPackages` | Schema → npm map for peers this run does **not** generate |
+
+Open App **publishers** (the repo that develops the app) use the string form plus `includeSchemas`, and must list sibling apps here:
+
+```javascript
+entityPackageName: '@mj-biz-apps/orders-entities',
+includeSchemas: ['__mj_BizAppsOrders'],
+entityImportPackages: {
+    '__mj_BizAppsCommon': '@mj-biz-apps/common-entities',
+    '__mj_BizAppsAccounting': '@mj-biz-apps/accounting-entities',
+},
+```
+
+Resolution: core schema (`__mj`) → `@memberjunction/core-entities`; same schema as the owning entity → this emit's package; then `entityImportPackages`; then Record `entityPackageName` (host fallback). An unmapped foreign schema **throws** — CodeGen will not self-import this emit's package (that was the Orders `import { mjBizAppsCommonAddressEntity } from '@mj-biz-apps/orders-entities'` bug). Mapping a foreign schema to this emit's own package is also an error. Imports are grouped: one `import { A, B } from 'pkg'` line per package.
 
 ### Database Platform Selection (`dbPlatform`)
 
@@ -692,27 +722,21 @@ FROM   [orders].[vwOrderHeadersGenerated] g;
 `RunView`, visible in Explorer — and is returned by `spCreate`/`spUpdate`/`spDelete`, because those
 select from `BaseView`.
 
-### SQL Server only
+### PostgreSQL — restar the outer view; ship it via pg-migrate
 
-**Layering is rejected on PostgreSQL.** CodeGen throws when it encounters an entity with
-`GeneratedBaseViewName` set on a PG install, naming the entity and both views.
+The outer view is still **custom SQL**. A build engineer ships the PostgreSQL equivalent through
+pg-migrate (same `SELECT g.*, extras FROM inner g` shape, with `||` / `LEFT JOIN LATERAL` instead of
+T-SQL). CodeGen never overwrites that outer SQL.
 
-The reason is that PG cannot deliver the feature's whole point. Everything above depends on the
-outer view's `SELECT g.*` being re-resolved after the inner view regenerates — that is what makes a
-late-added foreign key appear on its own. SQL Server does that with `sp_refreshview`. PostgreSQL
-expands `*` into a fixed column list at creation and freezes it, has no refresh equivalent, and
-CodeGen does not own the outer view, so nothing recreates it.
+PostgreSQL expands `g.*` at `CREATE VIEW` and freezes the column list, and it has no
+`sp_refreshview`. After CodeGen rewrites the inner view it **restars** the outer definition — rewrites
+the deparsed `SELECT g.col1, g.col2, …, extras` back to `SELECT g.*, extras` — then
+`CREATE OR REPLACE` (or, when a new inner column lands in the middle of `g.*` and PostgreSQL raises
+`42P16`, capture / `DROP CASCADE` / recreate / replay dependent functions). Open App `mj migrate`
+calls `spRebindLayeredOuterViewsInSchema` for the same rebind.
 
-The resulting behaviour would not even be consistently broken. Adding a column — the common case —
-leaves the outer view stale, because `CREATE OR REPLACE` on the inner view never touches dependents.
-Renaming a column or changing its type raises `42P16`, which sends CodeGen down its
-capture/`DROP CASCADE`/replay path; that incidentally recreates the outer view, which then *does*
-pick the new columns up. Same feature, opposite outcomes, decided by which kind of schema change
-happened to land that day. Since silent staleness is the exact failure layering exists to eliminate,
-PG refuses it outright rather than shipping a documented footgun.
-
-On PostgreSQL, use a fully custom base view (`BaseViewGenerated = 0`, `GeneratedBaseViewName` left
-`NULL`) and accept that it must be hand-maintained as the schema changes.
+Do not leave the outer as a one-time pg-migrate artifact and hope later inner regenerations show up.
+Without the restar they will not.
 
 ### Setting it up
 
@@ -721,8 +745,10 @@ On PostgreSQL, use a fully custom base view (`BaseViewGenerated = 0`, `Generated
    `metadata/entities/.layered-base-views.json`.
 2. Run CodeGen. It writes the inner view.
 3. Create your `BaseView` in a migration that runs **after** CodeGen output, since it selects from the
-   inner view — and may reference generated root-ID functions.
-4. Run CodeGen again so the new columns are discovered as `EntityField` rows.
+   inner view — and may reference generated root-ID functions. On PostgreSQL, ship the same wrapper
+   via pg-migrate (`LEFT JOIN LATERAL` / `||` instead of `OUTER APPLY` / `CONVERT`).
+4. Run CodeGen again so the new columns are discovered as `EntityField` rows. On PostgreSQL this
+   pass restars the outer view so `g.*` includes anything the inner view gained.
 
 > ### ⚠️ Adopting layering on an EXISTING entity needs `forceRegeneration`
 >
@@ -991,6 +1017,9 @@ Generates an import manifest that prevents tree-shaking of `@RegisterClass` deco
 | `outputDir(type, fallback)` | Get the configured output directory for a generator type |
 | `getSettingValue(name, default)` | Get a named setting value from configuration |
 | `mj_core_schema()` | Get the MJ core schema name (typically `__mj`) |
+| `resolveEntityPackageName(schema)` | Package for a schema from `entityPackageName` (string form returns that string for every schema) |
+| `resolveEntityImportPackage(related, owning)` | Package to **import** a peer class from; throws if a foreign schema is unmapped |
+| `thisEmitEntityPackageName(owning)` | The npm package this CodeGen run writes |
 
 ## Dependencies
 

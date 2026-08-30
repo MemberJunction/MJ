@@ -21,14 +21,14 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "6.1.0-edge.3",
-    "@memberjunction/actions": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/core-entities-server": "6.1.0-edge.3",
-    "@memberjunction/ai": "6.1.0-edge.3",
-    "@memberjunction/aiengine": "6.1.0-edge.3",
+    "@memberjunction/actions-base": "6.1.0-edge.4",
+    "@memberjunction/actions": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/core-entities-server": "6.1.0-edge.4",
+    "@memberjunction/ai": "6.1.0-edge.4",
+    "@memberjunction/aiengine": "6.1.0-edge.4",
     "zod": "^3.25.0"
   },
   "repository": {
