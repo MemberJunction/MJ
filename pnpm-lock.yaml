@@ -3262,6 +3262,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.4
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.1.0-edge.4
+        version: link:../../Credentials/Engine
       '@memberjunction/global':
         specifier: 6.1.0-edge.4
         version: link:../../MJGlobal
@@ -3445,12 +3448,18 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.4
         version: link:../../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.1.0-edge.4
+        version: link:../../../Credentials/Engine
       '@memberjunction/global':
         specifier: 6.1.0-edge.4
         version: link:../../../MJGlobal
       '@memberjunction/network-utils':
         specifier: 6.1.0-edge.4
         version: link:../../../NetworkUtils
+      axios:
+        specifier: ^1.13.4
+        version: 1.19.0
     devDependencies:
       '@types/node':
         specifier: 24.10.11
