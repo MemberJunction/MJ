@@ -146,6 +146,7 @@ const ROOT_FILES: readonly RootFile[] = [
   { SourceRel: 'distribution.turbo.json', DestRel: 'turbo.json' },
   { SourceRel: 'distribution.config.cjs', DestRel: 'mj.config.cjs' },
   { SourceRel: 'distribution.README.md', DestRel: 'README.md' },
+  { SourceRel: 'LICENSE', DestRel: 'LICENSE' },
   { SourceRel: 'install.config.json', DestRel: 'install.config.json' },
   { SourceRel: 'packages/Update_MemberJunction_Packages_To_Latest.ps1', DestRel: 'Update_MemberJunction_Packages_To_Latest.ps1' },
 ];

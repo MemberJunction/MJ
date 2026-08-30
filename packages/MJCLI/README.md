@@ -67,6 +67,87 @@ npm install --save-dev @memberjunction/cli
 
 **Requires Node.js 20.0.0 or higher.**
 
+## Using `mj` from an agent or CI
+
+`mj` detects whether a human is present and behaves accordingly. Nothing changes for
+someone typing at a terminal; everything changes for a program.
+
+### Prompting follows the terminal
+
+A command prompts when stdin and stdout are both real terminals. When either is piped
+or redirected, when a CI environment variable is set, or when `TERM=dumb`, it does not —
+and a command that needs a value it wasn't given fails immediately, naming the flag that
+supplies it, rather than blocking on stdin forever:
+
+```console
+$ mj sync init                         # at a terminal: prompts, exactly as before
+
+$ mj sync init < /dev/null             # spawned by an agent
+ ›   Error: An entity-directory choice is required and this run has no interactive
+ ›   terminal. Pass --setup-entity=ai-prompts|other|no.
+ ›   Try this: Pass --setup-entity=ai-prompts|other|no.
+$ echo $?
+1
+
+$ mj sync init --setup-entity=no       # scripted: runs unattended anywhere
+```
+
+Override the detection in either direction with `--interactive` / `--no-interactive`, or
+pin it for a whole shell session with `MJ_CLI_INTERACTIVE=0` (or `1`). An agent harness
+that shells out through a pty should set `MJ_CLI_INTERACTIVE=0` so its subprocesses can
+never block on a question.
+
+### Output follows the pipe
+
+With no explicit `--format`, `mj` writes human output to a terminal and JSON to a pipe —
+banner, spinners and color are suppressed automatically when stdout is redirected.
+
+```bash
+mj usage                       # human-readable domain map
+mj usage | jq '.data.domains'  # JSON envelope, no flag needed
+mj codegen --format=text > build.log   # force human output into a file
+export MJ_CLI_FORMAT=json      # pin the format for a whole session
+```
+
+`--format` accepts `text | json | md` everywhere. The older per-family spellings
+(`console`/`markdown` under `mj test *`, `compact`/`table` under `mj ai *`) still work and
+still win over auto-detection when passed explicitly.
+
+> **Note on `-o`:** `-o` means *output format* in the `mj ai` family and *output file path*
+> in `mj test`, `querygen export`, and `sql-audit`. Prefer `--format` — it means the same
+> thing in every command.
+
+### Discovering commands without burning context
+
+`mj usage` is a two-tier progressive-disclosure surface. Tier 1 is a ~200-token domain map;
+tier 2 is one domain's commands, flags, examples, and expected runtime. Reading the full
+oclif help tree instead costs roughly 13–15k tokens.
+
+```bash
+mj usage                    # every domain + a one-line summary + a runtime class
+mj sync usage               # every mj sync command, its flags and examples
+mj sync usage --format=json # the same, machine-readable
+```
+
+Each entry carries a **runtime hint** (`fast` | `moderate` | `slow` | `variable`, often with
+a typical duration) so a caller wrapping `mj` in a timeout can budget correctly instead of
+killing a healthy long-running command. Commands also emit a `{"event":"start", ...}` line
+on stderr before doing work.
+
+### The result envelope
+
+Commands built on `BaseCLIPlugin` emit a versioned envelope on stdout, with all progress and
+logging on stderr:
+
+```json
+{"version":"1","success":false,"command":"sync:push","durationSeconds":1.2,
+ "errors":[{"context":"metadata/entities","message":"No mj.config.cjs found.",
+            "code":"E_NO_CONFIG","suggestion":"Run `mj sync init` in this directory first."}]}
+```
+
+`code` is stable and safe to branch on; `message` is free to be reworded. `version` lets a
+caller detect a contract change rather than silently mis-parsing.
+
 ## Configuration
 
 Uses [cosmiconfig](https://github.com/davidtheclark/cosmiconfig) to find configuration:
@@ -545,4 +626,4 @@ The CLI includes these oclif plugins:
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

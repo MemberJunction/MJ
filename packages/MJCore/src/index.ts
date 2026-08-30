@@ -46,6 +46,7 @@ export * from "./generic/explorerNavigationItem";
 export * from "./generic/compositeKey";
 export * from "./generic/authEvaluator";
 export * from "./generic/metadataUtil";
+export * from "./generic/schemaHydration";
 export * from "./generic/authTypes";
 export * from "./generic/graphqlTypeNames";
 
@@ -62,6 +63,7 @@ export * from "./generic/column-descriptors";
 export * from "./generic/data-table";
 export * from "./generic/data-snapshot";
 export * from "./generic/permissionInterfaces";
+export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter
