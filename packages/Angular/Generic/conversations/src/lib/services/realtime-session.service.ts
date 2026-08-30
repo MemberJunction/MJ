@@ -205,8 +205,13 @@ interface RemoteBrowserAudioChunkPayload {
 /**
  * Result shape returned by the `StartRealtimeClientSession` server mutation.
  * The browser uses these values to open a client-direct realtime session.
+ *
+ * Exported because a host may mint the session ITSELF (its own mutation, carrying
+ * server-side context the stock mutation cannot express) and then hand the result to
+ * {@link RealtimeSessionService.StartRealtimeSessionFromResult} to run it — this is the
+ * contract that path is written against.
  */
-interface StartRealtimeClientSessionResult {
+export interface StartRealtimeClientSessionResult {
   AgentSessionId: string;
   ConversationId: string | null;
   Provider: string;
@@ -234,6 +239,45 @@ interface StartRealtimeClientSessionResult {
 }
 
 /**
+ * Host-supplied inputs that accompany an already-minted session on
+ * {@link RealtimeSessionService.StartRealtimeSessionFromResult} — the values the RUN half needs
+ * that a {@link StartRealtimeClientSessionResult} cannot carry. Every field is optional and
+ * mirrors the same-named {@link RealtimeSessionService.StartRealtimeSession} parameter, defaults
+ * included: omit one and the session behaves exactly as the all-in-one entry point does when that
+ * parameter is omitted.
+ */
+export interface RealtimeSessionRunOptions {
+  /**
+   * The conversation the host asked its OWN mint for, or null/omitted when it asked the server to
+   * create one. Only the ORIGINAL request tells the two apart: a null here plus a
+   * `ConversationId` on the result means the server created that conversation for this session,
+   * which the host is told about via {@link RealtimeSessionService.SessionCreatedConversationId}.
+   */
+  readonly conversationId?: string | null;
+  /**
+   * Display name of the target agent, surfaced on {@link RealtimeSessionService.AgentName$} so any
+   * host can render it without re-resolving. Omitted ⇒ the previous name stands.
+   */
+  readonly agentName?: string | null;
+  /**
+   * EXPLICIT "record this call" consent for THIS session. Omitted/`null` ⇒ the per-user persisted
+   * preference (`mj.realtimeVoice.recordingConsent.v1`) is read as the default; `false` never
+   * records. The host is responsible for reporting its own choice to its own mint.
+   */
+  readonly recordingConsent?: boolean | null;
+  /**
+   * The application the session runs in. Stored so the live ClientContextChannel can stream
+   * subsequent context deltas under it. Omitted ⇒ no app layer (the pre-app behavior).
+   */
+  readonly applicationId?: string | null;
+  /**
+   * Live app-context snapshot. Omitted/`null` ⇒ the snapshot the host has already pushed via
+   * {@link RealtimeSessionService.UpdateAppContext} stands (never clobber a good value with null).
+   */
+  readonly appContext?: AppContextSnapshot | null;
+}
+
+/**
  * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
  * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
  * frames never transit the MJ server (low latency); only tool calls and final
@@ -250,7 +294,10 @@ interface StartRealtimeClientSessionResult {
  * bakes the companion instructions + tool set into `SessionConfigJson`, which the client
  * driver applies verbatim.
  *
- * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}.
+ * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}. A start is
+ * two halves — MINT (the `StartRealtimeClientSession` mutation) and RUN (everything above) — and a
+ * host that must mint through its own server surface enters at the second half via
+ * {@link StartRealtimeSessionFromResult}; there is one implementation of the run half either way.
  */
 @Injectable({ providedIn: 'root' })
 export class RealtimeSessionService {
@@ -486,6 +533,20 @@ export class RealtimeSessionService {
   private segmentIndex = 0;
   /** How often crash-recovery shards are flushed during a recording. */
   private static readonly SegmentFlushMs = 15000;
+
+  // ── Server-side liveness ───────────────────────────────────────────────────
+  /**
+   * Interval that tells the server this session is still in use, or `null` when no session is
+   * running. See {@link startLivenessPulse} for why the server cannot work this out itself.
+   */
+  private livenessTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * How often the client asserts liveness. Comfortably under `SessionJanitor`'s
+   * `closeThresholdMinutes` (15 by default) so several pulses must be missed in a row before a
+   * live session is reaped, and well above `SessionManager`'s heartbeat write-coalescing window
+   * so the DB sees at most a trickle of writes per session.
+   */
+  private static readonly LivenessPulseMs = 60000;
   /**
    * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
    * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
@@ -672,22 +733,81 @@ export class RealtimeSessionService {
       return; // a session is already running — ignore duplicate starts
     }
 
+    const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
+    // Captured BEFORE startChannels so the mint carries exactly the snapshot the prologue
+    // resolved, whatever a channel plugin may push in the meantime.
+    const effectiveAppContext = this._appContext$.value;
+
+    let session: StartRealtimeClientSessionResult;
+    try {
+      // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
+      // tool sets must be declared to the realtime model at session mint.
+      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
+    } catch (error) {
+      await this.failSessionStart(error);
+      return;
+    }
+
+    await this.runMintedSession(session, conversationId ?? null, consent);
+  }
+
+  /**
+   * Run a session the HOST has already minted itself — the second half of
+   * {@link StartRealtimeSession}, without the `StartRealtimeClientSession` mutation.
+   *
+   * For hosts that must mint through their own server surface because they attach per-session
+   * context the stock mutation cannot carry (e.g. an interview persona baked into the companion
+   * prompt). They call their own mutation, shape the reply into a
+   * {@link StartRealtimeClientSessionResult}, and hand it here: driver resolution, the ephemeral-token
+   * connect, tool/transcript relays, recording, connection state and teardown are all identical to
+   * the all-in-one path — there is exactly one implementation of the run half.
+   *
+   * NOTE: the interactive-channel plugins are NOT started on this path. Their tool sets must be
+   * declared to the model AT MINT, which happened on the host's side — so a host that wants channels
+   * owns that half too.
+   *
+   * @param result The minted session — the same ten fields the `StartRealtimeClientSession`
+   *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call.
+   * @param options Host-side inputs the result cannot carry; see {@link RealtimeSessionRunOptions}.
+   *   Every field defaults exactly as its {@link StartRealtimeSession} counterpart does.
+   */
+  public async StartRealtimeSessionFromResult(
+    result: StartRealtimeClientSessionResult,
+    options?: RealtimeSessionRunOptions
+  ): Promise<void> {
+    if (this.IsActive) {
+      return; // a session is already running — ignore duplicate starts
+    }
+
+    const effectiveOptions = options ?? {};
+    const consent = this.beginSessionStart(effectiveOptions);
+    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent);
+  }
+
+  /**
+   * Start prologue shared by both entry points: bind the app layer, publish the agent name, reset
+   * per-session state, and flip the session live (which is ALSO what makes the `IsActive` guard
+   * suppress duplicate starts while the mint is still in flight — hence it runs before minting, not
+   * after). Returns the resolved recording consent, which the mint half reports to the server and
+   * the run half uses to decide whether to record.
+   */
+  private beginSessionStart(options: RealtimeSessionRunOptions): boolean {
     // App awareness (Move 1/3/4): the application the session runs in (sources the app config
     // cascade + RelevantAgents → allowed-agent union) and the live app-context snapshot injected
     // into the companion prompt at mint. Stored so the ClientContextChannel can stream subsequent
     // deltas. Absent ⇒ no app layer / no mint-time context (the pre-app behavior).
-    this.applicationId = applicationId ?? null;
+    this.applicationId = options.applicationId ?? null;
     // Prefer the explicit param, but fall back to the snapshot the host has ALREADY pushed via
     // UpdateAppContext (explorer-app streams the live snapshot continuously). The overlay's
     // [appContext] binding can still read null at the instant the mic is clicked — without this
     // fallback, StartRealtimeSession(null) would clobber a perfectly good snapshot and mint the
     // companion prompt with no app context (no NavigableApps / no tool schemas → the co-agent guesses
     // parameter names and navigation fails). Never overwrite a good value with null.
-    const effectiveAppContext = appContext ?? this._appContext$.value;
-    this._appContext$.next(effectiveAppContext);
+    this._appContext$.next(options.appContext ?? this._appContext$.value);
 
-    if (agentName) {
-      this._agentName$.next(agentName);
+    if (options.agentName) {
+      this._agentName$.next(options.agentName);
     }
     this.resetState();
     this._active$.next(true);
@@ -695,20 +815,28 @@ export class RealtimeSessionService {
 
     // Resolve recording consent for this session: explicit value wins, else the per-user
     // persisted preference. Computed before mint so it can be reported to the server.
-    const consent = recordingConsent ?? this.readPersistedRecordingConsent();
+    const consent = options.recordingConsent ?? this.readPersistedRecordingConsent();
     this.recordingStartedAtIso = consent ? new Date().toISOString() : null;
+    return consent;
+  }
 
+  /**
+   * The RUN half of a session start, shared by both entry points: consume the minted result, open
+   * the provider connection, and go live. `inputConversationId` is the conversation the START asked
+   * for (null ⇒ "server, make me one") — the result alone can't distinguish the two.
+   */
+  private async runMintedSession(
+    session: StartRealtimeClientSessionResult,
+    inputConversationId: string | null,
+    consent: boolean
+  ): Promise<void> {
     try {
-      // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
-      // tool sets must be declared to the realtime model at session mint.
-      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
       // it on close, and auto-name it (via the shared naming helper).
-      this.createdConversationId = !conversationId && session.ConversationId ? session.ConversationId : null;
-      this.sessionConversationId = session.ConversationId ?? conversationId ?? null;
+      this.createdConversationId = !inputConversationId && session.ConversationId ? session.ConversationId : null;
+      this.sessionConversationId = session.ConversationId ?? inputConversationId ?? null;
       this.firstUserTranscript = null;
       this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
       this._modelName$.next(session.ModelName ?? null);
@@ -753,11 +881,23 @@ export class RealtimeSessionService {
         sessionId: this.agentSessionId,
         channelNames: this._activeChannels$.value.map(c => c.ChannelName),
       });
+
+      // Same place, same reason: the session is connected and its id is known, which is exactly
+      // the window in which the server needs to be told it is alive.
+      this.startLivenessPulse();
     } catch (error) {
-      console.error('[RealtimeSession] Failed to start session:', error);
-      this._connectionState$.next('error');
-      await this.teardown(false);
+      await this.failSessionStart(error);
     }
+  }
+
+  /**
+   * The single failure path for a session start (mint half or run half): report it, latch the
+   * overlay into 'error', and unwind whatever the half-built session already opened.
+   */
+  private async failSessionStart(error: unknown): Promise<void> {
+    console.error('[RealtimeSession] Failed to start session:', error);
+    this._connectionState$.next('error');
+    await this.teardown(false);
   }
 
   /**
@@ -911,6 +1051,63 @@ export class RealtimeSessionService {
     if (this.segmentTimer) {
       clearInterval(this.segmentTimer);
       this.segmentTimer = null;
+    }
+  }
+
+  /**
+   * Starts telling the server this session is still in use (#3533).
+   *
+   * **Why the server cannot work this out on its own.** In the client-direct topology the audio
+   * goes browser → provider over WebRTC. The server sees the mint, a few channel actions in the
+   * first seconds, and then nothing at all — so `SessionManager.RecordActivity` stops being
+   * reached while the conversation is still going. `LastActiveAt` freezes ~45 seconds in, and
+   * `SessionJanitor` — which cannot distinguish an active call from an abandoned one — force-closes
+   * it at `closeThresholdMinutes`, mid-sentence, taking the user's surfaces with it. A session
+   * whose channels are all client-side (whiteboard, media) goes quiet from the server's point of
+   * view almost immediately.
+   *
+   * The browser is the only participant that knows the call is alive, so it is the one that has to
+   * say so. Raising `closeThresholdMinutes` is not the fix — it just makes the janitor slower at
+   * its real job (reaping rows orphaned by a crash) without making liveness observable.
+   *
+   * The pulse is best-effort by design: a failed beat is logged and skipped, never surfaced to the
+   * user and never allowed to end the session. Losing one beat costs nothing because the threshold
+   * is many beats wide; turning a transient network blip into a visible error would be a worse
+   * failure than the one this fixes. Write amplification is bounded on the server side too, where
+   * `SessionManager.Heartbeat` coalesces persisted writes.
+   */
+  private startLivenessPulse(): void {
+    this.stopLivenessPulse();
+    this.livenessTimer = setInterval(() => { void this.pulseLiveness(); }, RealtimeSessionService.LivenessPulseMs);
+  }
+
+  /** Stops the liveness pulse. Idempotent — safe on a session that never started one. */
+  private stopLivenessPulse(): void {
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer);
+      this.livenessTimer = null;
+    }
+  }
+
+  /**
+   * One liveness beat. Reads the session id at fire time rather than closing over it, so a beat
+   * that fires during teardown finds `null` and does nothing instead of resurrecting a closed row.
+   */
+  private async pulseLiveness(): Promise<void> {
+    const agentSessionId = this.agentSessionId;
+    if (!agentSessionId) {
+      return;
+    }
+    const mutation = `
+      mutation AgentSessionHeartbeat($agentSessionId: String!) {
+        AgentSessionHeartbeat(agentSessionId: $agentSessionId)
+      }
+    `;
+    try {
+      await this.gql().ExecuteGQL(mutation, { agentSessionId });
+    } catch (error) {
+      // Best-effort: the next beat is 60s away and the janitor threshold is many beats wide.
+      console.warn('[RealtimeSession] Liveness pulse failed (session continues):', error);
     }
   }
 
@@ -2381,6 +2578,9 @@ export class RealtimeSessionService {
    * @param closeServerSession when true, calls `CloseAgentSession` on the server.
    */
   private async teardown(closeServerSession: boolean): Promise<void> {
+    // First: stop asserting liveness. A pulse racing the close would re-stamp LastActiveAt on a
+    // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
+    this.stopLivenessPulse();
     this.teardownDelegationProgress();
 
     // Channels first: flush any unsaved channel state WHILE the live session id is still
