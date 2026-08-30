@@ -22,6 +22,11 @@ export class FileCategoryResolver extends FileCategoryResolverBase {
       return null;
     }
 
+    // This mutation accepts a DeleteOptionsInput and calls entityObject.Delete() itself, so it
+    // does NOT route through ResolverBase.DeleteRecord and needs its own sanitize — the audit
+    // row must not be suppressible here either.
+    options = DeleteOptionsInput.SanitizeFromWire(options, 'MJ: File Categories', userPayload?.email);
+
     const user = this.GetUserFromPayload(userPayload);
     const fileEntity = await p.GetEntityObject<MJFileEntity>('MJ: Files', user);
     const fileCategoryEntity = await p.GetEntityObject<MJFileCategoryEntity>('MJ: File Categories', user);
