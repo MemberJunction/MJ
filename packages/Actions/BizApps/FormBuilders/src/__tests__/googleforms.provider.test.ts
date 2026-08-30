@@ -1,40 +1,46 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { HttpClient } from '@memberjunction/network-utils';
 
 /**
  * Per-action tests for the Google Forms provider.
  *
  * Credentials resolve from the BIZAPPS_GOOGLE_FORMS_API_TOKEN environment
- * variable, so no database access occurs. The HTTP boundary is the axios
- * module mock — requests use an axios instance created with a bearer token.
+ * variable, so no database access occurs. The HTTP boundary is the @memberjunction/network-utils
+ * module mock — requests use an HttpClient created with a bearer token.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => ({
@@ -94,8 +100,8 @@ async function runWithoutUser(action: object, params: ActionParam[]): Promise<Ac
 
 beforeEach(() => {
   process.env[ENV_KEY] = 'env-token';
-  http.instance.get.mockReset();
-  http.axiosDefault.create.mockClear();
+  http.instance.Get.mockReset();
+  vi.mocked(HttpClient).mockClear();
 });
 
 afterEach(() => {
@@ -126,26 +132,26 @@ describe('GetGoogleFormAction', () => {
   });
 
   it('should GET /forms/{id} with the bearer token', async () => {
-    http.instance.get.mockResolvedValue({
-      data: {
+    http.instance.Get.mockResolvedValue({
+      Data: {
         formId: 'f-1',
         info: { title: 'My Google Form', documentTitle: 'My Google Form' },
         items: [{ itemId: 'i-1', questionItem: { question: { questionId: 'q-1' } } }],
         revisionId: 'rev-1',
         responderUri: 'https://docs.google.com/forms/d/e/f-1/viewform',
       },
-      headers: {},
+      Headers: {},
     });
 
     const result = await run(action, inputs({ FormID: 'f-1' }));
 
-    expect(http.axiosDefault.create).toHaveBeenCalledWith(
+    expect(HttpClient).toHaveBeenCalledWith(
       expect.objectContaining({
-        baseURL: 'https://forms.googleapis.com/v1',
-        headers: expect.objectContaining({ Authorization: 'Bearer env-token' }),
+        BaseURL: 'https://forms.googleapis.com/v1',
+        Headers: expect.objectContaining({ Authorization: 'Bearer env-token' }),
       }),
     );
-    expect(http.instance.get).toHaveBeenCalledWith('/forms/f-1');
+    expect(http.instance.Get).toHaveBeenCalledWith('/forms/f-1');
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully retrieved Google Form "My Google Form" with 1 questions');
@@ -174,7 +180,7 @@ describe('ExportGoogleFormsCSVAction', () => {
   });
 
   it('should return NO_DATA (Success true) for a form with no responses', async () => {
-    http.instance.get.mockResolvedValue({ data: { responses: [] }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { responses: [] }, Headers: {}, Status: 200 });
 
     const result = await run(action, inputs({ FormID: 'f-1' }));
 
@@ -206,19 +212,19 @@ describe('GetSingleGoogleFormsResponseAction', () => {
   });
 
   it('should GET /forms/{id}/responses/{responseId} on the happy path', async () => {
-    http.instance.get.mockResolvedValue({
-      data: {
+    http.instance.Get.mockResolvedValue({
+      Data: {
         responseId: 'r-1',
         createTime: '2024-06-15T10:00:00Z',
         lastSubmittedTime: '2024-06-15T10:05:00Z',
         answers: {},
       },
-      headers: {},
+      Headers: {},
     });
 
     const result = await run(action, inputs({ FormID: 'f-1', ResponseID: 'r-1' }));
 
-    expect(http.instance.get).toHaveBeenCalledWith('/forms/f-1/responses/r-1');
+    expect(http.instance.Get).toHaveBeenCalledWith('/forms/f-1/responses/r-1');
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
   });

@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BufferBaseAction, BufferAssets, BufferPost, BufferPostStatus, BufferShareMode } from '../buffer-base.action';
+import { BufferBaseAction, BufferAssetInput, BufferPost, BufferPostStatus, BufferShareMode } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -12,30 +12,58 @@ function resolveShareMode(postNow: boolean, addToTop: boolean, scheduledTime: st
 
 /**
  * Builds the assets input from image/video URLs and link params.
+ *
+ * One `AssetInput` entry per attachment, each naming its kind. Buffer moved
+ * createPost to this array form on 2026-05-25 and rejects the older
+ * `{ images: [...] }` object, which is why this does not build a `BufferAssets`.
  */
 function buildAssetsInput(
   imageUrls: string[] | null,
   videoUrls: string[] | null,
   mediaLink: string | null,
   mediaDescription: string | null,
-): BufferAssets | undefined {
-  const assets: BufferAssets = {};
-  let hasAssets = false;
+): BufferAssetInput[] | undefined {
+  const assets: BufferAssetInput[] = [];
 
-  if (imageUrls?.length) {
-    assets.images = imageUrls.map((url) => ({ url }));
-    hasAssets = true;
+  for (const url of imageUrls ?? []) {
+    if (url) assets.push({ image: { url } });
   }
-  if (videoUrls?.length) {
-    assets.videos = videoUrls.map((url) => ({ url }));
-    hasAssets = true;
+  for (const url of videoUrls ?? []) {
+    if (url) assets.push({ video: { url } });
   }
   if (mediaLink) {
-    assets.link = { url: mediaLink, description: mediaDescription || undefined };
-    hasAssets = true;
+    assets.push({ link: { url: mediaLink, description: mediaDescription || undefined } });
   }
 
-  return hasAssets ? assets : undefined;
+  return assets.length > 0 ? assets : undefined;
+}
+
+/**
+ * Read the `PlatformMetadata` param, accepted as an object or as a JSON string —
+ * both forms arrive, from typed callers and from agent/UI inputs respectively.
+ *
+ * Unparseable JSON throws rather than being dropped: metadata carries things like
+ * LinkedIn @mention annotations, and posting the text without them silently
+ * publishes something different from what the caller composed.
+ */
+function parsePlatformMetadata(value: unknown): Record<string, unknown> | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  if (typeof value === 'string') {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw new Error('PlatformMetadata was a string but not valid JSON');
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('PlatformMetadata must be an object keyed by service name, e.g. { "linkedin": { ... } }');
+    }
+    return parsed as Record<string, unknown>;
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('PlatformMetadata must be an object keyed by service name, e.g. { "linkedin": { ... } }');
+  }
+  return value as Record<string, unknown>;
 }
 
 interface CreatedPostSummary {
@@ -64,6 +92,13 @@ function summarizePost(post: BufferPost): CreatedPostSummary {
  * The new API accepts one channelId per mutation call. To post to multiple
  * channels, pass an array of ChannelIDs and a separate createPost call is
  * made for each.
+ *
+ * Two params exist for posting on someone else's behalf. `CredentialID` (on every
+ * Buffer action) makes the calls with a token from an `MJ: Credentials` row instead
+ * of the tenant's own connection, which is what publishing to an employee's personal
+ * channel requires. `PlatformMetadata` passes Buffer's per-service extras through —
+ * `{ "linkedin": { "annotations": [...] } }` is how an @mention survives the trip,
+ * and without it the post publishes as plain text with the mention spelled out.
  */
 @RegisterClass(BaseAction, 'BufferCreatePostAction')
 export class BufferCreatePostAction extends BufferBaseAction {
@@ -80,6 +115,7 @@ export class BufferCreatePostAction extends BufferBaseAction {
       const scheduledTime = this.getParamValue(Params, 'ScheduledTime') as string | null;
       const postNow = this.getParamValue(Params, 'PostNow') === true;
       const addToTop = this.getParamValue(Params, 'AddToTop') === true;
+      const platformMetadata = parsePlatformMetadata(this.getParamValue(Params, 'PlatformMetadata'));
 
       if (!channelIds?.length) throw new Error('ChannelIDs array is required with at least one channel');
       if (!content && !imageUrls?.length && !videoUrls?.length && !mediaLink) {
@@ -101,6 +137,7 @@ export class BufferCreatePostAction extends BufferBaseAction {
             mode,
             dueAt,
             assets,
+            metadata: platformMetadata,
           }),
         ),
       );
@@ -149,6 +186,7 @@ export class BufferCreatePostAction extends BufferBaseAction {
       { Name: 'ScheduledTime', Type: 'Input', Value: null },
       { Name: 'PostNow', Type: 'Input', Value: false },
       { Name: 'AddToTop', Type: 'Input', Value: false },
+      { Name: 'PlatformMetadata', Type: 'Input', Value: null },
       { Name: 'CreatedPosts', Type: 'Output', Value: null },
       { Name: 'Summary', Type: 'Output', Value: null },
     ];

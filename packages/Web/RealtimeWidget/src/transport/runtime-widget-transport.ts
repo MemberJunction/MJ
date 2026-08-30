@@ -18,6 +18,7 @@ import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/
 import type { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
+import { agentFailureMessage } from '@memberjunction/ai-core-plus';
 import type { WidgetSession } from '../types.js';
 import type { IWidgetTransport, WidgetProgressCallback, WidgetTurnResult } from './widget-transport.js';
 
@@ -81,7 +82,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
                 onProgress: (p) => onProgress?.(p.message ?? 'Working…', p.percentage),
             });
             if (!result || !result.success) {
-                return { reply: '', success: false, error: result?.agentRun?.ErrorMessage ?? 'The agent could not respond.' };
+                return { reply: '', success: false, error: agentFailureMessage(result, 'The agent could not respond.') };
             }
             return { reply: await this.readLatestAgentReply(), success: true };
         } catch (err) {
