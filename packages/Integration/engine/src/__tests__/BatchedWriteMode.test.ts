@@ -11,7 +11,9 @@ import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 type WriteModeReader = { ReadWriteMode: (ci: MJCompanyIntegrationEntity) => string };
 const readMode = (configuration: unknown): string => {
     const engine = Object.create(IntegrationEngine.prototype) as unknown as WriteModeReader;
-    const ci = { Get: (f: string) => (f === 'Configuration' ? configuration : undefined) } as unknown as MJCompanyIntegrationEntity;
+    // The generated TYPED property, which is what the reader uses (and what its four neighbours
+    // in IntegrationEngine already used) — not `.Get('Configuration')`.
+    const ci = { Configuration: configuration } as unknown as MJCompanyIntegrationEntity;
     return engine.ReadWriteMode(ci);
 };
 

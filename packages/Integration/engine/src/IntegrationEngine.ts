@@ -349,7 +349,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private ReadWriteMode(companyIntegration: MJCompanyIntegrationEntity): string {
         try {
-            const raw = companyIntegration.Get('Configuration') as string | null;
+            const raw = companyIntegration.Configuration;
             if (!raw) return '';
             const parsed = JSON.parse(raw) as { writeMode?: unknown };
             return typeof parsed.writeMode === 'string' ? parsed.writeMode : '';
@@ -374,7 +374,31 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private enrolInWriteGroup(entity: BaseEntity): void {
         const group = this.currentRunContext?.writeGroup;
-        if (group) entity.TransactionGroup = group;
+        if (!group) return;
+        // BATCHING REQUIRES A PK THAT EXISTS BEFORE SUBMIT.
+        //
+        // An enrolled `Save()` returns true immediately and the row lands at `Submit()`, so the
+        // caller reads `entity.PrimaryKey` while the write is still queued. That is fine for the
+        // shapes sync actually produces — `NewRecord()` client-generates the UUID for a single
+        // `uniqueidentifier` PK, and a composite/soft PK takes its values from the mapped fields
+        // before the save. It is NOT fine for a single AUTO-INCREMENT PK, whose value only exists
+        // after the insert executes: the record map would be written with a blank EntityRecordID,
+        // which is precisely the "duplicates on every incremental sync" failure the record-map
+        // comment in CreateRecord documents.
+        //
+        // So such an entity is left OUT of the group and saves immediately — correct, one round
+        // trip slower for that entity, and impossible to get silently wrong.
+        if (this.hasIdentityOnlyPrimaryKey(entity)) return;
+        entity.TransactionGroup = group;
+    }
+
+    /**
+     * True when the entity's identity is a SINGLE auto-increment column — the one primary-key
+     * shape whose value cannot be known until the insert has executed. See {@link enrolInWriteGroup}.
+     */
+    private hasIdentityOnlyPrimaryKey(entity: BaseEntity): boolean {
+        const pks = entity.EntityInfo?.PrimaryKeys ?? [];
+        return pks.length === 1 && pks[0]?.AutoIncrement === true;
     }
 
     /**
@@ -4040,6 +4064,21 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // underneath an existing tenant.
                     const writeGroup = batchedWrites ? await provider.CreateTransactionGroup() : null;
                     const runCtx = this.currentRunContext;
+                    // A batched batch REQUIRES a run context: the group is handed to
+                    // ApplySingleRecord's frames through a nested scope of it, so without one
+                    // every record would silently save unenrolled and Submit would commit an
+                    // empty group — which returns true, so the batch would report success while
+                    // having quietly run the per-record path. Every sync path enters a run
+                    // context (RunSync and the adopted-run path both wrap their work in one), so
+                    // this cannot happen today; stating it makes that a requirement rather than
+                    // an accident, and turns a future regression into an error instead of a
+                    // silent loss of the feature.
+                    if (writeGroup && !runCtx) {
+                        throw new Error(
+                            'batched writes were requested but no run context is active — the write group cannot reach the record ' +
+                            'frames, and an unenrolled batch would report success while saving per-record. This is a wiring bug.'
+                        );
+                    }
                     if (!writeGroup) await provider.BeginTransaction();
 
                     // EACH BATCH GETS ITS OWN GROUP, IN ITS OWN CONTEXT SCOPE.
@@ -4060,8 +4099,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         }
                     };
                     try {
-                        if (writeGroup && runCtx) {
-                            await IntegrationEngine.runContext.run({ ...runCtx, writeGroup }, runBatch);
+                        if (writeGroup) {
+                            // Guarded above: a batched batch always has a run context to nest.
+                            await IntegrationEngine.runContext.run({ ...runCtx!, writeGroup }, runBatch);
                         } else {
                             await runBatch();
                         }
