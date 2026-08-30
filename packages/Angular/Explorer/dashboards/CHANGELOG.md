@@ -1,5 +1,87 @@
 # @memberjunction/ng-dashboards
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [e7b4833]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.4
+  - @memberjunction/integration-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.4
+  - @memberjunction/ng-conversations@6.1.0-edge.4
+  - @memberjunction/tag-engine-base@6.1.0-edge.4
+  - @memberjunction/api-keys-base@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/ng-base-application@6.1.0-edge.4
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.4
+  - @memberjunction/ng-shared@6.1.0-edge.4
+  - @memberjunction/ng-testing@6.1.0-edge.4
+  - @memberjunction/ng-action-gallery@6.1.0-edge.4
+  - @memberjunction/ng-actions@6.1.0-edge.4
+  - @memberjunction/ng-agent-requests@6.1.0-edge.4
+  - @memberjunction/ng-agents@6.1.0-edge.4
+  - @memberjunction/ng-archive-manager@6.1.0-edge.4
+  - @memberjunction/ng-base-forms@6.1.0-edge.4
+  - @memberjunction/ng-base-types@6.1.0-edge.4
+  - @memberjunction/ng-clustering@6.1.0-edge.4
+  - @memberjunction/ng-code-editor@6.1.0-edge.4
+  - @memberjunction/ng-credentials@6.1.0-edge.4
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.4
+  - @memberjunction/ng-list-management@6.1.0-edge.4
+  - @memberjunction/ng-map-view@6.1.0-edge.4
+  - @memberjunction/ng-notifications@6.1.0-edge.4
+  - @memberjunction/ng-query-viewer@6.1.0-edge.4
+  - @memberjunction/ng-react@6.1.0-edge.4
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.4
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.4
+  - @memberjunction/ng-scheduling@6.1.0-edge.4
+  - @memberjunction/ng-search@6.1.0-edge.4
+  - @memberjunction/ng-shared-generic@6.1.0-edge.4
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.4
+  - @memberjunction/ng-trees@6.1.0-edge.4
+  - @memberjunction/ng-user-routines@6.1.0-edge.4
+  - @memberjunction/ng-versions@6.1.0-edge.4
+  - @memberjunction/credentials@6.1.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.4
+  - @memberjunction/templates-base-types@6.1.0-edge.4
+  - @memberjunction/testing-engine-base@6.1.0-edge.4
+  - @memberjunction/ng-composer@6.1.0-edge.4
+  - @memberjunction/ng-container-directives@6.1.0-edge.4
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.4
+  - @memberjunction/ng-filter-builder@6.1.0-edge.4
+  - @memberjunction/ng-media-player@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/ng-tabstrip@6.1.0-edge.4
+  - @memberjunction/ng-export-service@6.1.0-edge.4
+  - @memberjunction/ng-markdown@6.1.0-edge.4
+  - @memberjunction/ng-ui-components@6.1.0-edge.4
+  - @memberjunction/ng-word-cloud@6.1.0-edge.4
+  - @memberjunction/predictive-studio-core@6.1.0-edge.4
+  - @memberjunction/lists-base@6.1.0-edge.4
+  - @memberjunction/export-engine@6.1.0-edge.4
+  - @memberjunction/theme-engine@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

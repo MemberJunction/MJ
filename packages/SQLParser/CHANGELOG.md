@@ -1,5 +1,12 @@
 # @memberjunction/sql-parser
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [647bd71]
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

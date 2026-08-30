@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { importFromHost, isResolutionFailure } from '../host-import';
+import { importFromHost, isResolutionFailure, resolvePackageJsonFromHost } from '../host-import';
 
 describe('isResolutionFailure', () => {
     it('recognizes coded ESM resolution failures (ERR_MODULE_NOT_FOUND)', () => {
@@ -62,6 +62,11 @@ describe('importFromHost', () => {
         writeHostPackage('throwing', { 'index.js': "throw new Error('boom-load: module evaluated and failed');" });
         writeHostPackage('broken-transitive', { 'index.js': "import 'sb-hosttest-definitely-missing-dep';" });
         writeHostPackage('importonly', { 'index.js': 'export const ok = true;' }, { exports: { '.': { import: './index.js' } } });
+        writeHostPackage(
+            'jsonexport',
+            { 'index.js': 'export const ok = true;' },
+            { exports: { '.': './index.js', './package.json': './package.json' } },
+        );
     });
 
     afterAll(() => {
@@ -88,5 +93,25 @@ describe('importFromHost', () => {
 
     it('rethrows the original bare-import failure when no anchor resolves the package', async () => {
         await expect(importFromHost(`${scope}/does-not-exist-anywhere`, hostConfigPath)).rejects.toThrow(/Cannot find (package|module)/);
+    });
+
+    it('resolvePackageJsonFromHost: uses the exports map when package.json is exposed', () => {
+        const resolved = resolvePackageJsonFromHost(`${scope}/jsonexport`, hostConfigPath);
+        expect(resolved).toBeTruthy();
+        expect(realpathSync(resolved!)).toBe(
+            realpathSync(path.join(hostDir, 'node_modules', scope, 'jsonexport', 'package.json')),
+        );
+    });
+
+    it('resolvePackageJsonFromHost: walks up from main when package.json is not a subpath export', () => {
+        const resolved = resolvePackageJsonFromHost(`${scope}/good`, hostConfigPath);
+        expect(resolved).toBeTruthy();
+        expect(realpathSync(resolved!)).toBe(
+            realpathSync(path.join(hostDir, 'node_modules', scope, 'good', 'package.json')),
+        );
+    });
+
+    it('resolvePackageJsonFromHost: returns null when no host anchor can see the package', () => {
+        expect(resolvePackageJsonFromHost(`${scope}/does-not-exist-anywhere`, hostConfigPath)).toBeNull();
     });
 });
