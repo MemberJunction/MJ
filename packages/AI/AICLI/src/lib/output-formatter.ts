@@ -40,38 +40,66 @@ export class OutputFormatter {
   constructor(private format: OutputFormat) {}
 
   public formatAgentList(agents: AgentInfo[]): string {
-    if (agents.length === 0) {
-      return chalk.yellow('No agents found.');
-    }
-
+    // The empty case is still a RESULT, not a message. Answering it above the switch
+    // meant `--format=json` returned the prose "No agents found." — unparseable, and
+    // indistinguishable to a caller from the command having failed. An empty list is
+    // `[]`; only the human renderings get a sentence.
     switch (this.format) {
       case 'json':
         return JSON.stringify(agents, null, 2);
-      
+
       case 'table':
-        return this.formatAgentTable(agents);
-      
+        return agents.length === 0 ? chalk.yellow('No agents found.') : this.formatAgentTable(agents);
+
       case 'compact':
       default:
-        return this.formatAgentCompact(agents);
+        return agents.length === 0 ? chalk.yellow('No agents found.') : this.formatAgentCompact(agents);
     }
   }
 
-  public formatActionList(actions: ActionInfo[]): string {
-    if (actions.length === 0) {
-      return chalk.yellow('No actions found.');
+  /**
+   * Renders what `mj ai actions run --dry-run` *would* execute.
+   *
+   * A dry run is the one place a caller is most likely to be a program — it exists to
+   * be inspected before committing — so it has to honour the resolved format like every
+   * other output path. Printing coloured prose here regardless of `--format=json` put a
+   * banner and ANSI codes into what an agent was parsing.
+   */
+  public formatActionDryRun(actionName: string, parameters: Record<string, string>): string {
+    if (this.format === 'json') {
+      return JSON.stringify({ dryRun: true, action: actionName, parameters }, null, 2);
     }
 
+    const lines = [
+      chalk.yellow('Dry-run mode: Action would be executed with these parameters:'),
+      chalk.cyan(`Action: ${actionName}`),
+    ];
+
+    const entries = Object.entries(parameters);
+    if (entries.length === 0) {
+      lines.push(chalk.gray('No parameters provided'));
+    } else {
+      lines.push(chalk.cyan('Parameters:'));
+      for (const [key, value] of entries) {
+        lines.push(`  ${key}: ${value}`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  public formatActionList(actions: ActionInfo[]): string {
+    // See formatAgentList: an empty result must stay machine-readable in json mode.
     switch (this.format) {
       case 'json':
         return JSON.stringify(actions, null, 2);
-      
+
       case 'table':
-        return this.formatActionTable(actions);
-      
+        return actions.length === 0 ? chalk.yellow('No actions found.') : this.formatActionTable(actions);
+
       case 'compact':
       default:
-        return this.formatActionCompact(actions);
+        return actions.length === 0 ? chalk.yellow('No actions found.') : this.formatActionCompact(actions);
     }
   }
 
