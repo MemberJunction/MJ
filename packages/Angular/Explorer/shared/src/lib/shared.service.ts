@@ -11,6 +11,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { IsDescendantElement } from '@memberjunction/ng-shared-generic';
 import { RecordNavigationAdapter } from '@memberjunction/ng-base-types';
 import { NavigationService } from './navigation.service';
+import type { NavigationOptions } from './navigation.interfaces';
 
 @Injectable({
   providedIn: 'root'
@@ -41,6 +42,7 @@ export class SharedService {
     // See guides/UI_LAYERING_GUIDE.md §3 and the adapter's own docs.
     RecordNavigationAdapter.Register({
       OpenEntityRecord: (entityName, recordKey) => this.OpenEntityRecord(entityName, recordKey),
+      OpenNewEntityRecord: (entityName, options) => this.OpenNewEntityRecord(entityName, options as NavigationOptions),
     });
 
     MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
@@ -361,6 +363,19 @@ export class SharedService {
     }
     catch (e) {
       console.error('Error in OpenEntityRecord:', e);
+      LogError(e);
+    }
+  }
+
+  /**
+   * Opens a blank new entity record creation form in a new tab.
+   */
+  public OpenNewEntityRecord(entityName: string, options?: NavigationOptions) {
+    try {
+      this.navigationService.OpenNewEntityRecord(entityName, options);
+    }
+    catch (e) {
+      console.error('Error in OpenNewEntityRecord:', e);
       LogError(e);
     }
   }

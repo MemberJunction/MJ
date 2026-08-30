@@ -250,13 +250,59 @@ export class GraphQLFileStorageClient {
                 throw new Error("Invalid response from server");
             }
 
+            const data = result.CreatePreAuthUploadUrl;
+
             return {
-                uploadUrl: result.CreatePreAuthUploadUrl.UploadUrl,
-                providerKey: result.CreatePreAuthUploadUrl.ProviderKey
+                success: !!data.UploadUrl,
+                uploadUrl: data.UploadUrl || '',
+                providerKey: data.ProviderKey,
             };
         } catch (e) {
             const error = e as Error;
             LogError(`Error creating pre-auth upload URL: ${error}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Upload a file directly through MJ Storage server-side subsystem.
+     * Works with all supported storage providers (Box, Azure, S3, Google Drive, Dropbox, etc.)
+     * and automatically creates and persists the MJ: Files database record.
+     *
+     * @param input Upload configuration options including base64 data
+     * @returns A Promise resolving to the upload result with the created FileID
+     */
+    public async UploadFile(input: UploadFileInput): Promise<UploadFileResult> {
+        try {
+            const mutation = gql`
+                mutation UploadStorageFile($input: UploadStorageFileInput!) {
+                    UploadStorageFile(input: $input) {
+                        Success
+                        FileID
+                        ErrorMessage
+                        File {
+                            ID
+                            Name
+                            Description
+                            ContentType
+                            Status
+                            ProviderID
+                            CategoryID
+                        }
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { input });
+
+            if (!result?.UploadStorageFile) {
+                throw new Error("Invalid response from UploadStorageFile mutation");
+            }
+
+            return result.UploadStorageFile as UploadFileResult;
+        } catch (e) {
+            const error = e as Error;
+            LogError(`Error uploading file via MJ Storage: ${error}`);
             throw error;
         }
     }
@@ -668,10 +714,52 @@ export interface StorageListResult {
  * Result from creating a pre-authenticated upload URL
  */
 export interface CreatePreAuthUploadUrlResult {
+    /** Whether URL generation succeeded */
+    success: boolean;
+    /** Error message if failed */
+    errorMessage?: string;
     /** The URL to use for uploading */
     uploadUrl: string;
     /** The provider-specific key for the object */
     providerKey?: string;
+    /** HTTP method to use (e.g. PUT, POST) */
+    httpMethod?: string;
+    /** Additional HTTP headers to pass */
+    httpHeaders?: Record<string, string>;
+}
+
+/**
+ * Options for uploading a file directly through MJ Storage
+ */
+export interface UploadFileInput {
+    /** The name of the file */
+    FileName: string;
+    /** Base64 encoded file content */
+    Base64Data: string;
+    /** MIME content type */
+    MimeType?: string;
+    /** Specific storage account ID (optional) */
+    AccountID?: string;
+    /** Category ID for the file record (optional) */
+    CategoryID?: string;
+    /** Description for the file record (optional) */
+    Description?: string;
+    /** Optional path prefix within storage */
+    PathPrefix?: string;
+}
+
+/**
+ * Result from uploading a file through MJ Storage
+ */
+export interface UploadFileResult {
+    /** Whether the upload and file creation was successful */
+    Success: boolean;
+    /** The newly created MJ: Files record ID */
+    FileID?: string;
+    /** The created File record payload */
+    File?: Record<string, unknown>;
+    /** Error message if upload failed */
+    ErrorMessage?: string;
 }
 
 /**

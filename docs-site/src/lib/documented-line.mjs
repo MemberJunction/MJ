@@ -21,4 +21,12 @@ function repoLine() {
   return `v${major}`;
 }
 
-export const documentedLine = `${process.env.DOCS_VERSION || repoLine()}.x`;
+const line = process.env.DOCS_VERSION || repoLine();
+if (!/^v\d+$/.test(line)) {
+  throw new Error(`Documented line must look like "v6", got "${line}"`);
+}
+
+export const documentedLine = `${line}.x`;
+
+/** The major version this build documents, as a number — e.g. 6 for the "v6.x" line. */
+export const documentedMajor = Number(line.slice(1));

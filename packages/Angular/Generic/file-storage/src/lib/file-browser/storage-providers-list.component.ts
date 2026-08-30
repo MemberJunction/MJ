@@ -1,6 +1,8 @@
-import { Component, EventEmitter, OnInit, Output, ChangeDetectorRef } from '@angular/core';
-import { FileStorageEngineBase, StorageAccountWithProvider } from '@memberjunction/core-entities';
+import { Component, EventEmitter, OnInit, Output, ChangeDetectorRef, inject } from '@angular/core';
+import { FileStorageEngineBase, StorageAccountWithProvider, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
+import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { StorageAdminTab } from '../admin/storage-admin-dialog.component';
 
 /**
  * Displays a list of organizational file storage accounts.
@@ -15,6 +17,8 @@ import { UUIDsEqual } from '@memberjunction/global';
   styleUrls: ['./storage-providers-list.component.css']
 })
 export class StorageProvidersListComponent implements OnInit {
+  private cdr = inject(ChangeDetectorRef);
+
   /**
    * Emits when an account is selected by the user, or null when no accounts are available.
    * Emits the full account-with-provider object for downstream components to use.
@@ -41,26 +45,75 @@ export class StorageProvidersListComponent implements OnInit {
    */
   public errorMessage: string | null = null;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  /**
+   * Whether current user has admin rights to configure storage accounts or providers.
+   */
+  public userCanManage: boolean = false;
+
+  /**
+   * Admin dialog state
+   */
+  public isManageDialogOpen: boolean = false;
+  public adminDialogTab: StorageAdminTab = 'accounts';
+  public accountToEdit: MJFileStorageAccountEntity | null = null;
+
+  public Provider: IMetadataProvider | null = null;
+
+  public get ProviderToUse(): IMetadataProvider {
+    return this.Provider ?? Metadata.Provider;
+  }
+
+  constructor() {}
 
   ngOnInit(): void {
+    if (!this.userCanManage) {
+      this.checkPermissions();
+    }
     this.loadAccounts();
+  }
+
+  /**
+   * Checks if current user has create or update permissions on storage entities.
+   */
+  private checkPermissions(): void {
+    try {
+      const md = this.ProviderToUse;
+      const user = md.CurrentUser;
+      if (!user) {
+        return;
+      }
+
+      const provEntity = md.Entities.find(e => e.Name === 'MJ: File Storage Providers');
+      const acctEntity = md.Entities.find(e => e.Name === 'MJ: File Storage Accounts');
+
+      const provCanManage = provEntity ? provEntity.GetUserPermisions(user).CanCreate || provEntity.GetUserPermisions(user).CanUpdate : false;
+      const acctCanManage = acctEntity ? acctEntity.GetUserPermisions(user).CanCreate || acctEntity.GetUserPermisions(user).CanUpdate : false;
+
+      this.userCanManage = !!(provCanManage || acctCanManage);
+    } catch {
+      this.userCanManage = false;
+    }
   }
 
   /**
    * Loads all available file storage accounts with their provider details.
    * Uses FileStorageEngineBase for centralized, cached access.
    */
-  private async loadAccounts(): Promise<void> {
+  private async loadAccounts(forceRefresh = false): Promise<void> {
     this.isLoading = true;
     this.errorMessage = null;
 
     try {
       const engine = FileStorageEngineBase.Instance;
-      await engine.Config(false);  // Use cached data if available
+      await engine.Config(forceRefresh);
 
       // Only show accounts whose provider is active
-      this.accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive);
+      this.accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
+
+      if (this.accounts.length === 0 && !forceRefresh) {
+        await engine.Config(true);
+        this.accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
+      }
 
       console.log('[StorageAccountsList] Loaded accounts:', this.accounts.map(a => ({
         name: a.account.Name,
@@ -128,6 +181,40 @@ export class StorageProvidersListComponent implements OnInit {
    * Refreshes the accounts list by forcing a reload from the database.
    */
   public refresh(): void {
-    FileStorageEngineBase.Instance.Config(true).then(() => this.loadAccounts());
+    void this.loadAccounts(true);
+  }
+
+  /**
+   * Opens the storage administration dialog
+   */
+  public openAdminDialog(tab: StorageAdminTab = 'accounts', account?: MJFileStorageAccountEntity | null): void {
+    this.adminDialogTab = tab;
+    this.accountToEdit = account ?? null;
+    this.isManageDialogOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Closes the storage administration dialog
+   */
+  public closeAdminDialog(): void {
+    this.isManageDialogOpen = false;
+    this.accountToEdit = null;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Handles storage configuration changes from the admin dialog
+   */
+  public onAdminAccountsChanged(): void {
+    this.refresh();
+  }
+
+  /**
+   * Handles inline edit click on an account item
+   */
+  public onEditAccountClick(item: StorageAccountWithProvider, event: MouseEvent): void {
+    event.stopPropagation();
+    this.openAdminDialog('accounts', item.account);
   }
 }

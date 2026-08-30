@@ -1,5 +1,6 @@
 {
   "name": "mj-docs-site",
+  "license": "BUSL-1.1",
   "private": true,
   "type": "module",
   "description": "MemberJunction documentation site — Astro Starlight build that ingests guides, package READMEs, and TypeDoc output from this repo at build time. Deliberately OUTSIDE the npm workspaces: install and build from this directory.",

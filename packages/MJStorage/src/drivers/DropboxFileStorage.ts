@@ -1152,6 +1152,14 @@ export class DropboxFileStorage extends FileStorageBase {
     return true;
   }
 
+  public override get SupportsPreAuthUpload(): boolean {
+    return false;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
+    return true;
+  }
+
   /**
    * Streams a file's content from Dropbox, optionally honoring a byte range.
    *

@@ -137,9 +137,13 @@ export abstract class EntityCompanion<TWire = unknown> {
      * touches only header fields should not ship an empty children array and pay for it on every
      * request.
      *
+     * @param mode - `'request'` (default) is the caller's intent — omit a clean saved
+     *               companion so a header-only edit does not ship it. `'result'` is
+     *               post-save state the client must adopt so the next save does not
+     *               re-INSERT a peer the server already persisted.
      * @returns The wire payload, or `null` to omit this companion.
      */
-    public abstract Serialize(): Promise<TWire | null>;
+    public abstract Serialize(mode?: EntityCompanionDeserializeMode): Promise<TWire | null>;
 
     /**
      * Restores this companion's state from a wire payload produced by {@link Serialize} on the
@@ -228,14 +232,31 @@ export abstract class EntityCompanion<TWire = unknown> {
     }
 
     /**
+     * Contributes work that must run **after** the owner's own delete node.
+     *
+     * Related-record collections delete first (they point at the owner). Embedded
+     * records delete last (the owner points at them — the FK dies with the owner
+     * row, then the peer can go). Default is a no-op.
+     *
+     * @param _plan - The plan being assembled; the owner's delete node already exists.
+     */
+    public ContributePostDeleteWork(_plan: EntitySavePlan): void {
+        /* no-op by default */
+    }
+
+    /**
      * Populates this companion from the database, when it is configured to load eagerly.
      *
      * Called by `BaseEntity.Load()` after the record's own fields are populated. **Never** called
      * from `LoadFromData()` — that is the row-materialization path for
      * `RunView(ResultType:'entity_object')`, so loading children there turns one view into an N+1
      * storm. Set-oriented eager loading is handled by `RunView`'s batched child loading instead.
+     *
+     * @param _visited - EntityName:PK tokens already on this load walk. Embedded
+     *                   records use it to fail a self-parented / cyclic inherit
+     *                   instead of recursing until the stack dies.
      */
-    public async LoadEager(): Promise<void> {
+    public async LoadEager(_visited?: Set<string>): Promise<void> {
         /* no-op by default */
     }
 

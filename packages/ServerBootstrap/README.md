@@ -20,6 +20,7 @@ graph TD
     G --> J["WebSocket Subscriptions"]
     G --> K["REST API Endpoints"]
     G --> L["Graceful Shutdown"]
+    G --> N["Server extensions<br/>(Open App + host overlay)"]
 
     G --> M["Run afterStart Hook"]
 
@@ -101,6 +102,7 @@ The `createMJServer()` function handles:
 6. **REST API Setup** - Registers REST endpoints based on configuration
 7. **Graceful Shutdown** - Handles SIGTERM/SIGINT signals properly
 8. **Scheduled Jobs** - Initializes and starts scheduled job service if enabled
+9. **Open App server extensions** - Collects `MJ_SERVER_EXTENSIONS` (or `package.json` `memberjunction.serverExtensions`) from `dynamicPackages.server[]` and hands them to `serve()`, which overlays host `serverExtensions[]` by `DriverClass`
 
 ## Configuration
 
@@ -187,4 +189,4 @@ All the complexity is now encapsulated in this package and updated via NPM.
 
 ## License
 
-MIT
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.
