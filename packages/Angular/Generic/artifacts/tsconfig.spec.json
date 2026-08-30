@@ -12,6 +12,8 @@
     "src/lib/components/artifact-message-card.component.dom.test.ts",
     "src/lib/components/artifact-viewer-panel.component.ts",
     "src/lib/components/artifact-viewer-panel.component.dom.test.ts",
+    "src/lib/components/artifact-version-download.ts",
+    "src/lib/components/artifact-version-download.test.ts",
     "src/lib/services/artifact-icon.service.ts",
     "src/lib/services/artifact-preview-resolver.service.ts"
   ],
