@@ -42,6 +42,8 @@ import { LogError } from '@memberjunction/core';
 export interface IRecordNavigationAdapter {
     /** Open the given record on whatever surface the host considers appropriate. */
     OpenEntityRecord(entityName: string, recordKey: CompositeKey): void;
+    /** Open a new record creation form for the given entity. */
+    OpenNewEntityRecord?(entityName: string, options?: unknown): void;
 }
 
 /** The registered adapter, or null before any host registers one. */
@@ -81,6 +83,23 @@ export class RecordNavigationAdapter {
             registered.OpenEntityRecord(entityName, recordKey);
         } catch (e) {
             LogError(`RecordNavigationAdapter.OpenEntityRecord failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Ask the host to open a new record creation form for the given entity.
+     */
+    public static OpenNewEntityRecord(entityName: string, options?: unknown): void {
+        if (!registered || !registered.OpenNewEntityRecord) {
+            LogError(
+                `RecordNavigationAdapter: no host registered (or host lacks OpenNewEntityRecord), so new record for "${entityName}" could not be opened.`,
+            );
+            return;
+        }
+        try {
+            registered.OpenNewEntityRecord(entityName, options);
+        } catch (e) {
+            LogError(`RecordNavigationAdapter.OpenNewEntityRecord failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 

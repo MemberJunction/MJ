@@ -10,6 +10,12 @@ import { mkdirSync } from 'fs';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { MJActionEntityExtended } from '@memberjunction/actions-base';
 
+interface ActionWithLibraries {
+    Libraries?: {
+        Items?: MJActionLibraryEntity[];
+    };
+}
+
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
@@ -23,19 +29,19 @@ export class ActionSubClassGeneratorBase {
             // from ActionEngineBase's cache on first access. It THROWS rather than returning empty if
             // no engine caches Action Libraries — which during CodeGen means the engine has not been
             // configured, so guard the whole read rather than crash a generation run.
-            const actionLibraries = (() => {
+            const actionLibraries: MJActionLibraryEntity[] = (() => {
                 try {
-                    return action.Libraries?.Items ?? [];
+                    return (action as unknown as ActionWithLibraries).Libraries?.Items ?? [];
                 } catch {
                     return [];
                 }
             })();
-            actionLibraries.forEach(lib => {
+            actionLibraries.forEach((lib: MJActionLibraryEntity) => {
                 if (!allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID))) {
                     allActionLibraries.push({
                         Library: lib.Library ?? '',
                         LibraryID: lib.LibraryID,
-                        ItemsUsedArray: lib.ItemsUsed && lib.ItemsUsed.length > 0 ? lib.ItemsUsed.split(',').map(item => item.trim()) : []
+                        ItemsUsedArray: lib.ItemsUsed && lib.ItemsUsed.length > 0 ? lib.ItemsUsed.split(',').map((item: string) => item.trim()) : []
                     });
                 }
                 else {
@@ -43,9 +49,9 @@ export class ActionSubClassGeneratorBase {
                     // in the allActionLibraries array element
                     const existingLib = allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID));
                     if(existingLib && lib.ItemsUsed && lib.ItemsUsed.length > 0) {
-                        const itemsUsed = lib.ItemsUsed.split(',').map(item => item.trim());
+                        const itemsUsed: string[] = lib.ItemsUsed.split(',').map((item: string) => item.trim());
                         if(itemsUsed.length > 0) {
-                            itemsUsed.forEach(item => {
+                            itemsUsed.forEach((item: string) => {
                                 if (!existingLib.ItemsUsedArray.includes(item)) {
                                     existingLib.ItemsUsedArray.push(item);
                                 }

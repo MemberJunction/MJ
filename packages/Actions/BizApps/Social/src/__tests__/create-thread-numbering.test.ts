@@ -52,8 +52,25 @@ vi.mock('@memberjunction/actions-base', () => ({
   ActionParam: class ActionParam {},
 }));
 
-vi.mock('axios', () => ({
-  default: { post: vi.fn(), isAxiosError: vi.fn(() => false) },
+vi.mock('@memberjunction/network-utils', () => ({
+  HttpClient: vi.fn(function () {
+    return {
+    Get: vi.fn(), Post: vi.fn(), Put: vi.fn(), Patch: vi.fn(), Delete: vi.fn(), Head: vi.fn(), Request: vi.fn(),
+    };
+  }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  HttpGet: vi.fn(),
+  HttpPost: vi.fn(),
+  HttpPut: vi.fn(),
+  HttpPatch: vi.fn(),
+  HttpDelete: vi.fn(),
+  HttpHead: vi.fn(),
+  HttpRequest: vi.fn(),
 }));
 
 const { TwitterCreateThreadAction } = await import(
