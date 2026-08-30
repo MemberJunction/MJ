@@ -266,7 +266,11 @@ export class AzureFileStorage extends FileStorageBase {
     const queryString = sasToken[0] === '?' ? sasToken : `?${sasToken}`;
     const UploadUrl = `https://${this._azureAccountName}.blob.core.windows.net/${this._container}/${objectName}${queryString}`;
 
-    return Promise.resolve({ UploadUrl });
+    return Promise.resolve({
+      UploadUrl,
+      HttpMethod: 'PUT',
+      HttpHeaders: { 'x-ms-blob-type': 'BlockBlob' },
+    });
   }
 
   /**
@@ -696,6 +700,14 @@ export class AzureFileStorage extends FileStorageBase {
    * Azure Blob Storage supports ranged streaming via `BlobClient.download(offset, count)`.
    */
   public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthUpload(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
     return true;
   }
 

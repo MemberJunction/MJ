@@ -56,7 +56,8 @@ import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
-import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
+import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
+import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
 import type { MJCompanyIntegrationEntityServer } from "@memberjunction/core-entities-server";
@@ -2338,6 +2339,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     private buildSourceSchemaFromPersistedRows(
         integrationID: string,
         requestedNames?: string[],
+        warningsOut?: string[],
     ): SourceSchemaInfo {
         const engine = IntegrationEngineBase.Instance;
         // ACTIVE-only materialization: an object/field a given tenant doesn't expose is marked
@@ -2356,10 +2358,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         for (const io of ios) ioByID.set(io.ID, io.Name);
 
         const result: SourceSchemaInfo = { Objects: [] };
+        const fieldsByObjectName: Record<string, Array<{ Name: string; Status: string | null }>> = {};
         for (const io of ios) {
             if (filter && !filter.has(io.Name.toLowerCase())) continue;
             // Active fields only — an inactive (source-absent / deactivated) field is not materialized.
-            const iofs = engine.GetIntegrationObjectFields(io.ID).filter(iof => iof.Status === 'Active');
+            const allFields = engine.GetIntegrationObjectFields(io.ID);
+            const iofs = allFields.filter(iof => iof.Status === 'Active');
+            // Remember what this object declared, active or not — the caller's warning collector
+            // turns the difference into the one message that explains a column that never appeared.
+            if (warningsOut) fieldsByObjectName[io.Name] = allFields.map(f => ({ Name: f.Name, Status: f.Status }));
 
             const fields = iofs.map(iof => {
                 const targetIOName = iof.RelatedIntegrationObjectID
@@ -2399,6 +2406,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     })),
                 IncrementalWatermarkField: io.IncrementalWatermarkField ?? undefined,
             });
+        }
+
+        // Declared-but-inactive rows this rebuild left out. The caller decides what to do with the
+        // strings (the apply path puts them on its Warnings); computing them costs nothing when no
+        // collector was passed, since the field lists above are only gathered then.
+        if (warningsOut) {
+            warningsOut.push(...ComputeInactiveRowWarnings({
+                RequestedNames: requestedNames ?? null,
+                AllObjects: engine.GetIntegrationObjectsByIntegrationID(integrationID)
+                    .map(io => ({ Name: io.Name, Status: io.Status })),
+                FieldsByObjectName: fieldsByObjectName,
+            }));
         }
         return result;
     }
@@ -3147,13 +3166,46 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      *
      * Before #3738 this mutation inherited a full schema refresh from the
      * CompanyIntegration save hook, with no way to decline it.  The refresh is
-     * now this resolver's own, explicit step — same default behaviour, but
-     * visible in the API and suppressible with `runSchemaRefresh: false`.
+     * now this resolver's own, explicit step — visible in the API, suppressible
+     * with `runSchemaRefresh: false`, and (since it gained `awaitSchemaRefresh`)
+     * no longer something the caller has to sit through.
+     *
+     * WHY REACTIVATION NO LONGER SCANS THE SOURCE BY DEFAULT.  Resuming a
+     * connection and rescanning its schema are separate decisions that this
+     * mutation used to fuse. A one-click resume would spend minutes of a
+     * vendor's rate budget on an introspect nobody asked for, and the catalog is
+     * usually exactly as current as it was when the connection was paused.
+     * `IntegrationRefreshConnectorSchema` is the operation for "rescan now", and
+     * a caller that genuinely wants both passes `runSchemaRefresh: true`.
+     *
+     * WHY THAT REFRESH, WHEN REQUESTED, DEFAULTS TO DETACHED AND ITS SIBLINGS DO
+     * NOT.  Create and Update default to `awaitSchemaRefresh: true` because the
+     * caller is in a wizard, waiting on a form, and the counts ARE the answer
+     * they asked for. Reactivate is a one-click toggle on a connection row, and
+     * — unlike its siblings — its entire durable effect is already committed by
+     * the time any refresh begins: the `Save()` above returned. Blocking the
+     * response for the minutes a live introspect takes cannot make that
+     * reactivation any more true; it can only misreport it.
+     *
+     * And it did. The transport, not this resolver, is what breaks: a held
+     * request dies at the load balancer's fixed ceiling, which the app cannot
+     * configure and which differs by front end, and the client then shows a
+     * resumed connection as a failure. Note the shape of that bug — the two failure paths BELOW are both
+     * handled correctly, returning `Success: true` with the refresh problem
+     * appended, precisely because reactivation already happened. The gateway is
+     * the one caller of this mutation that never reaches them.
+     *
+     * So the default here optimises for the operation actually being requested
+     * (resume this connection) rather than for the operation that happens to be
+     * expensive (rescan the source). The refresh still runs — detached, on a
+     * durable, tailable run stream — and `awaitSchemaRefresh: true` restores the
+     * blocking behaviour for a caller that genuinely wants the counts inline.
      */
     @Mutation(() => MutationResultOutput)
     async IntegrationReactivateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
-        @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default), re-runs IntegrationConnectorCreationPipeline after reactivating so the catalog reflects the source as it is now. Pass false to reactivate without a live scan — useful when the catalog is known-current, or when the source is large enough that discovery should be scheduled separately." }) runSchemaRefresh: boolean,
+        @Arg("runSchemaRefresh", () => Boolean, { defaultValue: false, description: "When false (default), reactivation ONLY reactivates — no live scan of the source. Resuming a connection and rescanning its schema are separate decisions, and a resume should not spend minutes of a vendor's rate budget nobody asked for; run IntegrationRefreshConnectorSchema when the catalog actually needs refreshing. Pass true to re-run IntegrationConnectorCreationPipeline as part of the reactivation." }) runSchemaRefresh: boolean,
+        @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: false, description: "When false (default), the schema refresh is launched detached and this mutation returns as soon as the connection is active, naming the run to tail. Reactivation is already committed at that point, so blocking on a minutes-long live introspect can only delay — or, at the load balancer's fixed request ceiling, misreport — an operation that has already succeeded. Pass true to block until the refresh finishes and get its counts in the message." }) awaitSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
@@ -3165,13 +3217,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             ci.IsActive = true;
             if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.Message ?? 'Unknown error'}` };
 
+            if (runSchemaRefresh && !awaitSchemaRefresh) {
+                const detached = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md);
+                return { Success: true, Message: BuildReactivateMessage(detached) };
+            }
+
             if (runSchemaRefresh) {
                 try {
                     const refreshResult = await this.runSchemaRefreshPipeline(companyIntegrationID, user, md);
-                    return {
-                        Success: true,
-                        Message: `Reactivated, schema refresh: ${refreshResult.ObjectsCreated} created, ${refreshResult.ObjectsUpdated} updated, ${refreshResult.UnresolvedObjects.length} PK-unresolved`,
-                    };
+                    return { Success: true, Message: BuildReactivateMessage(refreshResult) };
                 } catch (refreshErr) {
                     // Refresh failure does NOT undo the reactivation — the
                     // connection is active, only discovery failed, and the
@@ -3181,7 +3235,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
-            return { Success: true, Message: 'Reactivated' };
+            return { Success: true, Message: BuildReactivateMessage(undefined) };
         } catch (e) {
             LogError(`IntegrationReactivateConnection error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
@@ -3338,15 +3392,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // the Phase 0 v5.39.x Save hook.  Fall back to live IntrospectSchema only
             // for direct-API callers bypassing the wizard (empty IO cache).
             const requestedNames = new Set(objects.map(o => o.SourceObjectName));
+            // Declared rows this apply will leave out (deactivated objects/fields) — surfaced on the
+            // mutation's Warnings so a column that never appears has a stated reason.
+            const inactiveWarnings: string[] = [];
             let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(
                 companyIntegration.IntegrationID,
                 Array.from(requestedNames),
+                inactiveWarnings,
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[IntegrationApplySchema] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
                 const introspect = connector.IntrospectSchema.bind(connector) as
                     (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
                 sourceSchema = await introspect(companyIntegration, user);
+                // The persisted rows are not what gets materialized on this path, so anything they
+                // said about deactivated rows describes a schema this apply is not using.
+                inactiveWarnings.length = 0;
             } else {
                 console.log(
                     `[IntegrationApplySchema] Reusing ${sourceSchema.Objects.length} persisted IOs for ${companyIntegration.Integration} ` +
@@ -3381,6 +3442,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 SkipGitCommit: skipGitCommit,
                 SkipRestart: skipRestart,
             });
+            if (inactiveWarnings.length > 0) SchemaOutput.Warnings.unshift(...inactiveWarnings);
 
             return {
                 Success: PipelineResult.Success,
@@ -4089,6 +4151,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // Intacct AND silently dropped selections when the second pass returned
         // fewer objects than the first (rate limits, transient errors).
         let sourceSchema: SourceSchemaInfo;
+        // Declared rows this apply will silently leave out (deactivated objects/fields). Collected
+        // during the rebuild and surfaced on the apply's Warnings, alongside the schema-limit ones.
+        const inactiveWarnings: string[] = [];
         if (prefetchedSourceSchema) {
             sourceSchema = prefetchedSourceSchema;
         } else {
@@ -4096,12 +4161,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             sourceSchema = this.buildSourceSchemaFromPersistedRows(
                 companyIntegration.IntegrationID,
                 requestedNamesForReuse,
+                inactiveWarnings,
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[buildSchemaForConnector] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
                 const introspect = connector.IntrospectSchema.bind(connector) as
                     (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
                 sourceSchema = await introspect(companyIntegration, user);
+                // The persisted rows are not what gets materialized on this path, so anything they
+                // said about deactivated rows describes a schema this apply is not using.
+                inactiveWarnings.length = 0;
             } else {
                 console.log(
                     `[buildSchemaForConnector] Reusing ${sourceSchema.Objects.length} persisted IOs for ${companyIntegration.Integration} ` +
@@ -4144,8 +4213,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
         const builder = new SchemaBuilder();
         const schemaOutput = builder.BuildSchema(input);
-        // Surface the auto-disabled over-wide objects (if any) in the apply's Warnings → CLI output.
+        // Surface the auto-disabled over-wide objects (if any) in the apply's Warnings → CLI output,
+        // together with the declared-but-deactivated rows this apply left out.
         if (limitWarnings.length > 0) schemaOutput.Warnings.unshift(...limitWarnings);
+        if (inactiveWarnings.length > 0) schemaOutput.Warnings.unshift(...inactiveWarnings);
 
         if (schemaOutput.Errors.length > 0) {
             throw new Error(`Schema generation failed: ${schemaOutput.Errors.join('; ')}`);

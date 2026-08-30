@@ -239,9 +239,18 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
 }
 
 .mj-forms-panel-body--collapsed {
-  max-height: 0;
-  padding: 0;
-  opacity: 0;
+  max-height: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none;
+}
+
+.mj-forms-panel-body--collapsed .mj-forms-panel-content {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
 }
 
 .mj-forms-panel-content {

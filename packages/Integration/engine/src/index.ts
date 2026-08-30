@@ -49,6 +49,9 @@ export type {
 
 // Error classification helpers
 export { IsRetryableError, ClassifyError } from './types.js';
+// Standard Retry-After extraction — exported so a connector overriding ExtractRetryAfterMs for a
+// non-standard vendor signal can still fall back to the header when the vendor sends one.
+export { ExtractRetryAfterFromError, ParseRetryAfterValue, MAX_HONORED_RETRY_AFTER_MS } from './RetryAfter.js';
 
 // Transforms
 export type {
@@ -123,8 +126,14 @@ export type { PersistSchemaOptions, PersistSchemaResult } from './IntegrationSch
 
 // ── Restored module exports dropped by the origin/next index.ts merge (union) ──
 export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
+export { CollapseDuplicateIdentities } from './BatchIdentity.js';
 export { CUSTOM_OVERFLOW_COLUMN, computeUnmappedFields, hasUnmappedFields, foldCustomKeyStats, CUSTOM_KEY_SAMPLE_CAP } from './CustomOverflow.js';
+export { SYNC_DIRECTIVE_CONFIG_KEY, ReadFieldSyncDirective, WriteFieldSyncDirective, ComputeExcludedSourceNames, StripExcludedFields } from './SyncDirectives.js';
+export type { FieldSyncDirective, FieldWithConfiguration } from './SyncDirectives.js';
+export { FindUnbindableFieldMaps, DescribeUnbindableFieldMaps } from './FieldMapValidation.js';
+export type { ValidatableFieldMap, UnbindableFieldMap } from './FieldMapValidation.js';
 export type { CustomKeyAccumulator } from './CustomOverflow.js';
+export type { HasExternalID, BatchIdentityResult } from './BatchIdentity.js';
 export { planPromotions, planColumnReclamations, inferColumnTypeFromSamples, inferColumnTypeFromStats, buildOverflowStats, sanitizeColumnName } from './CustomColumnPromotion.js';
 export { discoverFromStream, pickPrimaryKeyFromStats } from './StreamingDiscovery.js';
 export type { StreamDiscoveryOptions, DiscoveredColumnStat, StreamDiscoveryResult, PkPickOptions, PkStatVerdict } from './StreamingDiscovery.js';
@@ -139,6 +148,8 @@ export { RateLimiter } from './RateLimiter.js';
 export type { RateLimiterOptions, RateLimiterKeyState, NowFn, SleepFn } from './RateLimiter.js';
 export { IntegrationConnectorCreationPipeline } from './IntegrationConnectorCreationPipeline.js';
 export type { ConnectorCreationPipelineOptions, ConnectorCreationPipelineResult } from './IntegrationConnectorCreationPipeline.js';
+export { DiscoveryWatchdog, ResolveWatchdogIntervalMs } from './DiscoveryWatchdog.js';
+export type { DiscoveryWatchEntry, DiscoveryWatchPatch, DiscoveryWatchdogOptions } from './DiscoveryWatchdog.js';
 export { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult } from './AdaptiveConcurrency.js';
 export type { FetchWarning } from './BaseIntegrationConnector.js';
