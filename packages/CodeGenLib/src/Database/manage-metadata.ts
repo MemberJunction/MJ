@@ -5942,15 +5942,16 @@ export class ManageMetadataBase {
             let newEntityName: string = await this.createNewEntityName(newEntity, currentUser);
             const newEntityDisplayName = this.createNewEntityDisplayName(newEntity, newEntityName);
 
-            let suffix = '';
-            const existingEntity = md.Entities.find(e => e.Name.toLowerCase() === newEntityName.toLowerCase());
-            const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
-            if (existingEntity || existingEntityInNewEntityList) {
-               // the generated name is already in place, so we need another name
-               suffix = '__' + newEntity.SchemaName;
-               newEntityName = newEntityName + suffix
-               LogError(`   >>>> WARNING: Entity name already exists, so using ${newEntityName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
+            const { name: uniqueName, suffix: uniqueSuffix } = this.resolveUniqueEntityName(
+               newEntityName,
+               newEntity.SchemaName,
+               md.Entities.map(e => e.Name)
+            );
+            if (uniqueName !== newEntityName) {
+               LogError(`   >>>> WARNING: Entity name already exists, so using ${uniqueName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
             }
+            newEntityName = uniqueName;
+            const suffix = uniqueSuffix;
 
             const isNewSchema = await this.isSchemaNew(pool, newEntity.SchemaName);
             const newEntityID = this.createNewUUID();
@@ -6581,6 +6582,59 @@ export class ManageMetadataBase {
          }
       }
       return revoked;
+   }
+
+   /**
+    * Pick an entity name that is actually free, disambiguating with the schema name and, if
+    * that is still taken, a counter.
+    *
+    * Entity names are generated from the table name with trailing discriminators stripped, so
+    * distinct tables routinely generate the SAME name — NetSuite's customlist72, customlist74,
+    * customlist160, customlist436, customlist534 and customlist873 all generate "Custom Lists".
+    *
+    * The previous logic appended the schema suffix ONCE and assumed the result was unique. It
+    * is not: the first table took "Custom Lists", and every table after it appended the same
+    * "__netsuite" and produced the identical "Custom Lists__netsuite". The second was a
+    * duplicate-key failure on UQ_Entity_Name and the rest were never created — a silent loss of
+    * 8 entities on one NetSuite tenant, reported only as repeated identical INSERT errors.
+    *
+    * Comparison is case-INSENSITIVE on both sides, matching UQ_Entity_Name's collation. The old
+    * in-run check used an exact `===` while the metadata check beside it lowercased, so two
+    * names differing only in case read as free and then collided on INSERT.
+    *
+    * @param desiredName the generated name to place
+    * @param schemaName  schema, used for the first disambiguation step
+    * @param takenNames  every name already spoken for — existing metadata AND names claimed
+    *                    earlier in this run (which are not in metadata yet)
+    * @returns the free name and the suffix used to reach it ('' when the name was already free)
+    */
+   public resolveUniqueEntityName(
+      desiredName: string,
+      schemaName: string,
+      takenNames: string[]
+   ): { name: string; suffix: string } {
+      const taken = new Set(
+         [...takenNames, ...ManageMetadataBase.newEntityList].map(n => n.toLowerCase())
+      );
+      const isTaken = (candidate: string) => taken.has(candidate.toLowerCase());
+
+      if (!isTaken(desiredName)) {
+         return { name: desiredName, suffix: '' };
+      }
+
+      let suffix = '__' + schemaName;
+      let name = desiredName + suffix;
+
+      // Bounded: thousands of tables collapsing to one name is a naming problem no suffix can
+      // fix, and looping forever would hide it. Let the INSERT fail loudly instead.
+      const maxAttempts = 1000;
+      let attempt = 2;
+      while (isTaken(name) && attempt <= maxAttempts) {
+         suffix = `__${schemaName}_${attempt}`;
+         name = desiredName + suffix;
+         attempt++;
+      }
+      return { name, suffix };
    }
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
