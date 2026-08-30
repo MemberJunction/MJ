@@ -1,7 +1,8 @@
 import { Command, Flags } from '@oclif/core';
-import { CLIPluginRegistry } from '@memberjunction/cli-core';
+import { CLIPluginRegistry, ResolveOutputFormat } from '@memberjunction/cli-core';
 import { loadAllCliPlugins } from './cli-plugins.js';
 import { emitUsage, renderDomainDetail } from './usage-render.js';
+import type { OclifCommandShape } from './derived-usage.js';
 
 /**
  * Shared base for tier-2 usage commands (`mj <domain> usage`). Concrete
@@ -11,7 +12,11 @@ import { emitUsage, renderDomainDetail } from './usage-render.js';
  */
 export abstract class DomainUsageCommand extends Command {
   static flags = {
-    format: Flags.string({ options: ['text', 'json', 'md'], default: 'text', description: 'Output format' }),
+    // No default: the absence of a value is what lets a piped stdout select json.
+    format: Flags.string({
+      options: ['text', 'json', 'md'],
+      description: 'Output format. Defaults to text on a terminal and json when stdout is piped.',
+    }),
   };
 
   /** The domain this command documents (e.g. 'sync', 'codegen'). */
@@ -19,9 +24,10 @@ export abstract class DomainUsageCommand extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(this.constructor as typeof DomainUsageCommand);
-    await loadAllCliPlugins(process.cwd());
+    await loadAllCliPlugins(process.cwd(), this.config.commands as unknown as OclifCommandShape[]);
     const detail = CLIPluginRegistry.BuildDomainDetail(this.Domain);
     const result = CLIPluginRegistry.AsResult(`${this.Domain}:usage`, { domain: detail.domain, commands: detail.commands });
-    emitUsage((m) => this.log(m), flags.format as string, result, renderDomainDetail(detail));
+    const { format } = ResolveOutputFormat({ formatFlag: flags.format });
+    emitUsage((m) => this.log(m), format, result, renderDomainDetail(detail));
   }
 }
