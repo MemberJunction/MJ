@@ -107,7 +107,14 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     const sql = "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';\nGO\nCREATE TABLE [x].[Y] ( [ID] INT );";
     const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough, schema: '__mj_app' });
     expect(r.pgSQL).not.toContain('${mjSchema}');
-    expect(r.pgSQL).toContain('__mj');
+    // The app schema is deliberately '__mj_app', which CONTAINS '__mj' as a substring — so
+    // `toContain('__mj')` cannot tell the default apart from the bug this PR fixes, where the
+    // core placeholder falls back to the app schema. pgHeader() emits
+    // `CREATE SCHEMA IF NOT EXISTS __mj;` besides, which satisfies that assertion on its own
+    // whether or not the token was substituted at all. Assert on the qualified reference:
+    // negative on the wrong schema, positive on the right one.
+    expect(r.pgSQL).not.toContain('[__mj_app].[Entity]');
+    expect(r.pgSQL).toContain('[__mj].[Entity]');
   });
 
   it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
