@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
@@ -82,6 +82,16 @@ interface EngineRunContext {
     cancelRequested: boolean;
     /** True once a boundary/heartbeat discovered the lease was reclaimed — writes must stop. */
     ownershipLost: boolean;
+    /**
+     * When true, every save/delete this run performs suppresses the per-write side effects that
+     * have no value on machine writes — the Record Change (audit) row and the geocode lookup —
+     * via EntitySaveOptions/EntityDeleteOptions, NOT by touching entity flags. The capabilities
+     * stay fully on for every other writer: a human editing the same record mid-sync is still
+     * audited and geocoded, because their save never carries these options. Set from the
+     * connection's `Configuration.writeSideEffects === 'suppressed'` (fail-closed: anything else,
+     * including absent or malformed config, keeps the side effects on).
+     */
+    suppressWriteSideEffects?: boolean;
 }
 
 /**
@@ -333,6 +343,43 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /** The current run's context, when called from inside a sync run. */
     private get currentRunContext(): EngineRunContext | undefined {
         return IntegrationEngine.runContext.getStore();
+    }
+
+    /**
+     * The connection's write-side-effect mode from `CompanyIntegration.Configuration`. Returns ''
+     * for absent, unparseable or wrongly-typed configuration — every failure mode keeps the side
+     * effects ON. A connection has to ask, and a malformed request is not an ask.
+     */
+    private ReadWriteSideEffects(companyIntegration: MJCompanyIntegrationEntity): string {
+        try {
+            const raw = companyIntegration.Get('Configuration') as string | null;
+            if (!raw) return '';
+            const parsed = JSON.parse(raw) as { writeSideEffects?: unknown };
+            return typeof parsed.writeSideEffects === 'string' ? parsed.writeSideEffects : '';
+        } catch {
+            return '';
+        }
+    }
+
+    /**
+     * Save options for THIS run's machine writes: suppress the audit row + geocode lookup when
+     * the connection asked for it, undefined otherwise (identical to the pre-feature call).
+     * Scoped to the sync's own saves — never to any other writer of the same entities.
+     */
+    private get syncSaveOptions(): EntitySaveOptions | undefined {
+        if (!this.currentRunContext?.suppressWriteSideEffects) return undefined;
+        const opts = new EntitySaveOptions();
+        opts.SkipRecordChanges = true;
+        opts.SkipGeoCoding = true;
+        return opts;
+    }
+
+    /** Delete twin of {@link syncSaveOptions}. */
+    private get syncDeleteOptions(): EntityDeleteOptions | undefined {
+        if (!this.currentRunContext?.suppressWriteSideEffects) return undefined;
+        const opts = new EntityDeleteOptions();
+        opts.SkipRecordChanges = true;
+        return opts;
     }
 
     /**
@@ -1558,6 +1605,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         abortSignal?: AbortSignal,
         logger?: SyncLogger
     ): Promise<SyncResult> {
+        // Resolve the per-connection side-effect suppression ONCE for the run and stamp it on the
+        // run context, where CreateRecord/UpdateRecord/DeleteRecord (several frames below, no
+        // config parameter) read it back. Both run paths — direct and adopted — come through here.
+        const runCtxForFlags = this.currentRunContext;
+        if (runCtxForFlags) {
+            runCtxForFlags.suppressWriteSideEffects = this.ReadWriteSideEffects(config.companyIntegration) === 'suppressed';
+        }
         const aggregate: SyncResult = {
             Success: true,
             RecordsProcessed: 0,
@@ -3662,7 +3716,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             // Surface a failed conflict-mark: the engine thinks the row is quarantined, but without the
             // marker the operator has no signal. A silent failure here leaves the record in limbo.
-            const ok = await entity.Save();
+            const ok = await entity.Save(this.syncSaveOptions);
             if (!ok) {
                 logger?.warning(
                     entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
@@ -3776,7 +3830,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
                     if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
                     if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
-                    const archived = await entity.Save();
+                    const archived = await entity.Save(this.syncSaveOptions);
                     if (archived) {
                         result.RecordsDeleted++;
                         await this.DeleteRecordMapRow(orphan.ID, contextUser);
@@ -3787,7 +3841,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     }
                     continue;
                 }
-                const deleted = await entity.Delete();
+                const deleted = await entity.Delete(this.syncDeleteOptions);
                 if (deleted) {
                     result.RecordsDeleted++;
                     await this.DeleteRecordMapRow(orphan.ID, contextUser);
@@ -4541,7 +4595,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // A5: Pre-write validation
         this.validateEntity(entity, record.MJEntityName);
 
-        const saved = await entity.Save();
+        const saved = await entity.Save(this.syncSaveOptions);
         if (!saved) {
             const errMsg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
             const schemaErr = detectSchemaNotGenerated(record.MJEntityName, errMsg);
@@ -4699,7 +4753,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // A5: Pre-write validation
         this.validateEntity(entity, record.MJEntityName);
 
-        const saved = await entity.Save();
+        const saved = await entity.Save(this.syncSaveOptions);
         if (!saved) {
             const errMsg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
             const schemaErr = detectSchemaNotGenerated(record.MJEntityName, errMsg);
@@ -4843,7 +4897,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // Explicit, queryable tombstone (plan §2.5) — distinct from parsing SyncStatus='Archived'.
             if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
             if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
-            const archived = await entity.Save();
+            const archived = await entity.Save(this.syncSaveOptions);
             if (!archived) {
                 const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
                 console.warn(`[IntegrationEngine] Soft-delete (archive) failed for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);
@@ -4851,7 +4905,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return archived;
         }
 
-        const deleted = await entity.Delete();
+        const deleted = await entity.Delete(this.syncDeleteOptions);
         if (!deleted) {
             const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
             console.warn(`[IntegrationEngine] Delete blocked for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);

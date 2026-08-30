@@ -2784,7 +2784,7 @@ export class BaseAgent {
             // same mixed PCM as the WAV — persisted as a peaks.json sidecar so the player renders the
             // real waveform without re-decoding the audio. Best-effort: an empty array writes no sidecar.
             const peaks = controller.GetPeaks();
-            const fileID = await storeRealtimeRecording({
+            const stored = await storeRealtimeRecording({
                 Audio: encoded.Buffer,
                 MimeType: 'audio/wav',
                 Media: controller.Media,
@@ -2795,8 +2795,13 @@ export class BaseAgent {
                 Provider: md,
                 Peaks: peaks.length > 0 ? peaks : undefined
             });
-            if (fileID) {
-                this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${fileID}).`, true, params);
+            if (stored.FileID) {
+                this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${stored.FileID}).`, true, params);
+            } else {
+                // The store never throws, so its reason only reaches an operator if we log it here.
+                this.logError(`Failed to store realtime recording for session ${sessionID}: ${stored.ErrorMessage ?? 'no reason reported'}`, {
+                    agent: params.agent, category: 'RealtimeSession'
+                });
             }
         } catch (error) {
             this.logError(`Failed to finalize realtime recording: ${error instanceof Error ? error.message : String(error)}`, {

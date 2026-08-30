@@ -1590,6 +1590,10 @@ export class ResolverBase {
     // Check API key scope authorization for entity delete operations
     await this.CheckAPIKeyScopeAuthorization('entity:delete', entityName, userPayload);
 
+    // ...which authorizes "may you delete", never "may you delete without an audit row". Strip
+    // the capabilities no client may exercise before they reach the entity.
+    options = DeleteOptionsInput.SanitizeFromWire(options, entityName, userPayload?.email);
+
     if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
