@@ -37,4 +37,14 @@ export class DeleteOptionsInput {
      */
     @Field(() => Boolean)
     IsParentEntityDelete: boolean;
+
+    /**
+     * When true, the delete skips writing its Record Change (audit) row even when the entity
+     * has `TrackRecordChanges` on. Set by high-volume MACHINE writers (an integration sync
+     * applying tens of thousands of records), never by interactive deletes — the suppression is
+     * a property of the WRITER, not of the entity, so a human deleting the same record is still
+     * audited.
+     */
+    @Field(() => Boolean)
+    SkipRecordChanges: boolean;
 }
