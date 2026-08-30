@@ -270,3 +270,35 @@ ALTER TABLE ${flyway:defaultSchema}.[MLModel] ADD
 GO
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Root of this trained model''s materialized component-instance tree (MJ: ML Components). The root instance also carries the model-level Story; walk ParentComponentID/SlotName beneath it for the full composition. NULL for models trained before the component model existed.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'MLModel', @level2type=N'COLUMN', @level2name=N'RootComponentID';
 GO
+
+-- =============================================================================
+-- CodeGen handoff — the generated section is produced at RELEASE time, not here
+-- =============================================================================
+-- This migration carries hand-written DDL ONLY. The Entity/EntityField metadata, base views,
+-- CRUD procedures, hierarchy TVF suites, foreign-key indexes and permission grants for these
+-- tables are CodeGen's to emit, and are appended by the build engineer at release time — the
+-- same division of labor this repo already uses for the PostgreSQL counterparts and the
+-- consolidated metadata-sync migration (see migrations/CLAUDE.md).
+--
+-- The full sequence below was verified end to end on a clean SQL Server 2022 database
+-- (67 migrations applied; 101 seed records created; the tree renders through the hierarchy view):
+--
+--   1. mj migrate                        -- this file
+--   2. mj codegen                        -- registers the 5 entities + their fields, builds
+--                                           base views and spCreate/spUpdate/spDelete
+--   3. mj sync push --include=entities   -- sets Hierarchy.IsHierarchy on the THREE recursive
+--                                           FKs (MLComponentType.ParentID,
+--                                           MLComponent.ParentComponentID / .SourceComponentID)
+--                                           via metadata/entities/.entity-field-hierarchy-configurations.json
+--   4. mj codegen                        -- base views gain the hierarchy OUTER APPLY
+--   5. mj codegen                        -- registers the 4 remaining hierarchy fields
+--                                           (<FK>Depth / <FK>Path / <FK>IsLeaf / <FK>ChildCount)
+--   6. mj sync push --include=ml-component-types,ml-component-type-properties,
+--                             ml-component-type-slots,ml-algorithms      -- seeds the tree
+--
+-- Steps 3-5 are REQUIRED and cannot be collapsed: hierarchy support is opt-in through
+-- EntityField.Configuration (which a migration must never write directly — CodeGen owns that
+-- table), and CodeGen does not regenerate __mj base views once they exist. Skipping step 3
+-- leaves every read of these entities failing with "column ... does not exist"; skipping step 5
+-- leaves spCreate/spUpdate returning a column set the client cannot bind.
+-- =============================================================================
