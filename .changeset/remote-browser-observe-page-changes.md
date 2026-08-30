@@ -33,3 +33,13 @@ runs every ~700ms.
 `currentUrl` on the frame envelope is optional on the client, so an older MJAPI behaves exactly as it
 did rather than reading a missing field as "the page has no URL". `GetCurrentUrl()` is a synchronous
 last-known read, so it costs nothing per frame.
+
+`cause` alone cannot settle attribution, because a pushed frame or a perception poll only says the
+page moved — never who moved it. Two cases make that decisive rather than pedantic: under streaming,
+frames of the new page are pushed while the action's mutation is still in flight, so the observation
+reliably lands BEFORE the URL is returned; and `browser_AchieveGoal` drives an autonomous loop
+server-side for minutes with nothing returned until it ends. Both would have reported the agent's own
+navigation back to it as somebody else's takeover — the original lie, inverted. So an agent-initiated
+operation raises a depth counter for its whole span (a counter, not a flag: goals and actions overlap,
+and `finally` closes the window on a thrown transport error too), and a change observed inside that
+window is the agent's own whichever feed spotted it first.

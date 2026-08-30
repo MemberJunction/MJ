@@ -834,7 +834,10 @@ describe('RemoteBrowserChannel — page changes the agent did not cause (#3496)'
     const channel = new RemoteBrowserChannel();
     channel.Initialize(makeContext(log, { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com/next', Detail: null } }));
 
-    return channel.ApplyAgentTool('browser_Navigate', JSON.stringify({ url: 'https://example.com/next' })).then(() => {
+    return channel.ApplyAgentTool('browser_OpenUrl', JSON.stringify({ url: 'https://example.com/next' })).then(() => {
+      // The agent's own navigation must be the thing that produced the note — assert the mutation
+      // actually ran, or a misspelled tool name would make this whole case pass without driving it.
+      expect(log.Calls.some(c => c.Query.includes('ExecuteRemoteBrowserAction'))).toBe(true);
       // The poll fires ~700ms later and sees the URL the agent itself produced. Without the shared
       // funnel remembering it, every agent navigation would be followed by a bogus "someone else is
       // driving" note one tick later.
@@ -903,5 +906,108 @@ describe('RemoteBrowserChannel — page changes the agent did not cause (#3496)'
     channel.OnScreencastFrame('AAAA');
 
     expect(log.Notes).toHaveLength(0);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Attribution cannot be read off the feed a change arrives on: an observation says the page
+  // moved, never who moved it. These pin the window that supplies the missing half.
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /** A context whose server call runs `duringCall` before replying — the ordering the race needs. */
+  function makeRacingContext(log: CtxLog, response: Record<string, JSONValue> | null, duringCall: () => void): RealtimeChannelContext {
+    return {
+      AgentName: 'Sage',
+      Provider: null,
+      SendContextNote: (text: string) => log.Notes.push(text),
+      RequestSave: () => undefined,
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'session-1',
+      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+        log.Calls.push({ Query: query, Variables: variables });
+        duringCall();
+        return response as T | null;
+      },
+    };
+  }
+
+  it('does not call the agent a bystander when its own frames outrun its reply', async () => {
+    // Under streaming, frames of the new page are pushed WHILE the action's mutation is still in
+    // flight, so the observation reliably lands before the URL is returned. Ordering alone would
+    // therefore report every agent navigation as a takeover — the exact lie being fixed, inverted.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeRacingContext(
+      log,
+      { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com/next', Detail: null } },
+      () => observe(channel, 'https://example.com/next'),
+    ));
+    // Burn the first sighting deliberately: it is announced plainly whoever caused it, so leaving the
+    // race AS the first sighting would let this case pass even with attribution removed entirely.
+    observe(channel, 'https://example.com/start');
+
+    await channel.ApplyAgentTool('browser_OpenUrl', JSON.stringify({ url: 'https://example.com/next' }));
+
+    expect(log.Calls.some(c => c.Query.includes('ExecuteRemoteBrowserAction'))).toBe(true);
+    expect(log.Notes).toEqual([
+      '[browser] current page: https://example.com/start',
+      '[browser] current page: https://example.com/next',
+    ]);
+  });
+
+  it('does not narrate a GOAL run as someone else driving', async () => {
+    // A goal loop drives the page autonomously for minutes with nothing returned until it ends, so
+    // every page it opens is observed mid-run. This is the systematic case, not a race.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeRacingContext(
+      log,
+      { ExecuteRemoteBrowserGoal: { Success: true, Status: 'Completed', CurrentUrl: 'https://example.com/invoice', StepCount: 3, Detail: null } },
+      () => {
+        observe(channel, 'https://example.com/login');
+        observe(channel, 'https://example.com/invoice');
+      },
+    ));
+
+    await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'open the latest invoice' }));
+
+    expect(log.Notes.some(n => n.includes('you did not navigate here'))).toBe(false);
+    expect(log.Notes[0]).toBe('[browser] current page: https://example.com/login');
+  });
+
+  it('still reports a REAL takeover once the agent has finished driving', async () => {
+    // The window is what makes the takeover message trustworthy: if it never closed, the fix would
+    // have traded a missed takeover for one that can no longer be reported at all.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com/next', Detail: null } }));
+
+    await channel.ApplyAgentTool('browser_OpenUrl', JSON.stringify({ url: 'https://example.com/next' }));
+    observe(channel, 'https://example.com/user-went-here');
+
+    expect(log.Notes[1]).toContain('you did not navigate here');
+  });
+
+  it('closes the window when the server call THROWS, not only when it returns', async () => {
+    // Without `finally`, one failed tool call would leave the channel permanently convinced the
+    // agent is still driving — and every later takeover silently mis-attributed to it.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize({
+      AgentName: 'Sage',
+      Provider: null,
+      SendContextNote: (text: string) => log.Notes.push(text),
+      RequestSave: () => undefined,
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'session-1',
+      ExecuteServerAction: async () => { throw new Error('transport died'); },
+    });
+
+    await channel.ApplyAgentTool('browser_OpenUrl', JSON.stringify({ url: 'https://example.com/next' })).catch(() => undefined);
+    observe(channel, 'https://example.com/first');
+    observe(channel, 'https://example.com/user-went-here');
+
+    expect(log.Notes[1]).toContain('you did not navigate here');
   });
 });

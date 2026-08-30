@@ -318,6 +318,25 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    */
   private lastNotedUrl: string | null = null;
 
+  /**
+   * How many browser operations the AGENT itself has in flight right now (#3496).
+   *
+   * Attribution cannot be read off the feed a change arrives on. A pushed frame or a perception poll
+   * only says the page moved; it is `> 0` here that says the agent is the one moving it. Two cases
+   * make that necessary rather than tidy:
+   *
+   * - **an action's frames outrun its reply.** Under streaming, frames of the new page are pushed
+   *   while `ExecuteRemoteBrowserAction` is still in flight, so the observation reliably lands BEFORE
+   *   the mutation returns the URL — the agent's own navigation announced back to it as a takeover.
+   * - **a goal drives for minutes.** `browser_AchieveGoal` runs an autonomous loop server-side and
+   *   every page it opens is observed with nothing yet returned, so the whole run would narrate
+   *   itself as somebody else.
+   *
+   * A counter, not a flag: goals and actions overlap, and the last one to finish must not clear a
+   * window another still owns.
+   */
+  private agentDrivingDepth = 0;
+
   /** The client-side audio player fed pushed chunks while {@link audioStreaming}; `null` until started. */
   private audioPlayer: RemoteBrowserAudioPlayer | null = null;
 
@@ -617,12 +636,30 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
     const firstSighting = this.lastNotedUrl === null;
     this.lastNotedUrl = next;
+    // A change seen WHILE the agent is driving is the agent's own, whichever feed spotted it first.
+    const byAgent = cause === 'agent' || this.agentDrivingDepth > 0;
     this.Context?.SendContextNote(
-      cause === 'agent' || firstSighting
+      byAgent || firstSighting
         ? `[browser] current page: ${next}`
         : `[browser] the page changed to: ${next} — you did not navigate here, so someone else is driving. `
           + `Describe THIS page, not the one you last opened.`,
     );
+  }
+
+  /**
+   * Runs one agent-initiated browser operation with {@link agentDrivingDepth} raised, so any page
+   * change observed while it runs is attributed to the agent rather than to a phantom third party.
+   *
+   * `finally` and not a trailing decrement: the window must close on a thrown transport error too,
+   * or one failed tool call would leave the channel permanently unable to report a real takeover.
+   */
+  private async whileAgentDrives<T>(work: () => Promise<T>): Promise<T> {
+    this.agentDrivingDepth++;
+    try {
+      return await work();
+    } finally {
+      this.agentDrivingDepth--;
+    }
   }
 
   /**
@@ -671,22 +708,24 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       return this.fail('No live browser session is available yet — the realtime session may still be connecting; try again in a moment.');
     }
 
-    const data = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserActionResult>(
-      EXECUTE_REMOTE_BROWSER_ACTION_MUTATION,
-      this.buildVariables(sessionId, action),
-    );
-    const result = data?.ExecuteRemoteBrowserAction ?? null;
-    if (!result) {
-      return this.fail('The browser action could not be executed (no response from the server).');
-    }
-    if (!result.Success) {
-      return this.fail(result.Detail ?? 'The browser action failed.');
-    }
+    return this.whileAgentDrives(async () => {
+      const data = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserActionResult>(
+        EXECUTE_REMOTE_BROWSER_ACTION_MUTATION,
+        this.buildVariables(sessionId, action),
+      );
+      const result = data?.ExecuteRemoteBrowserAction ?? null;
+      if (!result) {
+        return this.fail('The browser action could not be executed (no response from the server).');
+      }
+      if (!result.Success) {
+        return this.fail(result.Detail ?? 'The browser action failed.');
+      }
 
-    // PERCEPTION: tell the agent where the page is now (background — no spoken reply), and refresh
-    // the live-view bar, which in streaming mode has no poll feeding it.
-    this.notePageChange(result.CurrentUrl, 'agent');
-    return this.ok(result.CurrentUrl, result.Detail);
+      // PERCEPTION: tell the agent where the page is now (background — no spoken reply), and refresh
+      // the live-view bar, which in streaming mode has no poll feeding it.
+      this.notePageChange(result.CurrentUrl, 'agent');
+      return this.ok(result.CurrentUrl, result.Detail);
+    });
   }
 
   /** Builds the flat mutation variables from a normalized action (omitted fields ride as null). */
@@ -729,27 +768,31 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
     // START the goal (returns immediately with a GoalRunID) then POLL — a goal loop can run for
     // minutes, far longer than any single request survives, so we never hold one open for the loop.
-    const startData = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserGoalResult>(EXECUTE_REMOTE_BROWSER_GOAL_MUTATION, {
-      agentSessionID: sessionId,
-      goal,
-      startUrl,
+    // The whole span is agent-driven: every page the loop opens is observed with nothing returned
+    // yet, so without the window the agent would narrate its own goal as somebody else's takeover.
+    return this.whileAgentDrives(async () => {
+      const startData = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserGoalResult>(EXECUTE_REMOTE_BROWSER_GOAL_MUTATION, {
+        agentSessionID: sessionId,
+        goal,
+        startUrl,
+      });
+      const started = startData?.ExecuteRemoteBrowserGoal ?? null;
+      if (!started) {
+        return this.fail('The browser goal could not be started (no response from the server).');
+      }
+      // Defensive: if the server ever returns a terminal status synchronously, use it directly.
+      const result = started.Status === 'Running' && started.GoalRunID
+        ? await this.pollGoalResult(sessionId, started.GoalRunID)
+        : started;
+      if (!result) {
+        return this.fail('The browser goal is taking longer than expected and could not be confirmed. It may still be running.');
+      }
+      this.notePageChange(result.CurrentUrl, 'agent');
+      if (!result.Success) {
+        return this.fail(result.Detail ?? `The goal could not be completed (${result.Status ?? 'unknown'}).`);
+      }
+      return this.ok(result.CurrentUrl, result.Detail ?? `Goal completed (${result.Status ?? 'Completed'}, ${result.StepCount ?? 0} steps).`);
     });
-    const started = startData?.ExecuteRemoteBrowserGoal ?? null;
-    if (!started) {
-      return this.fail('The browser goal could not be started (no response from the server).');
-    }
-    // Defensive: if the server ever returns a terminal status synchronously, use it directly.
-    const result = started.Status === 'Running' && started.GoalRunID
-      ? await this.pollGoalResult(sessionId, started.GoalRunID)
-      : started;
-    if (!result) {
-      return this.fail('The browser goal is taking longer than expected and could not be confirmed. It may still be running.');
-    }
-    this.notePageChange(result.CurrentUrl, 'agent');
-    if (!result.Success) {
-      return this.fail(result.Detail ?? `The goal could not be completed (${result.Status ?? 'unknown'}).`);
-    }
-    return this.ok(result.CurrentUrl, result.Detail ?? `Goal completed (${result.Status ?? 'Completed'}, ${result.StepCount ?? 0} steps).`);
   }
 
   /**
