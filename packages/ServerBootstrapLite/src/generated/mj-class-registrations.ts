@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (407 classes)
+// @memberjunction/core-entities (408 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -264,6 +264,7 @@ import {
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
+    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -617,12 +618,16 @@ import {
     MJEntityDocumentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
-// @memberjunction/ai-engine-base (4 classes)
+// @memberjunction/ai-engine-base (8 classes)
 import {
+    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
 } from '@memberjunction/ai-engine-base';
 
 // @memberjunction/ai-recommendations-rex (1 classes)
@@ -1200,9 +1205,12 @@ import {
 /**
  * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
+ *
+ * Split into fixed-size chunks so no single array literal grows a union large
+ * enough to trip TS2590; the exported array is their concatenation.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CLASS_REGISTRATIONS: any[] = [
+const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
     AssemblyAIRealtime,
     AzureEmbedding,
@@ -1326,6 +1334,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
+    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -1402,6 +1411,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJContentItemTagEntity,
     MJContentProcessRunDetailEntity,
     MJContentProcessRunEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
     MJContentSourceParamEntity,
@@ -1602,6 +1615,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
@@ -1669,10 +1686,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
     MJEntityDocumentEntityExtended,
+    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
     RexRecommendationsProvider,
     DataContextItemServer,
     MJLibraryEntityExtended,
@@ -1798,6 +1819,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     TwitterGetMentionsAction,
     TwitterGetTimelineAction,
     TwitterScheduleTweetAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     TwitterSearchTweetsAction,
     YouTubeCreatePlaylistAction,
     YouTubeGetChannelAnalyticsAction,
@@ -1998,6 +2023,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     CreateSVGSketchDiagramAction,
     CreateSVGWordCloudAction,
     CreateUserAction_core_actions,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     Create_Conversation_Record_Action,
     DataMapperAction,
     DelayAction,
@@ -2119,11 +2148,20 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentEvalDriver,
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const CLASS_REGISTRATIONS: any[] = [
+    ...CLASS_REGISTRATIONS_0,
+    ...CLASS_REGISTRATIONS_1,
+    ...CLASS_REGISTRATIONS_2,
+    ...CLASS_REGISTRATIONS_3,
+    ...CLASS_REGISTRATIONS_4,
+];
+
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 914;
+export const CLASS_REGISTRATIONS_COUNT = 919;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
