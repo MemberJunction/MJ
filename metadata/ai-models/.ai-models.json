@@ -21432,6 +21432,27 @@
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
         }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.111,
+            "OutputPricePerUnit": 0,
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Hour",
+            "ProcessingType": "Realtime",
+            "Comments": "Groq list pricing for whisper-large-v3 as of August 2026: $0.111 per hour of audio transcribed. Transcription has no output side, so the whole rate sits in InputPricePerUnit with OutputPricePerUnit 0 — the same single-blended-rate convention the Grok Voice per-minute row uses, so consumers never double-count. Priced on the Per Hour unit type while the Minutes price type describes what is metered; the TimePerHour driver converts recorded seconds. Groq bills a 10-second minimum per request, which this row does not model. Cache pricing does not apply to audio (both cache columns null)."
+          },
+          "primaryKey": {
+            "ID": "3D58D634-FA79-4ED7-9BE0-7238FDF39729"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -21496,6 +21517,27 @@
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
         }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.04,
+            "OutputPricePerUnit": 0,
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Hour",
+            "ProcessingType": "Realtime",
+            "Comments": "Groq list pricing for whisper-large-v3-turbo as of August 2026: $0.04 per hour of audio transcribed. Same single-blended-rate convention as the Large v3 row — whole rate in InputPricePerUnit, OutputPricePerUnit 0, cache columns null — and the same unmodelled 10-second per-request minimum."
+          },
+          "primaryKey": {
+            "ID": "9CC9F694-C4C9-4DB2-987C-5E8188A7F5CC"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -21504,6 +21546,79 @@
     "sync": {
       "lastModified": "2026-08-11T22:50:28.765Z",
       "checksum": "c1eba073f3f2ceb6dfe07e9994d170756e19f8d174cf62ddec6b52081c88b940"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Whisper 1",
+      "Description": "OpenAI's hosted Whisper transcription endpoint. Serves the Whisper large-v2 checkpoint rather than v3, so it is a distinct model from Whisper Large v3 despite the shared lineage. Multilingual transcription across 90+ languages.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Speech to Text",
+      "PowerRank": 8,
+      "IsActive": true,
+      "SpeedRank": 5,
+      "CostRank": 5,
+      "ModelSelectionInsights": "Choose when the workload already runs on OpenAI credentials, or when Groq is unavailable — accuracy is close to Whisper Large v3 but throughput and price are both markedly worse ($0.006/min = $0.36/hour, roughly 3x Groq's Large v3 and 9x its Turbo). Kept as a separate model record because the endpoint serves large-v2 weights: attaching it as a vendor of Whisper Large v3 would misreport which checkpoint transcribed a given run. No speaker diarization; OpenAI caps uploads at 25MB per request, so longer audio must be split.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "OpenAIAudioGenerator",
+            "APIName": "whisper-1",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5B74AABC-2C50-4898-919B-858E198AF720"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C851A9DE-7295-4A53-8F57-FC87DD006333"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.006,
+            "OutputPricePerUnit": 0,
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Minute",
+            "ProcessingType": "Realtime",
+            "Comments": "OpenAI list pricing for the Whisper transcription endpoint as of August 2026: $0.006 per minute of audio. Whole rate in InputPricePerUnit with OutputPricePerUnit 0 (transcription has no billed output side), cache columns null. The TimePerMinute driver converts recorded seconds to minutes."
+          },
+          "primaryKey": {
+            "ID": "61D2461F-EAE7-475D-8B74-9F267FB2D1EC"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "211CF655-85E6-46DB-8609-9CD0ED09F38B"
     }
   },
   {
