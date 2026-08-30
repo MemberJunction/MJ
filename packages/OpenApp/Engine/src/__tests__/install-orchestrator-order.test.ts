@@ -53,6 +53,7 @@ vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
     AddClientDynamicPackages: vi.fn(),
     RemoveServerDynamicPackages: vi.fn(),
+    PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
@@ -85,7 +86,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitH
 import { CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping } from '../install/config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -739,6 +740,90 @@ describe('UpgradeApp — migration failure is honest + recoverable (B21)', () =>
         // Original failure detail is preserved.
         expect(msg).toContain('ddl boom on v2');
         // App is flipped to Error (retryable: B17 makes Error reinstallable; upgrade resumes).
+        expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+});
+
+describe('UpgradeApp — config prune ordering', () => {
+    const upContext = {
+        ...context,
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
+    } as unknown as OrchestratorContext;
+
+    function v2Manifest(name: string): string {
+        return JSON.stringify({
+            manifestVersion: 1,
+            name,
+            displayName: name,
+            description: `${name} test app description`,
+            version: '2.0.0',
+            publisher: { name: 'Test' },
+            repository: `https://github.com/test/${name}`,
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: `test_${name.replace(/-/g, '_')}` },
+            packages: { server: [{ name: '@test/app-x-server', role: 'bootstrap', startupExport: 'Load' }] },
+            dependencies: {},
+        });
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+        serveManifests({ 'https://github.com/test/app-x': v2Manifest('app-x') });
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true } as ReturnType<typeof AddServerDynamicPackages>);
+        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue(
+            { Success: true } as ReturnType<typeof PruneDynamicPackagesNotInManifest>
+        );
+    });
+
+    it('adds the new manifest\'s entries BEFORE pruning stale ones', async () => {
+        // Both orders converge on the same config (the keep-set IS the new manifest), so the
+        // order is chosen for the FAILURE window between these two un-rolled-back writes.
+        // Add-then-prune leaves that window at (old ∪ new) — the running server still finds every
+        // entry it needs. Prune-then-add would leave a subset of BOTH versions.
+        await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+        const pruneCall = vi.mocked(PruneDynamicPackagesNotInManifest).mock.invocationCallOrder[0];
+        const addCall = vi.mocked(AddServerDynamicPackages).mock.invocationCallOrder[0];
+        expect(pruneCall).toBeDefined();
+        expect(addCall).toBeDefined();
+        expect(addCall).toBeLessThan(pruneCall);
+    });
+
+    it('fails the upgrade when the prune fails, leaving the added entries in place', async () => {
+        // The adds have already run, so the config is a superset of what the new version needs and
+        // the server keeps booting. The upgrade must still report failure so the operator retries;
+        // the resume checkpoint is not advanced, so the retry re-runs both writes.
+        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue(
+            { Success: false, ErrorMessage: 'config left unchanged' } as ReturnType<typeof PruneDynamicPackagesNotInManifest>
+        );
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+        expect(result.Success).toBe(false);
+        expect(vi.mocked(AddServerDynamicPackages)).toHaveBeenCalled();
+        expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+
+    it('does NOT prune when the add fails — the old config is left intact', async () => {
+        // The failure window that motivates the order: if the first write fails, the second must
+        // not run, so the config still holds exactly what the previous version needed.
+        vi.mocked(AddServerDynamicPackages).mockReturnValue(
+            { Success: false, ErrorMessage: 'could not write mj.config.cjs' } as ReturnType<typeof AddServerDynamicPackages>
+        );
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+        expect(result.Success).toBe(false);
+        expect(vi.mocked(PruneDynamicPackagesNotInManifest)).not.toHaveBeenCalled();
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
     });
 });

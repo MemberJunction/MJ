@@ -1,5 +1,93 @@
 # Change Log - @memberjunction/core-entities
 
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- e533ce5: Weekly AI model & vendor intelligence report (2026-08-24) + two metadata edits.
+  - **New model** `GLM 5.3` (Zhipu, released 2026-08-14). Placeholder record with Z.AI as Model Developer and OpenRouter as Inference Provider; no `MJ: AI Model Costs` rows populated because Zhipu has not posted a per-token API rate.
+  - **Deprecation** `GLM 4.7` on Cerebras — the Cerebras vendor row and matching cost record are now `Status: "Inactive"` per Cerebras' 2026-08-17 retirement of GLM-4.7 from its inference cloud. OpenRouter and Fireworks.ai vendor rows for GLM 4.7 remain Active.
+  - Full report at `reports/ai-model-research/2026-08-24-weekly-report.md`, including 4 items flagged for human review (DeepSeek V4 Pro Aug-16 cost record, GPT-5.6 Sol pricing conflict, FLUX.2 family refresh, redundant Sonnet 5 Sep-1 cost row).
+
+- de6eb14: Fix `__mj.FileEntityRecordLink`'s unique key, which omitted `RecordID` and therefore allowed a
+  given file to be linked to at most ONE record per entity — attaching the same document to two
+  Contracts, two Accounts, or two of anything else failed on a unique-key violation, contradicting
+  the table's purpose. `UQ_FileEntityRecordLink_EntityID_FileID` is replaced by
+  `UQ_FileEntityRecordLink_EntityID_RecordID_FileID`.
+
+  The constraint came from the v5.37 junction-table batch, whose stated scope was pure two-FK-column
+  link tables; `RecordID` is an `nvarchar(750)` soft key, so that heuristic mechanically selected
+  `(EntityID, FileID)` and dropped the column that makes a row unique. This is the second constraint
+  from that batch corrected on the same grounds, after `Drop_EntityAction_Uniqueness`.
+
+  Operators upgrading from a deployment that predates v5.37 should know that the migration which
+  introduced the bad constraint (`V202605221002__v5.37.x__Add_Unique_Constraints_To_MJ_Junction_Tables`)
+  DELETED pre-existing duplicates before adding each constraint, keeping only the earliest
+  `__mj_CreatedAt` row per `(EntityID, FileID)` group. Any deployment that legitimately had one file
+  linked to several records of the same entity lost those link rows at that upgrade, and they are not
+  recoverable from the migration. It logged per-table duplicate and deletion counts, so affected
+  deployments can check their v5.37 upgrade logs. This change stops the loss recurring; it cannot undo it.
+
+  The change is a widening — every row satisfying the old key satisfies the new one — so it needs no
+  de-duplication pass and cannot fail on existing data. The genuine duplicate (same file linked twice
+  to the same record) is still rejected. No CodeGen or generated-ORM change is involved.
+
+- 1fa6f6b: fix(metadata): the retired GLM-4.7 Cerebras cost record uses a Status its entity actually allows
+
+  `MJ: AI Model Costs.Status` is a value list of `Active | Expired | Invalid | Pending`. The GLM-4.7 Cerebras cost record was set to `Inactive` — which is valid on `MJ: AI Model Vendors` (33 rows legitimately use it) but not on `MJ: AI Model Costs` — so `mj sync push --ci` failed validation and took the deterministic integration tier red on `next`.
+
+  The record now reads `Status: "Expired"` (the ORM defines it as "no longer valid", which is what the 2026-08-17 Cerebras retirement means) and carries `EndedAt: "2026-08-17"`. `EndedAt` is documented as "when this pricing expired… NULL indicates currently active pricing", so an expired row without it would contradict itself. The sibling `MJ: AI Model Vendors` row keeps `Inactive`, which is correct there.
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+- 0db4f4f: Remove domain-specific `GuestOrder` and `PersonAccountLink` identity claim types from core MemberJunction metadata. These claim types are specific to BizApps applications (Orders/Common) and are managed in their respective app metadata seed files.
+
+### Patch Changes
+
+- 8f199e2: Identity Claims: ship the redemption surface and close the trust gaps.
+  - New `IdentityClaimRedemptionResolver` (MJServer): `RedeemIdentityClaim` /
+    `AutoClaimPendingIdentityClaims` mutations and `GetMyPendingIdentityClaims` query, with an
+    in-memory per-user rate limit on redemption attempts.
+  - New Explorer `/claims/redeem` page (explorer-core) — the landing target of claim emails'
+    `?id=..&token=..` links, previously a dead URL.
+  - Automatic claim-on-login: `getUserPayload` now fires `AutoClaimForUser` once per issued
+    token (deduped alongside the session audit), so pending claims addressed to a user's email
+    attach at sign-in.
+  - Email-verification gate: the OIDC `email_verified` claim is read off the verified JWT onto
+    `UserPayload.emailVerified` and threaded into redemption — an IdP that explicitly asserts
+    an unverified email can no longer redeem by email match (the token path still works).
+  - `IdentityClaimType.Configuration` is now read: `RequireVerifiedEmail`, `RequireToken`, and
+    `AutoClaim` gates (typed as `IdentityClaimTypeConfiguration` on the client engine).
+  - `IdentityClaimType.IsActive` is now enforced on both create and redeem.
+  - `GetPendingClaimsForEmail` uses `EscapeSQLString` and a platform-neutral expiry literal
+    (was `GETUTCDATE()`, SQL Server-only); `RevokeClaim` checks its save result and skips the
+    driver's `OnRevoke` when the revocation did not persist.
+
+- d078c54: Stop `UserInfoEngine`'s debounced settings flush from raising a process-level unhandled rejection.
+
+  `SetSettingDebounced` arms a 500ms timer whose callback called `FlushPendingSettings()` fire-and-forget — unawaited, with no `.catch()` — so any rejection from that flush escaped as an `unhandledRejection` rather than something a caller could handle. The rejection itself came from `SetSetting`, which read `md.CurrentUser?.ID` off `this.ProviderToUse`: the optional chain guarded `CurrentUser` but not the provider, and `ProviderToUse` resolves to `this._provider || Metadata.Provider`, which is `undefined` when no provider is configured or when one has been torn down while the timer was still armed.
+
+  Two changes: `SetSetting` now guards the provider itself (`md?.CurrentUser?.ID`), degrading to its existing "No user context available" path instead of throwing; and the debounce timer attaches a `.catch()` so no failure on that path — from this cause or any future one — can reach the process as an unhandled rejection.
+
+  Impact was mostly felt in CI, where a timer firing after a test environment was torn down failed the whole run with every assertion green: `Test Files 8 passed (8) / Tests 57 passed (57) / Errors 1 error`. Because it depends on where the 500ms timer lands relative to teardown, it was intermittent and reproduced on `next` itself — the same commit failed one scheduled run and passed the next.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [a1a8989]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes
