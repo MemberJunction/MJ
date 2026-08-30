@@ -95,6 +95,40 @@ export function buildConversionFailureArtifact(sourceFile: string, message: stri
 }
 
 /**
+ * Decide whether a legacy (non---split) convert run fails, and with what message (issue #3857).
+ * Pure — no I/O — so the exit policy is unit-testable apart from the oclif command.
+ *
+ * A GAP is a marker comment the converter wrote into the output where it knowingly could not
+ * produce SQL (`-- Could not parse: @RoleID …`). Unlike an ERROR — a throw the converter caught —
+ * a gap leaves the batch counted as converted, so before this gate the legacy path reported
+ * `Files: 1 (1 OK, 0 errors)` and exited 0 over a file PostgreSQL rejects, and nothing short of
+ * applying it to a real PG database caught it.
+ *
+ * Errors always fail. Gaps fail too, unless the caller explicitly accepts them with --allow-gaps
+ * (which until now had effect only on the --split path).
+ */
+export function decideLegacyConvertExit(args: {
+  errorCount: number;
+  gapCount: number;
+  gapFileCount: number;
+  allowGaps: boolean;
+}): { fail: true; message: string } | { fail: false; message: null } {
+  const reasons: string[] = [];
+  if (args.errorCount > 0) reasons.push(`errors in ${args.errorCount} file(s)`);
+  const gapsFail = args.gapCount > 0 && !args.allowGaps;
+  if (gapsFail) reasons.push(`${args.gapCount} conversion gap(s) in ${args.gapFileCount} file(s)`);
+  if (reasons.length === 0) return { fail: false, message: null };
+
+  const advice = gapsFail
+    ? ' A gap is a marker comment (e.g. "-- Could not parse: …") left where the converter could not ' +
+      'produce SQL — PostgreSQL will reject the output. Resolve the gaps (rewrite the source migration ' +
+      'declaratively, hand-author the PG form, or fix the converter rule), or pass --allow-gaps to ' +
+      'accept them for now.'
+    : '';
+  return { fail: true, message: `Conversion completed with ${reasons.join(' and ')}.${advice}` };
+}
+
+/**
  * CLI command to discover and convert T-SQL migrations to PostgreSQL.
  *
  * Scans the SQL Server migrations directory, identifies files that don't
@@ -144,6 +178,11 @@ export default class MigrateConvert extends Command {
       description: 'Target schema name',
       default: '__mj',
     }),
+    'core-schema': Flags.string({
+      description:
+        "MJ core schema substituted for ${mjSchema} (default __mj). Distinct from --schema, which is the app's OWN schema: an Open App migration references core as ${mjSchema} and itself as ${flyway:defaultSchema}, and for every app those differ.",
+      default: '__mj',
+    }),
     'dry-run': Flags.boolean({
       description: 'Show what would be converted without writing files',
       default: false,
@@ -166,8 +205,9 @@ export default class MigrateConvert extends Command {
     }),
     'allow-gaps': Flags.boolean({
       description:
-        'With --split: exit 0 even when migrations have conversion gaps (hand-authoring needed ' +
-        'or unhandled statements). Gaps are still embedded as comments and listed in the summary.',
+        'Exit 0 even when migrations have conversion gaps — with --split: hand-authoring needed or ' +
+        'unhandled statements; on the legacy path: "-- Could not parse" / "-- ERROR converting batch" ' +
+        'markers in the output. Gaps are still embedded as comments and listed in the summary.',
       default: false,
     }),
     'bake-codegen': Flags.boolean({
@@ -239,6 +279,7 @@ export default class MigrateConvert extends Command {
     // Convert each file
     let successCount = 0;
     let errorCount = 0;
+    const gapFiles: string[] = [];
     const totalStats: ConversionStats = createConversionStats();
 
     for (const migration of unconverted) {
@@ -266,7 +307,17 @@ export default class MigrateConvert extends Command {
         for (const err of result.Stats.ErrorBatches) {
           this.logToStderr(`    ${err.substring(0, 200)}`);
         }
-      } else {
+      }
+      // Gaps are listed the same way errors are — the whole point of issue #3857 is that a file
+      // the converter knowingly could not finish must not be reported as "OK".
+      if (result.Stats.Gaps > 0) {
+        gapFiles.push(migration.SourceFile);
+        this.logToStderr(`  GAPS: ${result.Stats.Gaps} unconverted statement(s) in ${migration.SourceFile}`);
+        for (const gap of result.Stats.GapBatches) {
+          this.logToStderr(`    ${gap.substring(0, 200)}`);
+        }
+      }
+      if (result.Stats.Errors === 0 && result.Stats.Gaps === 0) {
         successCount++;
         this.log(`  OK (${result.Stats.Converted} batches, ${result.Stats.TotalBatches - result.Stats.Converted} skipped)`);
       }
@@ -275,8 +326,8 @@ export default class MigrateConvert extends Command {
     // Print summary
     this.log('');
     this.log('=== Conversion Summary ===');
-    this.log(`  Files:       ${unconverted.length} (${successCount} OK, ${errorCount} errors)`);
-    this.log(`  Batches:     ${totalStats.TotalBatches} total, ${totalStats.Converted} converted, ${totalStats.Skipped} skipped, ${totalStats.Errors} errors`);
+    this.log(`  Files:       ${unconverted.length} (${successCount} OK, ${errorCount} errors, ${gapFiles.length} with gaps)`);
+    this.log(`  Batches:     ${totalStats.TotalBatches} total, ${totalStats.Converted} converted, ${totalStats.Skipped} skipped, ${totalStats.Errors} errors, ${totalStats.Gaps} gaps`);
     this.log(`  Tables:      ${totalStats.TablesCreated}`);
     this.log(`  Views:       ${totalStats.ViewsCreated}`);
     this.log(`  Procedures:  ${totalStats.ProceduresConverted}`);
@@ -285,10 +336,6 @@ export default class MigrateConvert extends Command {
     this.log(`  Indexes:     ${totalStats.IndexesCreated}`);
     this.log(`  Inserts:     ${totalStats.InsertsConverted}`);
     this.log(`  Grants:      ${totalStats.GrantsConverted}`);
-
-    if (errorCount > 0) {
-      this.error(`Conversion completed with errors in ${errorCount} file(s)`);
-    }
 
     // Post-conversion: deduplicate EntityField Sequence values across files
     // to prevent UQ_EntityField_EntityID_Sequence violations on PG
@@ -301,6 +348,20 @@ export default class MigrateConvert extends Command {
       }
     } else {
       this.log(`  No collisions found (${dedupResult.totalInserts} EntityField INSERTs scanned).`);
+    }
+
+    // Gate LAST, after the sequence dedup fixup. `this.error` throws, and the files are already
+    // written: gating before the fixup would leave every output un-deduped, and a re-run skips
+    // them (they now have a .pg.sql counterpart), so the fixup would never get another chance.
+    // Errors gate here as they always did; gaps now gate too unless --allow-gaps (issue #3857).
+    const exit = decideLegacyConvertExit({
+      errorCount,
+      gapCount: totalStats.Gaps,
+      gapFileCount: gapFiles.length,
+      allowGaps: flags['allow-gaps'],
+    });
+    if (exit.fail) {
+      this.error(exit.message);
     }
   }
 
@@ -342,11 +403,16 @@ export default class MigrateConvert extends Command {
     // Select the per-migration conversion: inline-baking (live DB, CodeGen baked natively) or
     // the default transpile-only path (CodeGen regenerated by `mj codegen` at deploy).
     const bakeCodegen = flags['bake-codegen'];
-    const baker = bakeCodegen ? await this.buildBaker(transpiler, flags.schema) : null;
+    const baker = bakeCodegen ? await this.buildBaker(transpiler, flags.schema, flags['core-schema']) : null;
     const convertOne = (sql: string, fileName: string): Promise<ConvertedShape> =>
       baker
         ? baker.bakeMigration(sql, fileName)
-        : convertMigration(sql, fileName, { schema: flags.schema, includeHeader: !flags['no-header'], transpiler });
+        : convertMigration(sql, fileName, {
+            schema: flags.schema,
+            coreSchema: flags['core-schema'],
+            includeHeader: !flags['no-header'],
+            transpiler,
+          });
     if (bakeCodegen) this.log(`\nInline CodeGen baking ENABLED — bringing the working DB forward as each migration bakes.`);
 
     const converted: string[] = [];
@@ -542,7 +608,7 @@ export default class MigrateConvert extends Command {
    * codegen-lib + core are declared MJCLI deps) to keep a plain `convert --split` light. The
    * matching `import type` at the top is erased at runtime, so it does not defeat the deferral.
    */
-  private async buildBaker(transpiler: MJPostgresTranspiler, schema: string): Promise<IncrementalBaker> {
+  private async buildBaker(transpiler: MJPostgresTranspiler, schema: string, coreSchema: string): Promise<IncrementalBaker> {
     const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
 
     if (dbPlatform() !== 'postgresql') {
@@ -629,7 +695,7 @@ export default class MigrateConvert extends Command {
           .map((e) => e.Name);
       },
     };
-    return new IncrementalBaker({ transpiler, db, schema });
+    return new IncrementalBaker({ transpiler, db, schema, coreSchema });
   }
 
   /** Print the split-and-regenerate run summary and the mandatory next steps. */
@@ -745,7 +811,9 @@ export default class MigrateConvert extends Command {
     target.FKConstraints += source.FKConstraints;
     target.CheckConstraints += source.CheckConstraints;
     target.CommentsConverted += source.CommentsConverted;
+    target.Gaps += source.Gaps;
     target.ErrorBatches.push(...source.ErrorBatches);
     target.SkippedBatches.push(...source.SkippedBatches);
+    target.GapBatches.push(...source.GapBatches);
   }
 }

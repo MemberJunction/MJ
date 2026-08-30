@@ -1,4 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestValidate extends Command {
   static description = 'Validate test definitions without executing';
@@ -32,12 +33,7 @@ export default class TestValidate extends Command {
       description: 'Save validation report to file',
       default: false,
     }),
-    format: Flags.string({
-      char: 'f',
-      description: 'Output format',
-      options: ['console', 'json', 'markdown'],
-      default: 'console',
-    }),
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',
@@ -62,7 +58,12 @@ export default class TestValidate extends Command {
         all: flags.all,
         type: flags.type,
         saveReport: flags['save-report'],
-        format: flags.format as 'console' | 'json' | 'markdown',
+        format: resolveLegacyFormat({
+          format: flags.format,
+          legacy: 'console' as const,
+          legacyDefault: 'console' as const,
+          map: TEST_FORMAT_MAP,
+        }),
         output: flags.output,
         verbose: flags.verbose,
       });

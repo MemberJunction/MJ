@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
-import chalk from 'chalk';
+import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class ActionsRun extends Command {
   static description = 'Execute an AI action with parameters';
@@ -26,9 +26,12 @@ export default class ActionsRun extends Command {
     'dry-run': Flags.boolean({
       description: 'Validate without executing',
     }),
+    format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
-      description: 'Output format',
+      description:
+        "Output format (legacy alias for --format in the 'mj ai' family; elsewhere -o is an output FILE path). "
+        + 'Prefer --format.',
       options: ['compact', 'json', 'table'],
       default: 'compact',
     }),
@@ -45,9 +48,15 @@ export default class ActionsRun extends Command {
   async run(): Promise<void> {
     const { ActionService, OutputFormatter } = await import('@memberjunction/ai-cli');
 
-    const { flags } = await this.parse(ActionsRun);
+    const { flags, metadata } = await this.parse(ActionsRun);
     const service = new ActionService();
-    const formatter = new OutputFormatter(flags.output as 'compact' | 'json' | 'table');
+    const formatter = new OutputFormatter(resolveLegacyFormat({
+        format: flags.format,
+        legacy: flags.output as 'compact' | 'json' | 'table',
+        legacyDefault: 'compact' as const,
+        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+        map: AI_FORMAT_MAP,
+      }));
 
     // Parse parameters
     const params: Record<string, string> = {};
@@ -63,17 +72,9 @@ export default class ActionsRun extends Command {
 
     try {
       if (flags['dry-run']) {
-        // For dry-run, just show what would be executed
-        this.log(chalk.yellow('Dry-run mode: Action would be executed with these parameters:'));
-        this.log(chalk.cyan(`Action: ${flags.name}`));
-        if (Object.keys(params).length > 0) {
-          this.log(chalk.cyan('Parameters:'));
-          for (const [key, value] of Object.entries(params)) {
-            this.log(`  ${key}: ${value}`);
-          }
-        } else {
-          this.log(chalk.gray('No parameters provided'));
-        }
+        // Route the dry run through the same formatter as a real run, so --format=json
+        // describes the planned execution as data instead of a coloured paragraph.
+        this.log(formatter.formatActionDryRun(flags.name, params));
       } else {
         // Execute action
         const spinner = ora();
