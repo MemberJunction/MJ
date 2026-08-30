@@ -8,6 +8,7 @@ import {
     HttpError,
     IsHttpError,
     BuildQueryString,
+    DrainResponseBody,
     type HttpRequestConfig,
 } from '../HttpClient.js';
 
@@ -347,5 +348,88 @@ describe('HttpClient', () => {
         await expect(client.Get('https://api.example.com/x')).rejects.toThrow(HttpError);
         // 1 initial + 2 retries
         expect(calls).toHaveLength(3);
+    });
+});
+
+// =====================================================================
+// DrainResponseBody
+// =====================================================================
+describe('DrainResponseBody', () => {
+    it('cancels an unconsumed body stream', async () => {
+        const cancel = vi.fn(async () => {});
+        const stream = new ReadableStream({ cancel });
+        const response = new Response(stream);
+
+        await DrainResponseBody(response);
+
+        expect(cancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves without throwing when the response has no body', async () => {
+        const response = new Response(null, { status: 204 });
+        await expect(DrainResponseBody(response)).resolves.toBeUndefined();
+    });
+
+    it('resolves without throwing when the body was already consumed', async () => {
+        const response = new Response('some text');
+        await response.text();
+        await expect(DrainResponseBody(response)).resolves.toBeUndefined();
+    });
+
+    it('swallows a rejection from cancel() rather than propagating it', async () => {
+        const stream = new ReadableStream({
+            cancel: async () => {
+                throw new Error('cancel failed');
+            },
+        });
+        const response = new Response(stream);
+        await expect(DrainResponseBody(response)).resolves.toBeUndefined();
+    });
+});
+
+// =====================================================================
+// HttpRequest — ResponseType 'stream' + non-2xx (the leak this round's audit found:
+// an unconsumed stream body attached to a thrown HttpError held its connection open)
+// =====================================================================
+describe('HttpRequest stream response + error handling', () => {
+    /** A ReadableStream whose cancel() is spy-able, backing a stubbed fetch Response. */
+    function StreamResponse(cancel: () => void, status: number, statusText = 'OK'): Response {
+        const stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(new TextEncoder().encode('body'));
+                controller.close();
+            },
+            cancel,
+        });
+        return new Response(stream, { status, statusText });
+    }
+
+    it('cancels the unconsumed stream body before throwing on a non-2xx', async () => {
+        const cancel = vi.fn();
+        vi.stubGlobal('fetch', vi.fn(async () => StreamResponse(cancel, 500, 'Server Error')));
+
+        await expect(HttpGet('https://api.example.com/x', { ResponseType: 'stream' })).rejects.toThrow(HttpError);
+        expect(cancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not cancel the stream on a 2xx response — the caller owns it', async () => {
+        const cancel = vi.fn();
+        vi.stubGlobal('fetch', vi.fn(async () => StreamResponse(cancel, 200)));
+
+        const response = await HttpGet('https://api.example.com/x', { ResponseType: 'stream' });
+        expect(response.Data).toBeInstanceOf(ReadableStream);
+        expect(cancel).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when ThrowOnError is false on a non-2xx stream response', async () => {
+        const cancel = vi.fn();
+        vi.stubGlobal('fetch', vi.fn(async () => StreamResponse(cancel, 500, 'Server Error')));
+
+        const response = await HttpGet('https://api.example.com/x', { ResponseType: 'stream', ThrowOnError: false });
+        expect(response.Status).toBe(500);
+        expect(response.Data).toBeInstanceOf(ReadableStream);
+        // Caller asked to inspect the response itself rather than have it thrown — leave the
+        // stream alone for them to read or cancel themselves.
+        expect(cancel).not.toHaveBeenCalled();
     });
 });
