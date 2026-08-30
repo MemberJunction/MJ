@@ -44,6 +44,7 @@
  * mid-transaction failure cannot orphan a row.
  */
 import { Metadata, RunView, TransactionGroupBase } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { RunViewParams, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
@@ -217,7 +218,7 @@ export const TransactionGroupsBatchedChecks: NamedCheck[] = [
             // Every finalized id must correspond to the row bearing that entity's OWN name — the
             // exact property a positional zip breaks when a statement returns no rows.
             for (const entity of [a, b, c]) {
-                const row = rows.find(r => r.ID.toLowerCase() === entity.ID.toLowerCase());
+                const row = rows.find(r => UUIDsEqual(r.ID, entity.ID));
                 Assert(!!row, `no persisted row carries the id finalized onto '${entity.Name}' (${entity.ID}) — results drifted between items`);
                 AssertEqual(row!.Name, entity.Name, `the id finalized onto '${entity.Name}' belongs to a DIFFERENT row ('${row!.Name}')`);
             }
