@@ -31,5 +31,11 @@ and a surface gets at most `MAX_DEAD_HANDLE_RECOVERIES` (3) before the engine lo
 up. A browser that dies on arrival should surface as a visible fault, never as a hang plus a stream
 of orphaned Chromes.
 
-`RemoteBrowserSnapshot` — the poll that almost always discovers the fault first — now reports it
-instead of only degrading around it.
+Both callers that meet a dead handle report it. `RemoteBrowserSnapshot` — the poll that almost always
+discovers the fault first — now reports it instead of only degrading around it, and
+`ExecuteRemoteBrowserAction` reports it too and re-runs the action against the replacement. The action
+path matters on its own: a surface nobody is watching has no poll to discover anything, so wiring only
+the poll would leave exactly the agent-driven case in the issue unhealed. Re-running is safe precisely
+because the handle was dead — the action never reached a browser, so it cannot run twice — and a
+`navigate` therefore heals in place, while a click or a type is told, in words the agent can act on,
+that its browser was replaced and is now on a blank page.

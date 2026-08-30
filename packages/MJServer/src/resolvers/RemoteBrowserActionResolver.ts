@@ -298,6 +298,36 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       const result = await liveSession.ExecuteAction(action);
       return { Success: result.Success, CurrentUrl: result.CurrentUrl, Detail: result.Detail };
     } catch (err) {
+      // A dead handle is not a failure to report, it is a mapping to delete (#3598) — and this is the
+      // path where that fault is actually FELT: the poll below only freezes a pane, while here the
+      // agent says "the shared browser session isn't launched right now" on every request for the rest
+      // of the session. The engine decides whether the error means "gone"; anything else falls
+      // straight through to the honest report below, exactly as before.
+      const recovered = await RemoteBrowserEngine.Instance.RecoverDeadAgentSession(agentSessionID, err, {
+        InstanceKey: instanceKey,
+        ContextUser: contextUser,
+        ProviderName: providerName,
+      });
+      if (recovered) {
+        // Retrying is safe precisely BECAUSE the handle was dead: the action never reached a browser,
+        // so it cannot run twice. A `navigate` therefore heals in place; a click or a type truthfully
+        // reports that its selector is missing on the replacement's blank page, which is the answer
+        // the agent needs to re-navigate — and either way the surface is live again for the next call.
+        try {
+          const retried = await recovered.ExecuteAction(action);
+          return {
+            Success: retried.Success,
+            CurrentUrl: retried.CurrentUrl,
+            Detail: retried.Success
+              ? retried.Detail
+              : `The browser had closed and was replaced (it is now on a blank page). ${retried.Detail ?? ''}`.trim(),
+          };
+        } catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+          LogError(`ExecuteRemoteBrowserAction failed after recovering the browser (kind='${kind}'): ${retryMessage}`);
+          return { Success: false, Detail: `The browser had closed and was replaced, but '${kind}' still failed: ${retryMessage}` };
+        }
+      }
       // Surface the real failure to BOTH the MJAPI terminal (for diagnosis) and the model (so it
       // narrates the actual cause instead of the opaque client-side "no response from the server").
       const message = err instanceof Error ? err.message : String(err);
