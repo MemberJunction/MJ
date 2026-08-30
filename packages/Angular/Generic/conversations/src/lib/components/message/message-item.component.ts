@@ -309,10 +309,44 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * stuck or forever-spinning conversations without any code changes.
    */
   public onMessageBubbleClick(event: MouseEvent): void {
+    const recordBadge = (event.target as HTMLElement | null)?.closest?.('.mention-badge.record') as HTMLElement | null;
+    if (recordBadge) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openRecordLinkBadge(recordBadge);
+      return;
+    }
     if (!event.shiftKey || !this.isAIMessage) return;
     event.preventDefault();
     event.stopPropagation();
     this.diagnosticRequested.emit(this.message.ID);
+  }
+
+  private openRecordLinkBadge(el: HTMLElement): void {
+    const entityName = el.getAttribute('data-record-entity');
+    const keysJson = el.getAttribute('data-record-keys');
+    if (!entityName) return;
+    let content: { type: 'record'; name: string; entityName: string; keys?: Record<string, string | number> };
+    try {
+      const keys = keysJson ? JSON.parse(keysJson) as Record<string, string | number> : {};
+      content = { type: 'record', name: el.textContent?.trim() || entityName, entityName, keys };
+    } catch {
+      return;
+    }
+    const entity = this.ProviderToUse.EntityByName(entityName);
+    if (!entity) {
+      console.warn('Record link: unknown entity', entityName);
+      return;
+    }
+    const compositeKey = ConversationUtility.CompositeKeyFromRecordLink(
+      content,
+      entity.PrimaryKeys.map(pk => pk.Name)
+    );
+    if (!compositeKey) {
+      console.warn('Record link: incomplete primary key', entityName, keysJson);
+      return;
+    }
+    this.openEntityRecord.emit({ entityName, compositeKey });
   }
 
   /**
@@ -577,7 +611,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   private renderMentionHTML(content: any, agents: any[], users: any[]): string {
-    let name = content.name;
+    let name = typeof content.name === 'string' ? content.name : '';
     let iconClass = '';
     let logoURL = '';
     let configPresetName = '';
@@ -625,24 +659,36 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       if (skill?.Color) {
         inlineStyle = ` style="background: ${this.escapeHtml(skill.Color)}; border-color: rgba(255, 255, 255, 0.35);"`;
       }
+    } else if (content.type === 'record') {
+      name = (content.name ?? '').trim();
+      iconClass = this.normalizeIconClass('fa-solid fa-up-right-from-square');
     }
 
-    const escapedName = this.escapeHtml(name);
+    const iconOnly = content.type === 'record' && !name;
+    const escapedName = name ? this.escapeHtml(name) : '';
     const typeClass =
-      content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' ? content.type : 'user';
+      (content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' || content.type === 'record' ? content.type : 'user')
+      + (iconOnly ? ' icon-only' : '');
 
     // Build preset indicator HTML if present
     const presetIndicator = configPresetName
       ? `<span class="preset-indicator">${this.escapeHtml(configPresetName)}</span>`
       : '';
 
+    const recordOpenLabel = content.type === 'record'
+      ? (name ? `Open ${name}` : `Open ${content.entityName || 'record'}`)
+      : '';
+    const recordAttrs = content.type === 'record' && content.entityName
+      ? ` role="link" title="${this.escapeHtml(recordOpenLabel)}" aria-label="${this.escapeHtml(recordOpenLabel)}" data-record-entity="${this.escapeHtml(content.entityName)}" data-record-keys="${this.escapeHtml(JSON.stringify(ConversationUtility.RecordLinkKeyMap(content)))}"`
+      : '';
+
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${escapedName}${presetIndicator}</span>`;
     }
   }
 

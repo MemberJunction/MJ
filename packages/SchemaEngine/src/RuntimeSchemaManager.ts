@@ -308,6 +308,49 @@ interface PostMigrationResult {
  * and read back by the post-restart consumer via {@link RuntimeSchemaManager.ReadPendingWork}.
  */
 export interface RSUPendingWork {
+  /**
+   * What the post-restart consumer should do with this row.
+   *
+   * Absent means `'apply-objects'` — every row written before this field existed is that, and
+   * the consumer must keep treating it that way.
+   *
+   * `'promote-columns'` carries {@link RSUPendingWork.PromotedColumns} instead of relying on a
+   * fresh introspection: promotion has already decided which source keys become which columns,
+   * including any collision suffix, and re-deriving those names after the restart could produce
+   * different ones.
+   */
+  WorkType?: 'apply-objects' | 'promote-columns';
+
+  /**
+   * `promote-columns` only: what to finish once the restart has loaded the regenerated entity
+   * classes — the IntegrationObjectField rows, the field maps, and the overflow→column spread.
+   *
+   * The destination names are carried rather than recomputed because `uniqueColumnName` may have
+   * suffixed one (`_2`) to avoid a collision; deriving it again post-restart would not know that.
+   */
+  PromotedColumns?: Array<{
+    /** MJ entity the columns were added to. */
+    EntityName: string;
+    /** The connection's entity map — field maps hang off this. */
+    EntityMapID: string;
+    /** The connector's name for the object, for resolving its IntegrationObject. */
+    ExternalObjectName: string;
+    /** Owning integration, for the same resolution. */
+    IntegrationID: string;
+    Columns: Array<{
+      /** Key as it appears in the overflow JSON. */
+      SourceKey: string;
+      /** Column actually created — possibly collision-suffixed. */
+      ColumnName: string;
+      /** Inferred schema type, for the IntegrationObjectField row. */
+      SchemaFieldType: string;
+      /** Inferred length; null for an unbounded type. */
+      MaxLength: number | null;
+      /** Share of sampled records carrying the key, recorded on the IntegrationObjectField row. */
+      Coverage: number;
+    }>;
+  }>;
+
   CompanyIntegrationID: string;
   SourceObjectNames: string[];
   /** Per-object field selections. Key = source object name, value = field names (null = all fields). */

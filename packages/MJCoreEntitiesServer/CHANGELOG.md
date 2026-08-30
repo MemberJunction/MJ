@@ -1,5 +1,279 @@
 # @memberjunction/core-entities-server
 
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+### Patch Changes
+
+- 8f199e2: Identity Claims: ship the redemption surface and close the trust gaps.
+  - New `IdentityClaimRedemptionResolver` (MJServer): `RedeemIdentityClaim` /
+    `AutoClaimPendingIdentityClaims` mutations and `GetMyPendingIdentityClaims` query, with an
+    in-memory per-user rate limit on redemption attempts.
+  - New Explorer `/claims/redeem` page (explorer-core) — the landing target of claim emails'
+    `?id=..&token=..` links, previously a dead URL.
+  - Automatic claim-on-login: `getUserPayload` now fires `AutoClaimForUser` once per issued
+    token (deduped alongside the session audit), so pending claims addressed to a user's email
+    attach at sign-in.
+  - Email-verification gate: the OIDC `email_verified` claim is read off the verified JWT onto
+    `UserPayload.emailVerified` and threaded into redemption — an IdP that explicitly asserts
+    an unverified email can no longer redeem by email match (the token path still works).
+  - `IdentityClaimType.Configuration` is now read: `RequireVerifiedEmail`, `RequireToken`, and
+    `AutoClaim` gates (typed as `IdentityClaimTypeConfiguration` on the client engine).
+  - `IdentityClaimType.IsActive` is now enforced on both create and redeem.
+  - `GetPendingClaimsForEmail` uses `EscapeSQLString` and a platform-neutral expiry literal
+    (was `GETUTCDATE()`, SQL Server-only); `RevokeClaim` checks its save result and skips the
+    driver's `OnRevoke` when the revocation did not persist.
+
+- 516f4fb: Scope `MJ: Identity Claims` reads to the requesting user, and decouple redemption from that read grant.
+
+  `IdentityClaim` shipped with CodeGen's default permission set (UI read-only; Developer/Integration full CRUD). That default is correct for most entities but too broad here: each row pairs a guest purchaser's email (`NormalizedEmail`) with the record they bought (`EntityID` / `RecordID`), so an unfiltered read grant let any authenticated UI user enumerate every guest email and its purchase linkage.
+
+  A new migration keeps `CanRead` and attaches a `ReadRLSFilterID` — the pattern core already uses for `UI: Own AI Agent Runs` / `UI: Own AI Prompt Runs`. The filter matches on `ClaimedByUserID` **or** `NormalizedEmail`, because `ClaimedByUserID` is NULL until redemption and an ID-only filter would hide every pending claim from the user entitled to redeem it. Developer and Integration keep filter-less rows and stay exempt.
+
+  `RedeemClaim` now reads the claim (and any associated magic-link invite) under the system user rather than the caller. Row filters are applied to single-record loads and not just `RunView`, so without this the filter would have silently broken the entity's own workflow #3 — redeeming when the purchase email differs from the login email, which is exactly the case the verification token exists to serve. Authorization is unchanged and still enforced in the engine: email match, or a timing-safe comparison against the stored token hash.
+
+  Note the `TokenHash` in `MetadataJSON` was not the exposure. The token is `crypto.randomBytes(32)` and is not recoverable from its SHA-256; the issue was PII enumeration.
+
+  ***
+
+  Also threads metadata providers through the identity-claim engines instead of reaching for the process-global default, removing all 8 `global-provider-ok` suppressions across the two files.
+
+  `IdentityClaimEngineServer.RedeemClaim` now **requires** an `IMetadataProvider` (breaking, deliberately). Redemption reads a claim, reads a magic-link invite, and executes a raw CAS `UPDATE` — three operations that must hit the same database. An optional provider would let a caller thread one into the entity reads while the CAS silently fell back to the global, which is the failure this signature makes impossible. `CreateClaim`, `RevokeClaim` and `GetPendingClaimsForEmail` take an optional trailing `provider?` instead, so they stay source-compatible.
+
+  The CAS helpers previously resolved schema and table names from the passed `md` but took `ExecuteSQL` from the global — identical objects in a single-provider process, but the statement would have been built for one database and run against another the moment anyone threaded a provider. Both now use a single provider.
+
+  `IdentityClaimEngine` (client) extends `BaseEngine` and so already owns a provider; its three `new Metadata()` calls are replaced with `this.ProviderToUse` per the repo's data-access rule. Two bare `new RunView()` calls — which resolve a _separate_ global RunView provider slot that the compliance scanner does not cover — now receive the engine's provider.
+
+  `IdentityClaimEngineServer` gains a settable `Provider` accessor with a `?? new Metadata()` fallback, matching `AIEngine` (the pattern `QueryEngineServer` and `ComponentMetadataEngineServer` both cite) and structurally exempt from the compliance scanner.
+
+  ***
+
+  **Breaking:** the claim lifecycle is removed from `IdentityClaimEngine` (`@memberjunction/core-entities`) and now lives only on `IdentityClaimEngineServer`.
+
+  `CreateClaim`, `RedeemClaim`, `RevokeClaim`, `GetPendingClaimsForEmail` and `AutoClaimForUser` are gone from the client+server class. It retains what is safe and useful in any host — the `IdentityClaimType` cache, type lookups, `ClassFactory` driver resolution, `NormalizeEmail`, and the `BaseIdentityClaimDriver` contract — and the server engine contains an instance of it, proxying those cached members. Same split as `AIEngineBase` / `AIEngine`.
+
+  The two copies had diverged. The client's `RedeemClaim` was the pre-hardening implementation: no email match, no token verification of any kind (it accepted a `token` and handed it to the driver unchecked), check-then-set instead of an atomic CAS, and the driver invoked before the status transition with no error handling. Those defects were fixed on the server copy only, leaving a weaker implementation of a security-critical operation exported from a package server code also imports — where `IdentityClaimEngine` and `IdentityClaimEngineServer` differ by one word.
+
+  Nothing outside the engines called the removed methods. `AutoClaimForUser` moves to the server engine and now runs each redemption through the hardened `RedeemClaim`, so the email lookup that finds pending claims is a convenience rather than the security boundary.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [698aeaf]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/sql-converter@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/doc-utils@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/tag-engine@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.4
+  - @memberjunction/templates@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/communication-engine@6.1.0-edge.4
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.4
+  - @memberjunction/scheduling-engine@6.1.0-edge.4
+  - @memberjunction/ai-vectordb@6.1.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.4
+  - @memberjunction/sql-parser@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+  - @memberjunction/predictive-studio-core@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- d4a5b4c: Content vectorization: make colocated vector stores usable, and stop ignoring an index's declared dimensions
+
+  A colocated vector provider (`SQLServerVectorDatabase`, pgvector) keeps vectors in the application's own
+  database. It has no credentials to present, and it needs the active data-provider connection handed to it
+  before use. The ContentSource pipeline honored neither, so a colocated store could be **searched** but
+  never **written** — and it failed in a way that pointed somewhere else entirely: `CreateIndex` logged
+  `"requires a host connection"` and continued, then vectorization died later on a vector-database cache
+  miss, which reads like bad metadata rather than a missing wire-up.
+
+  Four changes, in two places that both create provider instances:
+  - **`AutotagBaseEngine.createVectorDBInstance`** now instantiates first, calls `TryWireColocatedHost`, and
+    only then requires an API key — for providers that actually need one (`!SupportsColocatedQuery &&
+RequiresAPIKey`). The old order could not work: whether a provider is colocated is not knowable until it
+    exists. A non-empty sentinel is passed to the constructor because `VectorDBBase` rejects an empty key
+    outright and colocated providers do not override it, so `''` would throw for precisely the keyless case.
+  - **`MJVectorIndexEntityServer.getVectorDBInstance`** gets the same treatment. This is the site that runs
+    on `VectorIndex.Save()`, so without it the provider index is never created regardless of the above.
+  - **`AutotagBaseEngine.createEmbeddingInstance`** drops its pre-flight key check, matching the decision
+    already documented in the EntityDocument pipeline: an empty key is legitimate for local-only drivers
+    (`LocalEmbedding` runs ONNX in-process and defends itself with `super(apiKey || 'local')`), and a cloud
+    driver that genuinely needs one raises a real provider-level auth error, which is more actionable than a
+    guard here. Gating up front made local embedding models unusable from this pipeline.
+  - **`MJVectorIndexEntityServer.resolveDimensions`** now honors the index's own `Dimensions` column instead
+    of returning a hardcoded 1536. This was a latent bug with real consequences on any store that enforces
+    width: a colocated SQL Server index is a `VECTOR(n)` column, so a 384-dimension model got a
+    `VECTOR(1536)` table and every insert was rejected.
+
+  **Behaviour change worth noting before upgrading:** a `MJ: Vector Indexes` record whose `Dimensions`
+  differs from 1536 will now have its provider index created at the stated width. That is the intent — the
+  column exists to be honored, and the embedding call already honored it — but an index created earlier at
+  1536 will not match, and wants recreating.
+
+  Verified end to end against SQL Server 2025 with local embeddings: two content sources differing only in
+  whether they declare `VectorEntityName`, both vectorized through the real pipeline into a real colocated
+  index. Before these changes the pipeline could not reach that state at all.
+
+  Both entries are `minor` rather than `patch` because the bump level is evaluated per branch and this branch
+  also changes `metadata/` — see `.claude/rules/changesets.md`. The changes here are code only.
+
+- 9cd81ca: Integration apply path: stop record-map write amplification, surface pagination violations, and stop blocking the connection wizard on a schema refresh.
+
+  `MJ: Company Integration Record Maps` is the highest-volume table the sync path writes — one row per external record ever mapped, re-touched every sync — and unlike its run-log siblings it still shipped with `TrackRecordChanges = 1`, so every mapping upsert also wrote a `RecordChange` row and doubled a sync's write volume. Nothing reads that history: the mapping row is the current state, and operators audit a sync through the per-run artifact stream. Change tracking is now off for that entity; existing history rows are left in place. Separately, a connector returning an oversized batch (a pagination-contract violation) is now reported rather than absorbed silently, and `IntegrationUpdateConnection` can launch its schema refresh without waiting on it.
+
+  `MJCompanyIntegrationEntityServer` gains `SuppressActivationSchemaRefresh`, a transient opt-out that stops the activation (`IsActive` false→true) schema refresh from running inside `Save()` when the caller is going to run it itself. `IntegrationCreateConnection` sets it for `awaitSchemaRefresh: false`, which makes that flag actually non-blocking on create — previously the Save-side refresh ran first and awaited, so the mutation paid a full live introspect regardless — and moves the introspect after the connection test, so a connection rejected by that test is rolled back without having written IntegrationObject rows. Default false, so every other activation path is unchanged.
+
+  `IntegrationConnectorCreationPipeline.Run()` now honours a caller-supplied `RunID` even when it coalesces onto an already-running or just-completed run for the same CompanyIntegration. Previously the supplied ID was silently discarded, so a caller that had already handed it to a client as "the run to tail" left that client polling a run directory that was never created — `IntegrationTailRunEvents` answering "Run not found" forever, which is indistinguishable from "hasn't started yet". A coalesced call now publishes a terminal alias run under the requested ID that mirrors the served run's outcome and names it, so the ID is always tailable.
+
+### Patch Changes
+
+- 2875f6f: Stop running a live source introspection inside `CompanyIntegration.Save()`
+
+  `MJCompanyIntegrationEntityServer` no longer overrides `Save()` to fire
+  `IntegrationConnectorCreationPipeline` on an `IsActive false→true` transition.
+  That hook made an unbounded scan of the customer's source a side effect of
+  writing a row — it ran for any writer of that transition, inside the caller's
+  HTTP request, and on the create path it ran before the credential had been
+  tested.
+
+  Discovery is now something a caller asks for:
+  - `IntegrationCreateConnection` creates the row inactive and activates it only
+    after the credential test, so the scan can never run against a password that
+    is about to be rejected and rolled back.
+  - `IntegrationReactivateConnection` gains a `runSchemaRefresh` argument
+    (default `true`, matching the previous behaviour) so the refresh is visible
+    in the API and can be declined.
+  - `runSchemaRefreshPipeline` now takes the `IntegrationEngine` maintenance lock,
+    which the other pipeline call sites already held, and supplies the
+    SoftPKClassifier LLM callback the save hook used to provide.
+
+  `MJCompanyIntegrationEntityServer.RunSchemaRefreshPipeline()` is public for
+  callers that want the old behaviour explicitly.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [a788e27]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [2741d46]
+- Updated dependencies [2741d46]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/scheduling-engine@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/sql-converter@6.1.0-edge.3
+  - @memberjunction/sql-parser@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/tag-engine@6.1.0-edge.3
+  - @memberjunction/ai-vectordb@6.1.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/doc-utils@6.1.0-edge.3
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.3
+  - @memberjunction/predictive-studio-core@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes

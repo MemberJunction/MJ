@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/config",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.4",
   "description": "Central configuration package for MemberJunction framework with default configurations and merge utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,7 +18,7 @@
     "config"
   ],
   "author": "MemberJunction",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
     "cosmiconfig": "^9.0.0",
     "lodash.mergewith": "^4.6.2",

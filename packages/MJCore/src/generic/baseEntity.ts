@@ -347,6 +347,21 @@ export class EntityField {
                     }
                 }
             }
+
+            // Value-list validation (MJ issue #3969): a field whose ValueListType is `List` carries an
+            // EXHAUSTIVE set of legal values in metadata, and for an `IN (...)` CHECK constraint that
+            // list is the only runtime representation CodeGen produces — so without this rung an
+            // out-of-list value reached the database as a raw constraint violation attributed to no
+            // field, on every path that is not a form. Which modes and value types the rule applies
+            // to, how values are compared, and why, all live in
+            // EntityFieldInfo.ValueIsPermittedByValueList: the normalized set of legal values is
+            // derived from immutable metadata SHARED by every EntityField instance of this field, so
+            // it is built once per field rather than rebuilt on every record's validation.
+            if (!ef.ValueIsPermittedByValueList(this.Value)) {
+                result.Success = false;
+                const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
+                result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
+            }
         }
 
         return result;
@@ -458,6 +473,14 @@ export class EntityField {
      */
     public ResetOldValue() {
         this._OldValue = this.Value;
+    }
+
+    /**
+     * Restores the dirty-tracking baseline to a previously captured value.
+     * Used by graph rollback so a retried save still sees the pre-attempt dirty set.
+     */
+    public RestoreOldValue(value: unknown): void {
+        this._OldValue = value;
     }
 
     /**
@@ -762,6 +785,13 @@ export class BaseEntityEvent {
 /**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
+/** In-memory baseline captured before a graph runs so a rollback can be retried. */
+type GraphParticipantSnapshot = {
+    entity: BaseEntity;
+    wasSaved: boolean;
+    oldValues: { name: string; old: unknown }[];
+};
+
 export abstract class BaseEntity<T = unknown> {
     /**
      * Metadata describing this entity (name, fields, keys, relationships). Populated during
@@ -1202,6 +1232,9 @@ export abstract class BaseEntity<T = unknown> {
 
         this._childEntity = childEntity;
 
+        // Capture any pending modifications on this entity or its ancestors before child InnerLoad
+        const dirtySnapshots = this.captureChainDirtyState();
+
         // Load the child's record using our shared PK
         const loaded = await childEntity.InnerLoad(this.PrimaryKey);
         if (!loaded) {
@@ -1210,9 +1243,36 @@ export abstract class BaseEntity<T = unknown> {
             return;
         }
 
+        // Re-apply any pending modifications so child hydration does not overwrite unsaved in-memory edits
+        this.restoreChainDirtyState(dirtySnapshots);
+
         // Recursively discover grandchildren (child may also be a parent type)
         // InitializeChildEntity is idempotent via _childEntityDiscoveryDone flag
         await childEntity.InitializeChildEntity();
+    }
+
+    private captureChainDirtyState(): Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> {
+        const snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> = [];
+        let curr: BaseEntity | null = this;
+        while (curr) {
+            const dirtyFields = curr.Fields.filter(f => f.Dirty).map(f => ({
+                name: f.Name,
+                value: f.Value,
+            }));
+            if (dirtyFields.length > 0) {
+                snapshots.push({ entity: curr, dirtyFields });
+            }
+            curr = curr._parentEntity;
+        }
+        return snapshots;
+    }
+
+    private restoreChainDirtyState(snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }>): void {
+        for (const snap of snapshots) {
+            for (const df of snap.dirtyFields) {
+                snap.entity.Set(df.name, df.value);
+            }
+        }
     }
 
     /**
@@ -1303,7 +1363,12 @@ export abstract class BaseEntity<T = unknown> {
      * values are present (via {@link UpdateSavedStateFromPrimaryKeys}).
      *
      * The parent chain is handled recursively: if this entity has an IS-A parent, the
-     * parent is hydrated first (deepest ancestor first) via SetMany's built-in routing.
+     * parent is hydrated first (deepest ancestor first). Each level only receives the
+     * fields it owns — a child's view row is the union of every ancestor plus its own
+     * columns, and passing that whole row to the parent used to trip
+     * `WarningManager` ("fields were not found in entity definitions") for every
+     * child-only column. That is how loading `Accounting Company Profiles` as
+     * entity objects produced a `MJ: Companies` missing-field dump at MJAPI boot.
      *
      * @param data - A plain object whose properties map to field names on this entity
      *               (and potentially parent entities in the IS-A chain).
@@ -1322,9 +1387,24 @@ export abstract class BaseEntity<T = unknown> {
         // Populate this entity's fields. SetMany also routes parent field values to
         // _parentEntity via the IS-A routing block (which now includes PK fields).
         // replaceOldValues=true ensures OldValue matches Value (no false dirty flags).
-        // ignoreNonExistentFields=true because data may contain fields from other
-        // entities in the chain that don't exist on this entity.
-        this.SetMany(data, true, true, true);
+        // ignoreNonExistentFields=true remains as a safety net; ownedFieldsFrom already
+        // dropped columns that belong to another level of the IS-A chain.
+        this.SetMany(this.ownedFieldsFrom(data), true, true, true);
+    }
+
+    /**
+     * Columns on `data` that this entity actually defines (by field name or CodeName).
+     * Used by {@link Hydrate} so an IS-A ancestor is not asked to SetMany its child's
+     * extra view columns.
+     */
+    private ownedFieldsFrom(data: Record<string, unknown>): Record<string, unknown> {
+        const owned: Record<string, unknown> = {};
+        for (const key of Object.keys(data)) {
+            if (this.GetFieldByName(key) || this.GetFieldByCodeName(key)) {
+                owned[key] = data[key];
+            }
+        }
+        return owned;
     }
 
     // ─── Entity Companions ──────────────────────────────────────────────────────
@@ -1448,7 +1528,10 @@ export abstract class BaseEntity<T = unknown> {
         if (embeddeds.length === 0) {
             return;
         }
-        await Promise.all(embeddeds.map(e => e.InitializeInstance(visited)));
+        // Copy the visited set per sibling. Sharing one mutable set made two
+        // embeds targeting the same entity (BillTo + ShipTo Address) throw a
+        // false "cycle detected" while the first companion was still in flight.
+        await Promise.all(embeddeds.map(e => e.InitializeInstance(new Set(visited))));
     }
 
     /**
@@ -1461,7 +1544,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public async ConstructUninitializedEntity<T extends BaseEntity>(
         entityName: string,
-        _visited: Set<string>,
+        visited: Set<string>,
     ): Promise<T> {
         const provider = this.ProviderToUse as unknown as IMetadataProvider;
         if (!provider) {
@@ -1483,9 +1566,11 @@ export abstract class BaseEntity<T = unknown> {
         }
         await instance.Config(this.ContextCurrentUser);
         await instance.InitializeParentEntity();
-        // Do NOT recurse InitializeEmbeddedRecords here. A self-FK (Category.ParentID →
-        // Category) would otherwise construct forever, and Deal → Order does not need
-        // the Order's own embeddeds until the Order is loaded or explicitly initialised.
+        // Recurse so a *new* peer's own embeds are constructed (required nested
+        // FKs provision on NewRecord; Ensure on the nested peer does not throw).
+        // InitializeInstance skips when RelatedEntity is already on this path,
+        // so a self-FK / A→B→A cycle still constructs only one extra level.
+        await instance.InitializeEmbeddedRecords(visited);
         return instance;
     }
 
@@ -1495,15 +1580,17 @@ export abstract class BaseEntity<T = unknown> {
      * Companions returning `null` are omitted entirely, so a header-only save on a composite entity
      * ships no companion payload at all and costs nothing extra on the wire.
      *
+     * @param mode - `'request'` omits clean saved companions. `'result'` ships
+     *               authoritative post-save state so the other tier can mark peers saved.
      * @returns The companion payloads, in declaration order.
      */
-    public async SerializeCompanions(): Promise<EntityCompanionPayload[]> {
+    public async SerializeCompanions(mode: EntityCompanionDeserializeMode = 'request'): Promise<EntityCompanionPayload[]> {
         if (!this.HasCompanions) {
             return [];
         }
         const payloads: EntityCompanionPayload[] = [];
         for (const companion of this.Companions) {
-            const data = await companion.Serialize();
+            const data = await companion.Serialize(mode);
             if (data !== null && data !== undefined) {
                 payloads.push({ Name: companion.Name, Data: data });
             }
@@ -1724,11 +1811,33 @@ export abstract class BaseEntity<T = unknown> {
         });
     }
 
+    private _embedLoadVisited: Set<string> | undefined;
+
+    /**
+     * Seeds the embed-load cycle set for a nested `InnerLoad`. Called by
+     * {@link EmbeddedRecord.LoadEager} so inherit walks share one `entityName:PK`
+     * path and a self-parented row fails cleanly instead of recursing forever.
+     */
+    public SetEmbeddedLoadVisited(visited: Set<string> | undefined): void {
+        this._embedLoadVisited = visited;
+    }
+
+    private seedEmbedLoadVisited(): Set<string> {
+        const seeded = new Set<string>();
+        const name = this.EntityInfo?.Name;
+        const pk = this.FirstPrimaryKey?.Value;
+        if (name && pk !== null && pk !== undefined && pk !== '') {
+            seeded.add(`${name}:${String(pk)}`);
+        }
+        return seeded;
+    }
+
     private async loadEagerCompanions(): Promise<void> {
         if (!this.HasCompanions) {
             return;
         }
-        await Promise.all(this.Companions.map(c => c.LoadEager()));
+        const visited = this._embedLoadVisited ?? this.seedEmbedLoadVisited();
+        await Promise.all(this.Companions.map(c => c.LoadEager(visited)));
     }
 
     /**
@@ -1905,6 +2014,11 @@ export abstract class BaseEntity<T = unknown> {
         const childDeleteOptions = Object.assign(new EntityDeleteOptions(), deleteOptions ?? {});
         childDeleteOptions.GraphVisited = visited;
 
+        // Snapshot dirty/saved bookkeeping so a rolled-back graph can be retried.
+        // Node Save() finalizes each participant as saved+clean; DB rollback does
+        // not undo that, and the next Save() would skip the peer and fail the FK.
+        const participants = this.captureGraphParticipants(plan);
+
         // Acquired INSIDE the try: a begin failure (pool exhausted, dead connection) is a failed
         // save, and Save()/Delete() report failure by returning false — an escaping throw here
         // would break that contract for exactly one path.
@@ -1916,13 +2030,14 @@ export abstract class BaseEntity<T = unknown> {
                     : null;
             const result = await ExecuteEntitySavePlan(plan, {
                 SaveOptions: childSaveOptions,
-                RootSaveOptions: this.buildRootSaveOptions(saveOptions),
                 DeleteOptions: childDeleteOptions,
-                RootDeleteOptions: this.buildRootDeleteOptions(deleteOptions),
                 Visited: visited,
+                SaveSelfOnly: (entity, opts) => entity.saveAsGraphNode(opts),
+                DeleteSelfOnly: (entity, opts) => entity.deleteAsGraphNode(opts),
             });
             if (!result.Success) {
                 await scope?.Rollback();
+                this.revertGraphParticipants(participants);
                 this.registerGraphFailure(result.ErrorMessage, operation);
                 this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: result.ErrorMessage });
                 return false;
@@ -1944,6 +2059,7 @@ export abstract class BaseEntity<T = unknown> {
                     `${this.EntityInfo?.Name}: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
                 );
             }
+            this.revertGraphParticipants(participants);
             const detail = e instanceof Error ? e.message : String(e);
             LogError(`BaseEntity.executeGraphLocal failed for ${this.EntityInfo?.Name}: ${detail}`);
             this.registerGraphFailure(detail, operation);
@@ -1953,32 +2069,58 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Builds the save options for the graph's **root** node.
-     *
-     * Copies the caller's options onto a real `EntitySaveOptions` instance and stamps
-     * `IsGraphNodeSave`, which is what stops the root re-entering graph planning and lets it bypass
-     * its own in-flight save debounce.
-     *
-     * @param source - The caller's options, if any.
-     * @returns Options for the root node.
+     * Persist this record as one already-planned graph node. Private: the public
+     * `Save()` contract must not expose a "skip companions" switch. The executor
+     * binds this via {@link ExecuteEntitySavePlan}'s `SaveSelfOnly` callback.
      */
-    private buildRootSaveOptions(source?: EntitySaveOptions): EntitySaveOptions {
-        const options = Object.assign(new EntitySaveOptions(), source ?? {});
-        options.IsGraphNodeSave = true;
-        return options;
+    private saveAsGraphNode(options?: EntitySaveOptions): Promise<boolean> {
+        return this._InnerSave(options);
     }
 
     /**
-     * Builds the delete options for the graph's **root** node. Delete-path counterpart of
-     * {@link buildRootSaveOptions}.
-     *
-     * @param source - The caller's options, if any.
-     * @returns Options for the root node.
+     * Delete-path counterpart of {@link saveAsGraphNode}.
      */
-    private buildRootDeleteOptions(source?: EntityDeleteOptions): EntityDeleteOptions {
-        const options = Object.assign(new EntityDeleteOptions(), source ?? {});
-        options.IsGraphNodeDelete = true;
-        return options;
+    private deleteAsGraphNode(options?: EntityDeleteOptions): Promise<boolean> {
+        return this._InnerDelete(options);
+    }
+
+    /**
+     * Captures saved/dirty baselines for every plan participant so a rolled-back
+     * graph can be retried without re-INSERTing a "saved" peer or skipping it.
+     */
+    private captureGraphParticipants(plan: EntitySavePlan): GraphParticipantSnapshot[] {
+        return plan.Nodes.map(node => ({
+            entity: node.Entity,
+            wasSaved: node.Entity.IsSaved,
+            oldValues: node.Entity.Fields.map(f => ({ name: f.Name, old: f.OldValue })),
+        }));
+    }
+
+    /**
+     * Restores in-memory saved/dirty state after the database rolled the graph back.
+     */
+    private revertGraphParticipants(snapshots: GraphParticipantSnapshot[]): void {
+        for (const snap of snapshots) {
+            snap.entity.revertUncommittedGraphSave(snap);
+        }
+    }
+
+    /**
+     * After a graph node Save() the fields look clean and `_everSaved` is true.
+     * The DB rollback does not undo that. Restore the pre-attempt baseline so
+     * a retry still writes the peer and the owner FK still matches.
+     */
+    private revertUncommittedGraphSave(snap: GraphParticipantSnapshot): void {
+        if (!snap.wasSaved) {
+            this._everSaved = false;
+            this._recordLoaded = false;
+        }
+        for (const captured of snap.oldValues) {
+            const field = this.GetFieldByName(captured.name);
+            if (field) {
+                field.RestoreOldValue(captured.old);
+            }
+        }
     }
 
     /**
@@ -3184,12 +3326,6 @@ export abstract class BaseEntity<T = unknown> {
             return this._InnerSave(options);
         }
 
-        // Executing our own node inside a graph we already planned. Bypass both the debounce and
-        // graph routing — see EntitySaveOptions.IsGraphNodeSave for why each matters.
-        if (options?.IsGraphNodeSave) {
-            return this._InnerSave(options);
-        }
-
         // If a save is already in progress, return its promise. This check MUST run before graph
         // routing: a composite save is still a save, and two concurrent Save() calls on one record
         // (double-click, autosave racing a manual save) must share the in-flight unit of work.
@@ -3224,8 +3360,7 @@ export abstract class BaseEntity<T = unknown> {
                 }
                 // Run the graph through the same pending-save pipeline as a single-row save, so
                 // concurrent callers share one execution and one result. The graph's own root node
-                // re-enters Save() with IsGraphNodeSave, which bypasses this pipeline above — no
-                // self-deadlock.
+                // runs via the private saveAsGraphNode path — no re-entry into this pipeline.
                 this._pendingSave$ = of(options).pipe(
                     switchMap(opts => from(this.saveGraph(plan, opts))),
                     finalize(() => { this._pendingSave$ = null; }),
@@ -3574,7 +3709,11 @@ export abstract class BaseEntity<T = unknown> {
     private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            this.SetMany(data, false, true, true); // set the new values from the data returned from the save, this will also reset the old values
+            const fieldData = (data instanceof BaseEntity || (data && typeof data.GetAll === 'function')) ? data.GetAll() : data;
+            // IS-A GetAll() merges the parent, including parent virtuals this entity
+            // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
+            // this entity defines, and ignore anything leftover.
+            this.SetMany(this.ownedFieldsFrom(fieldData), true, true, true);
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
@@ -3619,7 +3758,9 @@ export abstract class BaseEntity<T = unknown> {
 
         // Cache it via this entity's provider so the cache lives on the right connection.
         const md = this.ProviderToUse as unknown as IMetadataProvider;
-        md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        if (typeof md?.SetCachedRecordName === 'function') {
+            md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        }
     }
 
     /**
@@ -4143,12 +4284,6 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean>
      */
     public async Delete(options?: EntityDeleteOptions) : Promise<boolean> {
-        // Executing our own node inside a delete graph we already planned. Bypass both the debounce
-        // and graph routing — see EntityDeleteOptions.IsGraphNodeDelete.
-        if (options?.IsGraphNodeDelete) {
-            return this._InnerDelete(options);
-        }
-
         // Composite routing: companions that own their children (OnRemove:'delete') contribute
         // child deletions that must run before this row disappears. A single-node plan falls
         // through to the ordinary path, so nothing changes for entities without companions.
@@ -4852,4 +4987,122 @@ export abstract class BaseEntity<T = unknown> {
     public ResetVectors(): void {
         this._vectors.clear();
     }
+
+    /**
+     * Resolves the recursive foreign key field for this entity. If `parentFieldName` is provided,
+     * finds that specific field. Otherwise defaults to 'ParentID' if present, or the first
+     * self-referencing foreign key field found on the entity.
+     */
+    protected getRecursiveForeignKeyField(parentFieldName?: string): EntityFieldInfo | null {
+        if (!this.EntityInfo) return null;
+        if (this.PrimaryKeys.length !== 1) {
+            LogError(`BaseEntity hierarchy methods: Entity '${this.EntityInfo.Name}' has ${this.PrimaryKeys.length} primary key fields. MemberJunction hierarchy traversal requires a single-column primary key.`);
+            return null;
+        }
+        const fields = this.EntityInfo.Fields ?? [];
+        if (parentFieldName) {
+            const match = fields.find(f => f.Name.toLowerCase() === parentFieldName.toLowerCase() || f.CodeName.toLowerCase() === parentFieldName.toLowerCase());
+            return match ?? null;
+        }
+        // Check for field explicitly configured with IsHierarchy = true first
+        const explicitHierarchyField = fields.find(f => f.IsHierarchy && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
+        if (explicitHierarchyField) return explicitHierarchyField;
+
+        // Check for 'ParentID' self-referencing foreign key next
+        const parentIdField = fields.find(f => f.Name.toLowerCase() === 'parentid' && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
+        if (parentIdField) return parentIdField;
+
+        // Fall back to first recursive foreign key field
+        return fields.find(f => f.RelatedEntityID && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name)) ?? null;
+    }
+
+    /**
+     * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+     * @param optionsOrMaxDepth Optional maximum relative depth to retrieve, or an options object.
+     * @returns Array of descendant entity instances ordered by hierarchy depth.
+     */
+    public async GetDescendants<T extends BaseEntity = this>(options?: { parentFieldName?: string; maxDepth?: number } | number): Promise<T[]> {
+        const maxDepth = typeof options === 'number' ? options : options?.maxDepth;
+        const parentFieldName = typeof options === 'object' ? options?.parentFieldName : undefined;
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetDescendants(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const rootId = this.Get(pkName);
+        if (!rootId) return [];
+
+        const rootFieldName = `Root${fkField.Name}`;
+        const depthFieldName = `${fkField.Name}Depth`;
+        const filter = maxDepth != null
+            ? `${rootFieldName} = '${rootId}' AND ${depthFieldName} <= ${maxDepth}`
+            : `${rootFieldName} = '${rootId}'`;
+
+        const rv = new RunView();
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: filter,
+            OrderBy: `${depthFieldName} ASC`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
+
+    /**
+     * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+     * @param parentFieldName Optional recursive foreign key field name (defaults to 'ParentID' or the first recursive FK found).
+     * @returns Array of ancestor entity instances ordered from root down to parent.
+     */
+    public async GetAncestors<T extends BaseEntity = this>(parentFieldName?: string): Promise<T[]> {
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetAncestors(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const currentId = this.Get(pkName);
+        const pathFieldName = `${fkField.Name}Path`;
+        const depthFieldName = `${fkField.Name}Depth`;
+        const path = this.Get(pathFieldName) as string | null | undefined;
+        if (!path) return [];
+
+        const rawIds = path.split('/').filter(id => id.length > 0 && id !== currentId);
+        if (rawIds.length === 0) return [];
+
+        const rv = new RunView();
+        const idList = rawIds.map(id => `'${id}'`).join(',');
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: `${pkName} IN (${idList})`,
+            OrderBy: `${depthFieldName} ASC`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
+
+    /**
+     * Retrieves all direct child records of this record using a single RunView query.
+     * @param parentFieldName Optional recursive foreign key field name (defaults to 'ParentID' or the first recursive FK found).
+     * @returns Array of direct child entity instances.
+     */
+    public async GetChildren<T extends BaseEntity = this>(parentFieldName?: string): Promise<T[]> {
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetChildren(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const currentId = this.Get(pkName);
+        if (!currentId) return [];
+
+        const rv = new RunView();
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: `${fkField.Name} = '${currentId}'`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
 }
+

@@ -13,7 +13,7 @@ import {
 import { configInfo, mj_core_schema } from '../../../Config/config';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
-import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers, restarLayeredOuterView, buildCreateOrReplaceLayeredOuterViewSQL, LayeredOuterRestarError } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
@@ -29,6 +29,7 @@ import { PostgreSQLCodeGenConnection } from './PostgreSQLCodeGenConnection';
 import * as fs from 'fs';
 import path from 'path';
 import { executeWithFallback } from './viewFallback';
+import type { PGQueryable } from './viewDependencyCapture';
 
 const pgDialect = new PostgreSQLDialect();
 
@@ -200,7 +201,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      */
     generateBaseView(context: BaseViewGenerationContext): string {
         const { entity } = context;
-        this.assertLayeredBaseViewSupported(entity);
         // The GENERATED view — `GeneratedViewName` is BaseView unless the entity layers a custom view
         // over an inner generated one, in which case CodeGen writes the inner name. The CRUD
         // routines keep using getBaseViewName(): they return rows from the PUBLIC view, so a
@@ -1022,6 +1022,31 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
         );
     }
 
+    protected softPrimaryKeyIndexPrefix(): string {
+        return 'idx_auto_mj_softpk_';
+    }
+
+    /**
+     * PostgreSQL will happily accept an unbounded `text` column in a btree key and then fail at
+     * INSERT time if a value exceeds roughly an eighth of a page — an error that surfaces long
+     * after the index was created, on whichever row happens to be too long. Treating unbounded
+     * columns as unindexable keeps the failure at generation time, where it names the column.
+     */
+    protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
+        return f.Length !== -1;
+    }
+
+    protected formatCompositeIndexStatement(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {
+        const cols = fields.map(f => pgDialect.QuoteIdentifier(f.Name)).join(', ');
+        return (
+            `-- Index for the soft primary key (${fields.map(f => f.Name).join(', ')}) in table ${entity.BaseTable}.\n` +
+            `-- The key is metadata-only — no PRIMARY KEY constraint — so without this the per-record\n` +
+            `-- existence check on the create path scans the whole table.\n` +
+            `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
+            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${cols});`
+        );
+    }
+
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
     /**
@@ -1114,7 +1139,243 @@ WHERE ${ftsColName} IS NULL;
      * the parent FK upward, capped at 100 levels to prevent infinite loops. Returns the
      * root record's primary key value.
      */
+    // ─── RECURSIVE HIERARCHY FUNCTIONS ──────────────────────────────────
+
+    /**
+     * Generates a PostgreSQL function returning a table of hierarchy metadata
+     * (RootID, Depth, Path, IsLeaf, ChildCount) for a self-referencing foreign key.
+     */
+    generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getHierarchyMetaFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- HIERARCHY METADATA FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_record_id ${primaryKeyType},
+    p_parent_id ${primaryKeyType}
+) RETURNS TABLE (
+    "RootID" ${primaryKeyType},
+    "Depth" INTEGER,
+    "Path" TEXT,
+    "IsLeaf" BOOLEAN,
+    "ChildCount" INTEGER
+) AS $$
+    WITH RECURSIVE cte_ancestors AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS depth,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_record_id
+
+        UNION ALL
+
+        SELECT
+            p.${pgDialect.QuoteIdentifier(primaryKey)},
+            p.${pgDialect.QuoteIdentifier(fieldName)},
+            c.depth + 1 AS depth,
+            '/' || p.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || c.path AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} p
+        INNER JOIN
+            cte_ancestors c ON p.${pgDialect.QuoteIdentifier(primaryKey)} = c.${pgDialect.QuoteIdentifier(fieldName)}
+        WHERE
+            c.depth < 100
+    )
+    SELECT
+        a.${pgDialect.QuoteIdentifier(primaryKey)} AS "RootID",
+        (SELECT MAX(depth) FROM cte_ancestors)::INTEGER AS "Depth",
+        (SELECT path FROM cte_ancestors ORDER BY depth DESC LIMIT 1)::TEXT AS "Path",
+        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id))::BOOLEAN AS "IsLeaf",
+        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id) AS "ChildCount"
+    FROM
+        cte_ancestors a
+    WHERE
+        a.${pgDialect.QuoteIdentifier(fieldName)} IS NULL OR p_parent_id IS NULL
+    ORDER BY
+        a.depth DESC
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    /**
+     * Generates a PostgreSQL table-valued function returning all descendant records of a root node.
+     */
+    generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getDescendantsFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- DESCENDANTS FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_root_id ${primaryKeyType},
+    p_max_depth INTEGER DEFAULT NULL
+) RETURNS TABLE (
+    "ID" ${primaryKeyType},
+    "Depth" INTEGER,
+    "Path" TEXT,
+    "IsLeaf" BOOLEAN,
+    "ChildCount" INTEGER
+) AS $$
+    WITH RECURSIVE cte_descendants AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS relative_depth,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_root_id
+
+        UNION ALL
+
+        SELECT
+            c.${pgDialect.QuoteIdentifier(primaryKey)},
+            c.${pgDialect.QuoteIdentifier(fieldName)},
+            p.relative_depth + 1 AS relative_depth,
+            p.path || c.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} c
+        INNER JOIN
+            cte_descendants p ON c.${pgDialect.QuoteIdentifier(fieldName)} = p.${pgDialect.QuoteIdentifier(primaryKey)}
+        WHERE
+            (p_max_depth IS NULL OR p.relative_depth < p_max_depth)
+            AND p.relative_depth < 100
+    )
+    SELECT
+        d.${pgDialect.QuoteIdentifier(primaryKey)} AS "ID",
+        d.relative_depth AS "Depth",
+        d.path AS "Path",
+        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = d.${pgDialect.QuoteIdentifier(primaryKey)}))::BOOLEAN AS "IsLeaf",
+        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = d.${pgDialect.QuoteIdentifier(primaryKey)}) AS "ChildCount"
+    FROM
+        cte_descendants d;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    /**
+     * Generates a PostgreSQL table-valued function returning all ancestors of a node walking upward.
+     */
+    generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getAncestorsFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- ANCESTORS FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_record_id ${primaryKeyType}
+) RETURNS TABLE (
+    "ID" ${primaryKeyType},
+    "LevelUp" INTEGER,
+    "Path" TEXT
+) AS $$
+    WITH RECURSIVE cte_ancestors AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS level_up,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_record_id
+
+        UNION ALL
+
+        SELECT
+            p.${pgDialect.QuoteIdentifier(primaryKey)},
+            p.${pgDialect.QuoteIdentifier(fieldName)},
+            c.level_up + 1 AS level_up,
+            '/' || p.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || c.path AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} p
+        INNER JOIN
+            cte_ancestors c ON p.${pgDialect.QuoteIdentifier(primaryKey)} = c.${pgDialect.QuoteIdentifier(fieldName)}
+        WHERE
+            c.level_up < 100
+    )
+    SELECT
+        a.${pgDialect.QuoteIdentifier(primaryKey)} AS "ID",
+        a.level_up AS "LevelUp",
+        a.path AS "Path"
+    FROM
+        cte_ancestors a;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    public getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_hierarchy_meta`;
+    }
+
+    public getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_descendants`;
+    }
+
+    public getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_ancestors`;
+    }
+
+    /** @inheritdoc */
+    generateHierarchyFieldSelect(_entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const rootFieldName = `Root${field.Name}`;
+        const depthFieldName = `${field.Name}Depth`;
+        const pathFieldName = `${field.Name}Path`;
+        const isLeafFieldName = `${field.Name}IsLeaf`;
+        const childCountFieldName = `${field.Name}ChildCount`;
+        return `${alias}."RootID" AS ${pgDialect.QuoteIdentifier(rootFieldName)},
+    ${alias}."Depth" AS ${pgDialect.QuoteIdentifier(depthFieldName)},
+    ${alias}."Path" AS ${pgDialect.QuoteIdentifier(pathFieldName)},
+    ${alias}."IsLeaf" AS ${pgDialect.QuoteIdentifier(isLeafFieldName)},
+    ${alias}."ChildCount" AS ${pgDialect.QuoteIdentifier(childCountFieldName)}`;
+    }
+
+    /**
+     * Generates a `LEFT JOIN LATERAL` clause that invokes the hierarchy metadata function
+     * for a self-referencing field.
+     */
+    generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const fnName = this.getHierarchyMetaFunctionName(entity, field);
+        const tableAlias = entity.BaseTableCodeName.charAt(0).toLowerCase();
+        return `LEFT JOIN LATERAL ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(${tableAlias}.${pgDialect.QuoteIdentifier(entity.FirstPrimaryKey.Name)}, ${tableAlias}.${pgDialect.QuoteIdentifier(field.Name)}) AS ${alias} ON true`;
+    }
+
+    /**
+     * Generates a PostgreSQL function that recursively calculates the root record ID for a
+     * self-referencing foreign key.
+     */
     generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
         const fieldName = field.Name;
@@ -1177,7 +1438,7 @@ $$ LANGUAGE sql STABLE;
      * function`. The snake_case scalar form is codegen's own naming space and
      * is consistent with how downstream views are emitted.
      */
-    private getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+    public getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
         return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_root_id`;
     }
 
@@ -1673,18 +1934,10 @@ ORDER BY ordinal_position`;
     }
 
     /**
-     * PostgreSQL has no view-refresh mechanism, so this always returns `false`.
-     *
-     * NOT because PG views track their source automatically — they do not. PG expands `SELECT *`
-     * into an explicit column list at creation and freezes it; a view gains a new underlying column
-     * only when the view itself is recreated. CodeGen gets away without a refresh step because it
-     * emits every generated view with an explicit column list and re-issues `CREATE OR REPLACE` on
-     * every run, so the definition it controls is always current.
-     *
-     * That holds only for views CodeGen writes. A view CodeGen does not own — such as the
-     * application-owned outer view of a layered entity — has no mechanism here to re-resolve it, and
-     * `generateViewRefreshSQL` returning empty is a genuine no-op rather than a cheap one. This is
-     * why {@link generateBaseView} refuses layered entities outright on PostgreSQL.
+     * PostgreSQL has no `sp_refreshview`. Generated views are re-issued with
+     * `CREATE OR REPLACE` (or the 42P16 capture/DROP CASCADE path) every run, so
+     * they do not need a separate refresh step. Layered *outer* views are rebound
+     * via {@link generateLayeredOuterRebindSQL}, not this flag.
      */
     get NeedsViewRefresh(): boolean {
         return false;
@@ -1695,12 +1948,90 @@ ORDER BY ordinal_position`;
         return '';
     }
 
+    /**
+     * Restar `g.*` on the application-owned outer view. Invokes the catalog
+     * function shipped by the PG layered-views migration; no-op if the function
+     * is not installed yet (bootstrap before that migration).
+     */
+    override generateLayeredOuterRebindSQL(entity: EntityInfo): string {
+        if (!entity.HasLayeredBaseView) {
+            return '';
+        }
+        let core = '__mj';
+        try {
+            core = (mj_core_schema() || '__mj').replace(/"/g, '""');
+        } catch {
+            core = '__mj';
+        }
+        const schema = entity.SchemaName.replace(/'/g, "''");
+        const outer = entity.BaseView.replace(/'/g, "''");
+        const inner = entity.GeneratedViewName.replace(/'/g, "''");
+        return `SELECT "${core}"."spRebindLayeredOuterView"('${schema}', '${outer}', '${inner}');`;
+    }
+
+    /**
+     * After the inner generated view is current, restar the application-owned
+     * outer wrapper so `g.*` re-expands. No-op when the entity is not layered
+     * or the outer view does not exist yet (bootstrap pass).
+     */
+    private async rebindLayeredOuterIfPresent(
+        client: PGQueryable,
+        entity: EntityInfo,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        if (!entity.HasLayeredBaseView) {
+            return;
+        }
+        const schemaLit = entity.SchemaName.replace(/'/g, "''").replace(/"/g, '""');
+        const outerLit = entity.BaseView.replace(/'/g, "''").replace(/"/g, '""');
+        const innerLit = entity.GeneratedViewName.replace(/'/g, "''").replace(/"/g, '""');
+        const existsResult = await client.query(
+            `SELECT to_regclass('"${schemaLit}"."${outerLit}"') IS NOT NULL AS present`,
+        );
+        if (!existsResult.rows?.[0]?.['present']) {
+            return;
+        }
+
+        const defResult = await client.query(this.getViewDefinitionSQL(entity.SchemaName, entity.BaseView));
+        const viewDefinition = String(defResult.rows?.[0]?.['ViewDefinition'] ?? defResult.rows?.[0]?.['viewdefinition'] ?? '');
+        if (!viewDefinition) {
+            throw new LayeredOuterRestarError(
+                `Could not read pg_get_viewdef for layered outer view ${entity.SchemaName}.${entity.BaseView}`,
+            );
+        }
+
+        const colResult = await client.query(
+            `SELECT a.attname AS "Name"
+             FROM pg_attribute a
+             JOIN pg_class c ON c.oid = a.attrelid
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = '${schemaLit}'
+               AND c.relname = '${innerLit}'
+               AND a.attnum > 0
+               AND NOT a.attisdropped
+             ORDER BY a.attnum`,
+        );
+        const innerColumns = (colResult.rows ?? []).map((r) => String(r['Name'] ?? r['name'] ?? ''));
+        const restarred = restarLayeredOuterView({
+            viewDefinition,
+            innerViewName: entity.GeneratedViewName,
+            innerColumns,
+        });
+        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(entity.SchemaName, entity.BaseView, restarred);
+        await executeWithFallback({
+            client,
+            schema: entity.SchemaName,
+            viewName: entity.BaseView,
+            createOrReplaceSQL: createSQL,
+            willRegenerate,
+        });
+    }
+
     /** @inheritdoc */
     generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string {
-        // Reached only if a future change enables layering on PG; today generateBaseView throws
-        // first. Implemented properly regardless, so the guard is not a lie if that day comes.
+        // The outer view of a layered entity does not exist on the bootstrap pass.
         const escaped = innerSQL.replace(/'/g, "''");
-        const regclass = `${schema}.${viewName}`.replace(/'/g, "''");
+        const regclass = `"${schema.replace(/"/g, '""')}"."${viewName.replace(/"/g, '""')}"`.replace(/'/g, "''");
         return `DO $if_view_exists$
 BEGIN
   IF to_regclass('${regclass}') IS NOT NULL THEN
@@ -1912,6 +2243,18 @@ WHERE p.prokind IN ('f', 'p')
                 f.RelatedEntityID != null && UUIDsEqual(f.RelatedEntityID, entity.ID)
             );
             for (const field of recursiveFKs) {
+                const metaSQL = this.generateHierarchyMetaFunction(entity, field);
+                if (metaSQL && metaSQL.trim().length > 0) {
+                    await client.query(metaSQL);
+                }
+                const descSQL = this.generateDescendantsFunction(entity, field);
+                if (descSQL && descSQL.trim().length > 0) {
+                    await client.query(descSQL);
+                }
+                const ancSQL = this.generateAncestorsFunction(entity, field);
+                if (ancSQL && ancSQL.trim().length > 0) {
+                    await client.query(ancSQL);
+                }
                 const fnSQL = this.generateRootIDFunction(entity, field);
                 if (fnSQL && fnSQL.trim().length > 0) {
                     await client.query(fnSQL);
@@ -1921,7 +2264,7 @@ WHERE p.prokind IN ('f', 'p')
             await executeWithFallback({
                 client,
                 schema: entity.SchemaName,
-                viewName: entity.BaseView,
+                viewName: entity.GeneratedViewName,
                 createOrReplaceSQL: viewSQL,
                 willRegenerate,
                 // Pass the base table so viewFallback can materialize a stub
@@ -1932,6 +2275,7 @@ WHERE p.prokind IN ('f', 'p')
                 // self-reference until a placeholder exists).
                 baseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
+            await this.rebindLayeredOuterIfPresent(client, entity, willRegenerate);
         } finally {
             client.release();
         }
@@ -1987,11 +2331,12 @@ WHERE p.prokind IN ('f', 'p')
                     await executeWithFallback({
                         client,
                         schema: opts.entity.SchemaName,
-                        viewName: opts.entity.BaseView,
+                        viewName: opts.entity.GeneratedViewName,
                         createOrReplaceSQL: opts.viewSQL,
                         willRegenerate: opts.willRegenerate,
                         baseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
                     });
+                    await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
                 } catch (e) {
                     return {
                         success: false,
@@ -2103,40 +2448,6 @@ WHERE p.prokind IN ('f', 'p')
     /** Gets the base view name for an entity */
     private getBaseViewName(entity: EntityInfo): string {
         return entity.BaseView || `vw_${this.toSnakeCase(entity.CodeName)}`;
-    }
-
-    /**
-     * Refuses layered base views on PostgreSQL, where the arrangement cannot deliver what it
-     * promises.
-     *
-     * Layering exists so an application can add a computed column without inheriting — and then
-     * hand-maintaining — the generated view, the payoff being that a foreign key added later still
-     * shows up on its own. That payoff depends entirely on the application-owned outer view's
-     * `SELECT g.*` being re-resolved after the inner view regenerates. SQL Server does that with
-     * `sp_refreshview`. PostgreSQL expands `*` at creation and freezes it, offers no refresh
-     * equivalent, and CodeGen does not own the outer view, so nothing recreates it.
-     *
-     * The resulting behaviour is worse than plainly broken, it is intermittent: an ADDED column (the
-     * common case) leaves the outer view stale, because `CREATE OR REPLACE` on the inner view
-     * succeeds and never touches dependents. A column RENAME or type change raises 42P16, which
-     * sends CodeGen down the capture/`DROP CASCADE`/replay path — and that incidentally recreates
-     * the outer view, so it picks the new columns up. Same feature, opposite outcomes, decided by
-     * which kind of schema change happened to land that day.
-     *
-     * That is precisely the silent-staleness failure layering was built to eliminate, so this throws
-     * rather than documenting a footgun. Fully custom base views (`BaseViewGenerated = 0` with no
-     * `GeneratedBaseViewName`) are unaffected and keep working on PostgreSQL as before.
-     */
-    private assertLayeredBaseViewSupported(entity: EntityInfo): void {
-        if (!entity.HasLayeredBaseView) return;
-        throw new Error(
-            `Entity "${entity.Name}" sets GeneratedBaseViewName = '${entity.GeneratedBaseViewName}', but layered ` +
-            `base views are not supported on PostgreSQL. PostgreSQL freezes a view's column list at creation and ` +
-            `has no sp_refreshview equivalent, so the application-owned view "${entity.BaseView}" would silently ` +
-            `stop gaining columns that the generated view underneath it picks up. Clear GeneratedBaseViewName and ` +
-            `use a fully custom base view (BaseViewGenerated = 0) instead, accepting that it must be ` +
-            `hand-maintained as the schema changes.`
-        );
     }
 
     /** Builds the WHERE clause for soft-delete filtering */

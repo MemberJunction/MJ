@@ -631,7 +631,35 @@ same record cannot produce a phantom cycle.
 
 ---
 
-## 7. Behavior changes for adopters
+## 7. Polymorphic IS-A Child Support in Collections & Embedded Records
+
+When an entity hierarchy uses [IS-A inheritance](./isa-relationships.md) (e.g. `Order Lines` with subtypes `Event Order Lines`, `Subscription Order Lines`), a `RelatedRecordCollection` (and `EmbeddedRecord`) can hold **polymorphic IS-A leaf entity instances** directly:
+
+```typescript
+// Add a polymorphic IS-A leaf entity directly to order.Lines
+const eventLine = await provider.GetEntityObject<EventOrderLineEntity>('MJ_BizApps_Orders: Event Order Lines');
+eventLine.NewRecord();
+eventLine.ProductID = eventProduct.ID;
+eventLine.Quantity = 1;
+eventLine.CheckInAt = new Date();
+
+order.Lines.Add(eventLine); // stamps OrderHeaderID onto eventLine
+```
+
+### How it works across the wire
+
+1. **Wire Serialization**: Each wire item carries its specific `EntityName` (e.g. `'MJ_BizApps_Orders: Event Order Lines'`), falling back to the collection's declared `RelatedEntityName` for standard homogeneous records.
+2. **Wire Deserialization**: Server-side rehydration reads `row.EntityName` and instantiates the proper IS-A subclass via `provider.GetEntityObject(entityName, user)`.
+3. **IS-A Validation & Persistence**:
+   - Because `EventOrderLineEntity` is an IS-A leaf node, it inherits and shares all base `OrderLine` fields (`OrderHeaderID`, `ProductID`, `Quantity`, `UnitPrice`) through its internal IS-A parent chain.
+   - When the graph saves, BaseEntity's native IS-A pipeline validates both parent and child fields, and persists the parent table row and the child table row atomically within the same database transaction.
+4. **Removals**: Polymorphic deletions preserve `__entityName` in the removal payload so the correct IS-A entity is loaded and deleted.
+
+The exact same polymorphic mechanism applies to [Embedded Records](./embedded-records.md) via `EmbeddedRecordWire.EntityName`.
+
+---
+
+## 8. Behavior changes for adopters
 
 Declaring a collection changes two things about the parent, both of them fixes:
 

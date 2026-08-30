@@ -10,6 +10,7 @@ import {
     Type,
     ViewChild,
     ViewContainerRef,
+    inject,
 } from '@angular/core';
 import { Subject, takeUntil } from 'rxjs';
 import { BaseEntity, LogError } from '@memberjunction/core';
@@ -19,6 +20,7 @@ import { FormContext } from '../types/form-types';
 import { BaseFormPanel, FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 import { FormSlotCoordinator } from './form-slot-coordinator.service';
 import { CollapseFormPanelRegistrations } from './form-contribution';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
  * `<mj-form-panel-slot>` — dynamic slot host that discovers and mounts every
@@ -80,6 +82,7 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     private mounted: ComponentRef<BaseFormPanel>[] = [];
     private readonly destroy$ = new Subject<void>();
     private registeredSlot: FormPanelSlot | null = null;
+    private readonly recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
     /** Tracks synchronous re-entry depth into remount() so a future refactor
      *  that reintroduces a remount loop surfaces loudly instead of freezing. */
     private remountDepth = 0;
@@ -97,6 +100,9 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
                 .pipe(takeUntil(this.destroy$))
                 .subscribe(() => this.remount());
         }
+        this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
+            this.notifyMountedPanels(record);
+        });
     }
 
     ngOnChanges(changes: SimpleChanges): void {
@@ -135,6 +141,12 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
             this.registeredSlot = null;
         }
         this.unmountAll();
+    }
+
+    private notifyMountedPanels(record: BaseEntity): void {
+        for (const ref of this.mounted) {
+            ref.instance.OnRecordRefreshed(record);
+        }
     }
 
     private remount(): void {
@@ -221,7 +233,14 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
 
     /** True when a registration's `entity` matches this slot's entity, or is the `'*'` wildcard. */
     private entityMatches(registeredEntity: string | undefined): boolean {
-        return registeredEntity === '*' || registeredEntity === this.Entity;
+        if (!registeredEntity || !this.Entity) return false;
+        if (registeredEntity === '*') return true;
+        const a = registeredEntity.trim().toLowerCase();
+        const b = this.Entity.trim().toLowerCase();
+        if (a === b) return true;
+        // Normalize schema prefixes like "MJ: " or "MJ_"
+        const strip = (s: string) => s.replace(/^mj[:_\s]+/i, '').replace(/[\s_]+/g, '').toLowerCase();
+        return strip(a) === strip(b);
     }
 
     /**

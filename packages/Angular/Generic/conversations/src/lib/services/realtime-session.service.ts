@@ -511,6 +511,12 @@ export class RealtimeSessionService {
    */
   private currentTurnStartMs: number | null = null;
   /**
+   * Wall-anchor of the SESSION clock (#3832): `performance.now()` at the moment the call went
+   * live, or `null` before any call has. Read only through {@link nowTurnOffsetMs}.
+   */
+  private sessionClockStartMs: number | null = null;
+
+  /**
    * Per-turn guard for {@link markTurnAudioStart}: `true` once the in-flight turn's audio-start
    * offset has been captured, so mid-turn interim deltas don't overwrite it. Reset to `false`
    * at each finalization so the NEXT turn re-stamps from where ITS audio begins.
@@ -736,6 +742,15 @@ export class RealtimeSessionService {
       // and never blocks the call. The remote stream may still be null here (the WebRTC
       // ontrack can land slightly after Connect resolves) — the recorder mixes the mic now
       // and the agent audio rides through whenever its track is already attached.
+      // The SESSION clock (#3832): anchored the moment the call goes live, whether or not a
+      // recording exists. When the recorder runs, per-turn timings use ITS clock (offsets into a
+      // seekable file); when it does not — every unconsented and every relay-captured session,
+      // which is 100% of turns measured across two databases — this is the fallback that stops
+      // `UtteranceStartMs`/`UtteranceEndMs` being categorically null. An offset into a session
+      // with no audio is not seekable, but it is orderable and displayable ("3:42 into the
+      // interview"), and it is stamped when the SPEECH happened rather than when the relay
+      // mutation landed — which no server-side backfill can ever recover.
+      this.sessionClockStartMs = performance.now();
       if (consent) {
         this.startRecording(client);
       }
@@ -885,6 +900,9 @@ export class RealtimeSessionService {
       // First turn's audio starts at ~0 (recording begins right as the call goes live). Seed it
       // here so the very first turn has a sane start even if its first interim is missed; later
       // turns re-stamp from where THEIR audio begins via markTurnAudioStart (handles tool gaps).
+      // Seeded even though the session clock may already have stamped a start: the clocks have
+      // different zeros, and a session-clock start carried into recorder-clock offsets would put
+      // turn one's cue wherever the clocks happen to differ.
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
       if (this.recorder) {
@@ -1625,11 +1643,31 @@ export class RealtimeSessionService {
    * assistant answer, which always has interims.
    */
   private markTurnAudioStart(kind: 'normal' | 'narration'): void {
-    if (!this.recorder || this.turnAudioStartCaptured || kind === 'narration') {
+    if (this.turnAudioStartCaptured || kind === 'narration') {
       return;
     }
-    this.currentTurnStartMs = this.recorder.NowOffsetMs();
+    const offset = this.nowTurnOffsetMs();
+    if (offset === null) {
+      return;
+    }
+    this.currentTurnStartMs = offset;
     this.turnAudioStartCaptured = true;
+  }
+
+  /**
+   * The current per-turn offset in ms — the RECORDER's clock when one runs (an offset into a
+   * seekable file), else the SESSION clock (#3832: orderable and displayable, not seekable),
+   * else `null` before any call is live. One function so the two stamp sites cannot disagree
+   * about which clock a session is on.
+   */
+  private nowTurnOffsetMs(): number | null {
+    if (this.recorder) {
+      return this.recorder.NowOffsetMs();
+    }
+    if (this.sessionClockStartMs !== null) {
+      return Math.max(0, Math.round(performance.now() - this.sessionClockStartMs));
+    }
+    return null;
   }
 
   /**
@@ -1999,12 +2037,13 @@ export class RealtimeSessionService {
     if (!this.agentSessionId) {
       return;
     }
-    // Per-turn timing against the recording (when recording). `utteranceStartMs` is where this
-    // turn's audio actually began (captured by markTurnAudioStart on the first interim); the
-    // `?? 0` fallback covers a turn whose interim was missed / a final-only first turn.
-    const utteranceEndMs = this.recorder ? this.recorder.NowOffsetMs() : null;
-    const utteranceStartMs = this.recorder && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
-    if (this.recorder && !replacesPrevious) {
+    // Per-turn timing against whichever clock the session is on (#3832): the recorder's when one
+    // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began
+    // (captured by markTurnAudioStart on the first interim); the `?? 0` fallback covers a turn
+    // whose interim was missed / a final-only first turn.
+    const utteranceEndMs = this.nowTurnOffsetMs();
+    const utteranceStartMs = utteranceEndMs !== null && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
+    if (utteranceEndMs !== null && !replacesPrevious) {
       // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first
       // interim (handles a tool-call gap before the next turn). Stop inheriting this end as the
       // next start. `null` means "not yet captured"; relay falls back to `?? 0` if no interim fires.

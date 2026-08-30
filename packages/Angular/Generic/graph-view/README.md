@@ -10,7 +10,7 @@ An interactive, high-performance network and relationship graph visualization co
 - 🔍 **Interactive Search & Degree Filter**: Node keyword filtering and hop-distance neighborhood expansion.
 - 🎯 **Cancelable Before/After Event System**: Full control over user interactions (`BeforeNodeSelect`, `BeforeEdgeSelect`, `BeforeHopExpand`, `BeforeLayoutChange`).
 - 🎨 **MemberJunction Design Tokens**: Seamless integration with MJ dark/light themes and typography.
-- 🔎 **Selected Node Inspector Pane**: Built-in side drawer with direct 1-click `NavigationService.OpenEntityRecord` action.
+- 🔎 **Selected Node Inspector Pane**: Built-in side drawer. Navigation is an intent event (`NodeNavigated`) so the host opens the record.
 
 ---
 
@@ -73,7 +73,7 @@ export class MyFeatureComponent {
 | `BeforeLayoutChange` | `BeforeLayoutChangeEventArgs` | ✅ Yes | Fired before layout mode changes. |
 | `LayoutChanged` | `LayoutChangedEventArgs` | ❌ No | Fired after layout algorithm recalculates. |
 | `BeforeNodeNavigate` | `BeforeNodeNavigateEventArgs` | ✅ Yes | Fired before opening full entity record form. |
-| `NodeNavigated` | `NodeNavigatedEventArgs` | ❌ No | Fired after navigation handoff to `NavigationService`. |
+| `NodeNavigated` | `NodeNavigatedEventArgs` | ❌ No | Fired after the user asks to open a record. The host owns navigation. |
 
 ---
 
