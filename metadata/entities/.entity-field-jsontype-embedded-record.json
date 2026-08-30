@@ -26,6 +26,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Fields&Name=EmbeddedRecord"
+          },
+          "sync": {
+            "lastModified": "2026-08-20T22:30:53.107Z",
+            "checksum": "82e3203b417dff20abf26c0f2a0c39825843971b1523a6d318f632deaf6fb741"
           }
         }
       ]

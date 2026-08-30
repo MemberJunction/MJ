@@ -42,6 +42,7 @@ export type SyncLogEvent =
     | 'sync.connector.built'
     | 'sync.connector.test'
     | 'sync.entity-map.start'
+    | 'sync.entity-map.exclusions'
     | 'sync.resume.keyset'
     | 'sync.partition.reconcile'
     | 'sync.fetch.batch.start'

@@ -125,7 +125,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
-        ['conversation-compaction', ConversationCompactionChecks, 12], // CC1-CC12
+        ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -219,7 +219,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
         'aggregates-cache': 3,
-        'ai-cost': 6,
+        'ai-cost': 7,
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
@@ -236,7 +236,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 8,
-        'conversation-compaction': 12,
+        'conversation-compaction': 18,
         'dataset-cache': 3,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -284,6 +284,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'task-graph-orchestration': 18,
         'templates': 8,
         'transaction-groups': 5,
+        'transaction-groups-batched': 5,
         'user-routines': 16,
         'view-execution': 12,
         'view-security': 4,
@@ -311,7 +312,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(85);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(86);
     });
 });
 
@@ -450,6 +451,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-orchestration.TG15',
         'task-graph-orchestration.TG16',
         'task-graph-orchestration.TG18',
+        'transaction-groups-batched.TGB1',
+        'transaction-groups-batched.TGB2',
+        'transaction-groups-batched.TGB3',
+        'transaction-groups-batched.TGB4',
+        'transaction-groups-batched.TGB5',
         'transaction-groups.TG2',
         'transaction-groups.TG3',
         'transaction-groups.TG4',
