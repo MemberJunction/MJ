@@ -127,6 +127,22 @@ describe('PostgreSQLTransactionGroup.BatchedSubmit', () => {
         expect(calls[0].params?.length).toBe(1);
     });
 
+    it('falls back to sequential when an instruction references more placeholders than the generator supplied', async () => {
+        // An absent parameter index is a generator/instruction disagreement, NOT a null value.
+        // Inlining it as NULL would silently write a null column; the group must bail instead so
+        // the driver raises it on the sequential path.
+        const { client, calls } = makeClient({ multiResult: () => [{ rows: [] }] });
+        const items = [
+            makeItem('SELECT * FROM sp_x($1, $2)', ['only-one'], 'X'),
+            makeItem('SELECT * FROM sp_y($1)', ['fine'], 'Y'),
+        ];
+        const results: unknown[] = [];
+        await makeGroup().executeBatched(items, client, results);
+        expect(calls.length).toBe(2);              // sequential, not one batch
+        expect(calls[0].params).toEqual(['only-one']); // and $2 never became a NULL literal
+        expect(calls[0].text).toContain('$2');
+    });
+
     it('falls back to sequential when the client has no escapeLiteral', async () => {
         const { client, calls } = makeClient({ withEscape: false, multiResult: () => [{ rows: [] }] });
         const items = [makeItem('SELECT * FROM sp_x($1)', ['v'], 'X')];

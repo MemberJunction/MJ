@@ -34,9 +34,16 @@ vi.mock('mssql', () => {
     return { default: { Request: FakeRequest, Transaction: FakeTransaction } };
 });
 
-// GenericDatabaseProvider.LogSQLStatement is a static side-channel — silence it.
+// GenericDatabaseProvider.LogSQLStatement is a static side-channel — capture it, because the
+// batched path must still log PER ITEM (migration capture replays statements one record at a
+// time and reads each item's own simpleSQLFallback).
+const logCalls: Array<{ query: string; description?: string; fallback?: string }> = [];
 vi.mock('@memberjunction/generic-database-provider', () => ({
-    GenericDatabaseProvider: { LogSQLStatement: async () => undefined },
+    GenericDatabaseProvider: {
+        LogSQLStatement: async (query: string, _params: unknown, description?: string, _isMutation?: boolean, fallback?: string) => {
+            logCalls.push({ query, description, fallback });
+        },
+    },
 }));
 
 import { SQLServerTransactionGroup } from '../SQLServerTransactionGroup.js';
@@ -49,7 +56,7 @@ function makeItem(instruction: string, vars: unknown[] | null, entityName: strin
         Instruction: instruction,
         Vars: vars,
         OperationType: 'Create',
-        ExtraData: { dataSource: {}, entityName },
+        ExtraData: { dataSource: {}, entityName, simpleSQLFallback: `SIMPLE:${entityName}` },
     } as unknown as TransactionItem;
 }
 
@@ -116,6 +123,36 @@ describe('SQLServerTransactionGroup.BatchedSubmit', () => {
         expect(text).toContain('@p2');
         expect(text).not.toContain('?');
         expect(inputs).toEqual({ p0: 'first', p1: 'second', p2: 'third' });
+    });
+
+    it('logs EVERY item with its own fallback, not just item 0 under the combined text', async () => {
+        // Migration capture replays statements one record at a time and reads each item's own
+        // record-change-free `simpleSQLFallback`. Logging the combined batch alone under item 0's
+        // fallback would capture something nobody can replay and attribute every row to the first
+        // entity — a degraded dev-facing capture that only appears when batching and SQL logging
+        // are both on.
+        queryCalls.length = 0;
+        logCalls.length = 0;
+        throwOnQuery = undefined;
+        scriptedRecordsets = [];
+        const items = [
+            makeItem('EXEC spCreateA', null, 'A'),
+            makeItem('EXEC spCreateB', null, 'B'),
+            makeItem('EXEC spCreateC', null, 'C'),
+        ];
+        await run(items, []);
+
+        expect(queryCalls.length).toBe(1); // still ONE round trip — logging changes nothing on the wire
+        // Every item is logged under its OWN fallback...
+        for (const entityName of ['A', 'B', 'C']) {
+            const entry = logCalls.find(c => c.fallback === `SIMPLE:${entityName}`);
+            expect(entry, `item ${entityName} must be logged with its own simpleSQLFallback`).toBeDefined();
+            expect(entry!.query).toContain(`spCreate${entityName}`);
+        }
+        // ...and the combined batch is still logged once, without borrowing anyone's fallback.
+        const batchEntry = logCalls.find(c => c.description?.includes('Batched 3 operation(s)'));
+        expect(batchEntry).toBeDefined();
+        expect(batchEntry!.fallback).toBeUndefined();
     });
 
     it('fails the whole group on a batch error, mirroring the serial rollback contract', async () => {

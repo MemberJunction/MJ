@@ -683,6 +683,14 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT86 - Transaction Group Batched Submit",
+            "Sequence": 48,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT84 - Agent Note Cache Types (entity_object invariant)",
             "Sequence": 48,
             "Status": "Active"

@@ -155,7 +155,18 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
             let inlined = item.Instruction;
             if (params.length > 0) {
                 inlined = inlined.replace(/\$(\d+)\b/g, (match, digits) => {
-                    const lit = literalFor(params[Number(digits) - 1]);
+                    const position = Number(digits) - 1;
+                    // An ABSENT parameter index is not a null value — it means the instruction
+                    // references more placeholders than the generator supplied, i.e. the two
+                    // disagree. Unreachable today (GenerateSaveSQL emits statement and parameters
+                    // together), but batching is precisely the path where that disagreement would
+                    // be SILENT: inlining it as NULL would write a null column instead of failing.
+                    // Bail the whole group to the sequential path, where the driver raises it.
+                    if (position < 0 || position >= params.length) {
+                        bail = true;
+                        return match;
+                    }
+                    const lit = literalFor(params[position]);
                     if (lit === undefined) {
                         bail = true;
                         return match;
@@ -198,6 +209,14 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
                 }
                 continue;
             }
+            // OWNERSHIP RULE: an item owns the first NON-EMPTY result after its sentinel. The
+            // pg driver reports a command that returned nothing as a result with zero rows, so
+            // skipping empties keeps a statement's own "no rows" from being mistaken for its
+            // result set while still refusing to adopt the NEXT item's rows (the sentinel walk
+            // has already moved `current` by then). The SQL Server sibling takes the first
+            // recordset unconditionally — documented there for the same reason. Neither is
+            // reachable with generated CRUD procedures; both are stated so the two
+            // implementations cannot drift apart unnoticed.
             if (current >= 0 && current < items.length && perItem[current] === undefined && rows.length > 0) {
                 perItem[current] = rows;
             }
