@@ -4183,6 +4183,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // unrecognised `writeMode` keeps the proven path, so the default never changes
                     // underneath an existing tenant.
                     const writeGroup = batchedWrites ? await provider.CreateTransactionGroup() : null;
+                    if (writeGroup) {
+                        // The batching itself (MJ#4087). Without this the group is atomic but still
+                        // SERIAL — one round trip per item inside the transaction, which is exactly
+                        // today's behaviour and why this PR was safe to land before the providers
+                        // could honour it. With it, the whole group travels as one statement.
+                        //
+                        // Set here rather than at construction because it is a property of how THIS
+                        // engine wants its batch submitted, not of the provider: any other caller
+                        // creating a group still gets the sequential default.
+                        writeGroup.BatchedSubmit = true;
+                    }
                     const runCtx = this.currentRunContext;
                     // A batched batch REQUIRES a run context: the group is handed to
                     // ApplySingleRecord's frames through a nested scope of it, so without one

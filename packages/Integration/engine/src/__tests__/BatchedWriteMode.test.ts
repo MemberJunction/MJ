@@ -152,3 +152,27 @@ describe('batching is independent of concurrency', () => {
         expect(src).toMatch(/if \(useTransaction \|\| batchedWrites\) \{/);
     });
 });
+
+/**
+ * The wire-up to MJ#4087. `writeMode: 'batched'` buys atomicity from the TransactionGroup; the
+ * BATCHING itself is `BatchedSubmit`, and without that one assignment the group sends one round
+ * trip per item — exactly the pre-PR behaviour, silently. Nothing else in this file would notice:
+ * every other test here passes with the flag unset, because the writes still go through Save()
+ * and still commit atomically. This is the only test that fails if the assignment is dropped.
+ */
+describe('the batch is actually batched', () => {
+    it('arms BatchedSubmit on the group it creates, so the group submits in ONE round trip', async () => {
+        const source = await import('node:fs/promises').then(fs =>
+            fs.readFile(new URL('../IntegrationEngine.ts', import.meta.url), 'utf-8'));
+
+        // The assignment must exist, and must be on the batch's own write group.
+        expect(source).toMatch(/writeGroup\.BatchedSubmit\s*=\s*true/);
+
+        // ...and it must be reached only when the connection opted in — i.e. guarded by the
+        // writeGroup that `batchedWrites` gates, never set unconditionally on some other group.
+        const armIndex = source.indexOf('writeGroup.BatchedSubmit = true');
+        const createIndex = source.indexOf('batchedWrites ? await provider.CreateTransactionGroup() : null');
+        expect(createIndex).toBeGreaterThan(-1);
+        expect(armIndex).toBeGreaterThan(createIndex);
+    });
+});
