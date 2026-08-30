@@ -168,9 +168,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integrations','IntegrationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integrations')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integrations','IntegrationID')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrations', $event.totalRowCount)"
                 >
@@ -193,9 +193,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Integration URL Formats','IntegrationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Integration URL Formats')"
+                [NewRecordValues]="NewRecordValues('MJ: Integration URL Formats','IntegrationID')"
                 [AllowLoad]="IsSectionExpanded('mJIntegrationURLFormats')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJIntegrationURLFormats', $event.totalRowCount)"
                 >
@@ -218,9 +218,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Changes','IntegrationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Changes')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Changes','IntegrationID')"
                 [AllowLoad]="IsSectionExpanded('mJRecordChanges')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordChanges', $event.totalRowCount)"
                 >
@@ -243,9 +243,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Integration Objects','IntegrationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Integration Objects')"
+                [NewRecordValues]="NewRecordValues('MJ: Integration Objects','IntegrationID')"
                 [AllowLoad]="IsSectionExpanded('mJIntegrationObjects')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJIntegrationObjects', $event.totalRowCount)"
                 >

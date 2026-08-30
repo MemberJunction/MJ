@@ -477,6 +477,7 @@ GO`);
                     RelatedEntityBaseTable: 'Category',
                     RelatedEntityBaseView: 'vwCategories',
                     RelatedEntityNameFieldMap: 'Parent',
+                    Configuration: '{"Hierarchy":{"IsHierarchy":true}}',
                 },
             ],
             EntityPermissions: [],
@@ -488,14 +489,18 @@ GO`);
         // No display join for the self-FK...
         expect(viewSQL).not.toContain('AS [Parent]');
         expect(viewSQL).not.toContain('Category_ParentID');
-        // ...but the recursive root-ID column + OUTER APPLY are present, exactly:
+        // ...but the recursive hierarchy columns + OUTER APPLY are present, exactly:
         expect(viewSQL).toContain(`SELECT
     c.*,
-    root_ParentID.RootID AS [RootParentID]
+    hier_ParentID.RootID AS [RootParentID],
+    hier_ParentID.Depth AS [ParentIDDepth],
+    hier_ParentID.Path AS [ParentIDPath],
+    hier_ParentID.IsLeaf AS [ParentIDIsLeaf],
+    hier_ParentID.ChildCount AS [ParentIDChildCount]
 FROM
     [sales].[Category] AS c
 OUTER APPLY
-    [sales].[fnCategoryParentID_GetRootID]([c].[ID], [c].[ParentID]) AS root_ParentID
+    [sales].[fnCategoryParentID_GetHierarchyMeta]([c].[ID], [c].[ParentID]) AS hier_ParentID
 GO`);
     });
 });

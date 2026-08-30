@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { HootSuiteBaseAction } from '../hootsuite-base.action';
+import { HootSuiteBaseAction, HootSuitePost, HootSuiteResponse } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
@@ -40,8 +40,8 @@ export class HootSuiteUpdateScheduledPostAction extends HootSuiteBaseAction {
 
             // First, get the existing post
             LogStatus(`Fetching existing post ${postId}...`);
-            const existingPostResponse = await this.axiosInstance.get(`/messages/${postId}`);
-            const existingPost = existingPostResponse.data;
+            const existingPostResponse = await this.httpClient.Get<HootSuitePost>(`/messages/${postId}`);
+            const existingPost = existingPostResponse.Data;
 
             // Check if post can be updated
             if (existingPost.state !== 'SCHEDULED' && existingPost.state !== 'DRAFT') {
@@ -115,8 +115,8 @@ export class HootSuiteUpdateScheduledPostAction extends HootSuiteBaseAction {
 
             // Update the post
             LogStatus(`Updating post ${postId}...`);
-            const response = await this.axiosInstance.patch(`/messages/${postId}`, updateData);
-            const updatedPost = response.data;
+            const response = await this.httpClient.Patch<HootSuitePost>(`/messages/${postId}`, updateData);
+            const updatedPost = response.Data;
 
             // Normalize the updated post
             const normalizedPost = this.normalizePost(updatedPost);

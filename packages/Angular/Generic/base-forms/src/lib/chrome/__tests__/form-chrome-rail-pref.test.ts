@@ -11,6 +11,7 @@ import {
     ParseRailWidthSetting,
     SerializeRailPinnedSetting,
     SerializeRailWidthSetting,
+    ShouldPersistChromeActiveGroup,
 } from '../form-chrome-rail-pref';
 
 describe('form chrome rail pin prefs', () => {
@@ -37,6 +38,13 @@ describe('form chrome rail pin prefs', () => {
     it('serializes as 1/0 for UserInfoEngine', () => {
         expect(SerializeRailPinnedSetting(true)).toBe('1');
         expect(SerializeRailPinnedSetting(false)).toBe('0');
+    });
+
+    it('does not persist left-nav active group on unsaved records', () => {
+        expect(ShouldPersistChromeActiveGroup(true)).toBe(true);
+        expect(ShouldPersistChromeActiveGroup(false)).toBe(false);
+        expect(ShouldPersistChromeActiveGroup(undefined)).toBe(false);
+        expect(ShouldPersistChromeActiveGroup(null)).toBe(false);
     });
 });
 

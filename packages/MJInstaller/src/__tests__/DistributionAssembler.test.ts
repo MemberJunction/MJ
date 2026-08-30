@@ -29,6 +29,9 @@ async function seedBaseFixture(dir: string): Promise<void> {
   await writeUnder(dir, 'distribution.turbo.json', '{ "tasks": {} }');
   await writeUnder(dir, 'distribution.config.cjs', 'module.exports = {};');
   await writeUnder(dir, 'distribution.README.md', '# Distribution');
+  // The distribution README points readers at a LICENSE, so the bundle has to
+  // actually carry one; ROOT_FILES treats it as required.
+  await writeUnder(dir, 'LICENSE', 'Business Source License 1.1');
   await writeUnder(dir, 'install.config.json', '{}');
   await writeUnder(dir, 'packages/Update_MemberJunction_Packages_To_Latest.ps1', '# update script');
 

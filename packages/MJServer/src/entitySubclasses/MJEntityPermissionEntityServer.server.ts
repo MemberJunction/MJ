@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
 import { MJEntityPermissionEntity } from '@memberjunction/core-entities';
-import axios from 'axios';
+import { HttpPost } from '@memberjunction/network-utils';
 import { ___codeGenAPIPort, ___codeGenAPISubmissionDelay, ___codeGenAPIURL } from '../config.js';
 
 /**
@@ -59,23 +59,24 @@ export class MJEntityPermissionEntityServer extends MJEntityPermissionEntity {
   protected static async SubmitQueue(): Promise<void> {
     this._lastModifiedTime = null;
 
-    // now, use Axios to submit the queue to the API server
+    // now, submit the queue to the API server
     // Check if there's anything to submit
     if (this._entityIDQueue.length > 0) {
       try {
-        // Use Axios to submit the queue to the API server
-        const response = await axios.post(this.getSubmissionURL(), {
+        // The submission URL is our OWN CodeGen API (typically localhost) — deliberately NOT
+        // routed through the SSRF guard, which would block an internal address by design.
+        const response = await HttpPost<{ status?: string; errorMessage?: string }>(this.getSubmissionURL(), {
           entityIDArray: this._entityIDQueue,
         });
 
-        // Check the Axios response code implicitly and API response explicitly
-        if (response.status === 200 && response.data.status === 'ok') {
+        // Check the HTTP status implicitly and API response explicitly
+        if (response.Status === 200 && response.Data?.status === 'ok') {
           console.log('Queue submitted successfully.');
           // now, clear the queue and timer
           this.ClearQueue();
         } else {
           // Handle API indicating a failure
-          console.error('Failed to submit queue:', response.data.errorMessage || 'Unknown error');
+          console.error('Failed to submit queue:', response.Data?.errorMessage || 'Unknown error');
         }
       } catch (error) {
         // Handle errors here

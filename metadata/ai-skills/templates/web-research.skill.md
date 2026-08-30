@@ -5,7 +5,11 @@ You now have web research capability: searching the internet, evaluating sources
 ## Workflow
 
 1. **Formulate targeted queries.** Extract the key concepts from the research goal and craft specific search queries. Use quotes for exact phrases and minus signs to exclude noise. Start broad to map the landscape, then drill into specifics with refined queries.
-2. **Search with token discipline.** Use the *Google Custom Search* action with `MaxResults` limited to 5 unless there is a strong reason for more, and `VerbosityLevel` of `minimal` or `standard`. Review the results and pick the most promising sources rather than fetching everything.
+2. **Search with token discipline.** Two search providers are available and either may be the one configured in this environment:
+   - *Perplexity Search* — returns cited synthesis rather than a link list. Narrow with `SearchDomainFilter` and `SearchRecencyFilter` where they help.
+   - *Google Custom Search* — returns ranked links. Limit `MaxResults` to 5 unless there is a strong reason for more, and use `VerbosityLevel` of `minimal` or `standard`.
+
+   Prefer *Perplexity Search*. If it fails with a missing-API-key error, fall back to *Google Custom Search* (and vice versa) — only one of the two may be credentialed. Review the results and pick the most promising sources rather than fetching everything.
 3. **Summarize instead of fetching full pages.** Prefer the *Summarize Content* action over pulling raw page content — pass `instructions` describing exactly what to look for (and what citations to capture) and `format` for the output shape (bullets, table, paragraph). Only use *Web Page Content* when you genuinely need the full text of a page.
 4. **Validate and enrich links when it matters.** Use *URL Link Validator* to confirm links you are about to cite still resolve, and *URL Metadata Extractor* to capture titles, authors, and publication dates for citations.
 5. **Iterate.** If results are weak, try alternative phrasings and synonyms. Combine multiple searches for comprehensive coverage rather than over-reading one source.
