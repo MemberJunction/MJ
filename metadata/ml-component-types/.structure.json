@@ -1,0 +1,53 @@
+[
+  {
+    "fields": {
+      "Name": "Structure",
+      "Kind": "Structure",
+      "Description": "Root of the composition space: wrappers whose SLOTS accept other components, letting agents and users combine models into larger ones.",
+      "Story": "Structures are how components become bigger ideas: plug models into a wrapper and the ensemble inherits their stories.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1
+    },
+    "primaryKey": {
+      "ID": "7EE6463B-4A8C-58D9-A7D2-C42E7C35E944"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bagging Wrapper",
+      "Kind": "Structure",
+      "Description": "Trains N bootstrap copies of whatever model fills base_estimator and averages them.",
+      "Story": "Take any single model you half-trust and turn it into a committee of itself.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Draft",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Structure",
+      "DriverClass": "bagging",
+      "SpecSchema": "@file:schemas/bagging.schema.json"
+    },
+    "primaryKey": {
+      "ID": "CD31D149-9CAB-5141-AC97-8A3F749E6420"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Stacking Wrapper",
+      "Kind": "Structure",
+      "Description": "Trains the models filling estimators, then a Linear final_estimator over their outputs.",
+      "Story": "Stacking lets different worldviews vote and learns how much to trust each voter — including reused, already-trained components.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Draft",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Structure",
+      "DriverClass": "stacking",
+      "SpecSchema": "@file:schemas/stacking.schema.json"
+    },
+    "primaryKey": {
+      "ID": "10471BD3-F815-58A5-A4E8-974563BF3B70"
+    }
+  }
+]

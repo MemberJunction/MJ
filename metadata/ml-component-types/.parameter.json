@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "Parameter",
+      "Kind": "Parameter",
+      "Description": "Root of the parameter space: trained or hand-authored values a model component consumes.",
+      "Story": "Parameters carry the knowledge — sometimes learned from data, sometimes written down by someone who already knew.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1
+    },
+    "primaryKey": {
+      "ID": "E6416413-E614-5B2C-9CFA-72271033EB43"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hyperparameter Set",
+      "Kind": "Parameter",
+      "Description": "Algorithm hyperparameters validated against the leaf SpecSchema.",
+      "Story": "The knobs that shape how learning happens, not what is learned.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Parameter"
+    },
+    "primaryKey": {
+      "ID": "8E971514-28F6-5C90-A6C1-E7032E9DFFD5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Weight Set",
+      "Kind": "Parameter",
+      "Description": "Named weights with per-entry mode (Additive/Multiplier/Gate/Penalty/Bonus), caps/floors — the rubric’s filling. Untrainable and first-class.",
+      "Story": "Importance made explicit: a human (or a search) saying how much each signal should count, in numbers anyone can audit.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Parameter"
+    },
+    "primaryKey": {
+      "ID": "412CB9E3-1DC6-55F4-AA4D-FDA9CE7F462F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hand-Authored Matrix",
+      "Kind": "Parameter",
+      "Description": "An operator-authored matrix/table consumed as a component (no training).",
+      "Story": "Institutional knowledge as data: the table someone maintains because they understand the domain better than any fit would.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Parameter"
+    },
+    "primaryKey": {
+      "ID": "FA3D696B-8B01-598F-9ECF-17F06FC9D1D6"
+    }
+  }
+]

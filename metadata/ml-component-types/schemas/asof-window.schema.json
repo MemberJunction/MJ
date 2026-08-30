@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "As-Of Window",
+  "type": "object",
+  "properties": {
+    "Kind": { "type": "string", "enum": ["Rolling", "Calendar", "SinceEvent", "RenewalRelative", "AllTime"] },
+    "LengthDays": { "type": "integer", "minimum": 1, "description": "Rolling: window length in days (exclusive lower bound)." },
+    "LengthMonths": { "type": "integer", "minimum": 1, "description": "Rolling: window length in calendar months (clamped subtraction: 31 Jul − 1mo = 30 Jun)." },
+    "Period": { "type": "string", "enum": ["month", "quarter", "year"], "description": "Calendar: the period containing the as-of date, period start → as-of." },
+    "AnchorDateField": { "type": "string", "description": "SinceEvent/RenewalRelative: the per-record date column the window anchors on." },
+    "OffsetDays": { "type": "integer", "description": "SinceEvent/RenewalRelative: offset applied to the anchor date." },
+    "Field": { "type": "string", "description": "Value column for Sum/Avg/Min/Max/DistinctCount/TrendSlope." },
+    "EmitPresence": { "type": "boolean", "default": true, "description": "Also emit <column>__present (the hadData mask distinguishing a real zero from absence)." }
+  },
+  "required": ["Kind"],
+  "additionalProperties": false
+}

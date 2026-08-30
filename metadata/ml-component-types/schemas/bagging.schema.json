@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Bagging Wrapper",
+  "type": "object",
+  "properties": {
+    "n_estimators": { "type": "integer", "minimum": 2, "maximum": 500, "default": 10 },
+    "max_samples": { "type": "number", "exclusiveMinimum": 0, "maximum": 1.0, "default": 1.0 },
+    "bootstrap": { "type": "boolean", "default": true }
+  },
+  "additionalProperties": false
+}

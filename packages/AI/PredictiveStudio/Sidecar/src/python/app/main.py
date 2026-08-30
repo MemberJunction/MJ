@@ -232,6 +232,7 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
         req, X_dev, y_dev, is_classification, rng,
         dev_rows=dev_rows, columns=columns, feature_cols=feature_cols, ops_spec=ops_spec,
         target_idx=target_idx, encoder=encoder,
+        output_columns=output_columns,
     )
 
     # Stash decode map so the serialized model can map int predictions -> labels.
@@ -311,6 +312,7 @@ def _fit_and_score(
     ops_spec: List[Dict[str, Any]],
     target_idx: int,
     encoder: Any,
+    output_columns: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, float], Any]:
     """Fit the estimator using the configured validation strategy.
 
@@ -329,9 +331,15 @@ def _fit_and_score(
     strategy = req.validation.strategy
 
     def build():
-        return algorithms.build_estimator(
+        est = algorithms.build_estimator(
             req.algorithm, req.problem_type, req.hyperparameters
         )
+        # Name-keyed estimators (the glass-box rubric) need the matrix's column names,
+        # which sklearn's fit(X, y) does not carry. Injected here so BOTH the anti-skew
+        # validation build and the final production build receive them.
+        if output_columns and hasattr(est, "mj_set_feature_names"):
+            est.mj_set_feature_names(output_columns)
+        return est
 
     if strategy == "train_test_split" and X.shape[0] >= 4:
         test_size = req.validation.test_size or 0.2

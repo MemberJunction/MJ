@@ -1,0 +1,100 @@
+[
+  {
+    "fields": {
+      "Name": "Statistic",
+      "Kind": "Statistic",
+      "Description": "Root of the statistical-method space: tests and diagnostics resolved from the tree as gates on candidate models.",
+      "Story": "Statistics are the referees: before and after a model plays, they say whether the game was fair and the score believable.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1
+    },
+    "primaryKey": {
+      "ID": "AA18C398-1301-5549-BA6F-ADD29513845D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Distribution Test",
+      "Kind": "Statistic",
+      "Description": "Tests on the feature/target distributions before training.",
+      "Story": "Checks on the raw material before anything is built from it.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Statistic"
+    },
+    "primaryKey": {
+      "ID": "3BC0DA4F-7D98-5E91-BAF9-C4A94D64BC07"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Single-Feature Dominance",
+      "Kind": "Statistic",
+      "Description": "Flags one feature explaining suspiciously much (leakage guard input).",
+      "Story": "When one input already knows the answer, the model learned nothing — it copied.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Distribution Test",
+      "DriverClass": "dominance"
+    },
+    "primaryKey": {
+      "ID": "9C947B3C-0A1E-550A-985F-1F20A49905A9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Class Balance",
+      "Kind": "Statistic",
+      "Description": "Target class imbalance ratio and its implications for metrics.",
+      "Story": "A 99:1 dataset makes accuracy a lie; this test says which numbers to trust instead.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Distribution Test",
+      "DriverClass": "class_balance"
+    },
+    "primaryKey": {
+      "ID": "3C9B2186-EA63-5180-8251-072F742FE312"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fit Diagnostic",
+      "Kind": "Statistic",
+      "Description": "Post-train diagnostics on a fitted model.",
+      "Story": "Questions asked of the finished model, not the data.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Statistic"
+    },
+    "primaryKey": {
+      "ID": "299E446F-E9A9-5160-9B1C-3A586A2C03D8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Holdout Gap",
+      "Kind": "Statistic",
+      "Description": "Train-vs-holdout metric gap (overfitting signal).",
+      "Story": "The distance between what the model memorized and what it actually understood.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Fit Diagnostic",
+      "DriverClass": "holdout_gap"
+    },
+    "primaryKey": {
+      "ID": "69B78234-B738-5304-BC1F-042A2C462A32"
+    }
+  }
+]

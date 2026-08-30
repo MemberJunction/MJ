@@ -61,6 +61,23 @@ export interface PreprocessingOp {
   fillValue?: string | number;
   /** Number of bins to fit when `op` is `bin`. The sidecar fits the edges; absent ⇒ sidecar default. */
   bins?: number;
+  /**
+   * Direction of meaning for the normalization ops (`minmax`/`percentile`/`zscore`/`logistic`/
+   * `banded`/`lookup`, ported from Sonar): when false the normalized fraction is inverted before
+   * scaling, so "days since last activity" can mean engagement without a flipped sign convention.
+   * Default true.
+   */
+  higherIsBetter?: boolean;
+  /** Lower bound of the normalized output range (normalization ops). Default 0. */
+  outputMin?: number;
+  /** Upper bound of the normalized output range (normalization ops). Default 1. */
+  outputMax?: number;
+  /**
+   * Stateless curve parameters for `logistic` ({midpoint, steepness}), `banded`
+   * ({bands: [{min, max, value}], fallback}), and `lookup` ({table, fallback}) — the operator's
+   * params ARE the transform; nothing is fit.
+   */
+  params?: Record<string, unknown>;
 }
 
 /**

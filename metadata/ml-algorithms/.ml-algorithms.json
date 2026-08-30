@@ -8,7 +8,8 @@
       "HyperparameterSchema": "@file:schemas/xgboost.schema.json",
       "DefaultHyperparameters": "{\"n_estimators\":300,\"max_depth\":6,\"learning_rate\":0.1,\"subsample\":0.8,\"colsample_bytree\":0.8,\"min_child_weight\":1}",
       "SupportsFeatureImportance": true,
-      "Status": "Active"
+      "Status": "Active",
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=XGBoost"
     },
     "primaryKey": {
       "ID": "25E83BF9-C5EE-4BDF-A891-D36D871B73E3"
@@ -27,7 +28,8 @@
       "HyperparameterSchema": "@file:schemas/lightgbm.schema.json",
       "DefaultHyperparameters": "{\"n_estimators\":300,\"num_leaves\":31,\"learning_rate\":0.1,\"max_depth\":-1,\"subsample\":0.8,\"colsample_bytree\":0.8}",
       "SupportsFeatureImportance": true,
-      "Status": "Active"
+      "Status": "Active",
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=LightGBM"
     },
     "primaryKey": {
       "ID": "B2FD5E4A-75D4-401A-A1DA-F223A5234FDA"
@@ -46,7 +48,8 @@
       "HyperparameterSchema": "@file:schemas/logistic_regression.schema.json",
       "DefaultHyperparameters": "{\"C\":1.0,\"penalty\":\"l2\",\"solver\":\"lbfgs\",\"max_iter\":1000,\"class_weight\":null}",
       "SupportsFeatureImportance": true,
-      "Status": "Active"
+      "Status": "Active",
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Logistic Regression"
     },
     "primaryKey": {
       "ID": "B4B84DB7-C255-4118-BE36-7A0489A5AFCE"
@@ -65,7 +68,8 @@
       "HyperparameterSchema": "@file:schemas/random_forest.schema.json",
       "DefaultHyperparameters": "{\"n_estimators\":200,\"max_depth\":null,\"min_samples_split\":2,\"min_samples_leaf\":1,\"max_features\":\"sqrt\"}",
       "SupportsFeatureImportance": true,
-      "Status": "Active"
+      "Status": "Active",
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Random Forest"
     },
     "primaryKey": {
       "ID": "F966965D-3A87-4DD6-91E0-4F9D1AF17796"
@@ -84,7 +88,8 @@
       "HyperparameterSchema": "@file:schemas/ridge.schema.json",
       "DefaultHyperparameters": "{\"alpha\":1.0,\"fit_intercept\":true,\"solver\":\"auto\"}",
       "SupportsFeatureImportance": true,
-      "Status": "Active"
+      "Status": "Active",
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Ridge Regression"
     },
     "primaryKey": {
       "ID": "1BA6D93C-2087-411E-9A7F-E72A64DB5106"
@@ -103,7 +108,8 @@
       "HyperparameterSchema": "@file:schemas/mlp.schema.json",
       "DefaultHyperparameters": "{\"hidden_layer_sizes\":\"100\",\"activation\":\"relu\",\"alpha\":0.0001,\"learning_rate_init\":0.001,\"max_iter\":200}",
       "SupportsFeatureImportance": false,
-      "Status": "Active"
+      "Status": "Active",
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Multilayer Perceptron"
     },
     "primaryKey": {
       "ID": "482A5EA8-64A7-46AF-8EFF-DB179A9FDD0F"
@@ -111,6 +117,22 @@
     "sync": {
       "lastModified": "2026-07-01T17:33:30.776Z",
       "checksum": "08d05de6c281a50dde9a8148ddedf4aaaed4af70d50df225ca7ae870e5d4f5c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Glass-Box Rubric",
+      "Description": "Operator-weighted scoring rubric: score = scale_min + (Σ wᵢ·normᵢ / Σ wᵢ) × (scale_max − scale_min) over normalized inputs, with per-input missing-data policy. In given mode the weights are hand-set — no training data informs the model, making it the canonical untrainable-but-first-class component; in search mode a constrained non-negative linear fit proposes them. Exact per-record explainability via coefficients. Ported from Sonar. Reach for it when a stakeholder must be able to see exactly why each record scored what it did, or when domain expertise beats the available training data.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "rubric",
+      "HyperparameterSchema": "@file:../ml-component-types/schemas/rubric.schema.json",
+      "DefaultHyperparameters": "{\"mode\":\"given\",\"scale_min\":0,\"scale_max\":100}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active",
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric"
+    },
+    "primaryKey": {
+      "ID": "A0FCAF1B-90C5-5797-9F0C-440F717C0EA8"
     }
   }
 ]

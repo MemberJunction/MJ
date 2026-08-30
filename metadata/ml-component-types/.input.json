@@ -1,0 +1,306 @@
+[
+  {
+    "fields": {
+      "Name": "Input",
+      "Kind": "Input",
+      "Description": "Root of the feature-source space: components that produce a column of the feature matrix.",
+      "Story": "Inputs are where the business enters the mathematics: each one is a claim that some slice of the data carries signal.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1
+    },
+    "primaryKey": {
+      "ID": "E80B6916-578C-5CD6-BA25-78AC32116D89"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Column",
+      "Kind": "Input",
+      "Description": "A raw entity column carried into the matrix.",
+      "Story": "The plainest input: the field as it sits on the record.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
+      "DriverClass": "select"
+    },
+    "primaryKey": {
+      "ID": "45814137-380C-5538-AE2F-B74019ABE3B8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Embedding",
+      "Kind": "Input",
+      "Description": "A persisted, version-pinned embedding expanded to one column per dimension.",
+      "Story": "Meaning as geometry: text or records mapped into a space where similarity is distance.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
+      "DriverClass": "embedding"
+    },
+    "primaryKey": {
+      "ID": "0349A89F-030D-5B6B-AFD7-385598B5321F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LLM-Derived",
+      "Kind": "Input",
+      "Description": "Features persisted by an upstream Feature Pipeline (LLM-synthesized, version-pinned).",
+      "Story": "A judgment an LLM already wrote down, frozen so training and scoring read the same answer.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
+      "DriverClass": "llm-derived"
+    },
+    "primaryKey": {
+      "ID": "DB2D5EBD-1F6B-58EE-B165-F1865C10DE48"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Flow Agent",
+      "Kind": "Input",
+      "Description": "Per-record MJ Flow Agent invocation mapped into feature columns.",
+      "Story": "A little procedure runs for every record and its verdict becomes a feature.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
+      "DriverClass": "flow-agent"
+    },
+    "primaryKey": {
+      "ID": "E5AFCEFA-C963-54DC-95F1-8A1E1467E48E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vision LLM",
+      "Kind": "Input",
+      "Description": "Per-row stateless vision-prompt extraction (category or scalar) from an image column.",
+      "Story": "Looks at the picture on the record and writes down the one fact the model needs from it.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
+      "DriverClass": "vision-llm"
+    },
+    "primaryKey": {
+      "ID": "83C419A2-EEB0-5C9A-B9C9-95F7BF6F9FDE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Code Feature",
+      "Kind": "Input",
+      "Description": "Any Approved MJ Action satisfying the feature contract (anchor + as-of → value); the promotion gate (PromotionState=Approved) is enforced at assembly. Ported from Sonar.",
+      "Story": "The escape hatch with a lock on it: arbitrary code can be a feature, but only after a human approved what it does.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Draft",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
+      "DriverClass": "action"
+    },
+    "primaryKey": {
+      "ID": "DF2120D5-A722-5C5A-86A2-3D5CC20AE54C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Aggregate",
+      "Kind": "Input",
+      "Description": "Time-windowed aggregates over dated related rows, computed as of the decision date (leakage-safe). Windows: Rolling, Calendar, SinceEvent, RenewalRelative, AllTime. Ported from Sonar.",
+      "Story": "These inputs answer \"what had already happened by then?\" — counting only evidence that existed at the decision moment, which is the discipline that keeps a model honest about the future.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
+      "SpecSchema": "@file:schemas/asof-window.schema.json"
+    },
+    "primaryKey": {
+      "ID": "F9475879-18FF-5C67-8467-4D30C4DD1CCF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Count",
+      "Kind": "Input",
+      "Description": "Row count in the window.",
+      "Story": "How often it happened.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_count"
+    },
+    "primaryKey": {
+      "ID": "41E60BC8-B77D-55B1-B9BE-A4F1AB521FF8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Sum",
+      "Kind": "Input",
+      "Description": "Sum of a value field in the window.",
+      "Story": "How much it added up to.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_sum"
+    },
+    "primaryKey": {
+      "ID": "458D8DF4-7F12-5DEE-BAB6-6FB16F9842AD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Average",
+      "Kind": "Input",
+      "Description": "Mean of a value field in the window.",
+      "Story": "What a typical one looked like.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_avg"
+    },
+    "primaryKey": {
+      "ID": "242AB1F6-3C08-5134-9FE5-B939DEF0E037"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Minimum",
+      "Kind": "Input",
+      "Description": "Min of a value field in the window.",
+      "Story": "The floor it touched.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_min"
+    },
+    "primaryKey": {
+      "ID": "1817C114-EE6F-5D5B-B639-68134182B9AD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Maximum",
+      "Kind": "Input",
+      "Description": "Max of a value field in the window.",
+      "Story": "The peak it reached.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_max"
+    },
+    "primaryKey": {
+      "ID": "12B0047A-F89F-5C23-8DF2-A9E4692CFA8A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Distinct Count",
+      "Kind": "Input",
+      "Description": "Distinct values of a field in the window.",
+      "Story": "How varied the activity was — breadth of engagement, not just volume.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_distinct_count"
+    },
+    "primaryKey": {
+      "ID": "531A8C7A-F689-55E2-B06A-544E29E7E979"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Recency",
+      "Kind": "Input",
+      "Description": "Days between the last event and the as-of date.",
+      "Story": "How long the silence has lasted.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_recency"
+    },
+    "primaryKey": {
+      "ID": "87D95C6D-1BB8-5CAC-8CDD-7EB3161743E3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Exists",
+      "Kind": "Input",
+      "Description": "1 when any row is in the window.",
+      "Story": "Whether it happened at all.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_exists"
+    },
+    "primaryKey": {
+      "ID": "064FE866-B40B-5DAB-9CC0-47D1479108A6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Rate Per Period",
+      "Kind": "Input",
+      "Description": "Count divided by window length in periods.",
+      "Story": "The tempo, not the total.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_rate_per_period"
+    },
+    "primaryKey": {
+      "ID": "039F1F3C-4CF6-5F65-BC80-9BCEA0057C96"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As-Of Trend Slope",
+      "Kind": "Input",
+      "Description": "OLS slope of per-period counts across the window.",
+      "Story": "Which way it was heading.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "DriverClass": "asof_trend_slope"
+    },
+    "primaryKey": {
+      "ID": "B8DFEFD4-F521-569D-8EC9-D4A66695F551"
+    }
+  }
+]

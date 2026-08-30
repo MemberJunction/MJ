@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Glass-Box Rubric",
+  "type": "object",
+  "properties": {
+    "mode": { "type": "string", "enum": ["given", "search"], "default": "given", "description": "given: weights are operator-set and stored verbatim by fit. search: fit proposes non-negative weights via a constrained linear fit." },
+    "weights": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 }, "description": "Feature name (post-preprocessing output column) → weight. Required in given mode." },
+    "weight_modes": { "type": "object", "additionalProperties": { "type": "string", "enum": ["Additive", "Multiplier", "Gate", "Penalty", "Bonus"] }, "description": "Optional per-weight combination mode (default Additive)." },
+    "contribution_cap": { "type": "object", "additionalProperties": { "type": "number" } },
+    "contribution_floor": { "type": "object", "additionalProperties": { "type": "number" } },
+    "missing_data_policy": { "type": "object", "additionalProperties": { "type": "string", "enum": ["Zero", "NeutralMidpoint", "Exclude"] }, "description": "Per-input policy for absent evidence (Exclude requires the presence mask)." },
+    "scale_min": { "type": "number", "default": 0 },
+    "scale_max": { "type": "number", "default": 100 },
+    "class_threshold": { "type": "number", "description": "Classification cut on the scaled score (default midpoint)." }
+  },
+  "required": ["mode"],
+  "additionalProperties": false
+}

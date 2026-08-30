@@ -1,0 +1,252 @@
+[
+  {
+    "fields": {
+      "Name": "Model",
+      "Kind": "Model",
+      "Description": "Root of the model-primitive space: every component that maps assembled features to a prediction, trained or not.",
+      "Story": "A model component turns evidence into a judgment. Everything below shares one contract — features in, prediction out — however different the internal story.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1
+    },
+    "primaryKey": {
+      "ID": "04885740-3910-5E6C-BAC3-0087FF26DB03"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Linear",
+      "Kind": "Model",
+      "Description": "Models whose output is a weighted combination of inputs; coefficients are the explanation.",
+      "Story": "Linear models say exactly why: each input pushes the answer up or down by its weight, and the weights ARE the story.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Model"
+    },
+    "primaryKey": {
+      "ID": "AE95DA53-4E2E-5782-BF07-D5F279AA2261"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Logistic Regression",
+      "Kind": "Model",
+      "Description": "L2-regularized logistic regression for classification; exact per-record contributions from coefficients.",
+      "Story": "Draws one straight boundary through the feature space and tells you the log-odds contribution of every input.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "DriverClass": "logistic_regression"
+    },
+    "primaryKey": {
+      "ID": "70E02250-2420-5849-94B1-502F60FCBC76"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ridge Regression",
+      "Kind": "Model",
+      "Description": "L2-regularized linear regression for numeric targets.",
+      "Story": "Fits the least-squares line while shrinking weights toward zero, trading a little bias for stability on collinear inputs.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "DriverClass": "ridge"
+    },
+    "primaryKey": {
+      "ID": "92FDB6BC-ADC5-5920-88A9-9CA7F05964C3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Glass-Box Rubric",
+      "Kind": "Model",
+      "Description": "Operator-weighted scoring rubric: normalizedScore = scaleMin + (Σ wᵢ·normᵢ / Σ wᵢ) × (scaleMax−scaleMin), with per-input weight modes, caps/floors, and missing-data policy. In given mode the weights are hand-set (no training data needed — a first-class untrainable component); in search mode a constrained non-negative fit proposes them. Ported from Sonar.",
+      "Story": "The rubric is expertise written down: a human names the signals and how much each should count, and the machine only does the arithmetic — which is why every score it produces can be explained to the person it is about.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "DriverClass": "rubric",
+      "SpecSchema": "@file:schemas/rubric.schema.json",
+      "DefaultSpec": "{\"mode\":\"given\",\"scale_min\":0,\"scale_max\":100}"
+    },
+    "primaryKey": {
+      "ID": "429168DC-FB1F-5CFB-9597-4EB9ADA68412"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tree Ensemble",
+      "Kind": "Model",
+      "Description": "Ensembles of decision trees; strong tabular defaults with global feature importance.",
+      "Story": "Many weak trees vote or correct each other into one strong opinion; the story lives in which features the forest keeps splitting on.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Model"
+    },
+    "primaryKey": {
+      "ID": "2DB41AB5-A0C9-5A6A-8558-AEB981EBE5B7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boosting",
+      "Kind": "Model",
+      "Description": "Sequential tree ensembles where each tree corrects the residual errors of the ones before.",
+      "Story": "Boosting is stubbornness as an algorithm: fit, look at what you got wrong, fit the mistake, repeat.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble"
+    },
+    "primaryKey": {
+      "ID": "DA4ABB46-AB42-5187-88B3-71CA76C46C65"
+    }
+  },
+  {
+    "fields": {
+      "Name": "XGBoost",
+      "Kind": "Model",
+      "Description": "Gradient-boosted trees (XGBoost); the strong accuracy default for tabular problems.",
+      "Story": "The heavyweight default: regularized boosting that usually wins on tabular data if you give it enough signal and tuning.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Boosting",
+      "DriverClass": "xgboost"
+    },
+    "primaryKey": {
+      "ID": "E4CA0C63-AF27-5C8C-90B8-319E86542240"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LightGBM",
+      "Kind": "Model",
+      "Description": "Histogram-based leaf-wise gradient boosting; fastest on large/wide data.",
+      "Story": "Boosting in a hurry — histogram bins and leaf-wise growth make it the choice when the dataset is big and time is not.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Boosting",
+      "DriverClass": "lightgbm"
+    },
+    "primaryKey": {
+      "ID": "7BFF6A5B-11DE-59BB-ACB4-1631BDCC40AE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bagging Family",
+      "Kind": "Model",
+      "Description": "Parallel tree ensembles trained on bootstrap resamples and averaged.",
+      "Story": "Ask many independently-grown trees and average away their individual noise.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble"
+    },
+    "primaryKey": {
+      "ID": "578BF970-0C4D-5328-8B6F-D2DA11230E49"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Random Forest",
+      "Kind": "Model",
+      "Description": "Bootstrap-aggregated decision trees with feature subsampling; robust with minimal tuning.",
+      "Story": "The forgiving workhorse: hard to overfit badly, hard to configure wrongly, rarely the very best, rarely bad.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Bagging Family",
+      "DriverClass": "random_forest"
+    },
+    "primaryKey": {
+      "ID": "8A53A7FA-9A92-5356-AE57-0012CC6B3B04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Neural",
+      "Kind": "Model",
+      "Description": "Feed-forward neural networks; best when features are dense/embedding-heavy.",
+      "Story": "Layers of learned transformations that trade explainability for the ability to bend around structure linear models cannot express.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Model"
+    },
+    "primaryKey": {
+      "ID": "A0F8A5A6-3A80-5174-A2F3-AF4D78D93BBD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Multilayer Perceptron",
+      "Kind": "Model",
+      "Description": "Fully-connected feed-forward network (sklearn MLP).",
+      "Story": "A small dense net — the right tool when embeddings carry the signal and a tree cannot see into them.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "DriverClass": "mlp"
+    },
+    "primaryKey": {
+      "ID": "8102FD39-80CA-5EC6-9993-40A4B1A96105"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sequence",
+      "Kind": "Model",
+      "Description": "Models over ORDERED per-entity event sequences (a distinct problem type; ships with the sequence ProblemType widening).",
+      "Story": "Sequence models care about the order of what happened, not just the totals — trajectories, not snapshots.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Draft",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Model"
+    },
+    "primaryKey": {
+      "ID": "CCFA46D5-1533-52F5-AC45-186C1672AD62"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hidden Markov Model",
+      "Kind": "Model",
+      "Description": "Gaussian HMM: latent regimes with learned transition dynamics over an ordered sequence.",
+      "Story": "An HMM assumes the visible events are shadows of a few hidden regimes — \"engaged\", \"drifting\", \"gone\" — and learns both the regimes and how members move between them.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Draft",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Sequence",
+      "DriverClass": "hmm",
+      "SpecSchema": "@file:schemas/hmm.schema.json"
+    },
+    "primaryKey": {
+      "ID": "979E1858-5712-5AF5-B8D5-161F428E88FB"
+    }
+  }
+]

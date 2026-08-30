@@ -45,6 +45,13 @@ class PreprocessingOp(BaseModel):
     fillValue: Optional[Union[str, float, int]] = None
     # bin-specific (the contract leaves `op` open so we extend additively)
     bins: Optional[int] = None
+    # normalization-specific (Sonar-ported ops: minmax/percentile/zscore/logistic/banded/lookup).
+    # Direction + output range apply to every normalization op; `params` carries the
+    # stateless curve parameters (logistic midpoint/steepness, banded bands, lookup table).
+    higherIsBetter: Optional[bool] = None
+    outputMin: Optional[float] = None
+    outputMax: Optional[float] = None
+    params: Optional[Dict[str, Any]] = None
 
 
 class ValidationConfig(BaseModel):

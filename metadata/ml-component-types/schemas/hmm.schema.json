@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Hidden Markov Model",
+  "type": "object",
+  "properties": {
+    "n_components": { "type": "integer", "minimum": 2, "maximum": 16, "default": 4, "description": "Number of hidden states (regimes)." },
+    "covariance_type": { "type": "string", "enum": ["spherical", "diag", "full", "tied"], "default": "diag" },
+    "n_iter": { "type": "integer", "minimum": 10, "maximum": 1000, "default": 100 }
+  },
+  "additionalProperties": false
+}

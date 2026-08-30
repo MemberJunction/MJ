@@ -57,6 +57,9 @@ export * from './maintenance';
 // pipeline → train → publish gated on the trust verdict). Code, never LLM.
 export * from './agent';
 
+// Typed ML component model — Sonar-ported design-time helpers (join-path, score bands).
+export * from './components';
+
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
  * package version so consumers can assert compatibility at runtime.

@@ -522,11 +522,50 @@ _(Entity names shown without the "MJ: " prefix for diagram clarity. `Record_Proc
 
 ---
 
+### 8.1 The typed-component model (v6.1)
+
+The catalog's flat "6 algorithms" shape is now the trained-leaf slice of a larger **typed
+component model** — "everything is a component": model primitives, preprocessing, statistical
+methods, inputs/outputs, parameters, and slot-bearing structures, organized in an inheritance
+tree whose nodes carry only what is true of every descendant. Five entities
+(migration `V202608301400__v6.1.x__ML_Component_Model.sql`):
+
+- **`MJ: ML Component Types`** — the catalog/tree node (`ParentID` inheritance; seven Kind roots:
+  Model, Preprocessing, Statistic, Input, Output, Parameter, Structure). Carries `IsAbstract`,
+  `Trainable` (a hand-authored matrix or operator-weighted rubric is first-class WITHOUT being
+  trainable), `DriverClass` (sidecar/step key), `SpecSchema`, and the archetype's prose **Story**
+  (+ embedding vector) — a component's dual identity.
+- **`MJ: ML Component Type Properties`** — inheritable lists AS ROWS (preprocessing banks,
+  hyperparameter banks, statistical gates, guidance), merged root→leaf per fixed per-key modes by
+  the pure resolver in `@memberjunction/predictive-studio-core` (`component-resolution.ts`);
+  `lintComponentTree` enforces the principled partition (a property belongs on a node only if it
+  holds for ALL descendants) and the shipped seed tree is test-certified to zero findings.
+- **`MJ: ML Component Type Slots`** — fillable positions (a Bagging Wrapper's `base_estimator`, a
+  rubric's `weights`), inherited by name, narrowable only.
+- **`MJ: ML Components`** — a filled/trained INSTANCE in one model's composition tree
+  (`ParentComponentID` + `SlotName`, `MLModel.RootComponentID` at the top) or standalone reusable
+  (per-component artifact, `SourceComponentID` reuse-by-reference, `PromotionState` gate for
+  code-backed inputs, the instance's Story + StoryContribution).
+- **`MJ: ML Component Bindings`** — instance inputs/outputs/parameters FK'd to real
+  `MJ: Entities`/`MJ: Entity Fields`, so a weight is on Members.DaysSinceLastLogin, not on x3.
+
+`MLAlgorithm.ComponentTypeID` bridges each catalog row onto its leaf; every existing read path is
+unchanged. The seed tree (`metadata/ml-component-types*`) adds the Sonar-ported members: the
+**Glass-Box Rubric** (`rubric` sidecar estimator — given-mode weights are hand-set, search mode
+fits them; exact per-record contributions via `coef_`), the six **normalization** preprocessing
+ops (`minmax`/`percentile`/`zscore`/`logistic`/`banded`/`lookup`), the ten **As-Of Aggregate**
+input leaves (the widened `DatedFeatureSpec.Aggregate` vocabulary with `Rolling`/`Calendar`/
+`SinceEvent`/`RenewalRelative`/`AllTime` windows and the `__present` hadData mask), **Score
+Band** outputs (`Engine/src/components/score-bands.ts`), and the design-time **join-path**
+auto-resolver (`Engine/src/components/join-path.ts`). The `Sequence`/HMM and Structure-wrapper
+subtrees are seeded `Status='Draft'` until the sidecar's `component_graph` execution and the
+`sequence` problem type ship.
+
 ## 9. The guidance layer — algorithm catalog + the 6×7 matrix
 
 Neither the agent nor a non-expert user should have to guess which algorithm fits. Three seeded metadata entities encode evidence-based defaults:
 
-- **`MJ: ML Algorithms`** — the fixed, curated catalog (6 algorithms): XGBoost, LightGBM, Logistic Regression, Random Forest, Linear/Ridge Regression, MLP. Each row declares `ProblemTypes`, `DriverClass` (the sidecar key), `HyperparameterSchema`, `DefaultHyperparameters`, and `SupportsFeatureImportance`.
+- **`MJ: ML Algorithms`** — the curated catalog (6 trained algorithms + the Glass-Box Rubric), each row bridged via `ComponentTypeID` onto its `MJ: ML Component Types` leaf (§8.1) so the resolved tree profile adds inherited banks/gates/guidance on top: XGBoost, LightGBM, Logistic Regression, Random Forest, Linear/Ridge Regression, MLP. Each row declares `ProblemTypes`, `DriverClass` (the sidecar key), `HyperparameterSchema`, `DefaultHyperparameters`, and `SupportsFeatureImportance`.
 - **`MJ: ML Algorithm Use Cases`** — **decision-relevant** scenarios that genuinely differentiate algorithms (7 of them), NOT business labels (churn/renewal/attendee-return are all the same *binary classification* shape and so don't differentiate). E.g. "Binary classification", "Regression", "Interpretability required", "Minimal tuning (business-user)", "Large/wide dataset (speed)", "Embedding/LLM-feature-heavy", "Small dataset".
 - **`MJ: ML Algorithm Use Case Rankings`** — the **6×7 join** (42 rows). Each cell carries a `SuitabilityScore` (1–5), a `RecommendationLevel` (`Primary` / `Strong` / `Viable` / `Weak` / `NotRecommended`), and the real payoff: a **`Rationale`** (agent- and human-readable, e.g. *"Gives feature importances but not simple coefficients — if a stakeholder needs to see exactly why each prediction was made, prefer Logistic/Ridge."*).
 
