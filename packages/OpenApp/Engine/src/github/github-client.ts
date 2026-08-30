@@ -8,7 +8,7 @@
  * RuntimeSchemaManager.
  */
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { Octokit } from '@octokit/rest';
 // Already a dependency of this package (package.json) and already used by
 // install/install-orchestrator.ts. Version parsing, precedence and prerelease detection all come
@@ -336,6 +336,42 @@ export async function ListGitHubReleases(
  *                  directory is resolved relative to it (`<subpath>/<migrationsPath>`).
  * @returns Download result with file list or error details
  */
+/** Bounded so a pathological or adversarial tree cannot walk forever. Generous vs any real repo. */
+const MAX_MIGRATION_DIRECTORY_DEPTH = 6;
+
+/**
+ * Every `.sql` file under `root`, with its path relative to `root` (#3858) — the same set skyway's
+ * recursive glob applies locally, which is the whole point: what installs must be what runs.
+ */
+async function listSqlFilesRecursive(
+    octokit: ReturnType<typeof CreateOctokit>,
+    owner: string,
+    repo: string,
+    root: string,
+    ref: string | undefined,
+    currentDir?: string,
+    depth = 0
+): Promise<{ path: string; relativePath: string }[]> {
+    if (depth > MAX_MIGRATION_DIRECTORY_DEPTH) {
+        throw new Error(
+            `Migration directory nesting exceeds ${MAX_MIGRATION_DIRECTORY_DEPTH} levels under '${root}' — `
+            + `refusing to walk further. No real migration layout is this deep.`);
+    }
+    const items = await ListDirectory(octokit, owner, repo, currentDir ?? root, ref);
+    const out: { path: string; relativePath: string }[] = [];
+    for (const item of items) {
+        if (item.type === 'file' && item.name.endsWith('.sql')) {
+            // Relative to the ORIGINAL root, however deep — this is the on-disk path, so nested
+            // structure survives and two same-named migrations in different subdirectories land in
+            // different places instead of silently overwriting each other.
+            out.push({ path: item.path, relativePath: item.path.slice(root.length).replace(/^\/+/, '') });
+        } else if (item.type === 'dir') {
+            out.push(...await listSqlFilesRecursive(octokit, owner, repo, root, ref, item.path, depth + 1));
+        }
+    }
+    return out;
+}
+
 export async function DownloadMigrations(
     repoUrl: string,
     version: string | undefined,
@@ -355,21 +391,37 @@ export async function DownloadMigrations(
     const octokit = CreateOctokit(repoUrl, options);
 
     try {
-        const items = await ListDirectory(octokit, parsed.Owner, parsed.Repo, cleanPath, ref);
-        const sqlFiles = items.filter(item => item.type === 'file' && item.name.endsWith('.sql'));
+        // RECURSIVE (#3858): skyway's scanner globs recursively, so a migration in a subdirectory
+        // is applied by a local `mj migrate` and looks correct — and was never downloaded and never
+        // ran on a host, with both sides reporting success. The walk mirrors what the scanner
+        // sees, and relative paths are PRESERVED on disk: flattening `file.name` would let two
+        // same-named migrations in different subdirectories silently overwrite each other.
+        const sqlFiles = await listSqlFilesRecursive(octokit, parsed.Owner, parsed.Repo, cleanPath, ref);
         if (sqlFiles.length === 0) {
-            return { Success: true, LocalPath: localDir, Files: [] };
-        }
-
-        if (!existsSync(localDir)) {
-            mkdirSync(localDir, { recursive: true });
+            // ZERO FILES IS A FAILURE (#3858). This function is only called because a manifest
+            // declared migrations; an app that says it has migrations and ships none is a defect.
+            // The old `Success: true, Files: []` let an install proceed past the migration phase,
+            // record the app as installed, and leave the host with an EMPTY schema and a green
+            // result — the one path where the migration phase failed soft.
+            return {
+                Success: false,
+                ErrorMessage: `No .sql files found under '${cleanPath}' (ref: ${ref ?? 'default branch'}). `
+                    + `The manifest declares a migrations directory, so an empty download is a defect — `
+                    + `check 'migrations.directory' in mj-app.json and that the tag's tree contains it.`,
+            };
         }
 
         const downloadedFiles: string[] = [];
         for (const file of sqlFiles) {
             const content = await FetchFileContent(octokit, parsed.Owner, parsed.Repo, file.path, ref);
-            writeFileSync(join(localDir, file.name), content, 'utf-8');
-            downloadedFiles.push(file.name);
+            // file.relativePath, not file.name — see the header note on same-named migrations.
+            const target = join(localDir, file.relativePath);
+            const targetDir = dirname(target);
+            if (!existsSync(targetDir)) {
+                mkdirSync(targetDir, { recursive: true });
+            }
+            writeFileSync(target, content, 'utf-8');
+            downloadedFiles.push(file.relativePath);
         }
 
         return { Success: true, LocalPath: localDir, Files: downloadedFiles };

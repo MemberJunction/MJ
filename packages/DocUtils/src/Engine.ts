@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { HttpGet } from '@memberjunction/network-utils';
 import { JSDOM } from 'jsdom';
 
 import { BaseEngine, BaseEnginePropertyConfig, LogError, UserInfo, BaseEntity, IMetadataProvider } from "@memberjunction/core";
@@ -100,9 +100,9 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
     }
     protected async fetchDocumentation(url: string): Promise<string> {
         try {
-            const response = await axios.get(url);
-            if (response.status === 200) {
-                return response.data;
+            const response = await HttpGet<string>(url, { ResponseType: 'text' });
+            if (response.Status === 200) {
+                return response.Data;
             } else {
                 return 'No content found';
             }    

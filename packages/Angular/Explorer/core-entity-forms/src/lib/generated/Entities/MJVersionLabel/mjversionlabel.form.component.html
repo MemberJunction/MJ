@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="labelDefinition"
         SectionName="Label Definition"
-        Icon="fa fa-tag"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -56,7 +56,7 @@
     <mj-collapsible-panel
         SectionKey="scopeTargets"
         SectionName="Scope Targets"
-        Icon="fa fa-sitemap"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -93,6 +93,38 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDDepth"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDPath"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDIsLeaf"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDChildCount"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -100,7 +132,7 @@
     <mj-collapsible-panel
         SectionKey="creationMetrics"
         SectionName="Creation Metrics"
-        Icon="fa fa-chart-line"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -185,9 +217,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Restores','VersionLabelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Restores','VersionLabelID')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelRestoresVersionLabelID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestoresVersionLabelID', $event.totalRowCount)"
                 >
@@ -210,9 +242,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Items','VersionLabelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Items')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Items','VersionLabelID')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelItems')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
                 >
@@ -235,9 +267,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Label Restores','PreRestoreLabelID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Label Restores')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Label Restores','PreRestoreLabelID')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabelRestoresPreRestoreLabelID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelRestoresPreRestoreLabelID', $event.totalRowCount)"
                 >
@@ -260,9 +292,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Labels','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Labels','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
                 >

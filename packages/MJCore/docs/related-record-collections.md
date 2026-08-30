@@ -3,18 +3,20 @@
 > A parent record and the rows that point at it — loaded, validated and persisted as **one unit**,
 > from a single `entity.Save()`, on the server *and* in the browser.
 
-This is the horizontal counterpart to [IS-A relationships](./isa-relationships.md). IS-A is
+This is the horizontal 1:N counterpart to [IS-A relationships](./isa-relationships.md). IS-A is
 *vertical*: one logical record spread across parent and child tables sharing a primary key. A
-related-record collection is *horizontal*: a header plus N rows that carry a foreign key back to it —
-order lines, journal entry lines, payment allocations, an action's parameters.
+related-record collection is *horizontal*: a header plus N rows that carry a foreign key **back to
+it** — order lines, journal entry lines, payment allocations, an action's parameters. For the
+inverted 1:1 — an owner-held FK such as `Deal.OrderID` — see
+[Embedded Records](./embedded-records.md).
 
-| | IS-A subtype | Related-record collection |
-|---|---|---|
-| MJ vocabulary | `ChildEntities`, `IsChildType`, `_childEntity` | `RelatedEntities`, `EntityRelationshipInfo` |
-| Primary key | **Shared** with the parent | **Its own** |
-| Cardinality | At most one per parent | Many per parent |
-| Join | Same PK | `RelatedEntityJoinField` (a real FK) |
-| Declared by | Schema (`Entity.ParentID`) | `EntityRelationship.RelatedRecordCollection` |
+| | IS-A subtype | Related-record collection | Embedded record |
+|---|---|---|---|
+| MJ vocabulary | `ChildEntities`, `IsChildType`, `_childEntity` | `RelatedEntities`, `EntityRelationshipInfo` | `DeclareEmbeddedRecord`, `{Field}_Object` |
+| Primary key | **Shared** with the parent | **Its own** | **Its own** |
+| Cardinality | At most one per parent | Many per parent | At most one |
+| Join | Same PK | FK **on the related row** | FK **on the owner** |
+| Declared by | Schema (`Entity.ParentID`) | `EntityRelationship.RelatedRecordCollection` | `EntityField.EmbeddedRecord` |
 
 **The word "child" means IS-A subtype in MJCore and nothing else.** That is why this feature says
 *related records* throughout — `DeclareRelatedRecords`, `RelatedRecordCollection`, `RelatedEntity`,
@@ -629,7 +631,35 @@ same record cannot produce a phantom cycle.
 
 ---
 
-## 7. Behavior changes for adopters
+## 7. Polymorphic IS-A Child Support in Collections & Embedded Records
+
+When an entity hierarchy uses [IS-A inheritance](./isa-relationships.md) (e.g. `Order Lines` with subtypes `Event Order Lines`, `Subscription Order Lines`), a `RelatedRecordCollection` (and `EmbeddedRecord`) can hold **polymorphic IS-A leaf entity instances** directly:
+
+```typescript
+// Add a polymorphic IS-A leaf entity directly to order.Lines
+const eventLine = await provider.GetEntityObject<EventOrderLineEntity>('MJ_BizApps_Orders: Event Order Lines');
+eventLine.NewRecord();
+eventLine.ProductID = eventProduct.ID;
+eventLine.Quantity = 1;
+eventLine.CheckInAt = new Date();
+
+order.Lines.Add(eventLine); // stamps OrderHeaderID onto eventLine
+```
+
+### How it works across the wire
+
+1. **Wire Serialization**: Each wire item carries its specific `EntityName` (e.g. `'MJ_BizApps_Orders: Event Order Lines'`), falling back to the collection's declared `RelatedEntityName` for standard homogeneous records.
+2. **Wire Deserialization**: Server-side rehydration reads `row.EntityName` and instantiates the proper IS-A subclass via `provider.GetEntityObject(entityName, user)`.
+3. **IS-A Validation & Persistence**:
+   - Because `EventOrderLineEntity` is an IS-A leaf node, it inherits and shares all base `OrderLine` fields (`OrderHeaderID`, `ProductID`, `Quantity`, `UnitPrice`) through its internal IS-A parent chain.
+   - When the graph saves, BaseEntity's native IS-A pipeline validates both parent and child fields, and persists the parent table row and the child table row atomically within the same database transaction.
+4. **Removals**: Polymorphic deletions preserve `__entityName` in the removal payload so the correct IS-A entity is loaded and deleted.
+
+The exact same polymorphic mechanism applies to [Embedded Records](./embedded-records.md) via `EmbeddedRecordWire.EntityName`.
+
+---
+
+## 8. Behavior changes for adopters
 
 Declaring a collection changes two things about the parent, both of them fixes:
 
@@ -646,6 +676,7 @@ Entities without collections are unaffected in every respect.
 ## See also
 
 - [IS-A Relationships](./isa-relationships.md) — the vertical counterpart
+- [Embedded Records](./embedded-records.md) — the owner-held 1:1 counterpart
 - [Transactions & Batching Guide](../../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md) — provider
   transactions vs TransactionGroups vs entity graphs, and which you want
 - [Remote Operations Showcase](./REMOTE_OPERATIONS_SHOWCASE.md) — the primitive the network path rides on

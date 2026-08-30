@@ -1,41 +1,47 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { HttpClient } from '@memberjunction/network-utils';
 
 /**
  * Per-action tests for the JotForm provider.
  *
  * Credentials resolve from the BIZAPPS_JOTFORM_API_TOKEN environment variable,
- * so no database access occurs. The HTTP boundary is the axios module mock —
- * JotForm requests go through an axios instance created with the API key in
+ * so no database access occurs. The HTTP boundary is the @memberjunction/network-utils module mock —
+ * JotForm requests go through an HttpClient created with the API key in
  * its default query params.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => ({
@@ -99,10 +105,10 @@ async function runWithoutUser(action: object, params: ActionParam[]): Promise<Ac
 
 beforeEach(() => {
   process.env[ENV_KEY] = 'env-token';
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
-  http.instance.put.mockReset();
-  http.axiosDefault.create.mockClear();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
+  http.instance.Put.mockReset();
+  vi.mocked(HttpClient).mockClear();
 });
 
 afterEach(() => {
@@ -133,17 +139,17 @@ describe('GetJotFormAction', () => {
   });
 
   it('should GET /form/{id} and /form/{id}/questions with the API key in params', async () => {
-    http.instance.get.mockImplementation((url: string) => {
+    http.instance.Get.mockImplementation((url: string) => {
       if (url === '/form/f-1') {
         return Promise.resolve({
-          data: { responseCode: 200, content: { id: 'f-1', title: 'My JotForm', status: 'ENABLED', url: 'https://form.jotform.com/f-1' } },
-          headers: {},
+          Data: { responseCode: 200, content: { id: 'f-1', title: 'My JotForm', status: 'ENABLED', url: 'https://form.jotform.com/f-1' } },
+          Headers: {},
         });
       }
       if (url === '/form/f-1/questions') {
         return Promise.resolve({
-          data: { responseCode: 200, content: { q1: { type: 'control_textbox', text: 'Name' } } },
-          headers: {},
+          Data: { responseCode: 200, content: { q1: { type: 'control_textbox', text: 'Name' } } },
+          Headers: {},
         });
       }
       return Promise.reject(new Error(`Unmocked GET ${url}`));
@@ -151,14 +157,15 @@ describe('GetJotFormAction', () => {
 
     const result = await run(action, inputs({ FormID: 'f-1' }));
 
-    expect(http.axiosDefault.create).toHaveBeenCalledWith(
+    expect(HttpClient).toHaveBeenCalledWith(
       expect.objectContaining({
-        baseURL: 'https://api.jotform.com',
-        params: { apiKey: 'env-token' },
+        BaseURL: 'https://api.jotform.com',
+        // The API key is injected per-request by the OnRequest hook, not a client-level option.
+        OnRequest: expect.any(Function),
       }),
     );
-    expect(http.instance.get).toHaveBeenCalledWith('/form/f-1', { params: { apiKey: 'env-token' } });
-    expect(http.instance.get).toHaveBeenCalledWith('/form/f-1/questions', { params: { apiKey: 'env-token' } });
+    expect(http.instance.Get).toHaveBeenCalledWith('/form/f-1', { Query: { apiKey: 'env-token' } });
+    expect(http.instance.Get).toHaveBeenCalledWith('/form/f-1/questions', { Query: { apiKey: 'env-token' } });
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully retrieved form "My JotForm" with 1 questions');
@@ -218,11 +225,11 @@ describe('ExportJotFormCSVAction', () => {
   });
 
   it('should GET /form/{id}/submissions and return NO_DATA for empty results', async () => {
-    http.instance.get.mockResolvedValue({ data: { responseCode: 200, content: [] }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { responseCode: 200, content: [] }, Headers: {}, Status: 200 });
 
     const result = await run(action, inputs({ FormID: 'f-1' }));
 
-    expect(http.instance.get).toHaveBeenCalledWith('/form/f-1/submissions', expect.anything());
+    expect(http.instance.Get).toHaveBeenCalledWith('/form/f-1/submissions', expect.anything());
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('NO_DATA');
     expect(result.Message).toBe('No submissions found matching the criteria');
@@ -288,11 +295,11 @@ describe('GetJotFormSubmissionsAction', () => {
   });
 
   it('should GET /form/{id}/submissions on the happy path', async () => {
-    http.instance.get.mockResolvedValue({ data: { responseCode: 200, content: [] }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { responseCode: 200, content: [] }, Headers: {}, Status: 200 });
 
     const result = await run(action, inputs({ FormID: 'f-1' }));
 
-    expect(http.instance.get).toHaveBeenCalledWith('/form/f-1/submissions', expect.anything());
+    expect(http.instance.Get).toHaveBeenCalledWith('/form/f-1/submissions', expect.anything());
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toContain('Successfully retrieved 0 submissions from JotForm');
