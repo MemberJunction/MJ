@@ -225,7 +225,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
             // don't silently drop forbidden scopes because that masks bugs
             // in scope authoring and surprises agents.
             if (scopeIDs && scopeIDs.length) {
-                const denied = await this.rejectForbiddenScopes(scopeIDs, currentUser, agentID);
+                const denied = await this.rejectForbiddenScopes(scopeIDs, currentUser, agentID, searchContext?.PrimaryScopeRecordID ?? null);
                 if (denied) {
                     // Emit a Status='Forbidden' SearchExecutionLog row so the
                     // analytics dashboard surfaces denied attempts. Best-effort
@@ -233,12 +233,12 @@ export class SearchKnowledgeResolver extends ResolverBase {
                     await SearchEngine.Instance.LogForbiddenSearch({
                         Query: query,
                         ScopeIDs: scopeIDs,
-                        FailureReason: denied,
+                        FailureReason: denied.auditReason,
                         StartTime: startTime,
                         ContextUser: currentUser,
                         AIAgentID: agentID ?? null,
                     });
-                    return this.errorResult(denied, startTime);
+                    return this.errorResult(denied.message, startTime);
                 }
             }
 
@@ -282,19 +282,46 @@ export class SearchKnowledgeResolver extends ResolverBase {
         scopeIDs: string[],
         user: UserInfo,
         agentID: string | undefined,
-    ): Promise<string | undefined> {
+        primaryScopeRecordID: string | null,
+    ): Promise<{ message: string; auditReason: string } | undefined> {
         const agent = await this.loadAgent(agentID, user);
+        // A NAMED PRINCIPAL THAT WOULD NOT LOAD IS A REFUSAL, NOT AN ABSENCE.
+        //
+        // `loadAgent` returns null both when no agentID was supplied and when the one supplied does
+        // not exist. Conflating them means the agent rules (AgentNone / AgentAssignedNotListed /
+        // AgentUnscopedAll) never fire, and the raw client string is then handed to Search() and
+        // bound into the expansion query unjudged. The Scoped Search action refuses this outright;
+        // this path did not.
+        if (agentID && !agent) {
+            LogStatus(`SearchKnowledge denied: agent '${agentID}' was supplied but could not be loaded`);
+            const msg = `Forbidden: AIAgentID '${agentID}' could not be loaded, so it cannot be judged.`;
+            return { message: msg, auditReason: msg };
+        }
         const resolver = GetSearchScopePermissionResolver();
+        // THE TENANT BELONGS IN THE PERMISSION DECISION, NOT ONLY IN THE SEARCH.
+        // `isGrantForTenant` DISCARDS a tenant-scoped row when the caller supplies no tenant —
+        // including a tenant-scoped PermissionLevel='None', an explicit per-tenant deny. Omitting
+        // the tenant here threw every such row away before the decision. The Scoped Search action
+        // passes it; these paths now do too.
         for (const scopeID of scopeIDs) {
             const verdict = await resolver.ResolveEffectivePermission({
                 User: user,
                 SearchScopeID: scopeID,
                 Agent: agent,
+                PrimaryScopeRecordID: primaryScopeRecordID,
                 ContextUser: user,
             });
             if (!verdict.Allowed) {
+                // The log keeps the full reason. The CLIENT gets the id it sent plus the Source:
+                // `verdict.Reason` names the principal, which turns a denial into a name oracle over
+                // the agent and skill catalogues. Same policy the Scoped Search action applies.
                 LogStatus(`SearchKnowledge denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`);
-                return `Forbidden: ${verdict.Reason}`;
+                return {
+                    message: `Forbidden: refused for ${agentID ? `AIAgentID '${agentID}'` : 'this user'} on scope '${scopeID}' (${verdict.Source}).`,
+                    // The audit row is server-side: it keeps the FULL reason, names and all —
+                    // matching the Scoped Search action's Forbidden rows.
+                    auditReason: verdict.Reason ?? 'Permission denied',
+                };
             }
             // Read level grants metadata visibility but not the right to run a
             // search. The SearchScopes query (scope-listing) accepts Read; the
@@ -302,17 +329,18 @@ export class SearchKnowledgeResolver extends ResolverBase {
             if (verdict.Level === 'Read') {
                 const reason = `User '${user.Name}' has Read-level access on this scope, which permits metadata visibility but not search execution. Search or Manage is required to run a query.`;
                 LogStatus(`SearchKnowledge denied: ${reason} (scope=${scopeID}, source=${verdict.Source})`);
-                return `Forbidden: ${reason}`;
+                return { message: `Forbidden: ${reason}`, auditReason: reason };
             }
         }
         return undefined;
     }
 
     /**
-     * Loads the AIAgent record by ID for the agent-fallback path. Returns
-     * null if no agentID was supplied, or if the lookup fails (which we
-     * treat as "no agent context" rather than as an error so a malformed
-     * input can't escalate privilege).
+     * Loads the AIAgent record by ID. Returns null both when no agentID was
+     * supplied and when the lookup fails — and the CALLERS distinguish those:
+     * a supplied-but-unloadable id is REFUSED (an unjudged principal must not
+     * reach the search or the listing), while "not supplied" means no agent
+     * rules apply.
      */
     private async loadAgent(agentID: string | undefined, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
         if (!agentID) return null;
@@ -351,6 +379,16 @@ export class SearchKnowledgeResolver extends ResolverBase {
 
             const ownedOrUnowned = scopes.filter(s => !s.OwnerUserID || UUIDsEqual(s.OwnerUserID, userID));
             const agent = await this.loadAgent(agentID, currentUser);
+            // Same policy as the search paths: a supplied-but-unloadable agentID is refused, not
+            // silently downgraded to "no agent" — otherwise this listing would SHOW scopes that an
+            // agent-gated search refuses. Empty result, matching this query's failure posture.
+            // (No tenant threading here: unlike the mutations, this query takes no searchContext,
+            // so there is no PrimaryScopeRecordID to pass — tenant-scoped grants do not narrow the
+            // listing.)
+            if (agentID && !agent) {
+                LogStatus(`SearchScopes: agent '${agentID}' was supplied but could not be loaded — returning no scopes`);
+                return [];
+            }
             const resolver = GetSearchScopePermissionResolver();
 
             const visible: SearchScopeInfo[] = [];
