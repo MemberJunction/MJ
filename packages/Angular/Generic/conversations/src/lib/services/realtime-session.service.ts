@@ -205,8 +205,13 @@ interface RemoteBrowserAudioChunkPayload {
 /**
  * Result shape returned by the `StartRealtimeClientSession` server mutation.
  * The browser uses these values to open a client-direct realtime session.
+ *
+ * Exported because a host may mint the session ITSELF (its own mutation, carrying
+ * server-side context the stock mutation cannot express) and then hand the result to
+ * {@link RealtimeSessionService.StartRealtimeSessionFromResult} to run it — this is the
+ * contract that path is written against.
  */
-interface StartRealtimeClientSessionResult {
+export interface StartRealtimeClientSessionResult {
   AgentSessionId: string;
   ConversationId: string | null;
   Provider: string;
@@ -234,6 +239,45 @@ interface StartRealtimeClientSessionResult {
 }
 
 /**
+ * Host-supplied inputs that accompany an already-minted session on
+ * {@link RealtimeSessionService.StartRealtimeSessionFromResult} — the values the RUN half needs
+ * that a {@link StartRealtimeClientSessionResult} cannot carry. Every field is optional and
+ * mirrors the same-named {@link RealtimeSessionService.StartRealtimeSession} parameter, defaults
+ * included: omit one and the session behaves exactly as the all-in-one entry point does when that
+ * parameter is omitted.
+ */
+export interface RealtimeSessionRunOptions {
+  /**
+   * The conversation the host asked its OWN mint for, or null/omitted when it asked the server to
+   * create one. Only the ORIGINAL request tells the two apart: a null here plus a
+   * `ConversationId` on the result means the server created that conversation for this session,
+   * which the host is told about via {@link RealtimeSessionService.SessionCreatedConversationId}.
+   */
+  readonly conversationId?: string | null;
+  /**
+   * Display name of the target agent, surfaced on {@link RealtimeSessionService.AgentName$} so any
+   * host can render it without re-resolving. Omitted ⇒ the previous name stands.
+   */
+  readonly agentName?: string | null;
+  /**
+   * EXPLICIT "record this call" consent for THIS session. Omitted/`null` ⇒ the per-user persisted
+   * preference (`mj.realtimeVoice.recordingConsent.v1`) is read as the default; `false` never
+   * records. The host is responsible for reporting its own choice to its own mint.
+   */
+  readonly recordingConsent?: boolean | null;
+  /**
+   * The application the session runs in. Stored so the live ClientContextChannel can stream
+   * subsequent context deltas under it. Omitted ⇒ no app layer (the pre-app behavior).
+   */
+  readonly applicationId?: string | null;
+  /**
+   * Live app-context snapshot. Omitted/`null` ⇒ the snapshot the host has already pushed via
+   * {@link RealtimeSessionService.UpdateAppContext} stands (never clobber a good value with null).
+   */
+  readonly appContext?: AppContextSnapshot | null;
+}
+
+/**
  * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
  * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
  * frames never transit the MJ server (low latency); only tool calls and final
@@ -250,7 +294,10 @@ interface StartRealtimeClientSessionResult {
  * bakes the companion instructions + tool set into `SessionConfigJson`, which the client
  * driver applies verbatim.
  *
- * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}.
+ * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}. A start is
+ * two halves — MINT (the `StartRealtimeClientSession` mutation) and RUN (everything above) — and a
+ * host that must mint through its own server surface enters at the second half via
+ * {@link StartRealtimeSessionFromResult}; there is one implementation of the run half either way.
  */
 @Injectable({ providedIn: 'root' })
 export class RealtimeSessionService {
@@ -497,6 +544,12 @@ export class RealtimeSessionService {
    */
   private currentTurnStartMs: number | null = null;
   /**
+   * Wall-anchor of the SESSION clock (#3832): `performance.now()` at the moment the call went
+   * live, or `null` before any call has. Read only through {@link nowTurnOffsetMs}.
+   */
+  private sessionClockStartMs: number | null = null;
+
+  /**
    * Per-turn guard for {@link markTurnAudioStart}: `true` once the in-flight turn's audio-start
    * offset has been captured, so mid-turn interim deltas don't overwrite it. Reset to `false`
    * at each finalization so the NEXT turn re-stamps from where ITS audio begins.
@@ -666,22 +719,81 @@ export class RealtimeSessionService {
       return; // a session is already running — ignore duplicate starts
     }
 
+    const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
+    // Captured BEFORE startChannels so the mint carries exactly the snapshot the prologue
+    // resolved, whatever a channel plugin may push in the meantime.
+    const effectiveAppContext = this._appContext$.value;
+
+    let session: StartRealtimeClientSessionResult;
+    try {
+      // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
+      // tool sets must be declared to the realtime model at session mint.
+      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
+    } catch (error) {
+      await this.failSessionStart(error);
+      return;
+    }
+
+    await this.runMintedSession(session, conversationId ?? null, consent);
+  }
+
+  /**
+   * Run a session the HOST has already minted itself — the second half of
+   * {@link StartRealtimeSession}, without the `StartRealtimeClientSession` mutation.
+   *
+   * For hosts that must mint through their own server surface because they attach per-session
+   * context the stock mutation cannot carry (e.g. an interview persona baked into the companion
+   * prompt). They call their own mutation, shape the reply into a
+   * {@link StartRealtimeClientSessionResult}, and hand it here: driver resolution, the ephemeral-token
+   * connect, tool/transcript relays, recording, connection state and teardown are all identical to
+   * the all-in-one path — there is exactly one implementation of the run half.
+   *
+   * NOTE: the interactive-channel plugins are NOT started on this path. Their tool sets must be
+   * declared to the model AT MINT, which happened on the host's side — so a host that wants channels
+   * owns that half too.
+   *
+   * @param result The minted session — the same ten fields the `StartRealtimeClientSession`
+   *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call.
+   * @param options Host-side inputs the result cannot carry; see {@link RealtimeSessionRunOptions}.
+   *   Every field defaults exactly as its {@link StartRealtimeSession} counterpart does.
+   */
+  public async StartRealtimeSessionFromResult(
+    result: StartRealtimeClientSessionResult,
+    options?: RealtimeSessionRunOptions
+  ): Promise<void> {
+    if (this.IsActive) {
+      return; // a session is already running — ignore duplicate starts
+    }
+
+    const effectiveOptions = options ?? {};
+    const consent = this.beginSessionStart(effectiveOptions);
+    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent);
+  }
+
+  /**
+   * Start prologue shared by both entry points: bind the app layer, publish the agent name, reset
+   * per-session state, and flip the session live (which is ALSO what makes the `IsActive` guard
+   * suppress duplicate starts while the mint is still in flight — hence it runs before minting, not
+   * after). Returns the resolved recording consent, which the mint half reports to the server and
+   * the run half uses to decide whether to record.
+   */
+  private beginSessionStart(options: RealtimeSessionRunOptions): boolean {
     // App awareness (Move 1/3/4): the application the session runs in (sources the app config
     // cascade + RelevantAgents → allowed-agent union) and the live app-context snapshot injected
     // into the companion prompt at mint. Stored so the ClientContextChannel can stream subsequent
     // deltas. Absent ⇒ no app layer / no mint-time context (the pre-app behavior).
-    this.applicationId = applicationId ?? null;
+    this.applicationId = options.applicationId ?? null;
     // Prefer the explicit param, but fall back to the snapshot the host has ALREADY pushed via
     // UpdateAppContext (explorer-app streams the live snapshot continuously). The overlay's
     // [appContext] binding can still read null at the instant the mic is clicked — without this
     // fallback, StartRealtimeSession(null) would clobber a perfectly good snapshot and mint the
     // companion prompt with no app context (no NavigableApps / no tool schemas → the co-agent guesses
     // parameter names and navigation fails). Never overwrite a good value with null.
-    const effectiveAppContext = appContext ?? this._appContext$.value;
-    this._appContext$.next(effectiveAppContext);
+    this._appContext$.next(options.appContext ?? this._appContext$.value);
 
-    if (agentName) {
-      this._agentName$.next(agentName);
+    if (options.agentName) {
+      this._agentName$.next(options.agentName);
     }
     this.resetState();
     this._active$.next(true);
@@ -689,20 +801,28 @@ export class RealtimeSessionService {
 
     // Resolve recording consent for this session: explicit value wins, else the per-user
     // persisted preference. Computed before mint so it can be reported to the server.
-    const consent = recordingConsent ?? this.readPersistedRecordingConsent();
+    const consent = options.recordingConsent ?? this.readPersistedRecordingConsent();
     this.recordingStartedAtIso = consent ? new Date().toISOString() : null;
+    return consent;
+  }
 
+  /**
+   * The RUN half of a session start, shared by both entry points: consume the minted result, open
+   * the provider connection, and go live. `inputConversationId` is the conversation the START asked
+   * for (null ⇒ "server, make me one") — the result alone can't distinguish the two.
+   */
+  private async runMintedSession(
+    session: StartRealtimeClientSessionResult,
+    inputConversationId: string | null,
+    consent: boolean
+  ): Promise<void> {
     try {
-      // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
-      // tool sets must be declared to the realtime model at session mint.
-      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
       // it on close, and auto-name it (via the shared naming helper).
-      this.createdConversationId = !conversationId && session.ConversationId ? session.ConversationId : null;
-      this.sessionConversationId = session.ConversationId ?? conversationId ?? null;
+      this.createdConversationId = !inputConversationId && session.ConversationId ? session.ConversationId : null;
+      this.sessionConversationId = session.ConversationId ?? inputConversationId ?? null;
       this.firstUserTranscript = null;
       this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
       this._modelName$.next(session.ModelName ?? null);
@@ -722,6 +842,15 @@ export class RealtimeSessionService {
       // and never blocks the call. The remote stream may still be null here (the WebRTC
       // ontrack can land slightly after Connect resolves) — the recorder mixes the mic now
       // and the agent audio rides through whenever its track is already attached.
+      // The SESSION clock (#3832): anchored the moment the call goes live, whether or not a
+      // recording exists. When the recorder runs, per-turn timings use ITS clock (offsets into a
+      // seekable file); when it does not — every unconsented and every relay-captured session,
+      // which is 100% of turns measured across two databases — this is the fallback that stops
+      // `UtteranceStartMs`/`UtteranceEndMs` being categorically null. An offset into a session
+      // with no audio is not seekable, but it is orderable and displayable ("3:42 into the
+      // interview"), and it is stamped when the SPEECH happened rather than when the relay
+      // mutation landed — which no server-side backfill can ever recover.
+      this.sessionClockStartMs = performance.now();
       if (consent) {
         this.startRecording(client);
       }
@@ -739,10 +868,18 @@ export class RealtimeSessionService {
         channelNames: this._activeChannels$.value.map(c => c.ChannelName),
       });
     } catch (error) {
-      console.error('[RealtimeSession] Failed to start session:', error);
-      this._connectionState$.next('error');
-      await this.teardown(false);
+      await this.failSessionStart(error);
     }
+  }
+
+  /**
+   * The single failure path for a session start (mint half or run half): report it, latch the
+   * overlay into 'error', and unwind whatever the half-built session already opened.
+   */
+  private async failSessionStart(error: unknown): Promise<void> {
+    console.error('[RealtimeSession] Failed to start session:', error);
+    this._connectionState$.next('error');
+    await this.teardown(false);
   }
 
   /**
@@ -867,6 +1004,9 @@ export class RealtimeSessionService {
       // First turn's audio starts at ~0 (recording begins right as the call goes live). Seed it
       // here so the very first turn has a sane start even if its first interim is missed; later
       // turns re-stamp from where THEIR audio begins via markTurnAudioStart (handles tool gaps).
+      // Seeded even though the session clock may already have stamped a start: the clocks have
+      // different zeros, and a session-clock start carried into recorder-clock offsets would put
+      // turn one's cue wherever the clocks happen to differ.
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
       if (this.recorder) {
@@ -1550,11 +1690,31 @@ export class RealtimeSessionService {
    * assistant answer, which always has interims.
    */
   private markTurnAudioStart(kind: 'normal' | 'narration'): void {
-    if (!this.recorder || this.turnAudioStartCaptured || kind === 'narration') {
+    if (this.turnAudioStartCaptured || kind === 'narration') {
       return;
     }
-    this.currentTurnStartMs = this.recorder.NowOffsetMs();
+    const offset = this.nowTurnOffsetMs();
+    if (offset === null) {
+      return;
+    }
+    this.currentTurnStartMs = offset;
     this.turnAudioStartCaptured = true;
+  }
+
+  /**
+   * The current per-turn offset in ms — the RECORDER's clock when one runs (an offset into a
+   * seekable file), else the SESSION clock (#3832: orderable and displayable, not seekable),
+   * else `null` before any call is live. One function so the two stamp sites cannot disagree
+   * about which clock a session is on.
+   */
+  private nowTurnOffsetMs(): number | null {
+    if (this.recorder) {
+      return this.recorder.NowOffsetMs();
+    }
+    if (this.sessionClockStartMs !== null) {
+      return Math.max(0, Math.round(performance.now() - this.sessionClockStartMs));
+    }
+    return null;
   }
 
   /**
@@ -1924,12 +2084,13 @@ export class RealtimeSessionService {
     if (!this.agentSessionId) {
       return;
     }
-    // Per-turn timing against the recording (when recording). `utteranceStartMs` is where this
-    // turn's audio actually began (captured by markTurnAudioStart on the first interim); the
-    // `?? 0` fallback covers a turn whose interim was missed / a final-only first turn.
-    const utteranceEndMs = this.recorder ? this.recorder.NowOffsetMs() : null;
-    const utteranceStartMs = this.recorder && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
-    if (this.recorder && !replacesPrevious) {
+    // Per-turn timing against whichever clock the session is on (#3832): the recorder's when one
+    // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began
+    // (captured by markTurnAudioStart on the first interim); the `?? 0` fallback covers a turn
+    // whose interim was missed / a final-only first turn.
+    const utteranceEndMs = this.nowTurnOffsetMs();
+    const utteranceStartMs = utteranceEndMs !== null && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
+    if (utteranceEndMs !== null && !replacesPrevious) {
       // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first
       // interim (handles a tool-call gap before the next turn). Stop inheriting this end as the
       // next start. `null` means "not yet captured"; relay falls back to `?? 0` if no interim fires.
