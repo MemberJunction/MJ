@@ -67,7 +67,11 @@ const MANAGED_AGENT_BASE_PROMPT =
  */
 function buildRequiredOverrideEnablement(): ElevenLabs.ConversationConfigClientOverrideConfigInput {
     return {
-        agent: { prompt: { prompt: true }, firstMessage: true },
+        // `prompt.llm: true` makes the conversational MODEL a per-session choice (#3859). The
+        // platform has no such flag for `temperature` (see PromptAgentApiModelOverrideConfig), so
+        // temperature is deliberately NOT here — it is agent-body state, applied at ensure time and
+        // re-PATCHed on drift via ModelSettingsSatisfied.
+        agent: { prompt: { prompt: true, llm: true }, firstMessage: true },
         tts: { voiceId: true },
     };
 }
@@ -446,7 +450,14 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     public static BuildSessionOverrides(systemPrompt: string, config?: JSONObject): JSONObject {
         // `first_message` is a SIBLING of `prompt` inside `agent`, so the agent object is built
         // once and added to — assigning `overrides['agent']` a second time would drop the prompt.
-        const agent: JSONObject = { prompt: { prompt: systemPrompt } };
+        const prompt: JSONObject = { prompt: systemPrompt };
+        // Per-session LLM (#3859): `llm` is one word, so for once the wire spelling and the SDK
+        // spelling agree. Omitted entirely when unconfigured, like every optional key here.
+        const llm = resolveTrimmedConfigString(config, 'llm');
+        if (llm) {
+            prompt['llm'] = llm;
+        }
+        const agent: JSONObject = { prompt };
         const firstMessage = ElevenLabsRealtime.ResolveFirstMessage(config);
         if (firstMessage) {
             agent['first_message'] = firstMessage;
@@ -514,14 +525,19 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             return model;
         }
         const tools = params.Tools ?? [];
-        const fingerprint = ElevenLabsRealtime.ToolSetFingerprint(tools);
+        // The cache key carries the DESIRED model settings alongside the tool fingerprint (#3859).
+        // Without them, a config-bag llm/temperature change inside one process lifetime would be
+        // served from cache and never reach the drift check — the same never-re-PATCHed defect,
+        // one layer earlier.
+        const fingerprint = ElevenLabsRealtime.ToolSetFingerprint(tools)
+            + '|' + ElevenLabsRealtime.ModelSettingsFingerprint(params.Config);
         const cached = this.agentCache.get(model);
         if (cached && cached.fingerprint === fingerprint) {
             return cached.agentId;
         }
         // Publish the in-flight ensure BEFORE awaiting it, so a second caller arriving mid-flight
         // joins this one rather than starting a rival find-create and forking a duplicate agent.
-        const pending = this.findCreateOrUpdateAgent(model, tools, fingerprint, params.Config);
+        const pending = this.findCreateOrUpdateAgent(model, tools, params.Config);
         this.agentCache.set(model, { agentId: pending, fingerprint });
         try {
             return await pending;
@@ -536,11 +552,17 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         }
     }
 
-    /** The uncached ensure flow: list-by-name, then create or (when drifted) update. */
+    /**
+     * The uncached ensure flow: list-by-name, then create or (when drifted) update.
+     *
+     * Drift is THREE independent comparisons, each against what the remote can actually witness:
+     * the tool fingerprint (plain — computed HERE from `tools`, never the composite cache key,
+     * whose `|settings` suffix the remote could never equal), the override enablement, and the
+     * agent-body model settings (#3859).
+     */
     private async findCreateOrUpdateAgent(
         name: string,
         tools: RealtimeToolDefinition[],
-        fingerprint: string,
         config?: JSONObject
     ): Promise<string> {
         const existing = await this.findAgentByName(name);
@@ -551,7 +573,9 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const remoteFingerprint = ElevenLabsRealtime.ToolSetFingerprint(
             ElevenLabsRealtime.ExtractClientTools(detail)
         );
-        if (remoteFingerprint !== fingerprint || !ElevenLabsRealtime.OverridesSatisfied(detail)) {
+        if (remoteFingerprint !== ElevenLabsRealtime.ToolSetFingerprint(tools)
+            || !ElevenLabsRealtime.OverridesSatisfied(detail)
+            || !ElevenLabsRealtime.ModelSettingsSatisfied(detail, config)) {
             await this.updateAgent(existing.agentId, this.buildAgentBody(name, tools, config));
         }
         return existing.agentId;
@@ -644,6 +668,13 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         if (typeof llm === 'string') {
             prompt.llm = llm as ElevenLabs.Llm;
         }
+        // Temperature is AGENT state, not a per-session override — the platform has no enablement
+        // flag for it (#3859). Set here and kept honest by ModelSettingsSatisfied in the ensure
+        // flow, which re-PATCHes an already-deployed agent when the configured value changes.
+        const temperature = config?.['temperature'];
+        if (typeof temperature === 'number' && Number.isFinite(temperature)) {
+            prompt.temperature = temperature;
+        }
         return {
             name,
             conversationConfig: { agent: { prompt } },
@@ -724,9 +755,53 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const overrides = agent.platformSettings?.overrides?.conversationConfigOverride;
         return (
             overrides?.agent?.prompt?.prompt === true &&
+            overrides?.agent?.prompt?.llm === true &&
             overrides?.agent?.firstMessage === true &&
             overrides?.tts?.voiceId === true
         );
+    }
+
+    /**
+     * Whether the agent's OWN configuration matches the model settings the config bag asks for —
+     * the drift the ensure flow repairs for settings that are AGENT STATE rather than per-session
+     * overrides (#3859).
+     *
+     * `temperature` lives here because the platform offers no per-session override flag for it
+     * (`PromptAgentApiModelOverrideConfig` has `prompt`/`llm`/`nativeMcpServerIds` only), so the
+     * only honest delivery is: set it on the managed agent's body and re-PATCH when it changes.
+     * `llm` is checked here TOO, even though it is also per-session overridable, so an agent whose
+     * configured default model changed is repaired even for callers that send no override.
+     *
+     * An UNCONFIGURED desire matches anything: half the point of the managed agent is that the
+     * deployment may tune it, and a config bag that says nothing must not stampede a PATCH war
+     * against a hand-tuned value.
+     */
+    public static ModelSettingsSatisfied(agent: ElevenLabs.GetAgentResponseModel, config?: JSONObject): boolean {
+        const prompt = agent.conversationConfig?.agent?.prompt;
+        const wantedLlm = resolveTrimmedConfigString(config, 'llm');
+        if (wantedLlm !== undefined && prompt?.llm !== wantedLlm) {
+            return false;
+        }
+        const wantedTemperature = config?.['temperature'];
+        if (typeof wantedTemperature === 'number' && Number.isFinite(wantedTemperature)
+            && prompt?.temperature !== wantedTemperature) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * The desired-model-settings half of the ensure cache key (#3859): the config bag's `llm`
+     * and `temperature` in one stable string. Unconfigured values serialize as absent, so a bag
+     * that says nothing produces the same fingerprint forever.
+     */
+    public static ModelSettingsFingerprint(config?: JSONObject): string {
+        const llm = resolveTrimmedConfigString(config, 'llm');
+        const temperature = config?.['temperature'];
+        return JSON.stringify({
+            ...(llm === undefined ? {} : { llm }),
+            ...(typeof temperature === 'number' && Number.isFinite(temperature) ? { temperature } : {}),
+        });
     }
 
     /**

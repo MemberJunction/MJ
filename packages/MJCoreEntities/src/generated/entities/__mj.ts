@@ -5989,7 +5989,9 @@ export const MJAIModelCostSchema = z.object({
         * * Field Name: PriceTypeID
         * * Display Name: Price Type
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)`),
+        * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
+        * * Default Value: ECE2BCB7-C854-4BF7-A517-D72793A40652
+        * * Description: DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.`),
     InputPricePerUnit: z.number().describe(`
         * * Field Name: InputPricePerUnit
         * * Display Name: Input Price Per Unit
@@ -6213,6 +6215,21 @@ export const MJAIModelPriceUnitTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UsageTypeID: z.string().nullable().describe(`
+        * * Field Name: UsageTypeID
+        * * Display Name: Usage Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
+        * * Description: The base measure this billing unit is a quantity of — Tokens for a per-1M-tokens rate, Seconds for a per-minute or per-hour rate, Images for a per-image rate. This is the authority on what a cost row priced by this unit type measures: AIModelCost deliberately does NOT carry its own copy, because two copies can disagree and nothing would arbitrate.`),
+    UnitsPerBillingUnit: z.number().nullable().describe(`
+        * * Field Name: UnitsPerBillingUnit
+        * * Display Name: Units Per Billing Unit
+        * * SQL Data Type: decimal(19, 8)
+        * * Description: How many units of the base measure make ONE billed unit: 1000000 for a per-1M-tokens rate, 3600 for per-hour, 60 for per-minute, 1 for per-image. Cost is (quantity / UnitsPerBillingUnit) * PricePerUnit. Holding the divisor as DATA is what lets a new linear billing unit ship by seeding a row, with no driver class and no build — the code-only requirement is what made bug B60 possible. DriverClass remains for non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments).`),
+    UsageType: z.string().nullable().describe(`
+        * * Field Name: UsageType
+        * * Display Name: Usage Type
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type MJAIModelPriceUnitTypeEntityType = z.infer<typeof MJAIModelPriceUnitTypeSchema>;
@@ -7296,6 +7313,22 @@ export const MJAIPromptRunSchema = z.object({
         * * Display Name: Tokens Cache Write (Rollup)
         * * SQL Data Type: int
         * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`),
+    InputUnitsUsed: z.number().nullable().describe(`
+        * * Field Name: InputUnitsUsed
+        * * Display Name: Input Units Used
+        * * SQL Data Type: decimal(19, 8)
+        * * Description: Quantity of continuous input consumed by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio submitted for transcription). NULL for token-billed runs, which use the Tokens* columns instead.`),
+    OutputUnitsUsed: z.number().nullable().describe(`
+        * * Field Name: OutputUnitsUsed
+        * * Display Name: Output Units Used
+        * * SQL Data Type: decimal(19, 8)
+        * * Description: Quantity of continuous output produced by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio synthesized, or images generated). NULL for token-billed runs.`),
+    UsageTypeID: z.string().nullable().describe(`
+        * * Field Name: UsageTypeID
+        * * Display Name: Usage Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
+        * * Description: The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NULL means token-billed, which is what every row predating this column is; it is read as Tokens at one seam in MJAIPromptRunEntityServer, and becomes NOT NULL in the release after the AI Usage Types seed ships.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -7340,6 +7373,10 @@ export const MJAIPromptRunSchema = z.object({
         * * Field Name: TestRun
         * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
+    UsageType: z.string().nullable().describe(`
+        * * Field Name: UsageType
+        * * Display Name: Usage Type
+        * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -8350,6 +8387,39 @@ export const MJAISkillSchema = z.object({
 });
 
 export type MJAISkillEntityType = z.infer<typeof MJAISkillSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Usage Types
+ */
+export const MJAIUsageTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Unique name of the base measure, e.g. Tokens, Seconds, Characters, Images.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable explanation of what the measure counts and how it is recorded.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIUsageTypeEntityType = z.infer<typeof MJAIUsageTypeSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Vendor Type Definitions
@@ -20692,7 +20762,7 @@ export const MJIdentityClaimSchema = z.object({
         * * Default Value: newsequentialid()`),
     ClaimTypeID: z.string().describe(`
         * * Field Name: ClaimTypeID
-        * * Display Name: Claim Type
+        * * Display Name: Claim Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Identity Claim Types (vwIdentityClaimTypes.ID)
         * * Description: Foreign key linking this claim to its IdentityClaimType definition.`),
@@ -20714,7 +20784,7 @@ export const MJIdentityClaimSchema = z.object({
         * * Description: Optional primary key / record ID of the specific entity record being claimed.`),
     PayloadJSON: z.string().nullable().describe(`
         * * Field Name: PayloadJSON
-        * * Display Name: Payload Data
+        * * Display Name: Payload
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional payload JSON containing custom data or parameters consumed by the claim type driver during redemption.`),
     Status: z.union([z.literal('Claimed'), z.literal('Expired'), z.literal('Pending'), z.literal('Revoked')]).describe(`
@@ -20747,7 +20817,7 @@ export const MJIdentityClaimSchema = z.object({
         * * Description: User ID of the authenticated user who successfully claimed this record.`),
     MagicLinkInviteID: z.string().nullable().describe(`
         * * Field Name: MagicLinkInviteID
-        * * Display Name: Magic Link Invite
+        * * Display Name: Magic Link Invite ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
         * * Description: Optional link to a MagicLinkInvite record for email ownership verification links.`),
@@ -20768,11 +20838,11 @@ export const MJIdentityClaimSchema = z.object({
         * * Default Value: getutcdate()`),
     ClaimType: z.string().describe(`
         * * Field Name: ClaimType
-        * * Display Name: Claim Type Name
+        * * Display Name: Claim Type
         * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     ClaimedByUser: z.string().nullable().describe(`
         * * Field Name: ClaimedByUser
@@ -50578,8 +50648,11 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     /**
     * * Field Name: PriceTypeID
     * * Display Name: Price Type
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
+    * * Default Value: ECE2BCB7-C854-4BF7-A517-D72793A40652
+    * * Description: DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.
     */
     get PriceTypeID(): string {
         return this.Get('PriceTypeID');
@@ -51219,6 +51292,42 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UsageTypeID
+    * * Display Name: Usage Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
+    * * Description: The base measure this billing unit is a quantity of — Tokens for a per-1M-tokens rate, Seconds for a per-minute or per-hour rate, Images for a per-image rate. This is the authority on what a cost row priced by this unit type measures: AIModelCost deliberately does NOT carry its own copy, because two copies can disagree and nothing would arbitrate.
+    */
+    get UsageTypeID(): string | null {
+        return this.Get('UsageTypeID');
+    }
+    set UsageTypeID(value: string | null) {
+        this.Set('UsageTypeID', value);
+    }
+
+    /**
+    * * Field Name: UnitsPerBillingUnit
+    * * Display Name: Units Per Billing Unit
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: How many units of the base measure make ONE billed unit: 1000000 for a per-1M-tokens rate, 3600 for per-hour, 60 for per-minute, 1 for per-image. Cost is (quantity / UnitsPerBillingUnit) * PricePerUnit. Holding the divisor as DATA is what lets a new linear billing unit ship by seeding a row, with no driver class and no build — the code-only requirement is what made bug B60 possible. DriverClass remains for non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments).
+    */
+    get UnitsPerBillingUnit(): number | null {
+        return this.Get('UnitsPerBillingUnit');
+    }
+    set UnitsPerBillingUnit(value: number | null) {
+        this.Set('UnitsPerBillingUnit', value);
+    }
+
+    /**
+    * * Field Name: UsageType
+    * * Display Name: Usage Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get UsageType(): string | null {
+        return this.Get('UsageType');
     }
 }
 
@@ -54521,6 +54630,46 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: InputUnitsUsed
+    * * Display Name: Input Units Used
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: Quantity of continuous input consumed by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio submitted for transcription). NULL for token-billed runs, which use the Tokens* columns instead.
+    */
+    get InputUnitsUsed(): number | null {
+        return this.Get('InputUnitsUsed');
+    }
+    set InputUnitsUsed(value: number | null) {
+        this.Set('InputUnitsUsed', value);
+    }
+
+    /**
+    * * Field Name: OutputUnitsUsed
+    * * Display Name: Output Units Used
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: Quantity of continuous output produced by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio synthesized, or images generated). NULL for token-billed runs.
+    */
+    get OutputUnitsUsed(): number | null {
+        return this.Get('OutputUnitsUsed');
+    }
+    set OutputUnitsUsed(value: number | null) {
+        this.Set('OutputUnitsUsed', value);
+    }
+
+    /**
+    * * Field Name: UsageTypeID
+    * * Display Name: Usage Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
+    * * Description: The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NULL means token-billed, which is what every row predating this column is; it is read as Tokens at one seam in MJAIPromptRunEntityServer, and becomes NOT NULL in the release after the AI Usage Types seed ships.
+    */
+    get UsageTypeID(): string | null {
+        return this.Get('UsageTypeID');
+    }
+    set UsageTypeID(value: string | null) {
+        this.Set('UsageTypeID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -54617,6 +54766,15 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     */
     get TestRun(): string | null {
         return this.Get('TestRun');
+    }
+
+    /**
+    * * Field Name: UsageType
+    * * Display Name: Usage Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get UsageType(): string | null {
+        return this.Get('UsageType');
     }
 
     /**
@@ -57239,6 +57397,97 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     */
     get CreatedByUser(): string {
         return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
+ * MJ: AI Usage Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIUsageType
+ * * Base View: vwAIUsageTypes
+ * * @description The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelPriceUnitType (what a billing unit is a quantity of, and therefore what every cost row priced by it measures) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType itself, which names the BILLING unit and its scale: audio recorded in Seconds may be billed by the Per Hour unit type.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Usage Types')
+export class MJAIUsageTypeEntity extends BaseEntity<MJAIUsageTypeEntityType> {
+    /**
+    * Loads the MJ: AI Usage Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Usage Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIUsageTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Unique name of the base measure, e.g. Tokens, Seconds, Characters, Images.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable explanation of what the measure counts and how it is recorded.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -89239,59 +89488,6 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
     }
 
     /**
-    * Validate() method override for MJ: Form Chrome Rules entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Ensures that if the target kind is 'Relationship', a related entity must be specified and the contribution key must be empty. Conversely, if the target kind is 'Contribution', a contribution key must be specified and the related entity must be empty.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateTargetKindConstraints(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * Ensures that if the target kind is 'Relationship', a related entity must be specified and the contribution key must be empty. Conversely, if the target kind is 'Contribution', a contribution key must be specified and the related entity must be empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateTargetKindConstraints(result: ValidationResult) {
-    	const isRelationship = this.TargetKind === "Relationship";
-    	const isContribution = this.TargetKind === "Contribution";
-    
-    	if (isRelationship) {
-    		if (this.RelatedEntityID == null || this.ContributionKey != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"RelatedEntityID",
-    				"When TargetKind is 'Relationship', RelatedEntityID must be specified and ContributionKey must be empty.",
-    				this.RelatedEntityID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	} else if (isContribution) {
-    		if (this.ContributionKey == null || this.RelatedEntityID != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"ContributionKey",
-    				"When TargetKind is 'Contribution', ContributionKey must be specified and RelatedEntityID must be empty.",
-    				this.ContributionKey,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	} else {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"TargetKind",
-    			"TargetKind must be either 'Relationship' or 'Contribution'.",
-    			this.TargetKind,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -90061,7 +90257,7 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
 
     /**
     * * Field Name: ClaimTypeID
-    * * Display Name: Claim Type
+    * * Display Name: Claim Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Identity Claim Types (vwIdentityClaimTypes.ID)
     * * Description: Foreign key linking this claim to its IdentityClaimType definition.
@@ -90115,7 +90311,7 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
 
     /**
     * * Field Name: PayloadJSON
-    * * Display Name: Payload Data
+    * * Display Name: Payload
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional payload JSON containing custom data or parameters consumed by the claim type driver during redemption.
     */
@@ -90188,7 +90384,7 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
 
     /**
     * * Field Name: MagicLinkInviteID
-    * * Display Name: Magic Link Invite
+    * * Display Name: Magic Link Invite ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
     * * Description: Optional link to a MagicLinkInvite record for email ownership verification links.
@@ -90235,7 +90431,7 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
 
     /**
     * * Field Name: ClaimType
-    * * Display Name: Claim Type Name
+    * * Display Name: Claim Type
     * * SQL Data Type: nvarchar(100)
     */
     get ClaimType(): string {
@@ -90244,7 +90440,7 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
