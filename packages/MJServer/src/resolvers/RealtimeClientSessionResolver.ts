@@ -45,6 +45,7 @@ import {
     RealtimeChannelServerHost,
     RealtimeCoAgentConfig,
     EvaluateRuntimeOverrideAuthorization,
+    FindIgnoredRealtimeConfigKeys,
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     RealtimeAllowedAgent,
@@ -744,7 +745,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return { Success: false, ErrorMessage: 'The uploaded recording was empty.' };
             }
 
-            const fileID = await storeRealtimeRecording({
+            const stored = await storeRealtimeRecording({
                 Audio: buffer,
                 MimeType: mimeType,
                 Media: 'Audio',
@@ -758,14 +759,16 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             });
 
             // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
-            if (fileID) {
+            if (stored.FileID) {
                 await deleteRealtimeRecordingSegments(agentSessionId, accountID, runUser);
             }
 
             return {
-                Success: !!fileID,
-                FileID: fileID ?? undefined,
-                ErrorMessage: fileID ? undefined : 'Storage upload failed.',
+                Success: !!stored.FileID,
+                FileID: stored.FileID ?? undefined,
+                // Report the reason the storage layer knew (e.g. Drive's "Service Accounts do not have
+                // storage quota"); the generic sentence is only for when no layer supplied one.
+                ErrorMessage: stored.FileID ? undefined : (stored.ErrorMessage ?? 'Storage upload failed.'),
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -1317,6 +1320,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Judgment calls baked in (per the approved product rules): co-agent selection (`coAgentId`)
      * and target selection within a pairing list / for a universal co-agent are NORMAL user flow
      * — they stay behind the existing `CanRun` gate only and are not touched here.
+     *
+     * Also the one place that reports what an ACCEPTED override payload still loses to
+     * normalization (see {@link FindIgnoredRealtimeConfigKeys}) — a gated field implies the payload
+     * matters, so an ignored key is worth a log line rather than silence.
      */
     private async assertRuntimeOverridesAuthorized(
         coAgentID: string,
@@ -1342,6 +1349,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         });
         if (!decision.Allowed) {
             throw new Error(`Not authorized: ${decision.DenialReason}`);
+        }
+
+        // The overrides are ACCEPTED — so say what the cascade will nevertheless throw away. The
+        // effective-config layer keeps only known, correctly-typed keys under `realtime`; every
+        // other key vanishes, and neither side of the wire can observe that (MJ #3854: a downstream
+        // app shipped a whole ignored section for months). Rejecting unknown keys was considered
+        // and deliberately NOT chosen: MJ is a framework with unknown callers, and turning a
+        // previously-accepted payload into a hard error in a patch release would break them — so a
+        // named, greppable warning is what ships.
+        const ignored = FindIgnoredRealtimeConfigKeys(configOverridesJson);
+        if (ignored.length > 0) {
+            LogStatus(
+                `StartRealtimeClientSession: configOverridesJson keys IGNORED by the realtime effective-config layer ` +
+                    `(co-agent ${coAgentID}, user ${contextUser.Email ?? contextUser.ID}): ` +
+                    ignored.map((k) => `${k.path} [${k.reason}]`).join(', ') +
+                    '. Only known, correctly-typed keys under the top-level "realtime" section are applied.',
+            );
         }
     }
 
