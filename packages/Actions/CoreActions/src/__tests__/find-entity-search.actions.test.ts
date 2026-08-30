@@ -5,9 +5,10 @@
  *   - Find Best Agent  / Find Candidate Agents   (BaseFindAgentsAction)
  *   - Search Query Catalog
  *
- * Each ranks via params.Provider.SearchEntity (semantic mode) and hydrates
- * record metadata from cached engines. Tests focus on validation, the
- * SearchEntity hand-off, hydration/filtering, and result shaping.
+ * Each ranks via params.Provider.SearchEntity — actions/queries use semantic mode;
+ * the agent actions use HYBRID so newly-created, not-yet-embedded agents still surface
+ * via the lexical pass — and hydrates record metadata from cached engines. Tests focus
+ * on validation, the SearchEntity hand-off, hydration/filtering, and result shaping.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -191,13 +192,19 @@ describe('FindBestAgentAction (wrapper)', () => {
         ];
         accessibleAgentsMock.mockResolvedValue([{ ID: 'G1' }, { ID: 'G2' }]); // G3 not runnable
         searchEntityMock.mockResolvedValue([
-            { recordId: 'G1', score: 0.9, matchType: 'semantic', components: {}, entityRecordDocumentId: 'e1' },
-            { recordId: 'G2', score: 0.85, matchType: 'semantic', components: {}, entityRecordDocumentId: 'e2' },
-            { recordId: 'G3', score: 0.8, matchType: 'semantic', components: {}, entityRecordDocumentId: 'e3' },
+            { recordId: 'G1', score: 0.9, matchType: 'semantic', components: { semantic: 0.9 }, entityRecordDocumentId: 'e1' },
+            { recordId: 'G2', score: 0.85, matchType: 'semantic', components: { semantic: 0.85 }, entityRecordDocumentId: 'e2' },
+            { recordId: 'G3', score: 0.8, matchType: 'semantic', components: { semantic: 0.8 }, entityRecordDocumentId: 'e3' },
         ]);
 
         const r = await run(new FindBestAgentAction(), makeParams([{ Name: 'TaskDescription', Value: 'research stuff' }]));
 
+        // Agent actions rank in hybrid mode (semantic + lexical)...
+        expect(searchEntityMock.mock.calls[0][0].options.mode).toBe('hybrid');
+        // ...and the provider gets minScore:0, NOT the cosine floor — hybrid blends via RRF
+        // (rank-based scores), so applying the 0.5 cosine floor there would drop everything.
+        // The cosine floor is re-applied in the action against components.semantic instead.
+        expect(searchEntityMock.mock.calls[0][0].options.minScore).toBe(0);
         expect(r.Success).toBe(true);
         const payload = JSON.parse(r.Message);
         expect(payload.matchCount).toBe(1);
@@ -217,8 +224,8 @@ describe('FindCandidateAgentsAction (wrapper)', () => {
         ];
         accessibleAgentsMock.mockResolvedValue([{ ID: 'P1' }, { ID: 'C1' }]);
         searchEntityMock.mockResolvedValue([
-            { recordId: 'P1', score: 0.9, matchType: 'semantic', components: {}, entityRecordDocumentId: 'e1' },
-            { recordId: 'C1', score: 0.88, matchType: 'semantic', components: {}, entityRecordDocumentId: 'e2' },
+            { recordId: 'P1', score: 0.9, matchType: 'semantic', components: { semantic: 0.9 }, entityRecordDocumentId: 'e1' },
+            { recordId: 'C1', score: 0.88, matchType: 'semantic', components: { semantic: 0.88 }, entityRecordDocumentId: 'e2' },
         ]);
 
         const r = await run(new FindCandidateAgentsAction(), makeParams([{ Name: 'TaskDescription', Value: 'do work' }]));
@@ -230,6 +237,65 @@ describe('FindCandidateAgentsAction (wrapper)', () => {
         expect(payload.allMatches[0].agentName).toBe('Parent');
         expect(payload.allMatches[0].defaultArtifactType).toBe('Report');
         expect(payload.allMatches[0].subAgents).toEqual([{ name: 'Child', description: 'child' }]);
+    });
+
+    it('surfaces a newly-created (not-yet-embedded) agent via the lexical pass', async () => {
+        // A brand-new agent has no semantic vector yet, so its semantic component is absent and
+        // only the lexical name/description pass matched it (matchType 'lexical', tiny RRF score).
+        // Hybrid mode must still return it — this is the whole point of the hybrid approach.
+        aiEngineState.agents = [
+            { ID: 'N1', Name: 'Invoice Reconciler', Description: 'brand new', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, DefaultArtifactType: null },
+        ];
+        accessibleAgentsMock.mockResolvedValue([{ ID: 'N1' }]);
+        searchEntityMock.mockResolvedValue([
+            { recordId: 'N1', score: 0.016, matchType: 'lexical', components: { lexical: 0.85 }, entityRecordDocumentId: null },
+        ]);
+
+        const r = await run(new FindCandidateAgentsAction(), makeParams([{ Name: 'TaskDescription', Value: 'reconcile invoices' }]));
+
+        expect(r.Success).toBe(true);
+        const payload = JSON.parse(r.Message);
+        expect(payload.matchCount).toBe(1);
+        expect(payload.allMatches[0].agentName).toBe('Invoice Reconciler');
+        // Reported score falls back to the lexical match score, not the tiny RRF blended score.
+        expect(payload.allMatches[0].similarityScore).toBe(0.85);
+    });
+
+    it('reports the stronger component score when a lexical hit qualifies a below-floor semantic match', async () => {
+        // Passes on lexical merit (0.85) even though its semantic component (0.3) is below the
+        // 0.5 floor. The reported score is the stronger of the two components (0.85), so a
+        // lexical-qualified match isn't labelled with its weak semantic score.
+        aiEngineState.agents = [
+            { ID: 'H1', Name: 'Invoice Wizard', Description: 'invoice helper', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, DefaultArtifactType: null },
+        ];
+        accessibleAgentsMock.mockResolvedValue([{ ID: 'H1' }]);
+        searchEntityMock.mockResolvedValue([
+            { recordId: 'H1', score: 0.02, matchType: 'hybrid', components: { semantic: 0.3, lexical: 0.85 }, entityRecordDocumentId: 'e1' },
+        ]);
+
+        const r = await run(new FindCandidateAgentsAction(), makeParams([{ Name: 'TaskDescription', Value: 'invoice' }]));
+
+        expect(r.Success).toBe(true);
+        const payload = JSON.parse(r.Message);
+        expect(payload.matchCount).toBe(1);
+        expect(payload.allMatches[0].similarityScore).toBe(0.85);
+    });
+
+    it('still drops a semantic-only match below the similarity floor', async () => {
+        // Regression guard: the cosine floor is now applied to components.semantic (not the
+        // RRF-blended r.score). A weak semantic match with no lexical hit must NOT survive.
+        aiEngineState.agents = [
+            { ID: 'L1', Name: 'Weak', Description: 'weak match', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+        ];
+        accessibleAgentsMock.mockResolvedValue([{ ID: 'L1' }]);
+        searchEntityMock.mockResolvedValue([
+            { recordId: 'L1', score: 0.01, matchType: 'semantic', components: { semantic: 0.3 }, entityRecordDocumentId: 'e1' },
+        ]);
+
+        const r = await run(new FindCandidateAgentsAction(), makeParams([{ Name: 'TaskDescription', Value: 'unrelated' }]));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('NO_AGENTS_FOUND');
     });
 });
 

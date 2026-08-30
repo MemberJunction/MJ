@@ -100,4 +100,4 @@ See the full `server-bootstrap` package for the complete manifest including all 
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

@@ -144,6 +144,28 @@
   box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
 
+.mj-forms-btn--secondary {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
+}
+
+.mj-forms-btn--secondary:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-forms-btn--accent {
+  background: var(--mj-brand-accent, #6366f1);
+  color: var(--mj-text-inverse, #ffffff);
+  border-color: var(--mj-brand-accent, #6366f1);
+}
+
+.mj-forms-btn--accent:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-accent, #6366f1) 30%, transparent);
+}
+
 .mj-forms-btn--danger {
   color: var(--mj-status-error);
   border-color: color-mix(in srgb, var(--mj-status-error) 30%, transparent);

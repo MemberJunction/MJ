@@ -38,9 +38,18 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/generic-database-provider', () => {
+    // Models the real UserCache: BaseSingleton's constructor returns the shared instance, and
+    // `Instance` is the only supported accessor (see BaseMessagingAdapter.test.ts for the full
+    // note — `new UserCache()` wipes the shared cache and is why this mock must expose Instance).
     const users = [{ ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' }];
+    const store: { instance?: MockUserCache } = {};
     class MockUserCache {
-        get Users() { return users; }
+        _users = users;
+        get Users() { return this._users; }
+        static get Instance(): MockUserCache {
+            if (!store.instance) store.instance = new MockUserCache();
+            return store.instance;
+        }
     }
     return { UserCache: MockUserCache };
 });
@@ -94,7 +103,7 @@ async function createInitializedAdapter(): Promise<SlackAdapter> {
 
 describe('SlackAdapter', () => {
     beforeEach(() => {
-        mocks.authTest.mockReset().mockResolvedValue({ user_id: 'UBOTID123' });
+        mocks.authTest.mockReset().mockResolvedValue({ user_id: 'UBOTID123', bot_id: 'BBOTID456' });
         mocks.postMessage.mockReset().mockResolvedValue({ ts: 'posted-ts-1' });
         mocks.chatUpdate.mockReset().mockResolvedValue({ ok: true });
         mocks.conversationsReplies.mockReset().mockResolvedValue({ messages: [] });
@@ -300,4 +309,128 @@ describe('SlackAdapter', () => {
             expect(mocks.usersInfo).toHaveBeenCalledWith({ user: 'U_ALICE' });
         });
     });
+
+    describe('self-identification (bot_id vs user_id)', () => {
+        // Slack returns TWO identifiers for one bot, and which one appears in history depends on
+        // how the message was posted. `chat:write.customize` — required for per-agent identity,
+        // and used on every agent reply — makes the post come back as `subtype: 'bot_message'`
+        // with a `bot_id` and NO `user`, so fetchThreadHistory records the B… id. Comparing only
+        // against auth.test()'s U… id therefore never matched this adapter's own replies.
+        const self = (a: SlackAdapter, id: string | null | undefined): boolean =>
+            (a as unknown as { isSelf(s: string | null | undefined): boolean }).isSelf(id);
+
+        it('recognises its own reply posted under a username override', async () => {
+            const adapter = await createInitializedAdapter();
+            // The identity fetchThreadHistory actually produces for this adapter's own replies.
+            expect(self(adapter, 'BBOTID456')).toBe(true);
+        });
+
+        it('still recognises the plain user_id identity', async () => {
+            const adapter = await createInitializedAdapter();
+            expect(self(adapter, 'UBOTID123')).toBe(true);
+        });
+
+        it('does not mistake another bot or a user for itself', async () => {
+            const adapter = await createInitializedAdapter();
+            expect(self(adapter, 'BOTHERBOT')).toBe(false);
+            expect(self(adapter, 'UHUMAN001')).toBe(false);
+            expect(self(adapter, '')).toBe(false);
+            expect(self(adapter, undefined)).toBe(false);
+        });
+    });
+
+    describe('uploadMediaOutputs', () => {
+        // Slack's image blocks require a public https URL, so base64 output (every generated
+        // image, and files inlined as data: URIs) was silently dropped. These upload instead.
+        const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+        function uploaderHarness() {
+            const uploads: Record<string, unknown>[] = [];
+            const harness = Object.create(SlackAdapter.prototype) as SlackAdapter & {
+                client: unknown;
+                uploadMediaOutputs: (m: unknown, f: unknown[]) => Promise<void>;
+            };
+            (harness as { client: unknown }).client = {
+                files: { uploadV2: async (args: Record<string, unknown>) => { uploads.push(args); return { ok: true }; } },
+            };
+            return { harness, uploads };
+        }
+
+        it('gives a .docx the correct extension, not the MIME subtype', async () => {
+            const { harness, uploads } = uploaderHarness();
+            await harness.uploadMediaOutputs({ ChannelID: 'C1', MessageID: 'm1' } as never, [
+                { modality: 'file', mimeType: DOCX, data: Buffer.from('doc').toString('base64'), label: 'Download Document' },
+            ]);
+            expect(uploads).toHaveLength(1);
+            expect(uploads[0].filename).toBe('Download_Document.docx');
+            expect((uploads[0].file as Buffer).toString()).toBe('doc');
+        });
+
+        it('prefers an explicit fileName and keeps its existing extension', async () => {
+            const { harness, uploads } = uploaderHarness();
+            await harness.uploadMediaOutputs({ ChannelID: 'C1', MessageID: 'm1' } as never, [
+                { modality: 'file', mimeType: DOCX, data: 'ZG9j', fileName: 'MemberJunction Overview.docx' },
+            ]);
+            expect(uploads[0].filename).toBe('MemberJunction_Overview.docx');
+        });
+
+        it('threads uploads under the reply and skips entries with no data', async () => {
+            const { harness, uploads } = uploaderHarness();
+            await harness.uploadMediaOutputs({ ChannelID: 'C1', MessageID: 'm1', ThreadID: 't7' } as never, [
+                { modality: 'image', mimeType: 'image/png', data: 'aW1n', label: 'Generated image 1' },
+                { modality: 'image', mimeType: 'image/png', data: '' },
+                { modality: 'image', mimeType: 'image/png' },
+            ]);
+            expect(uploads).toHaveLength(1);
+            expect(uploads[0].thread_ts).toBe('t7');
+            expect(uploads[0].filename).toBe('Generated_image_1.png');
+        });
+    });
+
+
+    describe('message text length (msg_too_long)', () => {
+        // Slack rejects a message whose `text` exceeds ~4,000 characters. The limit here was set
+        // to 39,000 — the figure for a message's total BLOCK payload — so truncation never
+        // engaged before Slack refused the call: every streaming update for a long output failed,
+        // the progress placeholder froze mid-run, and the log filled with msg_too_long.
+        const SLACK_TEXT_LIMIT = 4000;
+
+        function streamingHarness() {
+            const sent: Record<string, unknown>[] = [];
+            const harness = Object.create(SlackAdapter.prototype) as SlackAdapter & {
+                client: unknown;
+                thinkingMessageIds: Map<string, string>;
+                sendOrUpdateStreamingMessage: (m: unknown, c: string, id: string | null, a?: unknown) => Promise<string>;
+            };
+            (harness as { client: unknown }).client = {
+                chat: {
+                    update: async (args: Record<string, unknown>) => { sent.push(args); return { ok: true, ts: 'ts-1' }; },
+                    postMessage: async (args: Record<string, unknown>) => { sent.push(args); return { ok: true, ts: 'ts-1' }; },
+                },
+            };
+            (harness as { thinkingMessageIds: Map<string, string> }).thinkingMessageIds = new Map();
+            return { harness, sent };
+        }
+
+        it('keeps a streaming update under Slack\'s text limit', async () => {
+            const { harness, sent } = streamingHarness();
+            const huge = 'x'.repeat(50_000);
+            await harness.sendOrUpdateStreamingMessage({ ChannelID: 'C1', MessageID: 'm1' } as never, huge, 'ts-1');
+            expect(sent).toHaveLength(1);
+            expect((sent[0].text as string).length).toBeLessThanOrEqual(SLACK_TEXT_LIMIT);
+        });
+
+        it('keeps a new streaming message under the limit too', async () => {
+            const { harness, sent } = streamingHarness();
+            await harness.sendOrUpdateStreamingMessage({ ChannelID: 'C1', MessageID: 'm1' } as never, 'y'.repeat(50_000), null);
+            expect((sent[0].text as string).length).toBeLessThanOrEqual(SLACK_TEXT_LIMIT);
+        });
+
+        it('leaves short content untouched', async () => {
+            const { harness, sent } = streamingHarness();
+            await harness.sendOrUpdateStreamingMessage({ ChannelID: 'C1', MessageID: 'm1' } as never, 'short answer', 'ts-1');
+            expect(sent[0].text).toBe('short answer ...');
+        });
+    });
+
 });

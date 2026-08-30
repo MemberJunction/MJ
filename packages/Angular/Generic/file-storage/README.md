@@ -180,29 +180,74 @@ Kendo Grid for displaying and managing files with inline editing.
 | `canBeDeleted(file)` | Checks if file can be deleted |
 | `Refresh()` | Refreshes the files grid |
 
-### FileUploadComponent (`mj-files-file-upload`)
+### RecordAttachmentsComponent (`mj-record-attachments`)
 
-File upload component with storage provider integration and overwrite protection.
+Slide-in drawer and standalone component for managing file attachments linked to specific entity records via `MJ: File Entity Record Links` and `MJ: Files`.
+
+Features:
+- **Slide-in & Resizable**: Built on `<mj-slide-panel>` with `UserInfoEngine` width persistence.
+- **Provider Filtering**: Filter attachments across all configured cloud storage providers (Azure Blob, AWS S3, Box, etc.).
+- **Dual View Modes**: Card/Grid view with rich thumbnails and compact table/list view.
+- **Drag-and-Drop Uploader**: Direct upload pipeline with target storage account picker and signed token generation.
+- **Rich Media Preview**: In-app previews for PDFs, Images, Audio, Video, Code/Text, and Documents.
+- **Cancelable Before/After Events**: Full event lifecycle for uploads, deletions, unlinking, downloads, previews, and replacements.
+- **Programmatic Verbs**: Data model and action methods callable via code.
 
 #### Inputs
 
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
-| `disabled` | `boolean` | `false` | Disable the upload component |
-| `CategoryID` | `string \| undefined` | `undefined` | Category ID for uploaded files |
+| `Record` | `BaseEntity \| undefined` | `undefined` | Entity record to load/link attachments for |
+| `EntityID` | `string \| undefined` | `undefined` | Explicit Entity ID (alternative to Record) |
+| `RecordID` | `string \| undefined` | `undefined` | Explicit Record ID (alternative to Record) |
+| `Attachments` | `RecordAttachmentItem[]` | `[]` | Direct data-bound array of attachment items |
+| `Config` | `RecordAttachmentsConfig` | `undefined` | Optional configuration bag |
+| `Visible` | `boolean` | `true` | Whether the slide panel is visible |
+| `Resizable` | `boolean` | `true` | Whether the panel is resizable |
+| `WidthPx` | `number` | `0` | Width in pixels (0 = restore from `UserInfoEngine`) |
+| `ViewMode` | `'grid' \| 'list'` | `'grid'` | Preferred view layout |
+| `AllowUpload` | `boolean` | `true` | Whether file uploading is enabled |
+| `AllowDelete` | `boolean` | `true` | Whether hard delete from storage is enabled |
+| `AllowUnlink` | `boolean` | `true` | Whether unlinking from record is enabled |
+| `AllowDownload` | `boolean` | `true` | Whether file download is enabled |
+| `AllowPreview` | `boolean` | `true` | Whether in-app media preview is enabled |
+| `AllowReplace` | `boolean` | `true` | Whether replacing files is enabled |
+| `ShowProviderFilter` | `boolean` | `true` | Show filter pills when multiple providers are active |
+| `ShowSearch` | `boolean` | `true` | Show quick search filter |
 
-#### Outputs
+#### Outputs & Cancelable Events
 
 | Output | Type | Description |
 |--------|------|-------------|
-| `uploadStarted` | `EventEmitter<void>` | Emitted when upload begins |
-| `fileUpload` | `EventEmitter<FileUploadEvent>` | Emitted on upload completion |
+| `PanelClosed` | `EventEmitter<void>` | Emitted when user closes the panel |
+| `WidthChanged` | `EventEmitter<number>` | Emitted when panel is resized (auto-persisted) |
+| `AttachmentCountChanged` | `EventEmitter<number>` | Emitted when attachments count changes |
+| `ViewModeChanged` | `EventEmitter<AttachmentViewMode>` | Emitted when view mode toggles |
+| `BeforeUpload` | `EventEmitter<BeforeUploadAttachmentEventArgs>` | Cancelable (`event.Cancel = true`) before upload begins |
+| `AfterUpload` | `EventEmitter<AfterUploadAttachmentEventArgs>` | Emitted after files are uploaded and linked |
+| `BeforeDelete` | `EventEmitter<BeforeDeleteAttachmentEventArgs>` | Cancelable before an attachment is deleted |
+| `AfterDelete` | `EventEmitter<AfterDeleteAttachmentEventArgs>` | Emitted after an attachment is deleted |
+| `BeforeUnlink` | `EventEmitter<BeforeUnlinkAttachmentEventArgs>` | Cancelable before an attachment is unlinked |
+| `AfterUnlink` | `EventEmitter<AfterUnlinkAttachmentEventArgs>` | Emitted after an attachment is unlinked |
+| `BeforeDownload` | `EventEmitter<BeforeDownloadAttachmentEventArgs>` | Cancelable before download starts |
+| `AfterDownload` | `EventEmitter<AfterDownloadAttachmentEventArgs>` | Emitted after download URL is resolved |
+| `BeforePreview` | `EventEmitter<BeforePreviewAttachmentEventArgs>` | Cancelable before preview opens |
+| `AfterPreview` | `EventEmitter<AfterPreviewAttachmentEventArgs>` | Emitted after preview opens |
+| `BeforeReplace` | `EventEmitter<BeforeReplaceAttachmentEventArgs>` | Cancelable before file replacement begins |
+| `AfterReplace` | `EventEmitter<AfterReplaceAttachmentEventArgs>` | Emitted after file is replaced |
 
-#### Properties
+#### Public Methods (Programmatic Verbs)
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `IsUploading` | `boolean` | Whether files are currently uploading |
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `Refresh()` | `Promise<void>` | Reloads attachments from server |
+| `UploadFiles(files, accountId?, categoryId?)` | `Promise<RecordAttachmentItem[]>` | Uploads and links files programmatically |
+| `DeleteAttachment(item, hardDelete?)` | `Promise<boolean>` | Deletes an attachment |
+| `UnlinkAttachment(item)` | `Promise<boolean>` | Unlinks attachment from record |
+| `DownloadAttachment(item)` | `Promise<boolean>` | Triggers secure download |
+| `PreviewAttachment(item)` | `Promise<boolean>` | Opens media preview |
+| `ReplaceAttachment(item, newFile)` | `Promise<RecordAttachmentItem \| null>` | Replaces attachment with a new file |
+| `SetViewMode(mode)` | `void` | Changes view mode and persists preference |
 
 ## Types
 
@@ -269,4 +314,4 @@ npm run build
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

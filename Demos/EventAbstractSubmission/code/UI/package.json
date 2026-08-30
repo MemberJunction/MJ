@@ -18,7 +18,7 @@
     "angular-material"
   ],
   "author": "MemberJunction",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "@angular/compiler": "18.0.2",
     "@angular/compiler-cli": "18.0.2",

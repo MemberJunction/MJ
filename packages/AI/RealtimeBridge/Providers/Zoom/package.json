@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-zoom",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: Zoom Realtime Bridge driver — the first real platform bridge. Connects the realtime agent engine to a Zoom meeting (audio in/out, diarized roster, participant mute, in-meeting chat) via an injectable Zoom Meeting SDK seam, and contributes a Meeting Controls facilitator channel.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,12 +15,12 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/ai-bridge-base": "6.1.0-edge.2"
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/ai-bridge-base": "6.1.0-edge.4"
   },
   "optionalDependencies": {
     "@zoom/rtms": "^1.1.0"
