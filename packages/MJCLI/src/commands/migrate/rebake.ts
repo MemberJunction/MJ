@@ -5,6 +5,7 @@ import path from 'node:path';
 import { IncrementalBaker } from '@memberjunction/sql-converter';
 import type { BakerWorkingDB } from '@memberjunction/sql-converter';
 import { MJPostgresTranspiler } from '@memberjunction/sqlglot-ts';
+import type { BitColumnRef } from '@memberjunction/sqlglot-ts';
 // Type-only: erased at runtime so a non-bake CLI invocation never loads the heavy codegen graph.
 import type { DataSourceResult } from '@memberjunction/codegen-lib';
 
@@ -147,7 +148,7 @@ export default class MigrateRebake extends Command {
       this.error(err instanceof Error ? err.message : String(err));
     }
     const baselines = fs.readdirSync(sourceDir).filter((f) => /^B\d.*\.sql$/.test(f) && !f.endsWith('.pg.sql') && !f.endsWith('.pg-only.sql')).sort();
-    const bitColumns: string[] = [];
+    const bitColumns: BitColumnRef[] = [];
     for (const b of baselines) {
       try {
         bitColumns.push(...(await probe.collectBitColumns(fs.readFileSync(path.join(sourceDir, b), 'utf8'))));
