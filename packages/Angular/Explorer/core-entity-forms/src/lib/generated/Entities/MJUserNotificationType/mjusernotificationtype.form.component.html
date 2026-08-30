@@ -184,9 +184,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notifications','NotificationTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Notifications')"
+                [NewRecordValues]="NewRecordValues('MJ: User Notifications','NotificationTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJUserNotifications')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserNotifications', $event.totalRowCount)"
                 >
@@ -209,9 +209,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Preferences','NotificationTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Notification Preferences')"
+                [NewRecordValues]="NewRecordValues('MJ: User Notification Preferences','NotificationTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJUserNotificationPreferences')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserNotificationPreferences', $event.totalRowCount)"
                 >

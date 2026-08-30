@@ -65,6 +65,7 @@ function makeAgentDetail(opts: {
     name: string;
     tools?: RealtimeToolDefinition[];
     promptOverrideEnabled?: boolean;
+    llmOverrideEnabled?: boolean;
     voiceOverrideEnabled?: boolean;
     firstMessageOverrideEnabled?: boolean;
     createdAtUnixSecs?: number;
@@ -85,7 +86,10 @@ function makeAgentDetail(opts: {
             overrides: {
                 conversationConfigOverride: {
                     agent: {
-                        prompt: { prompt: opts.promptOverrideEnabled ?? true },
+                        // `llm: true` joined the required set with #3859 — a fixture agent "this
+                        // driver just provisioned" carries the full current enablement, or the
+                        // round-trip tests would read every fixture as drifted.
+                        prompt: { prompt: opts.promptOverrideEnabled ?? true, llm: opts.llmOverrideEnabled ?? true },
                         firstMessage: opts.firstMessageOverrideEnabled ?? true,
                     },
                     tts: { voiceId: opts.voiceOverrideEnabled ?? true },
@@ -440,6 +444,59 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
 
             expect(fresh.UpdateCalls, `override '${path.join('.')}' is written but never required`).toHaveLength(1);
         }
+    });
+
+    it('sends the per-session llm override when the config bag carries one (#3859)', () => {
+        const overrides = ElevenLabsRealtime.BuildSessionOverrides('be the interviewer', { llm: 'gemini-2.5-pro' });
+        expect((overrides['agent'] as Record<string, unknown>)['prompt'])
+            .toEqual({ prompt: 'be the interviewer', llm: 'gemini-2.5-pro' });
+    });
+
+    it('omits llm entirely when unconfigured — the frame is byte-for-byte what it was (#3859)', () => {
+        const overrides = ElevenLabsRealtime.BuildSessionOverrides('be the interviewer', {});
+        expect((overrides['agent'] as Record<string, unknown>)['prompt']).toEqual({ prompt: 'be the interviewer' });
+    });
+
+    it('re-PATCHes a deployed agent whose configured llm changed (#3859 — the never-learns defect)', async () => {
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_stale_llm', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], Config: { llm: 'gemini-2.5-pro' } }));
+        expect(driver.UpdateCalls).toHaveLength(1);
+        const prompt = driver.UpdateCalls[0].body.conversationConfig?.agent?.prompt;
+        expect(prompt?.llm).toBe('gemini-2.5-pro');
+    });
+
+    it('re-PATCHes when the configured temperature changed, and writes it onto the agent body (#3859)', async () => {
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_cold', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], Config: { temperature: 0.7 } }));
+        expect(driver.UpdateCalls).toHaveLength(1);
+        expect(driver.UpdateCalls[0].body.conversationConfig?.agent?.prompt?.temperature).toBe(0.7);
+    });
+
+    it('does NOT stampede a PATCH war against a hand-tuned agent when the bag says nothing (#3859)', async () => {
+        // Half the point of the managed agent is that a deployment may tune it. An unconfigured
+        // desire matches anything.
+        const tuned = makeAgentDetail({ agentId: 'agent_tuned', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        (tuned.conversationConfig!.agent!.prompt as { llm?: string; temperature?: number }).llm = 'claude-sonnet-4';
+        (tuned.conversationConfig!.agent!.prompt as { llm?: string; temperature?: number }).temperature = 0.4;
+        driver.Agents = [tuned];
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.UpdateCalls).toEqual([]);
+    });
+
+    it('a config llm change inside ONE process is not served from the ensure cache (#3859)', async () => {
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_cached', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        const listsAfterFirst = driver.ListCalls.length;
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], Config: { llm: 'gemini-2.5-pro' } }));
+        // The second session must go back to REST — the cache key carries the desired settings.
+        expect(driver.ListCalls.length).toBeGreaterThan(listsAfterFirst);
+        expect(driver.UpdateCalls).toHaveLength(1);
     });
 
     it('PATCHes the managed agent when the prompt override is not enabled', async () => {

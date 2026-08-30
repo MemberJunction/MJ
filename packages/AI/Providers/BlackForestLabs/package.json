@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-blackforestlabs",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction Wrapper for Black Forest Labs FLUX Image Generation Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,8 +20,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2"
+    "@memberjunction/ai": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4"
   },
   "repository": {
     "type": "git",

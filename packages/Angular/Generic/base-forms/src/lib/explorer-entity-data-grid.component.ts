@@ -1,5 +1,8 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, ChangeDetectorRef, NgZone, AfterViewInit, OnDestroy, inject } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { RunViewParams } from '@memberjunction/core';
+import { FormRecordRefreshCoordinator } from './form-record-refresh.coordinator';
 import {
     EntityDataGridComponent,
     AfterRowDoubleClickEventArgs,
@@ -69,6 +72,8 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     private elementRef = inject(ElementRef);
     private cdr = inject(ChangeDetectorRef);
     private ngZone = inject(NgZone);
+    private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+    private destroy$ = new Subject<void>();
 
     // Pass-through inputs from EntityDataGridComponent
     @Input() Params: RunViewParams | null = null;
@@ -130,12 +135,10 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() SelectionMode: GridSelectionMode = 'single';
 
     /**
-     * Related-entity grids (accordion and left-nav) size to toolbar + header
-     * + rows instead of `height: 100%` of leftover / auto space. Re-read the
-     * panel each time — the host may mount before it is wrapped, and left-nav
-     * adds `mj-chrome-show` only when the rail item is selected.
+     * Related-entity grids (accordion and left-nav) and explicit fit-content grids
+     * size to toolbar + header + rows instead of `height: 100%` of leftover / auto space.
      */
-    private sizedHeightPx = RelatedGridHeightPx(0);
+    private sizedHeightPx = RelatedGridHeightPx(0, this.MaxHeight);
 
     get ResolvedHeight(): number | 'auto' | 'fit-content' {
         return this.shouldSizeToRows() ? this.sizedHeightPx : this.Height;
@@ -146,7 +149,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     private shouldSizeToRows(): boolean {
-        return this.isInsideRelatedEntityPanel();
+        return this.Height === 'fit-content' || this.isInsideRelatedEntityPanel();
     }
 
     /**
@@ -173,6 +176,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     ngAfterViewInit(): void {
+        this.subscribeToFormRefresh();
         if (!this.DeferLoadUntilVisible || typeof IntersectionObserver === 'undefined') {
             // Deferral off or unsupported environment — preserve eager-load behavior.
             this._hasBeenVisible = true;
@@ -196,8 +200,35 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
+    }
+
+    /**
+     * Reload this grid from the database. Used by the grid's own refresh
+     * button and by the parent-form refresh broadcast.
+     */
+    public async Refresh(): Promise<void> {
+        await this.innerGrid?.Refresh();
+    }
+
+    private subscribeToFormRefresh(): void {
+        this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+            void this.refreshIfLoaded();
+        });
+    }
+
+    /**
+     * Parent-form refresh fan-out: only reload grids that have already paid
+     * for a RunView. Collapsed / never-seen related sections stay deferred.
+     */
+    private async refreshIfLoaded(): Promise<void> {
+        if (!this._hasBeenVisible) {
+            return;
+        }
+        await this.Refresh();
     }
 
     private onBecameVisible(): void {
