@@ -167,9 +167,10 @@ recursive companion payload so the order's lines ride along. See
 
 ```typescript
 const deal = await md.GetEntityObject<DealEntity>('Deals');
-deal.OrderID_Object.OrderDate = new Date('2002-01-01');
+// OrderID is nullable — Ensure() provisions the peer (required FKs exist after NewRecord).
+const order = deal.OrderID_EnsureObject();
+order.OrderDate = new Date('2002-01-01');
 await deal.Save(); // Order first, stamp Deal.OrderID, save Deal
-
 ```
 
 Then use it. The API is the same on both tiers:
@@ -296,6 +297,12 @@ Deprecated since 6.2. It opens a second physical transaction blind to any alread
 
 **❌ Setting `Load: 'immediate'` on a collection whose parent is commonly listed in grids.**
 Use `'explicit'` plus `IncludeRelatedRecords` on the specific views that need children.
+
+**❌ Inventing a "header-only" save that skips companions.**
+The graph executor's recursion guard is private on `BaseEntity`. Application
+code that previously passed a public `IsGraphNodeSave` flag dropped *every*
+companion, including owner-held embeds. Use `SkipRelatedCollections: true` —
+embeds still persist, collections do not.
 
 ---
 

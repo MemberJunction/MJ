@@ -8,9 +8,10 @@ type LogFn = (message: string) => void;
  * {@link SerializeResult} the runtime host uses (single source of truth). For
  * `text`, the caller supplies pre-rendered human lines.
  */
-export function emitUsage(log: LogFn, format: string, result: MJCLIResult, textLines: string[]): void {
+export function emitUsage(log: LogFn, format: OutputFormat, result: MJCLIResult, textLines: string[]): void {
   if (format === 'json' || format === 'md') {
-    log(SerializeResult(result, format as OutputFormat));
+    // Pretty only when a human is watching; a pipe gets one compact line.
+    log(SerializeResult(result, format, { pretty: process.stdout.isTTY === true }));
   } else {
     textLines.forEach((line) => log(line));
   }

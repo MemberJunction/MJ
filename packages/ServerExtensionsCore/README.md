@@ -9,7 +9,18 @@ This package provides two main exports:
 - **`BaseServerExtension`** — Abstract base class that all extensions implement. Defines the `Initialize`, `Shutdown`, and `HealthCheck` lifecycle methods.
 - **`ServerExtensionLoader`** — Discovers registered extension classes via MJ's `ClassFactory`, matches them to config entries, and manages their lifecycle.
 
-Extensions are discovered automatically using MemberJunction's standard `@RegisterClass` + `ClassFactory` pattern. You register your extension class, add an entry to `mj.config.cjs`, and MJServer loads it at startup — zero source code changes to MJServer required per new extension.
+Extensions are discovered automatically using MemberJunction's standard `@RegisterClass` + `ClassFactory` pattern.
+
+**Open App packages** listed in the host `mj.config.cjs` `dynamicPackages.server[]` declare the extensions they need:
+
+1. Named export `MJ_SERVER_EXTENSIONS` on the server package (preferred; read after the package is imported).
+2. Fallback: `package.json` → `memberjunction.serverExtensions`.
+
+`@memberjunction/server-bootstrap` collects those declarations and `serve()` merges them with the host `serverExtensions[]`. Host `DriverClass` wins (`Enabled`, `RootPath`, per-key `Settings`). A host entry with `Enabled: false` disables a discovered extension. Host-only extensions (Slack, Teams) stay in the host config.
+
+**Pre-auth.** Extension routes mount *before* MJServer's auth middleware. Boot logs every collected and merged extension as `PRE-AUTH` with its `DriverClass` and `RootPath` so an operator who installed an Open App for its entities can see the HTTP surface. To suppress one, add the same `DriverClass` to host `serverExtensions[]` with `Enabled: false`. Invalid `RootPath` values (`/`, `/graphql`, `/auth`, `/oauth`, `/health`, `/magic-link`, wildcards) are dropped fail-closed rather than mounted. Matching is **case-insensitive** (Express routing is) and `serve()` also passes the process's real mounts (`graphqlRootPath`, `/healthcheck`, `/esignature`, `/media`, widget, telephony, …) so a custom GraphQL root or a core path not in the static baseline cannot be claimed. Overlapping enabled roots (including case variants) are logged.
+
+Open Apps therefore do **not** require the operator to copy extension blocks into the host `mj.config.cjs`. The host file is the override layer plus host-only extensions.
 
 ## Installation
 
@@ -56,7 +67,29 @@ export class MyCustomExtension extends BaseServerExtension {
 }
 ```
 
-### 2. Configure in `mj.config.cjs`
+### 2. Declare the extension (Open App **or** host)
+
+An Open App server package publishes the default config (so installing the app is enough):
+
+```typescript
+// packages/Server/src/index.ts
+export const MJ_SERVER_EXTENSIONS = [
+    { Enabled: true, DriverClass: 'MyCustomExtension', RootPath: '/api/my-extension', Settings: {} },
+];
+```
+
+```json
+// packages/Server/package.json
+{
+  "memberjunction": {
+    "serverExtensions": [
+      { "Enabled": true, "DriverClass": "MyCustomExtension", "RootPath": "/api/my-extension", "Settings": {} }
+    ]
+  }
+}
+```
+
+A **host** `mj.config.cjs` is only needed to override that default, to disable it, or to load a host-only extension (not shipped by an Open App):
 
 ```javascript
 module.exports = {
@@ -68,7 +101,6 @@ module.exports = {
             RootPath: '/api/my-extension',
             Settings: {
                 apiKey: process.env.MY_EXTENSION_API_KEY,
-                // Any extension-specific settings
             }
         }
     ]
@@ -139,7 +171,7 @@ interface ExtensionHealthResult {
 
 ## Lifecycle
 
-1. MJServer reads `serverExtensions[]` from `mj.config.cjs`
+1. MJServer merges Open App–discovered `serverExtensions[]` with the host `mj.config.cjs` list (host `DriverClass` wins)
 2. For each enabled entry, `ServerExtensionLoader` uses `ClassFactory.CreateInstance(BaseServerExtension, driverClass)` to find the registered class
 3. Creates an instance and calls `Initialize(app, config)`
 4. Extension registers its Express routes under `config.RootPath`

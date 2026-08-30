@@ -1,89 +1,144 @@
 import { describe, it, expect } from 'vitest';
-import { renderComponentFixture, queryAll, attr, hasClass, click, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MJWorkspaceTabStripComponent } from './workspace-tab-strip.component';
 import { MJWorkspaceTab } from './workspace-tabs.types';
 
 /**
- * DOM spec for <mj-workspace-tab-strip> — the dumb, presentation-over-store draft tab strip.
- * It renders the tabs it is handed and emits intent; there is no data provider, so it renders
- * purely from the `Tabs` input. Covers: the `@for` tab-per-item render, the
- * `mj-tabs__tab--active` / `--rejected` / `--complete` status classes, the `aria-selected` state,
- * the `aria-label` accessible name that folds in rejected/unsaved state, the dirty dot, the
- * `@if (ShowNewTab)` new-tab affordance, and the `TabSelected` / `TabClosed` / `NewTabRequested`
- * outputs. (Drag-reorder / `TabReordered` is CDK-pointer-driven and out of scope for a jsdom DOM
- * spec — its emit logic is unit-covered via `onDrop`.)
+ * DOM coverage for `<mj-workspace-tab-strip>` — the data-driven draft strip.
+ *
+ * Scope note: the strip's LOOK comes from the global `.mj-tabs*` stylesheet and its KEYBOARD
+ * behaviour from the `mjTabList` directive, which has its own suite (`tabs/tab-list.dom.test.ts`).
+ * Neither is re-tested here. What IS the strip's own contract, and what these assert:
+ *  - it renders exactly what it is handed and emits intent, holding no state of its own;
+ *  - per-tab STATE reaches assistive tech — a dirty dot and a status colour are invisible to a
+ *    screen reader, so they are folded into the tab's accessible name instead;
+ *  - `role="tab"` sits on the focusable element, with the close button OUT of the tab order;
+ *  - closing does not also select (the close button is nested inside the clickable tab).
  */
+
+function tab(id: string, overrides: Partial<MJWorkspaceTab> = {}): MJWorkspaceTab {
+  return { Id: id, Label: `Tab ${id}`, Status: 'draft', State: {}, ...overrides };
+}
+
+const TABS: MJWorkspaceTab[] = [
+  tab('a', { Label: 'Overview' }),
+  tab('b', { Label: 'Line items', Dirty: true }),
+  tab('c', { Label: 'Rejected one', Status: 'rejected' }),
+  tab('d', { Label: 'Done', Status: 'complete' }),
+];
+
+const render = (inputs: Record<string, unknown> = {}) =>
+  renderComponentFixture(MJWorkspaceTabStripComponent, {
+    imports: [MJWorkspaceTabStripComponent],
+    inputs: { Tabs: TABS, ActiveId: 'a', ...inputs },
+  });
+
+const tabs = (f: ReturnType<typeof render>) => queryAll(f, '[role="tab"]') as HTMLElement[];
+
 describe('MJWorkspaceTabStripComponent (DOM)', () => {
-  type Fix = ReturnType<typeof renderComponentFixture<MJWorkspaceTabStripComponent>>;
-
-  const tab = (over: Partial<MJWorkspaceTab>): MJWorkspaceTab =>
-    ({ Id: 'a', Label: 'Alpha', Status: 'draft', State: null, ...over });
-
-  const render = (
-    inputs: Record<string, unknown>,
-    setup?: (c: MJWorkspaceTabStripComponent) => void,
-  ): Fix => renderComponentFixture(MJWorkspaceTabStripComponent, { inputs, setup });
-
-  const tabs = (f: Fix) => queryAll(f, '.mj-tabs__tab') as HTMLElement[];
-
-  it('renders one tab per item in Tabs', () => {
-    const f = render({ Tabs: [tab({ Id: 'a' }), tab({ Id: 'b', Label: 'Beta' })] });
-    expect(tabs(f).length).toBe(2);
+  it('renders one tab per entry, in the order given', () => {
+    const f = render();
+    expect(tabs(f).map((t) => t.querySelector('.mj-tabs__label')?.textContent?.trim())).toEqual([
+      'Overview',
+      'Line items',
+      'Rejected one',
+      'Done',
+    ]);
   });
 
-  it('marks the active tab with --active and aria-selected, and only that one', () => {
-    const f = render({ Tabs: [tab({ Id: 'a' }), tab({ Id: 'b', Label: 'Beta' })], ActiveId: 'b' });
-    const active = tabs(f).filter((t) => t.classList.contains('mj-tabs__tab--active'));
-    expect(active.length).toBe(1);
-    expect(active[0].getAttribute('aria-selected')).toBe('true');
-    // the inactive tab reports aria-selected=false
-    const inactive = tabs(f).find((t) => !t.classList.contains('mj-tabs__tab--active'))!;
-    expect(inactive.getAttribute('aria-selected')).toBe('false');
+  it('marks only the active tab, by class AND aria-selected', () => {
+    const t = tabs(render({ ActiveId: 'b' }));
+    expect(t.map((x) => x.classList.contains('mj-tabs__tab--active'))).toEqual([false, true, false, false]);
+    expect(t.map((x) => x.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false', 'false']);
   });
 
-  it('applies the rejected and complete status classes from tab.Status', () => {
-    const f = render({ Tabs: [tab({ Id: 'r', Status: 'rejected' }), tab({ Id: 'c', Status: 'complete' })] });
-    const [rejected, complete] = tabs(f);
-    expect(rejected.classList.contains('mj-tabs__tab--rejected')).toBe(true);
-    expect(complete.classList.contains('mj-tabs__tab--complete')).toBe(true);
-  });
-
-  it('folds rejected + unsaved state into the tab accessible name', () => {
-    const f = render({ Tabs: [tab({ Label: 'Alpha', Status: 'rejected', Dirty: true })] });
-    expect(tabs(f)[0].getAttribute('aria-label')).toBe('Alpha (rejected) (unsaved changes)');
-  });
-
-  it('renders the dirty dot only for tabs with unsaved changes', () => {
-    const f = render({ Tabs: [tab({ Id: 'a', Dirty: true }), tab({ Id: 'b', Label: 'Beta' })] });
-    expect(queryAll(f, '.mj-tabs__dirty').length).toBe(1);
-  });
-
-  it('emits TabSelected with the tab id when a tab body is clicked', () => {
-    const f = render({ Tabs: [tab({ Id: 'a' }), tab({ Id: 'b', Label: 'Beta' })] });
+  it('emits the tab ID — not its index — when a tab is clicked', () => {
+    const f = render();
     const selected = capture(f.componentInstance.TabSelected);
-    tabs(f)[1].click();
-    expect(selected).toEqual(['b']);
+
+    tabs(f)[2].click();
+
+    // The strip is id-addressed; emitting a position would silently break a reordered host.
+    expect(selected).toEqual(['c']);
   });
 
-  it('emits TabClosed (and not TabSelected) when a tab close button is clicked', () => {
-    const f = render({ Tabs: [tab({ Id: 'a' })] });
+  it('closing emits TabClosed and does NOT also select the tab', () => {
+    const f = render();
+    const selected = capture(f.componentInstance.TabSelected);
     const closed = capture(f.componentInstance.TabClosed);
-    const selected = capture(f.componentInstance.TabSelected);
-    click(f, '.mj-tabs__close');
-    expect(closed).toEqual(['a']);
-    expect(selected).toEqual([]); // stopPropagation keeps the row click from firing
+
+    (tabs(f)[1].querySelector('.mj-tabs__close') as HTMLElement).click();
+
+    expect(closed).toEqual(['b']);
+    // The close button sits INSIDE the clickable tab, so a missing stopPropagation would select it.
+    expect(selected).toEqual([]);
   });
 
-  it('shows the new-tab button by default and emits NewTabRequested on click', () => {
-    const f = render({ Tabs: [tab({ Id: 'a' })], NewTabLabel: 'New draft' });
+  it('folds unsaved and rejected state into the accessible name', () => {
+    // The dirty dot is aria-hidden and "rejected" is conveyed by colour — neither survives being
+    // read aloud, so the tab's name is the only place that information exists for a screen reader.
+    const t = tabs(render());
+    expect(t[0].getAttribute('aria-label')).toBe('Overview');
+    expect(t[1].getAttribute('aria-label')).toBe('Line items (unsaved changes)');
+    expect(t[2].getAttribute('aria-label')).toBe('Rejected one (rejected)');
+  });
+
+  it('orders combined state as label, rejected, then unsaved', () => {
+    // Pins the join order in tabAccessibleName for a tab carrying BOTH states.
+    const t = tabs(render({ Tabs: [tab('x', { Label: 'Alpha', Status: 'rejected', Dirty: true })], ActiveId: 'x' }));
+    expect(t[0].getAttribute('aria-label')).toBe('Alpha (rejected) (unsaved changes)');
+  });
+
+  it('shows the dirty dot only on dirty tabs, and hides it from assistive tech', () => {
+    const f = render();
+    const dots = tabs(f).map((t) => t.querySelector('.mj-tabs__dirty'));
+    expect(dots.map(Boolean)).toEqual([false, true, false, false]);
+    expect(dots[1]!.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('carries lifecycle state as modifier classes for the shared chrome to style', () => {
+    const t = tabs(render());
+    expect(t[2].classList.contains('mj-tabs__tab--rejected')).toBe(true);
+    expect(t[3].classList.contains('mj-tabs__tab--complete')).toBe(true);
+    expect(t[0].classList.contains('mj-tabs__tab--rejected')).toBe(false);
+  });
+
+  it('keeps the close button OUT of the page tab order', () => {
+    // The tab is the single focus stop (mjTabList's roving tabindex); a focusable close button
+    // would double the strip's length in the tab order.
+    const close = query(render(), '.mj-tabs__close') as HTMLElement;
+    expect(close.getAttribute('tabindex')).toBe('-1');
+    expect(close.getAttribute('aria-label')).toBe('Close Overview');
+  });
+
+  it('emits NewTabRequested when the pinned control is clicked, named by NewTabLabel', () => {
+    const f = render({ NewTabLabel: 'New draft' });
     const requested = capture(f.componentInstance.NewTabRequested);
-    expect(attr(f, '.mj-tabs__new', 'aria-label')).toBe('New draft');
-    click(f, '.mj-tabs__new');
-    expect(requested.length).toBe(1);
+    const control = query(f, '.mj-tabs__new') as HTMLElement;
+
+    expect(control.getAttribute('aria-label')).toBe('New draft');
+    control.click();
+
+    expect(requested).toHaveLength(1);
   });
 
-  it('hides the new-tab button when ShowNewTab is false', () => {
-    const f = render({ Tabs: [tab({ Id: 'a' })], ShowNewTab: false });
-    expect(queryAll(f, '.mj-tabs__new').length).toBe(0);
+  // One render per test: the harness configures TestBed on render, and it cannot be reconfigured
+  // once instantiated — so a second render() in the same `it` throws.
+  it('hides the new-tab control when ShowNewTab is false', () => {
+    expect(query(render({ ShowNewTab: false }), '.mj-tabs__new')).toBeNull();
+  });
+
+  it('renders an empty strip without error when handed no tabs', () => {
+    const f = render({ Tabs: [], ActiveId: null });
+    expect(tabs(f)).toHaveLength(0);
+    // The new-tab affordance must survive, or an emptied strip becomes a dead end.
+    expect(query(f, '.mj-tabs__new')).not.toBeNull();
+  });
+
+  it('disables drag-reorder when AllowReorder is false', () => {
+    // The escape hatch for hosts where every touch gesture should scroll instead.
+    const f = render({ AllowReorder: false });
+    expect(f.componentInstance.AllowReorder).toBe(false);
+    expect(tabs(f)).toHaveLength(4);
   });
 });
