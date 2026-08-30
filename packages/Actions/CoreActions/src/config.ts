@@ -12,8 +12,18 @@ const apiIntegrationsSchema = z.object({
    * Perplexity AI API Key for AI-powered web search
    * Used by: Perplexity Search action
    * Get your API key from: https://www.perplexity.ai/settings/api
+   *
+   * This is the recommended web-search credential for new deployments — a single key with no
+   * engine ID, and open to new customers. See `google.customSearch` below for why.
    */
   perplexityApiKey: z.string().optional(),
+
+  /**
+   * Tavily API Key for search built for LLM consumption
+   * Used by: Tavily Search action
+   * Get your API key from: https://app.tavily.com (keys are prefixed `tvly-`)
+   */
+  tavilyApiKey: z.string().optional(),
 
   /**
    * Gamma API Key for presentation generation
@@ -33,6 +43,12 @@ const apiIntegrationsSchema = z.object({
      * Used by: Google Custom Search action
      * Get your API key from: https://developers.google.com/custom-search/v1/overview
      * Get your CX from: https://programmablesearchengine.google.com/
+     *
+     * NOTE: the Custom Search JSON API is CLOSED TO NEW CUSTOMERS. Projects that already have it
+     * enabled are served until 2027-01-01, when the API is discontinued. New deployments should
+     * configure `perplexityApiKey` above instead — Google's stated successor (Vertex AI Search)
+     * searches your own indexed content rather than the public web and yields neither an API key
+     * nor a CX, so it is not a drop-in for this action.
      */
     customSearch: z.object({
       /**
@@ -87,27 +103,32 @@ export function getCoreActionsConfig(): CoreActionsConfig {
   try {
     const result = explorer.search();
     if (!result || result.isEmpty) {
-      LogStatus('No mj.config.cjs found, using default Core Actions configuration');
-      _config = coreActionsConfigSchema.parse({});
-      return _config;
+      LogStatus('No mj.config.cjs found; reading Core Actions API keys from the environment only');
     }
 
-    // Extract only the fields relevant to Core Actions
+    // Extract only the fields relevant to Core Actions.
+    //
+    // This runs whether or not a config file was found. Every key below documents
+    // an environment-variable fallback, and until this was hoisted out of the
+    // no-config early return, a deployment that set only environment variables
+    // silently got an empty config and every action reported its key as missing.
+    const fileConfig = result?.config;
     const rawConfig = {
       apiIntegrations: {
-        perplexityApiKey: result.config?.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
-        gammaApiKey: result.config?.gammaApiKey || process.env.GAMMA_API_KEY,
+        perplexityApiKey: fileConfig?.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
+        tavilyApiKey: fileConfig?.tavilyApiKey || process.env.TAVILY_API_KEY,
+        gammaApiKey: fileConfig?.gammaApiKey || process.env.GAMMA_API_KEY,
         google: {
           customSearch: {
-            apiKey: result.config?.google?.customSearch?.apiKey ||
-                    result.config?.googleCustomSearchApiKey ||  // Backwards compatibility
+            apiKey: fileConfig?.google?.customSearch?.apiKey ||
+                    fileConfig?.googleCustomSearchApiKey ||  // Backwards compatibility
                     process.env.GOOGLE_CUSTOM_SEARCH_API_KEY,
-            cx: result.config?.google?.customSearch?.cx ||
-                result.config?.googleCustomSearchCx ||  // Backwards compatibility
+            cx: fileConfig?.google?.customSearch?.cx ||
+                fileConfig?.googleCustomSearchCx ||  // Backwards compatibility
                 process.env.GOOGLE_CUSTOM_SEARCH_CX,
           },
           geocoding: {
-            apiKey: result.config?.google?.geocoding?.apiKey ||
+            apiKey: fileConfig?.google?.geocoding?.apiKey ||
                     process.env.GOOGLE_GEOCODING_API_KEY ||
                     process.env.GOOGLE_MAPS_API_KEY,
           },

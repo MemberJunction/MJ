@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/sample-open-app-server",
+  "license": "BUSL-1.1",
   "version": "1.0.0",
   "description": "Server bootstrap package for the MJ Sample Open App.",
   "main": "dist/index.js",

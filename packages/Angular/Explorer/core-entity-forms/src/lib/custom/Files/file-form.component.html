@@ -1,0 +1,315 @@
+@if (!ViewStandardForm) {
+  <div class="mj-file-viewer-container">
+    <!-- Top Action & Info Header -->
+    <header class="mj-file-viewer-header">
+      <div class="mj-file-viewer-header-left">
+        <div class="mj-file-viewer-icon-box">
+          <i [class]="FileIconClass"></i>
+        </div>
+        <div class="mj-file-viewer-title-group">
+          <h1 class="mj-file-viewer-title" [title]="record.Name">{{ record.Name }}</h1>
+          <div class="mj-file-viewer-badges">
+            <span class="mj-file-badge mj-file-badge--type">{{ record.ContentType || 'Document' }}</span>
+            <span class="mj-file-badge mj-file-badge--size">{{ FormatFileSize(record.ContentLength) }}</span>
+            @if (record.Status) {
+              <span class="mj-file-badge mj-file-badge--status">{{ record.Status }}</span>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="mj-file-viewer-header-right">
+        @if (MediaUrl) {
+          <button type="button" mjButton variant="secondary" size="sm" (click)="OpenInExternalTab()" title="Open file in new browser tab">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            <span>Open in New Tab</span>
+          </button>
+        }
+        <button type="button" mjButton variant="secondary" size="sm" (click)="ToggleDetailsSidebar()" [title]="ShowDetailsSidebar ? 'Hide Details' : 'Show Details'">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>{{ ShowDetailsSidebar ? 'Hide Details' : 'Details' }}</span>
+        </button>
+        @if (UserCanEdit) {
+          <button type="button" mjButton variant="tertiary" size="sm" (click)="ToggleViewMode()" title="Switch to full record editor">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>Edit Record</span>
+          </button>
+        }
+      </div>
+    </header>
+
+    <!-- Body / Split Content Area -->
+    <div class="mj-file-viewer-body">
+      <!-- Media Stage -->
+      <main class="mj-file-viewer-stage">
+        @if (IsLoadingMedia || !IsMediaLoaded) {
+          <div class="mj-file-viewer-loading-overlay">
+            <mj-loading [text]="'Loading ' + (record.Name || 'file') + '...'"></mj-loading>
+          </div>
+        }
+
+        @switch (MediaType) {
+          @case ('image') {
+            @if (MediaUrl) {
+              <div class="mj-file-media-image-box" [class.mj-file-media--hidden]="!IsMediaLoaded">
+                <img [src]="MediaUrl" [alt]="record.Name" (load)="OnMediaElementLoaded()" (error)="OnMediaElementLoaded()" />
+              </div>
+            } @else {
+              <div class="mj-file-viewer-fallback">
+                <i class="fa-solid fa-file-image mj-file-fallback-icon"></i>
+                <h3>{{ record.Name }}</h3>
+                <p>Image preview could not be loaded.</p>
+              </div>
+            }
+          }
+          @case ('pdf') {
+            @if (SafeMediaUrl) {
+              <div class="mj-file-media-frame-box" [class.mj-file-media--hidden]="!IsMediaLoaded">
+                <iframe [src]="SafeMediaUrl" title="Document Preview" (load)="OnMediaElementLoaded()"></iframe>
+              </div>
+            } @else {
+              <div class="mj-file-viewer-fallback">
+                <i class="fa-solid fa-file-pdf mj-file-fallback-icon"></i>
+                <h3>{{ record.Name }}</h3>
+                <p>PDF preview could not be loaded.</p>
+              </div>
+            }
+          }
+          @case ('video') {
+            @if (MediaUrl) {
+              <div class="mj-file-media-video-box" [class.mj-file-media--hidden]="!IsMediaLoaded">
+                <video controls autoplay [src]="MediaUrl" (loadeddata)="OnMediaElementLoaded()" (error)="OnMediaElementLoaded()"></video>
+              </div>
+            } @else {
+              <div class="mj-file-viewer-fallback">
+                <i class="fa-solid fa-file-video mj-file-fallback-icon"></i>
+                <h3>{{ record.Name }}</h3>
+                <p>Video preview could not be loaded.</p>
+              </div>
+            }
+          }
+          @case ('audio') {
+            @if (MediaUrl) {
+              <div class="mj-file-media-audio-box" [class.mj-file-media--hidden]="!IsMediaLoaded">
+                <div class="mj-file-audio-visual-icon"><i class="fa-solid fa-headphones"></i></div>
+                <audio controls [src]="MediaUrl" (loadeddata)="OnMediaElementLoaded()" (error)="OnMediaElementLoaded()"></audio>
+              </div>
+            } @else {
+              <div class="mj-file-viewer-fallback">
+                <i class="fa-solid fa-file-audio mj-file-fallback-icon"></i>
+                <h3>{{ record.Name }}</h3>
+                <p>Audio preview could not be loaded.</p>
+              </div>
+            }
+          }
+          @case ('text') {
+            <div class="mj-file-media-text-box">
+              <pre><code>{{ TextContent || 'Loading text content...' }}</code></pre>
+            </div>
+          }
+          @default {
+            <div class="mj-file-viewer-fallback">
+              <i [class]="FileIconClass" class="mj-file-fallback-icon"></i>
+              <h3>{{ record.Name }}</h3>
+              <p class="mj-file-fallback-meta">{{ record.ContentType || 'Document' }} &bull; {{ FormatFileSize(record.ContentLength) }}</p>
+              <p class="mj-file-fallback-desc">{{ record.Description || 'Preview is not available for this file type.' }}</p>
+              @if (MediaUrl) {
+                <button type="button" mjButton variant="primary" (click)="OpenInExternalTab()">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                  <span>Open in Browser</span>
+                </button>
+              }
+            </div>
+          }
+        }
+      </main>
+
+      <!-- Details & Linked Records Sidebar -->
+      @if (ShowDetailsSidebar) {
+        <aside class="mj-file-viewer-sidebar">
+          <div class="mj-file-sidebar-header">
+            <h3>File Details & Links</h3>
+            <button type="button" class="mj-file-sidebar-close" (click)="ToggleDetailsSidebar()" title="Collapse Sidebar">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div class="mj-file-sidebar-content">
+            <!-- Metadata Cards -->
+            <div class="mj-file-sidebar-card">
+              <div class="mj-file-meta-row">
+                <span class="mj-file-meta-label">File Name:</span>
+                <span class="mj-file-meta-val font-semibold">{{ record.Name }}</span>
+              </div>
+              @if (record.Description) {
+                <div class="mj-file-meta-row">
+                  <span class="mj-file-meta-label">Description:</span>
+                  <span class="mj-file-meta-val">{{ record.Description }}</span>
+                </div>
+              }
+              <div class="mj-file-meta-row">
+                <span class="mj-file-meta-label">MIME Type:</span>
+                <span class="mj-file-meta-val font-mono">{{ record.ContentType || 'Unknown' }}</span>
+              </div>
+              <div class="mj-file-meta-row">
+                <span class="mj-file-meta-label">Size:</span>
+                <span class="mj-file-meta-val">{{ FormatFileSize(record.ContentLength) }}</span>
+              </div>
+              @if (record.Status) {
+                <div class="mj-file-meta-row">
+                  <span class="mj-file-meta-label">Status:</span>
+                  <span class="mj-file-meta-val">{{ record.Status }}</span>
+                </div>
+              }
+              <div class="mj-file-meta-row">
+                <span class="mj-file-meta-label">Created:</span>
+                <span class="mj-file-meta-val">{{ record.CreatedAt | date:'short' }}</span>
+              </div>
+            </div>
+
+            <!-- Linked Records -->
+            <div class="mj-file-sidebar-section">
+              <h4 class="mj-file-sidebar-section-title">
+                <i class="fa-solid fa-link"></i>
+                <span>Linked Records</span>
+              </h4>
+              <div class="mj-file-relationship-wrapper">
+                <mj-relationship-view 
+                  [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Entity Record Links', 'FileID')"
+                  [NewRecordValues]="NewRecordValues('MJ: File Entity Record Links', 'FileID')">
+                </mj-relationship-view>
+              </div>
+            </div>
+          </div>
+        </aside>
+      }
+    </div>
+  </div>
+} @else {
+  <div class="mj-file-standard-form-wrapper">
+    <div class="mj-file-mode-switch-bar">
+      <button type="button" mjButton variant="secondary" size="sm" (click)="ToggleViewMode()">
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Return to File Preview</span>
+      </button>
+    </div>
+
+    <mj-record-form-container [Record]="record" [FormComponent]="this"
+        (Navigate)="OnFormNavigate($event)"
+        (DeleteRequested)="OnDeleteRequested()"
+        (FavoriteToggled)="OnFavoriteToggled()"
+        (HistoryRequested)="OnHistoryRequested()"
+        (ListManagementRequested)="OnListManagementRequested()">
+
+        <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+        <!-- File Basics Section -->
+        <mj-collapsible-panel
+            SectionKey="fileBasics"
+            SectionName="File Basics"
+            Icon="fa fa-file"
+            [Form]="this"
+            [FormContext]="formContext">
+            <mj-form-field 
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="Name"
+                Type="textbox"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+            ></mj-form-field>
+            <mj-form-field 
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="Description"
+                Type="textarea"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+            ></mj-form-field>
+        </mj-collapsible-panel>
+
+        <!-- Classification & Status Section -->
+        <mj-collapsible-panel
+            SectionKey="classificationStatus"
+            SectionName="Classification & Status"
+            Icon="fa fa-tags"
+            [Form]="this"
+            [FormContext]="formContext">
+            <mj-form-field 
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="CategoryID"
+                Type="textbox"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+                LinkType="Record"
+            ></mj-form-field>
+            <mj-form-field 
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="Status"
+                Type="textbox"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+            ></mj-form-field>
+        </mj-collapsible-panel>
+
+        <!-- Storage Details Section -->
+        <mj-collapsible-panel
+            SectionKey="storageDetails"
+            SectionName="Storage Details"
+            Icon="fa fa-database"
+            [Form]="this"
+            [FormContext]="formContext">
+            <mj-form-field 
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="ProviderID"
+                Type="textbox"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+                LinkType="Record"
+            ></mj-form-field>
+            <mj-form-field 
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="ProviderKey"
+                Type="textbox"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+            ></mj-form-field>
+            <mj-form-field 
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="ContentType"
+                Type="textbox"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+            ></mj-form-field>
+            <mj-form-field 
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="ContentLength"
+                Type="numeric"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+            ></mj-form-field>
+        </mj-collapsible-panel>
+
+        <!-- Linked Records Section -->
+        <mj-collapsible-panel
+            SectionKey="mJFileEntityRecordLinks"
+            SectionName="File Entity Record Links"
+            Icon="fa fa-link"
+            [Form]="this"
+            [FormContext]="formContext">
+            <mj-relationship-view 
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Entity Record Links','FileID')"
+                [NewRecordValues]="NewRecordValues('MJ: File Entity Record Links','FileID')">
+            </mj-relationship-view>
+        </mj-collapsible-panel>
+
+        <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+    </mj-record-form-container>
+  </div>
+}

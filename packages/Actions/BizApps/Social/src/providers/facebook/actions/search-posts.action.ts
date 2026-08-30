@@ -3,7 +3,6 @@ import { FacebookBaseAction, FacebookPost } from '../facebook-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialPost, SearchParams, SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
-import axios from 'axios';
 import { BaseAction } from '@memberjunction/actions';
 
 /**

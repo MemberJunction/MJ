@@ -683,6 +683,14 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT86 - Transaction Group Batched Submit",
+            "Sequence": 48,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT84 - Agent Note Cache Types (entity_object invariant)",
             "Sequence": 48,
             "Status": "Active"
@@ -1220,7 +1228,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 15,
+            "Sequence": 16,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1235,7 +1243,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT85 - Entity Embedded Records (owner-held 1:1)",
-            "Sequence": 69,
+            "Sequence": 15,
             "Status": "Active"
           },
           "primaryKey": {
