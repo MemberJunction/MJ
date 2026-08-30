@@ -1,5 +1,151 @@
 # @memberjunction/ng-base-forms
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ng-base-types@6.1.0-edge.4
+  - @memberjunction/ng-code-editor@6.1.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.4
+  - @memberjunction/ng-file-storage@6.1.0-edge.4
+  - @memberjunction/ng-list-management@6.1.0-edge.4
+  - @memberjunction/ng-notifications@6.1.0-edge.4
+  - @memberjunction/ng-react@6.1.0-edge.4
+  - @memberjunction/ng-record-changes@6.1.0-edge.4
+  - @memberjunction/ng-record-tags@6.1.0-edge.4
+  - @memberjunction/ng-shared-generic@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/ng-markdown@6.1.0-edge.4
+  - @memberjunction/ng-ui-components@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 7b4abe7: Form chrome membership is a five-layer stack: CodeGen, app inclusions (Primary / More / None), the Auto ranker, install overlay (`MJ: Form Chrome Rules`), and user rail order. Policy may decorate labels and icons only.
+- 051e0ff: L3 Form Chrome Rules can now pin an admin Title on a related entity or contribution. The column is nullable and keyed by RelatedEntityID / ContributionKey, so a site-specific rail label ("Pmts") survives an OpenApp upgrade that changes the shipped DisplayName. Custom forms that hide related entities also stop inventing leftover More groups for unbaked relationships.
+- 95fc3e6: Ship generated-form chrome: a budgeted related-role ranker (not all-in-More), accordion More as a quiet overflow footer (not a fake panel), left-nav More folder, user move in/out of More via Manage Sections, Layout auto / left-nav, optional BaseFormPolicy, and Entity / Entity Relationship visualization. Metadata JSONType bags on Entity / EntityRelationship.Configuration back the ranker.
+- 6ecfaa0: Relationship `UI.sortKey` orders first-class related rail items after Details. Hug-height related grids use a top-aligned inline empty state. Left-nav labels cap at 200px and show the full title on hover.
+
+### Patch Changes
+
+- a2e4e09: Honor L1 `inclusion` on form contributions. Primary contributions (Overview) are their own rail items and sort in a lead band before Details. The left-nav only applies a persisted user section order — the generated form.sections fallback no longer parks Overview after baked related grids.
+- 815b9bc: feat(storage,core,forms): ephemeral staged binary upload pipeline, polymorphic related collections, and file record viewer
+  - **Storage & Server**:
+    - Implement Tier 2 ephemeral staged raw binary upload pipeline (UploadTokenManager, POST /media/upload-stage, CreateUploadStageToken mutation, UploadStorageFile token consumption).
+    - Add single-use cryptographic token security, user identity ownership binding, automated TTL eviction, and memory bounds.
+    - Sanitize paths/filenames and add X-Content-Type-Options: nosniff to /media endpoints.
+  - **Core & ORM**:
+    - Add support for polymorphic IS-A subtypes in RelatedRecordCollection and dirty state preservation across relationship chains.
+    - Support IEntityConfiguration and entity hierarchy traversal.
+  - **Angular & UI**:
+    - Add 3-tier upload pipeline in RecordAttachmentsComponent with real-time wire progress.
+    - Add dedicated MJ: Files custom record viewer form component in ng-core-entity-forms.
+    - Add attachment count badges to base form container and toolbar.
+    - Add ResizeObserver lifecycle handling to Gantt chart and OpenNewEntityRecord in SharedService.
+
+- 69f2bf2: `mj-explorer-entity-data-grid` now forwards the inner grid's toolbar chrome (`ShowToolbar`, `ShowSearch`, and the `Show*Button` / `ShowRecycleBin` flags) so a related list can hide New, search, refresh, export, or the whole bar without losing the rest.
+- 05865ea: feat(angular): introduce `@memberjunction/ng-hierarchy-tree` visual hierarchy component and wire 15 core entity form hierarchy panels
+  - **`@memberjunction/ng-hierarchy-tree`**: Reusable D3-based interactive visual hierarchy and taxonomy tree component with smooth pan/zoom, dynamic primary key metadata extraction, real-time path search and ancestor branch auto-expansion, subtree focus, cancelable lifecycle events, and `--mj-*` design token theming.
+  - **`@memberjunction/ng-core-entity-forms`**: Adds 15 visual hierarchy form panels in the `after-related` slot for self-referencing and category entities in MJ Core (`AI Agent Categories`, `AI Prompt Categories`, `Action Categories`, `Dashboard Categories`, `Query Categories`, `Tags`, `Projects`, `Content Items`, `File Categories`, `List Categories`, `Record Process Categories`, `Skills`, `Template Categories`, `Test Suites`, `User View Categories`).
+  - **`@memberjunction/ng-gantt`**: Polish host height layout on `MJGanttChartComponent`.
+
+- ac6755c: New entity records no longer restore or persist the left-nav active section from the last saved record of the same entity.
+- 73c853b: Collapsed form chrome rail stays a 36px spine (min-width no longer leaks from the expanded band). Expanded width is user-resizable and persisted per entity.
+- 142cf2a: Scope `LoadFormChromeRules`' read to the provider it was handed.
+
+  The function resolves `md = provider ?? Metadata.Provider` and checks the entity is in that provider's metadata — then ran the actual query through `new RunView()`, which binds the **global** provider. In a multi-provider app that validated against the caller's provider and read from a different one, so a form could be handed another environment's chrome rules, or none, depending on which provider happened to be global at the time. The `provider` parameter was effectively decorative for the read.
+
+  Now `RunView.FromMetadataProvider(md)`, so the check and the read use one provider. Single-provider apps are unaffected — there `md` _is_ the global provider.
+
+  This also clears the repo's `ui-layers` adopted-standard error, which had been failing the `adopted standards` gate on every PR that merged `next`.
+
+- e635378: Form contributions: registered BaseFormPanel metadata can claim a related-entity grid or replace a named field panel (hero that is not a collapsible panel). Last-wins by Priority. The container fills in DisplayInForm relationships the template did not bake. CodeGen output is unchanged.
+- 26046d8: Add a read-mode form toolbar Refresh button that reloads the current record from the database in place and broadcasts to already-visible related-entity grids, the IS-A side panel, and custom form panels.
+- 44ac084: Hide the form toolbar expand-all / collapse-all buttons in left-nav and right-nav chrome. They only apply to accordion panels.
+- 6e98173: Left-nav form chrome can collapse to a thin current-section strip. Pin is the default and is stored per user per entity; unpinned rails hide again after you pick another section.
+- 0869c24: Left-nav rail marks the current section the way the rest of Explorer nav does: muted idle items, brand-tinted selected row, and a 3px leading bar. `aria-current="page"` is set on the active item.
+- aa9006b: Stop left-nav rail items from jumping when a section is selected: keep the previous first-class order across chrome re-resolves. Related-entity leftover height no longer stretches a custom widget's first child (the section header) to 100%, which parked titles mid-column.
+- a76cf28: Left-nav related grids size to their rows (capped) instead of filling leftover flex space, so a form header no longer collapses the grid body to zero.
+- 9b6fb5b: Rail section labels show a native tooltip with the full name only when the text is clipped.
+- 2a0262d: Give left-nav related grids 5px under the last row so the bottom border is not clipped, without a visible gap above the grid edge.
+- 6ef741e: Related left-nav grids hug toolbar + header + rows with no 200px floor. Optional MaxHeight (default 560) caps the box so AG Grid scrolls inside; omit it to grow with the rows.
+- 84f276e: Related-entity grids prefill every join field on a new child record and persist those defaults on the new-record URL (`/record/:entity/new?NewRecordValues=...`) so the link survives refresh and deeplink.
+
+  Left-nav related grids (including slot-mounted contributions) fill leftover column height and report their row-count badge: SetSectionRowCount upserts unknown section keys, contribution hosts are display:contents so they participate in the flex column, and accordion pixel heights are not applied while the rail is showing the panel.
+
+  Section search matches contribution titles (Orders) in both accordion and left-nav, keeps the rail visible when only one group hits, and does not treat chrome-hidden panels as non-matches.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [deea1a3]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [b46330e]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ng-code-editor@6.1.0-edge.3
+  - @memberjunction/ng-base-types@6.1.0-edge.3
+  - @memberjunction/ng-file-storage@6.1.0-edge.3
+  - @memberjunction/ng-notifications@6.1.0-edge.3
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.3
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/ng-list-management@6.1.0-edge.3
+  - @memberjunction/ng-react@6.1.0-edge.3
+  - @memberjunction/ng-record-changes@6.1.0-edge.3
+  - @memberjunction/ng-record-tags@6.1.0-edge.3
+  - @memberjunction/ng-shared-generic@6.1.0-edge.3
+  - @memberjunction/interactive-component-types@6.1.0-edge.3
+  - @memberjunction/ng-markdown@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes

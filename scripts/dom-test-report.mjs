@@ -52,6 +52,18 @@ const DEFERRALS = [
   // here so the ratchet stays honest until the forms team backfills specs (then remove these).
   [/\/form-contributions\.component\.ts$/, "new base-forms panel-slot UI; DOM spec pending"],
   [/\/related-entity-grid-panel\.component\.ts$/, "new base-forms panel-slot UI; DOM spec pending"],
+  // New graph-view component landed on `next` in #3842 without a DOM spec; deferred here so the
+  // ratchet stays honest until a spec is backfilled (then remove this). Note the component also
+  // has open UI-layering violations tracked separately — the spec should be written against
+  // whatever navigation contract that resolves to, not the current one.
+  [/\/graph-view\.component\.ts$/, "new generic graph-view UI; DOM spec pending"],
+  // The hierarchy-tree component landed on `next` in #3927 without a DOM spec. It went unnoticed
+  // because that PR also broke `pnpm install` repo-wide, so this ratchet never ran on it — see
+  // #3945. Its existing specs cover the logic (tree building, cycle breaking, search, focus,
+  // cancelable events) but nothing rendered; the DOM surface is a d3-driven SVG canvas that needs
+  // a spec written against real layout. Deferred so the ratchet stays honest until the authoring
+  // team backfills one (then remove this).
+  [/\/hierarchy-tree\.component\.ts$/, "new generic hierarchy-tree UI (d3/SVG); DOM spec pending"],
 ];
 const deferralReason = (rel) => (DEFERRALS.find(([re]) => re.test(rel)) || [])[1] || "";
 

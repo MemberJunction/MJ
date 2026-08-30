@@ -1,0 +1,262 @@
+[
+  {
+    "fields": {
+      "Name": "Read RSS Feed",
+      "Description": "Reads one or more RSS/Atom feeds and returns their articles, filtered by age and keywords. Every count that shaped the result is surfaced as an output param, so an empty answer is explainable without re-running.",
+      "DriverClass": "Read RSS Feed",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rss",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Web"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FeedURLs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "One or more feed URLs (http/https only). Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "618CAD01-CB18-4C4D-9E2A-F5F62A32EFAC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "DefaultValue": "20",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum articles to return across all feeds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F4B5E142-0BF2-4313-9AC7-695C4F0DC768"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxAgeDays",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Drop articles older than this many days.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9B789CE-F8C1-4BA8-9F8C-5F734BD2D874"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Keywords",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Only return articles matching these keywords.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4A9FEA7A-0FA3-4CB7-A160-F0BCF66E20D0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeUndated",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include articles with no publish date. Default false \u2014 an undated article cannot be age-filtered.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "72554D77-5650-4B2A-B09E-E7440B562CE6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RequireAllFeeds",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fail the action if ANY feed fails, rather than isolating the failure. Default false.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D1D288F0-66F2-46C3-B81D-A81038805E72"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Articles",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "The selected articles.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "54F4F2CA-1621-45E9-A3E8-79755E88903B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArticleCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of articles returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "61E17D74-1F0A-48A4-A6B4-579AC743F488"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalFetched",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Articles fetched before filtering.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9184D4ED-F67F-4D29-AB53-2ABDB118A694"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FilteredOutTooOld",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Articles dropped by the MaxAgeDays filter.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AEE41684-9005-4997-A6E4-C919E992CA27"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UndatedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Articles carrying no publish date.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "715077B4-D78F-4552-8738-E53E862BB8DD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FailedFeedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Feeds that could not be read.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D67CD980-EA8C-4605-A368-564AB0F46677"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FeedStatuses",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Per-feed outcome, so one failing feed is attributable.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9D9B578-DDFB-4B1A-9C03-969E33E81A40"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Feeds read and articles returned."
+          },
+          "primaryKey": {
+            "ID": "0B8FFC3B-8FD3-4157-A321-564E6AA5C760"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FEEDS",
+            "IsSuccess": false,
+            "Description": "FeedURLs is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "BBE5A3EA-6F57-4BB0-9C73-00FA2D2B512B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_FEEDS",
+            "IsSuccess": false,
+            "Description": "FeedURLs could not be parsed into a list of URLs."
+          },
+          "primaryKey": {
+            "ID": "4F705DA2-AAD5-4248-92DF-EDD2404211C1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_FEED_URL",
+            "IsSuccess": false,
+            "Description": "A supplied URL is not an http(s) URL."
+          },
+          "primaryKey": {
+            "ID": "580A1E45-DDC0-4C6A-903D-F50E6F631123"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FEED_FETCH_FAILED",
+            "IsSuccess": false,
+            "Description": "A feed could not be read, and RequireAllFeeds was set."
+          },
+          "primaryKey": {
+            "ID": "0EF8F5F2-8D8F-4EF7-861F-59A50684A32C"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "518B3820-5345-4B55-804E-980581772AF7"
+    }
+  }
+]

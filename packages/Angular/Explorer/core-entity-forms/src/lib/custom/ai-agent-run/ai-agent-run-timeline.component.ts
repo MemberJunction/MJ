@@ -9,6 +9,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FindAgentRunTreeNodes, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
 import { NormalizeStatus, ProjectRunTreeToTimeline } from './run-tree-timeline-projection';
+import { SortAgentRunStepsByExecutionOrder } from './agent-run-step-order';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 
 /**
@@ -222,17 +223,22 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     baseLevel: number,
     promptRuns?: MJAIPromptRunEntity[]
   ): TimelineItem[] {
+    // Walk in execution order, not persist order. Children are pushed in this walk, so a
+    // loop's iterations and root siblings both inherit the sort. Query OrderBy is the
+    // same pair; this is the belt for a caller that handed us an unsorted array.
+    const ordered = SortAgentRunStepsByExecutionOrder(steps);
+
     // Create a map of all timeline items by step ID
     const itemMap = new Map<string, TimelineItem>();
 
     // First pass: create all timeline items
-    steps.forEach(step => {
+    ordered.forEach(step => {
       const item = this.createTimelineItemFromStep(step, baseLevel, promptRuns);
       itemMap.set(step.ID, item);
     });
 
     // Second pass: build parent-child relationships based on ParentID
-    steps.forEach(step => {
+    ordered.forEach(step => {
       if (step.ParentID) {
         const parentItem = itemMap.get(step.ParentID);
         const childItem = itemMap.get(step.ID);
@@ -254,7 +260,7 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
 
     // Return only root-level items (those without a ParentID)
     const rootItems: TimelineItem[] = [];
-    steps.forEach(step => {
+    ordered.forEach(step => {
       if (!step.ParentID) {
         const item = itemMap.get(step.ID);
         if (item) {

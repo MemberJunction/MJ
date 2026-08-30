@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/ai
 
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- e533ce5: Weekly AI model & vendor intelligence report (2026-08-24) + two metadata edits.
+  - **New model** `GLM 5.3` (Zhipu, released 2026-08-14). Placeholder record with Z.AI as Model Developer and OpenRouter as Inference Provider; no `MJ: AI Model Costs` rows populated because Zhipu has not posted a per-token API rate.
+  - **Deprecation** `GLM 4.7` on Cerebras — the Cerebras vendor row and matching cost record are now `Status: "Inactive"` per Cerebras' 2026-08-17 retirement of GLM-4.7 from its inference cloud. OpenRouter and Fireworks.ai vendor rows for GLM 4.7 remain Active.
+  - Full report at `reports/ai-model-research/2026-08-24-weekly-report.md`, including 4 items flagged for human review (DeepSeek V4 Pro Aug-16 cost record, GPT-5.6 Sol pricing conflict, FLUX.2 family refresh, redundant Sonnet 5 Sep-1 cost row).
+
+### Patch Changes
+
+- Updated dependencies [4586215]
+- Updated dependencies [a5f92d2]
+  - @memberjunction/global@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- f5ec13b: Move the shared LLM conformance suite out of the runtime `@memberjunction/ai` package, and gate silent skip-growth in the integration registry (review fixes for #3542).
+
+  **Conformance suite relocated to `@memberjunction/unit-testing`.** The shared BaseLLM
+  streaming/ChatResult conformance suite and its OpenAI-compatible seam mock previously lived in
+  `@memberjunction/ai/src/test-support/` and were consumed through a deep `@memberjunction/ai/dist/test-support/*.js`
+  import — reaching past the package's public API into its build output, which resolved only because
+  `@memberjunction/ai` has no `exports` map, and which shipped test code plus an optional `vitest`
+  peer dependency inside the runtime package. Both files (and the suite's own reference regression
+  test) now live in `@memberjunction/unit-testing`, are exported from its index
+  (`RunLLMConformanceSuite`, `CreateOpenAICompatibleSeamMock`, and their types), and the eight
+  provider conformance suites import them from `@memberjunction/unit-testing`. `@memberjunction/ai`
+  no longer ships `dist/test-support/*` and no longer declares the optional `vitest` peer. No runtime
+  behavior changes; test-only wiring.
+
+  **Skip-growth is now gated, not just reported.** `check-registry.test.ts` gained a snapshot of the
+  exact set of checks that self-skip out of the deterministic lane (every `RequiresMutation` and
+  `RequiresLiveModel` check across all bundles). A change that makes a check newly self-skip — or
+  silently un-gates one — now fails the unit tests with a paste-ready diff, instead of only shrinking
+  the CI step-summary. Also corrected a stale `task-graph-execution` count (26 → 27) in the
+  all-bundle coverage-loss guard that had drifted after a `next` merge added TX27.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [cefc302]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1bd9674]
+  - @memberjunction/global@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes

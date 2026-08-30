@@ -1220,7 +1220,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 15,
+            "Sequence": 16,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1229,6 +1229,17 @@
           "sync": {
             "lastModified": "2026-07-21T17:00:43.506Z",
             "checksum": "cca8635d3caea633ae50889f69a1cbfd137c8f0acaeeb1aa345a52d121da36cb"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT85 - Entity Embedded Records (owner-held 1:1)",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4F970B91-8661-49AB-81E4-68F4A8803F87"
           }
         }
       ]

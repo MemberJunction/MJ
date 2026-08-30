@@ -215,7 +215,7 @@ export class DDLGenerator {
 }
 
 // ─── Re-exports (backward compatibility) ────────────────────────────
-export { ValidateIdentifier, EscapeSqlString } from './utils.js';
+export { ValidateIdentifier } from './utils.js';
 
 /** Resolve the SQL type for a column via SQLDialect. */
 export function resolveSqlType(col: ColumnDefinition, platform: DatabasePlatform): string {
