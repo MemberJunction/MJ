@@ -39,3 +39,9 @@ into every other caller and make the next request's answer depend on this one's.
 Both of the issue's asks beyond the fix are covered: the failure message now says **which** of the
 three walls was hit (no LLM models / no Active inference vendor / no key resolved), and an empty wire
 name is refused client-side with the row to fix instead of being sent and 404'd.
+
+`preferredModels` is matched against all three names a caller could plausibly hold — the model's
+`Name`, the model's own `APIName`, and the vendor's wire name. The vendor's is an implementation
+detail (an Azure deployment name, a gateway slug) that a caller has no reason to know, so matching
+only that one would have quietly downgraded existing callers to power selection: not an error, just
+the wrong model.

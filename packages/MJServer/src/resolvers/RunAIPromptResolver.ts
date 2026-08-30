@@ -501,8 +501,13 @@ export class RunAIPromptResolver extends ResolverBase {
         // Try preferred models first if provided
         if (preferredModels && preferredModels.length > 0) {
             for (const preferred of preferredModels) {
+                // All three names a caller could plausibly hold. `c.APIName` is the VENDOR's wire
+                // name, which is an implementation detail the caller has no reason to know — before
+                // the vendor split, `preferredModels` was matched against the MODEL's own APIName,
+                // and dropping it would silently downgrade those callers to power selection.
                 const choice = candidates.find(c =>
                     c.Model.Name === preferred ||
+                    c.Model.APIName === preferred ||
                     c.APIName === preferred
                 );
                 if (choice) {

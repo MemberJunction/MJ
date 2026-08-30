@@ -208,6 +208,29 @@ describe('selectModelForSimplePrompt (#3532)', () => {
     delete process.env['AI_VENDOR_API_KEY__OPENAILLM'];
   });
 
+  it("honours a preferred model by the MODEL's own APIName, which is what a caller actually holds", async () => {
+    // The vendor's wire name is an implementation detail — an Azure deployment name, a gateway's
+    // slug. What a caller has is the AI Models list, so before the vendor split `preferredModels` was
+    // matched against the model's own APIName. Matching only the vendor's would silently drop those
+    // callers to power selection: not an error, just quietly the wrong model.
+    process.env['AI_VENDOR_API_KEY__OPENAILLM'] = 'sk-openai';
+    stubEngine([
+      model({ ID: 'm-a', Name: 'Gemini 3.1 Flash', PowerRank: 9, ModelVendors: [vendor({ ModelID: 'm-a' })] }),
+      model({
+        ID: 'm-b', Name: 'GPT-5', PowerRank: 1, APIName: 'gpt-5',
+        // The vendor serves it under a different name than the model carries.
+        ModelVendors: [vendor({ ModelID: 'm-b', DriverClass: 'OpenAILLM', APIName: 'my-azure-deployment-01' })],
+      }),
+    ]);
+
+    const choice = await select(resolver).selectModelForSimplePrompt(['gpt-5'], 'highest', {});
+
+    expect(choice.Model.Name).toBe('GPT-5');
+    // …and the wire name still comes from the VENDOR, which is the whole point of defect 4.
+    expect(choice.APIName).toBe('my-azure-deployment-01');
+    delete process.env['AI_VENDOR_API_KEY__OPENAILLM'];
+  });
+
   describe('the error says WHICH wall was hit — the expensive part of the original bug', () => {
     it('no LLM models at all', async () => {
       stubEngine([model({ AIModelTypeID: OTHER_TYPE_ID, ModelVendors: [vendor()] })]);
