@@ -16,7 +16,7 @@ import {
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
-import type { IntrospectSchemaOptions } from './types.js';
+import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
 
 /** Options for the creation/refresh pipeline run. */
@@ -476,87 +476,46 @@ export class IntegrationConnectorCreationPipeline {
             // can't silently lose runtime discovery). PersistDiscoveredSchema is additive, so
             // declared objects are preserved and runtime-only objects (e.g. an auth-gated file
             // feed's streams) get created as Discovered. Errors are SURFACED, never swallowed.
-            const seen = new Set(schema.Objects.map(o => o.ExternalName.toLowerCase()));
+            const declaredNames = schema.Objects.map(o => o.ExternalName);
+            const seen = new Set(declaredNames.map(n => n.toLowerCase()));
             let runtimeObjects: ExternalObjectSchema[] = [];
+            // A DiscoverObjects failure used to end sampling for the ENTIRE run: the loop below was
+            // the only thing that sampled, and it iterated this (now empty) list. The declared
+            // catalog is still in hand — IntrospectSchema already returned it — so the union pass
+            // still samples every declared object. The failure is recorded on the checkpoint so a
+            // consumer can tell "the source has no other objects" from "we never got to ask".
+            let discoverObjectsFailed = false;
             try {
                 runtimeObjects = await opts.Connector.DiscoverObjects(opts.CompanyIntegration, opts.ContextUser);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
+                discoverObjectsFailed = true;
                 emitter.stageError('Introspect', `DiscoverObjects failed: ${msg}`, { code: 'discover-objects-failed' });
                 console.error(`[IntrospectPipeline] DiscoverObjects failed: ${msg}`);
             }
+
+            // §7 — a SCOPED introspection asked about a named subset. IntrospectSchema already
+            // honours the filter; DiscoverObjects does not take it, so without this the scoped run
+            // pulled and sampled the whole runtime catalog anyway.
+            const wantedNames = opts.IntrospectOptions?.ObjectNames;
+            const wanted = wantedNames && wantedNames.length > 0
+                ? new Set(wantedNames.map(n => n.toLowerCase()))
+                : null;
+            const inScope = (name: string): boolean => !wanted || wanted.has(name.toLowerCase());
+
+            const sampledDeclared = new Set<string>();
             let runtimeAdded = 0;
             for (const d of runtimeObjects) {
                 const key = d.Name.toLowerCase();
+                if (!inScope(d.Name)) continue;
                 if (seen.has(key)) {
                     // §case-3 (data-only-discoverable): a DECLARED object the connector ALSO surfaces at
-                    // runtime, but the declared form carries NO fields (e.g. a file-feed stream declared by
-                    // NAME only — its columns are knowable solely from the records). Without this, the loop
-                    // skipped it, it stayed field-less + PK-less, and ApplyAll dropped it — so the user's data
-                    // for that object never landed. Discover its fields over the read path and populate the
-                    // existing declared object IN PLACE so it becomes syncable.
+                    // runtime. Sampling populates it IN PLACE so a name-only declaration becomes syncable
+                    // and a fully-declared one gets its true widths and undeclared columns.
                     const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
-                    // SAMPLE UNCONDITIONALLY. This used to run only for a declared object with no
-                    // fields — a gate on the wrong question, because streaming answers three and a
-                    // declaration can only pre-answer one of them. A declared key IS authoritative;
-                    // which fields the source actually sends, and how wide their values are, only
-                    // the data knows. An object declared with fields and a key was therefore never
-                    // sampled: its undeclared columns arrived later through the overflow path one
-                    // sync at a time, and its widths were whatever the catalog guessed — which is a
-                    // truncation, or a migration written by hand afterwards.
-                    //
-                    // The merge is one-directional (see DeclaredSampleMerge): sampling fills gaps
-                    // and widens, never overrides. A fetch failure leaves the declaration exactly
-                    // as it was, so the worst case is the behaviour that shipped before.
                     if (existing) {
-                        try {
-                            const dfields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
-                            const sampled = dfields.map(f => ({
-                                Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
-                                IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
-                                Precision: f.Precision ?? null, Scale: f.Scale ?? null, DefaultValue: f.DefaultValue ?? null,
-                                // U1 — preserve `undefined` (no opinion); `?? false` fabricated a "not a PK/FK" opinion
-                                IsPrimaryKey: f.IsPrimaryKey, IsUniqueKey: f.IsUniqueKey, IsReadOnly: f.IsReadOnly,
-                                IsForeignKey: f.IsForeignKey, ForeignKeyTarget: f.ForeignKeyTarget ?? null,
-                            }));
-                            if (existing.Fields.length === 0) {
-                                // Nothing was declared, so there is nothing to defer to — the
-                                // sample is the whole truth, exactly as before this change.
-                                existing.Fields = sampled;
-                                existing.PrimaryKeyFields = dfields.filter(f => f.IsPrimaryKey).map(f => f.Name);
-                                existing.Relationships = dfields
-                                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
-                                    .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' }));
-                                console.log(`[IntrospectPipeline] declared field-less object "${d.Name}" → discovered ${dfields.length} field(s) via read path`);
-                            } else {
-                                const merged = MergeDeclaredWithSample(existing.Fields, sampled);
-                                existing.Fields = merged.Fields;
-                                // Only when the declaration named no key at all — a declared key
-                                // stays authoritative even if the sample nominates another column,
-                                // which is how a child table ends up keyed on its parent's FK.
-                                if (merged.AdoptedKeyNames.length > 0) {
-                                    existing.PrimaryKeyFields = merged.AdoptedKeyNames;
-                                }
-                                // Relationships come from the declaration when there is one; a
-                                // sampled FK target is a guess and must not rewrite a stated graph.
-                                const parts = [
-                                    merged.AddedFieldNames.length ? `added ${merged.AddedFieldNames.length} undeclared field(s): ${merged.AddedFieldNames.join(', ')}` : null,
-                                    merged.WidenedFieldNames.length ? `widened ${merged.WidenedFieldNames.length}: ${merged.WidenedFieldNames.join(', ')}` : null,
-                                    merged.AdoptedKeyNames.length ? `adopted key [${merged.AdoptedKeyNames.join(', ')}]` : null,
-                                ].filter(Boolean);
-                                console.log(`[IntrospectPipeline] declared object "${d.Name}" sampled ${dfields.length} field(s) — ${parts.length ? parts.join('; ') : 'declaration already matched the data'}`);
-                            }
-                        } catch (err) {
-                            const msg = err instanceof Error ? err.message : String(err);
-                            // The declaration stands exactly as it was — the worst case of sampling
-                            // failing is the behaviour that shipped before it. Say which was lost so
-                            // an operator can tell "no columns at all" from "possibly narrow ones".
-                            const lost = existing.Fields.length === 0
-                                ? 'object has NO fields and cannot be synced until this succeeds'
-                                : 'keeping the declared fields; undeclared columns and true widths are unknown for this run';
-                            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared "${d.Name}" — ${lost}: ${msg}`, { code: 'discover-fields-failed' });
-                            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared "${d.Name}" — ${lost}: ${msg}`);
-                        }
+                        await this.SampleDeclaredObjectInPlace(existing, d.Name, opts, emitter);
+                        sampledDeclared.add(key);
                     }
                     continue;
                 }
@@ -602,7 +561,24 @@ export class IntegrationConnectorCreationPipeline {
                 });
                 runtimeAdded++;
             }
-            console.log(`[IntrospectPipeline] declared=${seen.size - runtimeAdded} runtime-added=${runtimeAdded} total=${schema.Objects.length}`);
+
+            // The union's second half: DECLARED objects the runtime pass never reached. Sampling used
+            // to be reachable only through a DiscoverObjects hit, so an object the connector declares
+            // but does not re-surface at runtime — the normal shape for a catalog-driven connector, and
+            // for every object when DiscoverObjects fails — was never sampled at all. It kept whatever
+            // widths the catalog guessed (a truncation waiting to happen) and could only ever gain its
+            // undeclared columns later, one sync at a time, through the overflow path.
+            let declaredOnlySampled = 0;
+            for (const name of declaredNames) {
+                const key = name.toLowerCase();
+                if (sampledDeclared.has(key) || !inScope(name)) continue;
+                const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
+                if (!existing) continue;
+                await this.SampleDeclaredObjectInPlace(existing, name, opts, emitter);
+                declaredOnlySampled++;
+            }
+
+            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} total=${schema.Objects.length}`);
 
             const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
@@ -614,6 +590,7 @@ export class IntegrationConnectorCreationPipeline {
                 objectsDiscovered: schema.Objects.length,
                 fieldsDiscovered: fieldCount,
                 durationMs: Date.now() - startMs,
+                discoverObjectsFailed,
             });
             return schema;
         } catch (err) {
@@ -624,6 +601,74 @@ export class IntegrationConnectorCreationPipeline {
     }
 
     // ── Stage 3: persist ─────────────────────────────────────────────────
+
+    /**
+     * Samples a DECLARED object over the read path and merges the result into it IN PLACE.
+     *
+     * Sampling is UNCONDITIONAL — it used to run only for a declared object with no fields, a gate
+     * on the wrong question, because streaming answers three things and a declaration can only
+     * pre-answer one of them. A declared key IS authoritative; which fields the source actually
+     * sends, and how wide their values are, only the data knows.
+     *
+     * The merge is one-directional (see DeclaredSampleMerge): sampling fills gaps and widens, never
+     * overrides. A fetch failure leaves the declaration exactly as it was, so the worst case is the
+     * behaviour that shipped before sampling existed.
+     */
+    private async SampleDeclaredObjectInPlace(
+        existing: SourceObjectInfo,
+        objectName: string,
+        opts: ConnectorCreationPipelineOptions,
+        emitter: IntegrationProgressEmitter
+    ): Promise<void> {
+        try {
+            const dfields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, objectName, opts.ContextUser);
+            const sampled = dfields.map(f => ({
+                Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
+                IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
+                Precision: f.Precision ?? null, Scale: f.Scale ?? null, DefaultValue: f.DefaultValue ?? null,
+                // U1 — preserve `undefined` (no opinion); `?? false` fabricated a "not a PK/FK" opinion
+                IsPrimaryKey: f.IsPrimaryKey, IsUniqueKey: f.IsUniqueKey, IsReadOnly: f.IsReadOnly,
+                IsForeignKey: f.IsForeignKey, ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+            }));
+            if (existing.Fields.length === 0) {
+                // Nothing was declared, so there is nothing to defer to — the
+                // sample is the whole truth, exactly as before this change.
+                existing.Fields = sampled;
+                existing.PrimaryKeyFields = dfields.filter(f => f.IsPrimaryKey).map(f => f.Name);
+                existing.Relationships = dfields
+                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                    .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' }));
+                console.log(`[IntrospectPipeline] declared field-less object "${objectName}" → discovered ${dfields.length} field(s) via read path`);
+            } else {
+                const merged = MergeDeclaredWithSample(existing.Fields, sampled);
+                existing.Fields = merged.Fields;
+                // Only when the declaration named no key at all — a declared key
+                // stays authoritative even if the sample nominates another column,
+                // which is how a child table ends up keyed on its parent's FK.
+                if (merged.AdoptedKeyNames.length > 0) {
+                    existing.PrimaryKeyFields = merged.AdoptedKeyNames;
+                }
+                // Relationships come from the declaration when there is one; a
+                // sampled FK target is a guess and must not rewrite a stated graph.
+                const parts = [
+                    merged.AddedFieldNames.length ? `added ${merged.AddedFieldNames.length} undeclared field(s): ${merged.AddedFieldNames.join(', ')}` : null,
+                    merged.WidenedFieldNames.length ? `widened ${merged.WidenedFieldNames.length}: ${merged.WidenedFieldNames.join(', ')}` : null,
+                    merged.AdoptedKeyNames.length ? `adopted key [${merged.AdoptedKeyNames.join(', ')}]` : null,
+                ].filter(Boolean);
+                console.log(`[IntrospectPipeline] declared object "${objectName}" sampled ${dfields.length} field(s) — ${parts.length ? parts.join('; ') : 'declaration already matched the data'}`);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            // The declaration stands exactly as it was — the worst case of sampling
+            // failing is the behaviour that shipped before it. Say which was lost so
+            // an operator can tell "no columns at all" from "possibly narrow ones".
+            const lost = existing.Fields.length === 0
+                ? 'object has NO fields and cannot be synced until this succeeds'
+                : 'keeping the declared fields; undeclared columns and true widths are unknown for this run';
+            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared "${objectName}" — ${lost}: ${msg}`, { code: 'discover-fields-failed' });
+            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared "${objectName}" — ${lost}: ${msg}`);
+        }
+    }
 
     private async StagePersist(
         emitter: IntegrationProgressEmitter,
