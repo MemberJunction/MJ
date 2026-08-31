@@ -574,6 +574,9 @@ export class IntegrationConnectorCreationPipeline {
                 if (sampledDeclared.has(key) || !inScope(name)) continue;
                 const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
                 if (!existing) continue;
+                // Record it here too: two declared entries that differ only by case resolve to the
+                // SAME object, and sampling it twice doubles the most expensive part of discovery.
+                sampledDeclared.add(key);
                 await this.SampleDeclaredObjectInPlace(existing, name, opts, emitter);
                 declaredOnlySampled++;
             }

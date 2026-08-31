@@ -135,6 +135,38 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
         expect(fetchFields).toHaveBeenCalledTimes(1);
     });
 
+    it('samples an object once even when it is declared twice under different casing', async () => {
+        // Both entries resolve to the same object, and sampling is the expensive half of discovery.
+        const fetchFields = vi.fn(async () => [sampledField('id', 50, true), sampledField('note', 900)]);
+        const opts = makeOpts({ declared: [declaredObject('Invoice'), declaredObject('invoice')], discoverFieldsViaFetch: fetchFields });
+
+        await host().StageIntrospect(makeEmitter(), opts);
+
+        expect(fetchFields).toHaveBeenCalledTimes(1);
+    });
+
+    it('samples every declared object even when the runtime side returns a full, disjoint catalog', async () => {
+        // A busy DiscoverObjects must not crowd the declared list out of the union: the second pass
+        // walks what was declared, not what the runtime pass happened to leave over.
+        const fetchFields = vi.fn(async () => [sampledField('id', 50, true), sampledField('note', 900)]);
+        const opts = makeOpts({
+            declared: [declaredObject('Invoice'), declaredObject('Customer')],
+            discoverObjects: async () => [
+                { Name: 'Vendor', Label: 'Vendor', Description: '' },
+                { Name: 'Payment', Label: 'Payment', Description: '' },
+            ],
+            discoverFieldsViaFetch: fetchFields,
+        });
+
+        const schema = await host().StageIntrospect(makeEmitter(), opts);
+
+        const sampledNames = fetchFields.mock.calls.map((c) => (c as unknown[])[1]);
+        expect(sampledNames).toEqual(expect.arrayContaining(['Invoice', 'Customer']));
+        expect(schema.Objects.map((o) => o.ExternalName)).toEqual(
+            expect.arrayContaining(['Invoice', 'Customer', 'Vendor', 'Payment'])
+        );
+    });
+
     it('honours a scoped introspection: an out-of-scope object is neither sampled nor fetched', async () => {
         // ObjectNames reached IntrospectSchema only; DiscoverObjects does not take it, so a scoped
         // run still pulled and sampled the entire runtime catalog.
