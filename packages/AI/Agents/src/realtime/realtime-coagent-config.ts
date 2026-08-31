@@ -545,6 +545,120 @@ export function ResolveEffectiveRealtimeConfig(
     return config;
 }
 
+/** Why something in an override payload will not survive {@link ResolveEffectiveRealtimeConfig}. */
+export type IgnoredRealtimeConfigReason =
+    /** A top-level key other than `realtime` — the normalizer reads no other section. */
+    | 'unknown-section'
+    /** A key inside `realtime` that is not a member of {@link RealtimeConfigSection}. */
+    | 'unknown-key'
+    /** A recognized key whose value is of a type the normalizer's guard rejects. */
+    | 'wrong-type';
+
+/** One thing in an override payload that the effective-config layer will discard. */
+export interface IgnoredRealtimeConfigKey {
+    /** Dotted path as the caller wrote it, e.g. `caliber` or `realtime.modelPreference`. */
+    readonly path: string;
+    /** Why it will not survive. */
+    readonly reason: IgnoredRealtimeConfigReason;
+}
+
+/**
+ * What each {@link RealtimeConfigSection} key ACCEPTS — the single source of truth behind
+ * {@link FindIgnoredRealtimeConfigKeys} for both "is this key known?" and "will this value
+ * survive?".
+ *
+ * Typed as a `Required<>` mapped type deliberately: adding a field to
+ * {@link RealtimeConfigSection} without teaching this table about it FAILS THE BUILD, so the
+ * known-key list can never silently drift from the interface it reports against — which is the
+ * whole point, since a drifted list would resume the exact silent-drop the reporter hit.
+ *
+ * Each predicate MIRRORS the corresponding guard in {@link normalizeConfig} (and, for
+ * `allowedAgents`, {@link accumulateAllowedAgents}, which ingests arrays only). A predicate
+ * returning false means the value is dropped downstream.
+ */
+const REALTIME_SECTION_KEY_ACCEPTS: { readonly [K in keyof Required<RealtimeConfigSection>]: (value: unknown) => boolean } = {
+    modelPreference: (v) => typeof v === 'string' && v.trim().length > 0,
+    voice: isPlainObject,
+    video: isPlainObject,
+    allowUserModelOverride: (v) => typeof v === 'boolean',
+    narration: isPlainObject,
+    turnTaking: isPlainObject,
+    disclosure: (v) => v === 'silent' || v === 'mention' || v === 'hand-voice',
+    allowedAgents: (v) => Array.isArray(v),
+    session: isPlainObject,
+};
+
+/**
+ * Every key of {@link RealtimeConfigSection} the cascade recognizes, derived from
+ * {@link REALTIME_SECTION_KEY_ACCEPTS} so there is exactly one list to maintain. Exported so a
+ * caller (or a regression test) can assert the recognized set against what
+ * {@link ResolveEffectiveRealtimeConfig} actually keeps.
+ */
+export const REALTIME_CONFIG_SECTION_KEYS: readonly (keyof RealtimeConfigSection)[] =
+    Object.keys(REALTIME_SECTION_KEY_ACCEPTS) as (keyof RealtimeConfigSection)[];
+
+/** The accept-predicate for a raw key, or `undefined` when the key is not part of the section. */
+function acceptsForSectionKey(key: string): ((value: unknown) => boolean) | undefined {
+    if (!Object.prototype.hasOwnProperty.call(REALTIME_SECTION_KEY_ACCEPTS, key)) {
+        return undefined;
+    }
+    return REALTIME_SECTION_KEY_ACCEPTS[key as keyof RealtimeConfigSection];
+}
+
+/**
+ * Everything in `overridesJson` that {@link ResolveEffectiveRealtimeConfig} will SILENTLY DISCARD:
+ * top-level sections other than `realtime`, keys inside `realtime` that the section does not
+ * declare, and declared keys whose value fails the normalizer's type guard.
+ *
+ * This exists because the discard is otherwise unobservable from either side of the wire — a
+ * caller that sends `{"realtime":{…},"myapp":{…}}` gets a successful session running on the
+ * agent's default configuration, with nothing anywhere saying the second section went nowhere
+ * (MJ issue #3854, where that cost a downstream app months). The module stays PURE, so this
+ * reports the drops as DATA; hosts (e.g. the MJServer realtime resolver) do the logging.
+ *
+ * Depth is deliberately ONE level below `realtime`: it reports keys that fail to survive AT ALL,
+ * not sub-object contents that partially normalize away (`voice.default.tone: 7` is a drop this
+ * does not report). Reporting only what it can mirror EXACTLY from the normalizer keeps false
+ * positives at zero, which is what makes the output safe to log verbatim.
+ *
+ * Absent, blank, malformed, and non-object payloads report NOTHING — they are the layer being
+ * absent, which {@link ParseRealtimeTypeConfiguration} already documents as a tolerated no-op.
+ *
+ * @param overridesJson The runtime-overrides JSON string, or `null`/`undefined`.
+ * @returns The ignored paths with reasons, in payload key order; empty when everything survives.
+ */
+export function FindIgnoredRealtimeConfigKeys(overridesJson: string | null | undefined): readonly IgnoredRealtimeConfigKey[] {
+    const layer = ParseRealtimeTypeConfiguration(overridesJson);
+    if (!layer) {
+        return [];
+    }
+    const ignored: IgnoredRealtimeConfigKey[] = [];
+    for (const key of Object.keys(layer)) {
+        if (key !== 'realtime') {
+            ignored.push({ path: key, reason: 'unknown-section' });
+        }
+    }
+
+    const section = layer['realtime'];
+    if (section === undefined) {
+        return ignored;
+    }
+    if (!isPlainObject(section)) {
+        // A non-object `realtime` loses the WHOLE section, so there is nothing finer to report.
+        ignored.push({ path: 'realtime', reason: 'wrong-type' });
+        return ignored;
+    }
+    for (const key of Object.keys(section)) {
+        const accepts = acceptsForSectionKey(key);
+        if (!accepts) {
+            ignored.push({ path: `realtime.${key}`, reason: 'unknown-key' });
+        } else if (!accepts(section[key])) {
+            ignored.push({ path: `realtime.${key}`, reason: 'wrong-type' });
+        }
+    }
+    return ignored;
+}
+
 /**
  * Normalizes a single raw `allowedAgents` entry; returns `null` when it lacks a usable `agentId`.
  * Omits absent optional fields so per-entry field-merge in {@link accumulateAllowedAgents} is clean.

@@ -138,6 +138,18 @@ export interface MigrationConversionResult {
 export interface ConvertMigrationOptions {
   /** Target schema substituted for `${flyway:defaultSchema}` in the output (default '__mj'). */
   schema?: string;
+  /**
+   * MJ core schema substituted for `${mjSchema}` in the output (default '__mj').
+   *
+   * Distinct from `schema`: an Open App migration says `${flyway:defaultSchema}` for its OWN
+   * schema and `${mjSchema}` for core, and the two differ for every app (e.g.
+   * `__mj_bizappscommon` vs `__mj`). Both must be resolved, because committed `.pg.sql` files
+   * carry literal schemas — Flyway placeholder substitution is not relied on for PostgreSQL —
+   * and because `--bake-codegen` executes the converted body against the working database as it
+   * goes, where an unresolved macro is a hard error (`relation "${mjSchema}.Entity" does not
+   * exist`) that halts the whole bake chain.
+   */
+  coreSchema?: string;
   /** Emit the standard `.pg.sql` provenance header (default true). */
   includeHeader?: boolean;
   /**
@@ -372,6 +384,7 @@ export async function convertMigration(
 
   const transpiled = await options.transpiler.transpile(kept.tsql);
   const schema = options.schema ?? '__mj';
+  const coreSchema = options.coreSchema ?? '__mj';
 
   const emittedStatements = transpiled.sql.filter((s) => s.trim().length > 0).length;
   const accountingLeak = transpiled.unhandled.some((u) => u.kind === 'ACCOUNTING-LEAK');
@@ -393,11 +406,51 @@ export async function convertMigration(
     notes.push('Reconciliation: kept T-SQL produced empty output with no reported gap — surfaced as a conversion gap.');
   }
 
-  const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true);
+  /**
+   * HOLLOW: every translatable statement became a gap, so the emitted body is a header and a gap
+   * banner over nothing (issue #3840).
+   *
+   * This is the third distinct way `emittedStatements === 0` arises, and the only one that was
+   * unguarded:
+   *   • nothing reported, nothing dropped → content VANISHED  (suspiciousEmptyOutput, above)
+   *   • the dialect intentionally DROPPED it → legitimately empty, must stay `converted`
+   *   • everything became a GAP           → hollow, handled here
+   *
+   * Keyed on `transpiled.unhandled`, NOT on the local `unhandled`, which the vanish guard above
+   * has already appended its synthetic RECONCILIATION-EMPTY-OUTPUT row to. Reading the local one
+   * would fold the vanish case in here and label it with a note that misdescribes it — nothing
+   * "became a gap"; the reconciliation layer manufactured one. Vanish is promoted on its own
+   * terms below, the same way the empty-marker path does it.
+   *
+   * Left as `converted`, the CLI writes it as a discoverable `.pg.sql`. That artifact is the worst
+   * shape this pipeline can produce: it satisfies filename parity, contains no T-SQL to trip a
+   * contamination scan, applies to a PostgreSQL host without error, and does nothing — so the
+   * migration is recorded as applied while the schema change never happens. Observed on
+   * bizapps-common's `Layered_Base_Views_People_Organizations`, whose whole body sat inside two
+   * `IF NOT OBJECT_ID(...)` blocks.
+   *
+   * Promoting the status routes it to `.needs-hand` exactly as the empty-marker path above already
+   * does, and for the same stated reason: never a discoverable `.pg.sql` that Skyway could apply.
+   * The transpiled artifact is still written (under the `.needs-hand` name) so the gap comments and
+   * any partial DDL survive for whoever finishes the port.
+   */
+  const fullyGapped = emittedStatements === 0 && transpiled.unhandled.length > 0;
+  if (fullyGapped) {
+    notes.push(
+      'Reconciliation: every translatable statement became a conversion gap, leaving no executable SQL — ' +
+        'written as .needs-hand rather than a .pg.sql that would apply cleanly and do nothing.',
+    );
+  }
+
+  const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true, coreSchema);
 
   return {
     fileName: kept.fileName,
-    status: kept.status,
+    // A hollow body must not masquerade as a clean conversion — see `fullyGapped` above. Vanished
+    // content is promoted for the same reason and stated separately rather than folded in, so both
+    // routes to `.needs-hand` are visible here and neither borrows the other's explanation. This
+    // matches the empty-marker path, which already promotes on `suspiciousEmptyOutput` alone.
+    status: fullyGapped || suspiciousEmptyOutput ? 'needs-hand-authoring' : kept.status,
     pgSQL,
     split: kept.split,
     droppedCodeGenLines: kept.droppedCodeGenLines,
@@ -421,6 +474,7 @@ function assemblePgSQL(
   transpiled: MJTranspileResult,
   schema: string,
   includeHeader: boolean,
+  coreSchema: string,
 ): string {
   const parts: string[] = [];
   if (includeHeader) parts.push(pgHeader(kept.fileName));
@@ -438,8 +492,16 @@ function assemblePgSQL(
   // sentinel, should it ever leak.
   return parts
     .join('\n\n')
-    .replaceAll('${flyway:defaultSchema}', schema)
-    .replaceAll('__mj_flyway_default_schema__', schema)
+    // Replacement FUNCTIONS, not strings: a string replacement expands $$, $&, $` , $' and
+    // $1-$99, so any '$' in a schema name would be executed rather than inserted (issue #3171).
+    // A schema name is unlikely to carry one, but the function form costs nothing and removes
+    // the question.
+    .replaceAll('${flyway:defaultSchema}', () => schema)
+    .replaceAll('__mj_flyway_default_schema__', () => schema)
+    // `${mjSchema}` names MJ CORE, not the app's own schema, so it resolves to a different value
+    // and was previously left in the output — surviving into the file AND into the SQL that
+    // `--bake-codegen` executes against the working database (issue #3838).
+    .replaceAll('${mjSchema}', () => coreSchema)
     .concat('\n');
 }
 

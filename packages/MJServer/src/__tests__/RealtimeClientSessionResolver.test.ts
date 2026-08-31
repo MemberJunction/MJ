@@ -87,7 +87,7 @@ const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): nu
 // class-property/getter references above).
 const { resolveStorageMock, storeRecordingMock, writeSegmentMock, deleteSegmentsMock } = vi.hoisted(() => ({
     resolveStorageMock: vi.fn(async (): Promise<string | null> => 'storage-acct-1'),
-    storeRecordingMock: vi.fn(async (): Promise<string | null> => 'file-1'),
+    storeRecordingMock: vi.fn(async (): Promise<StoreRealtimeRecordingResult> => ({ FileID: 'file-1', ErrorMessage: null })),
     writeSegmentMock: vi.fn(async (): Promise<boolean> => true),
     deleteSegmentsMock: vi.fn(async (): Promise<number> => 0),
 }));
@@ -163,6 +163,7 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
 import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessionResolver.js';
 import type { AppContext } from '../types.js';
 import type { UserInfo } from '@memberjunction/core';
+import type { StoreRealtimeRecordingResult } from '@memberjunction/ai-agents';
 
 const USER = { ID: 'user-1', Email: 'tester@example.com' };
 
@@ -256,7 +257,7 @@ beforeEach(() => {
     resolveStorageMock.mockReset();
     resolveStorageMock.mockResolvedValue('storage-acct-1');
     storeRecordingMock.mockReset();
-    storeRecordingMock.mockResolvedValue('file-1');
+    storeRecordingMock.mockResolvedValue({ FileID: 'file-1', ErrorMessage: null });
     writeSegmentMock.mockReset();
     writeSegmentMock.mockResolvedValue(true);
     deleteSegmentsMock.mockReset();
@@ -3011,6 +3012,35 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(resolveStorageMock.mock.calls[0][1]).toBe(SYSTEM_USER);
         expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
         expect(deleteSegmentsMock).toHaveBeenCalledWith('session-1', 'storage-acct-1', SYSTEM_USER);
+    });
+
+    it('reports the storage layer’s own reason instead of the generic upload failure', async () => {
+        // The live defect: Google Drive refused the write with "Service Accounts do not have storage
+        // quota...", and the client was told only "Storage upload failed." — no layer named the cause.
+        currentProvider = makeRecordingProvider();
+        storeRecordingMock.mockResolvedValue({
+            FileID: null,
+            ErrorMessage: 'Service Accounts do not have storage quota. Leverage shared drives instead.',
+        });
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('Service Accounts do not have storage quota');
+        // The shards survive a failed consolidation — there is nothing consolidated to replace them.
+        expect(deleteSegmentsMock).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the generic message only when no layer supplied a reason', async () => {
+        currentProvider = makeRecordingProvider();
+        storeRecordingMock.mockResolvedValue({ FileID: null, ErrorMessage: null });
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe('Storage upload failed.');
     });
 
     it('still refuses a consent-less recording upload BEFORE any elevated work', async () => {
