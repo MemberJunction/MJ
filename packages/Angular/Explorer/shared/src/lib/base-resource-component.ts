@@ -313,6 +313,39 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         this.reboundTabId = tabId;
         this._lastDeliveredParamsKey = null;
         this.setupInitialParamDelivery();
+        this.onTabIdRebound(tabId);
+    }
+
+    /**
+     * Hook for a host that instantiates CHILD resource components: re-home them here.
+     *
+     * A host stamps its children with its tab id when it creates them, which is a SNAPSHOT. A cache
+     * reattach moves the host to a different tab without recreating anything, so a child left
+     * holding the birth tab's id would go on reading and — worse — writing that tab's params from
+     * inside a tab it no longer belongs to. That is the same cross-tab corruption this class refuses
+     * elsewhere, just arriving by a slower route, so the stamp has to move when the host does.
+     *
+     * Default is a no-op: a component with no children has nothing to re-home.
+     */
+    protected onTabIdRebound(_tabId: string): void {
+        // no children by default
+    }
+
+    /**
+     * Re-homes a child this component created to `tabId`.
+     *
+     * The `ParentTabId` stamp is cleared FIRST and deliberately: `getTabId()` prefers it over the
+     * rebound id, so leaving the old stamp in place would make the child's own `RebindTabId` a
+     * no-op — it early-returns when `getTabId()` already matches — and the child would keep
+     * answering with the tab it was born in. Clearing it lets the rebind be the authority, and the
+     * child re-delivers the NEW tab's current params exactly as a fresh mount would.
+     */
+    protected rehomeChildToTab(child: BaseResourceComponent | null | undefined, tabId: string): void {
+        if (!child) {
+            return;
+        }
+        child.ParentTabId = null;
+        child.RebindTabId(tabId);
     }
 
     private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {

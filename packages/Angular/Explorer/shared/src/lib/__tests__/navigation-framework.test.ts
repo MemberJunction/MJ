@@ -660,3 +660,85 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
     expect(updateActiveTabQueryParams).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The stamp a host puts on a child is a SNAPSHOT of where the host was when it created it. A cache
+ * reattach (`tab-container` calls `RebindTabId`) moves the host to a different tab without
+ * recreating anything, so a stamp that does not move leaves the child reading and writing the tab
+ * it was born in — from inside a tab it no longer belongs to. Same cross-tab corruption, slower
+ * route.
+ */
+describe('BaseResourceComponent re-homing on a cache reattach', () => {
+  /** A child whose only job is to record where its writes land. */
+  function makeChild(): { child: BaseResourceComponent; updateTabQueryParams: ReturnType<typeof vi.fn> } {
+    class ChildDashboard extends BaseResourceComponent {
+      async GetResourceDisplayName(_data: ResourceData): Promise<string> { return 'Child'; }
+      async GetResourceIconClass(_data: ResourceData): Promise<string> { return 'fa-solid fa-cube'; }
+    }
+    const child = Object.create(ChildDashboard.prototype) as BaseResourceComponent;
+    const updateTabQueryParams = vi.fn(() => true);
+    (child as unknown as { navigationService: unknown }).navigationService = {
+      UpdateTabQueryParams: updateTabQueryParams,
+      UpdateActiveTabQueryParams: vi.fn(),
+      ObserveTabQueryParams: vi.fn(() => ({ pipe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }) })),
+    };
+    child.Data = { ResourceRecordID: '', Configuration: {} } as any;
+    return { child, updateTabQueryParams };
+  }
+
+  /** A host that stamps one child at creation and re-homes it when it is itself rebound. */
+  function makeHost(child: BaseResourceComponent): BaseResourceComponent {
+    class HostWrapper extends BaseResourceComponent {
+      async GetResourceDisplayName(_data: ResourceData): Promise<string> { return 'Host'; }
+      async GetResourceIconClass(_data: ResourceData): Promise<string> { return 'fa-solid fa-window'; }
+      protected override onTabIdRebound(tabId: string): void {
+        this.rehomeChildToTab(child, tabId);
+      }
+    }
+    const host = Object.create(HostWrapper.prototype) as BaseResourceComponent;
+    (host as unknown as { navigationService: unknown }).navigationService = {
+      UpdateTabQueryParams: vi.fn(() => true),
+      UpdateActiveTabQueryParams: vi.fn(),
+      ObserveTabQueryParams: vi.fn(() => ({ pipe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }) })),
+    };
+    host.Data = { ResourceRecordID: '', Configuration: { tabId: 'tab-birth' } } as any;
+    return host;
+  }
+
+  it("moves a child's tab stamp when the host is rebound to another tab", () => {
+    const { child, updateTabQueryParams } = makeChild();
+    const host = makeHost(child);
+    child.ParentTabId = host.getTabId();          // what the host does at createComponent time
+    expect(child.getTabId()).toBe('tab-birth');
+
+    host.RebindTabId('tab-reattached');
+
+    expect(child.getTabId()).toBe('tab-reattached');
+    (child as any).UpdateQueryParams({ section: 'evidence' });
+    expect(updateTabQueryParams).toHaveBeenCalledWith('tab-reattached', { section: 'evidence' }, expect.anything());
+  });
+
+  it('clears the stale stamp rather than layering over it', () => {
+    // `getTabId()` prefers ParentTabId over the rebound id, so a re-home that only calls the child's
+    // RebindTabId would be a silent no-op — it early-returns when getTabId() already matches.
+    const { child } = makeChild();
+    const host = makeHost(child);
+    child.ParentTabId = 'tab-birth';
+
+    host.RebindTabId('tab-reattached');
+
+    expect(child.ParentTabId).toBeNull();
+    expect(child.getTabId()).toBe('tab-reattached');
+  });
+
+  it('is a no-op for a host with no children', () => {
+    const { child } = makeChild();
+    const host = makeHost(child);
+    // Rebinding to the tab it already has must not touch the child at all.
+    child.ParentTabId = 'tab-birth';
+
+    host.RebindTabId('tab-birth');
+
+    expect(child.ParentTabId).toBe('tab-birth');
+  });
+});

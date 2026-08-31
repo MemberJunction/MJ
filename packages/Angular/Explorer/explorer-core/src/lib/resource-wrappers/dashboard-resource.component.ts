@@ -409,6 +409,16 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
 })
 export class DashboardResource extends BaseResourceComponent {
     private componentRef: ComponentRef<unknown> | null = null;
+
+    /**
+     * A cache reattach moves this wrapper to another tab without recreating the dashboard inside it,
+     * so the child's tab stamp — taken when we created it — has to move too. Without this the
+     * dashboard keeps reading and writing the params of the tab it was born in, from inside a tab it
+     * no longer belongs to.
+     */
+    protected override onTabIdRebound(tabId: string): void {
+        this.rehomeChildToTab(this.componentRef?.instance as BaseResourceComponent | undefined, tabId);
+    }
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
 

@@ -68,6 +68,19 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
      * scroll position, etc. — and avoids expensive re-init.
      */
     protected cache = new Map<string, ComponentRef<unknown>>();
+
+    /**
+     * A cache reattach moves this container to another tab without recreating the section components
+     * inside it, so every cached child's tab stamp has to move with it — not just the visible one.
+     * A detached section is exactly the case this matters for: it is invisible, it still holds a
+     * subscription, and left on its birth tab it would read and write that tab's params from inside
+     * a tab it no longer belongs to.
+     */
+    protected override onTabIdRebound(tabId: string): void {
+        for (const ref of this.cache.values()) {
+            this.rehomeChildToTab(ref.instance as BaseResourceComponent | undefined, tabId);
+        }
+    }
     protected currentSectionId: string | null = null;
 
     protected readonly cdr = inject(ChangeDetectorRef);
