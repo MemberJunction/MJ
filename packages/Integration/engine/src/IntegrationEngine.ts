@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
@@ -44,6 +44,7 @@ import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
+import { DecideUnavailableSkip, ApplyUnavailableMarker, UnavailableRecheckMs, type ObjectUnavailableMarker } from './ObjectAvailability.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
@@ -179,6 +180,33 @@ export class SchemaNotGeneratedError extends Error {
         this.EntityName = entityName;
         this.StoredProcedureName = storedProcedureName;
     }
+}
+
+/**
+ * Thrown by a connector when the vendor says THIS account cannot serve an object it nonetheless
+ * lists in its catalog (e.g. a record type the account has not enabled). Distinct from a fetch
+ * failure: retrying cannot help, and it recurs identically on every run until the account changes.
+ * See ObjectAvailability for how the engine records and re-tests it.
+ *
+ * Connectors are NOT required to import this class — the engine also recognises any error carrying
+ * `code === 'OBJECT_UNAVAILABLE'`, so a connector can classify one without a peer version bump.
+ */
+export class ObjectUnavailableError extends Error {
+    public readonly code = 'OBJECT_UNAVAILABLE';
+    /** The vendor's own explanation, surfaced to the operator verbatim. */
+    public readonly VendorMessage: string;
+    constructor(objectName: string, vendorMessage: string) {
+        super(`The source cannot serve "${objectName}" for this account: ${vendorMessage}`);
+        this.name = 'ObjectUnavailableError';
+        this.VendorMessage = vendorMessage;
+    }
+}
+
+/** Recognises an unavailability signal from a connector that imported the class OR just set the code. */
+export function IsObjectUnavailable(err: unknown): boolean {
+    if (err instanceof ObjectUnavailableError) return true;
+    return typeof err === 'object' && err !== null
+        && (err as { code?: unknown }).code === 'OBJECT_UNAVAILABLE';
 }
 
 /**
@@ -2470,6 +2498,75 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return pullResult;
     }
 
+    /** The result of a map that did no work: nothing fetched, nothing written, nothing failed. */
+    private EmptySyncResult(entityMap: ICompanyIntegrationEntityMap): SyncResult {
+        return {
+            Success: true,
+            RecordsProcessed: 0, RecordsCreated: 0, RecordsUpdated: 0,
+            RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0,
+            Errors: [],
+            EntityMapID: entityMap.ID,
+        } as SyncResult;
+    }
+
+    /**
+     * Persists the "this account cannot serve this object" marker on the entity map, preserving
+     * `firstSeenAt` across recurrences so an operator can see how long it has been true.
+     *
+     * Failing to record it is not worth failing a sync over — the only cost is that the object is
+     * retried next run, which is exactly the behaviour that shipped before this existed.
+     */
+    private async RecordObjectUnavailable(
+        entityMap: ICompanyIntegrationEntityMap,
+        vendorMessage: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            const nowISO = new Date().toISOString();
+            const prior = DecideUnavailableSkip(entityMap.Configuration, 0, Number.MAX_SAFE_INTEGER).marker;
+            const marker: ObjectUnavailableMarker = {
+                firstSeenAt: prior?.firstSeenAt ?? nowISO,
+                lastCheckedAt: nowISO,
+                message: vendorMessage,
+            };
+            await this.SaveEntityMapConfiguration(entityMap, ApplyUnavailableMarker(entityMap.Configuration, marker), contextUser);
+        } catch (err) {
+            LogError(`[IntegrationEngine] could not record OBJECT_UNAVAILABLE for ${entityMap.ExternalObjectName}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Clears the marker after the object serves records again, so a re-enabled object returns to
+     * normal scheduling without anyone remembering it was ever suppressed.
+     */
+    private async ClearObjectUnavailable(
+        entityMap: ICompanyIntegrationEntityMap,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (!entityMap.Configuration || !entityMap.Configuration.includes('objectUnavailable')) return;
+        try {
+            await this.SaveEntityMapConfiguration(entityMap, ApplyUnavailableMarker(entityMap.Configuration, null), contextUser);
+        } catch (err) {
+            LogError(`[IntegrationEngine] could not clear OBJECT_UNAVAILABLE for ${entityMap.ExternalObjectName}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** Loads the map fresh and writes its Configuration through Save(), like every other engine write. */
+    private async SaveEntityMapConfiguration(
+        entityMap: ICompanyIntegrationEntityMap,
+        configurationJSON: string | null,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();  // global-provider-ok: entity-map bookkeeping — single-provider context
+        const row = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', contextUser);
+        if (!(await row.Load(entityMap.ID))) return;
+        row.Configuration = configurationJSON;
+        await this.runWriteExclusive(() => row.Save());
+        // Keep the in-memory map coherent with what was just persisted, so a later decision in this
+        // same run reads the value that is actually stored.
+        entityMap.Configuration = configurationJSON;
+    }
+
     /**
      * Pull sync: fetch from external → map → match → validate → apply to MJ.
      */
@@ -2485,6 +2582,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         logger?: SyncLogger
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
+        // An object this ACCOUNT cannot serve costs a request, an error event and a retry ladder
+        // every run, forever, and says nothing new after the first time. While the marker is fresh
+        // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
+        // the account later enables heals itself with no operator action.
+        const unavailable = DecideUnavailableSkip(entityMap.Configuration, Date.now(), UnavailableRecheckMs());
+        if (unavailable.skip) {
+            logger?.emit('sync.entity-map.skipped', {
+                externalObjectName: entityMap.ExternalObjectName,
+                skippedReason: 'OBJECT_UNAVAILABLE',
+                firstSeenAt: unavailable.marker?.firstSeenAt,
+                message: unavailable.marker?.message,
+            });
+            return this.EmptySyncResult(entityMap);
+        }
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
         // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
         // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
@@ -2740,6 +2851,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // A throttle (429 / rate-limit) backs the adaptive limiter off (honoring Retry-After);
                 // other errors don't touch the rate. §5 Gap 2: also flag the map result so the per-layer
                 // AIMD controller reduces in-flight concurrency, not just the per-request token bucket.
+                if (IsObjectUnavailable(fetchErr)) {
+                    // Not a failure to retry: the vendor is telling us this account will never serve
+                    // this object. Record it, warn ONCE, and end the map cleanly — no retry ladder,
+                    // no FETCH_INCOMPLETE, and the watermark is left exactly as it was.
+                    await this.RecordObjectUnavailable(entityMap, errMsg, contextUser);
+                    logger?.warning(
+                        'sync',
+                        'OBJECT_UNAVAILABLE',
+                        `"${entityMap.ExternalObjectName}" is not available to this account; skipping it until the source starts serving it: ${errMsg}`,
+                        { externalObjectName: entityMap.ExternalObjectName },
+                    );
+                    break;
+                }
                 if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {
                     // The adaptive decrease already happened inside governedFetch (once per
                     // throttle episode); here we only flag the map result so the per-layer AIMD
@@ -3052,6 +3176,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 consecutiveEmptyBatches = 0;
             }
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
+        }
+
+        // The object served records again, so whatever made it unavailable is over. Clearing here
+        // (rather than on the next scheduled discovery) is what makes an account change self-healing:
+        // the attempt that succeeds is also the one that un-suppresses it. No-op when no marker exists.
+        if (fetchCompletedCleanly) {
+            await this.ClearObjectUnavailable(entityMap, contextUser);
         }
 
         // Partition (Merkle) reconcile: the full set is now accumulated — diff it against last sync's
