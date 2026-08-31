@@ -14,6 +14,7 @@ import {
     type RealtimeSessionError,
     type JSONObject,
     type JSONValue,
+    type RealtimeTurnDetectionSettings,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -92,6 +93,50 @@ function resolveTrimmedConfigString(config: JSONObject | undefined, key: string)
     }
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/**
+ * The turn-detection settings this driver can actually deliver to ElevenLabs (#3534).
+ *
+ * MJ's {@link RealtimeTurnDetectionSettings} carries four — `Mode`, `Eagerness`, `Threshold`,
+ * `SilenceDurationMs` — and **ElevenLabs can express exactly one**. Its `TurnConfig` has
+ * `turnEagerness` and nothing corresponding to a server-VAD activation threshold or a trailing
+ * silence duration: `turnTimeout` is the wait before RE-ENGAGING a silent user, a different
+ * quantity, so mapping `SilenceDurationMs` onto it would quietly change what the author asked
+ * for. `Mode` has no analogue — ElevenLabs owns its turn model and does not expose the VAD under it.
+ *
+ * Declared rather than left implicit because the alternative — accepting all four and applying
+ * one — is exactly the transmitted-then-discarded defect #3374 and #3859 exist to end. A caller
+ * that needs to know what will survive can ask.
+ */
+export const ELEVENLABS_SUPPORTED_TURN_SETTINGS: ReadonlyArray<keyof RealtimeTurnDetectionSettings> = ['Eagerness'];
+
+/**
+ * Maps MJ's normalized `Eagerness` onto ElevenLabs' `turnEagerness`.
+ *
+ * The vocabularies differ in spelling, not meaning: MJ's `low` is "less eager, waits longer",
+ * which is ElevenLabs' `patient`; `high` is `eager`. This is the setting that answers #3534 — an
+ * agent taking a turn on room noise is one that is too eager, and `patient` is the fix.
+ *
+ * Returns `undefined` for absent, unrecognised or wrong-shaped input, so a typo leaves the agent
+ * on the eagerness it was deployed with instead of silently resetting it.
+ */
+export function MapTurnEagerness(eagerness: unknown): ElevenLabs.TurnEagerness | undefined {
+    switch (eagerness) {
+        case 'low': return 'patient';
+        case 'auto': return 'normal';
+        case 'high': return 'eager';
+        default: return undefined;
+    }
+}
+
+/** The session's requested `turnEagerness`, read out of the config bag's `turnDetection` block. */
+function resolveTurnEagerness(config: JSONObject | undefined): ElevenLabs.TurnEagerness | undefined {
+    const turnDetection = config?.['turnDetection'];
+    if (typeof turnDetection !== 'object' || turnDetection === null || Array.isArray(turnDetection)) {
+        return undefined;
+    }
+    return MapTurnEagerness((turnDetection as JSONObject)['Eagerness']);
 }
 
 // ── Tool-parameter schema sanitization (ElevenLabs client-tool validator quirks) ──
@@ -675,9 +720,18 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         if (typeof temperature === 'number' && Number.isFinite(temperature)) {
             prompt.temperature = temperature;
         }
+        // Turn detection is a SIBLING of `agent` in the conversation config, and agent-BODY state:
+        // ElevenLabs' per-session override surface exposes only `softTimeoutConfig`, so eagerness
+        // cannot ride the initiation frame and must live on the agent — which is why it joins the
+        // drift check below rather than BuildSessionOverrides.
+        const turnEagerness = resolveTurnEagerness(config);
+        const conversationConfig: ElevenLabs.ConversationalConfig = { agent: { prompt } };
+        if (turnEagerness !== undefined) {
+            conversationConfig.turn = { turnEagerness };
+        }
         return {
             name,
-            conversationConfig: { agent: { prompt } },
+            conversationConfig,
             platformSettings: {
                 overrides: { conversationConfigOverride: buildRequiredOverrideEnablement() },
             },
@@ -787,6 +841,11 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             && prompt?.temperature !== wantedTemperature) {
             return false;
         }
+        const wantedEagerness = resolveTurnEagerness(config);
+        if (wantedEagerness !== undefined
+            && agent.conversationConfig?.turn?.turnEagerness !== wantedEagerness) {
+            return false;
+        }
         return true;
     }
 
@@ -798,9 +857,11 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     public static ModelSettingsFingerprint(config?: JSONObject): string {
         const llm = resolveTrimmedConfigString(config, 'llm');
         const temperature = config?.['temperature'];
+        const turnEagerness = resolveTurnEagerness(config);
         return JSON.stringify({
             ...(llm === undefined ? {} : { llm }),
             ...(typeof temperature === 'number' && Number.isFinite(temperature) ? { temperature } : {}),
+            ...(turnEagerness === undefined ? {} : { turnEagerness }),
         });
     }
 
