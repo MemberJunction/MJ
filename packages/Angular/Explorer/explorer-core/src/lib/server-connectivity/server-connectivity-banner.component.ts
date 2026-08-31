@@ -1,6 +1,6 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { trigger, transition, style, animate, AnimationEvent } from '@angular/animations';
-import { Subscription } from 'rxjs';
 import { ServerConnectivityService } from '../services/server-connectivity.service';
 
 /**
@@ -23,7 +23,7 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
     ])
   ],
   template: `
-    @if (!IsConnected) {
+    @if (!IsConnected()) {
       <div class="connectivity-banner" @slideDown (@slideDown.done)="OnAnimationDone($event)">
         <i class="fa-solid fa-triangle-exclamation"></i>
         <span>Server unavailable &mdash; viewing cached data. Some features may not work.</span>
@@ -66,24 +66,30 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
     }
   `]
 })
-export class ServerConnectivityBannerComponent implements OnInit, OnDestroy {
+export class ServerConnectivityBannerComponent implements OnDestroy {
   private static readonly CSS_VAR = '--mj-connectivity-banner-height';
 
-  public IsConnected = true;
-  private subscription: Subscription | undefined;
+  private readonly connectivityService = inject(ServerConnectivityService);
 
-  constructor(private connectivityService: ServerConnectivityService) {}
-
-  ngOnInit(): void {
-    this.subscription = this.connectivityService.IsConnected$.subscribe(connected => {
-      this.IsConnected = connected;
-    });
-  }
+  /**
+   * Connectivity state as a **signal**, not a plain property — and that distinction is the
+   * whole point of this shape.
+   *
+   * The socket state that feeds `IsConnected$` is reported by graphql-ws, which can announce
+   * a drop from a callback that lands *inside* an in-flight change-detection pass (during app
+   * startup this reliably happens after the banner's own view has been checked). Assigning a
+   * plain property there mutates state the `@if` was already evaluated against, so dev-mode
+   * check-no-changes reports `NG0100 ... Previous value: '-1'` — `-1` being the `@if` branch
+   * index for "no branch rendered". Reading a signal from the template instead registers the
+   * view as its consumer, so a write marks the view dirty and Angular re-refreshes it within
+   * the same pass; the DOM and the expression can no longer disagree.
+   *
+   * `toSignal` also owns the subscription lifetime via `DestroyRef`, so there is no manual
+   * `Subscription` to unsubscribe.
+   */
+  public readonly IsConnected = toSignal(this.connectivityService.IsConnected$, { initialValue: true });
 
   ngOnDestroy(): void {
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-    }
     this.setBannerHeight(0);
   }
 

@@ -141,6 +141,44 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
   });
 
+  it('substitutes ${mjSchema} independently of ${flyway:defaultSchema} (issue #3838)', async () => {
+    // An Open App migration names its OWN schema with ${flyway:defaultSchema} and MJ CORE with
+    // ${mjSchema}; for every app those are different values. Only the first was substituted, so
+    // `${mjSchema}` survived into the emitted file AND into the SQL --bake-codegen executes,
+    // failing with: relation "${mjSchema}.Entity" does not exist.
+    const sql = [
+      'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
+      'GO',
+      "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';",
+    ].join('\n');
+    const r = await convertMigration(sql, 'V_Widget.sql', {
+      transpiler: passthrough,
+      schema: '__mj_bizappscommon',
+      coreSchema: '__mj',
+    });
+    expect(r.pgSQL).not.toContain('${mjSchema}');
+    expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
+    // The app's own object resolves to the app schema…
+    expect(r.pgSQL).toContain('__mj_bizappscommon');
+    // …and core resolves to core, NOT to the app schema.
+    expect(r.pgSQL).not.toContain('__mj_bizappscommon"."Entity"');
+    expect(r.pgSQL).toMatch(/__mj["\].]*\.?\[?"?Entity/);
+  });
+
+  it('defaults ${mjSchema} to __mj when no coreSchema is supplied', async () => {
+    const sql = "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';\nGO\nCREATE TABLE [x].[Y] ( [ID] INT );";
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough, schema: '__mj_app' });
+    expect(r.pgSQL).not.toContain('${mjSchema}');
+    // The app schema is deliberately '__mj_app', which CONTAINS '__mj' as a substring — so
+    // `toContain('__mj')` cannot tell the default apart from the bug this PR fixes, where the
+    // core placeholder falls back to the app schema. pgHeader() emits
+    // `CREATE SCHEMA IF NOT EXISTS __mj;` besides, which satisfies that assertion on its own
+    // whether or not the token was substituted at all. Assert on the qualified reference:
+    // negative on the wrong schema, positive on the right one.
+    expect(r.pgSQL).not.toContain('[__mj_app].[Entity]');
+    expect(r.pgSQL).toContain('[__mj].[Entity]');
+  });
+
   it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
     const leaky: TSQLToPGTranspiler = {
       transpile: async (t) => ({ sql: [t], unhandled: [{ kind: 'ACCOUNTING-LEAK', snippet: 'parsed=3 but …' }] }),
