@@ -1,5 +1,8 @@
 /* ==================== Form Response Display ==================== */
 
+/* NOTE (lts/5): clip-fix subset of #4085 only — the restyle half of that PR stays on
+   `next`. See the matching note in dynamic-form-field.component.css. */
+
 .form-response-pill {
   transition: all 0.2s ease;
 }
@@ -19,12 +22,17 @@
   font-weight: 600;
   box-shadow: var(--mj-shadow-md);
   cursor: default;
-  white-space: nowrap;
+  /* A chosen option can be a full sentence — wrap it instead of running past the message. */
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .form-response-pill.single-field i {
   font-size: 11px;
   opacity: 0.95;
+  /* keep the icon at its intrinsic size when a long answer puts the pill under pressure */
+  flex: 0 0 auto;
 }
 
 /* Multi-field - card layout */
@@ -32,7 +40,10 @@
   display: inline-block;
   max-width: min(800px, 100%);
   width: auto;
-  min-width: 400px;
+  /* min-width beats max-width, so an unconditional 400px overflows any container
+     narrower than that — and the media queries below key off the viewport, not the
+     message column, so a narrow chat panel on a wide screen never reaches them. */
+  min-width: min(400px, 100%);
   margin: 8px 0;
   vertical-align: top;
 }
@@ -117,7 +128,7 @@
 /* Responsive adjustments */
 @media (max-width: 600px) {
   .form-response-pill.multi-field {
-    min-width: 300px;
+    min-width: min(300px, 100%);
   }
 }
 

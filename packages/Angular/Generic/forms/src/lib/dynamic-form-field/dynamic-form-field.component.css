@@ -1,3 +1,11 @@
+/* NOTE (lts/5): this file carries the clip-fix subset of #4085 only. That PR also
+   restyled the form — card 600->720px, medium field 450->560px, 14px option labels,
+   and top-aligned option controls with their nudges — and those changes render
+   differently for deployments that were never clipping, so they stay on `next` and
+   are deliberately absent here. Every rule below is a no-op unless the element is
+   already overflowing. Expect a conflict when cherry-picking this file again; take
+   the wrap/min-width rules and leave the sizing and typography behind. */
+
 .form-question {
   margin-bottom: 16px;
 }
@@ -28,6 +36,13 @@
 .question-dropdown {
   width: 100%;
   max-width: 100%;
+}
+
+/* A value or placeholder longer than the field reads as truncated rather than
+   chopped mid-word — single-line controls cannot wrap. */
+.question-input,
+.question-dropdown {
+  text-overflow: ellipsis;
 }
 
 .question-dropdown {
@@ -73,35 +88,18 @@
 
 .question-buttongroup {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent) transparent;
 }
 
-.question-buttongroup::-webkit-scrollbar {
-  height: 6px;
-}
-
-.question-buttongroup::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.question-buttongroup::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-  border-radius: 3px;
-}
-
-.question-buttongroup::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
-}
-
+/* Wraps rather than scrolls: the previous overflow-x scroller sat inside a vertically
+   scrolling chat column, so overlay scrollbars hid the extra options outright. Matches
+   .footer-choice-button, the sibling button path in this same form. */
 .buttongroup-option {
-  flex: 0 0 auto;
-  white-space: nowrap;
+  flex: 0 1 auto;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 
 .buttongroup-option i {
@@ -120,8 +118,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 120px;
-  flex: 0 0 auto;
+  /* Basis is the option's own content width, but it may shrink: short options share a
+     row, while an option too wide for the row takes the row to itself and wraps its
+     label instead of overflowing (and being clipped by .response-form's overflow:hidden). */
+  flex: 0 1 auto;
+  min-width: min(120px, 100%);
+  max-width: 100%;
 }
 
 .radio-label,
@@ -132,11 +134,16 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  /* without this the label is stuck at its content width and cannot wrap */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .radio-label i,
 .checkbox-label i {
   color: var(--mj-text-secondary);
+  /* keep the icon at its intrinsic size when a long label puts the row under pressure */
+  flex: 0 0 auto;
 }
 
 .validation-error {
@@ -250,6 +257,9 @@
 }
 
 /* Auto-width - for dropdowns, radio, checkbox (sizes to content) */
+/* The 350px cap stays as-is on this line: a long selected label degrades to the
+   ellipsis above rather than being cut mid-word, so widening the container is a
+   layout improvement, not part of the clip fix. See #4085 on `next`. */
 .input-container.width-auto {
   max-width: 350px;
   min-width: 150px;
