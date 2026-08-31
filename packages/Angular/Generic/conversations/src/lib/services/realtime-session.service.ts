@@ -987,6 +987,31 @@ export class RealtimeSessionService {
   }
 
   /**
+   * Asks the live model to SPEAK FIRST — before the human has said anything.
+   *
+   * Every other path into the model's voice reacts to something: the human spoke, or a channel
+   * reported input. A host that needs the agent to open the conversation (an interviewer greeting
+   * a candidate, a guide introducing a task) had no way to ask for that, so the session connected
+   * and both sides waited for the other. The instructions are what to say, in the host's words —
+   * the model still speaks in its own voice and persona.
+   *
+   * Returns whether the request was DELIVERED, which is the one way this deliberately differs from
+   * {@link SendContextNote} beside it. A context note that is dropped costs the model a little
+   * perception; an opening line that is dropped is a session that sits in silence, and the host
+   * needs to be able to tell the two apart. `false` means no session was live (or the instructions
+   * were empty) — usually a host that asked before the connection reached a speaking state, which
+   * it can then retry.
+   */
+  public RequestSpokenOpening(instructions: string): boolean {
+    const trimmed = instructions?.trim() ?? '';
+    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+      return false;
+    }
+    this.requestChannelSpokenResponse(trimmed);
+    return true;
+  }
+
+  /**
    * The active client's current audio activity (per-direction RMS levels + spectrum
    * bins), or `null` when no session is live or the driver attached no audio meters.
    * Sampled by the overlay's animation-frame loop to drive the audio-reactive orb/EQ —
