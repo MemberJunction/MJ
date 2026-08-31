@@ -503,6 +503,25 @@ export interface SourceObjectInfo {
      * when the source does not expose a documented watermark.
      */
     IncrementalWatermarkField?: string;
+    /**
+     * Whether `Fields` is the object's COMPLETE column list for this account.
+     *
+     * Sources fall into three shapes and only the source knows which it is:
+     *   - it describes no columns at all (declared metadata is the whole truth),
+     *   - it returns only the account's CUSTOM columns (additive — the standard columns
+     *     still exist, the source simply did not restate them),
+     *   - it returns the full mapping (a column absent here is genuinely gone).
+     *
+     * Only the third shape may deactivate columns. This was previously INFERRED from
+     * "the field list came back non-empty", which cannot tell the second shape from the
+     * third — so a custom-only source looked authoritative and its standard columns were
+     * candidates for deactivation.
+     *
+     * Undefined means the source has not said. Absence of evidence is not evidence of
+     * absence (the same rule the primary-key search follows), so an undeclared object's
+     * columns are never deactivated.
+     */
+    FieldsAreAuthoritative?: boolean;
 }
 
 /** One field/column in a source object discovered during introspection. */

@@ -167,6 +167,7 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
         IsAuthoritative: true,
         DiscoveredObjectNames: [],
         DiscoveredFieldNamesByObject: {},
+        FieldsAuthoritativeByObject: {},
         ActiveObjects: [],
         ActiveFieldsByObjectID: {},
         ObjectIDByName: {},
@@ -198,11 +199,12 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
         expect(out.ObjectIDsToDeactivate).toEqual([]);
     });
 
-    it('FIELD-level: deactivates an ACTIVE field absent from the discovered field set (case-insensitive)', () => {
+    it('FIELD-level: deactivates an ACTIVE field absent from a DECLARED-COMPLETE field set (case-insensitive)', () => {
         const out = decideAbsentDeactivations(
             base({
                 DiscoveredObjectNames: ['Contacts'],
                 DiscoveredFieldNamesByObject: { Contacts: ['id', 'Name'] },
+                FieldsAuthoritativeByObject: { Contacts: true },
                 ObjectIDByName: { contacts: 'o1' },
                 ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'ID' }, { ID: 'f2', Name: 'name' }, { ID: 'f3', Name: 'oldcol' }] },
             }),
@@ -214,9 +216,40 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
         const out = decideAbsentDeactivations(
             base({
                 DiscoveredObjectNames: ['Stub'],
-                DiscoveredFieldNamesByObject: { Stub: [] }, // DiscoverFields found nothing -> not authoritative for columns
+                DiscoveredFieldNamesByObject: { Stub: [] },
+                FieldsAuthoritativeByObject: { Stub: true }, // even a claim of completeness cannot mean "all of them"
                 ObjectIDByName: { stub: 'o1' },
                 ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'anything' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual([]);
+    });
+
+    it('FIELD-level: a CUSTOM-ONLY source never loses its standard columns', () => {
+        // The case the old non-empty-list inference could not see. A source that returns only the
+        // account's custom columns is ADDITIVE — the standard columns still exist, it just did not
+        // restate them. Inferring completeness from "the list is non-empty" deactivated them.
+        const out = decideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['custom_score'] },
+                FieldsAuthoritativeByObject: { Contacts: false },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'email' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual([]);
+    });
+
+    it('FIELD-level: an object that has not declared either way is left alone', () => {
+        // Absence of evidence is not evidence of absence — the same rule the key search follows.
+        const out = decideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['id'] },
+                FieldsAuthoritativeByObject: {},
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'email' }] },
             }),
         );
         expect(out.FieldIDsToDeactivate).toEqual([]);
