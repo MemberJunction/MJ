@@ -540,7 +540,10 @@ export class IntegrationConnectorCreationPipeline {
                     // SAVE-LESS — stream as much of the feed as the budget allows so the PK decision is
                     // made on a statistically-significant sample, not a single (possibly tiny) file. No
                     // DB write happens here; the real save is the later ApplyAll → StartSync.
-                    fields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
+                    fields = await opts.Connector.DiscoverFieldsViaFetch(
+                        opts.CompanyIntegration, d.Name, opts.ContextUser,
+                        { OnFallback: (err) => this.ReportSampleFallback(d.Name, err, emitter) }
+                    );
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
                     emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
@@ -645,6 +648,23 @@ export class IntegrationConnectorCreationPipeline {
      * overrides. A fetch failure leaves the declaration exactly as it was, so the worst case is the
      * behaviour that shipped before sampling existed.
      */
+    /**
+     * Surfaces a silent degradation: streaming failed, so the fields came from the catalog's own
+     * description instead of from records. That distinction is the whole value of sampling — the
+     * catalog states no observed widths — but from the outside the two are indistinguishable, so
+     * without this an object quietly keeps a guessed width and drops every longer value at sync.
+     */
+    private ReportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
+        const msg = err instanceof Error ? err.message : String(err);
+        emitter.stageError(
+            'Introspect',
+            `Sampling fell back to the catalog description for "${objectName}" — real widths and ` +
+            `undeclared columns are unknown for this run: ${msg}`,
+            { code: 'discover-fields-fallback' }
+        );
+        console.warn(`[IntrospectPipeline] sample fallback for "${objectName}": ${msg}`);
+    }
+
     private async SampleDeclaredObjectInPlace(
         existing: SourceObjectInfo,
         objectName: string,
@@ -652,7 +672,10 @@ export class IntegrationConnectorCreationPipeline {
         emitter: IntegrationProgressEmitter
     ): Promise<void> {
         try {
-            const dfields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, objectName, opts.ContextUser);
+            const dfields = await opts.Connector.DiscoverFieldsViaFetch(
+                opts.CompanyIntegration, objectName, opts.ContextUser,
+                { OnFallback: (err) => this.ReportSampleFallback(objectName, err, emitter) }
+            );
             const sampled = dfields.map(f => ({
                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
                 IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
