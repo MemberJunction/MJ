@@ -522,7 +522,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
       const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
-      await liveSession.StartScreencast((frame) => this.publishFrame(pubSub, userPayload, agentSessionID, instanceKey, frame));
+      await liveSession.StartScreencast((frame) =>
+        this.publishFrame(pubSub, userPayload, agentSessionID, instanceKey, frame, liveSession.GetCurrentUrl()),
+      );
       this.startedScreencasts.add(streamKey);
       return { Streaming: true };
     } catch (err) {
@@ -770,6 +772,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     agentSessionID: string,
     instanceKey: string | undefined,
     frame: { DataBase64: string; Width: number; Height: number; SequenceNumber: number },
+    currentUrl?: string | null,
   ): void {
     this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
       resolver: 'RemoteBrowserActionResolver',
@@ -780,6 +783,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       // arrived last — the two surfaces flickering into each other. `null` is the unnamed instance,
       // stated explicitly so a client can match on it rather than on a missing property.
       instanceKey: NormalizeInstanceKey(instanceKey),
+      // WHERE the page was when this frame was captured (#3496). Under streaming the client's
+      // snapshot poll — the only other thing carrying the URL — is stopped, so without this a user
+      // navigating mid-screencast changes the picture and nothing else, and the agent keeps
+      // describing the page it last opened. `GetCurrentUrl()` is the session's last-known URL, a
+      // synchronous read, so this costs nothing per frame.
+      currentUrl: currentUrl ?? null,
       dataBase64: frame.DataBase64,
       width: frame.Width,
       height: frame.Height,
