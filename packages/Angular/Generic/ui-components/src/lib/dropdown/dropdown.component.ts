@@ -28,12 +28,24 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
  *   [Data]="items"
  *   TextField="name"
  *   ValueField="id"
+ *   AriaLabel="Status"
  *   [(ngModel)]="selectedId"
  *   [ValuePrimitive]="true"
  *   [Filterable]="true"
  *   (FilterChange)="onFilter($event)">
  * </mj-dropdown>
  * ```
+ *
+ * ## Accessibility
+ *
+ * The trigger is the focusable element and its only text is the selected value, so it has no
+ * accessible name of its own. Give every dropdown one of:
+ *
+ * - `AriaLabel="Status"` — when the control has no visible label; or
+ * - `[AriaLabelledBy]="'status-label-id'"` — when a visible label element exists (preferred:
+ *   the name then follows that element's text).
+ *
+ * `Placeholder` is NOT a name: it is replaced by the value the moment one is selected.
  */
 @Component({
   selector: 'mj-dropdown',
@@ -49,6 +61,8 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       [class.mj-dropdown--disabled]="IsDisabled"
       role="combobox"
       [attr.aria-expanded]="IsOpen"
+      [attr.aria-label]="AriaLabel || null"
+      [attr.aria-labelledby]="AriaLabelledBy || null"
       aria-haspopup="listbox"
       tabindex="0"
       (click)="Toggle()"
@@ -130,6 +144,21 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   @Input() Disabled = false;
   @Input() Placeholder = 'Select...';
   @Input() DefaultItem: Record<string, unknown> | string | null = null;
+  /**
+   * Accessible name for the dropdown, applied as `aria-label` on the focusable trigger.
+   *
+   * The trigger is a `role="combobox"` div whose only text content is the CURRENT VALUE, so
+   * without this a screen reader announces the selected item as though it were the control's
+   * name ("Active, combobox") and the user never learns what the control is for. Set this
+   * whenever the dropdown is not already named by a visible `<label>`-style element; prefer
+   * {@link AriaLabelledBy} when such an element exists, so the name stays in sync with it.
+   */
+  @Input() AriaLabel = '';
+  /**
+   * Id of the element that labels this dropdown, applied as `aria-labelledby` on the trigger.
+   * Takes precedence over {@link AriaLabel} per the accname spec when both are set.
+   */
+  @Input() AriaLabelledBy = '';
 
   @Output() FilterChange = new EventEmitter<string>();
   @Output() ValueChange = new EventEmitter<unknown>();
