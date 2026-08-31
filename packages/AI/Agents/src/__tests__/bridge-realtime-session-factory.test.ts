@@ -5,19 +5,25 @@
  * The `AIEngine`, `MJGlobal.ClassFactory`, `Metadata` and `BaseAgent` boundaries are mocked — no DB,
  * no models.
  *
- * ## What #3860 changed here, and why three of these cases inverted
+ * ## What #4111 changed here, and why three of these cases inverted
  *
  * The factory used to fall back to `agentType.DriverClass` when an agent declared none. That key
  * names a **BaseAgentType** subclass, while the key this call needs is a **BaseAgent** one — two
- * different ClassFactory registries, with no overlap. So the fallback matched nothing and
- * `CreateInstance` (which never returns null for an unmatched key) silently handed back an
- * unrelated agent: a seat configured as an interviewer answered as `QueryBuilderAgent`, in the
- * interviewer's voice, with no error anywhere.
+ * different ClassFactory registries, matched by exact key, with no overlap. So the fallback matched
+ * nothing, and `CreateInstance` (which never returns null for an unmatched key) handed back an
+ * instance of the BASE: every such seat silently ran plain `BaseAgent`, dropping the subclass
+ * behaviour it was configured for.
  *
  * These specs previously PINNED that behaviour — "falls back to the agent TYPE DriverClass" was
  * asserting the defect, and "throws when the agent has no DriverClass" was asserting a guard that
  * could never fire. Both are inverted below, because an absent `DriverClass` is the common, correct
  * case: it is what makes an agent data rather than code.
+ *
+ * Note what the no-driver specs assert, and why it is a call COUNT rather than only the key: the
+ * factory must construct `new BaseAgent()` directly, not `CreateInstance(BaseAgent, null)`. A null
+ * key makes `GetAllRegistrations` skip its key filter, so the factory would return the
+ * highest-priority registered subclass — an arbitrary agent. Asserting only "the key was null"
+ * cannot tell those two apart; asserting the factory was never called can.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -45,6 +51,8 @@ type StartableAgent = { StartBridgeRealtimeSession: (p: Record<string, unknown>)
 
 /** The driver key the factory asked the ClassFactory for, or `null` when it asked for nothing. */
 let createdDriverClass: string | null = null;
+/** How many times the ClassFactory was consulted — distinguishes "not called" from "called with null". */
+let tryCreateInstanceCalls = 0;
 let lastStartParams: Record<string, unknown> | null = null;
 let instanceToReturn: StartableAgent | null;
 
@@ -59,6 +67,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
                     // unresolvable key is an ERROR rather than a hollow anchor-base object that answers
                     // plausibly and wrongly. `Resolved: false` is what an unregistered key looks like.
                     TryCreateInstance: (_base: unknown, driverClass: string) => {
+                        tryCreateInstanceCalls++;
                         createdDriverClass = driverClass;
                         return instanceToReturn
                             ? { Resolved: true, Instance: instanceToReturn }
@@ -93,7 +102,12 @@ import { CreateBridgeRealtimeSession } from '../realtime/bridge-realtime-session
 describe('CreateBridgeRealtimeSession', () => {
     beforeEach(() => {
         createdDriverClass = null;
+        tryCreateInstanceCalls = 0;
         lastStartParams = null;
+        // Restored HERE rather than at the end of the one test that sets it: a spec that fails
+        // mid-body would otherwise leak the value into every test after it.
+        agentTypes[1].DriverClass = undefined;
+        agents[1].DriverClass = undefined;
         instanceToReturn = {
             StartBridgeRealtimeSession: async (p: Record<string, unknown>) => {
                 lastStartParams = p;
@@ -125,8 +139,10 @@ describe('CreateBridgeRealtimeSession', () => {
         const session = await CreateBridgeRealtimeSession({ AgentID: 'AAAA0000-0000-0000-0000-000000000002' });
 
         expect(session).toBe('SESSION');
-        expect(createdDriverClass).toBeNull();   // the ClassFactory was not consulted at all
-        agentTypes[1].DriverClass = undefined;   // restore for other tests
+        // A COUNT, not just the key: `CreateInstance(BaseAgent, null)` would also leave the key null
+        // while quietly returning the highest-priority registered subclass. Only "never consulted"
+        // proves the factory was bypassed in favour of `new BaseAgent()`.
+        expect(tryCreateInstanceCalls).toBe(0);
     });
 
     it('runs an agent that declares no DriverClass on the plain BaseAgent — the common, correct case', async () => {
@@ -135,7 +151,7 @@ describe('CreateBridgeRealtimeSession', () => {
         const session = await CreateBridgeRealtimeSession({ AgentID: 'AAAA0000-0000-0000-0000-000000000002' });
 
         expect(session).toBe('SESSION');
-        expect(createdDriverClass).toBeNull();
+        expect(tryCreateInstanceCalls).toBe(0);
         expect((lastStartParams?.agent as { Name: string }).Name).toBe('NoDriver Agent');
     });
 
@@ -150,6 +166,19 @@ describe('CreateBridgeRealtimeSession', () => {
 
     it('throws a clear error when the agent cannot be resolved', async () => {
         await expect(CreateBridgeRealtimeSession({ AgentID: 'missing-id' })).rejects.toThrow(/no agent found/);
+    });
+
+    it('treats a whitespace-only DriverClass as none, not as a key', async () => {
+        // Every other externally-sourced string in the factory is trimmed. Untrimmed, ' ' is a
+        // truthy key that reaches the ClassFactory and fails with a confusing quoted-blank message,
+        // when the row plainly means "no driver".
+        agents[1].DriverClass = '   ';
+
+        const session = await CreateBridgeRealtimeSession({ AgentID: 'AAAA0000-0000-0000-0000-000000000002' });
+
+        expect(session).toBe('SESSION');
+        expect(tryCreateInstanceCalls).toBe(0);
+        agents[1].DriverClass = undefined;
     });
 
     it('throws — rather than falling back — when the agent DECLARES a driver that is not registered', async () => {

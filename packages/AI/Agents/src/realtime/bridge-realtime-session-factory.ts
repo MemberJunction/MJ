@@ -97,21 +97,38 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
 
     // Instantiate the agent's own BaseAgent subclass — or the plain BaseAgent when it declares none.
     //
-    // ── WHY NOT `agentType.DriverClass` AS A FALLBACK ──
+    // ── WHY NOT `agentType.DriverClass` AS A FALLBACK (#4111) ──
     //
-    // `AIAgentType.DriverClass` names a **BaseAgentType** subclass; the key needed here is a
-    // **BaseAgent** one. They are different ClassFactory registries, so passing the type's key to
-    // `CreateInstance(BaseAgent, …)` matches no registration — and `CreateInstance` does not return
-    // null for an unmatched key, it falls back. The observed result was a bridged seat running an
-    // unrelated registered agent: a voice seat configured as an interviewer answered as
-    // `QueryBuilderAgent`, in the interviewer's voice, with no error anywhere. That is worse than a
-    // failure, because it looks like a bad prompt.
+    // `AIAgentType.DriverClass` names a **BaseAgentType** subclass — the three shipped values are
+    // `LoopAgentType`, `FlowAgentType`, `RealtimeAgentType`. The key needed here is a **BaseAgent**
+    // one. Different ClassFactory registries, matched by exact key against the base class NAME, so
+    // the type's key resolved nothing here — ever. Dead code that looked alive.
+    //
+    // What that produced is worth stating precisely, because the wrong story invites the wrong fix:
+    // with no registration and no `@RequiresSubclass` marker, `resolveAndInstantiate` returns
+    // `new BaseClassConstructor(...)` — a plain `BaseAgent`. So every such seat silently ran the
+    // BASE implementation, dropping whatever subclass behaviour it was configured for. It did not
+    // run some other agent's class. The only signal was one `console.warn` from
+    // `reportResolutionFailure`, deduped per base+key and capped at 3 per base: effectively
+    // invisible in a busy log, which is the whole problem.
+    //
+    // A NULL key is the path that really does hand back somebody else's agent —
+    // `GetAllRegistrations` skips the key filter entirely for null, so the highest-priority
+    // registered `BaseAgent` subclass wins. That is why the else-branch below constructs
+    // `new BaseAgent()` directly instead of calling `CreateInstance(BaseAgent, null)`.
     //
     // Most agents declare no `DriverClass` at all and are meant to run on the base implementation
     // (that is what makes them data rather than code), so an absent one is NOT an error — it is the
-    // common case, and the old throw was unreachable only because the wrong-registry fallback
-    // silently satisfied it.
-    const driverClass = agent.DriverClass || undefined;
+    // common case, and the old throw was unreachable only because the wrong-registry lookup always
+    // produced a truthy key.
+    //
+    // Dropping the type fallback loses nothing: agent-type behaviour is resolved separately inside
+    // `BaseAgent` via `BaseAgentType.GetAgentTypeInstance`, so a seat on the plain `BaseAgent` still
+    // gets Loop/Realtime type semantics.
+    // Trimmed like every other externally-sourced string in this file (`RealtimeVoice`,
+    // `RealtimeModelID`, `AgentSessionID`): a whitespace-only value is a truthy key that would
+    // otherwise reach the ClassFactory and fail with a confusing quoted-blank message.
+    const driverClass = agent.DriverClass?.trim() || undefined;
     let instance: BaseAgent | null;
     if (driverClass) {
         // `TryCreateInstance`, not `CreateInstance`: an unresolvable key must be an error here rather
@@ -126,6 +143,10 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
             );
         }
     } else {
+        // `new BaseAgent()` and NOT `CreateInstance(BaseAgent, null)`: a null key makes
+        // `GetAllRegistrations` skip the key filter, so the factory would return the
+        // highest-priority registered subclass — an arbitrary agent. Direct construction is the only
+        // form that reliably yields the base implementation.
         instance = new BaseAgent();
     }
 
