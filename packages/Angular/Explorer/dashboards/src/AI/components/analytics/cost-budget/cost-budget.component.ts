@@ -12,6 +12,7 @@ import {
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
+import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
 import { CacheRate, CacheTokenTotals, cacheHitRate, hasCacheActivity, netCacheSavings } from '../../../services/cache-metrics';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
@@ -88,15 +89,14 @@ interface ModelCostRow {
     OutputPricePerUnit: number | null;
     CacheReadPricePerUnit: number | null;
     CacheWritePricePerUnit: number | null;
-    UnitType: string | null;
+    UnitTypeID: string | null;
 }
 
-// AIModelCost UnitType name -> token divisor, matching the BasePriceUnitType driver classes.
-const UNIT_DIVISORS: Record<string, number> = {
-    'Per Million Tokens': 1_000_000,
-    'Per Hundred Thousand Tokens': 100_000,
-    'Per Thousand Tokens': 1_000
-};
+/** A price unit type, reduced to what the scale lookup needs. */
+interface PriceUnitTypeRow {
+    ID: string;
+    DriverClass: string | null;
+}
 
 const TIME_RANGE_OPTIONS = ['Today', '7d', '30d', 'MTD'];
 
@@ -712,7 +712,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             const currentFilter = this.combineDateAndModelFilter(currentStart, now, modelFilter);
             const prevFilter = this.combineDateAndModelFilter(previousStart, currentStart, modelFilter);
 
-            const [currentResult, prevResult, rateResult] = await rv.RunViews([
+            const [currentResult, prevResult, rateResult, unitTypeResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: AI Prompt Runs',
                     ExtraFilter: currentFilter,
@@ -730,14 +730,27 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 {
                     EntityName: 'MJ: AI Model Costs',
                     ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
-                    Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitType'],
+                    Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitTypeID'],
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: AI Model Price Unit Types',
+                    Fields: ['ID', 'DriverClass'],
                     ResultType: 'simple'
                 }
             ]);
 
             this.allRuns = (currentResult?.Results ?? []) as PromptRunRecord[];
             this.previousPeriodRuns = (prevResult?.Results ?? []) as PromptRunRecord[];
-            this.buildCacheRateMap(rateResult?.Results ?? []);
+            // A failed unit-type view is NOT the same as "these rows are unpriceable". Without the
+            // driver classes every rate row falls into the `continue` below, and cache savings
+            // render as a confident 0 instead of an error — the figure most likely to be believed.
+            // Say so rather than let the empty map speak for it.
+            if (unitTypeResult && !unitTypeResult.Success) {
+                console.error('Cost & Budget: price unit types failed to load; cache-savings figures will read 0. ' +
+                    unitTypeResult.ErrorMessage);
+            }
+            this.buildCacheRateMap(rateResult?.Results ?? [], unitTypeResult?.Results ?? []);
 
             this.computeKpis();
             this.computeDailyBars();
@@ -763,11 +776,28 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         return this.cacheRates.get(this.rateKey(run.ModelID, run.VendorID));
     }
 
-    /** Build the per-model+vendor rate lookup, normalizing each per-unit price to currency-per-token. */
-    private buildCacheRateMap(rows: ModelCostRow[]): void {
+    /**
+     * Build the per-model+vendor rate lookup, normalizing each per-unit price to currency-per-token.
+     *
+     * The scale comes from the unit type's DriverClass, not its display name — the name is editable
+     * metadata (`Per 1M Tokens`) while the driver class is the contract the pricing drivers register
+     * under, so this cannot drift the way a hardcoded name table does.
+     */
+    private buildCacheRateMap(rows: ModelCostRow[], unitTypes: PriceUnitTypeRow[]): void {
         this.cacheRates.clear();
+        const driverClassByUnitType = new Map<string, string>(
+            unitTypes.filter(u => u.DriverClass).map(u => [NormalizeUUID(u.ID), u.DriverClass!])
+        );
         for (const row of rows) {
-            const divisor = UNIT_DIVISORS[row.UnitType ?? ''] ?? 1_000_000;
+            const driverClass = driverClassByUnitType.get(NormalizeUUID(row.UnitTypeID ?? ''));
+            const divisor = TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass ?? ''];
+            if (divisor === undefined) {
+                // A non-token unit type (per minute/hour/image), or one this build has no driver
+                // for. Defaulting to the per-1M-token divisor would divide an hourly audio rate by
+                // a million and report a savings figure that is pure noise; no rate at all is the
+                // honest answer.
+                continue;
+            }
             const inputRate = (row.InputPricePerUnit ?? 0) / divisor;
             // Cache read/write fall back to the input rate when no distinct rate is recorded — exactly
             // as the server-side cost calculator does — which makes the corresponding savings term 0.

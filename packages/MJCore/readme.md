@@ -360,6 +360,24 @@ const data = { ...entity };
 const data = { ...entity.GetAll(), customField: 'value' };
 ```
 
+#### Recursive Foreign Keys & Hierarchy Traversal
+
+When an entity has a single-column primary key and a self-referencing foreign key configured as a hierarchy (`EntityField.Configuration` setting `{ "Hierarchy": { "IsHierarchy": true } }`), CodeGen automatically adds strongly-typed hierarchy traversal helper methods to the generated subclass in `@memberjunction/core-entities`:
+
+```typescript
+// Fetch all descendants in the subtree with an optional maxDepth limit
+const descendants = await category.GetDescendants();     // all descendants
+const directAndGrand = await category.GetDescendants(2); // max 2 levels down
+
+// Fetch all ancestors from root down to this record's parent
+const ancestors = await category.GetAncestors();
+
+// Fetch direct child records
+const children = await category.GetChildren();
+```
+
+All three methods execute a single optimized `RunView` query using the view's computed `Root<Field>`, `<Field>Depth`, `<Field>Path`, and `<Field>IsLeaf` columns. See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md).
+
 #### State Tracking and Events
 
 BaseEntity provides comprehensive state tracking and lifecycle events.

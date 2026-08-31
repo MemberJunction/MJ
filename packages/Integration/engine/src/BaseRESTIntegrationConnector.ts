@@ -675,6 +675,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         batchSize: number,
         maxRecords: number,
         deadlineMs?: number,
+        watchKey?: string,
     ): AsyncGenerator<Record<string, unknown>> {
         const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
         if (this.DetectTemplateVars(obj.APIPath).length === 0) {
@@ -689,7 +690,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             // cannot tell a sample from a sync, and one FetchChanges call walks every parent.
             // Live 2026-08-12: 28 minutes inside a single call, returning rows=0.
             yield* super.DiscoverySampleRecordStream(
-                companyIntegration, objectName, contextUser, batchSize, maxRecords, deadlineMs,
+                companyIntegration, objectName, contextUser, batchSize, maxRecords, deadlineMs, watchKey,
             );
             return;
         }
@@ -1362,12 +1363,49 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Gets IntegrationObjectField records from the engine's cache for a given object ID.
      * Returns only active fields sorted by Sequence.
+     *
+     * MEMOISED. This sits on per-record paths — `RawToExternalRecord` / `TransformRecord` resolve
+     * an object's fields for every record transformed, and several callers then run a `.find()` for
+     * the primary key over the freshly-sorted result — so the filter and sort were being repeated
+     * per record over a list that only changes when the engine reloads its metadata.
+     *
+     * Invalidation is the ARRAY IDENTITY of the engine's field cache: it is replaced wholesale on
+     * load/refresh, so a new array yields a new memo automatically, including after a schema
+     * refresh. A fresh copy is returned per call, preserving the previous contract for callers that
+     * sort or splice the result.
      */
     protected GetCachedFields(objectID: string): MJIntegrationObjectFieldEntity[] {
-        return IntegrationEngineBase.Instance.GetIntegrationObjectFields(objectID)
+        const allFields = IntegrationEngineBase.Instance.IntegrationObjectFields;
+        if (this.__cachedFieldsSource !== allFields) {
+            this.__cachedFieldsByObject = new Map();
+            this.__cachedFieldsSource = allFields;
+        }
+
+        const key = objectID?.trim().toLowerCase() ?? '';
+        const hit = this.__cachedFieldsByObject.get(key);
+        if (hit) {
+            return hit.slice();
+        }
+
+        const computed = IntegrationEngineBase.Instance.GetIntegrationObjectFields(objectID)
             .filter(f => f.Status === 'Active')
             .sort((a, b) => a.Sequence - b.Sequence);
+
+        // NEVER memoise an empty result. An empty list is indistinguishable from "the engine's
+        // metadata has not loaded yet", and because invalidation keys on array identity, a single
+        // call landing before the cache is seeded would pin `[]` for the life of that array.
+        // Callers derive primary-key field names from this list, so an empty answer builds records
+        // with NO key — rows that can never be matched again, and are therefore re-inserted on
+        // every subsequent sync.
+        if (computed.length > 0) {
+            this.__cachedFieldsByObject.set(key, computed);
+        }
+        return computed.slice();
     }
+
+    /** Memo backing {@link GetCachedFields}, keyed on the engine field cache's array identity. */
+    private __cachedFieldsByObject: Map<string, MJIntegrationObjectFieldEntity[]> = new Map();
+    private __cachedFieldsSource: MJIntegrationObjectFieldEntity[] | null = null;
 
     // ── Conversion helpers ───────────────────────────────────────────
 

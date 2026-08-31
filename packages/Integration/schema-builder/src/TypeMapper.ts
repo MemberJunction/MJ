@@ -71,6 +71,17 @@ export class TypeMapper {
       // A primary-key string column must fit the dialect's INDEX KEY size limit — cap it there. The
       // dialect reports its OWN ceiling (SQL Server 450 chars; PostgreSQL effectively none), so there is
       // no platform branch here. A too-wide PK would otherwise fail unique-constraint / index creation.
+      //
+      // An UNBOUNDED width (-1) is the `text` modality in this vocabulary, and the dialect already
+      // resolves that to its own unbounded type. Routing it through `string` instead would hit
+      // resolveStringType's `> 0` test and silently yield NVARCHAR(255) — the NARROWEST column for a
+      // field explicitly asked to be the widest. A primary key can never be unbounded (MAX is not
+      // indexable), so it is clamped to the key ceiling instead; note Math.min would return -1 here,
+      // which is why this is a special case rather than a comparison.
+      if (maxLength === -1) {
+        if (!field.IsPrimaryKey) return dialect.ResolveAbstractType({ type: 'text' });
+        maxLength = dialect.MaxKeyStringLength;
+      }
       if (field.IsPrimaryKey) maxLength = Math.min(maxLength, dialect.MaxKeyStringLength);
       return dialect.ResolveAbstractType({ type: 'string', maxLength });
     }
@@ -108,6 +119,10 @@ export class TypeMapper {
   private boundedStringLength(field: SourceFieldInfo): number {
     const MIN_LENGTH = 255; // floor — a tiny field still gets a sane column
     const HEADROOM = 300; // generous additive buffer for values longer than the sample happened to see
+    // -1 is MAX/unbounded (the convention both dialects render as `(MAX)`), passed straight through
+    // so the dialect resolves its own unbounded type. Without this it failed the `> 0` test and fell
+    // to the 255 floor — i.e. asking for MAX produced the NARROWEST possible column.
+    if (field.MaxLength === -1) return -1;
     const declared = field.MaxLength != null && field.MaxLength > 0 ? field.MaxLength : null;
     return declared == null ? MIN_LENGTH : Math.max(MIN_LENGTH, declared + HEADROOM);
   }
