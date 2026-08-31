@@ -352,12 +352,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param isNew  True for INSERT / Create, false for UPDATE
      * @param user   The acting user (needed for encryption, audit columns, etc.)
      */
-    protected abstract GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult>;
+    /** `options` carries per-save behavior the SQL builder must honor (e.g. SkipRecordChanges). Optional for back-compat with provider subclasses compiled against the 3-arg shape. */
+    protected abstract GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo, options?: EntitySaveOptions): Promise<SaveSQLResult>;
 
     /**
      * Generates the SQL (and optional parameters) for a Delete operation.
      */
-    protected abstract GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult;
+    /** `options` carries per-delete behavior the SQL builder must honor (e.g. SkipRecordChanges). */
+    protected abstract GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult;
 
     /**************************************************************************/
     // END ---- SQL Dialect Abstractions
@@ -1483,7 +1485,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 }
 
                 // Step 4: Generate provider-specific SQL
-                const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user);
+                const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
@@ -1560,7 +1562,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     }
                 }
             } else {
-                return entity; // nothing to save
+                return entity.GetAll(); // nothing to save
             }
         } catch (e) {
             this.OnResumeRefresh();
@@ -1610,7 +1612,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entity.RegisterResultHistoryEntry(entityResult);
 
             // Generate provider-specific delete SQL
-            const sqlDetails = this.GenerateDeleteSQL(entity, user);
+            const sqlDetails = this.GenerateDeleteSQL(entity, user, options);
 
             // Before-delete hooks
             await this.OnBeforeDeleteExecute(entity, user, options);

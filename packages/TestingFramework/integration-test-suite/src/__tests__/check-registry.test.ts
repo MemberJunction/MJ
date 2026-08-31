@@ -48,6 +48,7 @@ import { MaterializedReadChecks } from '../checks/materialized-read.checks';
 import { MaterializedEntityReadChecks } from '../checks/materialized-entity-read.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
+import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
@@ -124,7 +125,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
-        ['conversation-compaction', ConversationCompactionChecks, 12], // CC1-CC12
+        ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -145,6 +146,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
+        ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
         ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
         // TX1-TX27, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
@@ -217,7 +219,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
         'aggregates-cache': 3,
-        'ai-cost': 6,
+        'ai-cost': 7,
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
@@ -234,9 +236,10 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 8,
-        'conversation-compaction': 12,
+        'conversation-compaction': 18,
         'dataset-cache': 3,
         'entity-actions': 8,
+        'entity-embedded': 6,
         'entity-graph': 11,
         'entity-graph-client': 9,
         'entity-server-invariants': 9,
@@ -281,6 +284,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'task-graph-orchestration': 18,
         'templates': 8,
         'transaction-groups': 5,
+        'transaction-groups-batched': 5,
         'user-routines': 16,
         'view-execution': 12,
         'view-security': 4,
@@ -308,7 +312,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(84);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(86);
     });
 });
 
@@ -375,6 +379,12 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-actions.EA6',
         'entity-actions.EA7',
         'entity-actions.EA8',
+        'entity-embedded.EE1',
+        'entity-embedded.EE2',
+        'entity-embedded.EE3',
+        'entity-embedded.EE4',
+        'entity-embedded.EE5',
+        'entity-embedded.EE6',
         'entity-graph-client.EGC3',
         'entity-graph-client.EGC4',
         'entity-graph-client.EGC5',
@@ -441,6 +451,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-orchestration.TG15',
         'task-graph-orchestration.TG16',
         'task-graph-orchestration.TG18',
+        'transaction-groups-batched.TGB1',
+        'transaction-groups-batched.TGB2',
+        'transaction-groups-batched.TGB3',
+        'transaction-groups-batched.TGB4',
+        'transaction-groups-batched.TGB5',
         'transaction-groups.TG2',
         'transaction-groups.TG3',
         'transaction-groups.TG4',

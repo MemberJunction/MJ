@@ -1,5 +1,77 @@
 # @memberjunction/integration-engine-base
 
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- e7b4833: Index integration-object fields, and memoise the per-record field view.
+
+  `GetIntegrationObjectFields(objectID)` was `this._integrationObjectFields.filter(f => UUIDsEqual(f.IntegrationObjectID, objectID))` — a full scan of every `IntegrationObjectField` in the process, on a path that runs **per record**: a connector's `RawToExternalRecord`/`TransformRecord` resolves an object's fields for every record it transforms. On a catalog of 364 objects, that scan plus the generated `IntegrationObjectID` getter it invokes per element measured **~46% of process CPU** in a live profile.
+
+  It is now backed by a lazily-built `objectID → fields` index, keyed on the **identity** of `_integrationObjectFields`. The engine replaces that array wholesale on load/refresh (and `SeedForTesting` replaces it directly), so a new array is a new index automatically — there is no invalidation hook to forget. Keys are normalised the same way `UUIDsEqual` compares, so SQL Server's uppercase and PostgreSQL's lowercase land on the same bucket, and the `objectID == null` case keeps the original both-null-matches semantics via the unindexed path rather than inventing a magic key. Callers still receive a fresh array per call, so sorting or splicing the result behaves exactly as before.
+
+  Also adds `RefreshCatalog()`, which re-reads **only** the `IntegrationObject`/`IntegrationObjectField` datasets straight from the database. `RefreshItem` will not do: it reloads through the local dataset cache, which is the very thing that goes stale when the catalog is edited by direct SQL, a sproc-based sync push, or another process — `BaseEngine`'s auto-refresh only observes in-process `BaseEntity` saves. Replacing the arrays is also what invalidates the memoised views, since both the field index and the connectors' `GetCachedFields` memo key on array identity.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

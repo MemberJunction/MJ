@@ -15,35 +15,39 @@ export interface GlobalObjectStore {
      * because it is possible that a given class might have copies of its code in multiple paths in a deployed application. This approach ensures that no matter how many code copies might exist, there is only one instance of the object in question by using the Global Object Store.
  * @returns
  */
+let __globalObjectStore: GlobalObjectStore | null | undefined = undefined;
+
 export function GetGlobalObjectStore(): GlobalObjectStore | null {
-    try    {
-        // we might be running in a browser, in that case, we use the window object for our global stuff
-        if (window)
-            return window as unknown as GlobalObjectStore;
-        else {
-            // if we get here, we don't have a window object, so try the global object (node environment)
-            // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-            if (global)
-                return global as unknown as GlobalObjectStore;
-            else
-                return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-        }
+    /**
+     * Memoised, and probed with `typeof`.
+     *
+     * The previous shape was `if (window)` inside a try/catch. In Node, `window` is an
+     * UNDECLARED identifier, so that line THROWS a ReferenceError on every single call and the
+     * catch falls through to `global` — correct answer, pathological path. This function sits
+     * under ClassFactory and BaseEngine hot paths, and building + unwinding that exception was
+     * measured at several percent of a busy server process. `typeof window` is the one probe
+     * that is legal on an undeclared identifier, and the environment does not change after
+     * startup, so the answer is computed once.
+     *
+     * The `&& window` is not redundant with the `typeof` guard: it keeps the one input where the
+     * two differ. `typeof null === 'object'`, so a DECLARED-but-null `window` — which SSR shims
+     * in the wild do produce — would pass a bare `typeof` check and get memoised as the store,
+     * where `if (window)` had correctly fallen through to `global`. Nothing in this repo does
+     * that today; the guard is here because MJ is embedded by callers whose environment we do
+     * not control, and because memoising the wrong answer is unrecoverable for the process.
+     */
+    if (__globalObjectStore !== undefined) return __globalObjectStore;
+    if (typeof window !== 'undefined' && window) {
+        __globalObjectStore = window as unknown as GlobalObjectStore;
+    } else if (typeof global !== 'undefined') {
+        __globalObjectStore = global as unknown as GlobalObjectStore;
+    } else {
+        // neither browser nor node (e.g. an exotic test sandbox) — callers already handle null
+        __globalObjectStore = null;
     }
-    catch (e) {
-        try {
-            // if we get here, we don't have a window object, so try the global object (node environment)
-            if (global)
-                return global as unknown as GlobalObjectStore;
-            else
-                return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-        }
-        catch (e) {
-            // if we get here, we don't have a global object either, so we're not running in a browser or node, so we're probably running in a unit test
-            // in that case, we don't have a provider saved, return null, we need to be either in node or a browser
-            return null;
-        }
-    }
+    return __globalObjectStore;
 }
+
 
 /**
  * This utility function will copy all scalar and array properties from an object to a new object and return the new object.
@@ -1394,6 +1398,39 @@ export function EscapeHTML(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/**
+ * Safely escapes a string literal for use inside single-quoted SQL statements, clauses, or `ExtraFilter` predicates.
+ *
+ * Replaces each single quote with doubled single quotes (`''`) per ANSI SQL standard — the escaping
+ * mechanism supported by both SQL Server and PostgreSQL — and removes null bytes (`\0`), which cannot
+ * appear in any legitimate value and invite parser-level surprises when left in a predicate.
+ *
+ * **This escapes string literals and nothing else.** Three cases it does NOT cover:
+ *
+ * - **`LIKE` patterns** — `%`, `_` and `[` remain live wildcards after quote doubling, so a user
+ *   searching for `%` still matches every row. A LIKE value must additionally escape those
+ *   metacharacters and pair the clause with `ESCAPE '\'`. See `escapeLikeValue()` in
+ *   `@memberjunction/core` (`generic/runQuerySQLFilterImplementations.ts`) or
+ *   `GenericDatabaseProvider.escapeLikeTerm()`.
+ * - **Identifier names** (table/column/schema) — those require bracket or double-quote quoting, and
+ *   are handled by SchemaEngine's `ValidateIdentifier()`.
+ * - **Values that must not be missing** — `null`/`undefined` map to `''`, so a predicate built from a
+ *   missing value silently becomes `Field = ''` rather than throwing. Validate before interpolating
+ *   when absence is a bug.
+ *
+ * @param value - The raw string value to escape. If null or undefined, returns empty string.
+ * @returns Safely escaped string value (without surrounding quotes).
+ *
+ * @example
+ * ```typescript
+ * const filter = `Email = '${EscapeSQLString(userEmail)}'`;
+ * ```
+ */
+export function EscapeSQLString(value: string | null | undefined): string {
+  if (value == null) return '';
+  return String(value).replace(/\0/g, '').replace(/'/g, "''");
 }
 
 /**
