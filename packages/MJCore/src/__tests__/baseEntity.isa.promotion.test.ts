@@ -3,7 +3,7 @@
  *
  * The operation under test: "this existing Person is now also an Applicant" — binding a NEW child
  * record to an EXISTING parent row so the chain save UPDATEs the parent and INSERTs only the child.
- * Before AttachToExistingParent existed, this was structurally impossible: NewRecord() always
+ * Before AttachToParent existed, this was structurally impossible: NewRecord() always
  * started a fresh parent chain, so promotion INSERTed a duplicate parent and collided on the PK.
  *
  * Uses the same mock harness as baseEntity.isa.child.test.ts, plus a provider Load stub standing in
@@ -85,7 +85,7 @@ function createPromotionPair(): { product: MJTestEntity; meeting: MJTestEntity }
     return { product, meeting };
 }
 
-describe('AttachToExistingParent (#3825)', () => {
+describe('AttachToParent (#3825)', () => {
     it('binds a NEW child to an existing parent: parent loads (UPDATE-on-save), child adopts the PK', async () => {
         existingProductRow = { ID: EXISTING_PRODUCT_ID, Name: 'Existing Product', Price: 10 };
         const { product, meeting } = createPromotionPair();
@@ -93,7 +93,7 @@ describe('AttachToExistingParent (#3825)', () => {
         const freshPk = meeting.Get('ID');
         expect(freshPk).not.toBe(EXISTING_PRODUCT_ID);   // NewRecord minted a fresh chain
 
-        const attached = await meeting.AttachToExistingParent(CompositeKey.FromID(EXISTING_PRODUCT_ID));
+        const attached = await meeting.AttachToParent(CompositeKey.FromID(EXISTING_PRODUCT_ID));
 
         expect(attached).toBe(true);
         // The parent is LOADED — its save is an UPDATE, which is the entire promotion trick.
@@ -112,7 +112,7 @@ describe('AttachToExistingParent (#3825)', () => {
         existingProductRow = { ID: EXISTING_PRODUCT_ID, Name: 'Existing Product', Price: 10 };
         const { meeting } = createPromotionPair();
         meeting.NewRecord();
-        await meeting.AttachToExistingParent(CompositeKey.FromID(EXISTING_PRODUCT_ID));
+        await meeting.AttachToParent(CompositeKey.FromID(EXISTING_PRODUCT_ID));
         expect(meeting.Get('ID')).toBe(EXISTING_PRODUCT_ID);
     });
 
@@ -122,7 +122,7 @@ describe('AttachToExistingParent (#3825)', () => {
         meeting.NewRecord();
         const freshPk = meeting.Get('ID');
 
-        const attached = await meeting.AttachToExistingParent(CompositeKey.FromID(EXISTING_PRODUCT_ID));
+        const attached = await meeting.AttachToParent(CompositeKey.FromID(EXISTING_PRODUCT_ID));
 
         // The caller decides what a missing parent means — save as a fresh chain, or stop. The
         // record must be exactly as it was, so both choices remain open.
@@ -137,7 +137,7 @@ describe('AttachToExistingParent (#3825)', () => {
         const standalone = new MJTestEntity(standaloneInfo);
         standalone.ContextCurrentUser = mockUser;
         standalone.NewRecord();
-        await expect(standalone.AttachToExistingParent(CompositeKey.FromID(EXISTING_PRODUCT_ID)))
+        await expect(standalone.AttachToParent(CompositeKey.FromID(EXISTING_PRODUCT_ID)))
             .rejects.toThrow(/not an IS-A child type/);
     });
 
@@ -146,7 +146,7 @@ describe('AttachToExistingParent (#3825)', () => {
         const { meeting } = createPromotionPair();
         meeting.NewRecord();
         (meeting as unknown as { _everSaved: boolean })._everSaved = true;  // simulate a saved record
-        await expect(meeting.AttachToExistingParent(CompositeKey.FromID(EXISTING_PRODUCT_ID)))
+        await expect(meeting.AttachToParent(CompositeKey.FromID(EXISTING_PRODUCT_ID)))
             .rejects.toThrow(/already saved/);
     });
 });

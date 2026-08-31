@@ -1174,7 +1174,7 @@ export abstract class BaseEntity<T = unknown> {
      * ```typescript
      * const applicant = await md.GetEntityObject<ApplicantEntity>('Applicants', contextUser);
      * applicant.NewRecord();
-     * if (!await applicant.AttachToExistingParent(CompositeKey.FromID(personId))) {
+     * if (!await applicant.AttachToParent(CompositeKey.FromID(personId))) {
      *     // no such parent row — decide whether to create a fresh chain instead
      * }
      * applicant.Set('CompanyID', companyId);   // child-held fields as usual
@@ -1188,14 +1188,14 @@ export abstract class BaseEntity<T = unknown> {
      * @throws When this entity is not an IS-A child type, or has already been saved — promotion
      *   is a decision about what a NEW record IS, not an edit to an existing one.
      */
-    public async AttachToExistingParent(parentKey: CompositeKey): Promise<boolean> {
+    public async AttachToParent(parentKey: CompositeKey): Promise<boolean> {
         if (!this.EntityInfo.IsChildType || !this._parentEntity) {
             throw new Error(
-                `AttachToExistingParent: '${this.EntityInfo.Name}' is not an IS-A child type — there is no parent to attach to.`);
+                `AttachToParent: '${this.EntityInfo.Name}' is not an IS-A child type — there is no parent to attach to.`);
         }
         if (this.IsSaved) {
             throw new Error(
-                `AttachToExistingParent: '${this.EntityInfo.Name}' record is already saved. Promotion binds a NEW record to an existing parent; it cannot re-parent a saved one.`);
+                `AttachToParent: '${this.EntityInfo.Name}' record is already saved. Promotion binds a NEW record to an existing parent; it cannot re-parent a saved one.`);
         }
         // The PARENT's primary keys drive everything here, not the child's. The shared-PK mirror
         // is a same-name convention, and a child EntityInfo is not obliged to re-declare the key as
