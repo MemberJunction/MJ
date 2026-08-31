@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-engine-base",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: Base AI Engine Package - does extended types and data caching, can be used anywhere.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,17 +12,18 @@
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/ai": "6.1.0-edge.2",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
-    "@memberjunction/templates-base-types": "6.1.0-edge.2",
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/ai": "6.1.0-edge.4",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.4",
+    "@memberjunction/templates-base-types": "6.1.0-edge.4",
     "dotenv": "^17.2.4",
     "rxjs": "^7.8.2"
   },

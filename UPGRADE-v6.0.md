@@ -250,8 +250,7 @@ npx mj codegen               # regenerate — required after the EntityAction mi
 - **Push-subscription hijack fixed:** `statusUpdates` subscriptions previously filtered only
   on a client-supplied session id without checking it against the authenticated subscriber;
   they now fail closed. No operator action needed.
-- Additive features you can ignore until you want them: layered base views (SQL Server only,
-  opt-in per entity), per-verb direct-SQL flags (default off), API-key row-filter columns
+- Additive features you can ignore until you want them: layered base views (SQL Server via `sp_refreshview`; PostgreSQL restars the outer view after inner regeneration; opt-in per entity), per-verb direct-SQL flags (default off), API-key row-filter columns
   (enforcement lands later), a pluggable search-scope permission resolver, and mobile
   records UX below 768px.
 
