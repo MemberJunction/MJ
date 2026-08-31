@@ -15,6 +15,8 @@ import {
     ElevenLabsRealtimeSession,
     ElevenLabsRealtimeSocket,
     ElevenLabsServerEvent,
+    ELEVENLABS_SUPPORTED_TURN_SETTINGS,
+    MapTurnEagerness,
 } from '../elevenLabsRealtime';
 
 /* ------------------------------------------------------------------ */
@@ -485,6 +487,92 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         driver.Agents = [tuned];
         await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
         expect(driver.UpdateCalls).toEqual([]);
+    });
+
+    /* ------------- #3534: turn eagerness (the one VAD setting EL can express) ------------- */
+
+    it('maps MJ eagerness onto ElevenLabs turnEagerness, and refuses anything else', () => {
+        expect(MapTurnEagerness('low')).toBe('patient');
+        expect(MapTurnEagerness('auto')).toBe('normal');
+        expect(MapTurnEagerness('high')).toBe('eager');
+        for (const junk of [undefined, null, '', 'medium', 'LOW', 3, {}]) {
+            expect(MapTurnEagerness(junk)).toBeUndefined();
+        }
+    });
+
+    /**
+     * The honesty guard. MJ carries four turn-detection settings and ElevenLabs can express one;
+     * accepting all four and applying one is the transmitted-then-discarded defect #3374/#3859
+     * exist to end, so the boundary is declared rather than implied.
+     */
+    it('declares Eagerness as the ONLY turn setting it can deliver', () => {
+        expect(ELEVENLABS_SUPPORTED_TURN_SETTINGS).toEqual(['Eagerness']);
+    });
+
+    it('writes turnEagerness onto the agent BODY, beside agent (not inside it)', async () => {
+        await driver.CreateClientSession(makeParams({
+            Tools: [WEATHER_TOOL], Config: { turnDetection: { Eagerness: 'low' } },
+        }));
+        expect(driver.CreateBodies[0].conversationConfig?.turn?.turnEagerness).toBe('patient');
+    });
+
+    it('omits the turn block entirely when no eagerness is configured', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.CreateBodies[0].conversationConfig?.turn).toBeUndefined();
+    });
+
+    /**
+     * Eagerness is agent-BODY state — ElevenLabs' override surface exposes only softTimeoutConfig
+     * — so it moves neither the tool fingerprint nor override enablement. Without the drift check
+     * an agent deployed eager stays eager while every later session believes it asked for patient.
+     */
+    it('re-PATCHes an agent whose stored turnEagerness differs (#3534)', async () => {
+        const eagerAgent = makeAgentDetail({ agentId: 'agent_eager', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        eagerAgent.conversationConfig!.turn = { turnEagerness: 'eager' };
+        driver.Agents = [eagerAgent];
+
+        await driver.CreateClientSession(makeParams({
+            Tools: [WEATHER_TOOL], Config: { turnDetection: { Eagerness: 'low' } },
+        }));
+
+        expect(driver.UpdateCalls).toHaveLength(1);
+        expect(driver.UpdateCalls[0].body.conversationConfig?.turn?.turnEagerness).toBe('patient');
+    });
+
+    it('leaves a matching stored turnEagerness alone', async () => {
+        const patientAgent = makeAgentDetail({ agentId: 'agent_p', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        patientAgent.conversationConfig!.turn = { turnEagerness: 'patient' };
+        driver.Agents = [patientAgent];
+
+        await driver.CreateClientSession(makeParams({
+            Tools: [WEATHER_TOOL], Config: { turnDetection: { Eagerness: 'low' } },
+        }));
+
+        expect(driver.UpdateCalls).toEqual([]);
+    });
+
+    /** Same no-PATCH-war rule as llm/temperature: an unconfigured desire matches anything. */
+    it('does not fight a hand-tuned turnEagerness when the bag says nothing', async () => {
+        const tuned = makeAgentDetail({ agentId: 'agent_t', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        tuned.conversationConfig!.turn = { turnEagerness: 'eager' };
+        driver.Agents = [tuned];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(driver.UpdateCalls).toEqual([]);
+    });
+
+    it('an eagerness change inside ONE process is not served from the ensure cache', async () => {
+        driver.Agents = [makeAgentDetail({ agentId: 'agent_c', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] })];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        const listsAfterFirst = driver.ListCalls.length;
+        await driver.CreateClientSession(makeParams({
+            Tools: [WEATHER_TOOL], Config: { turnDetection: { Eagerness: 'high' } },
+        }));
+
+        expect(driver.ListCalls.length).toBeGreaterThan(listsAfterFirst);
+        expect(driver.UpdateCalls).toHaveLength(1);
     });
 
     it('a config llm change inside ONE process is not served from the ensure cache (#3859)', async () => {
