@@ -715,22 +715,40 @@ import {
     EntityActionInvocationValidate,
 } from '@memberjunction/actions';
 
-// @memberjunction/actions-apollo (2 classes)
+// @memberjunction/actions-apollo (9 classes)
 import {
+    ApolloCreateListAction,
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
+    ApolloGetListAccountsAction,
+    ApolloGetListContactsAction,
+    ApolloGetListsAction,
+    ApolloMoveListAccountsAction,
+    ApolloMoveListContactsAction,
+    ApolloSearchPeopleAction,
 } from '@memberjunction/actions-apollo';
 
-// @memberjunction/actions-bizapps-accounting (8 classes)
+// @memberjunction/actions-bizapps-accounting (19 classes)
 import {
+    CreateBusinessCentralJournalEntryAction,
+    CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
+    GetAccountBalancesAction,
+    GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
     GetBusinessCentralSalesInvoicesAction,
+    GetChartOfAccountsAction,
+    GetCustomersAction,
+    GetDimensionsAction,
+    GetGLEntriesAction,
     GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
+    GetSalesInvoicesAction,
 } from '@memberjunction/actions-bizapps-accounting';
 
 // @memberjunction/actions-bizapps-crm (4 classes)
@@ -1263,7 +1281,7 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/core-actions (145 classes)
+// @memberjunction/core-actions (147 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1368,6 +1386,7 @@ import {
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
+    ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -1392,6 +1411,7 @@ import {
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
+    TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -1967,16 +1987,34 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EntityActionInvocationMultipleRecords,
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
+    ApolloCreateListAction,
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
+    ApolloGetListAccountsAction,
+    ApolloGetListContactsAction,
+    ApolloGetListsAction,
+    ApolloMoveListAccountsAction,
+    ApolloMoveListContactsAction,
+    ApolloSearchPeopleAction,
+    CreateBusinessCentralJournalEntryAction,
+    CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
+    GetAccountBalancesAction,
+    GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
     GetBusinessCentralSalesInvoicesAction,
+    GetChartOfAccountsAction,
+    GetCustomersAction,
+    GetDimensionsAction,
+    GetGLEntriesAction,
     GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
+    GetSalesInvoicesAction,
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
@@ -2049,6 +2087,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FacebookSchedulePostAction,
     FacebookSearchPostsAction,
     GetAccountAnalyticsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     GetCommentsAction,
     GetTrendingHashtagsAction,
     GetUserVideosAction,
@@ -2067,10 +2109,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     InstagramGetBusinessPostsAction,
     InstagramGetCommentsAction,
     InstagramGetPostInsightsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     InstagramSchedulePostAction,
     InstagramSearchPostsAction,
     LinkedInCreateArticleAction,
@@ -2253,6 +2291,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
@@ -2271,10 +2313,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -2422,6 +2460,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
+    ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2446,6 +2485,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
+    TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -2455,6 +2495,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     UnitConverterAction,
     UnshareListAction,
     UpdateListItemStatusAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     UpdateRecordAction,
     ValidateAddressAction,
     ValidateEmailUniqueAction,
@@ -2475,10 +2519,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ComputerUseAction,
     ComputerUseTestDriver,
     MJEntityPermissionEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
     IntegrationTestDriver,
@@ -2498,7 +2538,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1003;
+export const CLASS_REGISTRATIONS_COUNT = 1023;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
