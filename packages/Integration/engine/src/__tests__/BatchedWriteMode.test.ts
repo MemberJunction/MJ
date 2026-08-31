@@ -144,9 +144,14 @@ describe('batching is independent of concurrency', () => {
         const src = await import('node:fs').then(fs =>
             fs.readFileSync(new URL('../IntegrationEngine.ts', import.meta.url), 'utf8'));
 
-        // The decision follows writeMode alone.
-        expect(src).toMatch(/const batchedWrites = this\.ReadWriteMode\(companyIntegration\) === 'batched';/);
+        // The decision follows writeMode — and, since the map-level gate landed, the target's
+        // primary-key shape. What it must NEVER consult is concurrency: assert the absence of the
+        // old gate rather than the exact text of the line, so adding a legitimate condition (as
+        // entityMapHasIdentityOnlyPK did) does not fail this while a concurrency gate still would.
+        expect(src).toMatch(/const batchedWrites = this\.ReadWriteMode\(companyIntegration\) === 'batched'/);
         expect(src).not.toMatch(/const batchedWrites = useTransaction &&/);
+        expect(src).not.toMatch(/const batchedWrites =[^;]*getSyncConcurrency/);
+        expect(src).not.toMatch(/const batchedWrites =[^;]*useTransaction/);
 
         // And the batch-atomic branch is reachable when batched, whatever the concurrency.
         expect(src).toMatch(/if \(useTransaction \|\| batchedWrites\) \{/);

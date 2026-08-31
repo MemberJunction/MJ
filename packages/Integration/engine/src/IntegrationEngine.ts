@@ -249,6 +249,25 @@ const INTEGER_SQL_BOUNDS: Record<string, { min: number; max: number }> = {
  * functions are generated, so it must be classified too (else the run produces
  * per-record errors instead of one fail-fast SchemaNotGeneratedError).
  */
+/**
+ * The one primary-key shape a TransactionGroup cannot carry: a SINGLE auto-increment column.
+ *
+ * An enrolled `Save()` returns true immediately and the row lands at `Submit()`, so the caller
+ * reads `entity.PrimaryKey` while the write is still queued. Every other shape survives that —
+ * `NewRecord()` client-generates a `uniqueidentifier`, and a composite/soft key takes its values
+ * from the mapped fields before the save. A server-assigned identity does not exist until the
+ * insert executes, so the record map would be written with a blank EntityRecordID and every
+ * incremental sync would re-insert the row.
+ *
+ * Defined ONCE, module-scope, because it is asked at two different levels — per record at the
+ * enrolment seam, and per entity map before a group is created. Two copies of this rule drifting
+ * apart is how a map ends up batching records that individually refuse to enrol.
+ */
+function IsIdentityOnlyPrimaryKey(primaryKeys: ReadonlyArray<{ AutoIncrement?: boolean }> | undefined | null): boolean {
+    const pks = primaryKeys ?? [];
+    return pks.length === 1 && pks[0]?.AutoIncrement === true;
+}
+
 function detectSchemaNotGenerated(entityName: string, errorMessage: string): SchemaNotGeneratedError | null {
     const sqlServer = errorMessage.match(/Could not find stored procedure '([^']+)'/i);
     if (sqlServer) return new SchemaNotGeneratedError(entityName, sqlServer[1]);
@@ -407,8 +426,36 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * shape whose value cannot be known until the insert has executed. See {@link enrolInWriteGroup}.
      */
     private hasIdentityOnlyPrimaryKey(entity: BaseEntity): boolean {
-        const pks = entity.EntityInfo?.PrimaryKeys ?? [];
-        return pks.length === 1 && pks[0]?.AutoIncrement === true;
+        return IsIdentityOnlyPrimaryKey(entity.EntityInfo?.PrimaryKeys);
+    }
+
+    /**
+     * The MAP-level twin of {@link hasIdentityOnlyPrimaryKey}, asked BEFORE a write group is
+     * created. The entity-level guard refuses enrolment per record, which is total at the seam —
+     * but for a map whose target is that shape it refuses EVERY record, and the branch around it
+     * has already committed to being atomic by construction: it skips `BeginTransaction` because
+     * a group exists. The result is a group that stays empty, no transaction, records saving
+     * one-by-one on their own, and an empty `Submit()` returning true — a NON-ATOMIC batch
+     * reporting success as an atomic one.
+     *
+     * Worse on the failure path: a mid-batch throw correctly skips the rollback (there is no
+     * transaction), then the fallback re-applies the WHOLE batch including rows that already
+     * committed. With a server-assigned identity there is nothing to recognise the first copy
+     * by, so those become duplicates — the very failure the enrolment guard exists to prevent,
+     * reached from the other side.
+     *
+     * So the decision is made here, at the map, and such a map falls to the `useTransaction`
+     * path and gets REAL atomicity instead of an empty group.
+     *
+     * Deliberately not asserted at `Submit()` instead: an empty group is a legitimate state —
+     * when the content-hash fast path skips every record in a batch, nothing enrols and the
+     * group is correctly empty. At submit time the harmful and benign cases are
+     * indistinguishable, which is exactly why this has to be decided up front.
+     */
+    private entityMapHasIdentityOnlyPK(entityMap: ICompanyIntegrationEntityMap): boolean {
+        if (!entityMap?.Entity) return false;
+        const info = this.ProviderToUse?.EntityByName(entityMap.Entity);
+        return IsIdentityOnlyPrimaryKey(info?.PrimaryKeys);
     }
 
     /**
@@ -4204,7 +4251,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // happened at concurrency 1 — the exact tradeoff this change exists to remove.
             // Batching is a property of how the writes TRAVEL; concurrency is a property of how
             // many maps fetch at once. They are independent.
-            const batchedWrites = this.ReadWriteMode(companyIntegration) === 'batched';
+            // Batching is a property of the ENTITY MAP, not only of the connection: a map whose
+            // target's whole identity is server-assigned can never enrol a record, so batching it
+            // would produce an empty group and a non-atomic batch reporting success. See
+            // entityMapHasIdentityOnlyPK.
+            const batchedWrites = this.ReadWriteMode(companyIntegration) === 'batched'
+                && !this.entityMapHasIdentityOnlyPK(entityMap);
 
             // NEVER nest `runWriteExclusive`: the inner call waits on a chain that already contains
             // the outer one, which deadlocks. Under the outer mutex the writes are already
