@@ -41,6 +41,9 @@ vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
     AddClientDynamicPackages: vi.fn(),
     RemoveServerDynamicPackages: vi.fn(),
+    // Upgrade prunes stale entries before re-adding (add-only writers would otherwise leave the
+    // config converging on the union of every version ever installed).
+    PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),

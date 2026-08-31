@@ -1,0 +1,48 @@
+[
+  {
+    "_comments": [
+      "The base measures an AI quantity can be expressed in. Referenced by",
+      "AIModelPriceUnitType.UsageTypeID (what a billing unit is a quantity OF, and therefore what",
+      "every cost row priced by it measures) and by AIPromptRun.UsageTypeID (what a recorded",
+      "quantity counts). Distinct from MJ: AI Model Price Unit Types, which names the BILLING unit",
+      "and its scale: audio recorded in Seconds may be billed by the Per Hour unit type.",
+      "IDs are fixed rather than generated because AIModelPriceUnitType rows reference them by",
+      "@lookup on Name, and because a future migration that tightens UsageTypeID to NOT NULL will",
+      "need a stable Tokens row to default to."
+    ],
+    "fields": {
+      "Name": "Tokens",
+      "Description": "Discrete model tokens. The default measure for text models, and the measure every pre-existing cost row is recorded in."
+    },
+    "primaryKey": {
+      "ID": "1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seconds",
+      "Description": "Seconds of continuous media — audio submitted for transcription, or audio synthesized. Always recorded in seconds regardless of the billing granularity; the price unit type converts to minutes or hours."
+    },
+    "primaryKey": {
+      "ID": "4115A8C8-311E-4DE5-9325-6A61C69CA6A7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Characters",
+      "Description": "Characters of text submitted, used by text-to-speech models that bill per character rather than per token."
+    },
+    "primaryKey": {
+      "ID": "8B075F49-3963-47D5-895C-1B3889A85009"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Images",
+      "Description": "Whole images generated or analyzed, for models that bill per image rather than by any continuous measure."
+    },
+    "primaryKey": {
+      "ID": "D16F94D1-6200-4A4B-934C-FD827E337E4D"
+    }
+  }
+]
