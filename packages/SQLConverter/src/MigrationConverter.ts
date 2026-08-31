@@ -406,11 +406,51 @@ export async function convertMigration(
     notes.push('Reconciliation: kept T-SQL produced empty output with no reported gap — surfaced as a conversion gap.');
   }
 
+  /**
+   * HOLLOW: every translatable statement became a gap, so the emitted body is a header and a gap
+   * banner over nothing (issue #3840).
+   *
+   * This is the third distinct way `emittedStatements === 0` arises, and the only one that was
+   * unguarded:
+   *   • nothing reported, nothing dropped → content VANISHED  (suspiciousEmptyOutput, above)
+   *   • the dialect intentionally DROPPED it → legitimately empty, must stay `converted`
+   *   • everything became a GAP           → hollow, handled here
+   *
+   * Keyed on `transpiled.unhandled`, NOT on the local `unhandled`, which the vanish guard above
+   * has already appended its synthetic RECONCILIATION-EMPTY-OUTPUT row to. Reading the local one
+   * would fold the vanish case in here and label it with a note that misdescribes it — nothing
+   * "became a gap"; the reconciliation layer manufactured one. Vanish is promoted on its own
+   * terms below, the same way the empty-marker path does it.
+   *
+   * Left as `converted`, the CLI writes it as a discoverable `.pg.sql`. That artifact is the worst
+   * shape this pipeline can produce: it satisfies filename parity, contains no T-SQL to trip a
+   * contamination scan, applies to a PostgreSQL host without error, and does nothing — so the
+   * migration is recorded as applied while the schema change never happens. Observed on
+   * bizapps-common's `Layered_Base_Views_People_Organizations`, whose whole body sat inside two
+   * `IF NOT OBJECT_ID(...)` blocks.
+   *
+   * Promoting the status routes it to `.needs-hand` exactly as the empty-marker path above already
+   * does, and for the same stated reason: never a discoverable `.pg.sql` that Skyway could apply.
+   * The transpiled artifact is still written (under the `.needs-hand` name) so the gap comments and
+   * any partial DDL survive for whoever finishes the port.
+   */
+  const fullyGapped = emittedStatements === 0 && transpiled.unhandled.length > 0;
+  if (fullyGapped) {
+    notes.push(
+      'Reconciliation: every translatable statement became a conversion gap, leaving no executable SQL — ' +
+        'written as .needs-hand rather than a .pg.sql that would apply cleanly and do nothing.',
+    );
+  }
+
   const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true, coreSchema);
 
   return {
     fileName: kept.fileName,
-    status: kept.status,
+    // A hollow body must not masquerade as a clean conversion — see `fullyGapped` above. Vanished
+    // content is promoted for the same reason and stated separately rather than folded in, so both
+    // routes to `.needs-hand` are visible here and neither borrows the other's explanation. This
+    // matches the empty-marker path, which already promotes on `suspiciousEmptyOutput` alone.
+    status: fullyGapped || suspiciousEmptyOutput ? 'needs-hand-authoring' : kept.status,
     pgSQL,
     split: kept.split,
     droppedCodeGenLines: kept.droppedCodeGenLines,
