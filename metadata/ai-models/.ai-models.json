@@ -11458,7 +11458,7 @@
     "fields": {
       "Name": "Kimi K2.5",
       "PowerRank": 15,
-      "Description": "Moonshot AI's most powerful 1T parameter native multimodal model with Mixture-of-Experts architecture. Features 256K token context window and advanced reasoning capabilities with Thinking Mode and Instant Mode. Released January 27, 2026 with state-of-the-art performance on visual and text understanding tasks.",
+      "Description": "Moonshot AI's 1T parameter native multimodal Mixture-of-Experts model, released January 27, 2026 with 256K token context window and reasoning capabilities (Thinking Mode / Instant Mode). SUNSET ON MOONSHOT AI DIRECT API 2026-08-31: Moonshot has completed the sunset of `moonshotai/Kimi-K2.5` (and the `moonshot-v1-*` series) alongside the Kimi K3 rollout that started in July; new signups have been blocked since the K3 launch. Weights remain MIT-licensed, so Fireworks.ai and OpenRouter passthroughs may continue to serve the model — those vendor rows are left Active pending confirmation. Source: https://platform.kimi.ai/docs/models",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 7,
@@ -11491,7 +11491,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "KimiLLM",
             "APIName": "moonshotai/Kimi-K2.5",
             "MaxInputTokens": 262144,
@@ -11562,14 +11562,14 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
             "StartedAt": "2026-01-27T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Inactive",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.6,
             "OutputPricePerUnit": 3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Kimi K2.5 pricing on Moonshot AI as of January 2026. API access via Kimi official API. Released January 27, 2026 as 1T parameter native multimodal model with 256K context window and reasoning capabilities.",
+            "Comments": "Kimi K2.5 pricing on Moonshot AI as of January 2026. API access via Kimi official API. Released January 27, 2026 as 1T parameter native multimodal model with 256K context window and reasoning capabilities. STATUS FLIPPED TO INACTIVE 2026-08-31: Moonshot completed the full sunset of `moonshotai/Kimi-K2.5` on this date (paired with the moonshot-v1-* series sunset). Row preserved for historical pricing lookups. Source: https://platform.kimi.ai/docs/models",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -21790,6 +21790,25 @@
             "lastModified": "2026-08-20T22:30:03.273Z",
             "checksum": "f56b0c14d4d8323afbaef77f0197df29d07bc7ebd1942bafc7e83ef29fef0d68"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "xai.grok-4-6-v1:0",
+            "MaxInputTokens": 500000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C908AC29-D7B5-4417-8E80-3B1FB95BBEB2"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -21839,6 +21858,26 @@
           "sync": {
             "lastModified": "2026-08-20T22:30:03.304Z",
             "checksum": "407ec45eb6d3296edfb9aa0666f11f046a2a2bfecf32c83c176f9d7214c10ed8"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-08-25T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok 4.6 on Amazon Bedrock — availability announced week of 2026-08-25 via US Geo and Global cross-region inference. Vendor parity with x.ai direct sub-200K tier ($2/$6 per 1M). Same tiered long-context structure applies for prompts >= 200K tokens (see the x.ai direct cost record Comments). Reasoning-effort levels (low/medium/high/xhigh) exposed. Sources: https://x.ai/news/grok-4-6-amazon-bedrock ; https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-bedrock-grok-4-6/",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "2F94ADA7-9E85-401E-9FB5-DBA92288D091"
           }
         }
       ]
@@ -22097,6 +22136,274 @@
     "sync": {
       "lastModified": "2026-08-26T08:34:00.705Z",
       "checksum": "d59b1e611abc8c29d9d9fe9f8e253ab2e26477e98632c67c66c7b463834a28dc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM-5.3-Flash",
+      "PowerRank": 17,
+      "Description": "Z.AI (Zhipu AI) cost-tier Flash companion to GLM-5.3, released 2026-08-26 with MIT-licensed open weights. Native multimodal (text/image/video/agentic), 320B total / 18B active parameters (MoE), 1.3M token input context and 131,072 token max output. Reportedly hit #1 on the OpenRouter usage leaderboard shortly after launch. Previously surfaced as the 'Ox Alpha' stealth preview on OpenRouter (posted Aug 20) before being de-anonymised as GLM-5.3-Flash on Aug 26. Sources: https://openrouter.ai/z-ai/glm-5.3-flash ; https://www.orcarouter.ai/blog/glm-5-3-flash-release ; https://kie.ai/blog/what-is-glm-5-5 ; https://www.explainx.ai/blog/ox-alpha-what-we-know-mystery-ai-model-august-2026",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.3"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "79D5CD15-445D-47FE-A0FC-424CC451D786"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ZAILLM",
+            "APIName": "glm-5.3-flash",
+            "MaxInputTokens": 1310720,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "45CD9FCC-1AC2-4EAD-ADF8-E35E0CB8CE7C"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "z-ai/glm-5.3-flash",
+            "MaxInputTokens": 1310720,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A5F9B6D8-1BC8-4B25-AB84-369FAA6A5EA8"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 60,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/models/glm-5p3-flash",
+            "MaxInputTokens": 1310720,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C8752D4A-755A-4A1B-909F-71AF26FC33C0"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-08-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM-5.3-Flash direct-API pricing on Z.AI as of 2026-08-26 launch: $0.15/$0.50 per 1M input/output. Cache reads reported at approximately $0.016/1M. Sources: https://www.orcarouter.ai/blog/glm-5-3-flash-release ; https://kie.ai/blog/what-is-glm-5-5",
+            "CacheReadPricePerUnit": 0.016,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "464D6103-312E-455E-B587-C811E10AEE6C"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-08-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.05,
+            "OutputPricePerUnit": 0.1667,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "C4F43C5F-1AAD-4EEB-A90D-8840A3C3756E"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A9866D22-380D-42A9-ABAC-CD974749A218"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen3.8-Flash",
+      "PowerRank": 15,
+      "Description": "Alibaba Cloud (Qwen) cost-tier Flash companion to Qwen 3.8 Max, released 2026-08-26. 125B parameters, multimodal reasoning across text / image / video / agentic surfaces, 1,000,000-token input context and 131,072-token max output. Positioned by Alibaba as a low-cost general-purpose reasoning model. Sources: https://www.bloomberg.com/news/articles/2026-08-26/alibaba-releases-smaller-cost-effective-qwen-ai-model ; https://mpost.io/alibaba-prices-qwen3-8-flash-api-at-0-16-per-million-tokens-cutting-inference-costs-for-125b-parameter-model/ ; https://openrouter.ai/qwen/qwen3.8-flash",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.8 Max"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "848E65BB-920F-4214-9F18-3FF1B5B0EF35"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.8-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5ABA054E-93A1-4B0B-AF7A-B5614F5C74BF"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.8-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D05691E5-82C8-4C20-A8CD-56AD2B061A63"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 60,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/models/qwen3p8-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7B3E543E-EA8E-449D-B829-B4F310F81039"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-08-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.47,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen3.8-Flash launch pricing on Alibaba Cloud Model Studio as of 2026-08-26: $0.15/$0.47 per 1M input/output. Cache-hit reads reported at approximately $0.016/1M. Sources: https://mpost.io/alibaba-prices-qwen3-8-flash-api-at-0-16-per-million-tokens-cutting-inference-costs-for-125b-parameter-model/ ; https://www.bloomberg.com/news/articles/2026-08-26/alibaba-releases-smaller-cost-effective-qwen-ai-model",
+            "CacheReadPricePerUnit": 0.016,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "37F828CF-15EE-49D5-AE1B-9B0A8D49EBCF"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-08-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.47,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen3.8-Flash on OpenRouter as passthrough of Alibaba Cloud direct pricing ($0.15/$0.47 per 1M). Source: https://openrouter.ai/qwen/qwen3.8-flash",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "0F6551D2-6184-4746-B77B-95024CC55FD5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A33A14EE-5018-46D5-AEFA-5DB798D90C0C"
     }
   }
 ]
