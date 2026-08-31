@@ -42,10 +42,12 @@ import {
         ArchiveRunsResourceComponent,
     ],
 })
-export class ArchivingDashboardsModule {
-    constructor() {
-        // Ensure tree-shaking prevention loaders are called
-        LoadArchiveConfigResource();
-        LoadArchiveRunsResource();
-    }
-}
+export class ArchivingDashboardsModule {}
+
+// Tree-shaking prevention at MODULE SCOPE — must run on file evaluation, not on
+// NgModule instantiation, because the lazy resource path builds components with
+// `createComponent(reg.SubClass)` and never instantiates this module. See the
+// longer explanation in `ai-dashboards.module.ts`, where a constructor-scoped
+// loader let `FeaturePipelinesResource` get tree-shaken out of its chunk entirely.
+LoadArchiveConfigResource();
+LoadArchiveRunsResource();
