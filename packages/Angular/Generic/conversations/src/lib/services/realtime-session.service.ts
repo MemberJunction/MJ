@@ -185,6 +185,12 @@ interface RemoteBrowserScreencastPayload {
   width: number;
   height: number;
   seq: number;
+  /**
+   * The browser's URL when the frame was captured (#3496). Optional: a server older than that change
+   * omits it, and the channel then behaves exactly as it did before rather than reading `undefined`
+   * as "the page has no URL".
+   */
+  currentUrl?: string | null;
 }
 
 /**
@@ -978,6 +984,31 @@ export class RealtimeSessionService {
       return;
     }
     this.client.SendContextNote(trimmed);
+  }
+
+  /**
+   * Asks the live model to SPEAK FIRST — before the human has said anything.
+   *
+   * Every other path into the model's voice reacts to something: the human spoke, or a channel
+   * reported input. A host that needs the agent to open the conversation (an interviewer greeting
+   * a candidate, a guide introducing a task) had no way to ask for that, so the session connected
+   * and both sides waited for the other. The instructions are what to say, in the host's words —
+   * the model still speaks in its own voice and persona.
+   *
+   * Returns whether the request was DELIVERED, which is the one way this deliberately differs from
+   * {@link SendContextNote} beside it. A context note that is dropped costs the model a little
+   * perception; an opening line that is dropped is a session that sits in silence, and the host
+   * needs to be able to tell the two apart. `false` means no session was live (or the instructions
+   * were empty) — usually a host that asked before the connection reached a speaking state, which
+   * it can then retry.
+   */
+  public RequestSpokenOpening(instructions: string): boolean {
+    const trimmed = instructions?.trim() ?? '';
+    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+      return false;
+    }
+    this.requestChannelSpokenResponse(trimmed);
+    return true;
   }
 
   /**
@@ -2361,7 +2392,9 @@ export class RealtimeSessionService {
   private routeScreencastFrame(frame: RemoteBrowserScreencastPayload): void {
     for (const channel of this._activeChannels$.value) {
       if (channel.ChannelName === 'Remote Browser' && this.hasOnScreencastFrame(channel)) {
-        channel.OnScreencastFrame(frame.dataBase64);
+        // The URL rides along so the channel can notice a page change nobody on this side caused —
+        // under streaming the snapshot poll is stopped, and frames were pure pixels (#3496).
+        channel.OnScreencastFrame(frame.dataBase64, frame.currentUrl ?? null);
         return;
       }
     }
@@ -2370,7 +2403,7 @@ export class RealtimeSessionService {
   /** Structural guard: true when the channel exposes an `OnScreencastFrame(dataBase64)` method. */
   private hasOnScreencastFrame(
     channel: BaseRealtimeChannelClient,
-  ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string): void } {
+  ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void } {
     return typeof (channel as { OnScreencastFrame?: unknown }).OnScreencastFrame === 'function';
   }
 
