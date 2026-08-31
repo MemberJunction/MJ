@@ -530,9 +530,15 @@ describe('UpdateTabQueryParams guard', () => {
 
 // ---- BaseResourceComponent query param glue ----
 
+/** `UpdateQueryParams` is protected; specs reach it through this named seam rather than a cast. */
+type UpdateQueryParamsSeam = { UpdateQueryParams(params: Record<string, unknown>): void };
+
+/** Builds the ResourceData stub these specs need, typed through the component's own field type. */
+const resourceData = (configuration: Record<string, unknown> = {}): BaseResourceComponent['Data'] =>
+  ({ ResourceRecordID: '', Configuration: configuration }) as unknown as BaseResourceComponent['Data'];
+
 describe('BaseResourceComponent UpdateQueryParams', () => {
   // Seam for invoking the protected method under test.
-  type UpdateQueryParamsSeam = { UpdateQueryParams(params: Record<string, unknown>): void };
 
   function createComponent(data: { ResourceRecordID?: string; Configuration?: Record<string, unknown> }): {
     component: BaseResourceComponent;
@@ -630,9 +636,9 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
       UpdateTabQueryParams: updateTabQueryParams,
       UpdateActiveTabQueryParams: vi.fn()
     };
-    component.Data = { ResourceRecordID: '', Configuration: {} } as any;
+    component.Data = resourceData();
 
-    (component as any).UpdateQueryParams({ section: 'blueprint' });
+    (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ section: 'blueprint' });
 
     expect(updateTabQueryParams).not.toHaveBeenCalled();
     const message = vi.mocked(LogError).mock.calls.at(-1)?.[0] as string;
@@ -651,7 +657,7 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
     // What DashboardResource / BaseAdminContainer now do for ClassFactory-resolved dashboards.
     component.ParentTabId = 'host-tab';
 
-    (component as any).UpdateQueryParams({ panel: 'details' });
+    (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ panel: 'details' });
 
     expect(updateTabQueryParams).toHaveBeenCalledWith('host-tab', { panel: 'details' }, expect.objectContaining({
       resourceType: 'Custom',
@@ -682,7 +688,7 @@ describe('BaseResourceComponent re-homing on a cache reattach', () => {
       UpdateActiveTabQueryParams: vi.fn(),
       ObserveTabQueryParams: vi.fn(() => ({ pipe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }) })),
     };
-    child.Data = { ResourceRecordID: '', Configuration: {} } as any;
+    child.Data = resourceData();
     return { child, updateTabQueryParams };
   }
 
@@ -701,7 +707,7 @@ describe('BaseResourceComponent re-homing on a cache reattach', () => {
       UpdateActiveTabQueryParams: vi.fn(),
       ObserveTabQueryParams: vi.fn(() => ({ pipe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }) })),
     };
-    host.Data = { ResourceRecordID: '', Configuration: { tabId: 'tab-birth' } } as any;
+    host.Data = resourceData({ tabId: 'tab-birth' });
     return host;
   }
 
@@ -714,7 +720,7 @@ describe('BaseResourceComponent re-homing on a cache reattach', () => {
     host.RebindTabId('tab-reattached');
 
     expect(child.getTabId()).toBe('tab-reattached');
-    (child as any).UpdateQueryParams({ section: 'evidence' });
+    (child as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ section: 'evidence' });
     expect(updateTabQueryParams).toHaveBeenCalledWith('tab-reattached', { section: 'evidence' }, expect.anything());
   });
 
