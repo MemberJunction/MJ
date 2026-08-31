@@ -43,6 +43,24 @@ import {
 export type RemoteBrowserFloorHolder = 'Agent' | 'Human';
 
 /**
+ * Canonicalises an `instanceKey` — the name of ONE browser within an agent session (#3531) — or
+ * returns `null` for "the single unnamed instance", which is what every pre-#3531 caller means.
+ *
+ * Exported because the key is compared in more than one place: the engine's session map, the
+ * resolver's per-stream idempotency sets, and the screencast/audio envelopes a client routes on. If
+ * each normalised for itself, a surface could start a stream under `Left` and then fail to find it
+ * under `left` — the key would be case-insensitive in one layer and case-sensitive in the next, which
+ * is the kind of disagreement that only shows up in production with two surfaces open.
+ *
+ * Empty and whitespace collapse to `null` rather than to a distinct `''` instance, so a caller that
+ * threads an absent value through as `''` lands exactly where it did before the argument existed.
+ */
+export function NormalizeInstanceKey(instanceKey?: string | null): string | null {
+  const name = (instanceKey ?? '').trim().toLowerCase();
+  return name.length === 0 ? null : name;
+}
+
+/**
  * Parameters for {@link RemoteBrowserEngine.StartSession}.
  *
  * The provider is identified by EITHER its display name OR its `DriverClass` (exactly one is required);
@@ -86,6 +104,11 @@ export interface StartRemoteBrowserSessionParams {
  * Parameters for {@link RemoteBrowserEngine.AchieveGoal} — a high-level, goal-driven browser run.
  */
 export interface AchieveGoalParams {
+  /**
+   * Names WHICH browser within the agent session, when the session holds more than one (#3531).
+   * Omitted resolves the single unnamed instance — the previous behaviour, and still the default.
+   */
+  InstanceKey?: string;
   /** The acting user (for lazy session start). */
   ContextUser?: UserInfo;
   /** Explicit backend provider name (when omitted, the single Active provider is used). */
@@ -347,8 +370,12 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
   /**
    * Lazily starts (or returns the already-running) remote-browser session for an `AIAgentSession`.
    *
-   * Idempotent: a second call for an agent session that already has a live browser returns that same
-   * {@link IRemoteBrowserSession} rather than launching a second browser. The provider is resolved by
+   * Idempotent PER INSTANCE: a second call for the same agent session AND `instanceKey` returns that
+   * same {@link IRemoteBrowserSession} rather than launching a second browser. A DIFFERENT
+   * `instanceKey` is a different browser — that is the whole point of the argument (#3531): keyed by
+   * agent session alone, "open the pricing page beside the docs page" resolved both requests to one
+   * browser and the second silently navigated the first, so a side-by-side comparison could not be
+   * expressed at all. Omitting the key keeps the previous behaviour exactly: one unnamed instance. The provider is resolved by
    * the explicit `providerName` when supplied, else the engine's single {@link RemoteBrowserEngineBase.ActiveProviders}
    * entry — assuming EXACTLY ONE Active provider for now (a clear error is thrown for none or ambiguous,
    * rather than silently picking one).
@@ -359,19 +386,20 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * @returns The live session the mutation drives.
    * @throws When no/ambiguous Active provider can be resolved, or the underlying {@link StartSession} fails.
    */
-  public async StartSessionForAgentSession(agentSessionID: string, contextUser?: UserInfo, providerName?: string): Promise<IRemoteBrowserSession> {
-    const existing = this.GetSessionForAgentSession(agentSessionID);
+  public async StartSessionForAgentSession(agentSessionID: string, contextUser?: UserInfo, providerName?: string, instanceKey?: string): Promise<IRemoteBrowserSession> {
+    const existing = this.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (existing) {
       return existing;
     }
     // Coalesce concurrent lazy-starts (screencast + first action + audio stream) onto one promise so we
-    // launch exactly ONE browser per agent session — see startingSessions.
-    const key = this.agentSessionKey(agentSessionID);
+    // launch exactly ONE browser per agent session AND INSTANCE — see startingSessions. The key must
+    // carry the instance or two named surfaces starting at once would collapse onto one promise.
+    const key = this.agentSessionKey(agentSessionID, instanceKey);
     const inflight = this.startingSessions.get(key);
     if (inflight) {
       return inflight;
     }
-    const startPromise = this.lazyStartBrowserForAgentSession(agentSessionID, key, contextUser, providerName);
+    const startPromise = this.lazyStartBrowserForAgentSession(agentSessionID, key, contextUser, providerName, instanceKey);
     this.startingSessions.set(key, startPromise);
     try {
       return await startPromise;
@@ -390,8 +418,9 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     key: string,
     contextUser?: UserInfo,
     providerName?: string,
+    instanceKey?: string,
   ): Promise<IRemoteBrowserSession> {
-    const existing = this.GetSessionForAgentSession(agentSessionID);
+    const existing = this.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (existing) {
       return existing;
     }
@@ -413,8 +442,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * @param agentSessionID The `AIAgentSession` id.
    * @returns The live session, or `undefined`.
    */
-  public GetSessionForAgentSession(agentSessionID: string): IRemoteBrowserSession | undefined {
-    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID));
+  public GetSessionForAgentSession(agentSessionID: string, instanceKey?: string): IRemoteBrowserSession | undefined {
+    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID, instanceKey));
     if (!engineSessionID) {
       return undefined;
     }
@@ -438,8 +467,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * @returns The goal outcome.
    */
   public async AchieveGoal(agentSessionID: string, goal: string, opts: AchieveGoalParams = {}): Promise<RemoteBrowserGoalResult> {
-    await this.StartSessionForAgentSession(agentSessionID, opts.ContextUser, opts.ProviderName);
-    const handle = this.getHandleForAgentSession(agentSessionID);
+    await this.StartSessionForAgentSession(agentSessionID, opts.ContextUser, opts.ProviderName, opts.InstanceKey);
+    const handle = this.getHandleForAgentSession(agentSessionID, opts.InstanceKey);
     if (!handle) {
       return { Success: false, Status: 'Error', Detail: 'No active remote-browser session for this agent session.' };
     }
@@ -466,8 +495,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
   }
 
   /** Returns the full session handle (with capability features) for an agent session, or `undefined`. */
-  private getHandleForAgentSession(agentSessionID: string): RemoteBrowserSessionHandle | undefined {
-    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID));
+  private getHandleForAgentSession(agentSessionID: string, instanceKey?: string): RemoteBrowserSessionHandle | undefined {
+    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID, instanceKey));
     return engineSessionID ? this.activeSessions.get(engineSessionID.toLowerCase()) : undefined;
   }
 
@@ -480,8 +509,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * @param agentSessionID The `AIAgentSession` id whose browser to end.
    * @returns `true` when a live browser was found and torn down, `false` when none was held.
    */
-  public async EndSessionForAgentSession(agentSessionID: string): Promise<boolean> {
-    const key = this.agentSessionKey(agentSessionID);
+  public async EndSessionForAgentSession(agentSessionID: string, instanceKey?: string): Promise<boolean> {
+    const key = this.agentSessionKey(agentSessionID, instanceKey);
     const engineSessionID = this.agentSessionToEngineSession.get(key);
     if (!engineSessionID) {
       return false;
@@ -950,9 +979,18 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     return active[0].Name;
   }
 
-  /** Canonical map key for an agent-session id (UUID case differs across DB platforms). */
-  private agentSessionKey(agentSessionID: string): string {
-    return agentSessionID.trim().toLowerCase();
+  /**
+   * Canonical map key for an agent-session id (UUID case differs across DB platforms).
+   *
+   * `instanceKey` NAMES A SECOND BROWSER within one agent session. Keyed by agent session alone,
+   * "open the pricing page beside the docs page" resolves both requests to the SAME browser and the
+   * second silently navigates the first — so a side-by-side comparison cannot be expressed at all.
+   * A caller that supplies no key keeps the previous behaviour exactly: the one unnamed instance.
+   */
+  private agentSessionKey(agentSessionID: string, instanceKey?: string): string {
+    const base = agentSessionID.trim().toLowerCase();
+    const name = NormalizeInstanceKey(instanceKey);
+    return name === null ? base : `${base}::${name}`;
   }
 
   /** Builds the standard capability-not-supported error stamped with the backend name. */

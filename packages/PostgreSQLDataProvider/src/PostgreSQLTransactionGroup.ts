@@ -26,6 +26,8 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
 
             if (this.Variables.length > 0) {
                 await this.executeWithVariables(items, client, pgProvider, returnResults);
+            } else if (this.BatchedSubmit) {
+                await this.executeBatched(items, client, returnResults);
             } else {
                 await this.executeWithoutVariables(items, client, returnResults);
             }
@@ -102,6 +104,127 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
                 throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
             }
             returnResults.push(new TransactionResult(item, result && result.length > 0 ? result[0] : result, bSuccess));
+        }
+    }
+
+    /**
+     * ── Opt-in batched submit: ONE round trip for the whole group ───────────────────────────
+     *
+     * The sequential path costs one round trip per item; a 100-item group pays 100 wire hops
+     * whose wall time is dominated by per-statement overhead, not SQL. Here the items travel
+     * together as ONE multi-statement text (PostgreSQL's simple query protocol returns one
+     * result per statement, in order), inside the same transaction, with per-item results
+     * mapped back via sentinel SELECTs — a statement that returns no rows produces a result
+     * with no rows, so sentinels keep the mapping exact rather than positional-by-luck.
+     *
+     * The extended protocol cannot carry $N parameters in multi-statement text, so parameter
+     * values are inlined as SQL literals through the driver's own `escapeLiteral`. Only values
+     * with an unambiguous literal form are inlined (string, finite number, boolean,
+     * null/undefined, Date); if ANY item carries a value outside that set, the whole group
+     * falls back to the sequential path — correctness first, batching second.
+     */
+    private async executeBatched(
+        items: TransactionItem[],
+        client: pg.PoolClient,
+        returnResults: TransactionResult[]
+    ): Promise<void> {
+        const SENTINEL = '__mj_batch_item';
+        const escapeFn = (client as unknown as { escapeLiteral?: (v: string) => string }).escapeLiteral?.bind(client);
+        if (!escapeFn) {
+            // No driver-provided literal escaper on this client — never hand-roll one; run sequentially.
+            await this.executeWithoutVariables(items, client, returnResults);
+            return;
+        }
+        const literalFor = (value: unknown): string | undefined => {
+            if (value === null || value === undefined) return 'NULL';
+            switch (typeof value) {
+                case 'number': return Number.isFinite(value) ? String(value) : undefined;
+                case 'boolean': return value ? 'TRUE' : 'FALSE';
+                case 'string': return escapeFn(value);
+                default:
+                    return value instanceof Date ? escapeFn(value.toISOString()) : undefined;
+            }
+        };
+
+        const parts: string[] = [];
+        for (let index = 0; index < items.length; index++) {
+            const item = items[index];
+            const rawParams = item.ExtraData?.parameters ?? item.Vars;
+            const params = PGQueryParameterProcessor.ProcessParameters(rawParams) ?? [];
+            let bail = false;
+            let inlined = item.Instruction;
+            if (params.length > 0) {
+                inlined = inlined.replace(/\$(\d+)\b/g, (match, digits) => {
+                    const position = Number(digits) - 1;
+                    // An ABSENT parameter index is not a null value — it means the instruction
+                    // references more placeholders than the generator supplied, i.e. the two
+                    // disagree. Unreachable today (GenerateSaveSQL emits statement and parameters
+                    // together), but batching is precisely the path where that disagreement would
+                    // be SILENT: inlining it as NULL would write a null column instead of failing.
+                    // Bail the whole group to the sequential path, where the driver raises it.
+                    if (position < 0 || position >= params.length) {
+                        bail = true;
+                        return match;
+                    }
+                    const lit = literalFor(params[position]);
+                    if (lit === undefined) {
+                        bail = true;
+                        return match;
+                    }
+                    return lit;
+                });
+            }
+            if (bail) {
+                await this.executeWithoutVariables(items, client, returnResults);
+                return;
+            }
+            parts.push(`SELECT ${index} AS ${SENTINEL};`);
+            parts.push(inlined.endsWith(';') ? inlined : `${inlined};`);
+        }
+
+        let rawResults: pg.QueryResult[];
+        try {
+            const combined = await client.query(parts.join('\n'));
+            rawResults = Array.isArray(combined) ? combined : [combined];
+        } catch (e) {
+            // One text to the server, so a failure fails all of it — the same outcome the
+            // sequential path produces, which also rolls back on the first error. Per-item
+            // attribution for the failing row is the caller's degradation path.
+            for (const item of items) {
+                returnResults.push(new TransactionResult(item, e, false));
+            }
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
+        }
+
+        const perItem: (Record<string, unknown>[] | undefined)[] = new Array(items.length).fill(undefined);
+        let current = -1;
+        for (const rs of rawResults) {
+            const rows = (rs?.rows ?? []) as Record<string, unknown>[];
+            const first = rows[0];
+            if (first !== undefined && Object.prototype.hasOwnProperty.call(first, SENTINEL)) {
+                const idx = Number(first[SENTINEL]);
+                if (Number.isFinite(idx)) {
+                    current = idx;
+                }
+                continue;
+            }
+            // OWNERSHIP RULE: an item owns the first NON-EMPTY result after its sentinel. The
+            // pg driver reports a command that returned nothing as a result with zero rows, so
+            // skipping empties keeps a statement's own "no rows" from being mistaken for its
+            // result set while still refusing to adopt the NEXT item's rows (the sentinel walk
+            // has already moved `current` by then). The SQL Server sibling takes the first
+            // recordset unconditionally — documented there for the same reason. Neither is
+            // reachable with generated CRUD procedures; both are stated so the two
+            // implementations cannot drift apart unnoticed.
+            if (current >= 0 && current < items.length && perItem[current] === undefined && rows.length > 0) {
+                perItem[current] = rows;
+            }
+        }
+        for (let i = 0; i < items.length; i++) {
+            const rows = perItem[i];
+            const ok = rows != null && rows.length > 0;
+            returnResults.push(new TransactionResult(items[i], ok ? rows![0] : rows, ok));
         }
     }
 

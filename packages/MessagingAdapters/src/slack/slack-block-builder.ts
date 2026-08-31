@@ -10,8 +10,10 @@
  */
 
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
+import { parseBase64DataUrl } from '@memberjunction/ai';
 import { LogStatus } from '@memberjunction/core';
 import { markdownToBlocks } from './slack-formatter.js';
+import { buildExplorerDeepLink, isOpenableURI } from '../base/message-formatter.js';
 
 /** Slack enforces a hard 50-block limit per message. */
 const SLACK_MAX_BLOCKS = 50;
@@ -284,8 +286,21 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
     });
   }
 
-  // "View Full" button if URL is available
-  if (artifact.URL) {
+  // "View Full" button if URL is available. A non-public URL here fails the entire message
+  // (see isButtonSafeURL), so anything not button-safe degrades to a mrkdwn link.
+  if (artifact.URL && !isButtonSafeURL(artifact.URL) && isOpenableURI(artifact.URL)) {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `<${artifact.URL}|View Full Report>` }],
+    });
+  } else if (artifact.URL && !isButtonSafeURL(artifact.URL)) {
+    // Neither postable as a button nor openable as a link (a `data:` or `file:` artifact URL).
+    // Say so rather than rendering nothing at all, which read as the report having no link.
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_Full report is not linkable from Slack._' }],
+    });
+  } else if (artifact.URL) {
     blocks.push({
       type: 'actions',
       elements: [
@@ -300,6 +315,28 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
   }
 
   return blocks;
+}
+
+/**
+ * Is this URL valid inside a Slack **block element**?
+ *
+ * Slack rejects the ENTIRE message with `invalid_blocks: invalid url` when a button's `url` is not
+ * a public http(s) address — so a localhost `ExplorerBaseURL` (the normal local-dev value) meant a
+ * reply carrying any resource command never posted: the agent's work completed, the artifact was
+ * created, and the user saw nothing. Note mrkdwn `<url|text>` links accept localhost, which is why
+ * context deep-links worked while buttons silently killed the message.
+ */
+function isButtonSafeURL(url: unknown): boolean {
+  if (typeof url !== 'string' || !isOpenableURI(url)) return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return host !== 'localhost' && host !== '127.0.0.1' && host !== '::1' && host !== '0.0.0.0'
+      && !host.endsWith('.localhost');
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -319,12 +356,30 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
 
   for (const cmd of commands.slice(0, 5)) {
     if (cmd.type === 'open:url' && 'url' in cmd) {
-      buttons.push(buildURLButton(cmd.label, cmd.url, buttons.length));
+      if (!isOpenableURI(cmd.url)) {
+        // Only PROMISE an attachment when one will actually be harvested. The drop-guard fires on
+        // any non-http(s) scheme, but only a base64 `data:` URI yields bytes — a `blob:`, `file:`
+        // or unparseable `data:` would otherwise render "attached to this reply" beside nothing.
+        // Matches BaseMessagingAdapter.collectInlineFileAttachments, which parses the same shape.
+        resourceInfoItems.push(
+          isHarvestableFileURI(cmd.url)
+            ? `📄 _${escapeMrkdwn(cmd.label) || 'Generated file'} — attached to this reply._`
+            : `📄 _${escapeMrkdwn(cmd.label) || 'Generated file'} — not linkable from Slack._`
+        );
+      } else if (isButtonSafeURL(cmd.url)) {
+        buttons.push(buildURLButton(cmd.label, cmd.url, buttons.length));
+      } else {
+        resourceInfoItems.push(`<${cmd.url}|${escapeMrkdwn(cmd.label) || 'Open link'}>`);
+      }
     } else if (cmd.type === 'open:resource') {
       const resourceCmd = cmd as OpenResourceCommand;
       const deepLink = buildExplorerDeepLink(resourceCmd, explorerBaseURL);
-      if (deepLink) {
+      if (deepLink && isButtonSafeURL(deepLink)) {
         buttons.push(buildURLButton(cmd.label, deepLink, buttons.length));
+      } else if (deepLink) {
+        // Not button-safe (a localhost Explorer, typical in local dev) — a mrkdwn link is
+        // accepted where a button URL is not, and still resolves for whoever can reach it.
+        resourceInfoItems.push(`<${deepLink}|${escapeMrkdwn(cmd.label) || 'Open resource'}>`);
       } else {
         resourceInfoItems.push(formatResourceInfo(resourceCmd));
       }
@@ -356,38 +411,12 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
 function buildURLButton(label: string | undefined, url: string, index: number): Record<string, unknown> {
   return {
     type: 'button',
-    text: { type: 'plain_text', text: truncateToLength(label ?? `Link ${index + 1}`, 75), emoji: true },
+    text: { type: 'plain_text', text: truncateToLength(label ?? `Link ${index + 1}`, SLACK_BUTTON_TEXT_MAX_LENGTH), emoji: true },
     action_id: `mj:action_${index}`,
     url
   };
 }
 
-/**
- * Build a deep link URL into MJ Explorer for an `open:resource` command.
- * Returns null if no explorer base URL is configured.
- */
-function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
-  if (!explorerBaseURL) return null;
-  const base = explorerBaseURL.replace(/\/+$/, '');
-
-  switch (cmd.resourceType) {
-    case 'Record':
-      if (cmd.entityName && cmd.resourceId) {
-        const entity = encodeURIComponent(cmd.entityName);
-        const id = encodeURIComponent(cmd.resourceId);
-        return `${base}/resource/record/${entity}/${id}`;
-      }
-      break;
-    case 'Dashboard':
-      return `${base}/resource/dashboard/${encodeURIComponent(cmd.resourceId)}`;
-    case 'Report':
-      return `${base}/resource/report/${encodeURIComponent(cmd.resourceId)}`;
-    case 'View':
-      return `${base}/resource/view/${encodeURIComponent(cmd.resourceId)}`;
-  }
-
-  return null;
-}
 
 /**
  * Format an `open:resource` command as descriptive text for a context block.
@@ -615,7 +644,7 @@ export function buildResponseForm(form: AgentResponseForm): Record<string, unkno
     elements: [
       {
         type: 'button',
-        text: { type: 'plain_text', text: form.submitLabel ?? 'Fill Out Form', emoji: true },
+        text: { type: 'plain_text', text: truncateToLength(form.submitLabel ?? 'Fill Out Form', SLACK_BUTTON_TEXT_MAX_LENGTH), emoji: true },
         action_id: 'mj:form_modal:open',
         value: formJson.length <= 2000 ? formJson : 'too_large',
         style: 'primary',
@@ -653,7 +682,7 @@ export function buildFormModal(form: AgentResponseForm): Record<string, unknown>
     type: 'modal',
     callback_id: 'mj:form_modal:submit',
     title: { type: 'plain_text', text: truncateToLength(form.title ?? 'Form', 24) },
-    submit: { type: 'plain_text', text: form.submitLabel ?? 'Submit' },
+    submit: { type: 'plain_text', text: truncateToLength(form.submitLabel ?? 'Submit', SLACK_MODAL_SUBMIT_MAX_LENGTH) },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks: modalBlocks,
   };
@@ -674,7 +703,9 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
         type: 'plain_text_input',
         action_id: `mj:form_field:${question.id}`,
         multiline: textType.type === 'textarea',
-        ...(textType.placeholder ? { placeholder: { type: 'plain_text', text: textType.placeholder } } : {}),
+        ...(textType.placeholder
+          ? { placeholder: { type: 'plain_text', text: truncateToLength(textType.placeholder, SLACK_PLACEHOLDER_MAX_LENGTH) } }
+          : {}),
         ...(textType.maxLength ? { max_length: textType.maxLength } : {}),
       };
     }
@@ -703,7 +734,7 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
         type: 'radio_buttons',
         action_id: `mj:form_field:${question.id}`,
         options: opts.slice(0, 10).map((opt) => ({
-          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), SLACK_BUTTON_TEXT_MAX_LENGTH) },
           value: String(opt.value),
         })),
       };
@@ -715,7 +746,7 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
         type: 'static_select',
         action_id: `mj:form_field:${question.id}`,
         options: opts.slice(0, 100).map((opt) => ({
-          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), SLACK_BUTTON_TEXT_MAX_LENGTH) },
           value: String(opt.value),
         })),
       };
@@ -727,7 +758,7 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
         type: 'checkboxes',
         action_id: `mj:form_field:${question.id}`,
         options: opts.slice(0, 10).map((opt) => ({
-          text: { type: 'plain_text', text: truncateToLength(String(opt.label), 75) },
+          text: { type: 'plain_text', text: truncateToLength(String(opt.label), SLACK_BUTTON_TEXT_MAX_LENGTH) },
           value: String(opt.value),
         })),
       };
@@ -738,7 +769,7 @@ function buildModalInputElement(question: FormQuestion): Record<string, unknown>
       return {
         type: 'plain_text_input',
         action_id: `mj:form_field:${question.id}`,
-        placeholder: { type: 'plain_text', text: `Enter ${question.label}` },
+        placeholder: { type: 'plain_text', text: truncateToLength(`Enter ${question.label}`, SLACK_PLACEHOLDER_MAX_LENGTH) },
       };
   }
 }
@@ -867,9 +898,66 @@ function appendTruncationNotice(blocks: Record<string, unknown>[], storeKey?: st
 }
 
 /**
+ * Slack's maximum length for a modal input's `placeholder` text.
+ *
+ * Exceeding it fails the whole `views.open` call with `invalid_arguments`
+ * (`must be less than 151 characters [json-pointer:/view/blocks/0/element/placeholder/text]`),
+ * so the modal never opens and the button appears dead — with the only clue in the server log.
+ * A form question's label is free text and easily longer than this.
+ */
+const SLACK_PLACEHOLDER_MAX_LENGTH = 150;
+
+/**
+ * Will `collectInlineFileAttachments` actually get bytes out of this URI?
+ */
+function isHarvestableFileURI(url: unknown): boolean {
+  return typeof url === 'string' && parseBase64DataUrl(url.trim().replace(/^data:/i, 'data:')) !== null;
+}
+
+/**
+ * Escape the three characters that carry meaning inside Slack mrkdwn.
+ *
+ * A link is `<url|label>`, so an agent-authored label containing `>` closes the link early and
+ * the rest of it leaks out as literal text.
+ */
+function escapeMrkdwn(text: string | null | undefined): string {
+  // `label` is declared required on OpenURLCommand but the value is model-authored JSON, and a
+  // throw here propagates all the way out of HandleMessage — the agent runs, and the user sees
+  // nothing at all. Every other label site in this file defends the same way.
+  if (!text) return '';
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\|/g, '&#124;');
+}
+
+/**
+ * Slack's maximum length for a modal view's `submit` text.
+ *
+ * Same failure mode as the placeholder above, from the same cause: `submitLabel` is
+ * agent-authored free text, and an over-long one fails the whole `views.open`.
+ */
+const SLACK_MODAL_SUBMIT_MAX_LENGTH = 24;
+
+/**
+ * Slack's maximum length for a message button's text.
+ *
+ * Three times the modal-submit limit — applying 24 here would cut an agent-authored label to 21
+ * characters plus an ellipsis for no reason, since a message button is not part of a view.
+ */
+const SLACK_BUTTON_TEXT_MAX_LENGTH = 75;
+
+/**
  * Truncate a string to a given length with ellipsis.
  */
 function truncateToLength(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength - 3) + '...';
+  // Slack counts UTF-16 units, so the BUDGET is counted in units — but the string is walked by
+  // code point so a cut never strands half a surrogate pair. Slicing by code point alone would
+  // overshoot the limit (24 code points of emoji is 48 units) and fail `views.open` outright,
+  // which is the failure this cap exists to prevent.
+  const budget = maxLength - 3;
+  let out = '';
+  for (const ch of text) {
+    if (out.length + ch.length > budget) break;
+    out += ch;
+  }
+  return out + '...';
 }

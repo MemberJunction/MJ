@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/computer-use-engine",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.4",
   "description": "MemberJunction: MJ Computer Use - MJ-aware subclass of the Computer Use engine with AIPromptRunner, MJ Credentials, Actions-as-Tools, and entity persistence.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,19 +15,19 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/ai": "6.1.0-edge.2",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
-    "@memberjunction/aiengine": "6.1.0-edge.2",
-    "@memberjunction/ai-prompts": "6.1.0-edge.2",
-    "@memberjunction/actions-base": "6.1.0-edge.2",
-    "@memberjunction/actions": "6.1.0-edge.2",
-    "@memberjunction/computer-use": "6.1.0-edge.2",
-    "@memberjunction/testing-engine": "6.1.0-edge.2"
+    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/core": "6.1.0-edge.4",
+    "@memberjunction/core-entities": "6.1.0-edge.4",
+    "@memberjunction/ai": "6.1.0-edge.4",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.4",
+    "@memberjunction/aiengine": "6.1.0-edge.4",
+    "@memberjunction/ai-prompts": "6.1.0-edge.4",
+    "@memberjunction/actions-base": "6.1.0-edge.4",
+    "@memberjunction/actions": "6.1.0-edge.4",
+    "@memberjunction/computer-use": "6.1.0-edge.4",
+    "@memberjunction/testing-engine": "6.1.0-edge.4"
   },
   "peerDependencies": {
     "playwright": ">=1.40.0"

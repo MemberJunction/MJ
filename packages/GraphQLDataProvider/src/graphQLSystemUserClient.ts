@@ -37,6 +37,63 @@ import {
  * Finaly, this client can be used in parallel with the regular client to allow a server
  * to mix and match the two as needed.
  */
+const QUERY_MUTATION_RESULT_SELECTION = `Success
+                    ErrorMessage
+                    Query {
+                        ID
+                        Name
+                        Description
+                        CategoryID
+                        Category
+                        SQL
+                        Status
+                        QualityRank
+                        EmbeddingVector
+                        EmbeddingModelID
+                        EmbeddingModel
+                        TechnicalDescription
+                        Reusable
+                    }
+                    Fields {
+                        ID
+                        QueryID
+                        Name
+                        Description
+                        Sequence
+                        SQLBaseType
+                        SQLFullType
+                        SourceEntityID
+                        SourceEntity
+                        SourceFieldName
+                        IsComputed
+                        ComputationDescription
+                        IsSummary
+                        SummaryDescription
+                    }
+                    Parameters {
+                        ID
+                        QueryID
+                        Name
+                        Description
+                        Type
+                        IsRequired
+                        DefaultValue
+                        SampleValue
+                        ValidationFilters
+                    }
+                    Entities {
+                        ID
+                        QueryID
+                        EntityID
+                        Entity
+                    }
+                    Permissions {
+                        ID
+                        QueryID
+                        RoleID
+                        Role
+                    }`;
+
 export class GraphQLSystemUserClient {
     private _client: GraphQLClient;
     private _sessionId: string;
@@ -635,62 +692,7 @@ export class GraphQLSystemUserClient {
         try {
             const query = `mutation CreateQueryExtended($input: CreateQuerySystemUserInput!) {
                 CreateQueryExtended(input: $input) {
-                    Success
-                    ErrorMessage
-                    Query {
-                        ID
-                        Name
-                        Description
-                        CategoryID
-                        Category
-                        SQL
-                        Status
-                        QualityRank
-                        EmbeddingVector
-                        EmbeddingModelID
-                        EmbeddingModel
-                        TechnicalDescription
-                        Reusable
-                        MJQueryFields_QueryIDArray {
-                            ID
-                            QueryID
-                            Name
-                            Description
-                            Sequence
-                            SQLBaseType
-                            SQLFullType
-                            SourceEntityID
-                            SourceEntity
-                            SourceFieldName
-                            IsComputed
-                            ComputationDescription
-                            IsSummary
-                            SummaryDescription
-                        }
-                        MJQueryParameters_QueryIDArray {
-                            ID
-                            QueryID
-                            Name
-                            Description
-                            Type
-                            IsRequired
-                            DefaultValue
-                            SampleValue
-                            ValidationFilters
-                        }
-                        MJQueryEntities_QueryIDArray {
-                            ID
-                            QueryID
-                            EntityID
-                            Entity
-                        }
-                        MJQueryPermissions_QueryIDArray {
-                            ID
-                            QueryID
-                            RoleID
-                            Role
-                        }
-                    }
+                    ${QUERY_MUTATION_RESULT_SELECTION}
                 }
             }`
 
@@ -722,62 +724,7 @@ export class GraphQLSystemUserClient {
         try {
             const query = `mutation UpdateQueryExtended($input: UpdateQuerySystemUserInput!) {
                 UpdateQueryExtended(input: $input) {
-                    Success
-                    ErrorMessage
-                    Query {
-                        ID
-                        Name
-                        Description
-                        CategoryID
-                        Category
-                        SQL
-                        Status
-                        QualityRank
-                        EmbeddingVector
-                        EmbeddingModelID
-                        EmbeddingModel
-                        TechnicalDescription
-                        Reusable
-                        MJQueryFields_QueryIDArray {
-                            ID
-                            QueryID
-                            Name
-                            Description
-                            Sequence
-                            SQLBaseType
-                            SQLFullType
-                            SourceEntityID
-                            SourceEntity
-                            SourceFieldName
-                            IsComputed
-                            ComputationDescription
-                            IsSummary
-                            SummaryDescription
-                        }
-                        MJQueryParameters_QueryIDArray {
-                            ID
-                            QueryID
-                            Name
-                            Description
-                            Type
-                            IsRequired
-                            DefaultValue
-                            SampleValue
-                            ValidationFilters
-                        }
-                        MJQueryEntities_QueryIDArray {
-                            ID
-                            QueryID
-                            EntityID
-                            Entity
-                        }
-                        MJQueryPermissions_QueryIDArray {
-                            ID
-                            QueryID
-                            RoleID
-                            Role
-                        }
-                    }
+                    ${QUERY_MUTATION_RESULT_SELECTION}
                 }
             }`
 
@@ -834,7 +781,8 @@ export class GraphQLSystemUserClient {
                     SkipEntityAIActions: options.SkipEntityAIActions ?? false,
                     SkipEntityActions: options.SkipEntityActions ?? false,
                     ReplayOnly: options.ReplayOnly ?? false,
-                    IsParentEntityDelete: options.IsParentEntityDelete ?? false
+                    IsParentEntityDelete: options.IsParentEntityDelete ?? false,
+                    SkipRecordChanges: options.SkipRecordChanges ?? false
                 };
             }
 
@@ -2413,8 +2361,8 @@ export interface QueryPermission {
 
 /**
  * Query data returned inside a mutation result.
- * Mirrors the CodeGen-generated MJQuery_ type using CodeGen array naming conventions.
- * New entity fields are automatically available without manual sync.
+ * Mirrors the CodeGen-generated MJQuery_ scalars. Related collections live
+ * on {@link QueryMutationResult}, not nested under Query.
  */
 export interface QueryMutationQueryData {
     ID: string;
@@ -2430,26 +2378,23 @@ export interface QueryMutationQueryData {
     EmbeddingModelID?: string;
     EmbeddingModel?: string;
     Reusable?: boolean;
-    /** Related fields — uses CodeGen array naming convention */
-    MJQueryFields_QueryIDArray?: QueryField[];
-    /** Related parameters — uses CodeGen array naming convention */
-    MJQueryParameters_QueryIDArray?: QueryParameter[];
-    /** Related entities — uses CodeGen array naming convention */
-    MJQueryEntities_QueryIDArray?: MJQueryEntity[];
-    /** Related permissions — uses CodeGen array naming convention */
-    MJQueryPermissions_QueryIDArray?: QueryPermission[];
     /** Catch-all for new fields added by CodeGen */
     [key: string]: unknown;
 }
 
 /**
  * Result type for Create and Update query mutation calls.
- * On success, Query contains the full query data. On failure, Query is null.
+ * On success, Query contains the query scalars and Fields/Parameters/Entities/
+ * Permissions hold the related rows. On failure, Query is null.
  */
 export interface QueryMutationResult {
     Success: boolean;
     ErrorMessage?: string;
     Query?: QueryMutationQueryData;
+    Fields?: QueryField[];
+    Parameters?: QueryParameter[];
+    Entities?: MJQueryEntity[];
+    Permissions?: QueryPermission[];
 }
 
 /** @deprecated Use QueryMutationResult instead */
@@ -2558,6 +2503,8 @@ export interface DeleteQueryOptionsInput {
      * @default false
      */
     IsParentEntityDelete?: boolean;
+    /** Skip the Record Change (audit) row for this delete — machine writers only; see EntityDeleteOptions. */
+    SkipRecordChanges?: boolean;
 }
 
 /**
