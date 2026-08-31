@@ -1,6 +1,8 @@
 import { Command, Flags } from '@oclif/core';
 import { MJCLIRuntimeHost } from './runtime-host';
-import type { IMJCLIRuntimeHost, MJCLIResult, OutputFormat, PluginUsage } from './types';
+import { ResolveOutputFormat } from './output-format';
+import { NonInteractiveError, ResolveInteractivity } from './interaction';
+import { MJCLIErrorCodes, type IMJCLIRuntimeHost, type MJCLIResult, type PluginUsage } from './types';
 
 /**
  * Abstract base for every pluggable `mj` command (plan D1/D2).
@@ -11,20 +13,37 @@ import type { IMJCLIRuntimeHost, MJCLIResult, OutputFormat, PluginUsage } from '
  * shared {@link BaseCLIPlugin.run} wires up the {@link IMJCLIRuntimeHost}, emits
  * the runtime advisory, renders the result per `--format`, and sets the exit code.
  *
- * The global flags `--format`, `--verbose`, and `--no-banner` are declared on
- * {@link BaseCLIPlugin.baseFlags} and inherited by every subclass via oclif's
- * native `baseFlags` merging — no per-command duplication (plan D3).
+ * The global flags `--format`, `--verbose`, `--no-banner`, and `--interactive`
+ * are declared on {@link BaseCLIPlugin.baseFlags} and inherited by every subclass
+ * via oclif's native `baseFlags` merging — no per-command duplication (plan D3).
+ *
+ * Two defaults are inferred here rather than declared per command, so that a human
+ * and an agent each get the right behaviour without either having to ask for it:
+ * - **Format follows the pipe.** With no explicit `--format`, a non-TTY stdout
+ *   resolves to `json`. A caller that redirected stdout has already said it is a
+ *   machine; it should not also have to remember a flag.
+ * - **Prompting follows the terminal.** {@link BaseCLIPlugin.Interactive} is true at a
+ *   real terminal and false when piped, spawned, or running in CI. A
+ *   {@link NonInteractiveError} escaping `Execute` is rendered as a structured,
+ *   actionable result rather than a stack trace.
  */
 export abstract class BaseCLIPlugin extends Command {
   /** Inherited by every subclass through oclif's static `baseFlags` mechanism. */
   static override baseFlags = {
     format: Flags.string({
-      options: ['text', 'json', 'md'],
-      default: 'text',
-      description: 'Output format: text (human), json (machine-readable), md (Markdown-fenced)',
+      options: ['text', 'json', 'md', 'human', 'console', 'markdown'],
+      description:
+        'Output format: text (human), json (machine-readable), md (Markdown-fenced). ' +
+        'Defaults to text on a terminal and json when stdout is piped.',
     }),
     verbose: Flags.boolean({ char: 'v', default: false, description: 'Show detailed output' }),
     'no-banner': Flags.boolean({ default: false, description: 'Suppress the startup banner and runtime advisory' }),
+    interactive: Flags.boolean({
+      allowNo: true,
+      description:
+        'Allow interactive prompts. Defaults to on at a terminal and off when piped, spawned, or in CI, ' +
+        'so an agent never hangs on a question. Use --no-interactive to force it off.',
+    }),
   };
 
   /**
@@ -36,6 +55,14 @@ export abstract class BaseCLIPlugin extends Command {
   static Usage: PluginUsage;
 
   protected Host!: IMJCLIRuntimeHost;
+
+  /**
+   * Whether this run may prompt — detected from the terminal unless `--interactive` /
+   * `--no-interactive` says otherwise. Subclasses pass this into `ResolveOrPrompt`
+   * rather than calling `@inquirer` directly, so a missing value fails fast with the
+   * flag to pass instead of blocking on stdin.
+   */
+  protected Interactive = false;
 
   /** Parsed flags, captured once in {@link run}; read via {@link GetFlags}. */
   private parsedFlags: unknown;
@@ -64,12 +91,14 @@ export abstract class BaseCLIPlugin extends Command {
     const { flags } = await this.parse(ctor);
     this.parsedFlags = flags;
 
-    const f = flags as { format?: string; verbose?: boolean; 'no-banner'?: boolean };
-    const format = (f.format as OutputFormat) ?? 'text';
+    const f = flags as { format?: string; verbose?: boolean; 'no-banner'?: boolean; interactive?: boolean };
+    const { format } = ResolveOutputFormat({ formatFlag: f.format });
     const verbose = !!f.verbose;
     const noBanner = !!f['no-banner'];
 
-    this.Host = new MJCLIRuntimeHost(format, verbose, noBanner);
+    this.Interactive = ResolveInteractivity({ interactiveFlag: f.interactive }).interactive;
+
+    this.Host = new MJCLIRuntimeHost(format, verbose, noBanner, { interactive: this.Interactive });
 
     // Announce runtime expectation up front (stderr in JSON mode) so an agent
     // reading the stream can budget its timeout — see plan §5/§6.
@@ -77,7 +106,7 @@ export abstract class BaseCLIPlugin extends Command {
       this.Host.AnnounceRuntime(ctor.Usage);
     }
 
-    const result = await this.Execute();
+    const result = await this.RunExecute(ctor);
     this.Host.Emit(result);
 
     // Optional cleanup hook (e.g. close DB pools, reset singletons). Runs after
@@ -88,6 +117,27 @@ export abstract class BaseCLIPlugin extends Command {
     // handles (e.g. embedding workers) do so inside Cleanup().
     if (!result.success) {
       this.exit(1);
+    }
+  }
+
+  /**
+   * Runs {@link BaseCLIPlugin.Execute}, converting a {@link NonInteractiveError} into a
+   * normal failed result. A command that asked for a value it wasn't given has NOT
+   * crashed — it has a precise, recoverable complaint, and an agent gets far more from
+   * `{code:'E_NON_INTERACTIVE', suggestion:'Pass --entity …'}` than from a stack trace.
+   * Every other error keeps propagating to oclif untouched.
+   */
+  private async RunExecute(ctor: typeof BaseCLIPlugin): Promise<MJCLIResult> {
+    try {
+      return await this.Execute();
+    } catch (e) {
+      if (!(e instanceof NonInteractiveError)) throw e;
+      return {
+        success: false,
+        command: ctor.Usage?.command ?? this.id ?? 'unknown',
+        durationSeconds: 0,
+        errors: [{ message: e.message, code: MJCLIErrorCodes.NonInteractive, suggestion: e.suggestion }],
+      };
     }
   }
 

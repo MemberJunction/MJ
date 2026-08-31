@@ -1,4 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
+import { DrainResponseBody } from '@memberjunction/network-utils';
 import env from 'env-var';
 import mime from 'mime-types';
 import {
@@ -395,6 +396,7 @@ export class BoxFileStorage extends FileStorageBase {
       });
 
       if (!response.ok) {
+        await DrainResponseBody(response);
         throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`);
       }
 
@@ -430,6 +432,7 @@ export class BoxFileStorage extends FileStorageBase {
       });
 
       if (!response.ok) {
+        await DrainResponseBody(response);
         throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
       }
 

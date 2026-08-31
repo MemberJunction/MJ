@@ -3,6 +3,7 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { resolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
@@ -521,10 +522,15 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Check queryParams first (shell populates these from the URL for deep-linking)
     const qp = config['queryParams'] as Record<string, string> | undefined;
     this.applyAgentParam(qp?.['agent'], qp?.['agentReq']);
-    const conversationId = qp?.['conversationId'] || (config.conversationId as string);
-    const artifactId = qp?.['artifactId'] || (config.artifactId as string);
-    const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
-      : config.versionNumber ? (config.versionNumber as number) : null;
+
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    const conversationId = resolveDeepLinkParam('conversationId', search, qp, config.conversationId as string);
+    const artifactId = resolveDeepLinkParam('artifactId', search, qp, config.artifactId as string);
+    // Resolved the same URL-first way as artifactId above: pairing a URL artifact with the
+    // previous visit's version number would open the wrong version of the right artifact.
+    const rawVersion = resolveDeepLinkParam(
+      'versionNumber', search, qp, config.versionNumber != null ? String(config.versionNumber) : undefined);
+    const versionNumber = rawVersion ? parseInt(rawVersion, 10) : null;
 
     // Set pending artifact if provided
     if (artifactId) {

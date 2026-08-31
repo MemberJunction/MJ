@@ -6,8 +6,10 @@
  * - Tab-scoped filtering prevents cross-tab leakage
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { LogError } from '@memberjunction/core';
 import { NavigationService, TabQueryParamUpdateGuard } from '../navigation.service';
 import { BaseResourceComponent } from '../base-resource-component';
+import { ResourceData } from '@memberjunction/core-entities';
 
 // Mock Angular dependencies
 vi.mock('@angular/core', () => ({
@@ -31,6 +33,7 @@ vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   Metadata: class {},
   CompositeKey: class {},
+  LogError: vi.fn(),
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
@@ -527,9 +530,15 @@ describe('UpdateTabQueryParams guard', () => {
 
 // ---- BaseResourceComponent query param glue ----
 
+/** `UpdateQueryParams` is protected; specs reach it through this named seam rather than a cast. */
+type UpdateQueryParamsSeam = { UpdateQueryParams(params: Record<string, unknown>): void };
+
+/** Builds the ResourceData stub these specs need, typed through the component's own field type. */
+const resourceData = (configuration: Record<string, unknown> = {}): BaseResourceComponent['Data'] =>
+  ({ ResourceRecordID: '', Configuration: configuration }) as unknown as BaseResourceComponent['Data'];
+
 describe('BaseResourceComponent UpdateQueryParams', () => {
   // Seam for invoking the protected method under test.
-  type UpdateQueryParamsSeam = { UpdateQueryParams(params: Record<string, unknown>): void };
 
   function createComponent(data: { ResourceRecordID?: string; Configuration?: Record<string, unknown> }): {
     component: BaseResourceComponent;
@@ -596,7 +605,13 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
     }));
   });
 
-  it('falls back to active-tab updates when no tab id is available', () => {
+  /**
+   * The cross-tab URL corruption this replaced: a component with no tab id used to write into
+   * "the active tab" — the tab the USER is looking at, not the caller's. A background dashboard
+   * finishing an async load therefore rewrote the visible tab's deep link. There is no safe
+   * fallback, so a tab-less component writes nowhere and says so loudly.
+   */
+  it('refuses to write query params when it cannot identify its own tab', () => {
     const { component, updateTabQueryParams, updateActiveTabQueryParams } = createComponent({
       Configuration: {
         resourceType: 'Custom',
@@ -606,7 +621,130 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
 
     (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ panel: 'details' });
 
-    expect(updateActiveTabQueryParams).toHaveBeenCalledWith({ panel: 'details' });
+    expect(updateActiveTabQueryParams).not.toHaveBeenCalled();
     expect(updateTabQueryParams).not.toHaveBeenCalled();
+  });
+
+  it('logs the offending component and the dropped params instead of writing somewhere arbitrary', () => {
+    class BackgroundStudioDashboard extends BaseResourceComponent {
+      async GetResourceDisplayName(_data: ResourceData): Promise<string> { return 'Studio'; }
+      async GetResourceIconClass(_data: ResourceData): Promise<string> { return 'fa-solid fa-flask'; }
+    }
+    const component = Object.create(BackgroundStudioDashboard.prototype) as BaseResourceComponent;
+    const updateTabQueryParams = vi.fn(() => true);
+    (component as unknown as { navigationService: unknown }).navigationService = {
+      UpdateTabQueryParams: updateTabQueryParams,
+      UpdateActiveTabQueryParams: vi.fn()
+    };
+    component.Data = resourceData();
+
+    (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ section: 'blueprint' });
+
+    expect(updateTabQueryParams).not.toHaveBeenCalled();
+    const message = vi.mocked(LogError).mock.calls.at(-1)?.[0] as string;
+    expect(message).toContain('BackgroundStudioDashboard');
+    expect(message).toContain('section');
+    expect(message).toContain('ParentTabId');
+  });
+
+  it('still writes — scoped to its own tab — once the host supplies a tab id', () => {
+    const { component, updateTabQueryParams, updateActiveTabQueryParams } = createComponent({
+      Configuration: {
+        resourceType: 'Custom',
+        navItemName: 'Embedded'
+      }
+    });
+    // What DashboardResource / BaseAdminContainer now do for ClassFactory-resolved dashboards.
+    component.ParentTabId = 'host-tab';
+
+    (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ panel: 'details' });
+
+    expect(updateTabQueryParams).toHaveBeenCalledWith('host-tab', { panel: 'details' }, expect.objectContaining({
+      resourceType: 'Custom',
+      navItemName: 'Embedded'
+    }));
+    expect(updateActiveTabQueryParams).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The stamp a host puts on a child is a SNAPSHOT of where the host was when it created it. A cache
+ * reattach (`tab-container` calls `RebindTabId`) moves the host to a different tab without
+ * recreating anything, so a stamp that does not move leaves the child reading and writing the tab
+ * it was born in — from inside a tab it no longer belongs to. Same cross-tab corruption, slower
+ * route.
+ */
+describe('BaseResourceComponent re-homing on a cache reattach', () => {
+  /** A child whose only job is to record where its writes land. */
+  function makeChild(): { child: BaseResourceComponent; updateTabQueryParams: ReturnType<typeof vi.fn> } {
+    class ChildDashboard extends BaseResourceComponent {
+      async GetResourceDisplayName(_data: ResourceData): Promise<string> { return 'Child'; }
+      async GetResourceIconClass(_data: ResourceData): Promise<string> { return 'fa-solid fa-cube'; }
+    }
+    const child = Object.create(ChildDashboard.prototype) as BaseResourceComponent;
+    const updateTabQueryParams = vi.fn(() => true);
+    (child as unknown as { navigationService: unknown }).navigationService = {
+      UpdateTabQueryParams: updateTabQueryParams,
+      UpdateActiveTabQueryParams: vi.fn(),
+      ObserveTabQueryParams: vi.fn(() => ({ pipe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }) })),
+    };
+    child.Data = resourceData();
+    return { child, updateTabQueryParams };
+  }
+
+  /** A host that stamps one child at creation and re-homes it when it is itself rebound. */
+  function makeHost(child: BaseResourceComponent): BaseResourceComponent {
+    class HostWrapper extends BaseResourceComponent {
+      async GetResourceDisplayName(_data: ResourceData): Promise<string> { return 'Host'; }
+      async GetResourceIconClass(_data: ResourceData): Promise<string> { return 'fa-solid fa-window'; }
+      protected override onTabIdRebound(tabId: string): void {
+        this.rehomeChildToTab(child, tabId);
+      }
+    }
+    const host = Object.create(HostWrapper.prototype) as BaseResourceComponent;
+    (host as unknown as { navigationService: unknown }).navigationService = {
+      UpdateTabQueryParams: vi.fn(() => true),
+      UpdateActiveTabQueryParams: vi.fn(),
+      ObserveTabQueryParams: vi.fn(() => ({ pipe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }) })),
+    };
+    host.Data = resourceData({ tabId: 'tab-birth' });
+    return host;
+  }
+
+  it("moves a child's tab stamp when the host is rebound to another tab", () => {
+    const { child, updateTabQueryParams } = makeChild();
+    const host = makeHost(child);
+    child.ParentTabId = host.getTabId();          // what the host does at createComponent time
+    expect(child.getTabId()).toBe('tab-birth');
+
+    host.RebindTabId('tab-reattached');
+
+    expect(child.getTabId()).toBe('tab-reattached');
+    (child as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ section: 'evidence' });
+    expect(updateTabQueryParams).toHaveBeenCalledWith('tab-reattached', { section: 'evidence' }, expect.anything());
+  });
+
+  it('clears the stale stamp rather than layering over it', () => {
+    // `getTabId()` prefers ParentTabId over the rebound id, so a re-home that only calls the child's
+    // RebindTabId would be a silent no-op — it early-returns when getTabId() already matches.
+    const { child } = makeChild();
+    const host = makeHost(child);
+    child.ParentTabId = 'tab-birth';
+
+    host.RebindTabId('tab-reattached');
+
+    expect(child.ParentTabId).toBeNull();
+    expect(child.getTabId()).toBe('tab-reattached');
+  });
+
+  it('is a no-op for a host with no children', () => {
+    const { child } = makeChild();
+    const host = makeHost(child);
+    // Rebinding to the tab it already has must not touch the child at all.
+    child.ParentTabId = 'tab-birth';
+
+    host.RebindTabId('tab-birth');
+
+    expect(child.ParentTabId).toBe('tab-birth');
   });
 });

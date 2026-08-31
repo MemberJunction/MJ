@@ -19,6 +19,7 @@ import {
     RunQuerySQLFilterManager,
     RestoreContext,
     RecordChangePayload,
+    EntityDeleteOptions,
 } from '@memberjunction/core';
 
 
@@ -1018,7 +1019,7 @@ SELECT * FROM save_result`;
      * Generates PostgreSQL function-call SQL for Delete.
      * Returns parameterized SQL with $1, $2, ... placeholders.
      */
-    protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult {
+    protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
         const entityInfo = entity.EntityInfo;
         const fnName = this.getCRUDFunctionName('delete', entityInfo);
         const pkFields = entityInfo.PrimaryKeys;
@@ -1030,7 +1031,7 @@ SELECT * FROM save_result`;
         // Delete function lives in the entity's own schema, mirroring codegen output.
         const simpleSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entityInfo.SchemaName, fnName)}(${paramPlaceholders})`;
 
-        if (this.ShouldTrackRecordChanges(entityInfo)) {
+        if (this.ShouldTrackRecordChanges(entityInfo) && options?.SkipRecordChanges !== true) {
             const oldData = entity.GetAll(false);
             const recordID = this.buildRecordIDFromEntity(entity);
             // Delete: newData is null so the payload renders Source/lineage from

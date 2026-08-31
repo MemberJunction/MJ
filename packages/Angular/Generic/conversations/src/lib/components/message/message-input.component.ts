@@ -14,7 +14,7 @@ import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMet
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility, agentFailureDisposition, agentFailureMessage } from '@memberjunction/ai-core-plus';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { AiComposerComponent } from '../composer/ai-composer.component';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -407,6 +407,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private completionTimestamps = new Map<string, number>();
   // Track registered streaming callbacks for cleanup
   private registeredCallbacks = new Map<string, (progress: MessageProgressUpdate) => Promise<void>>();
+  // After a post-ACK disconnect, keep observing ConversationDetail.Status until
+  // the *server* writes Complete/Error (MaxTimePerRun terminates the run).
+  // Back off 5s → 15s → 60s so we bound polling cost, not invent a client
+  // verdict. Do not paint Error here — that would unregister the streaming
+  // callback and make a later server Complete sticky-wrong until reload.
+  private static readonly IN_FLIGHT_WATCH_BACKOFF_MS = [5_000, 15_000, 60_000] as const;
+  private inFlightWatches = new Map<string, ReturnType<typeof setTimeout>>();
 
   // Track pending attachments from the input box
   private pendingAttachments: PendingAttachment[] = [];
@@ -527,6 +534,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ngOnDestroy() {
     // Unregister all streaming callbacks
     this.unregisterAllCallbacks();
+    this.clearInFlightWatches();
     this.realtimeActiveSub?.unsubscribe();
     // If the user navigates away mid-call, tear the session down.
     if (this.realtimeSession.IsActive) {
@@ -1751,15 +1759,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       taskId = null; // Clear reference but don't remove from service
 
       if (!result || !result.success) {
-        // Evaluation failed - use updateConversationDetail to ensure task cleanup
-        const errorMsg = result?.agentRun?.ErrorMessage || 'Agent evaluation failed';
-        conversationManagerMessage.Error = errorMsg;
-        await this.updateConversationDetail(conversationManagerMessage, `❌ Evaluation failed`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-        console.warn('⚠️ Sage failed:', result?.agentRun?.ErrorMessage);
-
-        // Clean up completion timestamp
+        await this.applyAgentFailureToDetail(
+          conversationManagerMessage,
+          userMessage,
+          this.converationManagerAgent?.Name || 'Sage',
+          result,
+          'failed',
+        );
+        console.warn('⚠️ Sage failed:', agentFailureMessage(result, 'Agent evaluation failed'));
         this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
         return;
       }
@@ -1968,15 +1975,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.markMessageComplete(convoDetail);
     }
 
-    // Race condition guard: Before writing Error, reload from DB to check if the server
-    // already completed this record. The server and client write to the same conversation
-    // detail record — if the server completed successfully but a client-side timeout or
-    // WebSocket disconnect triggered this error path, we must not overwrite the server's
-    // successful completion with an error status.
-    if (status === 'Error' && convoDetail.ID) {
+    // Race condition guard: Before writing Error *or* In-Progress, reload from DB.
+    // The In-Progress disconnect branch is the path that most needs this: a dropped
+    // socket leaves the in-memory Status stale (still In-Progress from creation), and
+    // without a reload we can overwrite a server Complete with the "still running"
+    // placeholder. If the server already finished, emit that record and stop the timer.
+    if ((status === 'Error' || status === 'In-Progress') && convoDetail.ID) {
       await convoDetail.Load(convoDetail.ID);
-      if (convoDetail.Status === 'Complete') {
-        // Server already completed — emit updated message, don't overwrite with error
+      if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {
+        this.markMessageComplete(convoDetail);
         this.messageSent.emit(convoDetail);
         return;
       }
@@ -2073,12 +2080,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const reasoning = payload.reasoning || 'Delegating to specialist agent';
 
     // Now create a NEW message for the sub-agent execution
+    let agentResponseMessage: MJConversationDetailEntity | null = null;
     try {
       // Look up the agent to get its ID
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
+      agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -2154,6 +2162,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
+        // A post-ACK disconnect means the first run may still be executing on this
+        // detail — do not start a second run on the same conversationDetailId.
+        if (agentFailureDisposition(subResult).status === 'In-Progress') {
+          await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, subResult);
+          return;
+        }
+
         // Sub-agent failed - attempt auto-retry once
         console.log(`⚠️ ${agentName} failed, attempting auto-retry...`);
 
@@ -2194,20 +2209,47 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         } else {
-          // Retry also failed - show error with manual retry option
-          conversationManagerMessage.Error = retryResult?.agentRun?.ErrorMessage || null;
-          await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** failed after retry\n\n${retryResult?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-          await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+          // Retry also failed — terminate the agent bubble (the red-pill timer lives here),
+          // not only the Sage delegation message.
+          await this.applyAgentFailureToDetail(
+            agentResponseMessage,
+            userMessage,
+            agentName,
+            retryResult,
+            'failed after retry',
+          );
+          const retryDisposition = agentFailureDisposition(retryResult);
+          if (retryDisposition.status === 'Error') {
+            conversationManagerMessage.Error = retryDisposition.message;
+            await this.updateConversationDetail(
+              conversationManagerMessage,
+              `❌ **${agentName}** failed after retry\n\n${retryDisposition.message}`,
+              'Error',
+            );
+          }
         }
       }
     } catch (error) {
       console.error(`❌ Error invoking sub-agent ${agentName}:`, error);
 
-      conversationManagerMessage.Error = String(error);
-      await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      const catchResult = {
+        success: false,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      } as ExecuteAgentResult;
+      if (agentResponseMessage) {
+        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, catchResult);
+      } else {
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      }
+      const catchDisposition = agentFailureDisposition(catchResult);
+      if (catchDisposition.status === 'Error') {
+        conversationManagerMessage.Error = catchDisposition.message;
+        await this.updateConversationDetail(
+          conversationManagerMessage,
+          `❌ **${agentName}** encountered an error\n\n${catchDisposition.message}`,
+          'Error',
+        );
+      }
     }
   }
 
@@ -2336,21 +2378,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
-        // Agent failed
-        statusMessage.Error = continuityResult?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(statusMessage, `❌ **${agentName}** failed during refinement\n\n${continuityResult?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(statusMessage, userMessage, agentName, continuityResult, 'failed during refinement');
       }
     } catch (error) {
       console.error(`❌ Error in agent continuity with ${agentName}:`, error);
 
       // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
 
-      statusMessage.Error = String(error);
-      await this.updateConversationDetail(statusMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      await this.applyAgentFailureToDetail(
+        statusMessage,
+        userMessage,
+        agentName,
+        { success: false, errorMessage: error instanceof Error ? error.message : String(error) } as ExecuteAgentResult,
+        'encountered an error',
+      );
     }
   }
  
@@ -2463,24 +2504,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         }
       } else {
-        // Agent failed - update the existing message instead of creating a new one
-        agentResponseMessage.Error = result?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(agentResponseMessage, `❌ **@${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, result);
       }
     } catch (error) {
       console.error(`❌ Error invoking mentioned agent ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
-
-      // Update the existing agent response message if it was created
       if (agentResponseMessage) {
-        agentResponseMessage.Error = String(error);
-        await this.updateConversationDetail(agentResponseMessage, `❌ **@${agentName}** encountered an error\n\n${String(error)}`, 'Error');
+        await this.applyAgentFailureToDetail(
+          agentResponseMessage,
+          userMessage,
+          agentName,
+          { success: false, errorMessage: error instanceof Error ? error.message : String(error) } as ExecuteAgentResult,
+        );
+      } else {
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -2670,24 +2708,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
-        // Agent failed - update the existing message instead of creating a new one
-        agentResponseMessage.Error = result?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, result);
       }
     } catch (error) {
       console.error(`❌ Error continuing with agent ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
-
-      // Update the existing agent response message if it was created
       if (agentResponseMessage) {
-        agentResponseMessage.Error = String(error);
-        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
+        await this.applyAgentFailureToDetail(
+          agentResponseMessage,
+          userMessage,
+          agentName,
+          { success: false, errorMessage: error instanceof Error ? error.message : String(error) } as ExecuteAgentResult,
+        );
+      } else {
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -2726,12 +2761,113 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
+   * Persist an agent failure onto the response bubble.
+   *
+   * A dropped HTTP/WebSocket path used to return `null` from invokeSubAgent, so
+   * the bubble said "Unknown error" while the AIAgentRun stayed Running and the
+   * timer kept ticking. If the transport ACKed the mutation and then died, keep
+   * In-Progress so a later completion event (or {@link startInFlightDetailWatch})
+   * can land. ConversationDetail.Status is the server's claim; the client only
+   * renders it. The GraphQLAIClient stall reconciler covers the wait inside
+   * invokeSubAgent; once that returns, the watch observes the detail until the
+   * server writes a terminal status (MaxTimePerRun).
+   *
+   * Always completes the user message — the user turn finished regardless of
+   * what the agent is doing.
+   */
+  private async applyAgentFailureToDetail(
+    agentResponseMessage: MJConversationDetailEntity,
+    userMessage: MJConversationDetailEntity,
+    agentName: string,
+    result: ExecuteAgentResult | null | undefined,
+    failedVerb = 'failed',
+  ): Promise<void> {
+    const disposition = agentFailureDisposition(result);
+    if (disposition.status === 'In-Progress') {
+      await this.updateConversationDetail(
+        agentResponseMessage,
+        `⏳ **${agentName}** is still running on the server.\n\n${disposition.message}`,
+        'In-Progress',
+      );
+      // Skip the watch if the reload-before-write guard already found a
+      // terminal server status (Complete/Error) — starting it would race the
+      // just-completed bubble.
+      if (agentResponseMessage.Status === 'In-Progress') {
+        this.startInFlightDetailWatch(agentResponseMessage);
+      }
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      return;
+    }
+    agentResponseMessage.Error = disposition.message;
+    await this.updateConversationDetail(
+      agentResponseMessage,
+      `❌ **${agentName}** ${failedVerb}\n\n${disposition.message}`,
+      'Error',
+    );
+    await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+  }
+
+  private startInFlightDetailWatch(detail: MJConversationDetailEntity): void {
+    if (!detail.ID) {
+      return;
+    }
+    this.stopInFlightDetailWatch(detail.ID);
+    this.scheduleInFlightDetailPoll(detail, 0);
+  }
+
+  private scheduleInFlightDetailPoll(detail: MJConversationDetailEntity, step: number): void {
+    const delays = MessageInputComponent.IN_FLIGHT_WATCH_BACKOFF_MS;
+    const delay = delays[Math.min(step, delays.length - 1)];
+    const handle = setTimeout(() => {
+      void this.pollInFlightDetail(detail, step);
+    }, delay);
+    this.inFlightWatches.set(detail.ID, handle);
+  }
+
+  private async pollInFlightDetail(detail: MJConversationDetailEntity, step: number): Promise<void> {
+    if (!this.inFlightWatches.has(detail.ID)) {
+      return;
+    }
+    try {
+      await detail.Load(detail.ID);
+      if (detail.Status === 'Complete' || detail.Status === 'Error') {
+        this.stopInFlightDetailWatch(detail.ID);
+        this.markMessageComplete(detail);
+        this.messageSent.emit(detail);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[InFlightWatch] Failed to reload conversation detail ${detail.ID}:`, e);
+    }
+    if (!this.inFlightWatches.has(detail.ID)) {
+      return;
+    }
+    this.scheduleInFlightDetailPoll(detail, step + 1);
+  }
+
+  private stopInFlightDetailWatch(detailId: string): void {
+    const handle = this.inFlightWatches.get(detailId);
+    if (handle) {
+      clearTimeout(handle);
+      this.inFlightWatches.delete(detailId);
+    }
+  }
+
+  private clearInFlightWatches(): void {
+    for (const handle of this.inFlightWatches.values()) {
+      clearTimeout(handle);
+    }
+    this.inFlightWatches.clear();
+  }
+
+  /**
    * Marks a conversation detail as complete and records timestamp to prevent race conditions
    * Emits event to parent to refresh agent run data from database
    */
   private markMessageComplete(conversationDetail: MJConversationDetailEntity): void {
     const now = Date.now();
     this.completionTimestamps.set(conversationDetail.ID, now);
+    this.stopInFlightDetailWatch(conversationDetail.ID);
 
     // Unregister streaming callback for this message (no more updates needed)
     const callback = this.registeredCallbacks.get(conversationDetail.ID);
