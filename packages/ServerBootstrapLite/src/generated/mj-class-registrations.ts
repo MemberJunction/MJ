@@ -653,22 +653,40 @@ import {
     EntityActionInvocationValidate,
 } from '@memberjunction/actions';
 
-// @memberjunction/actions-apollo (2 classes)
+// @memberjunction/actions-apollo (9 classes)
 import {
+    ApolloCreateListAction,
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
+    ApolloGetListAccountsAction,
+    ApolloGetListContactsAction,
+    ApolloGetListsAction,
+    ApolloMoveListAccountsAction,
+    ApolloMoveListContactsAction,
+    ApolloSearchPeopleAction,
 } from '@memberjunction/actions-apollo';
 
-// @memberjunction/actions-bizapps-accounting (8 classes)
+// @memberjunction/actions-bizapps-accounting (19 classes)
 import {
+    CreateBusinessCentralJournalEntryAction,
+    CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
+    GetAccountBalancesAction,
+    GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
     GetBusinessCentralSalesInvoicesAction,
+    GetChartOfAccountsAction,
+    GetCustomersAction,
+    GetDimensionsAction,
+    GetGLEntriesAction,
     GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
+    GetSalesInvoicesAction,
 } from '@memberjunction/actions-bizapps-accounting';
 
 // @memberjunction/actions-bizapps-crm (4 classes)
@@ -1038,7 +1056,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (145 classes)
+// @memberjunction/core-actions (147 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1143,6 +1161,7 @@ import {
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
+    ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -1167,6 +1186,7 @@ import {
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
+    TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -1701,16 +1721,34 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EntityActionInvocationMultipleRecords,
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
+    ApolloCreateListAction,
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
+    ApolloGetListAccountsAction,
+    ApolloGetListContactsAction,
+    ApolloGetListsAction,
+    ApolloMoveListAccountsAction,
+    ApolloMoveListContactsAction,
+    ApolloSearchPeopleAction,
+    CreateBusinessCentralJournalEntryAction,
+    CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
+    GetAccountBalancesAction,
+    GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
     GetBusinessCentralSalesInvoicesAction,
+    GetChartOfAccountsAction,
+    GetCustomersAction,
+    GetDimensionsAction,
+    GetGLEntriesAction,
     GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
+    GetSalesInvoicesAction,
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
@@ -1801,6 +1839,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     InstagramGetBusinessPostsAction,
     InstagramGetCommentsAction,
     InstagramGetPostInsightsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     InstagramSchedulePostAction,
     InstagramSearchPostsAction,
     LinkedInCreateArticleAction,
@@ -1819,10 +1861,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TwitterGetMentionsAction,
     TwitterGetTimelineAction,
     TwitterScheduleTweetAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     TwitterSearchTweetsAction,
     YouTubeCreatePlaylistAction,
     YouTubeGetChannelAnalyticsAction,
@@ -2005,6 +2043,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CensusDataLookupAction,
     CheckUserPermissionAction,
     ColorConverterAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     ComposeListsAction,
     ConditionalAction,
     CopyObjectAction,
@@ -2023,10 +2065,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CreateSVGSketchDiagramAction,
     CreateSVGWordCloudAction,
     CreateUserAction_core_actions,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     Create_Conversation_Record_Action,
     DataMapperAction,
     DelayAction,
@@ -2097,6 +2135,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
+    ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2121,6 +2160,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
+    TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -2161,7 +2201,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 919;
+export const CLASS_REGISTRATIONS_COUNT = 939;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -937,16 +937,20 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         it('UPDATES the most recent same-role turn in place instead of appending', async () => {
             const previous = makeSessionEntity({ ID: 'detail-prev', Message: 'truncated turn that', Role: 'AI' });
             const session = makeSessionEntity();
-            currentProvider = makeProvider(() => session);
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? previous : session,
+            );
+            // The lookup yields an IDENTIFIER, not something to save through — see the re-load test.
             (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
                 Success: true,
-                Results: [previous],
+                Results: [{ ID: 'detail-prev' }],
             }));
             const resolver = makeResolver();
 
             const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'truncated turn', makeCtx(), true);
 
             expect(ok).toBe(true);
+            expect(previous.Load).toHaveBeenCalledWith('detail-prev');
             expect(previous.Message).toBe('truncated turn'); // corrected IN PLACE
             expect(previous.Save).toHaveBeenCalled();
             expect(previous.NewRecord).not.toHaveBeenCalled(); // no duplicate row
@@ -983,16 +987,66 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
                 Save: vi.fn(async () => false),
                 LatestResult: { CompleteMessage: 'locked' },
             });
-            currentProvider = makeProvider(() => makeSessionEntity());
+            const session = makeSessionEntity();
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? previous : session,
+            );
             (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
                 Success: true,
-                Results: [previous],
+                Results: [{ ID: 'detail-prev' }],
             }));
             const resolver = makeResolver();
 
             const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'x', makeCtx(), true);
 
             expect(ok).toBe(false);
+            expect(heartbeatMock).not.toHaveBeenCalled();
+        });
+
+        it('saves through a PROVIDER-BOUND entity, never the object the lookup returned', async () => {
+            // The regression this exists for: `ResultType: 'entity_object'` hands back hydrated
+            // entities that carry no context user, so `Save()` on one ran with no principal and
+            // failed with an EMPTY message — indistinguishable from a permission denial. Every
+            // correction of a streamed utterance was silently dropped, and because providers deliver
+            // one utterance as a GROWING series of corrections, the stored turn kept only the words
+            // of the first fragment. Measured live: a 114-second answer persisted as 'So I think'.
+            const fromLookup = makeSessionEntity({ ID: 'detail-prev', Message: 'stale' });
+            const fromProvider = makeSessionEntity({ ID: 'detail-prev', Message: 'stale' });
+            const session = makeSessionEntity();
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? fromProvider : session,
+            );
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
+                Success: true,
+                Results: [fromLookup],
+            }));
+            const resolver = makeResolver();
+
+            await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'the whole answer', makeCtx(), true);
+
+            expect(fromProvider.Save).toHaveBeenCalled();
+            expect(fromProvider.Message).toBe('the whole answer');
+            expect(fromLookup.Save).not.toHaveBeenCalled();
+        });
+
+        it('reports failure when the re-load cannot find the turn, rather than keeping the shorter text', async () => {
+            // A correction that cannot be applied is a truncated transcript, and a truncated
+            // transcript is scored as a candidate who barely spoke. It must never pass as success.
+            const previous = makeSessionEntity({ ID: 'detail-prev', Load: vi.fn(async () => false) });
+            const session = makeSessionEntity();
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? previous : session,
+            );
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
+                Success: true,
+                Results: [{ ID: 'detail-prev' }],
+            }));
+            const resolver = makeResolver();
+
+            const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'x', makeCtx(), true);
+
+            expect(ok).toBe(false);
+            expect(previous.Save).not.toHaveBeenCalled();
             expect(heartbeatMock).not.toHaveBeenCalled();
         });
     });
