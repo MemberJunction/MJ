@@ -16,9 +16,10 @@ Fixes nine WCAG 2.1 A/AA findings raised against the Explorer shell and shared p
 - The closed mobile nav drawer and the closed search popup are now `inert` and `visibility: hidden` (transitioned so the slide-out still animates). They previously kept every control inside them in the tab order while closed. When the drawer closes with focus inside it, focus returns to the toggle instead of dropping to `<body>`.
 - The command palette already had `role="dialog"`/`aria-modal`; it now also traps Tab while open and returns focus to whatever was focused when it opened. `aria-modal` never stopped Tab on its own.
 
-**`mj-dropdown` (`ng-ui-components`)**
+**`mj-combobox` (`ng-ui-components`)**
 
-- New `AriaLabel` and `AriaLabelledBy` inputs, applied to the focusable `role="combobox"` trigger. The trigger's only text is the selected value, so without one of these a screen reader announces the value as though it were the control's name. `Placeholder` is not a name — it disappears on selection.
+- New `AriaLabel`, `AriaLabelledBy`, `AriaDescribedBy` and `InputId` inputs on the inner text input, mirroring the naming contract `mj-dropdown` gained in #3863 so the two sibling controls do not diverge. Unlike the dropdown's `div[role=combobox]` trigger, this component's focusable element is a native `<input>`, so a real `<label for>` plus `InputId` is the preferred route and needs no aria attribute; `AriaLabelledBy` / `AriaLabel` cover the no-label case.
+- `mj-dropdown`'s own accessible name landed separately in #3863 and is not part of this changeset.
 
 **Focus-ring tokens (`ng-shared-generic`)**
 

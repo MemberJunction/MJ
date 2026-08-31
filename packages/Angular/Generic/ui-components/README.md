@@ -69,34 +69,28 @@ Attribute directive that styles a **native** button or anchor. Variants: `primar
 ```
 
 ### `mj-combobox` — MJComboboxComponent
-Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, optional custom values (`[AllowCustom]`). Inputs: `Data`, `TextField`, `ValueField`, `ValuePrimitive`, `Filterable` (default true), `Placeholder`, `Disabled`, `AriaLabel`, `AriaLabelledBy`. Outputs: `ValueChange`, `FilterChange`. Custom item template via `<ng-template #mjComboboxItem>`.
+Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, optional custom values (`[AllowCustom]`). Inputs: `Data`, `TextField`, `ValueField`, `ValuePrimitive`, `Filterable` (default true), `Placeholder`, `Disabled`. Outputs: `ValueChange`, `FilterChange`. Custom item template via `<ng-template #mjComboboxItem>`.
 
 ```html
-<mj-combobox [Data]="categories" TextField="text" ValueField="value" AriaLabel="Category"
+<mj-combobox [Data]="categories" TextField="text" ValueField="value"
              [(ngModel)]="selected" [ValuePrimitive]="true" [AllowCustom]="true" />
 ```
 
 ### `mj-dropdown` — MJDropdownComponent
-Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox, plus `AriaLabel` / `AriaLabelledBy`. Custom item template via `<ng-template #mjDropdownItem>`.
+Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`.
+
+**Give every dropdown an accessible name.** The trigger is a `div[role=combobox]`, so `<label for>` neither names nor focuses it — an unnamed dropdown announces as "combobox, collapsed" (WCAG 2.1 4.1.2). Use `AriaLabelledBy` when a visible label already exists, `AriaLabel` when none does; `AriaDescribedBy` carries hint/error text, and `InputId` puts an id on the trigger for other markup to reference. All are applied to the popup listbox as well as the trigger, and a filterable panel's filter box takes its name from the same source.
 
 ```html
-<mj-dropdown [Data]="items" TextField="name" ValueField="id" AriaLabel="Status"
+<!-- A visible label already on screen (preferred) -->
+<span id="persona-label">Interview persona</span>
+<mj-dropdown AriaLabelledBy="persona-label" [Data]="items" TextField="name" ValueField="id"
+             [(ngModel)]="selectedId" [ValuePrimitive]="true" />
+
+<!-- No visible label -->
+<mj-dropdown AriaLabel="Interview persona" [Data]="items" TextField="name" ValueField="id"
              [(ngModel)]="selectedId" [ValuePrimitive]="true" />
 ```
-
-#### Naming these controls (required for accessibility)
-
-Both controls put their value — not their purpose — in the focusable element's text, so neither
-has an accessible name of its own. A screen reader otherwise announces the current value as
-though it were the control's name ("Active, combobox") and the user never learns what the
-control is for. Give every instance one of:
-
-| Situation | Use |
-|---|---|
-| No visible label | `AriaLabel="Status"` |
-| A visible label element exists | `[AriaLabelledBy]="'status-label-id'"` — preferred; the name then tracks that element's text |
-
-`Placeholder` is **not** a name: it is replaced the moment there is a value.
 
 ### `mj-datepicker` — MJDatepickerComponent
 Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.)

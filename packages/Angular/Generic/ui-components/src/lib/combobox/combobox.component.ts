@@ -60,8 +60,6 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
         [placeholder]="Placeholder"
         [value]="InputText"
         [disabled]="IsDisabled"
-        [attr.aria-label]="AriaLabel || null"
-        [attr.aria-labelledby]="AriaLabelledBy || null"
         (input)="OnInput($event)"
         (focus)="OnFocus()"
         (keydown)="OnKeyDown($event)"
@@ -143,20 +141,6 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
   @Input() Disabled = false;
   @Input() Placeholder = '';
   @Input() AllowCustom = false;
-  /**
-   * Accessible name for the combobox, applied as `aria-label` on the inner text input (the
-   * focusable element — the `role="combobox"` wrapper is not itself focusable here).
-   *
-   * Set this whenever the combobox is not already named by a visible label element; prefer
-   * {@link AriaLabelledBy} when one exists. `Placeholder` is NOT a name — it is replaced by
-   * the typed/selected text as soon as there is a value.
-   */
-  @Input() AriaLabel = '';
-  /**
-   * Id of the element that labels this combobox, applied as `aria-labelledby` on the inner
-   * input. Takes precedence over {@link AriaLabel} per the accname spec when both are set.
-   */
-  @Input() AriaLabelledBy = '';
 
   @Output() ValueChange = new EventEmitter<unknown>();
   @Output() FilterChange = new EventEmitter<string>();
