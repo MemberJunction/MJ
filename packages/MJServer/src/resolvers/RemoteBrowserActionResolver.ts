@@ -298,6 +298,36 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       const result = await liveSession.ExecuteAction(action);
       return { Success: result.Success, CurrentUrl: result.CurrentUrl, Detail: result.Detail };
     } catch (err) {
+      // A dead handle is not a failure to report, it is a mapping to delete (#3598) — and this is the
+      // path where that fault is actually FELT: the poll below only freezes a pane, while here the
+      // agent says "the shared browser session isn't launched right now" on every request for the rest
+      // of the session. The engine decides whether the error means "gone"; anything else falls
+      // straight through to the honest report below, exactly as before.
+      const recovered = await RemoteBrowserEngine.Instance.RecoverDeadAgentSession(agentSessionID, err, {
+        InstanceKey: instanceKey,
+        ContextUser: contextUser,
+        ProviderName: providerName,
+      });
+      if (recovered) {
+        // Retrying is safe precisely BECAUSE the handle was dead: the action never reached a browser,
+        // so it cannot run twice. A `navigate` therefore heals in place; a click or a type truthfully
+        // reports that its selector is missing on the replacement's blank page, which is the answer
+        // the agent needs to re-navigate — and either way the surface is live again for the next call.
+        try {
+          const retried = await recovered.ExecuteAction(action);
+          return {
+            Success: retried.Success,
+            CurrentUrl: retried.CurrentUrl,
+            Detail: retried.Success
+              ? retried.Detail
+              : `The browser had closed and was replaced (it is now on a blank page). ${retried.Detail ?? ''}`.trim(),
+          };
+        } catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+          LogError(`ExecuteRemoteBrowserAction failed after recovering the browser (kind='${kind}'): ${retryMessage}`);
+          return { Success: false, Detail: `The browser had closed and was replaced, but '${kind}' still failed: ${retryMessage}` };
+        }
+      }
       // Surface the real failure to BOTH the MJAPI terminal (for diagnosis) and the model (so it
       // narrates the actual cause instead of the opaque client-side "no response from the server").
       const message = err instanceof Error ? err.message : String(err);
@@ -424,10 +454,35 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     // exactly as this query's contract above promises ("null rather than an error"). The live
     // navigate/click path (ExecuteRemoteBrowserAction) is where a genuine browser failure is
     // reported to the agent; the read-only view poll never should be.
+    //
+    // Degrading is not the same as HEALING, and this poll is where the difference shows (#3598). It
+    // fires every ~700ms, so it is almost always the first caller to meet a dead handle — an external
+    // Chrome closed, a container recycled. Returning an empty snapshot forever leaves the surface
+    // frozen on its last good frame while the mapping stays dead for the rest of the session. So the
+    // fault is reported to the engine, which decides whether it means "gone" and, if so, replaces the
+    // browser and re-attaches this surface's screencast. The degradation below still stands for every
+    // other failure, and for a recovery that could not complete.
     try {
       const screenshot = await liveSession.CaptureScreenshot();
       return { ScreenshotBase64: screenshot, CurrentUrl: liveSession.GetCurrentUrl() };
     } catch (err) {
+      const recovered = await RemoteBrowserEngine.Instance.RecoverDeadAgentSession(agentSessionID, err, {
+        InstanceKey: instanceKey,
+        ContextUser: contextUser,
+      });
+      if (recovered) {
+        try {
+          return { ScreenshotBase64: await recovered.CaptureScreenshot(), CurrentUrl: recovered.GetCurrentUrl() };
+        } catch (postRecoveryError) {
+          // The replacement is live but not yet painting. The next poll is 700ms away and will get a
+          // frame; an empty snapshot here costs one tick, not the session.
+          LogError(
+            `[RemoteBrowserActionResolver] Recovered the browser for agent session ${agentSessionID} but its first ` +
+              `snapshot failed: ${postRecoveryError instanceof Error ? postRecoveryError.message : String(postRecoveryError)}`,
+          );
+          return {};
+        }
+      }
       LogError(
         `[RemoteBrowserActionResolver] Snapshot capture failed for agent session ${agentSessionID} ` +
           `(returning empty snapshot): ${err instanceof Error ? err.message : String(err)}`,
