@@ -1385,6 +1385,78 @@ export function resolveSubpathExports(packageDir: string): Map<string, Set<strin
 }
 
 /**
+ * Count the subpath exports that resolution is actually *expected* to satisfy: non-`.` entries
+ * carrying a `types` field.
+ *
+ * This is deliberately narrower than {@link hasSubpathExports}, which answers "is there any key
+ * besides `.`" and therefore counts entries that were never code subpaths at all. A built Angular
+ * package publishes `"./package.json": { "default": "./package.json" }`, which has no `types` and
+ * which `resolveSubpathExportsDetailed()` skips by design. Treating that as a declared-but-missing
+ * subpath would flag every ng-packagr output as unbuilt.
+ */
+function countTypedSubpathExports(packageDir: string): number {
+    const pkgPath = path.join(packageDir, 'package.json');
+    if (!fs.existsSync(pkgPath)) return 0;
+
+    let pkg: Record<string, unknown>;
+    try {
+        pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    } catch {
+        return 0;
+    }
+
+    const exports = pkg.exports as Record<string, Record<string, string> | string> | undefined;
+    if (!exports || typeof exports !== 'object') return 0;
+
+    let count = 0;
+    for (const [subpath, entry] of Object.entries(exports)) {
+        if (subpath === '.') continue;
+        const typesField = typeof entry === 'object' && entry !== null ? entry.types : undefined;
+        if (typesField) count++;
+    }
+    return count;
+}
+
+/**
+ * Resolve a lazy package's subpath exports, refusing to answer "none" when the package
+ * declares typed subpaths it simply hasn't built yet.
+ *
+ * **Call this only for a package that contributes lazy classes.** `resolveSubpathExportsDetailed()`
+ * reads the `.d.ts` each `exports` entry's `types` field names and records the subpath only if
+ * classes are reachable from it, so an empty result is perfectly ordinary in two innocent cases:
+ * a subpath whose `.d.ts` declares no classes, and a package with no code subpaths at all. Neither
+ * is a problem when there are no classes to group.
+ *
+ * With classes present it is a different matter. An empty map sends every one of them down the
+ * whole-package branch of `groupClassesIntoChunks()`, replacing the package's per-subpath lazy
+ * chunks with a SINGLE eager chunk. The emitted config is still valid TypeScript, still compiles,
+ * still passes review — it has just had its code splitting deleted, and nothing downstream can
+ * tell the difference.
+ *
+ * So refuse. A missing build is recoverable in one command; a silently de-optimised bundle
+ * shipped to production is not.
+ *
+ * @throws when `packageDir` declares typed subpath exports but none of them resolve.
+ */
+export function resolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
+    const subpaths = resolveSubpathExportsDetailed(packageDir);
+    if (subpaths.size === 0) {
+        const declared = countTypedSubpathExports(packageDir);
+        if (declared > 0) {
+            throw new Error(
+                `Cannot resolve the subpath exports of '${packageName}'. Its package.json declares ${declared} ` +
+                `subpath export(s) with a "types" target, but none of those targets exist under ${packageDir} — ` +
+                `the package has not been built.\n\n` +
+                `Build the workspace before generating the manifest. Emitting a manifest from here would ` +
+                `silently collapse this package's per-subpath lazy chunks into one eager import, removing ` +
+                `its code splitting without failing anything.`
+            );
+        }
+    }
+    return subpaths;
+}
+
+/**
  * Detailed version that also returns the .d.ts file path where each class was found.
  * Used by the lazy config generator to disambiguate classes with the same name
  * that appear in different subpath modules.
@@ -1619,10 +1691,21 @@ function groupClassesIntoChunks(
     lazyPackages: Map<string, string>,
     log: (msg: string) => void
 ): LazyChunk[] {
-    // Build detailed subpath export maps (including .d.ts file paths for disambiguation)
+    // Build detailed subpath export maps (including .d.ts file paths for disambiguation).
+    //
+    // Only packages that actually CONTRIBUTE lazy classes are guarded. An unresolved subpath map
+    // is harmful precisely when there are classes to mis-group: those classes fall through to the
+    // whole-package branch below and the package's per-subpath lazy chunks silently become one
+    // eager chunk. For a package contributing no classes the same fallback groups nothing, so an
+    // empty map is not evidence of anything — and it is a completely ordinary state, since a
+    // subpath whose .d.ts declares no classes (a generated manifest of const arrays, say) is
+    // skipped by resolution exactly like a missing one.
+    const packagesWithLazyClasses = new Set(lazyClasses.map(c => c.packageName));
     const packageSubpaths = new Map<string, Map<string, SubpathExportInfo>>();
     for (const [depName, depDir] of lazyPackages.entries()) {
-        const subpaths = resolveSubpathExportsDetailed(depDir);
+        const subpaths = packagesWithLazyClasses.has(depName)
+            ? resolveLazySubpathExports(depName, depDir)
+            : resolveSubpathExportsDetailed(depDir);
         if (subpaths.size > 0) {
             packageSubpaths.set(depName, subpaths);
         }
