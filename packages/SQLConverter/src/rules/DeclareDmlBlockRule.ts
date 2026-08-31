@@ -16,6 +16,7 @@
  *   - @var references → local variable references
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
+import { GAP_MARKER_UNPARSED } from './types.js';
 import {
   convertIdentifiers, removeNPrefix, convertCommonFunctions, quotePascalCaseIdentifiers,
   convertTopToLimit,
@@ -164,7 +165,10 @@ export class DeclareDmlBlockRule implements IConversionRule {
     const init = eq >= 0 ? item.slice(eq + 1).trim() : null;
 
     const m = decl.match(/^@(\w+)\s+([\w\s(),]+)$/i);
-    if (!m) return `${indent}  -- Could not parse: ${item}`;
+    // The declaration is dropped and a marker left in its place. Emitted via the shared
+    // GAP_MARKER_UNPARSED (identical text) so `convertFile`'s gap scan and this emitter
+    // cannot drift — a drifted marker is an uncounted gap, i.e. issue #3857 again.
+    if (!m) return `${indent}  ${GAP_MARKER_UNPARSED}: ${item}`;
 
     const pgType = resolveType(m[2].trim());
     if (!init) return `${indent}v_${m[1]} ${pgType};`;

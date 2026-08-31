@@ -7,10 +7,11 @@ import {
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
+import { FormToolbarItemConfig, FormToolbarItemClickEventArgs } from '../types/form-toolbar-item';
 import { ResolveFormShowToolbar, ResolveFormToolbarConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormWidthMode } from '../types/form-types';
@@ -19,6 +20,7 @@ import { SectionManagerItem, ChromeMembershipChange } from '../section-manager/s
 import {
   BeforeSaveEventArgs,
   BeforeDeleteEventArgs,
+  BeforeRefreshEventArgs,
   BeforeCancelEventArgs,
   BeforeHistoryViewEventArgs,
   BeforeListManagementEventArgs,
@@ -48,12 +50,14 @@ import {
   ParseRailWidthSetting,
   SerializeRailPinnedSetting,
   SerializeRailWidthSetting,
+  ShouldPersistChromeActiveGroup,
 } from '../chrome/form-chrome-rail-pref';
 import { ApplyClippedTitle } from '../chrome/clipped-title';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
 import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
  * Display shape for the variant picker. Kept minimal so the Generic
@@ -104,8 +108,10 @@ export interface VariantPickerItem {
   encapsulation: ViewEncapsulation.None,
   templateUrl: './record-form-container.component.html',
   styleUrls: ['./record-form-container.component.css'],
-  // FormSlotCoordinator + FormChromeCoordinator scoped per-container.
-  providers: [FormSlotCoordinator, FormChromeCoordinator],
+  // FormSlotCoordinator + FormChromeCoordinator + FormRecordRefreshCoordinator
+  // scoped per-container. `providers` (not viewProviders) so projected
+  // related-entity grids and slot-mounted panels can inject them.
+  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator],
 })
 export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
@@ -113,6 +119,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private notificationService = inject(MJNotificationService);
   private chrome = inject(FormChromeCoordinator);
   private slots = inject(FormSlotCoordinator);
+  private recordRefresh = inject(FormRecordRefreshCoordinator);
   private host = inject(ElementRef<HTMLElement>);
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
@@ -137,6 +144,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Number of tags on this record */
   TagCount = 0;
+
+  /** Controls visibility of attachments slide panel */
+  ShowAttachmentsPanel = false;
+
+  /** Number of attachments linked to this record */
+  AttachmentCount = 0;
 
   /** Number of tracked record change versions for this record */
   VersionCount = 0;
@@ -188,7 +201,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   @Input() DirtyFieldNames: string[] = [];
   @Input() ListCount = 0;
   @Input() IsSaving = false;
+  @Input() IsRefreshing = false;
   @Input() ToolbarConfig: FormToolbarConfig = DEFAULT_TOOLBAR_CONFIG;
+  @Input() RegisteredToolbarItems: FormToolbarItemConfig[] = [];
+  @Input() ToolbarItemOverrides: ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null = null;
   @Input() WidthMode: FormWidthMode = 'centered';
 
   /**
@@ -237,6 +253,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Emitted when delete is confirmed (host app handles actual deletion) */
   @Output() DeleteRequested = new EventEmitter<void>();
 
+  /** Emitted BEFORE refresh - can be cancelled by setting event.Cancel = true */
+  @Output() BeforeRefresh = new EventEmitter<BeforeRefreshEventArgs>();
+
+  /** Emitted when refresh is requested (only in standalone mode) */
+  @Output() RefreshRequested = new EventEmitter<void>();
+
   /** Emitted when favorite toggle is requested */
   @Output() FavoriteToggled = new EventEmitter<void>();
 
@@ -257,6 +279,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Emitted when a custom toolbar button is clicked */
   @Output() CustomButtonClick = new EventEmitter<CustomToolbarButtonClickEventArgs>();
+
+  /** Emitted when any toolbar item (standard or custom) is clicked */
+  @Output() ToolbarItemClick = new EventEmitter<FormToolbarItemClickEventArgs>();
 
   /**
    * Emitted when the user chooses a different form variant from the picker.
@@ -280,7 +305,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- FormComponent accessor ----
 
   /** Typed accessor for the form component reference */
-  private get fc(): BaseFormComponent | null {
+  public get fc(): BaseFormComponent | null {
     return this.FormComponent;
   }
 
@@ -335,6 +360,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.IsSaving;
   }
 
+  get EffectiveIsRefreshing(): boolean {
+    return this.fc?.IsRefreshing ?? this.IsRefreshing;
+  }
+
   get EffectiveWidthMode(): FormWidthMode {
     if (this.fc?.getFormWidthMode) {
       return this.fc.getFormWidthMode();
@@ -360,6 +389,20 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   get EffectiveToolbarConfig(): FormToolbarConfig {
     return ResolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.fc?.Config);
+  }
+
+  get EffectiveRegisteredToolbarItems(): FormToolbarItemConfig[] {
+    if (this.fc?.RegisteredToolbarItems && this.fc.RegisteredToolbarItems.length > 0) {
+      return this.fc.RegisteredToolbarItems;
+    }
+    return this.RegisteredToolbarItems;
+  }
+
+  get EffectiveToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null {
+    if (this.fc?.ToolbarItemOverrides && this.fc.ToolbarItemOverrides.size > 0) {
+      return this.fc.ToolbarItemOverrides;
+    }
+    return this.ToolbarItemOverrides;
   }
 
   get EffectiveSearchFilter(): string {
@@ -1149,8 +1192,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private RestoreChromePrefs(): void {
-    const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
-    if (group) this.chrome.ActiveGroupKey = group;
+    if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved)) {
+      const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
+      if (group) this.chrome.ActiveGroupKey = group;
+    }
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
     if (more === '0') this.chrome.MoreExpanded = false;
@@ -1164,7 +1209,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private PersistChromePrefs(): void {
-    if (this.chrome.ActiveGroupKey) {
+    if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved) && this.chrome.ActiveGroupKey) {
       UserInfoEngine.Instance.SetSettingDebounced(
         this.chromePrefKey('activeGroup'),
         this.chrome.ActiveGroupKey,
@@ -1195,6 +1240,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
         this.LoadBadgeCounts();
       });
+      this.fc.RecordRefreshed.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
+        this.OnFormRecordRefreshed(e.Record);
+      });
     }
 
     this.Panels.forEach(panel => {
@@ -1223,8 +1271,22 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- Badge Count Loading ----
 
   /**
-   * Loads tag count and record change version count for toolbar badges.
-   * Both queries run in parallel for performance.
+   * Whether the attachments feature is available for the current record.
+   * True when record is saved and entity allows attachments (default true).
+   */
+  public get AttachmentsAvailable(): boolean {
+    const record = this.EffectiveRecord;
+    if (!record || !record.IsSaved) return false;
+    const entity = record.EntityInfo;
+    if (!entity) return false;
+    const config = entity.Configuration?.Attachments;
+    if (config?.Enabled === false) return false;
+    return true;
+  }
+
+  /**
+   * Loads tag count, attachment count, and record change version count for toolbar badges.
+   * All queries run in parallel for performance.
    */
   private badgeCountsLoaded = false;
 
@@ -1236,9 +1298,33 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     this.badgeCountsLoaded = true;
 
-    // Fire both queries in parallel — no await needed, they update state async
+    // Fire queries in parallel — no await needed, they update state async
     this.LoadTagCount(record);
     this.LoadVersionCount(record);
+    this.LoadAttachmentCount(record);
+  }
+
+  /**
+   * Queries the count of linked attachments for the current entity + record
+   * and updates the AttachmentCount badge on the toolbar.
+   */
+  private async LoadAttachmentCount(record: BaseEntity): Promise<void> {
+    if (!this.AttachmentsAvailable) return;
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<{ ID: string }>({
+        EntityName: 'MJ: File Entity Record Links',
+        Fields: ['ID'],
+        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
+        ResultType: 'simple'
+      });
+      if (result.Success) {
+        this.AttachmentCount = result.Results.length;
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Non-critical — badge just stays at 0
+    }
   }
 
   /**
@@ -1370,6 +1456,44 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   /**
+   * Refresh: delegate to FormComponent if available, otherwise re-emit.
+   * Badge reload + related-grid fan-out happen on `RecordRefreshed` so
+   * `host.Refresh()` (which calls `RefreshRecord()` directly) still notifies.
+   */
+  async OnRefreshRequested(): Promise<void> {
+    if (this.fc?.RefreshRecord) {
+      this.IsRefreshing = true;
+      this.cdr.markForCheck();
+
+      try {
+        await this.fc.RefreshRecord();
+      } finally {
+        await Promise.resolve();
+        this.ngZone.run(() => {
+          this.IsRefreshing = false;
+          this.cdr.markForCheck();
+        });
+      }
+    } else {
+      this.RefreshRequested.emit();
+    }
+  }
+
+  /**
+   * After the form reloads the parent record: refresh chrome that is not
+   * the record itself (badges, open history drawer) and broadcast to
+   * in-form listeners (related grids, IS-A panel, custom panels).
+   */
+  private OnFormRecordRefreshed(record: BaseEntity): void {
+    this.badgeCountsLoaded = false;
+    this.LoadBadgeCounts();
+    if (this.ShowRecordChanges && this.recordChangesDrawer) {
+      this.recordChangesDrawer.Refresh();
+    }
+    this.recordRefresh.Notify(record);
+  }
+
+  /**
    * Delete, Favorite, History, Lists, ShowChanges: always re-emit for host app.
    */
   OnDeleteRequested(): void {
@@ -1435,6 +1559,30 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnTagsPanelWidthChanged(width: number): void {
     this.TagsPanelWidth = width;
     UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.TAGS_WIDTH_KEY, String(width));
+  }
+
+  OnAttachmentsPanelToggled(): void {
+    this.ShowAttachmentsPanel = !this.ShowAttachmentsPanel;
+    this.cdr.detectChanges();
+  }
+
+  OnAttachmentsPanelClosed(): void {
+    this.ShowAttachmentsPanel = false;
+    this.cdr.detectChanges();
+
+    // Refresh attachment count — attachments may have been added/removed while panel was open
+    const record = this.EffectiveRecord;
+    if (record?.EntityInfo) {
+      this.LoadAttachmentCount(record);
+    }
+  }
+
+  /**
+   * Handles live attachment count updates from the attachments panel component.
+   */
+  OnAttachmentCountChanged(count: number): void {
+    this.AttachmentCount = count;
+    this.cdr.markForCheck();
   }
 
   OnTagsRecordNavigate(event: { EntityName: string; RecordID: string }): void {

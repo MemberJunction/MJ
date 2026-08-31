@@ -182,8 +182,13 @@ export class UpdateQuerySystemUserInput {
  * Composes the CodeGen-generated MJQuery_ type so that new entity fields
  * are automatically available in the GraphQL schema without manual sync.
  *
- * On success, Query contains the full query data (scalars + related entities).
- * On failure, Query is null and ErrorMessage describes the problem.
+ * Child collections live on this result type (not as generated `*Array`
+ * FieldResolvers on MJQuery_) so the mutation can return the graph it already
+ * loaded without a per-parent SELECT *.
+ *
+ * On success, Query contains the query scalars and Fields/Parameters/Entities/
+ * Permissions hold the related rows. On failure, Query is null and
+ * ErrorMessage describes the problem.
  */
 @ObjectType()
 export class QueryMutationResultType {
@@ -195,6 +200,18 @@ export class QueryMutationResultType {
 
     @Field(() => MJQuery_, { nullable: true })
     Query?: MJQuery_;
+
+    @Field(() => [MJQueryField_], { nullable: true })
+    Fields?: MJQueryField_[];
+
+    @Field(() => [MJQueryParameter_], { nullable: true })
+    Parameters?: MJQueryParameter_[];
+
+    @Field(() => [MJQueryEntity_], { nullable: true })
+    Entities?: MJQueryEntity_[];
+
+    @Field(() => [MJQueryPermission_], { nullable: true })
+    Permissions?: MJQueryPermission_[];
 }
 
 @ObjectType()
@@ -306,7 +323,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 }
 
 
-                return this.buildSuccessResult(record);
+                return await this.buildSuccessResult(record);
             }
             else {
                 // Save failed - check if another request created the same query (race condition)
@@ -319,7 +336,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                     LogStatus(`[CreateQuery] Unique constraint detected for query '${input.Name}'. Using existing query (ID: ${existingQuery.ID}) created by concurrent request.`);
                     const existingEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', context.userPayload.userRecord);
                     if (await existingEntity.Load(existingQuery.ID)) {
-                        return this.buildSuccessResult(existingEntity);
+                        return await this.buildSuccessResult(existingEntity);
                     }
                     // Entity load failed after confirming the row exists — extremely rare
                     return {
@@ -350,16 +367,14 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      * Uses entity.GetAll() for scalar fields so that new CodeGen-generated fields are included
      * automatically without manual updates. Related entity arrays are mapped explicitly.
      */
-    private buildSuccessResult(entity: MJQueryEntityServer): QueryMutationResultType {
+    private async buildSuccessResult(entity: MJQueryEntityServer): Promise<QueryMutationResultType> {
         return {
             Success: true,
-            Query: {
-                ...entity.GetAll(),
-                MJQueryFields_QueryIDArray: this.mapFields(entity.QueryFields),
-                MJQueryParameters_QueryIDArray: this.mapParameters(entity.QueryParameters),
-                MJQueryEntities_QueryIDArray: this.mapEntities(entity.QueryEntities),
-                MJQueryPermissions_QueryIDArray: this.mapPermissions(entity.QueryPermissions),
-            } as MJQuery_
+            Query: await this.MapFieldNamesToCodeNames('MJ: Queries', entity.GetAll()) as MJQuery_,
+            Fields: this.mapFields(entity.QueryFields),
+            Parameters: this.mapParameters(entity.QueryParameters),
+            Entities: this.mapEntities(entity.QueryEntities),
+            Permissions: this.mapPermissions(entity.QueryPermissions),
         };
     }
 
@@ -538,7 +553,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
             }
 
-            return this.buildSuccessResult(queryEntity);
+            return await this.buildSuccessResult(queryEntity);
 
         } catch (err) {
             LogError(err);
@@ -582,7 +597,8 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 SkipEntityAIActions: false,
                 SkipEntityActions: false,
                 ReplayOnly: false,
-                IsParentEntityDelete: false
+                IsParentEntityDelete: false,
+                SkipRecordChanges: false
             };
             
             // Use inherited DeleteRecord method from ResolverBase
