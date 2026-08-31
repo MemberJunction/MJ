@@ -185,8 +185,7 @@
       <div class="user-menu">
         <button class="avatar-btn" (click)="toggleUserMenu($event)"
           [attr.aria-label]="avatarAriaLabel"
-          [attr.aria-expanded]="userMenuVisible"
-          aria-haspopup="menu">
+          [attr.aria-expanded]="userMenuVisible">
           @if (userImageURL) {
             <img [src]="userImageURL" alt="" aria-hidden="true" class="avatar-img" />
           } @else {

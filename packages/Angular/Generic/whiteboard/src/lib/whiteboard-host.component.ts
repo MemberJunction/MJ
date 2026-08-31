@@ -87,6 +87,9 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    * They are now scoped to focus being inside this host, which satisfies the criterion's
    * "active only on focus" branch.
    *
+   * Scoping covers the host's ENTIRE keydown handler, not only the letters: undo/redo
+   * (Cmd/Ctrl+Z, +Y), Escape and Delete/Backspace are focus-gated as well.
+   *
    * Set `true` only for a surface where the whiteboard is the entire page AND the 2.1.4
    * exposure has been accepted — it is an accessibility regression, not a convenience flag.
    */
@@ -427,8 +430,12 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   public OnKeydown(event: KeyboardEvent): void {
-    // WCAG 2.1.4: the shortcuts below are only live while focus is on the board. See
-    // {@link EnableGlobalShortcuts} for the (discouraged) opt-out.
+    // WCAG 2.1.4: only live while focus is on the board. NOTE this gates the WHOLE handler,
+    // not just the single-character tool keys that 2.1.4 is about — undo/redo (Cmd/Ctrl+Z,
+    // +Y), Escape and Delete/Backspace are scoped too. That is deliberate: a board that
+    // swallows the document's Cmd+Z from anywhere on the page is its own bug, and "the board
+    // responds to keys when you are on the board" is the only model that stays predictable.
+    // See {@link EnableGlobalShortcuts} for the (discouraged) opt-out.
     if (!this.EnableGlobalShortcuts && !this.hasFocusWithin()) {
       return;
     }

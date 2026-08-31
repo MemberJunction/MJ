@@ -110,6 +110,30 @@ describe('CommandPaletteComponent (DOM)', () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it('wraps focus at both ends of the dialog rather than leaving it', () => {
+    // The trap above is real but degenerate on its own: an empty palette has exactly ONE
+    // focusable element, so first === last and either branch looks identical. Add a second
+    // one so the two wrap directions are actually distinguishable.
+    const { fixture } = render(true);
+    const modal = query(fixture, '.command-palette-modal') as HTMLElement;
+    const input = query(fixture, 'input.search-input') as HTMLInputElement;
+    const tail = document.createElement('button');
+    modal.appendChild(tail);
+
+    // Shift+Tab off the FIRST element wraps to the last.
+    input.focus();
+    const back = press('Tab', input, { shiftKey: true });
+    fixture.componentInstance.HandleKeyDown(back);
+    expect(back.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(tail);
+
+    // Tab off the LAST element wraps to the first.
+    const fwd = press('Tab', tail);
+    fixture.componentInstance.HandleKeyDown(fwd);
+    expect(fwd.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input);
+  });
+
   it('closes on Escape', () => {
     const { fixture, close } = render(true);
     const input = query(fixture, 'input.search-input') as HTMLElement;
