@@ -6028,8 +6028,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
         @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
-        @Arg("autoEnableNewObjects", { defaultValue: false, description: 'newly-appeared objects get their entity maps created DISABLED by default (the user enables them after the refresh). Pass true to auto-enable them instead.' }) autoEnableNewObjects: boolean,
-        @Arg("autoEnableNewColumns", { defaultValue: false, description: 'newly-appeared COLUMNS on an already-enabled object get their field maps created DISABLED by default (the user enables them after the refresh). Pass true to auto-enable them instead. Mirrors autoEnableNewObjects; a column is as much a schema change as a table.' }) autoEnableNewColumns: boolean,
+        @Arg("autoEnableNewObjects", { defaultValue: true, description: 'newly-appeared objects get their entity maps created ENABLED — a refresh is an explicit request to bring the source\'s current shape in. Pass false to create them disabled and enable them by hand instead.' }) autoEnableNewObjects: boolean,
+        @Arg("autoEnableNewColumns", { defaultValue: true, description: 'newly-appeared COLUMNS on an enabled object get their field maps created ENABLED, matching autoEnableNewObjects. Pass false to create them disabled instead. NOTE: this governs the REFRESH only — a column discovered mid-SYNC is never auto-created; it is captured as a candidate and needs acceptance (Configuration.autoPromoteCustomColumns, default false).' }) autoEnableNewColumns: boolean,
         @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
         @Arg("cascadeRemoveDependents", { defaultValue: false, description: 'When a removed object has still-active dependents (DAG parent edges), also disable the transitive dependent closure ("force remove those too"). Default false: dependents stay active and each broken edge is surfaced as a warning.' }) cascadeRemoveDependents: boolean,
         @Ctx() ctx: AppContext
@@ -6376,12 +6376,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Refresh diff (continuing objects): reconciles one entity map's field maps to the
      * post-resolution IOF set.
      *
-     * A source field with NO field map gets one created **Inactive** — a new column is a schema
-     * change and waits for the user, exactly as a new OBJECT does. `autoEnableNewColumns` opts out
-     * of that, and the map's own state still bounds it: a column is never Active on a map that
-     * isn't. (It previously inherited the map's enabled state outright, so a column appearing on an
-     * object already being synced started syncing immediately with no decision from anyone — new
-     * objects were gated, new columns were not.)
+     * A source field with NO field map gets one created **Active** — a refresh is an explicit request
+     * to bring the source's current shape in, so new objects and new columns are both adopted rather
+     * than queued for approval. `autoEnableNewColumns: false` gates it for a connection that wants to
+     * review first, and the map's own state always bounds it: a column is never Active on a map that
+     * isn't.
+     *
+     * REFRESH ONLY. A column first seen mid-SYNC is never auto-created — it is captured as a
+     * candidate and needs acceptance (`CustomColumnPromoter`, default off). A refresh is a
+     * deliberate act; a sync is not, and must not reshape the schema on its own.
      *
      * A field map whose source field is no longer Active in the resolution is DISABLED, never
      * deleted — a later re-appearance re-enables it through the same reconciliation (the
@@ -6392,7 +6395,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         integrationObjectID: string,
         user: UserInfo,
         md: IMetadataProvider,
-        autoEnableNewColumns = false
+        autoEnableNewColumns = true
     ): Promise<{ Added: number; Disabled: number }> {
         const result = { Added: 0, Disabled: 0 };
         const activeFields = IntegrationEngineBase.Instance

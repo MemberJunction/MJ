@@ -276,21 +276,24 @@ export interface FieldMapReconcilePlan {
  * `decideAbsentDeactivations` in the engine.
  *
  * The rules:
- *  - **New column → `Inactive`.** A new column is a schema change and waits for the user, exactly as
- *    a new OBJECT does. `autoEnableNewColumns` opts out. This inherited the map's enabled state
- *    outright before, so a column appearing on an object already being synced started syncing
- *    immediately with no decision from anyone.
+ *  - **New column → `Active`.** A refresh is an explicit request to bring the source's current shape
+ *    in, so a column it finds is adopted rather than queued for approval. `autoEnableNewColumns:
+ *    false` gates it for a connection that wants to review first.
+ *
+ *    This is REFRESH ONLY. A column first seen mid-SYNC is never auto-created — it is captured as a
+ *    candidate with its statistics and needs acceptance before any DDL runs (see
+ *    `CustomColumnPromoter`, `Configuration.autoPromoteCustomColumns`, default false). Refresh is a
+ *    deliberate act; a sync is not, and must not reshape the schema on its own.
  *  - **The map bounds the column.** Nothing is Active on a map that is not enabled, flag or no flag.
  *  - **Re-added column → `Active`, ungated.** That row is not new; it was disabled because the source
- *    stopped reporting the column. Gating it would silently demote a column the user chose to sync
- *    every time the source flickered.
+ *    stopped reporting the column, so it returns to the state it had.
  *  - **Vanished column → `Inactive`, never deleted.** Retiring is reversible by the branch above.
  */
 export function decideFieldMapReconcile(
     activeFieldNames: readonly string[],
     existing: readonly ExistingFieldMapRead[],
     mapEnabled: boolean,
-    autoEnableNewColumns: boolean,
+    autoEnableNewColumns = true,
 ): FieldMapReconcilePlan {
     const plan: FieldMapReconcilePlan = { Create: [], Enable: [], Disable: [] };
     const existingByLower = new Map(
