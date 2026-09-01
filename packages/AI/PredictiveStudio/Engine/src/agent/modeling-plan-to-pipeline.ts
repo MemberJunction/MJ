@@ -22,6 +22,7 @@ import {
   type ValidationStrategy,
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
+import type { DatedSourceSpec } from '../feature-assembly';
 
 /** The resolved, ready-to-persist configuration for one `MJ: ML Training Pipelines` row. */
 export interface PipelineConfig {
@@ -43,6 +44,14 @@ export interface PipelineConfig {
   featureSteps: FeatureStepGraph;
   /** Point-in-time assembly strategy. */
   asOf: AsOfStrategy;
+  /**
+   * Dated ("as-of") feature sources persisted onto the pipeline row. `TrainingEngine` freezes
+   * these into the trained model's `Lineage`, so scoring assembles the SAME as-of columns
+   * without any caller-supplied configuration. Absent/empty ⇒ the pipeline has no as-of
+   * features. Populated by the Architect sub-agent; not derivable from `ModelingPlanSpec`
+   * today, so plan-built pipelines start empty.
+   */
+  datedSources?: DatedSourceSpec[];
   /** Leakage protection (deny-list + dominance threshold). */
   leakageGuard: LeakageGuard;
   /** Validation strategy. */

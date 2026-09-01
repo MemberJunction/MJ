@@ -135,6 +135,8 @@ class FakeMLPipeline {
     ],
   } satisfies FeatureStepGraph);
   public AsOfStrategy: string | null = JSON.stringify({ Mode: 'none' } as AsOfStrategy);
+  /** Null on a pipeline with no as-of features — the default. Set per-test to exercise the round-trip. */
+  public DatedSources: string | null = null;
   public LeakageGuard: string | null = JSON.stringify({ DenyFields: [], SingleFeatureDominanceThreshold: 0.6 } as LeakageGuard);
   public ValidationStrategy: string | null = JSON.stringify({
     Strategy: 'train_test_split',
@@ -237,8 +239,8 @@ const cleanResponse: TrainResponse = {
 };
 
 /** Build a TrainingEngine wired to an assembler over the given member rows. */
-function buildEngine(): TrainingEngine {
-  const dataAccess = new InMemoryDataAccess({ Members: syntheticMembers() });
+function buildEngine(extraFixtures: Record<string, SourceRow[]> = {}): TrainingEngine {
+  const dataAccess = new InMemoryDataAccess({ Members: syntheticMembers(), ...extraFixtures });
   // Inject the data-access into the assembler by wrapping assemble defaults:
   // FeatureAssemblyExecutor reads dataAccess from params, so we pass it via a
   // subclass that always supplies our in-memory access.
@@ -414,5 +416,47 @@ describe('TrainingEngine.trainModel — experiment session iteration linkage (§
     const { deps, factory } = buildDeps();
     await engine.trainModel({ pipelineId: 'pipe-1', experimentSessionIterationId: 'iter-7' }, deps);
     expect(factory.Runs[0].ExperimentSessionIterationID).toBe('iter-7');
+  });
+});
+
+describe('TrainingEngine.trainModel — as-of dated sources round-trip', () => {
+  /** Two activities for m0, one for m1, none for the rest. */
+  function syntheticActivities(): SourceRow[] {
+    return [
+      { ID: 'a1', MemberID: 'm0', ActivityDate: '2026-01-10T00:00:00Z' },
+      { ID: 'a2', MemberID: 'm0', ActivityDate: '2026-02-10T00:00:00Z' },
+      { ID: 'a3', MemberID: 'm1', ActivityDate: '2026-03-10T00:00:00Z' },
+    ];
+  }
+
+  const DATED_SOURCES = [
+    {
+      EntityName: 'Activities',
+      ForeignKeyField: 'MemberID',
+      DateField: 'ActivityDate',
+      Features: [{ OutputColumn: 'activity_count_asof', Aggregate: 'count' }],
+    },
+  ];
+
+  it("freezes the pipeline's DatedSources into the model Lineage and assembles the as-of columns", async () => {
+    const engine = buildEngine({ Activities: syntheticActivities() });
+    const pipeline = new FakeMLPipeline();
+    pipeline.DatedSources = JSON.stringify(DATED_SOURCES);
+    const { deps, sidecar } = buildDeps({ pipeline });
+
+    const { model } = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
+
+    // The as-of column reached the sidecar's training matrix...
+    expect(sidecar.LastRequest!.feature_schema.map((f) => f.Name)).toContain('activity_count_asof');
+    // ...and the spec is frozen on the model so scoring can rebuild the SAME column
+    // without the caller supplying it (see scoring/__tests__/dated-sources-round-trip).
+    expect(JSON.parse(model.Lineage!).datedSources).toEqual(DATED_SOURCES);
+  });
+
+  it('writes an empty datedSources lineage for a pipeline that declares none', async () => {
+    const engine = buildEngine();
+    const { deps } = buildDeps();
+    const { model } = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(JSON.parse(model.Lineage!).datedSources).toEqual([]);
   });
 });

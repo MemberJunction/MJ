@@ -46,7 +46,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
-import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
+import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from './types';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
@@ -62,6 +62,12 @@ interface ResolvedPipeline {
   asOf: AsOfStrategy;
   leakageGuard: LeakageGuard;
   validation: ValidationStrategy;
+  /**
+   * Dated/as-of feature sources. Persisted on the pipeline and copied into the model's Lineage at
+   * train time so scoring assembles the SAME as-of features without caller-supplied configuration —
+   * without this round trip an as-of feature simply computes to null at score time.
+   */
+  datedSources: DatedSourceSpec[];
 }
 
 /** The result of carving a matrix into a training portion + a locked holdout. */
@@ -142,6 +148,7 @@ export class TrainingEngine {
       asOf: parseJson<AsOfStrategy>(pipeline.AsOfStrategy, { Mode: 'none' }),
       leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
+      datedSources: parseJson<DatedSourceSpec[]>(pipeline.DatedSources, []),
     };
   }
 
@@ -224,6 +231,7 @@ export class TrainingEngine {
       steps: resolved.featureSteps,
       asOf: resolved.asOf,
       leakageGuard: resolved.leakageGuard,
+      datedSources: resolved.datedSources,
       targetVariable: resolved.targetVariable,
       labelEventDates: input.labelEventDates,
       primaryKeyField: input.primaryKeyField,
@@ -354,6 +362,7 @@ export class TrainingEngine {
       sourceBindings: resolved.sourceBindings,
       featureSteps: resolved.featureSteps,
       asOfStrategy: resolved.asOf,
+      datedSources: resolved.datedSources,
       sidecarVersion: input.sidecarVersion ?? null,
       lockedHoldoutRowCount: split.holdoutRowCount,
       trainingRowCount: split.trainingRowCount,

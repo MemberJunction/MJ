@@ -113,6 +113,10 @@ export class PredictiveStudioPipelineBuilder {
     pipeline.SourceBindings = JSON.stringify(config.sourceBindings);
     pipeline.FeatureSteps = JSON.stringify(config.featureSteps);
     pipeline.AsOfStrategy = JSON.stringify(config.asOf);
+    // Persist the as-of sources so TrainingEngine can freeze them into the model's Lineage —
+    // the train→score round-trip. Null (not `[]`) when there are none, so a pipeline that
+    // never used as-of features is distinguishable from one that declared an empty list.
+    pipeline.DatedSources = config.datedSources?.length ? JSON.stringify(config.datedSources) : null;
     pipeline.LeakageGuard = JSON.stringify(config.leakageGuard);
     pipeline.ValidationStrategy = JSON.stringify(config.validation);
     if (!(await pipeline.Save())) {
