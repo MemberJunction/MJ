@@ -19,6 +19,8 @@ import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@m
 import { modelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
 import { gateArchitecture, type ArchitectureGateResult } from './architecture-gate';
+import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
+import type { PromoteModelOutcome } from '../actions/promote-model.action';
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
 export interface BuildPredictionInput {
@@ -85,7 +87,7 @@ export class PredictiveStudioPipelineBuilder {
       const trust = deriveTrustVerdict(model);
       const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
 
-      const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
+      const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish, user, provider);
       return {
         success: true,
         pipelineId: pipeline.ID,
@@ -213,6 +215,8 @@ export class PredictiveStudioPipelineBuilder {
     trust: TrustVerdict,
     leakageFlagged: boolean,
     autoPublish: boolean,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
   ): Promise<{ published: boolean; heldReason: string | null }> {
     if (!autoPublish) {
       return { published: false, heldReason: 'Not published — auto-publish was off; review and publish when ready.' };
@@ -223,10 +227,60 @@ export class PredictiveStudioPipelineBuilder {
     if (!trust.canAct) {
       return { published: false, heldReason: trust.gateReason ?? 'Held — this prediction is not reliable enough to publish yet.' };
     }
-    model.Status = 'Published';
-    if (!(await model.Save())) {
-      throw new Error(`Trained model could not be published: ${model.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+    // Route through the PROMOTION GATE rather than setting Status directly. Writing the column here
+    // bypassed the state machine, the leakage re-check, the scoring-Action sync and (now) the story
+    // hook — so an agent-built model reached Published by a different road than a human-promoted
+    // one, and quietly skipped everything the gate exists to guarantee.
+    const outcome = await this.promoteViaGate(model, contextUser, provider);
+    if (outcome.kind === 'promoted') {
+      return { published: true, heldReason: null };
     }
-    return { published: true, heldReason: null };
+    if (outcome.kind === 'refused-leakage' || outcome.kind === 'signoff-reason-required') {
+      // The gate re-checks leakage independently of the training-time flag, so it can catch a model
+      // the builder's own check let through. A human sign-off with a reason is the only way past it,
+      // and that is deliberately not something an agent may do on its own.
+      return {
+        published: false,
+        heldReason:
+          'Held for analyst review — the promotion gate flagged a possible data-leakage issue. ' +
+          'Publishing it requires a person to sign off with a reason.',
+      };
+    }
+    throw new Error(`Trained model could not be published: ${describePromotionFailure(outcome)}`);
+  }
+
+  /** Promotion seam — overridden in tests so no live gate/DB is needed. */
+  protected async promoteViaGate(
+    model: MJMLModelEntity,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
+  ): Promise<PromoteModelOutcome> {
+    return new ProductionModelPromotionGate().promote({
+      modelId: model.ID,
+      targetStatus: 'Published',
+      // An agent NEVER signs off on a leakage-flagged model — that override exists for a person who
+      // can give a reason and be accountable for it.
+      signOff: false,
+      contextUser,
+      provider,
+    });
+  }
+}
+
+/** A readable message for a promotion outcome that is neither success nor a leakage hold. */
+function describePromotionFailure(outcome: PromoteModelOutcome): string {
+  switch (outcome.kind) {
+    case 'not-found':
+      return 'the model row could not be found';
+    case 'invalid-transition':
+      return `the promotion gate refused ${outcome.currentStatus} → ${outcome.targetStatus}`;
+    case 'save-failed':
+      return outcome.message;
+    case 'refused-leakage':
+    case 'signoff-reason-required':
+      return 'the promotion gate held it for leakage sign-off';
+    default:
+      return 'the promotion gate refused the transition';
   }
 }

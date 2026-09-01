@@ -119,5 +119,26 @@
       "lastModified": "2026-07-01T17:33:37.945Z",
       "checksum": "c347a11bee439a507e51eaa00e4d731f99f94db0b4c6b278a4f4bbd3670e3188"
     }
+  },
+  {
+    "fields": {
+      "Name": "Model Story Tagger - Main Prompt",
+      "Description": "Writes a published model's STORY — what it decides, how, what the data says, and what someone would do differently because of it — plus a standalone story and contribution judgment for each of its components. The only generative step in the publishing path: every fact it describes is computed and handed to it (trust grade, holdout-vs-validation metrics, feature importance, real entity/field bindings), so it narrates and never decides. Each component's story is written to that component's own row, which is what makes reuse-by-meaning searchable later. Attribution is machine-checked — every InstanceID must be a component the model actually has — and Caveats must not be empty.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/model-story-tagger.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/model-story-tagger.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "B09BD1F0-4BDB-4B8C-B67B-FCD4EB683FB2"
+    }
   }
 ]

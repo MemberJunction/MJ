@@ -21,4 +21,6 @@ export * from './component-model';
 export * from './statistics-spec';
 export * from './component-graph-spec';
 export * from './component-graph-schema';
+export * from './story-spec';
+export * from './story-schema';
 export * from './component-resolution';
