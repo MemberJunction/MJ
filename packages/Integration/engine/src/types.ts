@@ -517,9 +517,14 @@ export interface SourceObjectInfo {
      * third — so a custom-only source looked authoritative and its standard columns were
      * candidates for deactivation.
      *
-     * Undefined means the source has not said. Absence of evidence is not evidence of
-     * absence (the same rule the primary-key search follows), so an undeclared object's
-     * columns are never deactivated.
+     * Undefined means the object has not said, and the CONNECTOR's claim
+     * (`DiscoveryIsAuthoritative`, surfaced as `SourceSchemaInfo.IsAuthoritative`) is inherited:
+     * a connector affirming it returns the complete gamut is affirming it for the fields the same
+     * describe call returned. Since that claim defaults to false and a scoped introspection forces
+     * it false, an undeclared object under a non-affirming connector is still never deactivated.
+     *
+     * So set this `false` explicitly on an object whose describe is custom-only while the rest of
+     * the connector's discovery is complete — that is the one case the inherited claim gets wrong.
      */
     FieldsAreAuthoritative?: boolean;
 }
