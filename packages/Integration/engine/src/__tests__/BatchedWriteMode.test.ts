@@ -82,7 +82,9 @@ describe('the write mutex, and why the batched path must not nest it', () => {
         });
         const second = e.runWriteExclusive(async () => { order.push('second:start'); });
 
-        await Promise.resolve();
+        // Flush the scheduler rather than a single microtask: the lock's gate settles a small
+        // promise set before entering, so "has it started yet" is not a one-tick question.
+        await new Promise((r) => setTimeout(r, 0));
         expect(order).toEqual(['first:start']);   // second has not started
 
         releaseFirst();

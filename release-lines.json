@@ -1,7 +1,7 @@
 {
   "$schema": "./ci/release-lines.schema.json",
   "edge": {
-    "newest": "6.1.0-edge.3",
+    "newest": "6.1.0-edge.4",
     "releases": {
       "6.1.0-edge.0": {
         "dbImpact": "schema"
@@ -13,6 +13,9 @@
         "dbImpact": "schema"
       },
       "6.1.0-edge.3": {
+        "dbImpact": "schema"
+      },
+      "6.1.0-edge.4": {
         "dbImpact": "schema"
       }
     }
@@ -34,13 +37,16 @@
     "5.51": {
       "status": "certified",
       "certifiedBuild": "5.51.0",
-      "newest": "5.51.1",
+      "newest": "5.51.2",
       "candidateDate": "2026-07-31",
       "certifiedDate": "2026-08-14",
       "supportEnds": "2027-02-14",
       "upgradeImpact": "none",
       "releases": {
         "5.51.1": {
+          "dbImpact": "none"
+        },
+        "5.51.2": {
           "dbImpact": "none"
         }
       },

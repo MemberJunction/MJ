@@ -59,6 +59,7 @@ import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 import { CollapseDuplicateIdentities } from './BatchIdentity.js';
+import { WriteSerializer } from './WriteSerializer.js';
 import { ResumeConcurrency, RunResumesBounded } from './ResumeConcurrency.js';
 
 /** Default batch size for fetching records from external systems */
@@ -293,6 +294,37 @@ function detectSchemaNotGenerated(entityName: string, errorMessage: string): Sch
  */
 export function PositiveInt(v: unknown): number | undefined {
     return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
+}
+
+/**
+ * What one apply batch already knows about its destination rows before writing any of them.
+ *
+ * Two separate facts, deliberately not conflated: a row can EXIST while carrying no content hash
+ * (written before hashing, or hashed NULL), so "absent from the hash map" cannot mean "absent from
+ * the table". {@link Present} answers existence; {@link Hashes} answers unchanged-ness.
+ */
+interface BatchPrecheck {
+    /** Destination PK (PrimaryKeys order, '|'-joined) → its stored content hash, where one exists. */
+    Hashes: Map<string, string>;
+    /** Destination PKs proven to EXIST, whether or not they carry a hash. */
+    Present: Set<string>;
+    /**
+     * True only when the prefetch asked about EVERY candidate PK in the batch. Absence is provable
+     * only then — a partial or failed prefetch means "unknown", never "not there".
+     */
+    CoversWholeBatch: boolean;
+}
+
+/**
+ * How many deferred writes may accumulate in one batched group before it is submitted and replaced.
+ *
+ * `undefined` (unset, or any unusable value) means no mid-batch flush at all — the batch is one
+ * group and one transaction, which is the default and the behaviour that shipped. An explicit value
+ * trades that atomicity for bounded memory on a heap-constrained box.
+ */
+export function ReadFlushCeiling(env: NodeJS.ProcessEnv): number | undefined {
+    const raw = parseInt(env.MJ_INTEGRATION_BATCH_FLUSH_AT ?? '', 10);
+    return Number.isFinite(raw) && raw >= 1 ? raw : undefined;
 }
 
 export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
@@ -560,19 +592,36 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * phase stays parallel (the real throughput win — it's network-bound). WeakMap so a
      * retired provider's chain entry is collectable.
      */
-    private static readonly writeChains = new WeakMap<IMetadataProvider, { chain: Promise<unknown> }>();
-    private runWriteExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    private static readonly writeSerializers = new WeakMap<IMetadataProvider, WriteSerializer>();
+    /** The write lock for this engine's provider, created on first use. */
+    private writeSerializer(): WriteSerializer {
         const provider = this.ProviderToUse;
-        let holder = IntegrationEngine.writeChains.get(provider);
-        if (!holder) {
-            holder = { chain: Promise.resolve() };
-            IntegrationEngine.writeChains.set(provider, holder);
+        let s = IntegrationEngine.writeSerializers.get(provider);
+        if (!s) {
+            s = new WriteSerializer();
+            IntegrationEngine.writeSerializers.set(provider, s);
         }
-        // Run fn after the prior write completes (whether it resolved or rejected); keep the chain
-        // alive past failures so one errored batch never deadlocks subsequent writers.
-        const run = holder.chain.then(() => fn(), () => fn());
-        holder.chain = run.then(() => undefined, () => undefined);
-        return run;
+        return s;
+    }
+
+    /**
+     * Runs `fn` with NO other write in flight against the provider. Required for work that opens
+     * the provider's single global transaction — while it is open, any other write would join it.
+     */
+    private runWriteExclusive<T>(fn: () => Promise<T>): Promise<T> {
+        return this.writeSerializer().RunExclusive(fn);
+    }
+
+    /**
+     * Runs `fn` ordered against other writes for the SAME entity map, concurrently with other maps.
+     *
+     * Only for work that opens no provider transaction — watermark bookkeeping, match resolution,
+     * and the post-batch flushes of a batched (TransactionGroup-carrying) apply. Those were queued
+     * behind every other map's writes purely because the lock could not tell them apart from a
+     * transaction-holding section.
+     */
+    private runWriteForMap<T>(entityMapID: string, fn: () => Promise<T>): Promise<T> {
+        return this.writeSerializer().RunKeyed(entityMapID, fn);
     }
 
     /**
@@ -2497,7 +2546,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 excludedFields: Array.from(excludedSourceNames).sort(),
             });
         }
-        const watermark = await this.runWriteExclusive(() => this.watermarkService.Load(entityMapID, contextUser, 'Pull'));
+        const watermark = await this.runWriteForMap(entityMapID, () => this.watermarkService.Load(entityMapID, contextUser, 'Pull'));
         logger?.emit('sync.entity-map.start', {
             phase: 'pull-detail',
             externalObjectName: entityMap.ExternalObjectName,
@@ -2769,7 +2818,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // value — a crash from here on resumes from the pre-run watermark and re-covers
                     // the gap. Later checkpoints stop writing floors (gate above).
                     if (watermarkFloorSaved !== null) {
-                        await this.runWriteExclusive(() => this.watermarkService.RestoreValue(entityMapID, preRunWatermarkValue, contextUser));
+                        await this.runWriteForMap(entityMapID, () => this.watermarkService.RestoreValue(entityMapID, preRunWatermarkValue, contextUser));
                         watermarkFloorSaved = null;
                     }
                     logger?.warning(
@@ -2930,11 +2979,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // not begun"). Holding the same write-lock for the read keeps the connection single-owner.
             const resolved = partitionReconcile
                 ? []
-                : await this.runWriteExclusive(() => this.matchEngine.Resolve(mapped, entityMap, fieldMaps, contextUser));
+                : await this.runWriteForMap(entityMap.ID, () => this.matchEngine.Resolve(mapped, entityMap, fieldMaps, contextUser));
 
             const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
             try {
-                if (!partitionReconcile) await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1);
+                if (!partitionReconcile) await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
             } catch (applyErr) {
                 if (applyErr instanceof SchemaNotGeneratedError) {
                     // The destination spCreate/Update/Delete doesn't exist
@@ -2975,7 +3024,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
                 // Update progress on the watermark record so the DB reflects live sync state
                 if (batch.HasMore) {
-                    await this.runWriteExclusive(() => this.watermarkService.UpdateProgress(entityMapID, afterApply, contextUser));
+                    await this.runWriteForMap(entityMapID, () => this.watermarkService.UpdateProgress(entityMapID, afterApply, contextUser));
                 }
             }
 
@@ -3012,7 +3061,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // post-loop save below handles graceful early-exits precisely; this covers a SIGKILL
                 // between graceful checkpoints, costing at most ~25 batches of re-fetch on resume.
                 if (isKeysetConnector && currentAfterKey) {
-                    await this.runWriteExclusive(() => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
+                    await this.runWriteForMap(entityMapID, () => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
                 }
                 // The WATERMARK twin of the keyset floor above. Without it, a watermark-based
                 // connector had NO durable position at all until the run ended: a SIGKILL / OOM /
@@ -3030,7 +3079,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     && currentWatermark && currentWatermark !== initialWatermark
                     && currentWatermark !== watermarkFloorSaved) {
                     const floor = currentWatermark;
-                    await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, floor, contextUser, 'Pull'));
+                    await this.runWriteForMap(entityMapID, () => this.watermarkService.Update(entityMapID, floor, contextUser, 'Pull'));
                     watermarkFloorSaved = floor;
                 }
             }
@@ -3072,7 +3121,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // NOTE: a connector that ALSO returns a monotonic watermark (MonotonicWatermark=true) skips
             // this branch and falls through to SAVE that watermark below, so its next incremental NARROWS
             // (microtime > watermark) instead of re-scanning the whole object every run.
-            await this.runWriteExclusive(() => this.watermarkService.ClearKeysetPosition(entityMapID, contextUser));
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.ClearKeysetPosition(entityMapID, contextUser));
             result.WatermarkAfter = null;
         } else if (fetchCompletedCleanly) {
             // Save a watermark on every clean fetch, even when the connector
@@ -3110,12 +3159,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             } else {
                 finalWatermark = new Date().toISOString();
             }
-            await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, finalWatermark, contextUser, 'Pull'));
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.Update(entityMapID, finalWatermark, contextUser, 'Pull'));
             result.WatermarkAfter = finalWatermark;
         } else if (isKeysetConnector && currentAfterKey) {
             // The keyset scan stopped early (cancel / fetch error / safety limit). Persist the precise
             // last ordering key so the next run resumes the seek from here instead of restarting.
-            await this.runWriteExclusive(() => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
             result.WatermarkAfter = currentAfterKey;
         } else if (!hadFetchGap && currentWatermark && currentWatermark !== initialWatermark) {
             // A WATERMARK-based connector stopped early (cancel / safety limit / duplicate batch /
@@ -3134,7 +3183,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // deliberately NOT when hadFetchGap — a skipped page leaves a HOLE behind this watermark,
             // which is why that path holds it for a full re-fetch next run.
             const partialWatermark = currentWatermark;
-            await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, partialWatermark, contextUser, 'Pull'));
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.Update(entityMapID, partialWatermark, contextUser, 'Pull'));
             result.WatermarkAfter = partialWatermark;
         }
 
@@ -4144,8 +4193,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // (~line 1644). matchEngine.Resolve reads existing MJ rows on the SHARED provider
                 // connection, so when streams run in parallel (syncConcurrency>1) it must not interleave
                 // with another stream's open write transaction (else "Transaction in progress" / dirty read).
-                const resolved = await this.runWriteExclusive(() => this.matchEngine.Resolve(recs, entityMap, fieldMaps, contextUser));
-                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1);
+                const resolved = await this.runWriteForMap(entityMap.ID, () => this.matchEngine.Resolve(recs, entityMap, fieldMaps, contextUser));
+                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
                 appliedRecords += recs.length;
             }
         } catch (applyErr) {
@@ -4191,7 +4240,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // lost batch atomicity is absorbed by the engine's idempotency (upsert-by-identity + content
         // hash) and the safe-floor watermark (advances only on a clean batch). Default true = the
         // proven atomic serial path, unchanged.
-        useTransaction: boolean = true
+        useTransaction: boolean = true,
+        /**
+         * Requested apply concurrency. Only consulted on the transaction-free path (the one
+         * `useTransaction: false` selects), where records auto-commit independently and can
+         * therefore overlap. Defaults to 1, so a caller that does not pass it keeps the serial
+         * behaviour exactly.
+         */
+        concurrency: number = 1
     ): Promise<void> {
         // Batched application with per-record failure isolation (the "grace gap" fix).
         // Happy path: each batch of up to APPLY_BATCH_SIZE records commits as a single
@@ -4262,7 +4318,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // the outer one, which deadlocks. Under the outer mutex the writes are already
             // serialized, so they run inline; without it they take the mutex individually.
             const serializeWrite = batchedWrites
-                ? <T,>(fn: () => Promise<T>): Promise<T> => this.runWriteExclusive(fn)
+                ? <T,>(fn: () => Promise<T>): Promise<T> => this.runWriteForMap(entityMap.ID, fn)
                 : <T,>(fn: () => Promise<T>): Promise<T> => fn();
 
             const applyOneBatch = async () => {
@@ -4329,10 +4385,39 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     //
                     // Per-batch groups are also what keeps failures isolated: a poison record fails
                     // the group its own map owns, and every other map in flight is untouched.
+                    // OPT-IN ceiling on how many writes may sit deferred in one group.
+                    //
+                    // A group holds every enrolled record's rendered SQL and parameters until Submit,
+                    // so peak memory for a batched apply is roughly (maps in flight x group size x row
+                    // size). With wide rows that is the largest allocation a sync makes, and a box that
+                    // has run out of heap has no way to trade a little throughput for headroom.
+                    //
+                    // Unset (the default) means NO mid-batch flush: the batch stays exactly one group
+                    // and one transaction, as today. Setting it below the batch size splits the batch
+                    // into several transactions, which is a real trade — an earlier flush stays
+                    // committed if a later one fails — and is why it is off unless asked for. The
+                    // per-record fallback that follows a failed batch is idempotent, so the split is
+                    // recoverable; it is simply no longer all-or-nothing.
+                    const flushAt = ReadFlushCeiling(process.env);
                     const runBatch = async () => {
+                        let enrolledSinceFlush = 0;
                         for (const record of batch) {
                             result.RecordsProcessed++;
                             await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
+                            if (flushAt === undefined) continue;
+                            if (++enrolledSinceFlush < flushAt) continue;
+                            enrolledSinceFlush = 0;
+                            // Mutating the context object is what makes the swap visible: every frame
+                            // below shares this same object through AsyncLocalStorage, so replacing the
+                            // group here is what the next record's enrolment sees.
+                            const ctx = this.currentRunContext;
+                            const full = ctx?.writeGroup;
+                            if (!full) continue;
+                            const submitted = await serializeWrite(() => full.Submit());
+                            if (!submitted) throw new Error('Batched write group did not commit');
+                            const fresh = await provider.CreateTransactionGroup();
+                            fresh.BatchedSubmit = true;
+                            ctx.writeGroup = fresh;
                         }
                     };
                     try {
@@ -4403,7 +4488,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // connection. Per-record error isolation: a poison record is logged + counted; the
                     // rest still commit; the idempotent re-sync + safe-floor watermark reconcile any
                     // partial batch (the atomicity the transactional path provides is not needed here).
-                    for (const record of batch) {
+                    // The records are independent and each auto-commits on its own pooled
+                    // connection, so this is the one place in the apply path where the requested
+                    // concurrency can actually be spent. Running them one at a time made
+                    // syncConcurrency a fetch-only setting: the caller opted into concurrency, paid
+                    // for it by giving up batch atomicity, and then still wrote serially.
+                    //
+                    // A fixed pool of workers pulling from a shared cursor, rather than
+                    // Promise.all over the batch: 500 simultaneous saves would swamp the connection
+                    // pool. The cap is the same knob the fetch side uses, clamped to a sane ceiling.
+                    const applyLimit = Math.max(1, Math.min(16, Math.floor(concurrency) || 1));
+                    let cursor = 0;
+                    // Set by whichever worker sees it; every worker stops at the next pull and the
+                    // error is rethrown after they settle. SchemaNotGeneratedError means the whole
+                    // map cannot proceed, so finishing the remaining records would be wasted work
+                    // against a table that does not exist.
+                    let fatal: unknown;
+                    const applyOne = async (record: MappedRecord): Promise<void> => {
                         result.RecordsProcessed++;
                         try {
                             // §10 — bounded inline retry for provably-transient save failures (auto-commit per
@@ -4421,7 +4522,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                             );
                         } catch (err) {
                             if (err instanceof SchemaNotGeneratedError) {
-                                throw err;
+                                fatal ??= err;
+                                return;
                             }
                             // §10 — permanent / retry-exhausted → dead-letter (count + log), move on; watermark advances regardless.
                             result.RecordsErrored++;
@@ -4434,7 +4536,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                                 Severity: classified.Severity,
                             });
                         }
-                    }
+                    };
+                    // allSettled, not all: a worker must never reject, and the counters/dead-letter
+                    // list are only coherent once every worker has stopped touching them.
+                    await Promise.allSettled(
+                        Array.from({ length: Math.min(applyLimit, batch.length) }, async () => {
+                            for (;;) {
+                                if (fatal !== undefined) return;
+                                const next = cursor++;
+                                if (next >= batch.length) return;
+                                await applyOne(batch[next]);
+                            }
+                        }),
+                    );
+                    if (fatal !== undefined) throw fatal;
                 }
 
                 // After the batch settles (committed, or per-record retried), refresh
@@ -4560,7 +4675,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo,
         logger: SyncLogger | undefined,
-        precheckHashes: Map<string, string> | undefined,
+        precheckHashes: BatchPrecheck | undefined,
         reconciledSkipIds?: string[],
         recordMaps?: RecordMapBatch,
         // When false, each record is applied WITHOUT a provider transaction (auto-commit).
@@ -4672,7 +4787,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo,
         logger?: SyncLogger,
-        precheckHashes?: Map<string, string>,
+        precheckHashes?: BatchPrecheck,
         reconciledSkipIds?: string[],
         recordMaps?: RecordMapBatch
     ): Promise<void> {
@@ -4693,7 +4808,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         try {
             switch (record.ChangeType) {
                 case 'Create': {
-                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
+                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
                     if (outcome === 'updated') result.RecordsUpdated++;
                     else if (outcome === 'skipped') result.RecordsSkipped++;
                     else result.RecordsCreated++;
@@ -4771,7 +4886,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         recordMaps?: RecordMapBatch,
         /** Optional — lets the keyless-key guard below surface on the run's event stream. */
-        keylessLogger?: SyncLogger
+        keylessLogger?: SyncLogger,
+        /** What the batch already proved about its destination rows, if anything. */
+        precheck?: BatchPrecheck
     ): Promise<'created' | 'updated' | 'skipped'> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
@@ -4814,7 +4931,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return 'skipped';
         }
 
-        const existed = mappedPK != null
+        // The batch's prefetch may already have proved this row absent. When it did, the load below
+        // is a SELECT * — every column including any NVARCHAR(MAX) — issued once per record, to
+        // learn something the batch established in a single query. Skipping it is the whole point
+        // of widening that prefetch to the create path.
+        //
+        // Only ever used to skip work when absence is PROVEN: the prefetch must have covered every
+        // record in the batch, and this key must be missing from it. Anything less falls through to
+        // the load, because a wrong "absent" turns an update into a duplicate insert.
+        const provablyAbsent = mappedPK != null
+            && precheck?.CoversWholeBatch === true
+            && !precheck.Present.has(pkFields.map(f => String(mappedPK[f.Name] ?? '')).join('|'));
+
+        const existed = mappedPK != null && !provablyAbsent
             ? await entity.InnerLoad(this.BuildEntityPrimaryKey(mappedPK, pkFields))
             : false;
 
@@ -4919,7 +5048,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
         contextUser: UserInfo,
-        precheckHashes?: Map<string, string>,
+        precheckHashes?: BatchPrecheck,
         reconciledSkipIds?: string[],
         recordMaps?: RecordMapBatch,
         /** Forwarded to CreateRecord's keyless-key guard on the upsert fallback paths. */
@@ -4927,7 +5056,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
             // No matched ID — upsert by PK (insert; or update/skip if the PK already exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -4940,7 +5069,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // unchanged — skip the per-record DB load AND the write. The dirty-flag check
         // below is the fallback for entities without the hash column.
         if (precheckHashes) {
-            const stored = precheckHashes.get(record.MatchedMJRecordID);
+            const stored = precheckHashes.Hashes.get(record.MatchedMJRecordID);
             if (stored && stored === computeContentHash(record.MappedFields ?? {})) {
                 result.RecordsSkipped++;
                 // Re-establish the external↔MJ record map even on the content-hash skip. A record can
@@ -4977,7 +5106,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             // Matched-ID row vanished — fall back to upsert by PK (insert; or update/skip if PK exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -5057,19 +5186,36 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private async PrefetchContentHashes(
         batch: MappedRecord[],
         contextUser: UserInfo
-    ): Promise<Map<string, string> | undefined> {
-        const ids = Array.from(new Set(
-            batch.filter(r => r.ChangeType === 'Update' && r.MatchedMJRecordID)
-                 .map(r => r.MatchedMJRecordID as string)
-        ));
-        if (ids.length === 0) return undefined;
-
+    ): Promise<BatchPrecheck | undefined> {
         const entityName = batch[0].MJEntityName;
         const entityInfo = this.ProviderToUse.EntityByName(entityName);
         if (!entityInfo) return undefined;
-        if (!entityInfo.Fields.some(f => f.Name === CONTENT_HASH_COLUMN)) return undefined;
+        if (!entityInfo.Fields?.some(f => f.Name === CONTENT_HASH_COLUMN)) return undefined;
         const pkFields = entityInfo.PrimaryKeys ?? [];
         if (pkFields.length === 0) return undefined;
+
+        // Matched rows contribute the key the matcher already resolved. Unmatched rows contribute
+        // the key their MAPPED FIELDS carry (soft-PK tables key on the external id), which is the
+        // same key CreateRecord is about to probe for one at a time. Asking for all of them in the
+        // one query we are already issuing is what lets that per-record probe be skipped.
+        const wanted = new Set<string>();
+        let everyRecordCovered = true;
+        for (const r of batch) {
+            if (r.ChangeType === 'Update' && r.MatchedMJRecordID) {
+                wanted.add(r.MatchedMJRecordID);
+                continue;
+            }
+            const mappedPK = this.extractMappedPrimaryKey(r, pkFields);
+            if (mappedPK == null) {
+                // A destination-generated key (identity / server-assigned UUID) cannot be known
+                // before the insert, so this record's existence is genuinely unknowable here.
+                everyRecordCovered = false;
+                continue;
+            }
+            wanted.add(pkFields.map(f => String(mappedPK[f.Name] ?? '')).join('|'));
+        }
+        const ids = Array.from(wanted);
+        if (ids.length === 0) return undefined;
         // Map keys must match `record.MatchedMJRecordID`, which is the PK value(s) joined by '|' in
         // PrimaryKeys order (single value for single-PK, "v1|v2" for composite — see MatchEngine).
         const pkNames = pkFields.map(f => f.Name);
@@ -5090,16 +5236,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 ResultType: 'simple',
             }, contextUser);
             if (!res.Success) return undefined;
-            const map = new Map<string, string>();
+            const Hashes = new Map<string, string>();
+            const Present = new Set<string>();
             for (const row of res.Results) {
                 // Re-key by the same '|'-join the matcher produced, so the lookup in ApplySingleRecord hits.
                 const key = pkNames.map(n => row[n] ?? '').join('|');
+                // Presence is recorded for EVERY returned row. A row whose hash is NULL still exists,
+                // and treating "no hash" as "no row" would turn an update into a duplicate insert.
+                Present.add(key);
                 const hash = row[CONTENT_HASH_COLUMN];
                 if (typeof hash === 'string' && hash.length > 0) {
-                    map.set(key, hash);
+                    Hashes.set(key, hash);
                 }
             }
-            return map;
+            return { Hashes, Present, CoversWholeBatch: everyRecordCovered };
         } catch (err) {
             // MJ#3047 lesson: this best-effort catch was SILENT, so a failing prefetch (e.g. a reserved-word
             // PK producing an invalid WHERE) disabled the content-hash idempotent skip on EVERY sync with
