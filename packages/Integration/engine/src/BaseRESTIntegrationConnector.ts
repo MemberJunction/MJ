@@ -766,12 +766,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             return;
         }
 
-        // MULTI-VAR (composition) children are DEFERRED, and deferring means NOT ATTEMPTING: resolving only
-        // templateVars[0] would leave the remaining `{Vars}` as literal, unsubstituted text in the fetch URL
-        // (e.g. `/orgs/123/profiles/{ProfileId}/events`) — malformed requests fired at the vendor API. Adjourn
-        // instead → the multi-var child falls back to declared-only fields, caught at first real sync (which
-        // handles multi-var properly via FetchWithTemplateVars). (rkihm-BC #3049.)
-        if (templateVars.length > 1) return;
+        // MULTI-VAR (composition) child: sampleable exactly when ONE parent's records can supply a
+        // value for EVERY var. Real multi-var paths are overwhelmingly NESTED — /campaigns/{cid}/
+        // funds/{fid}/gifts, where funds is itself a child of campaigns — and a streamed `funds`
+        // record already carries BOTH ids: its own natively, its ancestor's tagged on by this very
+        // routine one level down. Streaming that innermost parent therefore yields complete,
+        // data-proven var tuples; no combination is ever fabricated, so no malformed URL is ever
+        // fired (rkihm-BC #3049's constraint holds — we never substitute a partial set).
+        //
+        // GENUINELY independent parents (/a/{aId}/b/{bId}/d where neither A nor B knows the other)
+        // stay adjourned: valid (aId,bId) pairs are unknowable without data that carries both, and
+        // guessing pairs IS the malformed-request bug. Such a child falls back to declared-only
+        // fields, caught at first real sync via FetchWithTemplateVars — and everything BENEATH it
+        // was previously dead too, which is the cascade this branch exists to end.
+        if (templateVars.length > 1) {
+            yield* this.StreamMultiVarChildForDiscovery(companyIntegration, obj, fields, templateVars, contextUser, target, depth, auth, baseURL, pkFieldNames);
+            return;
+        }
 
         // CHILD (single template var): stream the PARENT recursively via this SAME routine — so a
         // grandparent is sampled identically (uniform to all depths). Classify the parent's key from its
@@ -838,6 +849,111 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             parentKey = await this.ResolveParentKeyField(parentObj, buffer);
             if (parentKey) for (const bp of buffer) yield* fetchChildren(parentKey, bp);
         }
+    }
+
+    /**
+     * DISCOVERY-ONLY sampler for a MULTI-VAR child (2+ template vars in the APIPath).
+     *
+     * The strategy is "one stream proves the whole tuple": resolve every var to its parent object,
+     * pick the candidate parent whose records are most likely to carry values for ALL the vars (the
+     * innermost one — ranked by how many of the OTHER vars appear in its own APIPath, i.e. how deep
+     * it sits in the same nesting), stream it via {@link StreamRecordsForDiscovery} (so ITS ancestors
+     * resolve recursively, tags included), and per record substitute every var from the record's own
+     * fields. A record that cannot fill every var is SKIPPED — a partial substitution is a malformed
+     * URL, and fabricating the missing half is the exact bug the old blanket deferral existed to
+     * prevent. A candidate that proves barren (a probe slice streamed, zero covering records) is
+     * abandoned for the next; when no candidate covers, the child adjourns to declared-only fields
+     * exactly as the blanket deferral did — but its DESCENDANTS now only die when the tuple is
+     * genuinely unknowable, not whenever an ancestor merely had two parents.
+     *
+     * Bounds: the leaf's `target` is the only fill bound (lazy, same as single-var); the barren-probe
+     * slice is {@link DiscoveryParentKeySampleRows} per candidate, the same knob that bounds keyless-
+     * parent classification, because it is the same question — "how many rows before we admit this
+     * stream cannot answer".
+     */
+    private async *StreamMultiVarChildForDiscovery(
+        companyIntegration: MJCompanyIntegrationEntity,
+        obj: MJIntegrationObjectEntity,
+        fields: MJIntegrationObjectFieldEntity[],
+        templateVars: string[],
+        contextUser: UserInfo,
+        target: number,
+        depth: number,
+        auth: RESTAuthContext,
+        baseURL: string,
+        pkFieldNames: string[],
+    ): AsyncGenerator<ExternalRecord> {
+        // Resolve every var; any unresolvable var means the tuple can never be completed from data.
+        const resolved: Array<{ templateVar: string; parentObjectID: string; fkFieldName: string }> = [];
+        for (const tVar of templateVars) {
+            const info = this.ResolveParentForVar(obj, fields, tVar, companyIntegration.IntegrationID);
+            if (!info) {
+                console.warn(`[DiscoverySampleStream] "${obj.Name}" multi-var: no parent resolves {${tVar}} — adjourning (declared-only fields)`);
+                return;
+            }
+            resolved.push({ templateVar: tVar, parentObjectID: info.parentObjectID, fkFieldName: info.fkFieldName });
+        }
+
+        // Rank candidates innermost-first: the parent whose own path mentions more of the OTHER vars
+        // sits deeper in the same nesting, so its records carry more of the tuple. Ties keep var order.
+        const otherVarsInPath = (parentObjectID: string, ownVar: string): number => {
+            const p = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
+            if (!p) return -1;
+            const vars = new Set(this.DetectTemplateVars(p.APIPath).map(v => v.toLowerCase()));
+            return templateVars.filter(v => v.toLowerCase() !== ownVar.toLowerCase() && vars.has(v.toLowerCase())).length;
+        };
+        const candidates = [...resolved].sort((a, b) =>
+            otherVarsInPath(b.parentObjectID, b.templateVar) - otherVarsInPath(a.parentObjectID, a.templateVar));
+
+        const probeSlice = Math.min(target, this.ReadDiscoveryConfig(companyIntegration)
+            .int('discoveryParentKeySampleRows', 'MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS',
+                 this.DiscoveryParentKeySampleRows()));
+
+        for (const candidate of candidates) {
+            const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(candidate.parentObjectID);
+            if (!parentObj) continue;
+            // The candidate's OWN var may be carried under the parent's key name rather than the
+            // var's name (a `funds` record may say `id`, not `fund_id`). Map that one var through the
+            // parent's declared key when the record lacks the var-named field.
+            const parentDeclaredKey = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey)?.Name ?? null;
+
+            let scanned = 0, covered = 0, yielded = 0;
+            for await (const parentRec of this.StreamRecordsForDiscovery(companyIntegration, candidate.parentObjectID, contextUser, target, depth + 1)) {
+                scanned++;
+                const recFields = parentRec.Fields ?? {};
+                const lower = new Map(Object.entries(recFields).map(([k, v]) => [k.toLowerCase(), v] as const));
+                const values = new Map<string, string>();
+                for (const v of resolved) {
+                    let raw = lower.get(v.templateVar.toLowerCase());
+                    if ((raw == null || String(raw) === '') && v === candidate && parentDeclaredKey) {
+                        raw = lower.get(parentDeclaredKey.toLowerCase());
+                    }
+                    if (raw == null || String(raw) === '') { values.clear(); break; }
+                    values.set(v.templateVar, String(raw));
+                }
+                if (values.size !== resolved.length) {
+                    // Cannot fill the tuple from THIS record. Never substitute a partial set.
+                    if (covered === 0 && scanned >= probeSlice) break;   // barren candidate — try the next
+                    continue;
+                }
+                covered++;
+                let path = obj.APIPath;
+                for (const [tVar, val] of values) path = this.SubstituteTemplateVars(path, tVar, val);
+                const fullURL = this.BuildFullURL(baseURL, path);
+                const ctx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: target, ContextUser: contextUser };
+                const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
+                for (const r of result.Records) {
+                    // Tag EVERY resolved fk onto the child row — same contract as the single-var path,
+                    // extended to the whole tuple, so the child's FK columns are discoverable.
+                    for (const v of resolved) r[v.fkFieldName] = values.get(v.templateVar);
+                    const transformed = this.applyTransformPreservingKeys(r, obj, fields);
+                    yield this.ToExternalRecord(transformed, obj.Name, pkFieldNames);
+                    if (++yielded >= target) return;
+                }
+            }
+            if (covered > 0) return;   // this candidate answered; exhausting it means the data ran out
+        }
+        console.warn(`[DiscoverySampleStream] "${obj.Name}" multi-var: no parent's records carry the full {${templateVars.join('}, {')}} tuple — adjourning (declared-only fields)`);
     }
 
     /**
