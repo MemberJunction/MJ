@@ -30,8 +30,6 @@ export {
     IntegrationCheckRegistry,
     bootstrapIntegrationServer,
     bootstrapIntegrationClient,
-    createRunQueryFixtures,
-    teardownRunQueryFixtures,
     // RLS two-user discovery (the rls-isolation bundle's fixture) — DISCOVERED, not minted.
     discoverRlsFixture,
     // Tier gate predicate — the ONE source of truth honored by both the scripts and the driver.
