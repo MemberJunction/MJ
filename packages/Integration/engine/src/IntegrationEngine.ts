@@ -44,7 +44,6 @@ import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
-import { DecideUnavailableSkip, ReadUnavailableMarker, ApplyUnavailableMarker, UnavailableRecheckMs, type ObjectUnavailableMarker } from './ObjectAvailability.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
@@ -186,8 +185,11 @@ export class SchemaNotGeneratedError extends Error {
 /**
  * Thrown by a connector when the vendor says THIS account cannot serve an object it nonetheless
  * lists in its catalog (e.g. a record type the account has not enabled). Distinct from a fetch
- * failure: retrying cannot help, and it recurs identically on every run until the account changes.
- * See ObjectAvailability for how the engine records and re-tests it.
+ * failure: retrying cannot help WITHIN a run, so the map ends cleanly instead of climbing a retry
+ * ladder — one warning, watermark untouched.
+ *
+ * It is deliberately not remembered ACROSS runs. The next run simply asks again, which is what makes
+ * an account change self-healing with no marker, no recheck clock and no override to get right.
  *
  * Connectors are NOT required to import this class — the engine also recognises any error carrying
  * `code === 'OBJECT_UNAVAILABLE'`, so a connector can classify one without a peer version bump.
@@ -1021,7 +1023,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
 
             // Load config and filter to only remaining entity maps (by map ID)
-            const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions, resumeTriggerType);
+            const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions);
             const remainingMaps = config.entityMaps.filter(
                 em => !completedMapIDs.has(em.ID.toLowerCase())
             );
@@ -1372,7 +1374,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
          */
         await IntegrationEngineBase.Instance.RefreshCatalog(contextUser);
 
-        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options, triggerType);
+        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
         logger.attachIntegrationName(config.companyIntegration.Integration);
         logger.emit('sync.config.loaded', {
             integration: config.companyIntegration.Integration,
@@ -1638,8 +1640,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private async LoadRunConfiguration(
         companyIntegrationID: string,
         contextUser: UserInfo,
-        options?: IntegrationSyncOptions,
-        triggerType: SyncTriggerType = 'Scheduled'
+        options?: IntegrationSyncOptions
     ): Promise<RunConfiguration> {
         const rv = new RunView();
 
@@ -1702,9 +1703,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             connector,
             // Explicit caller request wins; otherwise honor the integration's periodic-reconcile cadence.
             fullSync: options?.FullSync ?? await this.resolveScheduledFullSync(companyIntegration, contextUser),
-            // Defaults to 'Scheduled' — the conservative reading. An unattributed run must not be
-            // treated as a person retrying, or the availability skip stops suppressing anything.
-            triggerType,
             syncDirection: options?.SyncDirection,
         };
     }
@@ -2551,58 +2549,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return pullResult;
     }
 
-    /** The result of a map that did no work: nothing fetched, nothing written, nothing failed. */
-    private EmptySyncResult(entityMap: ICompanyIntegrationEntityMap): SyncResult {
-        return {
-            Success: true,
-            RecordsProcessed: 0, RecordsCreated: 0, RecordsUpdated: 0,
-            RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0,
-            Errors: [],
-            EntityMapID: entityMap.ID,
-        } as SyncResult;
-    }
 
-    /**
-     * Persists the "this account cannot serve this object" marker on the entity map, preserving
-     * `firstSeenAt` across recurrences so an operator can see how long it has been true.
-     *
-     * Failing to record it is not worth failing a sync over — the only cost is that the object is
-     * retried next run, which is exactly the behaviour that shipped before this existed.
-     */
-    private async RecordObjectUnavailable(
-        entityMap: ICompanyIntegrationEntityMap,
-        vendorMessage: string,
-        contextUser: UserInfo
-    ): Promise<void> {
-        try {
-            const nowISO = new Date().toISOString();
-            const prior = ReadUnavailableMarker(entityMap.Configuration);
-            const marker: ObjectUnavailableMarker = {
-                firstSeenAt: prior?.firstSeenAt ?? nowISO,
-                lastCheckedAt: nowISO,
-                message: vendorMessage,
-            };
-            await this.SaveEntityMapConfiguration(entityMap, ApplyUnavailableMarker(entityMap.Configuration, marker), contextUser);
-        } catch (err) {
-            LogError(`[IntegrationEngine] could not record OBJECT_UNAVAILABLE for ${entityMap.ExternalObjectName}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
 
-    /**
-     * Clears the marker after the object serves records again, so a re-enabled object returns to
-     * normal scheduling without anyone remembering it was ever suppressed.
-     */
-    private async ClearObjectUnavailable(
-        entityMap: ICompanyIntegrationEntityMap,
-        contextUser: UserInfo
-    ): Promise<void> {
-        if (!entityMap.Configuration || !entityMap.Configuration.includes('objectUnavailable')) return;
-        try {
-            await this.SaveEntityMapConfiguration(entityMap, ApplyUnavailableMarker(entityMap.Configuration, null), contextUser);
-        } catch (err) {
-            LogError(`[IntegrationEngine] could not clear OBJECT_UNAVAILABLE for ${entityMap.ExternalObjectName}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
 
     /** Loads the map fresh and writes its Configuration through Save(), like every other engine write. */
     private async SaveEntityMapConfiguration(
@@ -2639,20 +2587,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // every run, forever, and says nothing new after the first time. While the marker is fresh
         // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
         // the account later enables heals itself with no operator action.
-        // A full sync OR a person pressing sync re-tests availability rather than trusting the
-        // marker — see DecideUnavailableSkip for why each counts.
-        const unavailable = DecideUnavailableSkip(
-            entityMap.Configuration, Date.now(), UnavailableRecheckMs(),
-            { fullSync: config.fullSync, manual: config.triggerType === 'Manual' });
-        if (unavailable.skip) {
-            logger?.emit('sync.entity-map.skipped', {
-                externalObjectName: entityMap.ExternalObjectName,
-                skippedReason: 'OBJECT_UNAVAILABLE',
-                firstSeenAt: unavailable.marker?.firstSeenAt,
-                message: unavailable.marker?.message,
-            });
-            return this.EmptySyncResult(entityMap);
-        }
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
         // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
         // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
@@ -2909,10 +2843,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // other errors don't touch the rate. §5 Gap 2: also flag the map result so the per-layer
                 // AIMD controller reduces in-flight concurrency, not just the per-request token bucket.
                 if (IsObjectUnavailable(fetchErr)) {
-                    // Not a failure to retry: the vendor is telling us this account will never serve
-                    // this object. Record it, warn ONCE, and end the map cleanly — no retry ladder,
-                    // no FETCH_INCOMPLETE, and the watermark is left exactly as it was.
-                    await this.RecordObjectUnavailable(entityMap, errMsg, contextUser);
+                    // Not a failure to retry: the vendor is telling us this account does not serve
+                    // this object. Warn once and end the map cleanly — no retry ladder, no
+                    // FETCH_INCOMPLETE, and the watermark left exactly as it was.
+                    //
+                    // Deliberately NOT remembered between runs. Persisting it would buy one probe
+                    // per object per run, and the object count in any real system is small enough
+                    // that this is not worth a stored marker, a recheck clock, and the staleness
+                    // both bring: a remembered skip is wrong from the moment the account changes,
+                    // and every scheme for noticing that is another thing to get right. Re-asking
+                    // every run is self-healing by construction and has no configuration.
                     logger?.warning(
                         'sync',
                         'OBJECT_UNAVAILABLE',
@@ -3233,13 +3173,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 consecutiveEmptyBatches = 0;
             }
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
-        }
-
-        // The object served records again, so whatever made it unavailable is over. Clearing here
-        // (rather than on the next scheduled discovery) is what makes an account change self-healing:
-        // the attempt that succeeds is also the one that un-suppresses it. No-op when no marker exists.
-        if (fetchCompletedCleanly) {
-            await this.ClearObjectUnavailable(entityMap, contextUser);
         }
 
         // Partition (Merkle) reconcile: the full set is now accumulated — diff it against last sync's
@@ -6511,12 +6444,6 @@ interface RunConfiguration {
     integration: MJIntegrationEntity;
     connector: BaseIntegrationConnector;
     fullSync: boolean;
-    /**
-     * What started this run. Read by the availability skip: a person pressing "sync now" has almost
-     * always just CHANGED something, so their run re-tests an object the marker says is unavailable.
-     * A scheduled or webhook run trusts the marker — suppressing that traffic is its whole purpose.
-     */
-    triggerType: SyncTriggerType;
     /** When set, overrides each entity map's own SyncDirection for this run. */
     syncDirection?: 'Pull' | 'Push' | 'Bidirectional';
 }

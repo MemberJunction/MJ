@@ -2,25 +2,23 @@
 "@memberjunction/integration-engine": patch
 ---
 
-An object the account cannot serve is skipped quietly instead of failing every run.
+An object the account cannot serve no longer fails loudly on every sync.
 
-A vendor catalog can list record types a particular account has not enabled. Asking for one returns
-the same error on every sync, forever — a request, an error event and a retry ladder per object per
-run, telling the operator nothing new after the first time. One live connection had 71 of them.
+A vendor catalog lists record types a given account has not enabled. Asking for one returns the same
+error every run, forever, and treated as a fetch failure it costs an error event and a retry ladder
+per object per run — 71 such objects on one live connection produced 71 hard failures every sync,
+burying the real ones.
 
-Connectors can now classify this case (`ObjectUnavailableError`, or any error carrying
-`code === 'OBJECT_UNAVAILABLE'` — duck-typed so a connector needs no peer version bump). The engine
-warns once, records a marker on the entity map's `Configuration` with the vendor's own message, and
-ends the map cleanly: no retry ladder, no incomplete-fetch flag, and the watermark untouched. While
-that marker is fresh the object is skipped with zero vendor requests; once it ages out
-(`MJ_INTEGRATION_OBJECT_UNAVAILABLE_RECHECK_MS`, default 24h) the next attempt *is* the recheck, and
-a fetch that succeeds clears the marker — so an account change heals itself with no operator action.
+The engine now recognises the signal as its own kind: `ObjectUnavailableError`, or any error carrying
+`code === 'OBJECT_UNAVAILABLE'` so a connector can classify one without a peer version bump. The map
+ends cleanly with a single warning — no retry ladder, no `FETCH_INCOMPLETE`, watermark untouched.
 
-Deliberately not modelled by disabling the entity map: `SyncEnabled`/`Status` are the user's levers,
-and writing to them would conflate "this account cannot serve it" with "the user does not want it".
+The verdict is deliberately NOT persisted between runs. Remembering it would save one probe per
+object per run, and the object count in any real system is small enough that the trade is bad: a
+stored verdict is wrong from the moment the account changes, and every scheme for noticing that — a
+recheck clock, a full-sync override, a manual-run override — is another thing to keep correct.
+Re-asking every run is self-healing by construction, with nothing to configure and no staleness.
 
-A full sync OR a manual run overrides the marker. The recheck clock is a cost control, not a claim
-that the account cannot change, so anything carrying evidence that it might have must beat it — and
-in practice that is a person pressing "sync now" after enabling the record type at the vendor, which
-is an ordinary incremental run. Scheduled and webhook runs still trust the marker; suppressing their
-traffic is the whole point.
+It is also deliberately not modelled by disabling the entity map. `SyncEnabled`/`Status` are the
+user's levers; writing to them would conflate "this account cannot serve the object" with "the user
+does not want it".

@@ -37,30 +37,6 @@ describe('engine wiring', () => {
     // green while quietly restoring a retry ladder on an object that can never succeed.
     const source = readFileSync(join(__dirname, '..', 'IntegrationEngine.ts'), 'utf8');
 
-    it('decides the skip BEFORE loading field maps or touching the source', () => {
-        // Matched on the call NAME alone: the argument list is free to wrap or gain arguments, and
-        // an assertion that breaks on formatting reports a refactor as a regression.
-        const skipIdx = source.indexOf('DecideUnavailableSkip(');
-        const fieldMapsIdx = source.indexOf('const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);');
-        expect(skipIdx).toBeGreaterThan(-1);
-        expect(skipIdx).toBeLessThan(fieldMapsIdx);
-    });
-
-    it('passes the full-sync flag through, so a full sync re-tests an unavailable object', () => {
-        // The skip must not outlive the operator's own "re-read everything" instruction. Pinned
-        // here because the flag is threaded at the call site — a unit test of the pure function
-        // cannot see whether the engine actually passes it.
-        expect(source).toMatch(/DecideUnavailableSkip\([\s\S]{0,300}?fullSync:\s*config\.fullSync/);
-    });
-
-    it('passes the manual flag through, so a person pressing sync re-tests', () => {
-        // The trigger has to REACH the decision. It is threaded RunSync -> LoadRunConfiguration ->
-        // RunConfiguration, and a break anywhere in that chain leaves the pure function correct
-        // while the product still makes the operator wait out the window.
-        expect(source).toMatch(/DecideUnavailableSkip\([\s\S]{0,300}?manual:\s*config\.triggerType === 'Manual'/);
-        expect(source).toMatch(/triggerType: SyncTriggerType = 'Scheduled'/);   // conservative default
-    });
-
     it('classifies unavailability before the rate-limit branch, and ends the map without retrying', () => {
         const unavailableIdx = source.indexOf('if (IsObjectUnavailable(fetchErr)) {');
         const rateLimitIdx = source.indexOf("if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {");
@@ -70,7 +46,23 @@ describe('engine wiring', () => {
         expect(source.slice(unavailableIdx, rateLimitIdx)).toMatch(/\bbreak;\s*\}\s*$/m);
     });
 
-    it('clears the marker on a clean fetch, so a re-enabled object heals itself', () => {
-        expect(source).toMatch(/if \(fetchCompletedCleanly\) \{\s*\n\s*await this\.ClearObjectUnavailable\(entityMap, contextUser\);/);
+    it('warns once instead of erroring, so a dead object is not noise', () => {
+        const idx = source.indexOf('if (IsObjectUnavailable(fetchErr)) {');
+        const branch = source.slice(idx, idx + 1200);
+        expect(branch).toMatch(/logger\?\.warning\(/);
+        // Not an error event: 71 of these on one connection is what buried the real failures.
+        expect(branch).not.toMatch(/logger\?\.emit\('sync\.record\.error'/);
+    });
+
+    it('does NOT persist the verdict — it is re-asked every run', () => {
+        // Deliberate. Remembering would buy one probe per object per run, and the object count in
+        // any real system is small enough that the trade is bad: a stored verdict is wrong from the
+        // moment the account changes, and every scheme for noticing that (a recheck clock, a
+        // full-sync override, a manual-run override) is another thing to keep correct. Re-asking is
+        // self-healing by construction. If this ever grows a marker again, it needs a new argument.
+        expect(source).not.toMatch(/objectUnavailable/);
+        expect(source).not.toMatch(/RecordObjectUnavailable|ClearObjectUnavailable|DecideUnavailableSkip/);
+        const branch = source.slice(source.indexOf('if (IsObjectUnavailable(fetchErr)) {'), source.indexOf("if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {"));
+        expect(branch).not.toMatch(/SaveEntityMapConfiguration|await this\.\w*Save/);
     });
 });
