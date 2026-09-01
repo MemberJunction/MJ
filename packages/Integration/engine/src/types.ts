@@ -35,6 +35,7 @@ export type SyncErrorCode =
     | 'WRITE_VERIFICATION_ERROR'
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
+    | 'OBJECT_UNAVAILABLE'
     | 'UNKNOWN_ERROR';
 
 /** Severity level of a sync error */
