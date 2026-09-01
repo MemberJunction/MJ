@@ -201,6 +201,116 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
     }
 
     /**
+     * Blank out string literals and comments, preserving length and line structure, so a regex can
+     * scan SQL *code* without matching text that merely looks like code. Only used to locate
+     * positions — every edit is applied to the original string at the offsets found here.
+     */
+    private static maskNonCode(sql: string): string {
+        const out = sql.split('');
+        let i = 0;
+        while (i < sql.length) {
+            const ch = sql[i];
+            if (ch === "'") {
+                out[i] = ' ';
+                i++;
+                while (i < sql.length) {
+                    if (sql[i] === "'" && sql[i + 1] === "'") { out[i] = ' '; out[i + 1] = ' '; i += 2; continue; }
+                    const end = sql[i] === "'";
+                    out[i] = ' ';
+                    i++;
+                    if (end) break;
+                }
+                continue;
+            }
+            if (ch === '-' && sql[i + 1] === '-') {
+                while (i < sql.length && sql[i] !== '\n') { out[i] = ' '; i++; }
+                continue;
+            }
+            if (ch === '/' && sql[i + 1] === '*') {
+                while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) { if (sql[i] !== '\n') out[i] = ' '; i++; }
+                if (i < sql.length) { out[i] = ' '; out[i + 1] = ' '; i += 2; }
+                continue;
+            }
+            i++;
+        }
+        return out.join('');
+    }
+
+    /**
+     * Give one batch item its own variable namespace.
+     *
+     * T-SQL scopes `DECLARE` to the BATCH, not to a statement or a `BEGIN…END` block — there is no
+     * block-level declaration scope. So concatenating N generated CRUD wrappers into one batch
+     * declares each wrapper's locals N times and SQL Server rejects the whole thing with
+     * `The variable name '@X' has already been declared. Variable names must be unique within a
+     * query batch or stored procedure.` Every wrapper declares the same three (`@ResultTable`,
+     * `@ID`, and `@ResultChangesTable` when the entity tracks record changes), so this fires for
+     * ANY group of two or more items — which is every group worth batching.
+     *
+     * The sequential path never hit this because it sends each item as its own request; its own
+     * comment says it executes items individually "to avoid variable conflicts between different
+     * stored procedure calls that might use same variable names". Batching gave up that isolation,
+     * so it has to reintroduce it here.
+     *
+     * Renaming is deliberately restricted to names this item DECLARES. A generated wrapper also
+     * contains named ARGUMENTS to the procedures it calls (`EXEC … @EntityName='MJ: Tasks',
+     * @RecordID=…`), and those are part of the callee's signature — renaming one produces
+     * `@EntityName_mjb0 is not a parameter for procedure spCreateRecordChange_Internal`. The `@pN`
+     * placeholders substituted above are likewise left alone: they are request-level parameters,
+     * already globally numbered, and intentionally shared across the batch.
+     *
+     * Only `DECLARE @name` is recognised, which covers every shape the generators emit today (one
+     * variable per DECLARE). A comma-separated declaration list would leave its second and later
+     * variables unscoped — that degrades to the SAME loud duplicate-name error rather than to
+     * silent corruption, so it fails visibly if a generator ever starts emitting them.
+     */
+    public static scopeItemVariables(sql: string, index: number): string {
+        const masked = SQLServerTransactionGroup.maskNonCode(sql);
+        const declared = new Set<string>();
+        for (const m of masked.matchAll(/\bDECLARE\s+@([A-Za-z_][A-Za-z0-9_$#@]*)/gi)) {
+            declared.add(m[1].toLowerCase());
+        }
+        if (declared.size === 0) return sql;
+
+        // Positions where an `@name` is a CALLEE'S PARAMETER NAME rather than a reference to one of
+        // this item's locals. In `EXEC sp @ID = @ID`, the two tokens are unrelated: the left one
+        // names a parameter in spCreateActionCategory's signature, the right one reads the local we
+        // are renaming. Renaming the left produces `@ID_mjb2 is not a parameter for procedure
+        // spCreateActionCategory` — trading the duplicate-declaration failure for a binding one.
+        //
+        // Position is what separates them, not spelling, and `followed by =` alone is not enough:
+        // `SELECT @ID = [ID] FROM @ResultTable` is an ASSIGNMENT to the local and must be renamed.
+        // So only argument lists count — spans running from an EXEC/EXECUTE to the statement end.
+        const protectedStarts = new Set<number>();
+        for (const execMatch of masked.matchAll(/\bEXEC(?:UTE)?\b/gi)) {
+            const spanStart = execMatch.index! + execMatch[0].length;
+            const semicolon = masked.indexOf(';', spanStart);
+            const spanEnd = semicolon === -1 ? masked.length : semicolon;
+            const span = masked.slice(spanStart, spanEnd);
+            for (const arg of span.matchAll(/@([A-Za-z_][A-Za-z0-9_$#@]*)\s*=/g)) {
+                protectedStarts.add(spanStart + arg.index!);
+            }
+        }
+
+        const suffix = `_mjb${index}`;
+        const edits: { start: number; end: number; text: string }[] = [];
+        for (const m of masked.matchAll(/@([A-Za-z_][A-Za-z0-9_$#@]*)/g)) {
+            const name = m[1];
+            if (!declared.has(name.toLowerCase())) continue;
+            const start = m.index!;
+            if (protectedStarts.has(start)) continue;
+            edits.push({ start, end: start + m[0].length, text: `@${name}${suffix}` });
+        }
+        let out = '';
+        let cursor = 0;
+        for (const e of edits) {
+            out += sql.slice(cursor, e.start) + e.text;
+            cursor = e.end;
+        }
+        return out + sql.slice(cursor);
+    }
+
+    /**
      * The batched submit for variable-free groups — see {@link TransactionGroupBase.BatchedSubmit}.
      * Factored out so the wire behavior (one query, sentinel mapping, parameter renumbering,
      * whole-group failure) is directly unit-testable against a fake transaction.
@@ -236,20 +346,19 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
         const globalParams: unknown[] = [];
         items.forEach((item, index) => {
             parts.push(`SELECT ${index} AS [${SENTINEL}];`);
+            let instruction = item.Instruction;
             if (item.Vars && Array.isArray(item.Vars) && item.Vars.length > 0) {
                 const vars = item.Vars;
                 let local = 0;
-                const rewritten = item.Instruction.replace(/\?/g, () => {
+                instruction = instruction.replace(/\?/g, () => {
                     const g = globalParams.length;
                     globalParams.push(vars[local]);
                     local++;
                     return `@p${g}`;
                 });
-                parts.push(rewritten.endsWith(';') ? rewritten : `${rewritten};`);
             }
-            else {
-                parts.push(item.Instruction.endsWith(';') ? item.Instruction : `${item.Instruction};`);
-            }
+            instruction = SQLServerTransactionGroup.scopeItemVariables(instruction, index);
+            parts.push(instruction.endsWith(';') ? instruction : `${instruction};`);
         });
         const batchSQL = parts.join('\n');
         try {
