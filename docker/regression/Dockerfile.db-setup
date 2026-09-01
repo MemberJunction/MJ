@@ -40,15 +40,20 @@ ENV PATH="/opt/mssql-tools18/bin:$PATH"
 WORKDIR /app
 
 # Copy package manifests and source
-COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+# See Dockerfile.api for why corepack + pnpm-workspace.yaml are required rather than optional:
+# there is no package-lock.json in the 6.x era, and pnpm-workspace.yaml carries
+# linkWorkspacePackages / onlyBuiltDependencies, both of which change what actually installs.
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.angular.json tsconfig.server.json ./
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
 COPY migrations/ ./migrations/
 COPY Demos/AssociationDB/ ./Demos/AssociationDB/
 
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
-RUN npm run build:api
+RUN pnpm run build:api
 
 # Copy MJ config (same one MJAPI uses)
 COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
