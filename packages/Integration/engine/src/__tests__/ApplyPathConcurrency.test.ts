@@ -21,6 +21,9 @@ function makeHost(apply: (rec: { id: number }) => Promise<void>) {
     const host = Object.create(IntegrationEngine.prototype) as unknown as ApplyHost & Record<string, unknown>;
     Object.assign(host, {
         ApplySingleRecord: async (record: { id: number }) => apply(record),
+        // Unrelated collaborator for these tests: they exercise how the batch is WALKED, not what
+        // the batch knows about its destination rows beforehand.
+        PrefetchContentHashes: async () => undefined,
         TouchLastReconciledAt: async () => undefined,
         FlushRecordMaps: async () => undefined,
         runWriteExclusive: async (fn: () => Promise<void>) => fn(),

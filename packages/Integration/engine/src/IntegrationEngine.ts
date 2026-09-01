@@ -296,6 +296,25 @@ export function PositiveInt(v: unknown): number | undefined {
     return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
 }
 
+/**
+ * What one apply batch already knows about its destination rows before writing any of them.
+ *
+ * Two separate facts, deliberately not conflated: a row can EXIST while carrying no content hash
+ * (written before hashing, or hashed NULL), so "absent from the hash map" cannot mean "absent from
+ * the table". {@link Present} answers existence; {@link Hashes} answers unchanged-ness.
+ */
+interface BatchPrecheck {
+    /** Destination PK (PrimaryKeys order, '|'-joined) → its stored content hash, where one exists. */
+    Hashes: Map<string, string>;
+    /** Destination PKs proven to EXIST, whether or not they carry a hash. */
+    Present: Set<string>;
+    /**
+     * True only when the prefetch asked about EVERY candidate PK in the batch. Absence is provable
+     * only then — a partial or failed prefetch means "unknown", never "not there".
+     */
+    CoversWholeBatch: boolean;
+}
+
 export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     public constructor() {
         super();
@@ -4615,7 +4634,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo,
         logger: SyncLogger | undefined,
-        precheckHashes: Map<string, string> | undefined,
+        precheckHashes: BatchPrecheck | undefined,
         reconciledSkipIds?: string[],
         recordMaps?: RecordMapBatch,
         // When false, each record is applied WITHOUT a provider transaction (auto-commit).
@@ -4727,7 +4746,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo,
         logger?: SyncLogger,
-        precheckHashes?: Map<string, string>,
+        precheckHashes?: BatchPrecheck,
         reconciledSkipIds?: string[],
         recordMaps?: RecordMapBatch
     ): Promise<void> {
@@ -4748,7 +4767,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         try {
             switch (record.ChangeType) {
                 case 'Create': {
-                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
+                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
                     if (outcome === 'updated') result.RecordsUpdated++;
                     else if (outcome === 'skipped') result.RecordsSkipped++;
                     else result.RecordsCreated++;
@@ -4826,7 +4845,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         recordMaps?: RecordMapBatch,
         /** Optional — lets the keyless-key guard below surface on the run's event stream. */
-        keylessLogger?: SyncLogger
+        keylessLogger?: SyncLogger,
+        /** What the batch already proved about its destination rows, if anything. */
+        precheck?: BatchPrecheck
     ): Promise<'created' | 'updated' | 'skipped'> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
@@ -4869,7 +4890,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return 'skipped';
         }
 
-        const existed = mappedPK != null
+        // The batch's prefetch may already have proved this row absent. When it did, the load below
+        // is a SELECT * — every column including any NVARCHAR(MAX) — issued once per record, to
+        // learn something the batch established in a single query. Skipping it is the whole point
+        // of widening that prefetch to the create path.
+        //
+        // Only ever used to skip work when absence is PROVEN: the prefetch must have covered every
+        // record in the batch, and this key must be missing from it. Anything less falls through to
+        // the load, because a wrong "absent" turns an update into a duplicate insert.
+        const provablyAbsent = mappedPK != null
+            && precheck?.CoversWholeBatch === true
+            && !precheck.Present.has(pkFields.map(f => String(mappedPK[f.Name] ?? '')).join('|'));
+
+        const existed = mappedPK != null && !provablyAbsent
             ? await entity.InnerLoad(this.BuildEntityPrimaryKey(mappedPK, pkFields))
             : false;
 
@@ -4974,7 +5007,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
         contextUser: UserInfo,
-        precheckHashes?: Map<string, string>,
+        precheckHashes?: BatchPrecheck,
         reconciledSkipIds?: string[],
         recordMaps?: RecordMapBatch,
         /** Forwarded to CreateRecord's keyless-key guard on the upsert fallback paths. */
@@ -4982,7 +5015,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
             // No matched ID — upsert by PK (insert; or update/skip if the PK already exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -4995,7 +5028,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // unchanged — skip the per-record DB load AND the write. The dirty-flag check
         // below is the fallback for entities without the hash column.
         if (precheckHashes) {
-            const stored = precheckHashes.get(record.MatchedMJRecordID);
+            const stored = precheckHashes.Hashes.get(record.MatchedMJRecordID);
             if (stored && stored === computeContentHash(record.MappedFields ?? {})) {
                 result.RecordsSkipped++;
                 // Re-establish the external↔MJ record map even on the content-hash skip. A record can
@@ -5032,7 +5065,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             // Matched-ID row vanished — fall back to upsert by PK (insert; or update/skip if PK exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -5112,19 +5145,36 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private async PrefetchContentHashes(
         batch: MappedRecord[],
         contextUser: UserInfo
-    ): Promise<Map<string, string> | undefined> {
-        const ids = Array.from(new Set(
-            batch.filter(r => r.ChangeType === 'Update' && r.MatchedMJRecordID)
-                 .map(r => r.MatchedMJRecordID as string)
-        ));
-        if (ids.length === 0) return undefined;
-
+    ): Promise<BatchPrecheck | undefined> {
         const entityName = batch[0].MJEntityName;
         const entityInfo = this.ProviderToUse.EntityByName(entityName);
         if (!entityInfo) return undefined;
-        if (!entityInfo.Fields.some(f => f.Name === CONTENT_HASH_COLUMN)) return undefined;
+        if (!entityInfo.Fields?.some(f => f.Name === CONTENT_HASH_COLUMN)) return undefined;
         const pkFields = entityInfo.PrimaryKeys ?? [];
         if (pkFields.length === 0) return undefined;
+
+        // Matched rows contribute the key the matcher already resolved. Unmatched rows contribute
+        // the key their MAPPED FIELDS carry (soft-PK tables key on the external id), which is the
+        // same key CreateRecord is about to probe for one at a time. Asking for all of them in the
+        // one query we are already issuing is what lets that per-record probe be skipped.
+        const wanted = new Set<string>();
+        let everyRecordCovered = true;
+        for (const r of batch) {
+            if (r.ChangeType === 'Update' && r.MatchedMJRecordID) {
+                wanted.add(r.MatchedMJRecordID);
+                continue;
+            }
+            const mappedPK = this.extractMappedPrimaryKey(r, pkFields);
+            if (mappedPK == null) {
+                // A destination-generated key (identity / server-assigned UUID) cannot be known
+                // before the insert, so this record's existence is genuinely unknowable here.
+                everyRecordCovered = false;
+                continue;
+            }
+            wanted.add(pkFields.map(f => String(mappedPK[f.Name] ?? '')).join('|'));
+        }
+        const ids = Array.from(wanted);
+        if (ids.length === 0) return undefined;
         // Map keys must match `record.MatchedMJRecordID`, which is the PK value(s) joined by '|' in
         // PrimaryKeys order (single value for single-PK, "v1|v2" for composite — see MatchEngine).
         const pkNames = pkFields.map(f => f.Name);
@@ -5145,16 +5195,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 ResultType: 'simple',
             }, contextUser);
             if (!res.Success) return undefined;
-            const map = new Map<string, string>();
+            const Hashes = new Map<string, string>();
+            const Present = new Set<string>();
             for (const row of res.Results) {
                 // Re-key by the same '|'-join the matcher produced, so the lookup in ApplySingleRecord hits.
                 const key = pkNames.map(n => row[n] ?? '').join('|');
+                // Presence is recorded for EVERY returned row. A row whose hash is NULL still exists,
+                // and treating "no hash" as "no row" would turn an update into a duplicate insert.
+                Present.add(key);
                 const hash = row[CONTENT_HASH_COLUMN];
                 if (typeof hash === 'string' && hash.length > 0) {
-                    map.set(key, hash);
+                    Hashes.set(key, hash);
                 }
             }
-            return map;
+            return { Hashes, Present, CoversWholeBatch: everyRecordCovered };
         } catch (err) {
             // MJ#3047 lesson: this best-effort catch was SILENT, so a failing prefetch (e.g. a reserved-word
             // PK producing an invalid WHERE) disabled the content-hash idempotent skip on EVERY sync with
