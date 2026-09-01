@@ -826,3 +826,168 @@ describe('IntegrationEngine — mid-run watermark durability floor (§8a)', () =
         }
     });
 });
+
+/**
+ * A connector whose object this account cannot serve: FetchChanges raises the duck-typed
+ * OBJECT_UNAVAILABLE signal (a connector may set the code without importing the class).
+ */
+function createUnavailableObjectConnector(): { connector: BaseIntegrationConnector; fetchCalls: () => number } {
+    let fetchCallCount = 0;
+    const connector = {
+        TestConnection: vi.fn(),
+        DiscoverObjects: vi.fn(),
+        DiscoverFields: vi.fn(),
+        FetchChanges: vi.fn().mockImplementation(async (_ctx: FetchContext): Promise<FetchBatchResult> => {
+            fetchCallCount++;
+            const err = new Error("Record 'contacts' was not found") as Error & { code: string };
+            err.code = 'OBJECT_UNAVAILABLE';
+            throw err;
+        }),
+        GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+        RateLimitPolicy: null,
+        ExtractRetryAfterMs: () => undefined,
+        PostProcessRecord: (r: ExternalRecord) => r,
+        StableOrderingKey: () => null,   // non-keyset → timestamp watermark path
+    } as unknown as BaseIntegrationConnector;
+    return { connector, fetchCalls: () => fetchCallCount };
+}
+
+describe('IntegrationEngine — an object the account cannot serve leaves no trace', () => {
+    let orchestrator: IntegrationEngine;
+
+    beforeEach(() => {
+        orchestrator = new IntegrationEngine();
+        mockEntityInstances = new Map();
+        mockRunViewFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
+        (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
+    });
+
+    /** Same wiring as the floor suite: run-config reads plus a captured watermark row. */
+    function wireUnavailableRun() {
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'Test',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    CompanyIntegrationID: 'ci-1',
+                    EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins',
+                    DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts',
+                    ExternalObjectName: 'contacts',
+                } as unknown as ICompanyIntegrationEntityMap],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        const persistedValues: Array<string | null> = [];
+        const existingWatermark = {
+            ID: 'wm-1',
+            EntityMapID: 'em-1',
+            Direction: 'Pull' as const,
+            WatermarkType: 'Timestamp' as const,
+            WatermarkValue: PRIOR_WATERMARK as string | null,
+            LastSyncAt: new Date('2024-06-15T09:00:00.000Z'),
+            RecordsSynced: 0,
+            Get: vi.fn(),
+            Save: vi.fn().mockImplementation(async function (this: { WatermarkValue: string | null }) {
+                persistedValues.push(this.WatermarkValue);
+                return true;
+            }),
+        } as unknown as ICompanyIntegrationSyncWatermark;
+
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return {
+                    Success: true,
+                    Results: [{
+                        SourceFieldName: 'Name', DestinationFieldName: 'Name', TransformPipeline: null,
+                        IsKeyField: false, Status: 'Active', Priority: 0,
+                    } as unknown as ICompanyIntegrationFieldMap],
+                };
+            }
+            if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                return { Success: true, Results: [existingWatermark] };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        return { persistedValues, existingWatermark };
+    }
+
+    async function runUnavailable(fullSync: boolean) {
+        const { connector, fetchCalls } = createUnavailableObjectConnector();
+        const wired = wireUnavailableRun();
+        const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
+        const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async () => createMockEntity({}));
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser, 'Manual', undefined, undefined, { FullSync: fullSync });
+            return { result, fetchCalls, ...wired };
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    }
+
+    it('never advances the watermark past the value it had before the run', async () => {
+        // THE BUG: the unavailable branch broke out of the fetch loop leaving fetchCompletedCleanly
+        // true, so control fell into the clean-fetch branch and minted a wall-clock Timestamp for an
+        // object that returned ZERO records. When the account later enables the object, the next
+        // incremental filters `modified > <that stamp>` and permanently misses every pre-existing
+        // record — destroying the self-healing this path exists to provide.
+        const { persistedValues, existingWatermark, fetchCalls } = await runUnavailable(false);
+        // Prove the run REACHED the connector first. Without this the assertions below are vacuous
+        // ("every element of an empty array") and pass even when the run never ran — which is
+        // precisely how the duplicate-record defect survived its own test suite.
+        expect(fetchCalls()).toBe(1);
+        expect((existingWatermark as unknown as { WatermarkValue: string | null }).WatermarkValue).toBe(PRIOR_WATERMARK);
+        for (const v of persistedValues) expect(v).toBe(PRIOR_WATERMARK);
+    });
+
+    it('does not mint a watermark on a FULL sync either', async () => {
+        // The full-sync arm is the one that advances to wall-clock "now", so it is the worse half
+        // of the same defect: it would stamp the moment of the failed fetch.
+        const { persistedValues, existingWatermark, fetchCalls } = await runUnavailable(true);
+        expect(fetchCalls()).toBe(1);
+        expect((existingWatermark as unknown as { WatermarkValue: string | null }).WatermarkValue).toBe(PRIOR_WATERMARK);
+        for (const v of persistedValues) expect(v).toBe(PRIOR_WATERMARK);
+    });
+
+    it('still ends the map successfully — one warning, no retry ladder, no fetch storm', async () => {
+        // Withholding the watermark must not turn a quiet skip back into a failure. The whole point
+        // of the classification is that the map ends cleanly and asks again next run.
+        const { connector, fetchCalls } = createUnavailableObjectConnector();
+        wireUnavailableRun();
+        const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
+        const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async () => createMockEntity({}));
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser, 'Manual', undefined, undefined, { FullSync: false });
+            expect(result.RecordsErrored).toBe(0);
+            expect(result.RecordsCreated).toBe(0);
+            expect(fetchCalls()).toBe(1);   // asked once, did not climb a retry ladder
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    });
+});

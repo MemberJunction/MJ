@@ -518,6 +518,22 @@ export class ManageMetadataBase {
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
    }
+   private static _deletedEntitySchemaList: string[] = [];
+   /**
+    * Schemas that lost an entity during this run.
+    *
+    * Deletion cannot be reported the way new/modified entities are. Those lists carry entity
+    * NAMES, which downstream code resolves to a schema by looking the entity up in live
+    * metadata — and a deleted entity is, by then, no longer there to look up. So the schema is
+    * captured here at deletion time instead.
+    *
+    * Without this the schema is never marked dirty, its per-schema file is never rebuilt, and
+    * the dead class keeps a live `@RegisterClass` registration on disk. The old monolith could
+    * not drift this way: it was rewritten in full every run.
+    */
+   public static get deletedEntitySchemaList(): string[] {
+      return this._deletedEntitySchemaList;
+   }
    private static _entitiesRequiringViewRegen: ViewRegenEntry[] = [];
    /**
     * Entities that had late-phase changes requiring their base views to be
@@ -3965,6 +3981,11 @@ export class ManageMetadataBase {
                   const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID'], true);
                   await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove entity ${e.Name}`);
                   logStatus(`      > Removed metadata for table ${e.SchemaName}.${e.BaseTable}`);
+                  // Recorded only after the delete succeeds, so a failed removal (logged below for
+                  // an admin to handle) does not mark a schema dirty for an entity still present.
+                  if (e.SchemaName && e.SchemaName.trim().length > 0) {
+                     ManageMetadataBase._deletedEntitySchemaList.push(e.SchemaName.trim());
+                  }
 
                   // next up we need to remove the spCreate, spDelete, spUpdate, BaseView, and FullTextSearchFunction, if provided.
                   // We only remoe these artifcacts when they are generated which is info we have in the BaseViewGenerated, spCreateGenerated, etc. fields
@@ -4689,7 +4710,13 @@ export class ManageMetadataBase {
       if (ag.featureEnabled('EntityDescriptions')) {
          // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
          for (let e of ManageMetadataBase.newEntityList) {
-            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${e}'`);
+            // Every literal in this function is doubled-quote escaped. The description below is
+            // FREE TEXT FROM AN LLM — prose about business entities contains apostrophes as a
+            // matter of course, and one unescaped quote aborts the whole CodeGen run with
+            // "Unclosed quotation mark" (SQL Server) at the very end of an otherwise-complete
+            // pass. '' doubling is correct on both supported dialects.
+            const esc = (s: string) => s.replace(/'/g, "''");
+            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${esc(e)}'`);
             const data = dataResult.recordset;
             const fieldsResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} WHERE EntityID='${data[0].ID}'`);
             const fields = fieldsResult.recordset;
@@ -4703,7 +4730,7 @@ export class ManageMetadataBase {
             );
 
             if (result?.entityDescription && result.entityDescription.length > 0) {
-               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
+               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${esc(result.entityDescription)}' WHERE Name = '${esc(e)}'`;
                await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
             }
             else {
@@ -4928,14 +4955,28 @@ export class ManageMetadataBase {
     * following INSERT can use the real BaseView column_id without colliding on
     * UQ_EntityField_EntityID_Sequence. The +100000 band is unique-safe; the
     * subsequent spUpdateExistingEntityFieldsFromSchema rewrite brings every row
-    * (parked and new) back to live catalog order. Skip rows already parked so a
-    * second pass in the same run does not add 100000 twice.
+    * (parked and new) back to live catalog order.
+    *
+    * Parks ONLY when nothing on the entity is parked yet, which is what makes a second
+    * emission for the same entity in the same run a no-op. `Sequence < 100000` alone does
+    * not achieve that: after the first park the rows below the band are precisely the ones
+    * the first pass just INSERTED at their catalog ordinals, so a second park lifts THOSE
+    * into the band — onto the row the first park moved from the same ordinal, and the
+    * migration dies on UQ_EntityField_EntityID_Sequence with a duplicate at 100000+ordinal.
+    * Reachable whenever an entity gains fields in both CodeGen passes: pass 1 for the real
+    * columns, pass 2 for the denormalized name column a new foreign key introduces.
     */
    protected parkEntityFieldSequencesSQL(entityID: string): string {
-      return `UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+      const table = this.qs(mj_core_schema(), 'EntityField');
+      return `UPDATE ${table}
          SET ${this.qi('Sequence')} = ${this.qi('Sequence')} + 100000
        WHERE ${this.qi('EntityID')} = '${entityID}'
-         AND ${this.qi('Sequence')} < 100000;`;
+         AND ${this.qi('Sequence')} < 100000
+         AND NOT EXISTS (
+             SELECT 1 FROM ${table}
+              WHERE ${this.qi('EntityID')} = '${entityID}'
+                AND ${this.qi('Sequence')} >= 100000
+         );`;
    }
 
    protected parseDefaultValue(sqlDefaultValue: string): string {
@@ -5901,15 +5942,16 @@ export class ManageMetadataBase {
             let newEntityName: string = await this.createNewEntityName(newEntity, currentUser);
             const newEntityDisplayName = this.createNewEntityDisplayName(newEntity, newEntityName);
 
-            let suffix = '';
-            const existingEntity = md.Entities.find(e => e.Name.toLowerCase() === newEntityName.toLowerCase());
-            const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
-            if (existingEntity || existingEntityInNewEntityList) {
-               // the generated name is already in place, so we need another name
-               suffix = '__' + newEntity.SchemaName;
-               newEntityName = newEntityName + suffix
-               LogError(`   >>>> WARNING: Entity name already exists, so using ${newEntityName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
+            const { name: uniqueName, suffix: uniqueSuffix } = this.resolveUniqueEntityName(
+               newEntityName,
+               newEntity.SchemaName,
+               md.Entities.map(e => e.Name)
+            );
+            if (uniqueName !== newEntityName) {
+               LogError(`   >>>> WARNING: Entity name already exists, so using ${uniqueName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
             }
+            newEntityName = uniqueName;
+            const suffix = uniqueSuffix;
 
             const isNewSchema = await this.isSchemaNew(pool, newEntity.SchemaName);
             const newEntityID = this.createNewUUID();
@@ -6540,6 +6582,59 @@ export class ManageMetadataBase {
          }
       }
       return revoked;
+   }
+
+   /**
+    * Pick an entity name that is actually free, disambiguating with the schema name and, if
+    * that is still taken, a counter.
+    *
+    * Entity names are generated from the table name with trailing discriminators stripped, so
+    * distinct tables routinely generate the SAME name — NetSuite's customlist72, customlist74,
+    * customlist160, customlist436, customlist534 and customlist873 all generate "Custom Lists".
+    *
+    * The previous logic appended the schema suffix ONCE and assumed the result was unique. It
+    * is not: the first table took "Custom Lists", and every table after it appended the same
+    * "__netsuite" and produced the identical "Custom Lists__netsuite". The second was a
+    * duplicate-key failure on UQ_Entity_Name and the rest were never created — a silent loss of
+    * 8 entities on one NetSuite tenant, reported only as repeated identical INSERT errors.
+    *
+    * Comparison is case-INSENSITIVE on both sides, matching UQ_Entity_Name's collation. The old
+    * in-run check used an exact `===` while the metadata check beside it lowercased, so two
+    * names differing only in case read as free and then collided on INSERT.
+    *
+    * @param desiredName the generated name to place
+    * @param schemaName  schema, used for the first disambiguation step
+    * @param takenNames  every name already spoken for — existing metadata AND names claimed
+    *                    earlier in this run (which are not in metadata yet)
+    * @returns the free name and the suffix used to reach it ('' when the name was already free)
+    */
+   public resolveUniqueEntityName(
+      desiredName: string,
+      schemaName: string,
+      takenNames: string[]
+   ): { name: string; suffix: string } {
+      const taken = new Set(
+         [...takenNames, ...ManageMetadataBase.newEntityList].map(n => n.toLowerCase())
+      );
+      const isTaken = (candidate: string) => taken.has(candidate.toLowerCase());
+
+      if (!isTaken(desiredName)) {
+         return { name: desiredName, suffix: '' };
+      }
+
+      let suffix = '__' + schemaName;
+      let name = desiredName + suffix;
+
+      // Bounded: thousands of tables collapsing to one name is a naming problem no suffix can
+      // fix, and looping forever would hide it. Let the INSERT fail loudly instead.
+      const maxAttempts = 1000;
+      let attempt = 2;
+      while (isTaken(name) && attempt <= maxAttempts) {
+         suffix = `__${schemaName}_${attempt}`;
+         name = desiredName + suffix;
+         attempt++;
+      }
+      return { name, suffix };
    }
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {

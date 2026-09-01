@@ -813,6 +813,12 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
   'FOR', 'EACH', 'ROW', 'AFTER', 'BEFORE', 'INSTEAD', 'OF',
   'GENERATED', 'BY', 'IDENTITY', 'SERIAL', 'REPLACE', 'ACTION',
   'ASC', 'DESC', 'ORDER', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'TOP',
+  // MERGE (PostgreSQL 15+) and its MATCHED sub-keyword. Every other word in a MERGE statement was
+  // already here — USING, ON, WHEN, THEN, NOT, INSERT, UPDATE, SET, VALUES, AS — so a converted
+  // MERGE emerged as `"MERGE" __mj."X" AS tgt … WHEN "MATCHED" THEN UPDATE` and PostgreSQL rejected
+  // it with `syntax error at or near ""MERGE""`. The rest of the statement transpiles to valid PG
+  // MERGE already; these two were the only tokens being mistaken for identifiers.
+  'MERGE', 'MATCHED',
   'INNER', 'LEFT', 'RIGHT', 'OUTER', 'JOIN', 'CROSS', 'FULL',
   'UNION', 'ALL', 'DISTINCT', 'BETWEEN', 'CASE', 'WHEN', 'COALESCE',
   'CAST', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG', 'NOW', 'CURRENT_USER',
@@ -857,6 +863,14 @@ export function convertCommonFunctions(sql: string): string {
   sql = sql.replace(/\bSUSER_SNAME\s*\(\s*\)/gi, 'current_user');
   sql = sql.replace(/\bSUSER_NAME\s*\(\s*\)/gi, 'current_user');
   sql = sql.replace(/\bUSER_NAME\s*\(\s*\)/gi, 'current_user');
+  // `INTO` is OPTIONAL in T-SQL's MERGE and REQUIRED in PostgreSQL's, so `MERGE [dbo].[T] AS tgt`
+  // transpiles token-for-token into something PostgreSQL rejects at the target name rather than at
+  // MERGE — `syntax error at or near "__mj"`, which points one token past the actual problem.
+  // Only the bare form is rewritten; `MERGE INTO` is already correct and left alone. Anchored to
+  // statement position (start of line) so the word MERGE in prose — a migration's own header comment
+  // explaining "re-runnable: MERGE on fixed UUIDs" — is not rewritten into "MERGE INTO on fixed
+  // UUIDs". A `--`/`*` comment line cannot match either, since the anchor requires MERGE first.
+  sql = sql.replace(/^([ \t]*)MERGE[ \t]+(?!INTO\b)/gim, '$1MERGE INTO ');
   return sql;
 }
 
