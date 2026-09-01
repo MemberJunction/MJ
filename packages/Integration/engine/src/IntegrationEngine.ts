@@ -59,6 +59,7 @@ import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 import { CollapseDuplicateIdentities } from './BatchIdentity.js';
+import { WriteSerializer } from './WriteSerializer.js';
 import { ResumeConcurrency, RunResumesBounded } from './ResumeConcurrency.js';
 
 /** Default batch size for fetching records from external systems */
@@ -560,19 +561,36 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * phase stays parallel (the real throughput win — it's network-bound). WeakMap so a
      * retired provider's chain entry is collectable.
      */
-    private static readonly writeChains = new WeakMap<IMetadataProvider, { chain: Promise<unknown> }>();
-    private runWriteExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    private static readonly writeSerializers = new WeakMap<IMetadataProvider, WriteSerializer>();
+    /** The write lock for this engine's provider, created on first use. */
+    private writeSerializer(): WriteSerializer {
         const provider = this.ProviderToUse;
-        let holder = IntegrationEngine.writeChains.get(provider);
-        if (!holder) {
-            holder = { chain: Promise.resolve() };
-            IntegrationEngine.writeChains.set(provider, holder);
+        let s = IntegrationEngine.writeSerializers.get(provider);
+        if (!s) {
+            s = new WriteSerializer();
+            IntegrationEngine.writeSerializers.set(provider, s);
         }
-        // Run fn after the prior write completes (whether it resolved or rejected); keep the chain
-        // alive past failures so one errored batch never deadlocks subsequent writers.
-        const run = holder.chain.then(() => fn(), () => fn());
-        holder.chain = run.then(() => undefined, () => undefined);
-        return run;
+        return s;
+    }
+
+    /**
+     * Runs `fn` with NO other write in flight against the provider. Required for work that opens
+     * the provider's single global transaction — while it is open, any other write would join it.
+     */
+    private runWriteExclusive<T>(fn: () => Promise<T>): Promise<T> {
+        return this.writeSerializer().RunExclusive(fn);
+    }
+
+    /**
+     * Runs `fn` ordered against other writes for the SAME entity map, concurrently with other maps.
+     *
+     * Only for work that opens no provider transaction — watermark bookkeeping, match resolution,
+     * and the post-batch flushes of a batched (TransactionGroup-carrying) apply. Those were queued
+     * behind every other map's writes purely because the lock could not tell them apart from a
+     * transaction-holding section.
+     */
+    private runWriteForMap<T>(entityMapID: string, fn: () => Promise<T>): Promise<T> {
+        return this.writeSerializer().RunKeyed(entityMapID, fn);
     }
 
     /**
@@ -2497,7 +2515,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 excludedFields: Array.from(excludedSourceNames).sort(),
             });
         }
-        const watermark = await this.runWriteExclusive(() => this.watermarkService.Load(entityMapID, contextUser, 'Pull'));
+        const watermark = await this.runWriteForMap(entityMapID, () => this.watermarkService.Load(entityMapID, contextUser, 'Pull'));
         logger?.emit('sync.entity-map.start', {
             phase: 'pull-detail',
             externalObjectName: entityMap.ExternalObjectName,
@@ -2769,7 +2787,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // value — a crash from here on resumes from the pre-run watermark and re-covers
                     // the gap. Later checkpoints stop writing floors (gate above).
                     if (watermarkFloorSaved !== null) {
-                        await this.runWriteExclusive(() => this.watermarkService.RestoreValue(entityMapID, preRunWatermarkValue, contextUser));
+                        await this.runWriteForMap(entityMapID, () => this.watermarkService.RestoreValue(entityMapID, preRunWatermarkValue, contextUser));
                         watermarkFloorSaved = null;
                     }
                     logger?.warning(
@@ -2930,7 +2948,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // not begun"). Holding the same write-lock for the read keeps the connection single-owner.
             const resolved = partitionReconcile
                 ? []
-                : await this.runWriteExclusive(() => this.matchEngine.Resolve(mapped, entityMap, fieldMaps, contextUser));
+                : await this.runWriteForMap(entityMap.ID, () => this.matchEngine.Resolve(mapped, entityMap, fieldMaps, contextUser));
 
             const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
             try {
@@ -2975,7 +2993,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
                 // Update progress on the watermark record so the DB reflects live sync state
                 if (batch.HasMore) {
-                    await this.runWriteExclusive(() => this.watermarkService.UpdateProgress(entityMapID, afterApply, contextUser));
+                    await this.runWriteForMap(entityMapID, () => this.watermarkService.UpdateProgress(entityMapID, afterApply, contextUser));
                 }
             }
 
@@ -3012,7 +3030,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // post-loop save below handles graceful early-exits precisely; this covers a SIGKILL
                 // between graceful checkpoints, costing at most ~25 batches of re-fetch on resume.
                 if (isKeysetConnector && currentAfterKey) {
-                    await this.runWriteExclusive(() => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
+                    await this.runWriteForMap(entityMapID, () => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
                 }
                 // The WATERMARK twin of the keyset floor above. Without it, a watermark-based
                 // connector had NO durable position at all until the run ended: a SIGKILL / OOM /
@@ -3030,7 +3048,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     && currentWatermark && currentWatermark !== initialWatermark
                     && currentWatermark !== watermarkFloorSaved) {
                     const floor = currentWatermark;
-                    await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, floor, contextUser, 'Pull'));
+                    await this.runWriteForMap(entityMapID, () => this.watermarkService.Update(entityMapID, floor, contextUser, 'Pull'));
                     watermarkFloorSaved = floor;
                 }
             }
@@ -3072,7 +3090,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // NOTE: a connector that ALSO returns a monotonic watermark (MonotonicWatermark=true) skips
             // this branch and falls through to SAVE that watermark below, so its next incremental NARROWS
             // (microtime > watermark) instead of re-scanning the whole object every run.
-            await this.runWriteExclusive(() => this.watermarkService.ClearKeysetPosition(entityMapID, contextUser));
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.ClearKeysetPosition(entityMapID, contextUser));
             result.WatermarkAfter = null;
         } else if (fetchCompletedCleanly) {
             // Save a watermark on every clean fetch, even when the connector
@@ -3110,12 +3128,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             } else {
                 finalWatermark = new Date().toISOString();
             }
-            await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, finalWatermark, contextUser, 'Pull'));
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.Update(entityMapID, finalWatermark, contextUser, 'Pull'));
             result.WatermarkAfter = finalWatermark;
         } else if (isKeysetConnector && currentAfterKey) {
             // The keyset scan stopped early (cancel / fetch error / safety limit). Persist the precise
             // last ordering key so the next run resumes the seek from here instead of restarting.
-            await this.runWriteExclusive(() => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
             result.WatermarkAfter = currentAfterKey;
         } else if (!hadFetchGap && currentWatermark && currentWatermark !== initialWatermark) {
             // A WATERMARK-based connector stopped early (cancel / safety limit / duplicate batch /
@@ -3134,7 +3152,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // deliberately NOT when hadFetchGap — a skipped page leaves a HOLE behind this watermark,
             // which is why that path holds it for a full re-fetch next run.
             const partialWatermark = currentWatermark;
-            await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, partialWatermark, contextUser, 'Pull'));
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.Update(entityMapID, partialWatermark, contextUser, 'Pull'));
             result.WatermarkAfter = partialWatermark;
         }
 
@@ -4144,7 +4162,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // (~line 1644). matchEngine.Resolve reads existing MJ rows on the SHARED provider
                 // connection, so when streams run in parallel (syncConcurrency>1) it must not interleave
                 // with another stream's open write transaction (else "Transaction in progress" / dirty read).
-                const resolved = await this.runWriteExclusive(() => this.matchEngine.Resolve(recs, entityMap, fieldMaps, contextUser));
+                const resolved = await this.runWriteForMap(entityMap.ID, () => this.matchEngine.Resolve(recs, entityMap, fieldMaps, contextUser));
                 await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
                 appliedRecords += recs.length;
             }
@@ -4269,7 +4287,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // the outer one, which deadlocks. Under the outer mutex the writes are already
             // serialized, so they run inline; without it they take the mutex individually.
             const serializeWrite = batchedWrites
-                ? <T,>(fn: () => Promise<T>): Promise<T> => this.runWriteExclusive(fn)
+                ? <T,>(fn: () => Promise<T>): Promise<T> => this.runWriteForMap(entityMap.ID, fn)
                 : <T,>(fn: () => Promise<T>): Promise<T> => fn();
 
             const applyOneBatch = async () => {
