@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
@@ -180,6 +180,36 @@ export class SchemaNotGeneratedError extends Error {
         this.EntityName = entityName;
         this.StoredProcedureName = storedProcedureName;
     }
+}
+
+/**
+ * Thrown by a connector when the vendor says THIS account cannot serve an object it nonetheless
+ * lists in its catalog (e.g. a record type the account has not enabled). Distinct from a fetch
+ * failure: retrying cannot help WITHIN a run, so the map ends cleanly instead of climbing a retry
+ * ladder — one warning, watermark untouched.
+ *
+ * It is deliberately not remembered ACROSS runs. The next run simply asks again, which is what makes
+ * an account change self-healing with no marker, no recheck clock and no override to get right.
+ *
+ * Connectors are NOT required to import this class — the engine also recognises any error carrying
+ * `code === 'OBJECT_UNAVAILABLE'`, so a connector can classify one without a peer version bump.
+ */
+export class ObjectUnavailableError extends Error {
+    public readonly code = 'OBJECT_UNAVAILABLE';
+    /** The vendor's own explanation, surfaced to the operator verbatim. */
+    public readonly VendorMessage: string;
+    constructor(objectName: string, vendorMessage: string) {
+        super(`The source cannot serve "${objectName}" for this account: ${vendorMessage}`);
+        this.name = 'ObjectUnavailableError';
+        this.VendorMessage = vendorMessage;
+    }
+}
+
+/** Recognises an unavailability signal from a connector that imported the class OR just set the code. */
+export function IsObjectUnavailable(err: unknown): boolean {
+    if (err instanceof ObjectUnavailableError) return true;
+    return typeof err === 'object' && err !== null
+        && (err as { code?: unknown }).code === 'OBJECT_UNAVAILABLE';
 }
 
 /**
@@ -2519,6 +2549,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return pullResult;
     }
 
+
+
+
+    /** Loads the map fresh and writes its Configuration through Save(), like every other engine write. */
+    private async SaveEntityMapConfiguration(
+        entityMap: ICompanyIntegrationEntityMap,
+        configurationJSON: string | null,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();  // global-provider-ok: entity-map bookkeeping — single-provider context
+        const row = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', contextUser);
+        if (!(await row.Load(entityMap.ID))) return;
+        row.Configuration = configurationJSON;
+        await this.runWriteExclusive(() => row.Save());
+        // Keep the in-memory map coherent with what was just persisted, so a later decision in this
+        // same run reads the value that is actually stored.
+        entityMap.Configuration = configurationJSON;
+    }
+
     /**
      * Pull sync: fetch from external → map → match → validate → apply to MJ.
      */
@@ -2534,6 +2583,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         logger?: SyncLogger
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
+        // An object this ACCOUNT cannot serve costs a request, an error event and a retry ladder
+        // every run, forever, and says nothing new after the first time. While the marker is fresh
+        // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
+        // the account later enables heals itself with no operator action.
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
         // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
         // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
@@ -2789,6 +2842,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // A throttle (429 / rate-limit) backs the adaptive limiter off (honoring Retry-After);
                 // other errors don't touch the rate. §5 Gap 2: also flag the map result so the per-layer
                 // AIMD controller reduces in-flight concurrency, not just the per-request token bucket.
+                if (IsObjectUnavailable(fetchErr)) {
+                    // Not a failure to retry: the vendor is telling us this account does not serve
+                    // this object. Warn once and end the map cleanly — no retry ladder, no
+                    // FETCH_INCOMPLETE, and the watermark left exactly as it was.
+                    //
+                    // Deliberately NOT remembered between runs. Persisting it would buy one probe
+                    // per object per run, and the object count in any real system is small enough
+                    // that this is not worth a stored marker, a recheck clock, and the staleness
+                    // both bring: a remembered skip is wrong from the moment the account changes,
+                    // and every scheme for noticing that is another thing to get right. Re-asking
+                    // every run is self-healing by construction and has no configuration.
+                    logger?.warning(
+                        'sync',
+                        'OBJECT_UNAVAILABLE',
+                        `"${entityMap.ExternalObjectName}" is not available to this account; skipping it until the source starts serving it: ${errMsg}`,
+                        { externalObjectName: entityMap.ExternalObjectName },
+                    );
+                    break;
+                }
                 if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {
                     // The adaptive decrease already happened inside governedFetch (once per
                     // throttle episode); here we only flag the map result so the per-layer AIMD
