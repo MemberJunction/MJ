@@ -2703,6 +2703,85 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Returns true when this entity is the ROOT of an IS-A hierarchy: it has subtypes below it and
+     * no parent type above it. The root is where the shared primary key originates and where
+     * `AllowMultipleSubtypes` is decided, so it is the row most IS-A questions resolve back to.
+     */
+    get IsRootType(): boolean {
+        return this.IsParentType && !this.IsChildType;
+    }
+
+    /**
+     * Returns true when this entity is a LEAF of an IS-A hierarchy: it has a parent type and no
+     * subtypes of its own. A leaf is the only kind of IS-A entity that can be created by promotion
+     * without also being something else's parent.
+     */
+    get IsLeafType(): boolean {
+        return this.IsChildType && !this.IsParentType;
+    }
+
+    /**
+     * Returns true when this entity takes part in an IS-A hierarchy at all, in any role.
+     *
+     * The cheap guard for "does IS-A apply here?", which otherwise gets written as
+     * `IsChildType || IsParentType` at every call site — and gets written as just `IsChildType`
+     * about half the time, which silently skips every root and intermediate type.
+     */
+    get ParticipatesInIsA(): boolean {
+        return this.IsChildType || this.IsParentType;
+    }
+
+    /**
+     * This entity's role in the IS-A graph as ONE value, for the common "what is this?" lookup.
+     *
+     * `Intermediate` is the case that makes booleans awkward: an entity can be a child AND a parent
+     * at once (Webinars IS-A Meetings IS-A Products makes Meetings both), so code that branches on
+     * `IsChildType` alone quietly mishandles the middle of every chain deeper than two.
+     */
+    get IsARole(): 'None' | 'Root' | 'Intermediate' | 'Leaf' {
+        if (!this.ParticipatesInIsA) return 'None';
+        if (!this.IsChildType) return 'Root';
+        return this.IsParentType ? 'Intermediate' : 'Leaf';
+    }
+
+    /**
+     * The ROOT entity of this entity's IS-A hierarchy — itself when it is already the root, and
+     * `null` when it takes part in no hierarchy.
+     *
+     * Saves every caller the "walk up until ParentEntityInfo is null" loop, which is where the
+     * cycle guard gets forgotten. Backed by {@link ParentChain}, which is cached and cycle-safe.
+     */
+    get RootEntityInfo(): EntityInfo | null {
+        if (!this.ParticipatesInIsA) return null;
+        const chain = this.ParentChain;
+        return chain.length > 0 ? chain[chain.length - 1] : this;
+    }
+
+    /**
+     * Every entity BELOW this one in the IS-A graph, at any depth — the downward twin of
+     * {@link ParentChain}, which already walks upward.
+     *
+     * {@link ChildEntities} is DIRECT children only, and that distinction is a trap: on
+     * Products → Meetings → Webinars, `Products.ChildEntities` omits Webinars entirely, so a
+     * "find every subtype" written against it misses everything past the first level. Not cached,
+     * because subtypes are discovered by scanning all entities and this is not a hot path; guarded
+     * against cycles the same way `ParentChain` is.
+     */
+    get DescendantEntities(): EntityInfo[] {
+        const descendants: EntityInfo[] = [];
+        const visited = new Set<string>();
+        const queue: EntityInfo[] = [...this.ChildEntities];
+        while (queue.length > 0) {
+            const next = queue.shift()!;
+            if (visited.has(next.ID)) continue;
+            visited.add(next.ID);
+            descendants.push(next);
+            queue.push(...next.ChildEntities);
+        }
+        return descendants;
+    }
+
+    /**
      * Returns all fields from all parent entities in the IS-A chain, excluding primary keys,
      * virtual fields, and timestamp fields (__mj_ prefixed). These represent the inherited
      * fields that should be available on child entities.

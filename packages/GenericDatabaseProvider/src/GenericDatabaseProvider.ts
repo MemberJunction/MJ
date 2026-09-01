@@ -616,8 +616,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             await this.HandleEntityAIActions(entity, 'save', true, user);
 
         // Flag geo sync needed in the SaveContext state bag.
-        // Check: entity supports geocoding AND (new record OR any geo field was dirty)
-        if (entity.EntityInfo.SupportsGeoCoding) {
+        // Check: entity supports geocoding AND (new record OR any geo field was dirty).
+        // SkipGeoCoding: a sync's writes arrive pre-formed from the source system — the per-write
+        // geocode lookup is suppressed for those saves only; interactive saves still geocode.
+        if (entity.EntityInfo.SupportsGeoCoding && options.SkipGeoCoding !== true) {
             const needsGeoSync = context.IsNew || context.Fields.some(
                 (f: SaveContextField) => f.WasDirty && f.FieldInfo.ExtendedType != null && GEO_EXTENDED_TYPES.has(f.FieldInfo.ExtendedType)
             );
@@ -1112,6 +1114,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         entity: BaseEntity,
         isNew: boolean,
         user: UserInfo,
+        options?: EntitySaveOptions,
     ): Promise<SaveSQLResult> {
         const isUpdate = !isNew;
         const spName = this.GetCreateUpdateSPName(entity, isNew);
@@ -1158,7 +1161,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
-        if (this.ShouldTrackRecordChanges(entity.EntityInfo)) {
+        // Per-save suppression: a high-volume machine writer (integration sync) opts out of the
+        // audit row for ITS writes only — the entity keeps TrackRecordChanges for everyone else.
+        if (this.ShouldTrackRecordChanges(entity.EntityInfo) && options?.SkipRecordChanges !== true) {
             const newData = entity.GetAll(false);
             const oldData = isUpdate ? entity.GetAll(true) : null;
 

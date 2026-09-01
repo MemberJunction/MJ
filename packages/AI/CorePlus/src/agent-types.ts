@@ -680,6 +680,17 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
 export type ExecuteAgentResult<P = any> = {
     /** Whether the agent execution was successful */
     success: boolean;
+    /**
+     * Transport-level failure text when {@link agentRun} is missing (lost WebSocket,
+     * fire-and-forget timeout). Prefer `agentRun.ErrorMessage` when the run exists.
+     */
+    errorMessage?: string;
+    /**
+     * True when the fire-and-forget mutation returned an ACK before the transport
+     * died (server has the run). False when the request never left the browser.
+     * Undefined when the caller does not know.
+     */
+    requestAcknowledged?: boolean;
     /** Optional payload returned by the agent */
     payload?: P;
     /**

@@ -388,24 +388,46 @@ export const UserRoutinesChecks: NamedCheck[] = [
             f.RoutineDue!.NotifyCondition = 'OnChange';
             Assert(await f.RoutineDue!.Save(), `re-arming the routine failed: ${f.RoutineDue!.LatestResult?.CompleteMessage}`);
 
+            // Snapshot the run rows that exist BEFORE this pass, and assert on the DELTA.
+            //
+            // The shipped "User Routine Dispatcher" scheduled job is Active with a per-minute cron,
+            // so from the moment the Save above makes this routine due, the live sweep inside MJAPI
+            // is entitled to claim it too. ConcurrencyMode=Skip does not prevent that: it serialises
+            // SCHEDULED runs against each other, and the driver below is constructed in-process
+            // against a fabricated MJScheduledJobEntity that is never saved, so the engine cannot
+            // see it. A global count assertion here is therefore a race against the product, and it
+            // resolves differently depending on where MJAPI's poll tick — anchored to boot time,
+            // not to the wall clock — happens to land inside this bundle's ~3 second window.
+            const before = new Set((await fetchRuns(f.RoutineDue!.ID, user)).map(r => String(r.ID)));
+
             const driver = new UserRoutineDispatcherDriver();
             const result = await driver.Execute(await makeDispatcherContext(ctx));
             Assert(result.Success, `second dispatcher sweep failed: ${result.ErrorMessage}`);
+            // The property the old exact-count assertion was really protecting — that a sweep does
+            // not double-run a routine it claimed — stated directly against OUR sweep, where it is
+            // deterministic, instead of inferred from a row count anyone else may also write to.
+            AssertEqual(Number(result.Details?.RoutinesRun), 1, 'this sweep must claim and run the routine exactly once');
 
             const runs = await fetchRuns(f.RoutineDue!.ID, user);
-            AssertEqual(runs.length, 2, 'a second run row exists after the second pass');
-            const secondRun = runs[1];
-            AssertEqual(String(secondRun.Status), 'Success', `second run status (error: ${secondRun.ErrorMessage ?? 'none'})`);
-            AssertEqual(String(secondRun.ResultHash), String(runs[0].ResultHash), 'identical expression must produce an identical hash');
-            AssertEqual(secondRun.NotificationSent, false, 'OnChange with an unchanged hash must NOT notify');
+            const newRuns = runs.filter(r => !before.has(String(r.ID)));
+            Assert(newRuns.length >= 1, `the second pass must produce at least one run row (got ${newRuns.length})`);
 
-            const notifications = await new RunView().RunView({
-                EntityName: 'MJ: User Notifications',
-                ExtraFilter: `UserID='${user.ID}' AND ResourceConfiguration LIKE '%${String(secondRun.ID)}%'`,
-                ResultType: 'simple',
-                BypassCache: true,
-            }, user);
-            AssertEqual(notifications.Results.length, 0, 'no notification row for the unchanged second run');
+            // Every run in this window replays the same expression against the same data, so the
+            // OnChange contract has to hold for ALL of them regardless of which dispatcher produced
+            // each one. Checking every new row is strictly stronger than checking the one at index 1.
+            for (const run of newRuns) {
+                AssertEqual(String(run.Status), 'Success', `second run status (error: ${run.ErrorMessage ?? 'none'})`);
+                AssertEqual(String(run.ResultHash), String(runs[0].ResultHash), 'identical expression must produce an identical hash');
+                AssertEqual(run.NotificationSent, false, 'OnChange with an unchanged hash must NOT notify');
+
+                const notifications = await new RunView().RunView({
+                    EntityName: 'MJ: User Notifications',
+                    ExtraFilter: `UserID='${user.ID}' AND ResourceConfiguration LIKE '%${String(run.ID)}%'`,
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, user);
+                AssertEqual(notifications.Results.length, 0, 'no notification row for the unchanged second run');
+            }
         }
     },
     {

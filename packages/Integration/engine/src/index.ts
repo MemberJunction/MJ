@@ -49,6 +49,9 @@ export type {
 
 // Error classification helpers
 export { IsRetryableError, ClassifyError } from './types.js';
+// Standard Retry-After extraction — exported so a connector overriding ExtractRetryAfterMs for a
+// non-standard vendor signal can still fall back to the header when the vendor sends one.
+export { ExtractRetryAfterFromError, ParseRetryAfterValue, MAX_HONORED_RETRY_AFTER_MS } from './RetryAfter.js';
 
 // Transforms
 export type {
@@ -110,7 +113,8 @@ export type { IntegrationActionVerb, GenerateIntegrationActionResult } from './I
 
 // Integration Engine (server-side, wraps IntegrationEngineBase via composition)
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
-export { IntegrationEngine } from './IntegrationEngine.js';
+export { IntegrationEngine, ObjectUnavailableError, IsObjectUnavailable } from './IntegrationEngine.js';
+
 export { RunOwnershipService, RunOwnershipLostError } from './RunOwnershipService.js';
 // TerminalRunStatus is the parameter type of the public Release() method, so it has to be nameable
 // from outside the package — otherwise a consumer can call Release but cannot declare a variable to

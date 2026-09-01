@@ -1,9 +1,18 @@
 import { BaseAction } from '@memberjunction/actions';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
+import { ACCOUNTING_ERP_INTEGRATION_NAMES, erpPluginKey } from '../constants';
+import { ResolvedAccountingIntegration } from '../types';
+
+class AccountingIntegrationError extends Error {
+    constructor(message: string, readonly resultCode: 'NO_ACCOUNTING_INTEGRATION' | 'AMBIGUOUS_ACCOUNTING_INTEGRATION') {
+        super(message);
+        this.name = 'AccountingIntegrationError';
+    }
+}
 
 /**
  * Base class for all accounting-related actions.
@@ -59,6 +68,11 @@ export abstract class BaseAccountingAction extends BaseAction {
                 Name: 'AccountingPeriod',
                 Type: 'Input',
                 Value: null
+            },
+            {
+                Name: 'IntegrationName',
+                Type: 'Input',
+                Value: null
             }
         ];
     }
@@ -75,7 +89,7 @@ export abstract class BaseAccountingAction extends BaseAction {
         const rv = new RunView();
         const result = await rv.RunView<MJCompanyIntegrationEntity>({
             EntityName: 'MJ: Company Integrations',
-            ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${this.integrationName}'`,
+            ExtraFilter: `CompanyID = '${EscapeSQLString(companyId)}' AND Integration.Name = '${EscapeSQLString(this.integrationName)}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
@@ -144,7 +158,7 @@ export abstract class BaseAccountingAction extends BaseAction {
         const rv = new RunView();
         const result = await rv.RunView<MJIntegrationEntity>({
             EntityName: 'MJ: Integrations',
-            ExtraFilter: `Name = '${this.integrationName}'`,
+            ExtraFilter: `Name = '${EscapeSQLString(this.integrationName)}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
@@ -200,5 +214,130 @@ export abstract class BaseAccountingAction extends BaseAction {
             message += ` System error: ${systemError.message || systemError}`;
         }
         return message;
+    }
+
+    /**
+     * Load the company's accounting CompanyIntegration (any Integration whose
+     * Name is one of the known ERP names). Does not hard-filter to a single vendor.
+     */
+    protected async resolveCompanyAccountingIntegration(
+        companyId: string,
+        contextUser: UserInfo,
+        integrationName?: string
+    ): Promise<ResolvedAccountingIntegration> {
+        const names = integrationName
+            ? [integrationName]
+            : [...ACCOUNTING_ERP_INTEGRATION_NAMES];
+        const nameList = names
+            .map(name => `'${EscapeSQLString(name)}'`)
+            .join(', ');
+
+        const rv = new RunView();
+        const result = await rv.RunView<MJCompanyIntegrationEntity>({
+            EntityName: 'MJ: Company Integrations',
+            ExtraFilter: `CompanyID = '${EscapeSQLString(companyId)}' AND IsActive = 1 AND Integration.Name IN (${nameList})`,
+            OrderBy: 'Integration',
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!result.Success) {
+            throw new AccountingIntegrationError(
+                `Failed to retrieve company integration: ${result.ErrorMessage}`,
+                'NO_ACCOUNTING_INTEGRATION'
+            );
+        }
+
+        if (!result.Results || result.Results.length === 0) {
+            throw new AccountingIntegrationError(
+                integrationName
+                    ? `No active '${integrationName}' integration found for company ${companyId}.`
+                    : `No accounting ERP integration found for company ${companyId}. Configure QuickBooks Online or Microsoft Dynamics 365 Business Central.`,
+                'NO_ACCOUNTING_INTEGRATION'
+            );
+        }
+
+        if (!integrationName && result.Results.length > 1) {
+            const candidates = result.Results
+                .map(r => r.Integration)
+                .filter((n): n is string => !!n);
+            throw new AccountingIntegrationError(
+                `Company ${companyId} has ${result.Results.length} active accounting ERP integrations (${candidates.join(', ')}). Pass IntegrationName to select one.`,
+                'AMBIGUOUS_ACCOUNTING_INTEGRATION'
+            );
+        }
+
+        const record = result.Results[0];
+        const name = record.Integration;
+        if (!name) {
+            throw new AccountingIntegrationError(
+                `Company integration ${record.ID} has no Integration name; cannot dispatch an ERP plugin.`,
+                'NO_ACCOUNTING_INTEGRATION'
+            );
+        }
+
+        return {
+            Name: name,
+            CompanyIntegrationID: record.ID,
+            CompanyID: record.CompanyID,
+            IntegrationID: record.IntegrationID,
+        };
+    }
+
+    /**
+     * Resolve the company's ERP and invoke the plugin registered as `${verb}:${integration.Name}`.
+     * Plugin.Run → InternalRunAction with the same params the caller passed to the dispatcher.
+     */
+    protected async dispatchVerb(verb: string, params: RunActionParams): Promise<ActionResultSimple> {
+        const companyId = this.getParamValue(params.Params, 'CompanyID');
+        if (!companyId) {
+            return {
+                Success: false,
+                ResultCode: 'VALIDATION_ERROR',
+                Message: 'CompanyID is required',
+                Params: params.Params
+            };
+        }
+
+        if (!params.ContextUser) {
+            return {
+                Success: false,
+                ResultCode: 'ERROR',
+                Message: 'Context user is required',
+                Params: params.Params
+            };
+        }
+
+        let integration: ResolvedAccountingIntegration;
+        try {
+            integration = await this.resolveCompanyAccountingIntegration(
+                companyId,
+                params.ContextUser,
+                this.getParamValue(params.Params, 'IntegrationName')
+            );
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const resultCode = error instanceof AccountingIntegrationError
+                ? error.resultCode
+                : 'NO_ACCOUNTING_INTEGRATION';
+            return {
+                Success: false,
+                ResultCode: resultCode,
+                Message: errorMessage,
+                Params: params.Params
+            };
+        }
+
+        const pluginKey = erpPluginKey(verb, integration.Name);
+        const resolved = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAction>(BaseAction, pluginKey);
+        if (!resolved.Resolved || !resolved.Instance) {
+            return {
+                Success: false,
+                ResultCode: 'PROVIDER_NOT_REGISTERED',
+                Message: `No ERP plugin registered for ${pluginKey}`,
+                Params: params.Params
+            };
+        }
+
+        return resolved.Instance.Run(params);
     }
 }

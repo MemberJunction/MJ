@@ -127,6 +127,22 @@
   box-shadow: var(--mj-shadow-md);
 }
 
+:host ::ng-deep .mention-badge.record {
+  background: var(--mj-color-info, #2563eb);
+  color: var(--mj-text-inverse, #fff);
+  border: 2px solid color-mix(in srgb, var(--mj-color-info, #2563eb) 40%, transparent);
+  box-shadow: var(--mj-shadow-md);
+  text-decoration: none;
+}
+
+/* Icon-only record citation: surrounding prose already named the row. */
+:host ::ng-deep .mention-badge.record.icon-only {
+  padding: 4px 7px;
+  gap: 0;
+  min-width: 1.65em;
+  justify-content: center;
+}
+
 /* Skills: standard green fallback (AISkill.Color overrides via inline style) + sharp-cornered
    rectangle — the shape differentiates skills from the rounded agent/user/entity pills.
    Keep color + shape in sync with the composer chip (mention-editor's createMentionChip). */
