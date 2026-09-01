@@ -5011,9 +5011,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Only ever used to skip work when absence is PROVEN: the prefetch must have covered every
         // record in the batch, and this key must be missing from it. Anything less falls through to
         // the load, because a wrong "absent" turns an update into a duplicate insert.
-        const provablyAbsent = mappedPK != null
-            && precheck?.CoversWholeBatch === true
-            && !precheck.Present.has(pkFields.map(f => String(mappedPK[f.Name] ?? '')).join('|'));
+        const provablyAbsent = this.isProvablyAbsent(mappedPK, precheck);
 
         const existed = mappedPK != null && !provablyAbsent
             ? await entity.InnerLoad(this.BuildEntityPrimaryKey(mappedPK, pkFields))
@@ -5076,6 +5074,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // incremental sync. SaveRecordMap is an upsert keyed on (CompanyIntegration, Entity, ExternalID),
         // so this also re-establishes a map that was previously cleared.
         const entityRecordID = entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|');
+        // The prefetch's absence proof is only true until this process inserts the row. A mid-batch
+        // flush (MJ_INTEGRATION_BATCH_FLUSH_AT) COMMITS part of a batch; if a later record then fails,
+        // the per-record fallback re-applies the whole batch against the SAME precheck — and the
+        // committed rows' keys, honestly absent at prefetch time, would still "prove" absent and
+        // insert again. Recording the key the moment we create keeps the proof truthful for any
+        // replay in this run. Deliberately unconditional on commit outcome: if the group later rolls
+        // back, an over-included key merely costs that record one existence load on retry — while an
+        // under-included key costs a duplicate row. Only ever err toward the load.
+        if (!existed && mappedPK != null && precheck) {
+            precheck.Present.add(mappedPK);
+        }
         await this.QueueRecordMap(
             recordMaps,
             companyIntegration.ID,
@@ -5107,6 +5116,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             values.push(s);
         }
         return values.join('|');
+    }
+
+    /**
+     * True ONLY when the batch prefetch PROVED this record's row does not exist: the prefetch covered
+     * every record in the batch AND this key is missing from the rows it found. Anything less is
+     * "unknown", and unknown must load — a wrong "absent" turns an update into a duplicate INSERT.
+     *
+     * `mappedPK` must be the '|'-joined key {@link extractMappedPrimaryKey} returns — the SAME shape
+     * {@link PrefetchContentHashes} keys `Present` with (`pkNames.map(n => row[n] ?? '').join('|')`).
+     * The first version of this check re-derived a key by indexing that string with PK field names,
+     * which evaluates to `''` for every record — so "provably absent" was unconditionally true and
+     * every upsert of an existing row became a blind duplicate INSERT. Kept as its own method so the
+     * decision is testable against the real extractor's output rather than a re-implementation.
+     */
+    private isProvablyAbsent(
+        mappedPK: string | null,
+        precheck: { Present: Set<string>; CoversWholeBatch: boolean } | undefined
+    ): boolean {
+        return mappedPK != null
+            && precheck?.CoversWholeBatch === true
+            && !precheck.Present.has(mappedPK);
     }
 
     /**
@@ -5284,7 +5314,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 everyRecordCovered = false;
                 continue;
             }
-            wanted.add(pkFields.map(f => String(mappedPK[f.Name] ?? '')).join('|'));
+            // Already the '|'-joined key in pkFields order — add it as-is (see extractMappedPrimaryKey).
+            wanted.add(mappedPK);
         }
         const ids = Array.from(wanted);
         if (ids.length === 0) return undefined;

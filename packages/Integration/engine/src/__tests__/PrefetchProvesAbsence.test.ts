@@ -18,12 +18,11 @@ vi.mock('@memberjunction/core', async () => {
 const { IntegrationEngine } = await import('../IntegrationEngine.js');
 const { CONTENT_HASH_COLUMN } = await import('../ContentHash.js');
 
+type Precheck = { Hashes: Map<string, string>; Present: Set<string>; CoversWholeBatch: boolean };
 type PrefetchHost = {
-    PrefetchContentHashes: (batch: unknown[], user: unknown) => Promise<{
-        Hashes: Map<string, string>;
-        Present: Set<string>;
-        CoversWholeBatch: boolean;
-    } | undefined>;
+    PrefetchContentHashes: (batch: unknown[], user: unknown) => Promise<Precheck | undefined>;
+    extractMappedPrimaryKey: (record: unknown, pkFields: Array<{ Name: string }>) => string | null;
+    isProvablyAbsent: (mappedPK: string | null, precheck: Precheck | undefined) => boolean;
 };
 
 const pkField = { Name: 'id' };
@@ -32,11 +31,11 @@ const pkField = { Name: 'id' };
 function makeHost(rows: Array<Record<string, unknown>>, success = true) {
     runViewResult.current = { Success: success, Results: rows };
     const entityInfo = { Fields: [{ Name: 'id' }, { Name: CONTENT_HASH_COLUMN }], PrimaryKeys: [pkField] };
+    // The REAL extractMappedPrimaryKey runs — no stub. The first version of this file stubbed it
+    // with an OBJECT-returning fake while the real method returns a '|'-joined STRING; every test
+    // passed while the production code indexed that string with field names and computed '' for
+    // every record. A fake that disagrees with the real shape makes the whole file vacuous.
     const host = Object.create(IntegrationEngine.prototype) as unknown as PrefetchHost & Record<string, unknown>;
-    Object.assign(host, {
-        extractMappedPrimaryKey: (r: { MappedFields?: Record<string, unknown> }) =>
-            r.MappedFields?.id != null ? { id: r.MappedFields.id } : null,
-    });
     Object.defineProperty(host, 'ProviderToUse', {
         value: {
             EntityByName: () => entityInfo,
@@ -94,19 +93,76 @@ describe('PrefetchContentHashes — presence is separate from hash', () => {
     });
 });
 
-describe('CreateRecord — the elision is gated on proof', () => {
-    const source = readFileSync(join(__dirname, '..', 'IntegrationEngine.ts'), 'utf8');
+describe('the key SHAPES agree end to end (the regression that shipped)', () => {
+    // Every assertion here runs the REAL extractor against the REAL prefetch and the REAL decision.
+    // No re-implementation of the key on either side — a shape disagreement between the extractor
+    // and Present's keying is exactly what these exist to catch.
 
-    it('skips the existence load ONLY when the batch covered every record and this key was missing', () => {
-        const m = source.match(/const provablyAbsent =[\s\S]{0,400}?;/);
-        expect(m).not.toBeNull();
-        const decl = m![0];
-        expect(decl).toMatch(/precheck\?\.CoversWholeBatch === true/);
-        expect(decl).toMatch(/!precheck\.Present\.has\(/);
-        expect(decl).toMatch(/mappedPK != null/);
+    it('extractMappedPrimaryKey returns the "|"-joined STRING, not a field map', () => {
+        const host = makeHost([]);
+        const key = host.extractMappedPrimaryKey(created('ext-123'), [pkField]);
+        expect(key).toBe('ext-123');
+        const composite = host.extractMappedPrimaryKey(
+            { MappedFields: { a: 'v1', b: 'v2' } }, [{ Name: 'a' }, { Name: 'b' }]);
+        expect(composite).toBe('v1|v2');
     });
 
-    it('still loads whenever absence is not proven', () => {
-        expect(source).toMatch(/const existed = mappedPK != null && !provablyAbsent/);
+    it('an EXISTING row is never provably absent — the duplicate scenario', async () => {
+        // The bug: an existing row reaching the create path (record map deleted, fresh
+        // CompanyIntegration over pre-existing rows, MatchEngine "Create") was judged absent
+        // because the derived lookup key was '' — and got a second INSERT. The real key must
+        // hit Present, and the decision must say "not absent", forcing the load-then-update.
+        const host = makeHost([{ id: 'ext-123', [CONTENT_HASH_COLUMN]: 'h' }]);
+        const out = await host.PrefetchContentHashes([created('ext-123'), created('brand-new')], {});
+        expect(out?.CoversWholeBatch).toBe(true);
+        const keyExisting = host.extractMappedPrimaryKey(created('ext-123'), [pkField]);
+        const keyNew = host.extractMappedPrimaryKey(created('brand-new'), [pkField]);
+        expect(host.isProvablyAbsent(keyExisting, out)).toBe(false);   // must load, must NOT insert
+        expect(host.isProvablyAbsent(keyNew, out)).toBe(true);         // genuinely new — elide the load
+    });
+
+    it('composite keys agree between extractor and Present', async () => {
+        const pkFields = [{ Name: 'a' }, { Name: 'b' }];
+        runViewResult.current = { Success: true, Results: [{ a: 'v1', b: 'v2', [CONTENT_HASH_COLUMN]: 'h' }] };
+        const host = Object.create(IntegrationEngine.prototype) as unknown as PrefetchHost & Record<string, unknown>;
+        Object.defineProperty(host, 'ProviderToUse', {
+            value: {
+                EntityByName: () => ({ Fields: [{ Name: 'a' }, { Name: 'b' }, { Name: CONTENT_HASH_COLUMN }], PrimaryKeys: pkFields }),
+                Dialect: { QuoteIdentifier: (n: string) => `[${n}]`, QuoteStringLiteral: (v: string) => `'${v}'` },
+            },
+            configurable: true,
+        });
+        const rec = { MJEntityName: 'X', ChangeType: 'Create', MappedFields: { a: 'v1', b: 'v2' }, ExternalRecord: { ExternalID: 'v1' } };
+        const out = await host.PrefetchContentHashes([rec], {});
+        expect(host.isProvablyAbsent(host.extractMappedPrimaryKey(rec, pkFields), out)).toBe(false);
+    });
+
+    it('a key created during the batch stops being "absent" — mid-flush replay safety', async () => {
+        // MJ_INTEGRATION_BATCH_FLUSH_AT commits part of a batch. If a later record then fails, the
+        // per-record fallback re-applies the WHOLE batch against the SAME precheck object. A row
+        // this run already inserted was honestly absent at prefetch time, so without recording it
+        // the replay would "prove" it absent again and insert a duplicate. CreateRecord adds the
+        // key to Present the moment it creates; this asserts the resulting decision flips.
+        const host = makeHost([]);
+        const out = await host.PrefetchContentHashes([created('new-1')], {});
+        const key = host.extractMappedPrimaryKey(created('new-1'), [pkField])!;
+        expect(host.isProvablyAbsent(key, out)).toBe(true);    // first pass: genuinely new, elide the load
+        out!.Present.add(key);                                  // what CreateRecord does on the create path
+        expect(host.isProvablyAbsent(key, out)).toBe(false);    // replay: must load, must NOT insert again
+    });
+
+    it('CreateRecord records the key it just created', () => {
+        // Source-level because no CreateRecord harness exists (it needs Metadata, entity objects and
+        // validation to drive). The behaviour it guards is asserted above; this only pins that the
+        // production path actually performs the Present.add the replay-safety argument depends on.
+        const src = readFileSync(join(__dirname, '..', 'IntegrationEngine.ts'), 'utf8');
+        expect(src).toMatch(/if \(!existed && mappedPK != null && precheck\) \{\s*\n\s*precheck\.Present\.add\(mappedPK\);/);
+    });
+
+    it('no proof, no elision: partial coverage or a missing precheck always loads', () => {
+        const host = makeHost([]);
+        expect(host.isProvablyAbsent('k', undefined)).toBe(false);
+        expect(host.isProvablyAbsent('k', { Hashes: new Map(), Present: new Set(), CoversWholeBatch: false })).toBe(false);
+        expect(host.isProvablyAbsent(null, { Hashes: new Map(), Present: new Set(), CoversWholeBatch: true })).toBe(false);
     });
 });
