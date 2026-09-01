@@ -10,7 +10,7 @@ import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunc
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
-import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap } from './integration/EntityMapLifecycle.js';
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -1824,9 +1824,9 @@ async function processRSUPendingWork(): Promise<void> {
           const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
 
           const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
-          const fieldsToMap = selectedFields
-            ? (sourceObj?.Fields ?? []).filter(f => selectedFields.some(sf => sf.toLowerCase() === f.Name.toLowerCase()))
-            : (sourceObj?.Fields ?? []);
+          // Always maps the PRIMARY KEY, selected or not — see selectFieldsToMap for why identity
+          // cannot be left to the selection.
+          const fieldsToMap = selectFieldsToMap(sourceObj?.Fields ?? [], selectedFields);
 
           // Load existing field maps to avoid duplicates
           const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({

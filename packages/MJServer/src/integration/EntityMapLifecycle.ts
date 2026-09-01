@@ -219,3 +219,34 @@ export async function ResetPullWatermarks(
     }
     return reset;
 }
+
+/** One discovered source field, reduced to what the selection decision needs. */
+export interface SelectableSourceField {
+    Name: string;
+    IsPrimaryKey?: boolean;
+}
+
+/**
+ * Which discovered fields get a field map, given the user's column selection.
+ *
+ * A PRIMARY KEY field is ALWAYS mapped, selected or not. The table build already applies this rule
+ * (`buildTargetConfigs`: `|| f.IsPrimaryKey`), so the key column exists in the table either way —
+ * and without the same rule here, deselecting the key produced a table WITH its key column but no
+ * field map carrying `IsKeyField`. The sync then had no identity to match on and silently fell back
+ * to content-hash matching: nothing errored, records just stopped being recognised as the same
+ * record across syncs.
+ *
+ * Nothing enforces selecting the key in the UI, and nothing should — identity is not a preference,
+ * so the invariant belongs here rather than in a validation message.
+ *
+ * `null`/`undefined` selection means "all fields", which is not the same as an EMPTY selection —
+ * an empty array is a real (if unusual) choice, and still yields the keys.
+ */
+export function selectFieldsToMap<T extends SelectableSourceField>(
+    allFields: readonly T[],
+    selectedFieldNames: readonly string[] | null | undefined,
+): T[] {
+    if (!selectedFieldNames) return [...allFields];
+    const selected = new Set(selectedFieldNames.map(n => n.toLowerCase()));
+    return allFields.filter(f => selected.has(f.Name.toLowerCase()) || f.IsPrimaryKey === true);
+}
