@@ -1114,6 +1114,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref next
 
+      # Canonical release notes. Before this, nothing generated them for a line:
+      # generate-release-notes.yml hooks `pull_request opened into main`, which is the
+      # Edge shape — a line release is a dispatch against the line branch and opens no
+      # such PR. 5.51.2 shipped with no releases/v5.51.2.md as a result.
+      #
+      # It writes the file, opens the PR against `next` and applies the `backport lts/N`
+      # label itself. The label is the point: the docs site builds the line branch, so
+      # notes that stop at `next` publish nothing.
+      #
+      # Fatal, like the ledger step below and for the same reason: by here the packages
+      # are on npm, so a failure means "released, notes never started" — and a red run is
+      # the only thing that says so. Dispatching costs a second; it is the forgetting that
+      # this replaces.
+      - name: Start the release notes for this line release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          gh workflow run generate-release-notes.yml --repo "$GITHUB_REPOSITORY" --ref next \
+            -f version="${VERSION#v}" -f line_branch="$LINE"
+          echo "::notice::release-notes generation dispatched for ${VERSION#v} on $LINE; review and merge the PR it opens."
+
       # Same bookkeeping as the edge path above — see that step for why it writes to `next`,
       # why it is last, and why it is fatal. One difference: this job is checked out on the
       # LINE branch, whose own release-lines.json is inert (`"lines": {}`) because the source
