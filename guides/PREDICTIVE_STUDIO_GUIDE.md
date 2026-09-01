@@ -50,6 +50,8 @@ This guide ties together the packages that each document one layer:
 6. [Scoring — a Record Set Processing work type](#6-scoring--a-record-set-processing-work-type)
 7. [The experiment engine — a generic agentic-search primitive](#7-the-experiment-engine--a-generic-agentic-search-primitive)
 8. [The data model — entities and relationships](#8-the-data-model--entities-and-relationships)
+    - 8.1 [The typed-component model (v6.1)](#81-the-typed-component-model-v61)
+    - 8.2 [The runtime layer — reading the tree, binding the meaning](#82-the-runtime-layer--reading-the-tree-binding-the-meaning)
 9. [The guidance layer — algorithm catalog + the 6×7 matrix](#9-the-guidance-layer--algorithm-catalog--the-67-matrix)
 10. [The invocation surface — Actions vs Remote Operations](#10-the-invocation-surface--actions-vs-remote-operations)
 11. [Feature Pipelines — the category route (no new entity)](#11-feature-pipelines--the-category-route-no-new-entity)
@@ -64,7 +66,7 @@ This guide ties together the packages that each document one layer:
 20. [Quick reference — what's built](#20-quick-reference--whats-built)
 
 > **The six invariants** this system is built to protect. Each is enforced by code, not convention — they recur throughout the guide:
-> 1. **Anti train/serve skew** — one assembly code path for train and score; preprocessing is *fit once, applied everywhere*, and the **validation fit happens inside the train/val split** (§4.2, §5.1).
+> 1. **Anti train/serve skew** — one assembly code path for train and score; preprocessing is *fit once, applied everywhere*, the **validation fit happens inside the train/val split** (§4.2, §5.1), and the point-in-time sources a model trained on are frozen into its lineage so scoring rebuilds the *same* as-of columns (§8.2).
 > 2. **Locked holdout** — a slice the search never sees, scored exactly once → the only *honest* metric (§5.1).
 > 3. **Leakage gate** — deny-list at assembly + single-feature-dominance flag post-train, blocking auto-promotion (§4.4); promotion of a flagged model requires an **auditable sign-off reason** (§13).
 > 4. **Point-in-time correctness** — features assembled as-of the decision date, never leaking the future (§4.3).
@@ -319,8 +321,9 @@ The flow:
 5. **Call the sidecar `/train`** — get back the artifact, `fitted_preprocessing`, train+validation metrics, feature importance, and `holdout_metrics`.
 6. **Persist the artifact** to MJStorage (`MJ: Files`) via an injected store.
 7. **Create the immutable `MJ: ML Models` row** (`Status='Draft'`) carrying `FittedPreprocessing`, `FeatureSchema`, `Metrics`, `HoldoutMetrics`, `FeatureImportance`, and full `Lineage`.
-8. **Leakage check** — run `detectSingleFeatureDominance`; a dominant feature flags the run and blocks auto-promotion.
-9. **Finalize the run** (`Completed`/`Failed`, results, costs, notes).
+8. **Materialize the component** (§8.2) — project the model into a root `MJ: ML Components` row + bindings onto real entity fields. Best-effort; skipped when no materializer seam is injected.
+9. **Leakage check** — run `detectSingleFeatureDominance`; a dominant feature flags the run and blocks auto-promotion.
+10. **Finalize the run** (`Completed`/`Failed`, results, costs, notes).
 
 ```mermaid
 sequenceDiagram
@@ -340,12 +343,13 @@ sequenceDiagram
     SC-->>TE: artifact · fitted_preprocessing · metrics · importance · holdout_metrics
     TE->>ST: persist artifact → ArtifactFileID
     TE->>DB: create immutable ML Model (Status='Draft')
+    TE->>DB: materialize root ML Component + Bindings (best-effort)
     TE->>TE: detectSingleFeatureDominance → flag?
     TE->>DB: finalize Training Run (Completed/Failed)
     TE-->>C: { model, run }
 ```
 
-The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §19.4).
+The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`, and the optional `IModelComponentMaterializer` (§8.2). Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §19.4).
 
 ### 5.1 Validation discipline + locked holdout
 
@@ -560,6 +564,87 @@ Band** outputs (`Engine/src/components/score-bands.ts`), and the design-time **j
 auto-resolver (`Engine/src/components/join-path.ts`). The `Sequence`/HMM and Structure-wrapper
 subtrees are seeded `Status='Draft'` until the sidecar's `component_graph` execution and the
 `sequence` problem type ship.
+
+### 8.2 The runtime layer — reading the tree, binding the meaning
+
+The five entities of §8.1 are the *shape*. Four runtime pieces make them load, resolve, get
+written, and stay honest.
+
+**`MLComponentEngine`** (`Engine/src/components/ml-component-engine.ts`) — a `BaseEngine`
+subclass caching the three **type** tables (types, properties, slots), never the instances.
+Types are a small, slow-moving catalog; instances grow with every trained model, so they are
+loaded on demand by `MLModelID`/type with narrowed `Fields` instead. The engine exposes
+`ResolveProfile(componentTypeID)` (memoized, cleared in `AdditionalLoading`), `FindTypeByID` /
+`FindTypeByName`, `TypesByKind`, `LeafForAlgorithm`, `IsDescendantOf`, and `Lint()`. The
+resolution itself lives in the pure, browser-safe `component-resolution.ts` in Core, so the
+Studio UI and the server run the *same* fold.
+
+A compile-time test in the Engine pins Core's hand-written `ComponentKind` and
+`ComponentPropertyKey` unions to the CodeGen-emitted `MJMLComponentTypeEntity['Kind']` /
+`MJMLComponentTypePropertyEntity['PropertyKey']`. Widen a CHECK constraint without widening the
+Core union and the build breaks, rather than the resolver silently ignoring the new key.
+
+**The as-of round-trip.** `MLTrainingPipeline.DatedSources` is read by `TrainingEngine`, passed
+to `FeatureAssemblyExecutor`, and frozen into `MLModel.Lineage.datedSources`;
+`MLModelInferenceProcessor` reads it straight back out and **prefers it over its constructor
+option**. Before this, dated sources could only reach scoring from the caller, so a model trained
+WITH as-of features scored WITHOUT them — silently, because the missing columns arrived as `null`
+and the sidecar imputed them. That is exactly the train/serve skew §6.2's fit-once/apply-everywhere
+rule exists to prevent, and it now has the same single-declaration guarantee:
+
+```
+MLTrainingPipeline.DatedSources          ← declared once
+  → TrainingEngine.assemble()
+  → MLModel.Lineage.datedSources         ← frozen with the model
+  → MLModelInferenceProcessor            ← lineage wins; the option is a legacy fallback
+  → the SAME FeatureAssembly executor    ← identical as-of columns
+```
+
+A malformed lineage blob degrades to "no as-of sources" rather than throwing, and a model whose
+lineage predates the column still honors the caller-supplied spec — so nothing that trains today
+stops scoring.
+
+**`ComponentMaterializer`** (`Engine/src/components/component-materializer.ts`) — what turns a
+trained model into something you can *reason* about. A model's `FeatureSchema` is a list of column
+names; a binding says what each one means:
+
+| Feature | Binding |
+|---|---|
+| `tenure` | `Input` → `Members.MembershipTenureMonths`, Number |
+| `activity_count_asof` | `Input` → `Activities`, `RelationshipPath` = the FK hops, "count of rows as of the decision date" |
+| `activity_count_asof__present` | `Input` → the `hadData` mask: "did this record have ANY activity rows" |
+| `class` | `Output` → `Members.Renewed` — the field this model exists to predict |
+
+`planModelMaterialization` is **pure** (plain data in, plan out), so every naming, typing, and
+join-path decision is unit-testable with no provider; `ComponentMaterializer.materialize`
+persists a plan and **never throws**. Three deliberate non-guesses: an unresolvable feature (a
+one-hot, an embedding dimension) gets a binding with a null `EntityFieldID` and a `Meaning`
+saying what it is, never an invented field id; `HigherIsBetter` is left null, because direction
+is a human or story-tagger judgment; and an unreachable or ambiguous join path falls back to the
+DECLARED foreign key with a warning rather than a guessed multi-hop path (`findAutoPathHops`
+fails loud on both, by design — a guessed join is a silently-wrong feature).
+
+The seam is `TrainingDeps.componentMaterializer`, wired into all three production deps builders
+and wrapped in try/catch by the engine. Training has already succeeded by the time it runs, so a
+provenance failure must never be recorded as a failed run. Omit the seam and no component rows
+are written at all — every pre-existing caller is unchanged.
+
+**Server subclasses** (`MJCoreEntitiesServer/src/custom/MJMLComponent{,Type}EntityServer.server.ts`)
+— the write-side guarantees:
+
+| Rule | Why |
+|---|---|
+| `Story` → `StoryVector` on save (both entities) | reuse-by-meaning searches the same text a human reads, and can't drift from it |
+| a child's `Kind` must equal its parent's | Kind partitions the tree into seven independent spaces; a branch that changes Kind makes every inherited property below it wrong, and nothing downstream notices |
+| an **abstract** type cannot be instantiated | `Model`, `Linear`, `Preprocessing` carry inherited properties and have nothing to run — the failure would otherwise surface at train or score time, far from the save that caused it |
+| `Spec` must conform to the type's `SpecSchema` | checked with the dependency-free `ValidateJsonAgainstSchemaLite`. A type with no schema leaves the spec freeform; a type whose schema is *itself* malformed yields a **Warning**, never a Failure — that is a metadata bug on the type row and must not brick every instance of it |
+| no self-parent / self-reuse; no `SlotName` without a parent | a slot is a position *inside* a parent; a root component occupies none |
+
+Whole-tree rules — contradictory `Add`/`Remove` pairs, hoist suggestions, narrowing direction —
+stay in Core's `lintComponentTree`, which runs over the loaded tree. These subclasses enforce
+only what a single row can prove on its own.
+
+---
 
 ## 9. The guidance layer — algorithm catalog + the 6×7 matrix
 
@@ -1211,6 +1296,11 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | Area | Status |
 |---|---|
 | 10-entity data model + CodeGen | ✅ built |
+| **Typed-component model** (5 entities, inheritance tree, seed tree lint-certified) — §8.1 | ✅ built |
+| **`MLComponentEngine`** (type-table cache, memoized profile resolution, compile-time union lockstep) — §8.2 | ✅ built |
+| **As-of round-trip** (`Pipeline.DatedSources` → `Model.Lineage` → scoring; lineage wins) — §8.2 | ✅ built |
+| **`ComponentMaterializer`** (root component + bindings onto real entity fields; pure planner, never fails a train) — §8.2 | ✅ built |
+| **ML component server subclasses** (Story→StoryVector, abstract-instantiation gate, `Spec ⊨ SpecSchema`, Kind-parent match) — §8.2 | ✅ built |
 | Algorithm catalog + use cases + 6×7 rankings (metadata) | ✅ built |
 | `MLSidecar` self-managing Python sidecar (managed + remote) | ✅ built |
 | `FeatureAssemblyExecutor` (raw/preprocessing split, fit-in-split, as-of, leakage guard) | ✅ built |
@@ -1226,6 +1316,8 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
 | **Business-user experience** (§16) — agent offers + schedules monthly · generic `'*'` risk-card panel · Models-in-Production section · de-mocked Studio + ops wired · scoring-binding lineage · WorkType value-list + Enrichment-over-GraphQL | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
+| Component **composition** execution (sidecar `component_graph`: bagging/stacking/frozen reuse) | ⏳ planned |
+| Component **stories** (tagger, reuse-by-meaning search, Components tab) | ⏳ planned |
 | Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).

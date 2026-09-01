@@ -11,7 +11,7 @@
  *    Save() attempts: provider SupportedFeatures/DriverClass gates (RD5) and session-bridge
  *    outbound-target / status-timestamp / close-reason coherence (RD6),
  *  - bridge driver-registry ClassFactory resolution WITHOUT starting anything (RD7 — LoopbackBridge),
- *  - the Predictive Studio deterministic legs NOT covered by predictive-studio.checks.ts (PS1–PS5):
+ *  - the Predictive Studio deterministic legs NOT covered by predictive-studio.checks.ts (PS1–PS8):
  *    the ML Algorithms / Use Cases / Rankings guidance-matrix integrity (RD8) and the
  *    ProductionModelPromotionGate's deterministic refusal paths — non-UUID injection refusal,
  *    leakage refusal, sign-off-reason gate, and the lifecycle state machine (RD9).
