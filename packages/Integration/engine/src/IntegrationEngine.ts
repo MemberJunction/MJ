@@ -315,6 +315,18 @@ interface BatchPrecheck {
     CoversWholeBatch: boolean;
 }
 
+/**
+ * How many deferred writes may accumulate in one batched group before it is submitted and replaced.
+ *
+ * `undefined` (unset, or any unusable value) means no mid-batch flush at all — the batch is one
+ * group and one transaction, which is the default and the behaviour that shipped. An explicit value
+ * trades that atomicity for bounded memory on a heap-constrained box.
+ */
+export function ReadFlushCeiling(env: NodeJS.ProcessEnv): number | undefined {
+    const raw = parseInt(env.MJ_INTEGRATION_BATCH_FLUSH_AT ?? '', 10);
+    return Number.isFinite(raw) && raw >= 1 ? raw : undefined;
+}
+
 export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     public constructor() {
         super();
@@ -4373,10 +4385,39 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     //
                     // Per-batch groups are also what keeps failures isolated: a poison record fails
                     // the group its own map owns, and every other map in flight is untouched.
+                    // OPT-IN ceiling on how many writes may sit deferred in one group.
+                    //
+                    // A group holds every enrolled record's rendered SQL and parameters until Submit,
+                    // so peak memory for a batched apply is roughly (maps in flight x group size x row
+                    // size). With wide rows that is the largest allocation a sync makes, and a box that
+                    // has run out of heap has no way to trade a little throughput for headroom.
+                    //
+                    // Unset (the default) means NO mid-batch flush: the batch stays exactly one group
+                    // and one transaction, as today. Setting it below the batch size splits the batch
+                    // into several transactions, which is a real trade — an earlier flush stays
+                    // committed if a later one fails — and is why it is off unless asked for. The
+                    // per-record fallback that follows a failed batch is idempotent, so the split is
+                    // recoverable; it is simply no longer all-or-nothing.
+                    const flushAt = ReadFlushCeiling(process.env);
                     const runBatch = async () => {
+                        let enrolledSinceFlush = 0;
                         for (const record of batch) {
                             result.RecordsProcessed++;
                             await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
+                            if (flushAt === undefined) continue;
+                            if (++enrolledSinceFlush < flushAt) continue;
+                            enrolledSinceFlush = 0;
+                            // Mutating the context object is what makes the swap visible: every frame
+                            // below shares this same object through AsyncLocalStorage, so replacing the
+                            // group here is what the next record's enrolment sees.
+                            const ctx = this.currentRunContext;
+                            const full = ctx?.writeGroup;
+                            if (!full) continue;
+                            const submitted = await serializeWrite(() => full.Submit());
+                            if (!submitted) throw new Error('Batched write group did not commit');
+                            const fresh = await provider.CreateTransactionGroup();
+                            fresh.BatchedSubmit = true;
+                            ctx.writeGroup = fresh;
                         }
                     };
                     try {
