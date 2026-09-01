@@ -10,6 +10,35 @@ import { normalizeSmartFieldResultShape } from "../Database/search-guardrails";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
+
+/**
+ * Result from LLM-assisted entity DISPLAY NAME generation.
+ *
+ * Distinct from {@link EntityNameResult}: `Entity.Name` is an identifier that
+ * code and metadata reference, so changing it is a breaking rename and only ever
+ * happens at entity creation. `Entity.DisplayName` is presentation-only, so it
+ * can be improved on any run without breaking a reference.
+ */
+export type EntityDisplayNameResult = {
+    /** The proposed human-readable display name. */
+    displayName: string;
+    /** The entity name this was generated for, echoed back for correlation. */
+    entityName: string;
+    /**
+     * Which abbreviations the model expanded, and to what. Recorded so a
+     * reviewer can audit a questionable expansion rather than only seeing the
+     * result — `STAT` to `Status` and `STAT` to `Statistic` are both plausible,
+     * and only the schema's context distinguishes them.
+     */
+    expansions?: Array<{ from: string; to: string }>;
+    /**
+     * The model's own confidence. `low` results are discarded by CodeGen rather
+     * than written, since a bad display name is worse than an ugly one.
+     */
+    confidence: 'high' | 'medium' | 'low';
+    /** Why the model chose this rendering. */
+    reasoning?: string;
+}
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
 
 export type SmartFieldIdentificationResult = {
@@ -196,6 +225,31 @@ export class AdvancedGeneration {
 
     public getFeature(featureName: string): AdvancedGenerationFeature | undefined {
         return this.features()?.find(f => f.name === featureName);
+    }
+
+    /**
+     * Reads a boolean option off a feature, falling back to `defaultValue` when
+     * the feature or option is absent.
+     *
+     * Options are typed `unknown` in the config schema, so this normalizes the
+     * shapes a hand-edited `mj.config.cjs` realistically produces — a real
+     * boolean, or the strings "true"/"false" — rather than truthy-testing, under
+     * which the string "false" would enable the option.
+     */
+    public featureOptionBool(featureName: string, optionName: string, defaultValue: boolean): boolean {
+        const raw = this.getFeature(featureName)?.options?.find(o => o.name === optionName)?.value;
+        if (raw === undefined || raw === null) {
+            return defaultValue;
+        }
+        if (typeof raw === 'boolean') {
+            return raw;
+        }
+        if (typeof raw === 'string') {
+            const normalized = raw.trim().toLowerCase();
+            if (normalized === 'true') return true;
+            if (normalized === 'false') return false;
+        }
+        return defaultValue;
     }
 
     public featureEnabled(featureName: string): boolean {
@@ -633,6 +687,63 @@ export class AdvancedGeneration {
             }
         } catch (error) {
             LogError(`AdvancedGeneration:Error in generateEntityName: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Generate an improved human-readable DISPLAY NAME for an entity.
+     *
+     * Only meaningful for entities whose names remain opaque after the
+     * deterministic `createDisplayName()` conversion — see
+     * `assessDisplayNameOpacity()`. The caller is expected to have applied that
+     * filter; this method does not re-derive it, so an explicit request for a
+     * clean name is honoured rather than silently skipped.
+     *
+     * @param entity - The entity's name, table name, description and field names.
+     *                 Field names matter: they are usually the strongest evidence
+     *                 for what an abbreviated table name means.
+     * @param contextUser - User context for the prompt run.
+     */
+    public async generateEntityDisplayName(
+        entity: {
+            Name: string;
+            SchemaName?: string;
+            BaseTable?: string;
+            Description?: string | null;
+            Fields?: Array<{ Name: string; Type?: string }>;
+        },
+        contextUser: UserInfo
+    ): Promise<EntityDisplayNameResult | null> {
+        if (!this.featureEnabled('EntityDisplayNames')) {
+            return null;
+        }
+
+        try {
+            const prompt = await this.getPromptEntity('CodeGen: Entity Display Name Generation', contextUser);
+
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = {
+                entityName: entity.Name,
+                schemaName: entity.SchemaName ?? '',
+                tableName: entity.BaseTable ?? '',
+                description: entity.Description ?? '',
+                fields: (entity.Fields ?? []).map(f => ({ name: f.Name, type: f.Type ?? '' }))
+            };
+            params.contextUser = contextUser;
+
+            const result = await this.executePrompt<EntityDisplayNameResult>(params);
+
+            if (result.success && result.result?.displayName) {
+                LogStatus(`Entity display name generated for ${entity.Name}: ${result.result.displayName}`);
+                return result.result;
+            } else {
+                LogError(`AdvancedGeneration:Entity display name generation failed: ${result.errorMessage}`);
+                return null;
+            }
+        } catch (error) {
+            LogError(`AdvancedGeneration:Error in generateEntityDisplayName: ${error}`);
             return null;
         }
     }
