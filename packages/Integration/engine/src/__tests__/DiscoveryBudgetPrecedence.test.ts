@@ -27,7 +27,6 @@ import type {
     FetchBatchResult,
 } from '../BaseIntegrationConnector.js';
 import type { StreamDiscoveryOptions, PkPickOptions } from '../StreamingDiscovery.js';
-import { PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE } from '../StreamingDiscovery.js';
 
 /** The three budgets as `DiscoverFieldsViaFetch` resolved them for a given call. */
 type ResolvedBudgets = { BatchSize: number; MaxRecords: number; TimeBudgetMs: number | undefined };
@@ -85,17 +84,13 @@ const NO_USER = {} as unknown as UserInfo;   // passed straight through to the o
 /**
  * Engine defaults, asserted here so a silent change to one shows up as a test failure.
  *
- * MaxRecords is the per-table sample TARGET and is deliberately the classifier's significance floor,
- * not a round number: 50 rows fully answers two of the three questions sampling asks (significant
- * primary key, custom-discoverable columns) and only the third (largest observed string) benefits
- * from more — and that one has its own safety nets. Sourced from the constant rather than restated,
- * so the two cannot drift apart.
+ * MaxRecords is a STATISTICS budget, deliberately far above the primary-key significance FLOOR
+ * (PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE). It was briefly lowered to that floor, which cost width
+ * fidelity on every connector whose catalog declares no lengths — for those the sample is the only
+ * width source, and a column sized too narrow SKIPS records at sync time. A floor is a minimum, not
+ * a target to sample down to; this assertion exists to stop that conflation recurring.
  */
-const DEFAULTS = {
-    BatchSize: 500,
-    MaxRecords: PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE,
-    TimeBudgetMs: 5 * 60 * 1000,
-} as const;
+const DEFAULTS = { BatchSize: 500, MaxRecords: 500, TimeBudgetMs: 5 * 60 * 1000 } as const;
 
 const ENV_KEYS = [
     'MJ_INTEGRATION_DISCOVERY_TIME_BUDGET_MS',

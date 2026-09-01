@@ -378,15 +378,27 @@ export interface RateLimitPolicy {
 }
 
 /**
- * Records sampled per table during discovery, by default.
+ * Records STREAMED per table during discovery, by default.
  *
- * Deliberately equal to the classifier's significance floor
- * ({@link PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE}): sampling exists to answer three questions, and 50 rows
- * fully answers two of them. Raising it only sharpens the third (largest observed string), which has
- * its own safety nets, so the extra rows are paid on every object of every connection to improve one
- * answer in three. Per-connection `discoveryMaxRecords` raises it where that trade is worth making.
+ * This is a STATISTICS budget, not a fetch-fan-out budget, and the distinction is the whole reason
+ * it is large. Streaming N rows from one object is paging one endpoint; it does not multiply into
+ * per-parent requests. What costs requests is DESCENDING into parents to build a child's sample, and
+ * that is bounded separately by the child's own demand — see StreamRecordsForDiscovery, which pulls
+ * exactly as many parents as it takes to fill the child, however many rows each parent's own scan
+ * happens to read.
+ *
+ * It was briefly lowered to {@link PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE} on the reasoning that 50 rows
+ * answer the primary-key question and the other two answers have safety nets. Both halves were
+ * wrong:
+ *   - Several connectors declare NO widths at all (YourMembership states `MaxLength: null` in its
+ *     own catalog and unions in the sampler's result), so the sample is the ONLY source of column
+ *     width. Ten times fewer observed values means narrower columns, and a value too wide for its
+ *     column is SKIPPED at sync time, not truncated — records silently lost.
+ *   - A sparse custom column present on ~1% of records is near-certain in 500 rows and a coin flip
+ *     in 50.
+ * The primary-key floor is a MINIMUM for significance, never a target to sample down to.
  */
-const DEFAULT_DISCOVERY_SAMPLE_TARGET = PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
+const DEFAULT_DISCOVERY_SAMPLE_TARGET = 500;
 
 export abstract class BaseIntegrationConnector {
 
@@ -685,7 +697,11 @@ export abstract class BaseIntegrationConnector {
             // objects still get no PK (content-hash identity handles dedup).
             // #A4 — tell the PK picker whether the scan saw the WHOLE stream; a time-budget-truncated scan
             // must not yield a confident soft key from a partial prefix.
-            const soft = pickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason !== 'time-budget' });
+            // A scan is COMPLETE only when the source ran out of rows. A time budget and a record cap
+            // both leave a PREFIX, and a prefix must not earn a confident soft key: over a short one
+            // an ordinary foreign key is very likely to look near-unique, and a wrong soft key does
+            // not error — it silently merges two source records onto one row.
+            const soft = pickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason === 'exhausted' });
             if (soft.Field) { pkFieldNames = [soft.Field]; pkReason = `[soft-fallback] ${soft.Reason}`; }
         }
         const pkFields = new Set<string>(pkFieldNames);
@@ -793,19 +809,8 @@ export abstract class BaseIntegrationConnector {
         // discovery budget an operator actually wants to lower for a slow source the ONLY one that needed
         // an app setting and a process restart. Same precedence as the others now:
         // explicit opts > per-connection Configuration > operator env > default.
-        // The DEFAULT is the per-table sample target: ~50 records, the same figure the value-statistic
-        // classifier treats as significant (PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE). It was 500, which is
-        // 10x what any of the three questions sampling answers actually needs:
-        //   - a significant primary key — 50 rows IS the significance floor; more changes no verdict,
-        //   - custom-discoverable columns — a column present in the data shows up almost immediately,
-        //   - the largest string — the only one that genuinely benefits from more rows.
-        // That last one is why this is a KNOB and not a constant. Width has real safety nets (the
-        // bucket pads to 2x the observed max, the overlay only ever GROWS a width, and a value that
-        // overflows at sync time is recorded as a widening candidate rather than lost), so paying 10x
-        // the discovery time on every object by default to sharpen one of three answers is the wrong
-        // trade. A connection that needs deeper width fidelity raises `discoveryMaxRecords`.
-        //
-        // Precedence unchanged: explicit opts > per-connection Configuration > operator env > default.
+        // The DEFAULT is a STATISTICS budget — see DEFAULT_DISCOVERY_SAMPLE_TARGET for why it is large
+        // and why lowering it costs width fidelity and custom-column coverage rather than buying speed.
         const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', DEFAULT_DISCOVERY_SAMPLE_TARGET);
         // Announce intent AND cost. Until now only the FAILURE branch below said anything, so a
         // healthy-but-slow object, an object grinding out its whole time budget, and one that will
@@ -827,7 +832,10 @@ export abstract class BaseIntegrationConnector {
                     deadlineMs,
                     watchKey,
                 ),
-                { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
+                // RecordCap is the producer's target, handed to the scan so it can tell "the source ran
+                // out" from "we stopped it at the target". Without it a capped prefix reports as a
+                // complete scan and earns the lenient near-unique soft-key rule it has not earned.
+                { Discovery: { TimeBudgetMs: timeBudgetMs, RecordCap: maxRecords }, ReadOnly: true },
             );
             const tookMs = Date.now() - startedMs;
             const seen = watchdog.Peek(watchKey);

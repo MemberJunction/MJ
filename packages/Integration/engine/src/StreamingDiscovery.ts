@@ -32,6 +32,15 @@ export interface StreamDiscoveryOptions {
      * (cap × columns) — never the raw values. Default 2000: enough for significance, cheap on CPU/RAM.
      */
     CompositeSampleRowCap?: number;
+    /**
+     * The record target the PRODUCER of this stream is enforcing, if any.
+     *
+     * Supplied so the scan can distinguish "the source ran out of rows" from "we stopped it" — the
+     * generator enforces the cap by returning, which the scan would otherwise read as exhaustion.
+     * Only affects {@link StreamDiscoveryResult.StoppedReason}; the scan never stops early on its
+     * own account because of it.
+     */
+    RecordCap?: number;
     /** Injectable clock (for tests). Defaults to Date.now. */
     Now?: () => number;
 }
@@ -62,8 +71,16 @@ export interface DiscoveredColumnStat {
 export interface StreamDiscoveryResult {
     Columns: DiscoveredColumnStat[];
     RowsScanned: number;
-    /** Why the scan ended — surfaced so a time-capped (partial) corpus is never silently treated as complete. */
-    StoppedReason: 'exhausted' | 'time-budget';
+    /**
+     * Why the scan ended, so a PARTIAL corpus is never silently treated as complete.
+     *
+     * `record-cap` is not a variant of `exhausted`. Hitting the sample target means the stream had
+     * more to give — the corpus is a PREFIX of the table, exactly like a time-capped one, and the
+     * key pickers must judge it with the same suspicion. Reporting it as `exhausted` let a 50-row
+     * prefix of a ten-million-row table qualify for the lenient near-unique soft-key rule, where an
+     * ordinary foreign key is very likely to look unique.
+     */
+    StoppedReason: 'exhausted' | 'time-budget' | 'record-cap';
     /**
      * Bounded per-row cell-hash sample (column → stable value-hash for the row's non-null cells),
      * capped at {@link StreamDiscoveryOptions.CompositeSampleRowCap}. Feeds composite-key discovery
@@ -114,7 +131,11 @@ export async function discoverFromStream(
     const acc = new Map<string, ColumnAcc>();
     const rowSamples: Array<Record<string, string>> = [];
     let totalRows = 0;
-    let stoppedReason: 'exhausted' | 'time-budget' = 'exhausted';
+    let stoppedReason: 'exhausted' | 'time-budget' | 'record-cap' = 'exhausted';
+    // The record cap fires in the GENERATOR feeding this scan (it simply returns), so the stream
+    // ends indistinguishably from a table that ran out of rows. Told the cap, the scan can tell the
+    // two apart: reaching it exactly means the producer stopped us, not that the source was done.
+    const recordCap = opts.RecordCap;
 
     for await (const record of toAsyncIterable(records)) {
         totalRows++;
@@ -130,6 +151,10 @@ export async function discoverFromStream(
         }
         if (now() - start > timeBudgetMs) {
             stoppedReason = 'time-budget';
+            break;
+        }
+        if (recordCap != null && totalRows >= recordCap) {
+            stoppedReason = 'record-cap';
             break;
         }
     }
@@ -363,11 +388,22 @@ function* combinations<T>(items: T[], k: number): Generator<T[]> {
 }
 
 /**
- * Key-ness of a column SUBSET over the cached row-hash sample, via the Chao1 nonparametric
- * cardinality estimator. A subset is a PROVABLE key iff its estimated value-domain provably EXCEEDS
- * the sample (D̂ > n) — i.e. the domain has NOT saturated: we keep seeing brand-new tuples, the
- * signature of an identifier, not a category. Robust to skew (it reads the singleton/doubleton
- * structure of the repeats, not a raw distinct ratio) and CPU-cheap (one pass over the row-hashes).
+ * Key-ness of a column SUBSET over the cached row-hash sample.
+ *
+ * TWO conditions, and the first is the one that makes it PROVABLE:
+ *
+ *  1. **No observed duplicate.** Every tuple in the sample occurs exactly once (`d === n`). A
+ *     repeated tuple is direct, positive disproof — the column cannot be a key, and no amount of
+ *     domain estimation can argue otherwise.
+ *  2. **The domain has not saturated** (Chao1 `D̂ > n`). Given all-distinct values, this separates an
+ *     identifier from a small category that merely happens not to have collided yet in `n` rows.
+ *
+ * Condition 1 used to be missing, and Chao1 alone is not a uniqueness test — it estimates how large
+ * the value domain is, which is evidence about FUTURE collisions, not about observed ones. Worse,
+ * its bias-corrected branch (`f2 === 0`) grows QUADRATICALLY in the singleton count, so a column with
+ * 92 distinct values over 100 rows — nine of them the same value — scored D̂ ≈ 4187 and was declared
+ * a provable primary key. That does not error: the sync silently merges two source records onto one
+ * row, which is data loss, and the mirror image of the duplicate-record failure.
  */
 function subsetKeyness(rowSamples: Array<Record<string, string>>, cols: string[], minRows: number): { Dhat: number; isKey: boolean } {
     const n = rowSamples.length;
@@ -383,7 +419,8 @@ function subsetKeyness(rowSamples: Array<Record<string, string>>, cols: string[]
     // Chao1 (bias-corrected when no doubletons): D̂ blows up when values are mostly singletons
     // (domain ≫ sample → unsaturated → key); collapses toward `d` when repeats dominate (saturated).
     const Dhat = f2 > 0 ? d + (f1 * f1) / (2 * f2) : d + (f1 * (f1 - 1)) / 2;
-    return { Dhat, isKey: n >= minRows && Dhat > n };
+    // `d === n` FIRST: an observed duplicate disproves keyness outright, whatever the estimator says.
+    return { Dhat, isKey: n >= minRows && d === n && Dhat > n };
 }
 
 /**
