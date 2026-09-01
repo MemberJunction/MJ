@@ -965,6 +965,37 @@ exactly as it did before.
 
 ---
 
+### 12.9 Reuse by meaning — the three component-tree Actions
+
+Stories only pay off if something can search them. Three Actions close that loop, and they are the
+agent-facing surface over everything §8.1–§8.2 built:
+
+| Action | What it answers |
+|---|---|
+| **Browse ML Component Tree** | *What kinds of parts exist, and what does this one inherit?* Naming a type returns its **resolved profile** — merged banks, gates and slots — **with provenance**, so an agent can say *where* a constraint came from rather than only that it exists |
+| **Find Reusable Components** | *Is there already a part that measures this?* Cosine over `StoryVector`, filtered to what can legally fill the slot |
+| **Validate Component Graph** | *Is this composition buildable?* The same `validateComponentGraph` the Architect gate runs, exposed so a caller can check its own proposal first |
+
+Three deliberate constraints on the reuse search:
+
+- **The caller supplies the query embedding.** The stories were embedded with a specific model; a
+  vector from a different one yields distances that look like numbers and mean nothing. Making that
+  the caller's responsibility keeps the mismatch impossible to introduce here by accident, and the
+  Action refuses anything that is not a clean numeric array rather than passing it through.
+- **Similarity is only half the answer.** A semantically perfect component is useless if it cannot
+  legally go where the caller wants to put it, so `ForComponentTypeID` + `ForSlotName` filter by the
+  slot's `Accepts` rule — the same rule `validateComponentGraph` enforces, applied as a filter rather
+  than as an error. Excluded matches are *reported*, not silently dropped.
+- **Approved and trained only, by default.** Reusing a `Draft` component would silently propagate
+  unreviewed work into a new model.
+
+Ranking uses the platform's `SimpleVectorService` (`@memberjunction/ai-vectors-memory`) rather than a
+private cosine, and a component whose stored vector cannot be parsed is **skipped with a warning** —
+coercing it would place it in the ranking at a distance that means nothing, which is worse than
+leaving it out.
+
+---
+
 ## 13. The security model
 
 Predictive Studio touches client data, runs arbitrary trained models against record sets, and lets an agent draft queries — so security is treated as a first-class concern, enforced at code boundaries, not by convention.
@@ -1458,7 +1489,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | `TrainingEngine` (immutable models, locked holdout, lineage) | ✅ built |
 | `MLModelInferenceProcessor` ('ML Model' RSP work type, ephemeral/write-back) | ✅ built |
 | `ExperimentOrchestrator` (waves, leaderboard, pruning, budget-in-runner) | ✅ built |
-| **6 Remote Operations** (Train/Score/RunFeaturePipeline/Start+Control Experiment/Promote) + **4 Actions** | ✅ built |
+| **6 Remote Operations** (Train/Score/RunFeaturePipeline/Start+Control Experiment/Promote) + **8 Actions** | ✅ built |
 | **Feature Pipelines** (category route — `FeaturePipelineEngine` + KH panel; no new entity) | ✅ built |
 | **Model Development Agent** + 3 sub-agents + **ML Experiment Results artifact** + Angular viewer | ✅ built |
 | **Security model** (scope gate, PK field-name guard, UUID gate, promotion state machine, sign-off reason) | ✅ built |
@@ -1471,7 +1502,8 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | Component **composition** execution (sidecar `component_graph`: bagging/stacking/frozen reuse) — makes `reify`/`compose` trainable | ⏳ planned |
 | **Architect sub-agent** (commit/defer/reify/compose + graph validation + execution gate) — §12.7 | ✅ built |
 | **Model stories** (deterministic context + one validated prompt, per-component prose, promotion hook) — §12.8 | ✅ built |
-| Reuse-by-meaning search + Components tab | ⏳ planned |
+| **Reuse-by-meaning search** + Browse/Validate Actions (8 PS Actions total) — §12.9 | ✅ built |
+| Studio **Components tab** (tree + resolved-profile inspector + compose UI) | ⏳ planned |
 | Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).

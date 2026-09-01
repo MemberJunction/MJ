@@ -26,6 +26,7 @@ export * from './score-record-set.runner';
 export * from './run-experiment.action';
 export * from './run-experiment.deps';
 export * from './promote-model.action';
+export * from './component-tree.actions';
 export * from './promote-model.gate';
 export * from './model-scoring-action-generator';
 export * from './schedule-model-scoring.action';
@@ -35,6 +36,11 @@ import { PredictiveStudioScoreRecordSetAction } from './score-record-set.action'
 import { PredictiveStudioRunExperimentAction } from './run-experiment.action';
 import { PredictiveStudioPromoteModelAction } from './promote-model.action';
 import { PredictiveStudioScheduleModelScoringAction } from './schedule-model-scoring.action';
+import {
+  PredictiveStudioBrowseComponentTreeAction,
+  PredictiveStudioFindReusableComponentsAction,
+  PredictiveStudioValidateComponentGraphAction,
+} from './component-tree.actions';
 
 /**
  * Tree-shaking anchor — call from a server bootstrap to guarantee the
@@ -48,4 +54,7 @@ export function LoadPredictiveStudioActions(): void {
   void PredictiveStudioRunExperimentAction;
   void PredictiveStudioPromoteModelAction;
   void PredictiveStudioScheduleModelScoringAction;
+  void PredictiveStudioBrowseComponentTreeAction;
+  void PredictiveStudioFindReusableComponentsAction;
+  void PredictiveStudioValidateComponentGraphAction;
 }
