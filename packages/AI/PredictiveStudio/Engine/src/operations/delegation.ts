@@ -50,6 +50,7 @@ import type {
   ModelingPlanSpec,
   Budget,
 } from '@memberjunction/predictive-studio-core';
+import { MetadataComponentMaterializer } from '../components/materialization-seam';
 
 // ----- Training ---------------------------------------------------------------
 
@@ -75,6 +76,9 @@ export async function buildTrainingDeps(provider: IMetadataProvider, user: UserI
     artifactStore: buildArtifactStore(providerId, entityFactory),
     contextUser: user,
     provider,
+    // Project every trained model into the component graph (root `MJ: ML Components` row +
+    // bindings onto real MJ entities/fields). Best-effort by contract — never fails a train.
+    componentMaterializer: new MetadataComponentMaterializer(),
   };
 }
 

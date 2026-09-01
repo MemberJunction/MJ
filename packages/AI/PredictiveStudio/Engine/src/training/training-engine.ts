@@ -27,7 +27,7 @@
  * is unit-testable with no live database and no live sidecar.
  */
 
-import { LogError } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
   type TrainRequest,
@@ -113,6 +113,7 @@ export class TrainingEngine {
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
       const model = await this.createModelRow(resolved, input, assembly, split, response, deps);
+      await this.materializeComponents(model, resolved, assembly, deps);
       await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, deps);
       return { model, run };
     } catch (err) {
@@ -167,6 +168,52 @@ export class TrainingEngine {
     run.StartedAt = new Date();
     await this.saveOrThrow(run, 'create ML Training Run');
     return run;
+  }
+
+  /**
+   * Project the trained model into the component graph — the root `MJ: ML Components` row
+   * plus the bindings tying each feature and output to a real MJ entity/field. Runs only
+   * when a materializer seam is injected, and is **best-effort by contract**: the seam never
+   * throws, and a warning it returns is logged, not propagated. A model that trained fine
+   * must never be lost to a provenance write.
+   */
+  private async materializeComponents(
+    model: MJMLModelEntity,
+    resolved: ResolvedPipeline,
+    assembly: FeatureAssemblyResult,
+    deps: TrainingDeps,
+  ): Promise<void> {
+    if (!deps.componentMaterializer) {
+      return;
+    }
+    try {
+      const result = await deps.componentMaterializer.materializeTrainedModel(
+        {
+          model,
+          algorithmID: resolved.pipeline.AlgorithmID,
+          componentName: `${resolved.pipeline.Name} v${model.Version}`,
+          targetEntityName: resolved.targetEntityName,
+          targetVariable: resolved.targetVariable,
+          problemType: resolved.problemType,
+          featureSchema: assembly.featureSchema,
+          datedSources: resolved.datedSources,
+          hyperparameters: resolved.hyperparameters,
+        },
+        { entityFactory: deps.entityFactory, contextUser: deps.contextUser },
+        deps.provider,
+      );
+      for (const w of result.Warnings) {
+        LogStatus(`TrainingEngine: component materialization — ${w}`);
+      }
+    } catch (err) {
+      // The seam's contract is not to throw, but a third-party implementation might. The model
+      // is already saved and the artifact already stored — swallowing here is what keeps a
+      // successful train from being recorded as a failed run over a provenance write.
+      LogError(
+        `TrainingEngine: component materialization threw for model ${model.ID} (training is unaffected): ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /** Mark the run `Completed`, attach the model + results, and record observations. */

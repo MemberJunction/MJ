@@ -31,6 +31,11 @@ import type {
   FetchRowsResult,
   SourceRow,
 } from '../../feature-assembly';
+import type {
+  IModelComponentMaterializer,
+  MaterializationResult,
+  TrainedModelContext,
+} from '../../components/component-materializer';
 
 /**
  * Unit tests for the TrainingEngine. NO live DB, NO live sidecar — every seam is
@@ -458,5 +463,60 @@ describe('TrainingEngine.trainModel — as-of dated sources round-trip', () => {
     const { deps } = buildDeps();
     const { model } = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(JSON.parse(model.Lineage!).datedSources).toEqual([]);
+  });
+});
+
+describe('TrainingEngine.trainModel — component materialization hook', () => {
+  /** Records what the engine handed the seam; can be told to misbehave. */
+  class RecordingMaterializer implements IModelComponentMaterializer {
+    public Calls: TrainedModelContext[] = [];
+    constructor(
+      private readonly result: MaterializationResult = { ComponentID: 'component-1', BindingCount: 3, Warnings: [] },
+      private readonly throwWith: string | null = null,
+    ) {}
+    async materializeTrainedModel(ctx: TrainedModelContext): Promise<MaterializationResult> {
+      this.Calls.push(ctx);
+      if (this.throwWith) throw new Error(this.throwWith);
+      return this.result;
+    }
+  }
+
+  it('hands the seam the saved model plus everything needed to bind its inputs and outputs', async () => {
+    const engine = buildEngine();
+    const materializer = new RecordingMaterializer();
+    const { deps } = buildDeps();
+    const { model, run } = await engine.trainModel({ pipelineId: 'pipe-1' }, { ...deps, componentMaterializer: materializer });
+
+    expect(materializer.Calls).toHaveLength(1);
+    const ctx = materializer.Calls[0];
+    expect(ctx.model).toBe(model);
+    expect(ctx.algorithmID).toBe('algo-xgb');
+    expect(ctx.componentName).toBe('Member Renewal Predictor v5');
+    expect(ctx.targetEntityName).toBe('Members');
+    expect(ctx.targetVariable).toBe('Renewed');
+    expect(ctx.problemType).toBe('classification');
+    expect(ctx.featureSchema.map((f) => f.Name)).toEqual(['tenure', 'events_at_signup', 'city']);
+    expect(ctx.hyperparameters).toEqual({ max_depth: 4 });
+    expect(run.Status).toBe('Completed');
+  });
+
+  it('is skipped entirely when no materializer is injected (every existing caller unchanged)', async () => {
+    const engine = buildEngine();
+    const { deps } = buildDeps();
+    const { run } = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(run.Status).toBe('Completed');
+  });
+
+  it('does NOT fail the run when the seam throws — the model is already trained and saved', async () => {
+    const engine = buildEngine();
+    const materializer = new RecordingMaterializer(undefined, 'component store is down');
+    const { deps } = buildDeps();
+    const { model, run } = await engine.trainModel(
+      { pipelineId: 'pipe-1' },
+      { ...deps, componentMaterializer: materializer },
+    );
+    expect(run.Status).toBe('Completed');
+    expect(model.Status).toBe('Draft');
+    expect(model.ArtifactFileID).toBeTruthy();
   });
 });
