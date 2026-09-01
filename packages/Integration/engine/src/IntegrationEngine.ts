@@ -5059,7 +5059,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // re-establish the possibly-cleared record map and SKIP the write — leaving __mj_UpdatedAt
             // and the integration LastSynced columns untouched, exactly like the content-hash skip path.
             this.SetEntityFields(entity, record.MappedFields);
-            if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo)) {
+            if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo, record)) {
                 await this.QueueRecordMap(
                     recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                     entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
@@ -5244,7 +5244,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Uses MJ's built-in dirty tracking (zero custom comparison logic). Critical for
         // connectors without server-side date filtering (e.g., YM) where every sync re-fetches
         // all records. Without this, 50k+ records get re-written every run.
-        if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo)) {
+        if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo, record)) {
             result.RecordsSkipped++;
             // Re-establish the record map even when the write is skipped — see the content-hash skip
             // above for the full rationale (a key-field/PK match can land here with no map row, and
@@ -5672,13 +5672,35 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private needsSyncStateRepair(
         entity: { Get(fieldName: string): unknown },
-        entityInfo: { Fields: Array<{ Name: string }> } | undefined
+        entityInfo: { Fields: Array<{ Name: string }> } | undefined,
+        record?: MappedRecord
     ): boolean {
         if (!entityInfo) return false;
         const has = (name: string) => entityInfo.Fields.some(f => f.Name === name);
         if (has('__mj_integration_IsTombstoned') && entity.Get('__mj_integration_IsTombstoned') === true) return true;
         if (has('__mj_integration_SyncMessage') && entity.Get('__mj_integration_SyncMessage') != null) return true;
         if (has('__mj_integration_SyncStatus') && entity.Get('__mj_integration_SyncStatus') !== 'Active') return true;
+        // A STALE CONTENT HASH is repair-worthy for the same reason: skipping the write freezes it.
+        //
+        // The case that produces one is a source that stops sending a column. The mapper OMITS an
+        // absent key rather than mapping it to null (a missing value is not a null value), so the
+        // recomputed hash differs — but SetEntityFields never touches that column either, so the
+        // entity is NOT dirty and the skip above fires. The stored hash is therefore never refreshed
+        // and the mismatch is permanent: that row loses the content-hash fast path FOREVER, paying a
+        // full load and field-by-field compare on every sync until some other field happens to
+        // change. One repair write here re-converges it, and every later sync skips it cheaply.
+        //
+        // Deliberately NOT treated as "the column is gone" — absence in the data is not evidence of
+        // absence in the schema (§ the same rule the field-level deactivation follows). The value is
+        // left exactly as it is; only the hash is brought back in line with what we are actually
+        // mapping.
+        if (record && has(CONTENT_HASH_COLUMN)) {
+            const storedHash = entity.Get(CONTENT_HASH_COLUMN);
+            if (typeof storedHash === 'string' && storedHash.length > 0
+                && storedHash !== computeContentHash(record.MappedFields ?? {})) {
+                return true;
+            }
+        }
         return false;
     }
 
