@@ -8,6 +8,7 @@
  */
 
 export * from './types';
+export * from './holdout';
 export * from './artifact-store';
 export * from './seams';
 export * from './training-engine';

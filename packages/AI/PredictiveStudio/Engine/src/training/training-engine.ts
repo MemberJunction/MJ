@@ -47,6 +47,7 @@ import {
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
+import { carveLockedHoldout, type HoldoutSplit } from './holdout';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from './types';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
@@ -68,14 +69,6 @@ interface ResolvedPipeline {
    * without this round trip an as-of feature simply computes to null at score time.
    */
   datedSources: DatedSourceSpec[];
-}
-
-/** The result of carving a matrix into a training portion + a locked holdout. */
-interface HoldoutSplit {
-  training: MatrixData;
-  lockedHoldout: MatrixData;
-  holdoutRowCount: number;
-  trainingRowCount: number;
 }
 
 /**
@@ -296,19 +289,9 @@ export class TrainingEngine {
    * `LockedHoldoutFraction` of rows; it is never sent in the training `data`.
    */
   private carveLockedHoldout(matrix: MatrixData, validation: ValidationStrategy, _targetVariable: string): HoldoutSplit {
-    const fraction = clamp01(validation.LockedHoldoutFraction);
-    const total = matrix.rows.length;
-    const holdoutCount = total > 1 ? Math.min(Math.max(Math.floor(total * fraction), fraction > 0 ? 1 : 0), total - 1) : 0;
-    const cut = total - holdoutCount;
-
-    const trainingRows = matrix.rows.slice(0, cut);
-    const holdoutRows = matrix.rows.slice(cut);
-    return {
-      training: { columns: matrix.columns, rows: trainingRows },
-      lockedHoldout: { columns: matrix.columns, rows: holdoutRows },
-      holdoutRowCount: holdoutRows.length,
-      trainingRowCount: trainingRows.length,
-    };
+    // Delegates to the SHARED carve so the statistics pre-pass describes exactly the rows this
+    // trains on — see `training/holdout.ts` for why that has to be one implementation.
+    return carveLockedHoldout(matrix, validation);
   }
 
   /** Translate the pipeline's {@link ValidationStrategy} into a sidecar {@link ValidationConfig}. */
@@ -444,13 +427,6 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   }
 }
 
-/** Clamp a fraction into [0, 1). */
-function clamp01(value: number): number {
-  if (!Number.isFinite(value) || value < 0) {
-    return 0;
-  }
-  return value > 1 ? 1 : value;
-}
 
 /** Decode a base64 artifact string into raw bytes (no Buffer dependency leak in types). */
 function decodeArtifact(b64: string): Uint8Array {

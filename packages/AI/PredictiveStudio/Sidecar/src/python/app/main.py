@@ -5,9 +5,11 @@ CPU-only tabular ML training + inference. The server side of the contract in
 feature matrix and orchestrates; this service fits/serves the model.
 
 Endpoints:
-  * ``GET  /health``  — liveness + registered algorithms + warm-cache depth
-  * ``POST /train``   — fit a model, return artifact + fitted preprocessing + metrics
-  * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing
+  * ``GET  /health``   — liveness + registered algorithms + warm-cache depth
+  * ``POST /train``    — fit a model, return artifact + fitted preprocessing + metrics
+  * ``POST /predict``  — score rows by APPLYING (never re-fitting) frozen preprocessing
+  * ``POST /describe`` — READ-ONLY statistics pre-pass over the training partition; fits
+    nothing and returns no artifact (see :mod:`app.describe`)
 """
 
 from __future__ import annotations
@@ -18,8 +20,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import algorithms, artifacts, metrics, preprocessing
+from . import algorithms, artifacts, describe as describe_mod, metrics, preprocessing
 from .schemas import (
+    DescribeRequest,
+    DescribeResponse,
     HealthResponse,
     PredictRequest,
     PredictResponse,
@@ -619,3 +623,28 @@ def _classification_prediction(
     else:
         score = float(np.ravel(scores)[i])
     return Prediction(score=score, contributions=contributions, **{"class": label})
+
+
+# ---------------------------------------------------------------------------
+# /describe
+# ---------------------------------------------------------------------------
+
+
+@app.post("/describe", response_model=DescribeResponse)
+def describe(req: DescribeRequest) -> DescribeResponse:
+    """Measure the training partition — the statistics pre-pass (read-only).
+
+    Returns per-feature and target statistics so the Model Development Agent can choose an
+    architecture from evidence rather than from the goal statement alone. Nothing is fitted,
+    cached, or persisted; the caller sends ONLY the training partition, because a statistic
+    measured on the locked holdout would leak into every downstream decision.
+
+    Raises 400 on an empty matrix or a target column that is not in the data — both are
+    caller bugs that would otherwise surface as an opaque numeric error deep in the pass.
+    """
+    if not req.data or not req.data.rows:
+        raise HTTPException(status_code=400, detail="describe requires a non-empty inline `data` matrix")
+    try:
+        return describe_mod.describe(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

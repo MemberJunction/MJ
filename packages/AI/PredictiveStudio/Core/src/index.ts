@@ -18,4 +18,5 @@ export * from './modeling-plan-schema';
 export * from './metrics-util';
 export * from './trust';
 export * from './component-model';
+export * from './statistics-spec';
 export * from './component-resolution';

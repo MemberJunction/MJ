@@ -266,3 +266,104 @@ export interface PredictResponse {
  * (`MLModel.FittedPreprocessing`, plan §4.3) and round-tripped unchanged.
  */
 export type FittedPreprocessing = Record<string, unknown>;
+
+/**
+ * `POST /describe` request body — the **statistics pre-pass** (additive; the sidecar's third
+ * endpoint alongside `/train` and `/predict`). MJ assembles the TRAINING partition through the same
+ * `FeatureAssemblyExecutor` and the same locked-holdout carve it uses for training, then sends only
+ * the training rows here. The locked holdout is never described: measuring it would leak into every
+ * downstream decision and the "honest number" would stop being honest.
+ *
+ * The endpoint is read-only — it fits nothing, stores nothing, and returns no artifact.
+ */
+export interface DescribeRequest {
+  /** Classification or regression — decides which association measure is computed. */
+  problem_type: ProblemType;
+  /** Ordered feature schema describing each column (same shape `/train` receives). */
+  feature_schema: FeatureSchemaEntry[];
+  /** Target/label column name; must be present in `data.columns`. */
+  target: string;
+  /** The TRAINING partition only. */
+  data: MatrixData;
+  /**
+   * Cap on how many distinct values are enumerated per categorical column in `top_values`.
+   * Omitted ⇒ sidecar default. Bounds the response for a high-cardinality column.
+   */
+  top_values_limit?: number;
+  /**
+   * Also return the pairwise |correlation| matrix over numeric features, which the collinearity
+   * hints are derived from. Omitted/false ⇒ skipped (it is O(features²) and not always wanted).
+   */
+  include_correlations?: boolean;
+}
+
+/**
+ * `POST /describe` response. Deliberately mirrors `DatasetStatistics` / `FeatureStatistics` in
+ * `statistics-spec.ts` in snake_case, so the TypeScript side maps field-for-field with no
+ * interpretation — the hints themselves are derived in TypeScript (`deriveFeatureHints`), from
+ * these measurements, so the thresholds stay in one place and stay testable without Python.
+ */
+export interface DescribeResponse {
+  /** Rows described (the training partition). */
+  row_count: number;
+  /** Columns described, excluding the target. */
+  feature_count: number;
+  /** Label distribution. */
+  target: DescribeTarget;
+  /** Per-feature measurements, in `feature_schema` order. */
+  features: DescribeFeature[];
+  /**
+   * `{ "a|b": r }` for numeric feature pairs, present only when `include_correlations` was set.
+   * The key joins the two column names with `|` in `feature_schema` order.
+   */
+  correlations?: Record<string, number>;
+  /** Wall-clock time for the pass. */
+  duration_sec: number;
+  /** Columns that could not be described, and why — never silently dropped. */
+  warnings: string[];
+}
+
+/** Label distribution as measured by `/describe`. Exactly one of `classes` / `numeric` is present. */
+export interface DescribeTarget {
+  name: string;
+  /** Rows carrying a usable label. */
+  labeled_row_count: number;
+  /** Class counts, descending (classification). */
+  classes?: Array<{ value: string; count: number }>;
+  /** Label moments (regression). */
+  numeric?: DescribeNumericSummary;
+}
+
+/** Numeric moments shared by the target and numeric features. */
+export interface DescribeNumericSummary {
+  mean: number;
+  std: number;
+  min: number;
+  max: number;
+  /** `[p25, p50, p75]`. */
+  quartiles: [number, number, number];
+  /** Fisher skewness; omitted when undefined (zero variance). */
+  skewness?: number;
+}
+
+/** One feature's measurements from `/describe`. */
+export interface DescribeFeature {
+  name: string;
+  kind: FeatureKind | string;
+  /** Fraction of rows that are null/NaN. */
+  missing_fraction: number;
+  /** Distinct non-null values. */
+  distinct_count: number;
+  /** Numeric moments (numeric columns only). */
+  numeric?: DescribeNumericSummary;
+  /**
+   * Association with the target, comparable across features:
+   * classification → single-feature AUC in `[0.5, 1]`; regression → `|Pearson r|` in `[0, 1]`.
+   * Omitted when it cannot be computed.
+   */
+  target_association?: number;
+  /** Mutual information with the target, in nats. Omitted when it cannot be computed. */
+  mutual_information?: number;
+  /** Most frequent values (categorical columns only), descending by count. */
+  top_values?: Array<{ value: string; count: number }>;
+}
