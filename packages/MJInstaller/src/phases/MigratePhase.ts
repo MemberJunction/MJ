@@ -24,6 +24,7 @@ import type { PartialInstallConfig } from '../models/InstallConfig.js';
 import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
+import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
 
 /**
  * Input context for the migrate phase.
@@ -39,9 +40,11 @@ export interface MigrateContext {
   Emitter: InstallerEventEmitter;
   /**
    * Release version tag (e.g., `"v5.9.0"`). Used to pin the CLI version
-   * when falling back to `npx @memberjunction/cli@<version>`.
+   * when falling back to the package manager's remote-exec (`npx` / `pnpm dlx`).
    */
   VersionTag?: string;
+  /** Package manager used for the remote-exec CLI fallback (`'pnpm'` default, `'npm'` override). */
+  PackageManager: PackageManagerType;
 }
 
 /**
@@ -122,7 +125,8 @@ export class MigratePhase {
       Message: `Running database migrations (timeout: ${timeoutMin} min)...`,
     });
 
-    const { cmd, args } = await this.resolveCli(context.Dir, context.VersionTag, ['migrate', '--verbose']);
+    const pm = new PackageManagerCommands(context.PackageManager);
+    const { cmd, args } = await this.resolveCli(context.Dir, pm, context.VersionTag, ['migrate', '--verbose']);
 
     const result = await this.processRunner.Run(cmd, args, {
       Cwd: context.Dir,
@@ -193,6 +197,7 @@ export class MigratePhase {
    */
   private async resolveCli(
     dir: string,
+    pm: PackageManagerCommands,
     versionTag: string | undefined,
     cliArgs: string[]
   ): Promise<{ cmd: string; args: string[] }> {
@@ -207,12 +212,14 @@ export class MigratePhase {
       }
     }
 
-    // Fall back to npx with version pinning (distribution layout)
+    // Fall back to the package manager's remote-exec with version pinning
+    // (distribution layout): `npx <spec>` / `pnpm dlx <spec>`.
     const cliPackage = versionTag
       ? `@memberjunction/cli@${versionTag.replace(/^v/, '')}`
       : '@memberjunction/cli';
 
-    return { cmd: 'npx', args: [cliPackage, ...cliArgs] };
+    const dlx = pm.Dlx(cliPackage, cliArgs);
+    return { cmd: dlx.Cmd, args: dlx.Args };
   }
 
   // ---------------------------------------------------------------------------

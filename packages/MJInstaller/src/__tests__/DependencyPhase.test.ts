@@ -40,6 +40,7 @@ function makeContext(overrides?: Partial<DependencyContext>): DependencyContext 
   return {
     Dir: '/test/install',
     Tag: 'v5.9.0',
+    PackageManager: 'pnpm',
     Emitter: emitter,
     ...overrides,
   };
@@ -95,8 +96,8 @@ describe('DependencyPhase', () => {
   // npm install failures
   // -----------------------------------------------------------------------
 
-  describe('npm install timeout', () => {
-    it('should throw NPM_INSTALL_TIMEOUT when npm install times out', async () => {
+  describe('install timeout', () => {
+    it('should throw INSTALL_TIMEOUT when the install times out', async () => {
       mockRunner.Run.mockResolvedValueOnce({ ExitCode: 1, Stdout: '', Stderr: '', TimedOut: true });
 
       const ctx = makeContext();
@@ -107,14 +108,14 @@ describe('DependencyPhase', () => {
       } catch (err) {
         expect(err).toBeInstanceOf(InstallerError);
         const ie = err as InstallerError;
-        expect(ie.Code).toBe('NPM_INSTALL_TIMEOUT');
+        expect(ie.Code).toBe('INSTALL_TIMEOUT');
         expect(ie.Phase).toBe('dependencies');
       }
     });
   });
 
-  describe('npm install failure (non-ERESOLVE)', () => {
-    it('should throw NPM_INSTALL_FAILED for non-ERESOLVE errors', async () => {
+  describe('install failure (non-ERESOLVE)', () => {
+    it('should throw INSTALL_FAILED for non-ERESOLVE errors', async () => {
       mockRunner.Run.mockResolvedValueOnce(fail({ Stderr: 'ERR! code ENOENT' }));
 
       const ctx = makeContext();
@@ -125,24 +126,24 @@ describe('DependencyPhase', () => {
       } catch (err) {
         expect(err).toBeInstanceOf(InstallerError);
         const ie = err as InstallerError;
-        expect(ie.Code).toBe('NPM_INSTALL_FAILED');
+        expect(ie.Code).toBe('INSTALL_FAILED');
         expect(ie.Phase).toBe('dependencies');
       }
     });
   });
 
   // -----------------------------------------------------------------------
-  // ERESOLVE retry logic
+  // ERESOLVE retry logic (npm-specific — pnpm has no --legacy-peer-deps)
   // -----------------------------------------------------------------------
 
-  describe('ERESOLVE retry', () => {
+  describe('ERESOLVE retry (npm)', () => {
     it('should retry with --legacy-peer-deps when ERESOLVE is detected', async () => {
       mockRunner.Run
         .mockResolvedValueOnce(fail({ Stderr: 'ERESOLVE unable to resolve dependency tree' })) // first install
         .mockResolvedValueOnce(ok())   // retry install with --legacy-peer-deps
         .mockResolvedValueOnce(ok());  // build
 
-      const ctx = makeContext();
+      const ctx = makeContext({ PackageManager: 'npm' });
       const result = await phase.Run(ctx);
 
       expect(result.InstallSuccess).toBe(true);
@@ -158,18 +159,18 @@ describe('DependencyPhase', () => {
         .mockResolvedValueOnce(ok())   // retry succeeds
         .mockResolvedValueOnce(ok());  // build succeeds
 
-      const ctx = makeContext();
+      const ctx = makeContext({ PackageManager: 'npm' });
       const result = await phase.Run(ctx);
 
       expect(result.Warnings.some((w) => w.includes('--legacy-peer-deps'))).toBe(true);
     });
 
-    it('should throw NPM_INSTALL_FAILED when ERESOLVE retry also fails', async () => {
+    it('should throw INSTALL_FAILED when ERESOLVE retry also fails', async () => {
       mockRunner.Run
         .mockResolvedValueOnce(fail({ Stderr: 'ERESOLVE unable to resolve dependency tree' }))
         .mockResolvedValueOnce(fail({ Stderr: 'Still broken' })); // retry fails too
 
-      const ctx = makeContext();
+      const ctx = makeContext({ PackageManager: 'npm' });
 
       try {
         await phase.Run(ctx);
@@ -177,16 +178,16 @@ describe('DependencyPhase', () => {
       } catch (err) {
         expect(err).toBeInstanceOf(InstallerError);
         const ie = err as InstallerError;
-        expect(ie.Code).toBe('NPM_INSTALL_FAILED');
+        expect(ie.Code).toBe('INSTALL_FAILED');
       }
     });
 
-    it('should throw NPM_INSTALL_TIMEOUT when ERESOLVE retry times out', async () => {
+    it('should throw INSTALL_TIMEOUT when ERESOLVE retry times out', async () => {
       mockRunner.Run
         .mockResolvedValueOnce(fail({ Stderr: 'ERESOLVE unable to resolve dependency tree' }))
         .mockResolvedValueOnce({ ExitCode: 1, Stdout: '', Stderr: '', TimedOut: true }); // retry times out
 
-      const ctx = makeContext();
+      const ctx = makeContext({ PackageManager: 'npm' });
 
       try {
         await phase.Run(ctx);
@@ -194,7 +195,7 @@ describe('DependencyPhase', () => {
       } catch (err) {
         expect(err).toBeInstanceOf(InstallerError);
         const ie = err as InstallerError;
-        expect(ie.Code).toBe('NPM_INSTALL_TIMEOUT');
+        expect(ie.Code).toBe('INSTALL_TIMEOUT');
       }
     });
   });
@@ -399,5 +400,159 @@ describe('tagToNpmVersion', () => {
     expect(tagToNpmVersion('not-a-version')).toBe('latest');
     expect(tagToNpmVersion('5.38')).toBe('latest'); // not full major.minor.patch
     expect(tagToNpmVersion('v5')).toBe('latest');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Package-manager awareness
+// ---------------------------------------------------------------------------
+
+describe('DependencyPhase package-manager awareness', () => {
+  let phase: DependencyPhase;
+
+  beforeEach(() => {
+    phase = new DependencyPhase();
+    mockRunner.Run.mockClear().mockReset();
+    mockFs.ReadJSON.mockClear().mockResolvedValue({});
+    mockFs.WriteJSON.mockClear().mockResolvedValue(undefined);
+    mockFs.WriteText.mockClear().mockResolvedValue(undefined);
+    mockFs.FileExists.mockClear().mockResolvedValue(true);
+    mockFs.DirectoryExists.mockClear().mockResolvedValue(true);
+  });
+
+  describe('command selection', () => {
+    it('installs and builds with pnpm by default', async () => {
+      mockRunner.Run
+        .mockResolvedValueOnce(ok())   // install
+        .mockResolvedValueOnce(ok());  // build
+
+      await phase.Run(makeContext());
+
+      expect(mockRunner.Run.mock.calls[0][0]).toBe('pnpm');
+      expect(mockRunner.Run.mock.calls[0][1]).toEqual(['install']);
+      expect(mockRunner.Run.mock.calls[1][0]).toBe('pnpm');
+      expect(mockRunner.Run.mock.calls[1][1]).toEqual(['run', 'build']);
+    });
+
+    it('installs with npm when the config overrides to npm', async () => {
+      mockRunner.Run
+        .mockResolvedValueOnce(ok())
+        .mockResolvedValueOnce(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'npm' }));
+
+      expect(mockRunner.Run.mock.calls[0][0]).toBe('npm');
+      expect(mockRunner.Run.mock.calls[0][1]).toEqual(['install']);
+    });
+
+    it('does not retry peer conflicts under pnpm', async () => {
+      mockRunner.Run.mockResolvedValueOnce(fail({ Stderr: 'ERESOLVE unable to resolve dependency tree' }));
+
+      try {
+        await phase.Run(makeContext());
+        expect.unreachable('Expected InstallerError to be thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(InstallerError);
+        expect((err as InstallerError).Code).toBe('INSTALL_FAILED');
+      }
+      // No --legacy-peer-deps retry: exactly one install invocation
+      expect(mockRunner.Run).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('workspace scaffold', () => {
+    it('pins packageManager and rewrites npm-hoist mj scripts for pnpm', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false); // distribution layout
+      mockFs.ReadJSON.mockResolvedValue({
+        packageManager: 'npm@11.7.0',
+        scripts: {
+          'mj': 'node apps/MJAPI/node_modules/@memberjunction/cli/bin/run.js',
+          'mj:migrate': 'node apps/MJAPI/node_modules/@memberjunction/cli/bin/run.js migrate',
+          'mj:codegen': 'node apps/MJAPI/node_modules/@memberjunction/cli/bin/run.js codegen',
+          'install:deps': 'npm install',
+        },
+      });
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext());
+
+      expect(mockFs.WriteJSON).toHaveBeenCalledWith(
+        expect.stringContaining('package.json'),
+        expect.objectContaining({
+          packageManager: 'pnpm@10.33.0',
+          scripts: expect.objectContaining({
+            'mj': 'mj',
+            'mj:migrate': 'mj migrate',
+            'mj:codegen': 'mj codegen',
+            'install:deps': 'pnpm install',
+          }),
+        })
+      );
+    });
+
+    it('writes pnpm-workspace.yaml when missing under pnpm', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockImplementation(async (p: string) => !p.endsWith('pnpm-workspace.yaml'));
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext());
+
+      const wsWrite = mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('pnpm-workspace.yaml'));
+      expect(wsWrite).toBeDefined();
+      const content = String(wsWrite![1]);
+      expect(content).toContain("- 'apps/*'");
+      expect(content).toContain("- 'packages/*'");
+      expect(content).toContain('linkWorkspacePackages: true');
+      expect(content).toContain('onlyBuiltDependencies:');
+      expect(content).toContain('- esbuild');
+    });
+
+    it('does not write pnpm-workspace.yaml when it already exists', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockResolvedValue(true);
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext());
+
+      const wsWrite = mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('pnpm-workspace.yaml'));
+      expect(wsWrite).toBeUndefined();
+    });
+
+    it('does not write pnpm-workspace.yaml under npm', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockResolvedValue(false);
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'npm' }));
+
+      const wsWrite = mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('pnpm-workspace.yaml'));
+      expect(wsWrite).toBeUndefined();
+    });
+  });
+
+  describe('hoisting under pnpm', () => {
+    it('skips the ng-auth-services root-dependency hoist under pnpm', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false); // distribution layout
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext());
+
+      const hoistWrite = mockFs.WriteJSON.mock.calls.find(([, data]) =>
+        JSON.stringify(data).includes('@memberjunction/ng-auth-services')
+      );
+      expect(hoistWrite).toBeUndefined();
+    });
+
+    it('keeps the ng-auth-services hoist for npm distribution installs', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false); // distribution layout
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'npm' }));
+
+      const hoistWrite = mockFs.WriteJSON.mock.calls.find(([, data]) =>
+        JSON.stringify(data).includes('@memberjunction/ng-auth-services')
+      );
+      expect(hoistWrite).toBeDefined();
+    });
   });
 });

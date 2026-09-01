@@ -2,7 +2,6 @@ import { createMockFileSystem, createMockProcessRunner, createMockSqlAdapter } f
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { samplePartialConfig } from './mocks/fixtures.js';
 import type { PreflightContext } from '../phases/PreflightPhase.js';
-import type { PartialInstallConfig } from '../models/InstallConfig.js';
 
 // ---------------------------------------------------------------------------
 // Adapter mocks — PreflightPhase creates adapters via `new` in its constructor
@@ -206,27 +205,70 @@ describe('PreflightPhase', () => {
     });
   });
 
-  // ─── npm check ─────────────────────────────────────────────────────
+  // ─── Package manager check ─────────────────────────────────────────
 
-  describe('npm check', () => {
-    it('should pass when npm is found', async () => {
-      mockProcess.RunSimple.mockResolvedValue('10.9.0');
+  describe('Package manager check', () => {
+    /** Route RunSimple by binary so npm and pnpm can behave differently. */
+    function mockVersions(versions: Record<string, string | Error>): void {
+      mockProcess.RunSimple.mockImplementation(async (cmd: string) => {
+        const value = versions[cmd];
+        if (value === undefined) throw new Error(`${cmd} not found`);
+        if (value instanceof Error) throw value;
+        return value;
+      });
+    }
+
+    it('should check pnpm by default and pass when pnpm is found', async () => {
+      mockVersions({ npm: '10.9.0', pnpm: '10.33.0' });
       const ctx = makeContext();
       const result = await phase.Run(ctx);
-      const npmCheck = result.Diagnostics.Checks.find(c => c.Name === 'npm');
-      expect(npmCheck).toBeDefined();
-      expect(npmCheck!.Status).toBe('pass');
-      expect(npmCheck!.Message).toContain('10.9.0');
+      const pmCheck = result.Diagnostics.Checks.find(c => c.Name === 'Package manager');
+      expect(pmCheck).toBeDefined();
+      expect(pmCheck!.Status).toBe('pass');
+      expect(pmCheck!.Message).toContain('pnpm 10.33.0');
+      expect(mockProcess.RunSimple).toHaveBeenCalledWith('pnpm', ['--version']);
     });
 
-    it('should fail when npm is not found (RunSimple throws)', async () => {
-      mockProcess.RunSimple.mockRejectedValue(new Error('npm not found'));
+    it('should hard-fail when pnpm is configured (default) but missing', async () => {
+      mockVersions({ npm: '10.9.0' });
       const ctx = makeContext();
       const result = await phase.Run(ctx);
-      const npmCheck = result.Diagnostics.Checks.find(c => c.Name === 'npm');
-      expect(npmCheck).toBeDefined();
-      expect(npmCheck!.Status).toBe('fail');
-      expect(npmCheck!.Message).toContain('not found');
+      const pmCheck = result.Diagnostics.Checks.find(c => c.Name === 'Package manager');
+      expect(pmCheck).toBeDefined();
+      expect(pmCheck!.Status).toBe('fail');
+      expect(pmCheck!.Message).toContain('pnpm not found');
+      expect(pmCheck!.SuggestedFix).toContain('corepack enable pnpm');
+      expect(pmCheck!.SuggestedFix).toContain('"npm"');
+      expect(result.Passed).toBe(false);
+    });
+
+    it('should check npm when the config overrides to npm', async () => {
+      mockVersions({ npm: '10.9.0' });
+      const ctx = makeContext({ Config: { ...samplePartialConfig(), PackageManager: 'npm' } });
+      const result = await phase.Run(ctx);
+      const pmCheck = result.Diagnostics.Checks.find(c => c.Name === 'Package manager');
+      expect(pmCheck).toBeDefined();
+      expect(pmCheck!.Status).toBe('pass');
+      expect(pmCheck!.Message).toContain('npm 10.9.0');
+    });
+
+    it('should hard-fail when npm is configured but missing', async () => {
+      mockVersions({});
+      const ctx = makeContext({ Config: { ...samplePartialConfig(), PackageManager: 'npm' } });
+      const result = await phase.Run(ctx);
+      const pmCheck = result.Diagnostics.Checks.find(c => c.Name === 'Package manager');
+      expect(pmCheck).toBeDefined();
+      expect(pmCheck!.Status).toBe('fail');
+      expect(pmCheck!.Message).toContain('npm not found');
+      expect(result.Passed).toBe(false);
+    });
+
+    it('should record the package manager in the environment info', async () => {
+      mockVersions({ npm: '10.9.0', pnpm: '10.33.0' });
+      const ctx = makeContext();
+      const result = await phase.Run(ctx);
+      expect(result.Diagnostics.Environment.PackageManager).toBe('pnpm');
+      expect(result.Diagnostics.Environment.PackageManagerVersion).toBe('10.33.0');
     });
   });
 
@@ -530,10 +572,11 @@ describe('PreflightPhase', () => {
       expect(wrongFile!.SuggestedFix).toContain('Rename');
     });
 
-    it('should check for codegen artifacts', async () => {
-      // mj_generatedentities does not exist
+    it('should fail the codegen artifact check when no artifact layout exists', async () => {
+      // Neither the npm root symlink nor any GeneratedEntities package dir exists
       mockFs.DirectoryExists.mockImplementation(async (path: string) => {
         if (path.includes('mj_generatedentities')) return false;
+        if (path.includes('GeneratedEntities')) return false;
         return true;
       });
       mockFs.FileExists.mockResolvedValue(true);
@@ -545,6 +588,21 @@ describe('PreflightPhase', () => {
       expect(codegenCheck).toBeDefined();
       expect(codegenCheck!.Status).toBe('fail');
       expect(codegenCheck!.SuggestedFix).toContain('mj codegen');
+    });
+
+    it('should pass the codegen artifact check via packages/GeneratedEntities when the root symlink is absent (pnpm layout)', async () => {
+      mockFs.DirectoryExists.mockImplementation(async (path: string) => {
+        if (path.includes('mj_generatedentities')) return false;
+        return path.includes('packages') && path.includes('GeneratedEntities');
+      });
+      mockFs.FileExists.mockResolvedValue(true);
+
+      const { emitter } = createMockEmitter();
+      const diagnostics = await phase.RunDiagnostics('/test/install', samplePartialConfig(), emitter);
+
+      const codegenCheck = diagnostics.Checks.find(c => c.Name === 'CodeGen artifacts');
+      expect(codegenCheck).toBeDefined();
+      expect(codegenCheck!.Status).toBe('pass');
     });
 
     it('should pass codegen artifact check when mj_generatedentities exists', async () => {
