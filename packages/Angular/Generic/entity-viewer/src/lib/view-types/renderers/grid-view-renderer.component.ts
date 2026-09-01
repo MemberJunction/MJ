@@ -121,7 +121,8 @@ export interface GridViewConfig {
       [AllowLoad]="false"
       [AutoLoadEntityActions]="AutoLoadEntityActions"
       [ShowToolbar]="effectiveShowToolbar"
-      [ToolbarConfig]="config.toolbarConfig ?? {}"
+      [ToolbarConfig]="effectiveToolbarConfig"
+      [AllowDelete]="canDelete"
       [SelectionMode]="effectiveSelectionMode"
       [ShowAddToListButton]="effectiveShowAddToListButton"
       [ShowPager]="effectiveShowPager"
@@ -311,6 +312,46 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   /** Effective toolbar visibility — defaults to `true` when not set in config. */
   get effectiveShowToolbar(): boolean {
     return this.config.showToolbar ?? true;
+  }
+
+  /**
+   * Whether this user may delete records of this entity.
+   *
+   * Mirrors `recycle-bin.component.ts`, the other delete surface in this package, so
+   * both agree on what "can delete" means rather than each inventing a rule.
+   */
+  get canDelete(): boolean {
+    const entity = this.entity;
+    if (!entity) {
+      return false;
+    }
+    try {
+      const user = this.ProviderToUse.CurrentUser;
+      return user ? (entity.GetUserPermisions(user)?.CanDelete ?? false) : false;
+    } catch {
+      // A metadata provider that cannot answer is not permission to delete.
+      return false;
+    }
+  }
+
+  /**
+   * Effective toolbar config — Delete defaults to whether the user CAN delete.
+   *
+   * The grid's Delete affordance was unreachable: the template shows it only when
+   * `ToolbarConfig.showDelete && AllowDelete`, both of which default to false, and
+   * this wrapper set neither. So `onDeleteConfirmed()` below — which already deletes
+   * every selected record, reports per-record failures and reloads the page — could
+   * only ever be reached by a view whose saved config happened to set the flag. In
+   * practice that meant no multi-record delete anywhere in Explorer: the only way to
+   * remove ten rows was to open ten records.
+   *
+   * Defaulting to the permission (rather than to `true`) keeps the button off exactly
+   * where the delete would have been refused anyway. An explicit `showDelete` in a
+   * view's config still wins in both directions.
+   */
+  get effectiveToolbarConfig(): GridToolbarConfig {
+    const cfg = this.config.toolbarConfig ?? {};
+    return { ...cfg, showDelete: cfg.showDelete ?? this.canDelete };
   }
 
   /** Effective selection mode — defaults to `'checkbox'` when not set in config. */
