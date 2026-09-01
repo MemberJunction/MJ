@@ -266,6 +266,7 @@ export class MarkdownEngine {
     const lines = markdown.split('\n');
     const result: string[] = [];
     let inHtmlBlock = false;
+    let preDepth = 0;
     const tagStack: string[] = [];
 
     for (const line of lines) {
@@ -289,6 +290,37 @@ export class MarkdownEngine {
         }
         result.push(line);
       } else {
+        // A blank line ends an HTML block in CommonMark, so the markup that
+        // follows is re-tokenized. Which token it becomes depends purely on its
+        // indentation: 4+ spaces makes an indented code block (rescued later by
+        // the html-block-repair extension), while 0-3 spaces makes a paragraph,
+        // rendered as `<p>…<br>…</p>`. Because this pass strips indentation, the
+        // paragraph case is the one that arises here — and `<p>` and `<br>` are
+        // on the HTML5 foreign-content breakout list, so inside an `<svg>` the
+        // browser leaves the SVG namespace and auto-closes the chart. Every
+        // shape after the blank line then becomes an unknown HTML element:
+        // `<text>` renders as bare document text and `<path>`/`<circle>`/`<rect>`
+        // render as nothing.
+        //
+        // Dropping the blank line keeps the block intact. Whitespace between
+        // tags is insignificant, so this cannot change the rendered result.
+        //
+        // Two guards keep it narrow:
+        //   - `tagStack.length > 0` — only while an element is genuinely open.
+        //     Without it, blank lines separating sibling top-level blocks would
+        //     be swallowed and unrelated blocks would merge into one.
+        //   - `preDepth === 0` — never inside `<pre>`, where a blank line is
+        //     meaningful content rather than insignificant whitespace.
+        if (trimmedLine === '' && tagStack.length > 0 && preDepth === 0) {
+          continue;
+        }
+
+        // Track <pre> separately from tagStack: it is not in htmlBlockTags (it
+        // never starts a block here) but its content must be left untouched.
+        const preOpens = (trimmedLine.match(/<pre\b/gi) || []).length;
+        const preCloses = (trimmedLine.match(/<\/pre>/gi) || []).length;
+        preDepth = Math.max(0, preDepth + preOpens - preCloses);
+
         // We're inside an HTML block - remove ALL leading whitespace
         // to prevent any nested content from being treated as code blocks.
         this.updateTagStack(trimmedLine, tagStack, htmlBlockTags);
@@ -298,6 +330,7 @@ export class MarkdownEngine {
         // Check if we've closed all HTML blocks
         if (tagStack.length === 0) {
           inHtmlBlock = false;
+          preDepth = 0;
         }
       }
     }
