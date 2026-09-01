@@ -98,6 +98,15 @@ interface ResolvedTemplateVar {
  * Concrete connectors (YourMembership, Salesforce, HubSpot, etc.) extend
  * this class and implement only auth, HTTP transport, and response normalization.
  */
+/**
+ * Parents held back for key classification when the parent declares no primary key.
+ *
+ * Matches the value-statistic classifier's own significance floor: fewer rows and it abstains,
+ * more rows buy no additional confidence — they only cost parent fetches, which recurse up the
+ * dependency chain.
+ */
+const PARENT_KEY_CLASSIFY_ROWS = 50;
+
 export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnector {
 
     // ── Abstract methods concrete connectors must implement ──────────
@@ -704,13 +713,18 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * DISCOVERY-ONLY recursive lazy sampler. Yields records of `objectID` for field/PK analysis by
      * STREAMING — never bulk. A top-level object paginates its endpoint directly. A template-var CHILD
-     * streams its PARENT (recursively, via this same routine), classifies the parent's key from the
-     * parent's own ~`target` rows (declared PK → value-statistic classifier → adjourn — never a guessed
-     * name), and fetches children under parent rows until the child has `target`. Parent rows beyond what
-     * the child needs are analysis-only — they keep the parent's key classified on a CONSISTENT ~`target`
-     * sample; if the child needs MORE parents than `target`, it keeps streaming, so the parent count may
-     * be over OR under `target`. Record-constrained (unlike sync, which walks ALL rows via the DAG): a
-     * million-row ancestor is streamed and cut off early. Pure HTTP — no SQL, dialect-agnostic.
+     * streams its PARENT (recursively, via this same routine), classifies the parent's key from a
+     * significance-sized slice of the parent's rows (declared PK → value-statistic classifier → adjourn
+     * — never a guessed name), and fetches children under parent rows until the child has `target`.
+     *
+     * Parents are pulled ON DEMAND, so the leaf's `target` is the only bound and it propagates up the
+     * whole chain. The single exception is a parent that declares no key: it cannot be descended into
+     * until its key is known, so {@link PARENT_KEY_CLASSIFY_ROWS} of its rows are read first — the
+     * classifier's own significance floor, NOT the leaf's target, which would over-pull by the ratio
+     * between them and recurse that over-pull up every level above.
+     *
+     * Record-constrained (unlike sync, which walks ALL rows via the DAG): a million-row ancestor is
+     * streamed and cut off early. Pure HTTP — no SQL, dialect-agnostic.
      */
     private async *StreamRecordsForDiscovery(
         companyIntegration: MJCompanyIntegrationEntity,
@@ -767,6 +781,17 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
         let parentKey: string | null = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey)?.Name ?? null;
         const buffer: ExternalRecord[] = [];   // parent rows awaiting descent until the key is classified
+        // How many parents to hold back before classifying their key.
+        //
+        // This is the ONE eager step in an otherwise lazy chain, so its size is the whole cost. With
+        // a declared key nothing is buffered and parents are pulled strictly on demand; without one
+        // we must read some parents before we can descend at all.
+        //
+        // Bound it by what the CLASSIFIER needs, not by what the leaf wants. The value-statistic
+        // classifier needs MIN_ROWS_FOR_SIGNIFICANCE rows to call a key significant; buffering the
+        // leaf's full target instead pulled up to 10x that — and because a parent may itself be a
+        // child, those pulls recurse up the whole chain before one child record is yielded.
+        const classifySampleSize = Math.min(target, PARENT_KEY_CLASSIFY_ROWS);
 
         const fetchChildren = async function* (this: BaseRESTIntegrationConnector, key: string, parentRec: ExternalRecord): AsyncGenerator<ExternalRecord> {
             const idVal = parentRec.Fields?.[key];
@@ -784,11 +809,12 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
         for await (const parentRec of this.StreamRecordsForDiscovery(companyIntegration, parentInfo.parentObjectID, contextUser, target, depth + 1)) {
             if (parentKey) { yield* fetchChildren(parentKey, parentRec); continue; }
-            // Key not declared: buffer up to `target` parent rows, classify the key from them, then flush.
-            // This buffer pulls `target` parents up the chain (recursively resolving THEIR parents) — the
-            // "resolve N at the highest dependency" step — bounded by `target`, never the parent's total.
+            // Key not declared: read a significance-sized slice of parents, classify the key from it,
+            // then flush their children and go lazy again. Every row here is pulled up the chain
+            // (recursively resolving THEIR parents), so this slice's size is multiplied by the depth
+            // above it — which is why it is sized to the classifier, not to the leaf's target.
             buffer.push(parentRec);
-            if (buffer.length >= target) {
+            if (buffer.length >= classifySampleSize) {
                 parentKey = await this.ResolveParentKeyField(parentObj, buffer);
                 if (!parentKey) return;   // parent genuinely keyless → adjourn
                 for (const bp of buffer) yield* fetchChildren(parentKey, bp);
