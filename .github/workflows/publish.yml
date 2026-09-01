@@ -1134,7 +1134,14 @@ jobs:
             exit 1
           fi
           git fetch origin next
-          git checkout -B record-release-lines origin/next
+          # -f is load-bearing. The build step rewrites tracked generated files — on 5.51.2 it was
+          # packages/GraphQLDataProvider/src/version.generated.ts — so the tree is dirty by the time
+          # this step runs, and a plain checkout aborts with "local changes would be overwritten".
+          # That is exactly how 5.51.2 shipped to npm with no ledger entry: everything that matters
+          # (release commit, tag, GitHub Release) had already been pushed, and the job then died on
+          # its last step. Discarding here is safe for that same reason — what is being thrown away
+          # is build output, regenerated on the next run.
+          git checkout -f -B record-release-lines origin/next
           node ci/append-release-line.mjs --version "${VERSION#v}" --db-impact "${DB_IMPACT:-none}" --since "$PREV" --until "$VERSION"
           node ci/validate-release-lines.mjs --base origin/next --mode push
           git add release-lines.json

@@ -1691,6 +1691,10 @@ async function processRSUPendingWork(): Promise<void> {
   for (const pending of pendingItems) {
     const pendingWorkID = pending.ID;
     const item = pending.Work;
+    // Declared outside the try so the catch can narrow a retry to what is still outstanding: what
+    // actually got mapped this attempt. Each retry is then strictly smaller, and one poison object
+    // cannot keep re-running its healthy siblings.
+    const mappedObjectNames = new Set<string>();
     try {
       const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
 
@@ -1813,6 +1817,7 @@ async function processRSUPendingWork(): Promise<void> {
         }
 
         if (isNewMap) createdEntityMapIDs.push(entityMapID);
+        mappedObjectNames.add(objName);
 
         // Create field maps — filter by SourceObjectFields (null = all)
         try {
@@ -1966,8 +1971,20 @@ async function processRSUPendingWork(): Promise<void> {
       await rsm.CompletePendingWork(pendingWorkID, systemUser);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${message}`);
-      await rsm.FailPendingWork(pendingWorkID, message, systemUser);
+      const attempt = (item.Attempts ?? 0) + 1;
+      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID} (attempt ${attempt}): ${message}`);
+      // RSU is a long chain — migrations, CodeGen, commit, compile, restart — and a failure partway
+      // through is often transient (a restart landing mid-consumption, one bad provider call).
+      // Failing terminally on the first error means the objects this item would have mapped are
+      // silently never mapped, and the only recovery is someone noticing and re-applying by hand.
+      const remaining = (item.SourceObjectNames ?? []).filter(n => !mappedObjectNames.has(n));
+      const requeued = await rsm.RetryPendingWork(pendingWorkID, item, remaining, systemUser);
+      if (!requeued) {
+        // Budget spent, or nothing left to retry. This message is the operator's only signal, so
+        // it names what was left undone rather than just the error.
+        const undone = remaining.length > 0 ? ` Objects never mapped: ${remaining.slice(0, 20).join(', ')}${remaining.length > 20 ? ` (+${remaining.length - 20} more)` : ''}.` : '';
+        await rsm.FailPendingWork(pendingWorkID, `${message}${undone} Re-apply this connector to finish it.`, systemUser);
+      }
     }
   }
 
