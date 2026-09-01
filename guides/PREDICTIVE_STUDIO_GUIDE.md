@@ -768,15 +768,19 @@ flowchart TB
     style LEAK fill:#fee2e2,stroke:#dc2626
 ```
 
-### 12.1 Topology — the agent and its three sub-agents
+### 12.1 Topology — the agent and its four sub-agents
 
-The parent **Model Development Agent** is a `Loop` agent (`ModelSelectionMode='Agent'`, `ArtifactCreationMode='Always'`, `DefaultArtifactTypeID → ML Experiment Results`, `InjectNotes=true`, `MaxNotesToInject=10`, `ExposeAsAction=true`). Its four wired Actions are the agent-facing PS Actions plus `Write Entity Field(s)`. Three sub-agents (all `Loop`, `InvocationMode='Sub-Agent'`) refine the plan:
+The parent **Model Development Agent** is a `Loop` agent (`ModelSelectionMode='Agent'`, `ArtifactCreationMode='Always'`, `DefaultArtifactTypeID → ML Experiment Results`, `InjectNotes=true`, `MaxNotesToInject=10`, `ExposeAsAction=true`). Its four wired Actions are the agent-facing PS Actions plus `Write Entity Field(s)`. Four sub-agents (all `Loop`, `InvocationMode='Sub-Agent'`) refine the plan:
 
-| Sub-agent | ExecOrder | Writes (its payload slice) |
-|---|---|---|
-| **Goal Analyst** | 1 | refines the business goal → `Goal`, `TargetDefinition` (target + problem type + success metric) |
-| **Data Scout** | 2 | studies the data → `CandidateSources`, `CandidateFeatures`, `LeakageNotes`; flags leakage risks |
-| **Experiment Designer** | 3 | proposes ranked experiments + validation + budget → `ProposedExperiments`, `ValidationStrategy`, `ProposedBudget` |
+| Sub-agent | ExecOrder | LLM? | Writes (its payload slice) |
+|---|---|---|---|
+| **Goal Analyst** | 1 | yes | refines the business goal → `Goal`, `TargetDefinition` (target + problem type + success metric) |
+| **Data Scout** | 2 | yes | studies the data → `CandidateSources`, `CandidateFeatures`, `LeakageNotes`; flags leakage risks |
+| **Statistics Pass** | 3 | **no — code** | MEASURES the data → `Statistics`, `GateReports` (§12.6) |
+| **Experiment Designer** | 4 | yes | proposes ranked experiments + validation + budget → `ProposedExperiments`, `ValidationStrategy`, `ProposedBudget` |
+
+The ordering is the point: the Experiment Designer proposes algorithms **after** the data has been
+measured, so its choice can be argued with from evidence rather than from the goal sentence alone.
 
 **Sequencing is declarative, not hardcoded control flow** — it's enforced by metadata **payload-path guards**. Each sub-agent has `PayloadDownstreamPaths: ["*"]` (it can *read* the whole plan) and an `PayloadUpstreamPaths` list scoped to exactly the slice it's allowed to *write back* (e.g. Goal Analyst → `["Goal", "TargetDefinition", "TargetDefinition.*"]`). The parent holds `PayloadSelfWritePaths: ["Approved", "Leaderboard"]` — only the orchestrator stamps the approval gate and the execution-phase leaderboard.
 
@@ -811,6 +815,54 @@ The Model Development Agent is elevated to the **Database-Designer / Agent-Manag
 - **`PredictiveStudioPipelineBuilder`** (`pipeline-builder.ts`) — the pure builder: `modelingPlanToPipelineConfig(ModelingPlanSpec)` deterministically maps the plan → the exact `MJ: ML Training Pipelines` field shapes (SourceBindings, the FeatureStep DAG with one-hot for categoricals, AsOfStrategy, LeakageGuard from the plan's exclude-notes, ValidationStrategy); it creates the pipeline, trains via `trainModelViaEngine`, then **publishes the model ONLY if `deriveTrustVerdict` clears the bar** (`@memberjunction/predictive-studio-core`) and training wasn't leakage-flagged — otherwise it stays Draft with a plain held-reason. So a coin-flip model is **never auto-published into the business catalog**.
 
 Proven by: unit tests (mapper, gate logic, projection helpers), an in-process integration test (`ps-inproc-agent-builder.ts` — builds + trains + asserts the publish gate), and an **agent-loop test through the real `AgentRunner`** (`ps-inproc-agent-run.ts` — the sub-agent runs end-to-end and the gate fires). "+ New prediction" on the business surface opens this agent as a docked `mj-conversation-chat-area` co-pilot.
+
+---
+
+### 12.6 The statistics pre-pass — measuring before choosing
+
+`Statistics Pass` (`PredictiveStudioStatisticsPassAgent`, DriverClass-routed like `Pipeline Builder`)
+runs **once, in pure code, with no LLM**. The orchestrator force-routes to it —
+`shouldForceStatisticsPass` — as soon as the plan is describable (a target entity, a target variable
+and at least one candidate feature) and no `Statistics` exist yet. It never re-fires: re-measuring
+the same rows on every turn would spend a sidecar round trip per message and could not change the
+answer. A user-message stamp handles the one failure mode — a pass that ran but produced nothing
+(sidecar down) does not re-fire for the same message, while a fresh message gets a retry.
+
+What it does, in order:
+
+1. Assembles through the **same** `FeatureAssemblyExecutor` the training run will use
+   (`modelingPlanToAssemblyParams` is built on `modelingPlanToPipelineConfig`, so the pass cannot
+   drift from the pipeline the plan would produce).
+2. Carves the locked holdout with the **same** `carveLockedHoldout` (§5.1, extracted to
+   `training/holdout.ts` for exactly this reason) and **discards it**. Describing the holdout would
+   leak it into every downstream decision and `MLModel.HoldoutMetrics` would stop being honest —
+   the one rule in this pass that nothing else in the system would catch if it broke.
+3. Calls the sidecar's read-only `POST /describe`: class balance, per-feature association with the
+   target (single-feature AUC folded to `[0.5, 1]` for classification, `|r|` for regression),
+   mutual information, cardinality, missingness, moments, and an opt-in pairwise correlation matrix.
+4. Derives the **hints** in TypeScript — `leakage-dominance`, `near-duplicate-of-target`, `id-like`,
+   `constant`, `high-cardinality`, `high-missingness`, `collinear` — each carrying the measured
+   value AND the threshold it crossed, so "why was this flagged" is always answerable.
+5. Evaluates each proposed candidate against the `StatisticalGate` rows its `MJ: ML Component Types`
+   leaf **inherits** (§8.1): the `Model` root's rows-per-feature floor of 5 and its
+   `max-single-feature-share` ceiling, `Neural`'s `Replace` of that floor with 50, `Sequence`'s
+   `requires-ordered-sequences`. Each verdict names the tree node that declared it — the node to
+   argue with. An unknown gate kind is `Unevaluated`, **never** a silent pass.
+
+Both results land on `ModelingPlanSpec.Statistics` / `.GateReports`, which means they land on
+`MJ: Experiment Sessions.PlanSpec` automatically — so the numbers the agent saw are stored next to
+the choice it made, and the decision stays auditable long after the session.
+
+Two consequences worth naming:
+
+- **The leakage guard moves earlier.** `max-single-feature-share` catches pre-train what §6.4's
+  `detectSingleFeatureDominance` catches post-train — the same conclusion, without paying for a fit.
+- **Nothing here is an opinion.** The sidecar returns measurements; hints and verdicts come from
+  pure functions with explicit thresholds. The conversational sub-agents may reason about the
+  numbers, but they cannot change them.
+
+The pass is best-effort by construction: if it cannot run, the payload records the absence and the
+plan proceeds as it did before, with the agent saying so plainly rather than quietly guessing.
 
 ---
 
@@ -1313,10 +1365,12 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | **Security model** (scope gate, PK field-name guard, UUID gate, promotion state machine, sign-off reason) | ✅ built |
 | **Maintenance** (staleness + direction-aware challenger-vs-incumbent, never auto-promotes) | ✅ built |
 | **Multimodal** vision-LLM-as-feature (`'vision-llm'` FeatureStep kind, additive) | ✅ built |
+| **Statistics pre-pass** (sidecar `/describe`, feature hints, tree-inherited gates, `Statistics Pass` sub-agent) — §12.6 | ✅ built |
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
 | **Business-user experience** (§16) — agent offers + schedules monthly · generic `'*'` risk-card panel · Models-in-Production section · de-mocked Studio + ops wired · scoring-binding lineage · WorkType value-list + Enrichment-over-GraphQL | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
 | Component **composition** execution (sidecar `component_graph`: bagging/stacking/frozen reuse) | ⏳ planned |
+| **Architect sub-agent** (commit / defer / reify / compose from the measured evidence) | ⏳ planned |
 | Component **stories** (tagger, reuse-by-meaning search, Components tab) | ⏳ planned |
 | Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 

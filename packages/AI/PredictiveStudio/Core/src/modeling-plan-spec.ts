@@ -10,6 +10,8 @@
  * {@link LeaderboardEntry} shape used to rank experiment iterations.
  */
 
+import type { CandidateGateReport, DatasetStatistics } from './statistics-spec';
+
 /**
  * Explicit resource budget for an experiment session — the bounded-autonomy
  * guardrail (plan §8.4). Enforced by Record Set Processing's budget gate within
@@ -78,6 +80,21 @@ export interface ModelingPlanSpec {
   ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
   /** Proposed resource budget for the experiment session. */
   ProposedBudget: { MaxComputeCost?: number; MaxRuns?: number; MaxWallclockMinutes?: number };
+  /**
+   * What the **statistics pre-pass** measured about the training partition (additive). Written by
+   * the `Statistics Pass` code sub-agent before the architecture is chosen, so the decision rests on
+   * evidence rather than on the goal statement alone — and so it stays auditable afterwards: the
+   * numbers the agent saw are persisted next to the choice it made (this whole spec lands on
+   * `MJ: Experiment Sessions.PlanSpec`). Absent when the pass did not run or could not complete.
+   */
+  Statistics?: DatasetStatistics;
+  /**
+   * Per-candidate admissibility, evaluated from each candidate component type's INHERITED
+   * `StatisticalGate` rows against {@link ModelingPlanSpec.Statistics} (additive). A candidate with
+   * `Admissible: false` should not be proposed; one carrying an `Unevaluated` gate should be
+   * proposed only with that caveat stated.
+   */
+  GateReports?: CandidateGateReport[];
   /** User approval gate — execution does not begin until this is true. */
   Approved?: boolean;
   /** Execution-phase leaderboard — one entry per Experiment Session Iteration. */

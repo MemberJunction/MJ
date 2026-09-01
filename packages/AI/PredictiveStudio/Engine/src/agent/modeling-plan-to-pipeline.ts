@@ -22,7 +22,7 @@ import {
   type ValidationStrategy,
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
-import type { DatedSourceSpec } from '../feature-assembly';
+import type { DatedSourceSpec, FeatureAssemblyParams } from '../feature-assembly';
 
 /** The resolved, ready-to-persist configuration for one `MJ: ML Training Pipelines` row. */
 export interface PipelineConfig {
@@ -152,3 +152,36 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineCo
     validation: buildValidation(spec),
   };
 }
+
+/**
+ * Project a {@link ModelingPlanSpec} onto the {@link FeatureAssemblyParams} the executor takes —
+ * so the **statistics pre-pass** describes the matrix the plan would actually produce, not an
+ * approximation of it.
+ *
+ * Built on {@link modelingPlanToPipelineConfig} rather than re-deriving anything, which is what
+ * keeps the pre-pass and the eventual pipeline in lockstep: if the plan→pipeline mapping changes,
+ * the pass follows automatically.
+ *
+ * @param spec the (not necessarily approved) plan
+ * @param options row cap + primary-key field, matching the training call's own options
+ */
+export function modelingPlanToAssemblyParams(
+  spec: ModelingPlanSpec,
+  options: { maxRows?: number; primaryKeyField?: string } = {},
+): FeatureAssemblyParams {
+  const config = modelingPlanToPipelineConfig(spec);
+  return {
+    targetEntityName: config.targetEntityName,
+    recordSet: { EntityName: config.targetEntityName, MaxRows: options.maxRows },
+    sources: config.sourceBindings,
+    steps: config.featureSteps,
+    asOf: config.asOf,
+    leakageGuard: config.leakageGuard,
+    datedSources: config.datedSources,
+    targetVariable: config.targetVariable,
+    primaryKeyField: options.primaryKeyField,
+    // Train context: the pre-pass must see exactly what training will see.
+    context: 'train',
+  };
+}
+
