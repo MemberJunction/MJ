@@ -250,3 +250,70 @@ export function selectFieldsToMap<T extends SelectableSourceField>(
     const selected = new Set(selectedFieldNames.map(n => n.toLowerCase()));
     return allFields.filter(f => selected.has(f.Name.toLowerCase()) || f.IsPrimaryKey === true);
 }
+
+/** One existing field map, reduced to what the reconciliation decision needs. */
+export interface ExistingFieldMapRead {
+    SourceFieldName: string | null;
+    Status: string | null;
+}
+
+/** What a refresh should do to one entity map's field maps. Names are the SOURCE field names. */
+export interface FieldMapReconcilePlan {
+    /** Source fields with no field map at all → create one, with this Status. */
+    Create: Array<{ SourceFieldName: string; Status: 'Active' | 'Inactive' }>;
+    /** Field maps whose source field is back in the resolution → re-enable. */
+    Enable: string[];
+    /** Field maps whose source field is no longer in the resolution → disable (never delete). */
+    Disable: string[];
+}
+
+/**
+ * Decides the field-map reconciliation for ONE entity map on a schema refresh.
+ *
+ * Pure so the three branches are pinned by tests rather than by a live refresh — the resolver that
+ * calls this imports schema-builder and schema-engine, which makes it unimportable in a unit test,
+ * so a decision left inline there is a decision nothing can check. Same reasoning as
+ * `decideAbsentDeactivations` in the engine.
+ *
+ * The rules:
+ *  - **New column → `Inactive`.** A new column is a schema change and waits for the user, exactly as
+ *    a new OBJECT does. `autoEnableNewColumns` opts out. This inherited the map's enabled state
+ *    outright before, so a column appearing on an object already being synced started syncing
+ *    immediately with no decision from anyone.
+ *  - **The map bounds the column.** Nothing is Active on a map that is not enabled, flag or no flag.
+ *  - **Re-added column → `Active`, ungated.** That row is not new; it was disabled because the source
+ *    stopped reporting the column. Gating it would silently demote a column the user chose to sync
+ *    every time the source flickered.
+ *  - **Vanished column → `Inactive`, never deleted.** Retiring is reversible by the branch above.
+ */
+export function decideFieldMapReconcile(
+    activeFieldNames: readonly string[],
+    existing: readonly ExistingFieldMapRead[],
+    mapEnabled: boolean,
+    autoEnableNewColumns: boolean,
+): FieldMapReconcilePlan {
+    const plan: FieldMapReconcilePlan = { Create: [], Enable: [], Disable: [] };
+    const existingByLower = new Map(
+        existing.map(fm => [(fm.SourceFieldName ?? '').toLowerCase(), fm] as const)
+    );
+    const activeLower = new Set(activeFieldNames.map(n => n.toLowerCase()));
+
+    for (const name of activeFieldNames) {
+        const found = existingByLower.get(name.toLowerCase());
+        if (!found) {
+            plan.Create.push({
+                SourceFieldName: name,
+                Status: mapEnabled && autoEnableNewColumns ? 'Active' : 'Inactive',
+            });
+        } else if (found.Status !== 'Active' && mapEnabled) {
+            plan.Enable.push(found.SourceFieldName ?? name);
+        }
+    }
+    for (const fm of existing) {
+        const name = fm.SourceFieldName ?? '';
+        if (fm.Status === 'Active' && !activeLower.has(name.toLowerCase())) {
+            plan.Disable.push(name);
+        }
+    }
+    return plan;
+}
