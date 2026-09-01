@@ -62,6 +62,7 @@ function makeOpts(over: {
     discoverObjects?: () => Promise<Array<{ Name: string; Label: string; Description: string }>>;
     discoverFieldsViaFetch?: ReturnType<typeof vi.fn>;
     objectNames?: string[];
+    runDeadlineMs?: number;
 }): ConnectorCreationPipelineOptions {
     const discoverFieldsViaFetch = over.discoverFieldsViaFetch
         ?? vi.fn(async () => [sampledField('id', 50, true), sampledField('note', 900), sampledField('undeclared_col', 64)]);
@@ -74,6 +75,7 @@ function makeOpts(over: {
         CompanyIntegration: { ID: 'CI-1', IntegrationID: 'INT-1' },
         ContextUser: { ID: 'U-1' },
         IntrospectOptions: over.objectNames ? { ObjectNames: over.objectNames } : undefined,
+        RunDeadlineMs: over.runDeadlineMs,
     } as unknown as ConnectorCreationPipelineOptions;
 }
 
@@ -208,5 +210,54 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
         const schema = await host().StageIntrospect(makeEmitter(), opts);
 
         expect(schema.Objects[0].PrimaryKeyFields).toEqual(['id']);
+    });
+
+    describe('the sampling budget', () => {
+        // Sampling is per OBJECT, so this stage's cost scales with the catalog. Execute races the
+        // stage against the run deadline, but Promise.race does not CANCEL the loser — so without a
+        // check the loop keeps calling the vendor for hours on behalf of an already-failed run.
+
+        it('stops sampling once the run budget is spent, and keeps the declarations', async () => {
+            // Each sample burns 30ms against a 60ms budget, so the first one or two land and the
+            // rest are passed over. The objects still come back — with their declared fields.
+            const fetchFields = vi.fn(async () => {
+                await new Promise((r) => setTimeout(r, 30));
+                return [sampledField('id', 50, true), sampledField('undeclared_col', 64)];
+            });
+            const declared = Array.from({ length: 12 }, (_v, i) => declaredObject(`Obj${i}`));
+            const opts = makeOpts({ declared, discoverFieldsViaFetch: fetchFields, runDeadlineMs: 60 });
+            const emitter = makeEmitter();
+
+            const schema = await host().StageIntrospect(emitter, opts);
+
+            expect(fetchFields.mock.calls.length).toBeLessThan(12);   // did NOT walk the whole catalog
+            expect(schema.Objects).toHaveLength(12);                  // every object still returned
+            // An unsampled object keeps its declaration — the behaviour that shipped before sampling.
+            const last = schema.Objects[11];
+            expect(last.Fields.map((f) => f.Name)).toEqual(['id', 'note']);
+            expect(emitter.errors.some((e) => e.meta?.code === 'sample-budget-exhausted')).toBe(true);
+        });
+
+        it('samples everything when the budget is ample, and says nothing about time', async () => {
+            const fetchFields = vi.fn(async () => [sampledField('id', 50, true)]);
+            const declared = Array.from({ length: 6 }, (_v, i) => declaredObject(`Obj${i}`));
+            const opts = makeOpts({ declared, discoverFieldsViaFetch: fetchFields, runDeadlineMs: 60_000 });
+            const emitter = makeEmitter();
+
+            await host().StageIntrospect(emitter, opts);
+
+            expect(fetchFields.mock.calls.length).toBe(6);
+            expect(emitter.errors.some((e) => e.meta?.code === 'sample-budget-exhausted')).toBe(false);
+        });
+
+        it('treats a budget of 0 as disabled, matching RunDeadlineMs elsewhere', async () => {
+            const fetchFields = vi.fn(async () => [sampledField('id', 50, true)]);
+            const declared = Array.from({ length: 4 }, (_v, i) => declaredObject(`Obj${i}`));
+            const opts = makeOpts({ declared, discoverFieldsViaFetch: fetchFields, runDeadlineMs: 0 });
+
+            await host().StageIntrospect(makeEmitter(), opts);
+
+            expect(fetchFields.mock.calls.length).toBe(4);   // 0 disables, it does not mean "no time"
+        });
     });
 });

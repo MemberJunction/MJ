@@ -450,6 +450,18 @@ export class IntegrationConnectorCreationPipeline {
     ) {
         emitter.stageStart('Introspect', 'Discovering objects and fields via connector');
         const startMs = Date.now();
+        // Sampling is now per OBJECT, so this stage's cost scales with the catalog — and on a large
+        // one it is the run's whole cost. Execute races the stage against the run deadline, but
+        // `Promise.race` does not CANCEL the loser: without a check the sampling loops below keep
+        // issuing vendor requests, for hours, on behalf of a run that has already been failed and
+        // whose results nobody will read. So stop at the same wall the race enforces.
+        //
+        // Approximated from THIS stage's start rather than the run's: only ConnectionTest precedes
+        // it, so the two differ by one connectivity probe. The approximation can only ever stop
+        // work LATER than the race — never earlier — so it cannot truncate a run that would
+        // otherwise have completed.
+        const budgetMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+        const outOfTime = (): boolean => budgetMs > 0 && Date.now() - startMs >= budgetMs;
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured
             // stream (IntegrationTailRunEvents carries counts) so a client can render a real
@@ -505,9 +517,11 @@ export class IntegrationConnectorCreationPipeline {
 
             const sampledDeclared = new Set<string>();
             let runtimeAdded = 0;
+            let unsampledForTime = 0;
             for (const d of runtimeObjects) {
                 const key = d.Name.toLowerCase();
                 if (!inScope(d.Name)) continue;
+                if (outOfTime()) { unsampledForTime++; continue; }
                 if (seen.has(key)) {
                     // §case-3 (data-only-discoverable): a DECLARED object the connector ALSO surfaces at
                     // runtime. Sampling populates it IN PLACE so a name-only declaration becomes syncable
@@ -572,6 +586,7 @@ export class IntegrationConnectorCreationPipeline {
             for (const name of declaredNames) {
                 const key = name.toLowerCase();
                 if (sampledDeclared.has(key) || !inScope(name)) continue;
+                if (outOfTime()) { unsampledForTime++; continue; }
                 const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
                 if (!existing) continue;
                 // Record it here too: two declared entries that differ only by case resolve to the
@@ -581,7 +596,19 @@ export class IntegrationConnectorCreationPipeline {
                 declaredOnlySampled++;
             }
 
-            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} total=${schema.Objects.length}`);
+            if (unsampledForTime > 0) {
+                // NOT a failure: every unsampled object keeps its declaration, which is exactly the
+                // behaviour that shipped before sampling existed. But it is not the complete sample
+                // the run appears to have done, and the difference is real — unsampled objects keep
+                // catalog-guessed widths and gain undeclared columns only via the overflow path.
+                const msg =
+                    `Ran out of time after ${Math.round((Date.now() - startMs) / 1000)}s: ` +
+                    `${unsampledForTime} object(s) were not sampled and keep their declared fields ` +
+                    `and catalog widths. Raise RunDeadlineMs or introspect a named subset.`;
+                emitter.stageError('Introspect', msg, { code: 'sample-budget-exhausted' });
+                console.warn(`[IntrospectPipeline] ${msg}`);
+            }
+            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} total=${schema.Objects.length}`);
 
             const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
@@ -594,6 +621,7 @@ export class IntegrationConnectorCreationPipeline {
                 fieldsDiscovered: fieldCount,
                 durationMs: Date.now() - startMs,
                 discoverObjectsFailed,
+                unsampledForTime,
             });
             return schema;
         } catch (err) {
