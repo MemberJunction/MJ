@@ -76,6 +76,27 @@
   },
   {
     "fields": {
+      "Name": "Architect - Main Prompt",
+      "Description": "System prompt for the Architect sub-agent. Makes the FIRST real decision in the plan — what kind of thing the model should be — from the measured statistics and the per-candidate gate reports the Statistics Pass produced, not from the goal statement. Chooses commit / defer / reify / compose, records every candidate considered with its rationale, and (when composing) proposes a component graph that is validated against the real component tree before anything runs. Writes only the Architecture slice of the ModelingPlanSpec.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/architect.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/architect.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "F144C61B-CC16-4E4D-BCDF-A254FE36A57C"
+    }
+  },
+  {
+    "fields": {
       "Name": "Experiment Designer - Main Prompt",
       "Description": "System prompt for the Experiment Designer sub-agent. Proposes a ranked set of experiments (features × algorithms × hyperparameters) with rationale, a validation strategy with a locked holdout, and a proposed budget. Writes only the ProposedExperiments, ValidationStrategy, and ProposedBudget slices of the ModelingPlanSpec.",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",

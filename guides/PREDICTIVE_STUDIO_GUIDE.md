@@ -768,19 +768,21 @@ flowchart TB
     style LEAK fill:#fee2e2,stroke:#dc2626
 ```
 
-### 12.1 Topology — the agent and its four sub-agents
+### 12.1 Topology — the agent and its five sub-agents
 
-The parent **Model Development Agent** is a `Loop` agent (`ModelSelectionMode='Agent'`, `ArtifactCreationMode='Always'`, `DefaultArtifactTypeID → ML Experiment Results`, `InjectNotes=true`, `MaxNotesToInject=10`, `ExposeAsAction=true`). Its four wired Actions are the agent-facing PS Actions plus `Write Entity Field(s)`. Four sub-agents (all `Loop`, `InvocationMode='Sub-Agent'`) refine the plan:
+The parent **Model Development Agent** is a `Loop` agent (`ModelSelectionMode='Agent'`, `ArtifactCreationMode='Always'`, `DefaultArtifactTypeID → ML Experiment Results`, `InjectNotes=true`, `MaxNotesToInject=10`, `ExposeAsAction=true`). Its four wired Actions are the agent-facing PS Actions plus `Write Entity Field(s)`. Five sub-agents (all `Loop`, `InvocationMode='Sub-Agent'`) refine the plan:
 
 | Sub-agent | ExecOrder | LLM? | Writes (its payload slice) |
 |---|---|---|---|
 | **Goal Analyst** | 1 | yes | refines the business goal → `Goal`, `TargetDefinition` (target + problem type + success metric) |
 | **Data Scout** | 2 | yes | studies the data → `CandidateSources`, `CandidateFeatures`, `LeakageNotes`; flags leakage risks |
 | **Statistics Pass** | 3 | **no — code** | MEASURES the data → `Statistics`, `GateReports` (§12.6) |
-| **Experiment Designer** | 4 | yes | proposes ranked experiments + validation + budget → `ProposedExperiments`, `ValidationStrategy`, `ProposedBudget` |
+| **Architect** | 4 | yes | decides what KIND of model this is → `Architecture` (§12.7) |
+| **Experiment Designer** | 5 | yes | proposes ranked experiments + validation + budget → `ProposedExperiments`, `ValidationStrategy`, `ProposedBudget` |
 
-The ordering is the point: the Experiment Designer proposes algorithms **after** the data has been
-measured, so its choice can be argued with from evidence rather than from the goal sentence alone.
+The ordering is the point. The data is measured before anything commits to a shape; the shape is
+chosen before experiments are proposed within it; and the Experiment Designer no longer re-picks an
+algorithm from scratch, it fills in the architecture that was already argued for from evidence.
 
 **Sequencing is declarative, not hardcoded control flow** — it's enforced by metadata **payload-path guards**. Each sub-agent has `PayloadDownstreamPaths: ["*"]` (it can *read* the whole plan) and an `PayloadUpstreamPaths` list scoped to exactly the slice it's allowed to *write back* (e.g. Goal Analyst → `["Goal", "TargetDefinition", "TargetDefinition.*"]`). The parent holds `PayloadSelfWritePaths: ["Approved", "Leaderboard"]` — only the orchestrator stamps the approval gate and the execution-phase leaderboard.
 
@@ -863,6 +865,55 @@ Two consequences worth naming:
 
 The pass is best-effort by construction: if it cannot run, the payload records the absence and the
 plan proceeds as it did before, with the agent saying so plainly rather than quietly guessing.
+
+---
+
+### 12.7 The Architect — deciding what kind of model this is
+
+The agent's first real decision used to be "which of the six algorithms", made from the guidance
+matrix and a goal sentence. That is a decision about a *leaf*. The component tree makes a larger
+space available, so the decision becomes typed — `ArchitectureSpec` records **which** of four
+shapes was chosen and **why**:
+
+| Decision | Means | Must carry |
+|---|---|---|
+| `commit` | one family; the evidence is clear and a search would not change the answer | exactly one candidate |
+| `defer` | several families raced on the leaderboard; the statistics do not separate them | at least two candidates |
+| `reify` | the candidates are variations of one generalized parent, so the parent is what the model *is* | `ReifiedUnderComponentTypeRef` |
+| `compose` | a custom model built by filling a structure's slots — a Bagging Wrapper over a Random Forest, a Stacking Wrapper whose `final_estimator` is a Logistic Regression, a rubric whose `weights` are a hand-authored matrix | `ComposedGraph` |
+
+`Candidates[]` is the record of everything considered, **including what was rejected and why** — so
+the rejections are auditable too, not just the choice.
+
+**Three independent guards** stand between that LLM output and a real pipeline row, and none implies
+the others:
+
+1. **Well-formed** — `validateArchitectureSpec` (zod, in Core). Cross-field rules make the label mean
+   what it says: a `commit` naming three candidates is shaped correctly and says something
+   incoherent, so it is refused.
+2. **Buildable** — `validateComponentGraph` proves a composition against the slots the component
+   types actually declare: every referenced type exists, none is abstract, each child names a real
+   slot on its parent, each filler is the slot's `Accepts` type or a descendant, required slots are
+   filled and bounded ones are not over-filled, and depth is capped so a self-referential graph
+   reports a finding instead of blowing the stack. Every error says what *would* have been valid
+   ("Its slots are: base_estimator"). The validator is pure and takes the tree as three callbacks,
+   so the identical rules run in the Studio UI and on the server.
+3. **Consistent with the evidence** — a candidate the statistics pre-pass found `Admissible: false`
+   cannot be committed to. The gate quotes the failed gate's own message ("only 30 rows per feature,
+   below the floor of 50") rather than restating it, so the user reads the measured reason.
+
+`gateArchitecture` runs all three in `PredictiveStudioPipelineBuilder.build` **before** anything is
+created — after `createPipeline` a refusal would leave an orphan row, and after training it would
+have spent the compute to learn what was knowable up front.
+
+**What is not built yet, said plainly.** `reify` and `compose` are *recordable* today but not
+*executable* — the sidecar's `component_graph` runtime ships later. The gate refuses them with a
+concrete alternative ("commit to one of its concrete descendants, or defer across them, to build
+now") and keeps the proposal on the plan. It does not quietly train the graph's root and let the
+user believe the composition happened.
+
+A plan carrying no `Architecture` at all passes the gate untouched — every pre-Architect plan
+executes exactly as it always did.
 
 ---
 
@@ -1369,8 +1420,8 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
 | **Business-user experience** (§16) — agent offers + schedules monthly · generic `'*'` risk-card panel · Models-in-Production section · de-mocked Studio + ops wired · scoring-binding lineage · WorkType value-list + Enrichment-over-GraphQL | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
-| Component **composition** execution (sidecar `component_graph`: bagging/stacking/frozen reuse) | ⏳ planned |
-| **Architect sub-agent** (commit / defer / reify / compose from the measured evidence) | ⏳ planned |
+| Component **composition** execution (sidecar `component_graph`: bagging/stacking/frozen reuse) — makes `reify`/`compose` trainable | ⏳ planned |
+| **Architect sub-agent** (commit/defer/reify/compose + graph validation + execution gate) — §12.7 | ✅ built |
 | Component **stories** (tagger, reuse-by-meaning search, Components tab) | ⏳ planned |
 | Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 

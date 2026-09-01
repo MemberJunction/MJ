@@ -18,6 +18,7 @@ import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@m
 
 import { modelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
+import { gateArchitecture, type ArchitectureGateResult } from './architecture-gate';
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
 export interface BuildPredictionInput {
@@ -62,6 +63,21 @@ export class PredictiveStudioPipelineBuilder {
   public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
     try {
+      // Gate the LLM-authored architecture BEFORE anything is created. A malformed decision, a
+      // candidate the statistics pre-pass ruled out, or a composition the component tree refuses
+      // must stop here — after `createPipeline` we would be leaving an orphan row behind, and after
+      // training we would have spent the compute to learn what was knowable up front.
+      const gate = this.gateArchitectureForBuild(spec);
+      if (!gate.Executable) {
+        return {
+          success: false,
+          published: false,
+          leakageFlagged: false,
+          heldReason: null,
+          errorMessage: gate.Reasons.join(' '),
+        };
+      }
+
       const config = modelingPlanToPipelineConfig(spec);
       const pipeline = await this.createPipeline(config, provider, user);
       const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
@@ -85,6 +101,15 @@ export class PredictiveStudioPipelineBuilder {
       LogError(`PredictiveStudioPipelineBuilder.build failed: ${errorMessage}`);
       return { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
     }
+  }
+
+  /**
+   * Architecture gate seam. Overridden in tests to inject a component engine (or to bypass the tree
+   * lookup entirely); the default runs the shape + admissibility + executability checks and skips
+   * the graph check, which needs a loaded tree the builder does not otherwise require.
+   */
+  protected gateArchitectureForBuild(spec: ModelingPlanSpec): ArchitectureGateResult {
+    return gateArchitecture(spec);
   }
 
   /** Create + save the `MJ: ML Training Pipelines` row from the resolved config. */
