@@ -1,4 +1,5 @@
 import { Readable } from 'stream';
+import { RequiresSubclass } from '@memberjunction/global';
 
 /**
  * Represents the payload returned by the CreatePreAuthUploadUrl method.
@@ -400,7 +401,17 @@ export interface StorageProviderConfig {
  * - Methods return Promises to support asynchronous operations across various providers
  * - When a storage provider doesn't support a particular operation, implementations should throw UnsupportedOperationError
  * - Each instance operates on behalf of a specific FileStorageAccount (identified by accountId)
+ *
+ * ## Why this base is `@RequiresSubclass()`
+ * Every operation that matters here (`GetObject`, `PutObject`, `ListObjects`, ...) is `abstract`,
+ * and TypeScript's `abstract` is ERASED at runtime — `new FileStorageBase()` succeeds in plain JS
+ * and yields an object whose methods are all `undefined`. Without this marker, a `ServerDriverKey`
+ * that resolves to nothing made `ClassFactory.CreateInstance` hand back exactly that hollow object,
+ * and the misconfiguration surfaced minutes later, in a different subsystem, as
+ * `driver.GetObject is not a function`. The marker turns an unresolved driver key into an
+ * immediate, named failure at the point of resolution.
  */
+@RequiresSubclass()
 export abstract class FileStorageBase {
   /**
    * The name of this storage provider, used in error messages and logging.
