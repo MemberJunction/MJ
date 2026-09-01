@@ -56,6 +56,15 @@ export interface PipelineConfig {
   leakageGuard: LeakageGuard;
   /** Validation strategy. */
   validation: ValidationStrategy;
+  /**
+   * The chosen experiment's starting hyperparameters, persisted on the pipeline row.
+   *
+   * `TrainingEngine` reads them from `MLTrainingPipeline.Hyperparameters`, so a config that omits
+   * them trains at the algorithm's defaults no matter what the Experiment Designer proposed — which
+   * is what happened before this field existed: `ProposedExperiments[i].Hyperparameters` was written
+   * by the agent and then silently dropped on the way to the pipeline.
+   */
+  hyperparameters: Record<string, unknown>;
 }
 
 
@@ -110,10 +119,15 @@ function buildValidation(spec: ModelingPlanSpec): ValidationStrategy {
 }
 
 /** Derive a concise pipeline name from the plan's goal (trim + cap length). */
-function deriveName(goal: string): string {
+function deriveName(goal: string, experimentLabel?: string): string {
   const trimmed = (goal ?? '').trim();
-  if (!trimmed) return 'New prediction';
-  return trimmed.length <= 80 ? trimmed : `${trimmed.slice(0, 77)}…`;
+  const base = trimmed.length > 0 ? trimmed : 'New prediction';
+  // An experiment SESSION materializes one pipeline per proposed experiment. Naming them all after
+  // the goal would leave a registry full of identically-named rows that only differ inside their
+  // JSON columns — so the experiment's own label distinguishes them.
+  const label = experimentLabel?.trim();
+  const full = label ? `${base} — ${label}` : base;
+  return full.length <= 80 ? full : `${full.slice(0, 77)}…`;
 }
 
 /**
@@ -123,9 +137,15 @@ function deriveName(goal: string): string {
  * clean failure rather than creating a broken pipeline.
  *
  * @param spec the approved modeling plan the agent accumulated.
+ * @param targetExperiment map THIS experiment rather than the plan's highest-priority one. An
+ *   experiment SESSION trains several of the plan's proposed experiments, each needing its own
+ *   pipeline; without this the whole session would collapse onto the top-ranked one.
  * @returns the resolved {@link PipelineConfig}.
  */
-export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineConfig {
+export function modelingPlanToPipelineConfig(
+  spec: ModelingPlanSpec,
+  targetExperiment?: ModelingPlanSpec['ProposedExperiments'][number],
+): PipelineConfig {
   const target = spec.TargetDefinition;
   if (!target?.EntityName?.trim()) {
     throw new Error('ModelingPlanSpec.TargetDefinition.EntityName is required to build a pipeline.');
@@ -133,13 +153,13 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineCo
   if (!target.TargetVariable?.trim()) {
     throw new Error('ModelingPlanSpec.TargetDefinition.TargetVariable is required to build a pipeline.');
   }
-  const experiment = chooseExperiment(spec);
+  const experiment = targetExperiment ?? chooseExperiment(spec);
   if (!experiment?.AlgorithmName?.trim()) {
     throw new Error('ModelingPlanSpec needs at least one ProposedExperiment with an AlgorithmName to build a pipeline.');
   }
 
   return {
-    name: deriveName(spec.Goal),
+    name: deriveName(spec.Goal, targetExperiment ? experiment.Label : undefined),
     description: spec.Goal?.trim() || 'Created by the Predictive Studio Agent.',
     targetEntityName: target.EntityName.trim(),
     targetVariable: target.TargetVariable.trim(),
@@ -150,6 +170,7 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineCo
     asOf: target.AsOfStrategy ?? { Mode: 'none' },
     leakageGuard: buildLeakageGuard(spec),
     validation: buildValidation(spec),
+    hyperparameters: experiment.Hyperparameters ?? {},
   };
 }
 

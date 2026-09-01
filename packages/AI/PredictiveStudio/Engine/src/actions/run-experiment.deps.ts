@@ -7,13 +7,12 @@
  * independently readable.
  *
  * The orchestrator's per-iteration {@link IExperimentTrainer} bridges to the
- * {@link TrainingEngine}, which trains by **pipeline id**. Mapping a plan's
- * proposed experiment (algorithm × feature set × hyperparameters) to a concrete
- * `MJ: ML Training Pipelines` id is an {@link IPipelineResolver} — a materialization
- * strategy that belongs to the higher layer that owns pipeline definitions. The
- * Engine package therefore supplies a clear-failing default resolver; production
- * callers inject a real one (and a real artifact loader) by constructing the deps
- * themselves and passing them via the action's `buildDeps` override.
+ * {@link TrainingEngine}, which trains by **pipeline id**. Mapping a plan's proposed experiment
+ * (algorithm × feature set × hyperparameters) to a concrete `MJ: ML Training Pipelines` id is an
+ * {@link IPipelineResolver}; production now wires {@link MaterializingPipelineResolver}, which
+ * reuses an existing pipeline whose whole configuration matches and materializes one when none
+ * does. {@link UnresolvedPipelineResolver} remains exported for callers that deliberately want the
+ * mapping to be someone else's decision.
  */
 
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -30,6 +29,9 @@ import {
 } from '../experiment/seams';
 import type { ExperimentDeps, TrainExperimentInput } from '../experiment/types';
 import { MetadataComponentMaterializer } from '../components/materialization-seam';
+import { MaterializingPipelineResolver, type IPipelineMaterializer } from '../experiment/materializing-pipeline-resolver';
+import { createTrainingPipeline } from '../agent/create-pipeline';
+import type { PipelineConfig } from '../agent/modeling-plan-to-pipeline';
 
 /**
  * A clear-failing default {@link IPipelineResolver}. The strategy for turning a
@@ -83,7 +85,7 @@ export async function buildProductionExperimentDeps(
 
   const trainer = new TrainingEngineExperimentTrainer(
     trainingDeps,
-    new UnresolvedPipelineResolver(),
+    new MaterializingPipelineResolver(new PipelineBuilderMaterializer()),
     new TrainingEngine(),
   );
 
@@ -94,4 +96,18 @@ export async function buildProductionExperimentDeps(
     contextUser,
     provider,
   };
+}
+
+/**
+ * Production {@link IPipelineMaterializer} — creates the pipeline through the SAME
+ * {@link createTrainingPipeline} helper an agent build uses, so a pipeline born in an experiment
+ * session is indistinguishable from one built directly and both inherit its plan validation (real
+ * entity, real target column, real feature columns, real algorithm).
+ */
+export class PipelineBuilderMaterializer implements IPipelineMaterializer {
+  /** @inheritdoc */
+  public async materialize(config: PipelineConfig, provider: IMetadataProvider, user: UserInfo): Promise<string> {
+    const pipeline = await createTrainingPipeline(config, provider, user);
+    return pipeline.ID;
+  }
 }

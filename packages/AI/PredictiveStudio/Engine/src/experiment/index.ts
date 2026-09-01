@@ -14,4 +14,5 @@ export * from './leaderboard';
 export * from './concurrency';
 export * from './wave-strategist';
 export * from './seams';
+export * from './materializing-pipeline-resolver';
 export * from './experiment-orchestrator';

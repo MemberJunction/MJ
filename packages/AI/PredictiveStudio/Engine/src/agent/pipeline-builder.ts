@@ -21,6 +21,7 @@ import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/de
 import { gateArchitecture, type ArchitectureGateResult } from './architecture-gate';
 import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
 import type { PromoteModelOutcome } from '../actions/promote-model.action';
+import { createTrainingPipeline } from './create-pipeline';
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
 export interface BuildPredictionInput {
@@ -115,95 +116,9 @@ export class PredictiveStudioPipelineBuilder {
   }
 
   /** Create + save the `MJ: ML Training Pipelines` row from the resolved config. */
-  private async createPipeline(config: PipelineConfig, provider: IMetadataProvider, user: UserInfo): Promise<MJMLTrainingPipelineEntity> {
-    // Validate the whole plan against real metadata BEFORE creating any rows or training — so an invalid
-    // plan (bad entity / target / feature / algorithm) fails fast with an actionable message and leaves
-    // no orphan pipeline/run rows behind, instead of erroring mid-train.
-    const entity = provider.EntityByName(config.targetEntityName);
-    if (!entity) {
-      throw new Error(`Target entity '${config.targetEntityName}' was not found in metadata. The plan must reference a real entity.`);
-    }
-    this.validatePlanFields(config, entity);
-    const targetEntityId = entity.ID;
-    const algorithmId = await this.resolveAlgorithmId(config.algorithmName, provider, user);
-
-    const pipeline = await provider.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', user);
-    pipeline.NewRecord();
-    pipeline.Name = config.name;
-    pipeline.Description = config.description;
-    pipeline.Version = 1;
-    pipeline.Status = 'Draft';
-    pipeline.TargetEntityID = targetEntityId;
-    pipeline.TargetVariable = config.targetVariable;
-    pipeline.ProblemType = config.problemType;
-    pipeline.AlgorithmID = algorithmId;
-    pipeline.SourceBindings = JSON.stringify(config.sourceBindings);
-    pipeline.FeatureSteps = JSON.stringify(config.featureSteps);
-    pipeline.AsOfStrategy = JSON.stringify(config.asOf);
-    // Persist the as-of sources so TrainingEngine can freeze them into the model's Lineage —
-    // the train→score round-trip. Null (not `[]`) when there are none, so a pipeline that
-    // never used as-of features is distinguishable from one that declared an empty list.
-    pipeline.DatedSources = config.datedSources?.length ? JSON.stringify(config.datedSources) : null;
-    pipeline.LeakageGuard = JSON.stringify(config.leakageGuard);
-    pipeline.ValidationStrategy = JSON.stringify(config.validation);
-    if (!(await pipeline.Save())) {
-      throw new Error(`Failed to create training pipeline: ${pipeline.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-    }
-    return pipeline;
-  }
-
-  /**
-   * Validate that the plan's target variable and its `select` feature columns actually exist as fields on
-   * the target entity — throwing a single actionable error (with a sample of the real field names) when
-   * they don't. This turns a would-be mid-train failure (or a garbage model trained on missing columns)
-   * into a fast, correctable "the plan references fields that don't exist" message.
-   *
-   * SINGLE-SOURCE ASSUMPTION: select columns are validated against the TARGET entity only, which is
-   * correct today because the plan converter only emits select columns from `CandidateFeatures` on the
-   * training-unit entity (see modeling-plan-to-pipeline.ts). If feature steps ever gain multi-source
-   * selects, this must validate each select against ITS source entity or it will false-reject valid plans.
-   */
-  private validatePlanFields(config: PipelineConfig, entity: EntityInfo): void {
-    const fieldNames = new Set(entity.Fields.map((f) => f.Name.toLowerCase()));
-    const missing: string[] = [];
-    if (config.targetVariable && !fieldNames.has(config.targetVariable.toLowerCase())) {
-      missing.push(`target field '${config.targetVariable}'`);
-    }
-    const steps = (config.featureSteps?.Steps ?? []) as Array<{ Kind?: string; Columns?: string[] }>;
-    const selectCols = steps.filter((s) => s.Kind === 'select').flatMap((s) => s.Columns ?? []);
-    for (const c of selectCols) {
-      if (!fieldNames.has(c.toLowerCase())) missing.push(`feature '${c}'`);
-    }
-    if (missing.length > 0) {
-      const available = entity.Fields.map((f) => f.Name).slice(0, 25).join(', ');
-      throw new Error(
-        `The plan references field(s) that don't exist on '${entity.Name}': ${missing.join(', ')}. Available fields include: ${available}.`,
-      );
-    }
-  }
-
-  /**
-   * Resolve an algorithm reference to its `MJ: ML Algorithms` id. Tolerant of LLM
-   * naming variation: matches the display `Name` OR the `DriverClass`, comparing
-   * case- and separator-insensitively — so `'LogisticRegression'`,
-   * `'Logistic Regression'`, and `'logistic_regression'` all resolve to the same row.
-   * Throws with the available algorithm list if nothing matches.
-   */
-  private async resolveAlgorithmId(algorithmName: string, provider: IMetadataProvider, user: UserInfo): Promise<string> {
-    const rv = RunView.FromMetadataProvider(provider);
-    const res = await rv.RunView<{ ID: string; Name: string; DriverClass: string }>(
-      { EntityName: 'MJ: ML Algorithms', Fields: ['ID', 'Name', 'DriverClass'], ResultType: 'simple' },
-      user,
-    );
-    const algos = res.Success ? res.Results ?? [] : [];
-    const normalize = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const want = normalize(algorithmName);
-    const match = algos.find((a) => normalize(a.Name) === want || normalize(a.DriverClass) === want);
-    if (!match) {
-      const available = algos.map((a) => a.Name).join(', ');
-      throw new Error(`Algorithm '${algorithmName}' was not found in MJ: ML Algorithms. Available: ${available || '(none)'}.`);
-    }
-    return match.ID;
+  /** Create + save the pipeline row. Delegates to the shared leaf helper (see `create-pipeline.ts`). */
+  protected async createPipeline(config: PipelineConfig, provider: IMetadataProvider, user: UserInfo): Promise<MJMLTrainingPipelineEntity> {
+    return createTrainingPipeline(config, provider, user);
   }
 
   /**

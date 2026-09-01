@@ -450,6 +450,42 @@ erDiagram
 - **`MJ: Experiment Sessions`** — one execution. Carries the `Budget` (JSON), the approved `PlanSpec` (for PS, the `ModelingPlanSpec`), a `Leaderboard` snapshot, and `AgentRunID`.
 - **`MJ: Experiment Session Iterations`** — one attempt, the **leaderboard unit**. Carries `Sequence`, `Status`, the normalized `Score` (the Experiment's `TargetMetric`), `ComputeCost`/`TokensUsed`, `Rationale`, and the driving `AIAgentRunID`.
 
+### 7.4 Resolving an experiment to a pipeline
+
+`TrainingEngine` trains by **pipeline id**, so every iteration of an experiment session needs one.
+Mapping "algorithm × feature set × hyperparameters" to a concrete `MJ: ML Training Pipelines` row was
+declared to belong to a higher layer, and the shipped default (`UnresolvedPipelineResolver`) threw —
+which meant a production experiment session could not train anything at all.
+
+`MaterializingPipelineResolver` closes that. Two properties matter more than the mechanics:
+
+- **Reuse before create.** A retried or resumed session, or a second session over the same plan, must
+  land on the SAME pipeline row — otherwise `MJ: ML Models` versions fragment across near-identical
+  pipelines and the registry stops being the history of one thing.
+- **Match on the whole configuration, not on the name.** Two proposed experiments can differ *only*
+  in hyperparameters, or only in feature set. Matching on less would silently train the wrong
+  pipeline and report it as the right one — precisely what the throwing default existed to prevent.
+  The comparison is canonical (key-order-insensitive, `null`/`{}`/`[]` all reading as "nothing"), so
+  a re-serialization never spawns a duplicate, and array order still matters because feature-step
+  order is meaningful.
+
+Two fixes fell out of building it:
+
+- **`ProposedExperiments[i].Hyperparameters` was silently dropped.** `PipelineConfig` carried no
+  hyperparameters and `createPipeline` never wrote the column, while `TrainingEngine` reads them from
+  it — so every agent-built model trained at the algorithm's defaults no matter what the Experiment
+  Designer proposed. Same failure shape as the `DatedSources` gap (§8.2): written by one side, never
+  read by the other, and invisible because the result still looks like a trained model.
+- **`modelingPlanToPipelineConfig` now takes the experiment to map.** It previously always chose the
+  plan's highest-priority one, so a session would have collapsed every iteration onto the same
+  pipeline.
+
+Pipeline creation itself moved to `agent/create-pipeline.ts` — a leaf module with no dependency on
+the training/delegation stack. Leaving it on the builder made the resolver's import a cycle, which
+failed at class-extend time with an undefined base class.
+
+---
+
 ### 7.1 The wave orchestrator
 
 `ExperimentOrchestrator` (`Engine/src/experiment/experiment-orchestrator.ts`) is **deterministic** TS that executes an *already-approved* `ModelingPlanSpec`:
@@ -1514,6 +1550,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | `TrainingEngine` (immutable models, locked holdout, lineage) | ✅ built |
 | `MLModelInferenceProcessor` ('ML Model' RSP work type, ephemeral/write-back) | ✅ built |
 | `ExperimentOrchestrator` (waves, leaderboard, pruning, budget-in-runner) | ✅ built |
+| **`MaterializingPipelineResolver`** (experiment → pipeline, reuse-before-create) — §7.4 | ✅ built |
 | **6 Remote Operations** (Train/Score/RunFeaturePipeline/Start+Control Experiment/Promote) + **8 Actions** | ✅ built |
 | **Feature Pipelines** (category route — `FeaturePipelineEngine` + KH panel; no new entity) | ✅ built |
 | **Model Development Agent** + 3 sub-agents + **ML Experiment Results artifact** + Angular viewer | ✅ built |
