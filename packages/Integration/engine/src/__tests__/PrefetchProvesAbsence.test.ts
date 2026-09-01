@@ -4,13 +4,14 @@ import { join } from 'node:path';
 
 // Scripted by each test before it drives the prefetch.
 const runViewResult = vi.hoisted(() => ({ current: { Success: true, Results: [] as Array<Record<string, unknown>> } }));
+const lastRunViewParams = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
     return {
         ...actual,
         RunView: class MockRunView {
-            async RunView() { return runViewResult.current; }
+            async RunView(params: Record<string, unknown>) { lastRunViewParams.current = params; return runViewResult.current; }
         },
     };
 });
@@ -164,5 +165,18 @@ describe('the key SHAPES agree end to end (the regression that shipped)', () => 
         expect(host.isProvablyAbsent('k', undefined)).toBe(false);
         expect(host.isProvablyAbsent('k', { Hashes: new Map(), Present: new Set(), CoversWholeBatch: false })).toBe(false);
         expect(host.isProvablyAbsent(null, { Hashes: new Map(), Present: new Set(), CoversWholeBatch: true })).toBe(false);
+    });
+});
+
+describe('the prefetch is unbounded — its result is what absence proofs are judged against', () => {
+    it('passes IgnoreMaxRows so a row-limit default can never truncate the proof', async () => {
+        // A plain RunView falls back to the entity's UserViewMaxRows (default 1000). CoversWholeBatch
+        // is computed from the REQUEST side and never reconciled against res.Results.length, so a
+        // silently truncated response marks every existing row beyond the cap "provably absent" —
+        // and each one is re-INSERTed as a duplicate on every sync. The batch size happening to sit
+        // under the default cap is a margin, not a guard.
+        const host = makeHost([]);
+        await host.PrefetchContentHashes([created('x')], {});
+        expect(lastRunViewParams.current?.['IgnoreMaxRows']).toBe(true);
     });
 });

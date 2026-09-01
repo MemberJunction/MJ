@@ -5352,6 +5352,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 Fields: [...pkNames, CONTENT_HASH_COLUMN],
                 ExtraFilter: extraFilter,
                 ResultType: 'simple',
+                // A plain RunView is NOT unbounded — it falls back to the entity's UserViewMaxRows
+                // (default 1000). This result is what `CoversWholeBatch` absence proofs are judged
+                // against, and coverage is computed from the REQUEST side, never reconciled with
+                // res.Results.length: a silently truncated response would mark every existing row
+                // beyond the cap "provably absent" and re-INSERT it as a duplicate on every sync.
+                // Today the apply batch (500) sits under the default cap, so nothing fires — but a
+                // 2x margin defended by nothing is not a guard. Same reasoning as baseEngine's own
+                // IgnoreMaxRows use, and this file documents the identical trap on the push side.
+                IgnoreMaxRows: true,
             }, contextUser);
             if (!res.Success) return undefined;
             const Hashes = new Map<string, string>();
