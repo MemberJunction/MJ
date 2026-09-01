@@ -1254,6 +1254,16 @@ GO
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
 
     /** @inheritdoc */
+    getRoutineNamesBySchemaSQL(schemas: string[]): string {
+        if (schemas.length === 0) return '';
+        const inList = schemas.map(s => `'${s.replace(/'/g, "''")}'`).join(', ');
+        return `SELECT s.name AS schema_name, p.name AS routine_name
+FROM sys.procedures p
+INNER JOIN sys.schemas s ON s.schema_id = p.schema_id
+WHERE s.name IN (${inList})`;
+    }
+
+    /** @inheritdoc */
     getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string {
         switch (type) {
             case 'Create':

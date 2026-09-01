@@ -66,12 +66,47 @@ export class BaseParams {
 }
 
 /**
- * Represents token usage and cost information for an AI model execution.
- * 
+ * The base measure a model's usage is counted in.
+ *
+ * `Tokens` is the default and is carried by the token fields on {@link ModelUsage}. The other
+ * kinds are *continuous* measures — what a model bills for when tokens are not the unit of work —
+ * and are carried by {@link ModelUsage.inputUnits} / {@link ModelUsage.outputUnits}.
+ *
+ * Always the BASE measure, never the billing measure: audio billed per hour is still counted in
+ * `Seconds`, and the price unit type driver does the conversion. That keeps one recorded quantity
+ * valid across vendors who bill the same model per minute and per hour.
+ *
+ * **This union must stay a SUPERSET of the `AIUsageType` catalog.** Those rows are the source:
+ * `MJAIPromptRunEntityServer` resolves a run's `UsageTypeID` to its `Name` and hands the string
+ * straight to this type. Adding a usage-type row whose name is absent here means every run
+ * recorded in it becomes unpriceable at runtime — a data change breaking a type, with no compile
+ * error to warn you. `MODEL_USAGE_UNIT_KINDS` below exists so a test can assert the two agree;
+ * `Characters` is present for exactly that reason, ahead of any driver for it.
+ *
+ * A kind being listed here does NOT mean runs recorded in it can be priced. Pricing is driven by
+ * `MJ: AI Model Price Unit Types` drivers, and both `AIEngineBase.CalculateModelCost` and
+ * `MJAIPromptRunEntityServer` deliberately REFUSE to price a run whose kind no driver claims,
+ * rather than produce a plausible wrong number. `Characters` has no driver yet — per-character TTS
+ * billing is real and will arrive — so such a run is left uncosted with a logged reason, which is
+ * the intended safe behaviour rather than an oversight.
+ */
+export const MODEL_USAGE_UNIT_KINDS = ['Tokens', 'Seconds', 'Characters', 'Images'] as const;
+
+export type ModelUsageUnitKind = (typeof MODEL_USAGE_UNIT_KINDS)[number];
+
+/**
+ * Represents usage and cost information for an AI model execution.
+ *
  * This class tracks the number of tokens used in both the prompt (input) and
  * completion (output) phases of an AI model execution, along with optional
  * cost information when provided by the AI provider.
- * 
+ *
+ * For models whose unit of work is not a token — speech-to-text priced per minute of audio,
+ * image generation priced per image — the quantity lives in {@link inputUnits} /
+ * {@link outputUnits} with {@link unitKind} naming its measure. Continuous quantities are never
+ * folded into the token fields: a run that reports 90 "tokens" meaning 90 minutes corrupts every
+ * token rollup and dashboard downstream of it.
+ *
  * @class ModelUsage
  * @since 2.43.0
  */
@@ -193,6 +228,47 @@ export class ModelUsage {
      */
     get totalTokens(): number {
         return this.promptTokens + this.completionTokens;
+    }
+
+    /**
+     * The base measure {@link inputUnits} / {@link outputUnits} are counted in. `undefined` means
+     * the execution was token-billed and only the token fields are meaningful.
+     */
+    unitKind?: ModelUsageUnitKind
+
+    /**
+     * Continuous input quantity consumed by the execution, in {@link unitKind}'s base measure —
+     * e.g. seconds of audio submitted for transcription. Undefined for token-billed executions.
+     *
+     * Left undefined rather than zeroed when a provider does not report the quantity: a zero here
+     * prices as free, which is a worse answer than "no usage recorded".
+     */
+    inputUnits?: number
+
+    /**
+     * Continuous output quantity produced by the execution, in {@link unitKind}'s base measure —
+     * e.g. seconds of audio synthesized, or number of images generated. Undefined for
+     * token-billed executions.
+     */
+    outputUnits?: number
+
+    /**
+     * Builds usage for a continuous-media execution, with the token fields zeroed.
+     *
+     * @param kind The base measure being counted — never the billing measure
+     * @param inputUnits Quantity consumed on the input side
+     * @param outputUnits Quantity produced on the output side; defaults to 0
+     */
+    public static ForMedia(
+        kind: Exclude<ModelUsageUnitKind, 'Tokens'>,
+        inputUnits: number,
+        outputUnits: number = 0
+    ): ModelUsage {
+        const usage = new ModelUsage(0, 0);
+        usage.unitKind = kind;
+        usage.inputUnits = inputUnits;
+        usage.outputUnits = outputUnits;
+        return usage;
     }
 }
 

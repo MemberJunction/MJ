@@ -99,6 +99,9 @@ export type RunCounters = {
   entitiesRegenerated: number;
   sqlStatements: number;
   filesWritten: number;
+  filesSkipped: number;
+  schemasEmitted: number;
+  schemasSkipped: number;
   spCalls: Record<string, number>;
   [key: string]: number | Record<string, number>;
 };
@@ -604,6 +607,9 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
       entitiesRegenerated: 0,
       sqlStatements: 0,
       filesWritten: 0,
+      filesSkipped: 0,
+      schemasEmitted: 0,
+      schemasSkipped: 0,
       spCalls: {},
     };
   }

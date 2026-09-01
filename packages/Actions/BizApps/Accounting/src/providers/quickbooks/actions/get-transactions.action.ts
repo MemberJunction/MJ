@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
 
 /**
  * Standard transaction interface
@@ -38,6 +39,7 @@ export interface TransactionLine {
 /**
  * Action to retrieve transactions from QuickBooks Online
  */
+@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetGLEntries, ERP_INTEGRATION.QuickBooksOnline))
 @RegisterClass(BaseAction, 'GetQuickBooksTransactionsAction')
 export class GetQuickBooksTransactionsAction extends QuickBooksBaseAction {
     

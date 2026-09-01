@@ -35,6 +35,7 @@ export type SyncErrorCode =
     | 'WRITE_VERIFICATION_ERROR'
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
+    | 'OBJECT_UNAVAILABLE'
     | 'UNKNOWN_ERROR';
 
 /** Severity level of a sync error */
@@ -503,6 +504,30 @@ export interface SourceObjectInfo {
      * when the source does not expose a documented watermark.
      */
     IncrementalWatermarkField?: string;
+    /**
+     * Whether `Fields` is the object's COMPLETE column list for this account.
+     *
+     * Sources fall into three shapes and only the source knows which it is:
+     *   - it describes no columns at all (declared metadata is the whole truth),
+     *   - it returns only the account's CUSTOM columns (additive — the standard columns
+     *     still exist, the source simply did not restate them),
+     *   - it returns the full mapping (a column absent here is genuinely gone).
+     *
+     * Only the third shape may deactivate columns. This was previously INFERRED from
+     * "the field list came back non-empty", which cannot tell the second shape from the
+     * third — so a custom-only source looked authoritative and its standard columns were
+     * candidates for deactivation.
+     *
+     * Undefined means the object has not said, and the CONNECTOR's claim
+     * (`DiscoveryIsAuthoritative`, surfaced as `SourceSchemaInfo.IsAuthoritative`) is inherited:
+     * a connector affirming it returns the complete gamut is affirming it for the fields the same
+     * describe call returned. Since that claim defaults to false and a scoped introspection forces
+     * it false, an undeclared object under a non-affirming connector is still never deactivated.
+     *
+     * So set this `false` explicitly on an object whose describe is custom-only while the rest of
+     * the connector's discovery is complete — that is the one case the inherited claim gets wrong.
+     */
+    FieldsAreAuthoritative?: boolean;
 }
 
 /** One field/column in a source object discovered during introspection. */
@@ -565,6 +590,26 @@ export interface SourceFieldInfo {
     IsForeignKey?: boolean;
     /** If FK, which source object it references (null if not a FK). */
     ForeignKeyTarget: string | null;
+    /**
+     * How the sync engine should treat this field.
+     *
+     * - undefined / 'Sync' — normal behaviour (map, hash, persist).
+     * - 'Exclude' — the field is stripped from every fetched record BEFORE field
+     *   mapping. It reaches neither the mapped row, nor the CustomOverflow column,
+     *   nor the content-hash basis, so it stops influencing change detection.
+     *
+     * For payload a connector knows to be worthless or redundant at the field level:
+     * vendor UI state riding along on every record (Totara `preferences` — file-picker
+     * recents on 100% of rows), cosmetic configuration (`courseformatoptions`), or an
+     * embedded collection that re-derives an object already synced in its own right
+     * (`enrolledcourses` re-deriving Enrolled_Users). Exclusion — not field-map
+     * deactivation, which merely REROUTES the value into CustomOverflow, from which
+     * the custom-column promoter can resurrect it.
+     *
+     * Persisted into IntegrationObjectField.Configuration (JSON) by schema sync, so
+     * no migration is needed and existing installs pick it up on their next sync.
+     */
+    SyncDirective?: 'Sync' | 'Exclude';
 }
 
 /** One foreign key relationship in a source object. */

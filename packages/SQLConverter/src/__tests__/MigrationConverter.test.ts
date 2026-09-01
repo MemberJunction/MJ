@@ -31,6 +31,13 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
     // …and it is surfaced as a gap so the CLI fails the run rather than shipping an empty file.
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+    // Promoted for the same reason a fully-gapped file is: an empty body must never be written as
+    // a discoverable .pg.sql. Pinned because the two promotions are computed separately — the
+    // hollow check reads `transpiled.unhandled`, which does NOT contain the synthetic row added
+    // just above, so this case cannot ride on that one by accident.
+    expect(r.status).toBe('needs-hand-authoring');
+    // And it is NOT described as a gapped conversion — nothing became a gap here.
+    expect(r.notes.some((n) => n.includes('every translatable statement became a conversion gap'))).toBe(false);
   });
 
   it('does NOT flag a normal conversion; reports source/emitted counts', async () => {
@@ -55,6 +62,61 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.reconciliation.emittedStatements).toBe(0);
   });
 
+  it('promotes a FULLY GAPPED conversion to needs-hand-authoring (issue #3840)', async () => {
+    // The real case: bizapps-common's Layered_Base_Views_People_Organizations wraps its entire
+    // body in `IF NOT OBJECT_ID(...)` blocks the dialect cannot emit, so every statement becomes a
+    // gap and the body is a header + banner over nothing. Left as `converted`, the CLI writes a
+    // discoverable .pg.sql that satisfies filename parity, passes a T-SQL scan, applies cleanly,
+    // and does nothing.
+    const allGapped: TSQLToPGTranspiler = {
+      transpile: async () => ({
+        sql: [],
+        unhandled: [
+          { kind: 'IF-BLOCK', snippet: "IF NOT OBJECT_ID('[s].[vwPeople]', 'V') IS NULL BEGIN" },
+          { kind: 'IF-BLOCK', snippet: "IF NOT OBJECT_ID('[s].[vwOrganizations]', 'V') IS NULL BEGIN" },
+        ],
+      }),
+    };
+    // Hand-authored DDL, so the classifier keeps it and it reaches the transpiler. (A `vw*`-named
+    // object would classify as a CodeGen object and take the marker path instead, which is guarded
+    // separately by the empty-marker promotion above.)
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Layered.sql', { transpiler: allGapped });
+    expect(r.status).toBe('needs-hand-authoring');
+    expect(r.reconciliation.emittedStatements).toBe(0);
+    // It is a DIFFERENT finding from the vanish guard: content was reported, not lost.
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(false);
+    expect(r.notes.some((n) => n.includes('every translatable statement became a conversion gap'))).toBe(true);
+  });
+
+  it('does NOT promote when SOME statements survived alongside a gap', async () => {
+    // A partially-gapped migration is the ordinary case `--allow-gaps` exists for: real DDL was
+    // emitted, and the gap is recorded in the banner. Promoting it would route every imperfect
+    // conversion to .needs-hand and make the flag meaningless.
+    const partial: TSQLToPGTranspiler = {
+      transpile: async (tsql) => ({
+        sql: [tsql],
+        unhandled: [{ kind: 'IF-BLOCK', snippet: 'IF EXISTS (...) BEGIN' }],
+      }),
+    };
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: partial });
+    expect(r.status).toBe('converted');
+    expect(r.reconciliation.emittedStatements).toBeGreaterThan(0);
+  });
+
+  it('does NOT promote an all-DROPPED file (empty, but nothing was gapped)', async () => {
+    // Guards the third `emittedStatements === 0` case: the dialect accounted the content as
+    // dropped rather than gapped, which is legitimate and must stay `converted`.
+    const allDropped: TSQLToPGTranspiler = {
+      transpile: async () => ({ sql: [], unhandled: [], dropped: [{ kind: 'ALTER-ACTIONLESS', snippet: 'ALTER TABLE x' }] }),
+    };
+    const sql = 'ALTER TABLE [__mj].[Widget] ADD CONSTRAINT CK CHECK (ISJSON([X]) = 1);';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: allDropped });
+    expect(r.status).not.toBe('needs-hand-authoring');
+  });
+
   it('does NOT flag suspiciousEmptyOutput when the dialect intentionally DROPPED the content', async () => {
     // An all-dropped file (e.g. kept T-SQL is only an actionless ALTER that PG discards) emits
     // nothing and reports nothing, but the content did not VANISH — it was accounted as dropped.
@@ -77,6 +139,44 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     const r = await convertMigration(sql, 'V_CustomerSummary.sql', { transpiler: passthrough });
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+  });
+
+  it('substitutes ${mjSchema} independently of ${flyway:defaultSchema} (issue #3838)', async () => {
+    // An Open App migration names its OWN schema with ${flyway:defaultSchema} and MJ CORE with
+    // ${mjSchema}; for every app those are different values. Only the first was substituted, so
+    // `${mjSchema}` survived into the emitted file AND into the SQL --bake-codegen executes,
+    // failing with: relation "${mjSchema}.Entity" does not exist.
+    const sql = [
+      'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
+      'GO',
+      "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';",
+    ].join('\n');
+    const r = await convertMigration(sql, 'V_Widget.sql', {
+      transpiler: passthrough,
+      schema: '__mj_bizappscommon',
+      coreSchema: '__mj',
+    });
+    expect(r.pgSQL).not.toContain('${mjSchema}');
+    expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
+    // The app's own object resolves to the app schema…
+    expect(r.pgSQL).toContain('__mj_bizappscommon');
+    // …and core resolves to core, NOT to the app schema.
+    expect(r.pgSQL).not.toContain('__mj_bizappscommon"."Entity"');
+    expect(r.pgSQL).toMatch(/__mj["\].]*\.?\[?"?Entity/);
+  });
+
+  it('defaults ${mjSchema} to __mj when no coreSchema is supplied', async () => {
+    const sql = "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';\nGO\nCREATE TABLE [x].[Y] ( [ID] INT );";
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough, schema: '__mj_app' });
+    expect(r.pgSQL).not.toContain('${mjSchema}');
+    // The app schema is deliberately '__mj_app', which CONTAINS '__mj' as a substring — so
+    // `toContain('__mj')` cannot tell the default apart from the bug this PR fixes, where the
+    // core placeholder falls back to the app schema. pgHeader() emits
+    // `CREATE SCHEMA IF NOT EXISTS __mj;` besides, which satisfies that assertion on its own
+    // whether or not the token was substituted at all. Assert on the qualified reference:
+    // negative on the wrong schema, positive on the right one.
+    expect(r.pgSQL).not.toContain('[__mj_app].[Entity]');
+    expect(r.pgSQL).toContain('[__mj].[Entity]');
   });
 
   it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
