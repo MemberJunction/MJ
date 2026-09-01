@@ -21,6 +21,39 @@
   flex-shrink: 0;
 }
 
+/* Skip link (WCAG 2.4.1) — off-screen until focused, then pinned over the header.
+   It is the first focusable element in the shell; consuming apps should drop their
+   own skip link on upgrade rather than stacking a second one in front of this. */
+.mj-skip-link {
+  position: absolute;
+  top: var(--mj-space-2);
+  left: var(--mj-space-2);
+  z-index: 100000;
+  padding: var(--mj-space-2) var(--mj-space-4);
+  background: var(--mj-bg-surface-elevated);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-border-strong);
+  border-radius: var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-lg);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform var(--mj-transition-fast);
+}
+.mj-skip-link:focus,
+.mj-skip-link:focus-visible {
+  transform: translateY(0);
+  outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
+  outline-offset: var(--mj-ring-offset);
+}
+
+/* The main landmark is also the skip-link target; focusing it programmatically must
+   not paint a ring on a region the user did not tab to. */
+mj-tab-container:focus {
+  outline: none;
+}
+
 .shell-container {
   display: flex;
   flex-direction: column;
@@ -688,6 +721,12 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 /* Mobile Navigation Drawer */
+/* `visibility` is transitioned alongside `transform` so the closed drawer is genuinely
+   hidden — off-screen alone leaves its controls hit-testable and visible to
+   checkVisibility(), which is what let 6 of its 8 controls keep taking focus. The
+   delay holds visibility through the slide-out, then drops it; opening is instant
+   (0s) so the drawer is present for the whole slide-in. `inert` (set in the template)
+   is the actual focus guard; this keeps the CSS from disagreeing with it. */
 .mobile-nav-drawer {
   display: none;
   position: fixed;
@@ -701,10 +740,21 @@ mj-tab-container ::ng-deep .lm_stack {
   z-index: 9999;
   flex-direction: column;
   transform: translateX(-100%);
-  transition: transform var(--mj-transition-slow);
+  visibility: hidden;
+  transition: transform var(--mj-transition-slow), visibility 0s linear 300ms;
 }
 .mobile-nav-drawer.open {
   transform: translateX(0);
+  visibility: visible;
+  transition: transform var(--mj-transition-slow), visibility 0s linear 0s;
+}
+
+/* Reduced motion: no slide, so nothing to hold visibility open for. */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav-drawer,
+  .mobile-nav-drawer.open {
+    transition: none;
+  }
 }
 
 .mobile-nav-header {
@@ -952,13 +1002,23 @@ mj-tab-container ::ng-deep .lm_stack {
   opacity: 0;
   transform: translateY(-10px);
   pointer-events: none;
-  transition: opacity var(--mj-transition-base), transform var(--mj-transition-base);
+  visibility: hidden;
+  transition: opacity var(--mj-transition-base), transform var(--mj-transition-base), visibility 0s linear 200ms;
 }
 
 .search-popup.open {
   opacity: 1;
   transform: translateY(0);
   pointer-events: all;
+  visibility: visible;
+  transition: opacity var(--mj-transition-base), transform var(--mj-transition-base), visibility 0s linear 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-popup,
+  .search-popup.open {
+    transition: none;
+  }
 }
 
 .search-popup-content {
