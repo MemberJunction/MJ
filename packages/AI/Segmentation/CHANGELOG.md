@@ -1,5 +1,19 @@
 # @memberjunction/ai-segmentation
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/aiengine@5.51.2
+  - @memberjunction/ai-core-plus@5.51.2
+  - @memberjunction/ai-prompts@5.51.2
+  - @memberjunction/ai-vectors@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

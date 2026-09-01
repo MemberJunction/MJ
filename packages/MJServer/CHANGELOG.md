@@ -1,5 +1,128 @@
 # Change Log - @memberjunction/server
 
+## 5.51.2
+
+### Patch Changes
+
+- 22cb904: fix(server): map GraphQL transport field names onto copies, never onto the cache's own rows
+
+  `ResolverBase` renamed `__mj_*` keys to their `_mj__*` wire aliases by writing onto its
+  argument. Those arguments are routinely rows straight out of `findBy`/`RunView` — the server
+  cache's own objects, held **by reference** under a reference-sharing storage provider. Preparing
+  one GraphQL response therefore rewrote `__mj_CreatedAt` inside the live cache, and because that
+  cache is process-wide, a single response left every later read across every worker serving
+  transport-shaped rows that `BaseEntity.SetMany` rejects.
+
+  It reached both halves of the transport rename:
+  - `MapFieldNamesToCodeNames` (single-record) — every `UserByEmail` / `UserByID` /
+    `UserByEmployeeID` call, and every CodeGen-generated single-record resolver whose entity has
+    caching enabled.
+  - The `RunView` result path — `FieldMapper.MapFields` renames by mutating, and
+    `ArrayFilterEncryptedFieldsForAPI` mutates too.
+
+  Both now map onto copies. `MapFieldNamesToCodeNames` shallow-copies its argument up front and
+  returns the copy; `ArrayMapFieldNamesToCodeNames` returns a new array of new objects rather than
+  mapping in place and handing back the caller's array. Shallow is sufficient — the only post-map
+  mutators rename top-level keys and redact scalar fields.
+
+  Behaviour is unchanged for callers: the same transport-shaped result comes back. What changes is
+  that the provider's own row objects are no longer written to.
+
+  Extracted from #3425 for the 5.x line; the freeze-on-write half of that PR is deliberately not
+  included here, since converting in-place row mutation into a `TypeError` is a behaviour change
+  that does not belong in a patch on a certified line.
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/aiengine@5.51.2
+  - @memberjunction/ai-agents@5.51.2
+  - @memberjunction/scheduling-engine@5.51.2
+  - @memberjunction/scheduling-engine-base@5.51.2
+  - @memberjunction/ai-agent-manager-actions@5.51.2
+  - @memberjunction/ai-agent-manager@5.51.2
+  - @memberjunction/ai-engine-base@5.51.2
+  - @memberjunction/clustering-engine@5.51.2
+  - @memberjunction/computer-use@5.51.2
+  - @memberjunction/ai@5.51.2
+  - @memberjunction/ai-core-plus@5.51.2
+  - @memberjunction/tag-engine@5.51.2
+  - @memberjunction/tag-engine-base@5.51.2
+  - @memberjunction/ai-mcp-client@5.51.2
+  - @memberjunction/computer-use-engine@5.51.2
+  - @memberjunction/ai-prompts@5.51.2
+  - @memberjunction/ai-bridge-base@5.51.2
+  - @memberjunction/ai-bridge-ringcentral@5.51.2
+  - @memberjunction/ai-bridge-teams@5.51.2
+  - @memberjunction/ai-bridge-twilio@5.51.2
+  - @memberjunction/ai-bridge-vonage@5.51.2
+  - @memberjunction/ai-bridge-server@5.51.2
+  - @memberjunction/remote-browser-base@5.51.2
+  - @memberjunction/remote-browser-cdp@5.51.2
+  - @memberjunction/remote-browser-selfhost@5.51.2
+  - @memberjunction/remote-browser-server@5.51.2
+  - @memberjunction/ai-vectordb@5.51.2
+  - @memberjunction/ai-vectors-pinecone@5.51.2
+  - @memberjunction/ai-vector-sync@5.51.2
+  - @memberjunction/api-keys@5.51.2
+  - @memberjunction/actions-apollo@5.51.2
+  - @memberjunction/actions-base@5.51.2
+  - @memberjunction/actions-bizapps-accounting@5.51.2
+  - @memberjunction/actions-bizapps-crm@5.51.2
+  - @memberjunction/actions-bizapps-formbuilders@5.51.2
+  - @memberjunction/actions-bizapps-lms@5.51.2
+  - @memberjunction/actions-bizapps-social@5.51.2
+  - @memberjunction/core-actions@5.51.2
+  - @memberjunction/actions@5.51.2
+  - @memberjunction/auth-providers@5.51.2
+  - @memberjunction/codegen-lib@5.51.2
+  - @memberjunction/communication-types@5.51.2
+  - @memberjunction/communication-engine@5.51.2
+  - @memberjunction/entity-communications-base@5.51.2
+  - @memberjunction/entity-communications-server@5.51.2
+  - @memberjunction/notifications@5.51.2
+  - @memberjunction/communication-ms-graph@5.51.2
+  - @memberjunction/communication-sendgrid@5.51.2
+  - @memberjunction/component-registry-client-sdk@5.51.2
+  - @memberjunction/credentials@5.51.2
+  - @memberjunction/doc-utils@5.51.2
+  - @memberjunction/encryption@5.51.2
+  - @memberjunction/external-change-detection@5.51.2
+  - @memberjunction/generic-database-provider@5.51.2
+  - @memberjunction/graphql-dataprovider@5.51.2
+  - @memberjunction/integration-engine@5.51.2
+  - @memberjunction/integration-engine-base@5.51.2
+  - @memberjunction/integration-progress-artifacts@5.51.2
+  - @memberjunction/integration-schema-builder@5.51.2
+  - @memberjunction/lists@5.51.2
+  - @memberjunction/livekit-room-server@5.51.2
+  - @memberjunction/core-entities-server@5.51.2
+  - @memberjunction/data-context@5.51.2
+  - @memberjunction/data-context-server@5.51.2
+  - @memberjunction/queue@5.51.2
+  - @memberjunction/storage@5.51.2
+  - @memberjunction/postgresql-dataprovider@5.51.2
+  - @memberjunction/record-comparison@5.51.2
+  - @memberjunction/redis-provider@5.51.2
+  - @memberjunction/sqlserver-dataprovider@5.51.2
+  - @memberjunction/scheduling-actions@5.51.2
+  - @memberjunction/scheduling-base-types@5.51.2
+  - @memberjunction/schema-engine@5.51.2
+  - @memberjunction/search-engine@5.51.2
+  - @memberjunction/server-extensions-core@5.51.2
+  - @memberjunction/templates@5.51.2
+  - @memberjunction/testing-engine@5.51.2
+  - @memberjunction/testing-engine-base@5.51.2
+  - @memberjunction/version-history@5.51.2
+  - @memberjunction/esignature@5.51.2
+  - @memberjunction/interactive-component-types@5.51.2
+  - @memberjunction/ai-provider-bundle@5.51.2
+  - @memberjunction/config@5.51.2
+  - @memberjunction/lists-base@5.51.2
+  - @memberjunction/sql-dialect@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

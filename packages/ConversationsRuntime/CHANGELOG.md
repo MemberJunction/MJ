@@ -1,5 +1,19 @@
 # @memberjunction/conversations-runtime
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/ai-agent-client@5.51.2
+  - @memberjunction/ai-engine-base@5.51.2
+  - @memberjunction/ai-core-plus@5.51.2
+  - @memberjunction/graphql-dataprovider@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

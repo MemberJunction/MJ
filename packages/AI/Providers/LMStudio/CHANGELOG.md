@@ -1,5 +1,13 @@
 # @memberjunction/ai-lmstudio
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/ai@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

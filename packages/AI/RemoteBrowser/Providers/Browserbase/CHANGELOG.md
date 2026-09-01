@@ -1,5 +1,16 @@
 # @memberjunction/remote-browser-browserbase
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/remote-browser-base@5.51.2
+  - @memberjunction/remote-browser-cdp@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

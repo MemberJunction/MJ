@@ -1,5 +1,84 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/ai-agents@5.51.2
+  - @memberjunction/scheduling-engine@5.51.2
+  - @memberjunction/scheduling-engine-base@5.51.2
+  - @memberjunction/ai-agent-manager@5.51.2
+  - @memberjunction/ai-engine-base@5.51.2
+  - @memberjunction/ai-core-plus@5.51.2
+  - @memberjunction/ai-form-builder@5.51.2
+  - @memberjunction/tag-engine-base@5.51.2
+  - @memberjunction/predictive-studio@5.51.2
+  - @memberjunction/ai-prompts@5.51.2
+  - @memberjunction/ai-anthropic@5.51.2
+  - @memberjunction/ai-assemblyai@5.51.2
+  - @memberjunction/ai-azure@5.51.2
+  - @memberjunction/ai-bedrock@5.51.2
+  - @memberjunction/ai-betty-bot@5.51.2
+  - @memberjunction/ai-blackforestlabs@5.51.2
+  - @memberjunction/ai-cerebras@5.51.2
+  - @memberjunction/ai-cohere@5.51.2
+  - @memberjunction/ai-elevenlabs@5.51.2
+  - @memberjunction/ai-fireworks@5.51.2
+  - @memberjunction/ai-gemini@5.51.2
+  - @memberjunction/ai-groq@5.51.2
+  - @memberjunction/ai-heygen@5.51.2
+  - @memberjunction/ai-inception@5.51.2
+  - @memberjunction/ai-inworld@5.51.2
+  - @memberjunction/ai-lmstudio@5.51.2
+  - @memberjunction/ai-llamacpp@5.51.2
+  - @memberjunction/ai-local-embeddings@5.51.2
+  - @memberjunction/ai-minimax@5.51.2
+  - @memberjunction/ai-mistral@5.51.2
+  - @memberjunction/ai-ollama@5.51.2
+  - @memberjunction/ai-openai@5.51.2
+  - @memberjunction/ai-openrouter@5.51.2
+  - @memberjunction/ai-recommendations-rex@5.51.2
+  - @memberjunction/ai-vertex@5.51.2
+  - @memberjunction/ai-zhipu@5.51.2
+  - @memberjunction/ai-xai@5.51.2
+  - @memberjunction/ai-reranker@5.51.2
+  - @memberjunction/ai-vector-dupe@5.51.2
+  - @memberjunction/ai-vectors-memory@5.51.2
+  - @memberjunction/ai-vectors-pinecone@5.51.2
+  - @memberjunction/ai-vectors-qdrant@5.51.2
+  - @memberjunction/ai-vectors-sqlserver@5.51.2
+  - @memberjunction/ai-vectors-pgvector@5.51.2
+  - @memberjunction/actions-apollo@5.51.2
+  - @memberjunction/actions-base@5.51.2
+  - @memberjunction/actions-bizapps-accounting@5.51.2
+  - @memberjunction/actions-bizapps-crm@5.51.2
+  - @memberjunction/actions-bizapps-formbuilders@5.51.2
+  - @memberjunction/actions-bizapps-lms@5.51.2
+  - @memberjunction/actions-bizapps-social@5.51.2
+  - @memberjunction/core-actions@5.51.2
+  - @memberjunction/actions@5.51.2
+  - @memberjunction/communication-types@5.51.2
+  - @memberjunction/content-autotagging@5.51.2
+  - @memberjunction/doc-utils@5.51.2
+  - @memberjunction/encryption@5.51.2
+  - @memberjunction/core-entities-server@5.51.2
+  - @memberjunction/data-context-server@5.51.2
+  - @memberjunction/queue@5.51.2
+  - @memberjunction/storage@5.51.2
+  - @memberjunction/react-linter@5.51.2
+  - @memberjunction/record-comparison@5.51.2
+  - @memberjunction/record-set-processor@5.51.2
+  - @memberjunction/scheduling-actions@5.51.2
+  - @memberjunction/search-engine@5.51.2
+  - @memberjunction/templates@5.51.2
+  - @memberjunction/testing-engine@5.51.2
+  - @memberjunction/geo-core@5.51.2
+  - @memberjunction/ai-provider-bundle@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @memberjunction/ng-whiteboard
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/ng-code-editor@5.51.2
+  - @memberjunction/ng-markdown@5.51.2
+  - @memberjunction/ng-ui-components@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

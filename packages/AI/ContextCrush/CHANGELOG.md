@@ -1,5 +1,7 @@
 # @memberjunction/context-crush
 
+## 5.51.2
+
 ## 5.51.1
 
 ## 5.51.0

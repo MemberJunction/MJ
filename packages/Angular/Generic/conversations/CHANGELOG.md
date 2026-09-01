@@ -1,5 +1,41 @@
 # @memberjunction/ng-conversations
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [679bab9]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/ng-forms@5.51.2
+  - @memberjunction/ai-agent-client@5.51.2
+  - @memberjunction/ai-engine-base@5.51.2
+  - @memberjunction/ai@5.51.2
+  - @memberjunction/ai-core-plus@5.51.2
+  - @memberjunction/ai-realtime-client@5.51.2
+  - @memberjunction/ng-testing@5.51.2
+  - @memberjunction/ng-agent-client@5.51.2
+  - @memberjunction/ng-artifacts@5.51.2
+  - @memberjunction/ng-base-types@5.51.2
+  - @memberjunction/ng-code-editor@5.51.2
+  - @memberjunction/ng-composer@5.51.2
+  - @memberjunction/ng-container-directives@5.51.2
+  - @memberjunction/ng-notifications@5.51.2
+  - @memberjunction/ng-resource-permissions@5.51.2
+  - @memberjunction/ng-shared-generic@5.51.2
+  - @memberjunction/ng-tasks@5.51.2
+  - @memberjunction/ng-user-routines@5.51.2
+  - @memberjunction/ng-whiteboard@5.51.2
+  - @memberjunction/conversations-runtime@5.51.2
+  - @memberjunction/graphql-dataprovider@5.51.2
+  - @memberjunction/ng-media-player@5.51.2
+  - @memberjunction/interactive-component-types@5.51.2
+  - @memberjunction/ng-markdown@5.51.2
+  - @memberjunction/ng-ui-components@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

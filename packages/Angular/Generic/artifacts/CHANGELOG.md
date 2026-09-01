@@ -1,5 +1,30 @@
 # @memberjunction/ng-artifacts
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/ng-base-forms@5.51.2
+  - @memberjunction/ng-base-types@5.51.2
+  - @memberjunction/ng-code-editor@5.51.2
+  - @memberjunction/ng-notifications@5.51.2
+  - @memberjunction/ng-query-viewer@5.51.2
+  - @memberjunction/ng-react@5.51.2
+  - @memberjunction/ng-shared-generic@5.51.2
+  - @memberjunction/ng-trees@5.51.2
+  - @memberjunction/graphql-dataprovider@5.51.2
+  - @memberjunction/ng-media-player@5.51.2
+  - @memberjunction/interactive-component-types@5.51.2
+  - @memberjunction/ng-export-service@5.51.2
+  - @memberjunction/ng-markdown@5.51.2
+  - @memberjunction/ng-pagination@5.51.2
+  - @memberjunction/ng-ui-components@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

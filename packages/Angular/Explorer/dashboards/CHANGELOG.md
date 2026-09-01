@@ -1,5 +1,71 @@
 # @memberjunction/ng-dashboards
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/ai-engine-base@5.51.2
+  - @memberjunction/ai-core-plus@5.51.2
+  - @memberjunction/tag-engine-base@5.51.2
+  - @memberjunction/api-keys-base@5.51.2
+  - @memberjunction/actions-base@5.51.2
+  - @memberjunction/ng-base-application@5.51.2
+  - @memberjunction/ng-core-entity-forms@5.51.2
+  - @memberjunction/ng-explorer-settings@5.51.2
+  - @memberjunction/ng-shared@5.51.2
+  - @memberjunction/ng-testing@5.51.2
+  - @memberjunction/ng-action-gallery@5.51.2
+  - @memberjunction/ng-actions@5.51.2
+  - @memberjunction/ng-agent-requests@5.51.2
+  - @memberjunction/ng-agents@5.51.2
+  - @memberjunction/ng-ai-test-harness@5.51.2
+  - @memberjunction/ng-archive-manager@5.51.2
+  - @memberjunction/ng-base-forms@5.51.2
+  - @memberjunction/ng-base-types@5.51.2
+  - @memberjunction/ng-clustering@5.51.2
+  - @memberjunction/ng-code-editor@5.51.2
+  - @memberjunction/ng-composer@5.51.2
+  - @memberjunction/ng-container-directives@5.51.2
+  - @memberjunction/ng-conversations@5.51.2
+  - @memberjunction/ng-credentials@5.51.2
+  - @memberjunction/ng-dashboard-viewer@5.51.2
+  - @memberjunction/ng-entity-relationship-diagram@5.51.2
+  - @memberjunction/ng-entity-viewer@5.51.2
+  - @memberjunction/ng-list-management@5.51.2
+  - @memberjunction/ng-map-view@5.51.2
+  - @memberjunction/ng-notifications@5.51.2
+  - @memberjunction/ng-query-viewer@5.51.2
+  - @memberjunction/ng-react@5.51.2
+  - @memberjunction/ng-record-process-studio@5.51.2
+  - @memberjunction/ng-resource-permissions@5.51.2
+  - @memberjunction/ng-scheduling@5.51.2
+  - @memberjunction/ng-search@5.51.2
+  - @memberjunction/ng-shared-generic@5.51.2
+  - @memberjunction/ng-trees@5.51.2
+  - @memberjunction/ng-user-routines@5.51.2
+  - @memberjunction/ng-versions@5.51.2
+  - @memberjunction/credentials@5.51.2
+  - @memberjunction/graphql-dataprovider@5.51.2
+  - @memberjunction/integration-engine-base@5.51.2
+  - @memberjunction/templates-base-types@5.51.2
+  - @memberjunction/testing-engine-base@5.51.2
+  - @memberjunction/ng-filter-builder@5.51.2
+  - @memberjunction/ng-media-player@5.51.2
+  - @memberjunction/interactive-component-types@5.51.2
+  - @memberjunction/predictive-studio-core@5.51.2
+  - @memberjunction/ng-export-service@5.51.2
+  - @memberjunction/ng-markdown@5.51.2
+  - @memberjunction/ng-ui-components@5.51.2
+  - @memberjunction/ng-word-cloud@5.51.2
+  - @memberjunction/lists-base@5.51.2
+  - @memberjunction/export-engine@5.51.2
+  - @memberjunction/theme-engine@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

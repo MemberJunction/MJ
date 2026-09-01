@@ -1,5 +1,18 @@
 # @memberjunction/integration-engine
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/integration-engine-base@5.51.2
+  - @memberjunction/integration-pk-classifier@5.51.2
+  - @memberjunction/integration-progress-artifacts@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes

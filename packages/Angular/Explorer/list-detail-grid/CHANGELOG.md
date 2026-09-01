@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-list-detail-grid
 
+## 5.51.2
+
+### Patch Changes
+
+- Updated dependencies [f560edc]
+- Updated dependencies [0130b53]
+  - @memberjunction/global@5.51.2
+  - @memberjunction/core@5.51.2
+  - @memberjunction/core-entities@5.51.2
+  - @memberjunction/ng-shared@5.51.2
+  - @memberjunction/ng-base-types@5.51.2
+  - @memberjunction/ng-entity-viewer@5.51.2
+  - @memberjunction/ng-shared-generic@5.51.2
+  - @memberjunction/ng-ui-components@5.51.2
+
 ## 5.51.1
 
 ### Patch Changes
