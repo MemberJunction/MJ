@@ -204,9 +204,23 @@ export interface AbsentDeactivationInput {
   IsAuthoritative: boolean;
   /** ExternalName of every object this discovery returned. */
   DiscoveredObjectNames: string[];
-  /** Per discovered object (by ExternalName): the field names it returned. An EMPTY list means the
-   *  object's fields are NOT authoritative (DiscoverFields found none) → its columns are never disabled. */
+  /** Per discovered object (by ExternalName): the field names it returned. */
   DiscoveredFieldNamesByObject: Record<string, string[]>;
+  /**
+   * Per discovered object (by ExternalName): whether that field list is the object's COMPLETE
+   * column set for this account, as DECLARED by the source (SourceObjectInfo.FieldsAreAuthoritative).
+   *
+   * Only a complete list may deactivate columns. This used to be inferred from "the list came back
+   * non-empty", which cannot distinguish a source returning only the account's CUSTOM columns from
+   * one returning the full mapping — so a custom-only source looked complete and its standard
+   * columns became deactivation candidates.
+   *
+   * Now it is DECLARED: per object where the object states one, otherwise inherited from the
+   * connector's own `DiscoveryIsAuthoritative`. A connector affirming a complete gamut is affirming
+   * it for the fields the same describe returned; an object that returns only custom columns sets
+   * this false to opt out.
+   */
+  FieldsAuthoritativeByObject: Record<string, boolean>;
   /** Current ACTIVE objects in the integration. */
   ActiveObjects: Array<{ ID: string; Name: string }>;
   /** persisted IO ID → its current ACTIVE fields. */
@@ -237,7 +251,10 @@ export function decideAbsentDeactivations(input: AbsentDeactivationInput): {
 
   const FieldIDsToDeactivate: string[] = [];
   for (const [objName, fieldNames] of Object.entries(input.DiscoveredFieldNamesByObject)) {
-    if (fieldNames.length === 0) continue; // not authoritative for this object's columns — never disable them
+    // Declared-complete only. An undeclared object (or one that returned nothing) says nothing
+    // about what is absent, so nothing of its is disabled.
+    if (input.FieldsAuthoritativeByObject[objName] !== true) continue;
+    if (fieldNames.length === 0) continue; // a complete list that is empty would disable everything
     const objID = input.ObjectIDByName[objName.toLowerCase()];
     if (!objID) continue;
     const discoveredFields = new Set(fieldNames.map((f) => f.toLowerCase()));
@@ -484,11 +501,19 @@ export class IntegrationSchemaSync {
       // (decideAbsentDeactivations — unit-tested) choose what to Disable. The EFFECT (load + Save) is
       // applied here; the CHOICE lives in the pure function so it is testable without mocking the engine.
       const discoveredFieldNamesByObject: Record<string, string[]> = {};
+      const fieldsAuthoritativeByObject: Record<string, boolean> = {};
       const objectIDByName: Record<string, string> = {};
       const activeFieldsByObjectID: Record<string, Array<{ ID: string; Name: string }>> = {};
       for (const r of objectResults) {
         if (!r.ObjectID) continue;
         discoveredFieldNamesByObject[r.srcObj.ExternalName] = r.srcObj.Fields.map((f) => f.Name);
+        // A connector that affirms its discovery is COMPLETE is affirming it for the fields it
+        // described too — that is the same describe call. So the object's own declaration wins,
+        // and where it says nothing we inherit the connector's claim rather than assuming false.
+        // Assuming false would mean no connector ever retires a column, which is the opposite of
+        // what an authoritative full-mapping source is telling us.
+        fieldsAuthoritativeByObject[r.srcObj.ExternalName] =
+          r.srcObj.FieldsAreAuthoritative ?? SourceSchema.IsAuthoritative === true;
         objectIDByName[r.srcObj.ExternalName.toLowerCase()] = r.ObjectID;
         activeFieldsByObjectID[r.ObjectID] = engine
           .GetIntegrationObjectFields(r.ObjectID)
@@ -497,9 +522,15 @@ export class IntegrationSchemaSync {
       }
       const decision = decideAbsentDeactivations({
         DeactivateAbsent: true,
-        IsAuthoritative: true,
+        // The CONNECTOR's claim, not a constant. This was hardcoded true, which silently overrode
+        // every connector that declares it cannot prove absence: a refresh that did not return an
+        // object disabled it even for a source whose discovery is admittedly partial. Same rule the
+        // field level now follows — only a source that says its enumeration is complete may retire
+        // anything from it. Undefined reads as false; a scoped introspect already forces false.
+        IsAuthoritative: SourceSchema.IsAuthoritative === true,
         DiscoveredObjectNames: SourceSchema.Objects.map((o) => o.ExternalName),
         DiscoveredFieldNamesByObject: discoveredFieldNamesByObject,
+        FieldsAuthoritativeByObject: fieldsAuthoritativeByObject,
         ActiveObjects: engine.GetActiveIntegrationObjects(IntegrationID).map((io) => ({ ID: io.ID, Name: io.Name })),
         ActiveFieldsByObjectID: activeFieldsByObjectID,
         ObjectIDByName: objectIDByName,

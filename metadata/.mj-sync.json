@@ -26,6 +26,7 @@
     "integration-source-types",
     "integrations",
     "ai-model-types",
+    "ai-usage-types",
     "ai-vendors",
     "ai-models",
     "ml-component-types",

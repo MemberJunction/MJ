@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import Prism from 'prismjs';
-import mermaid from 'mermaid';
+// TYPE-ONLY — erased at compile time, so it costs nothing at runtime. The mermaid engine
+// itself is fetched on demand; see `loadMermaid()`.
+import type { Mermaid } from 'mermaid';
 import {
   MarkdownEngine,
   MarkdownConfig,
@@ -45,6 +47,10 @@ export class MarkdownService {
   private mermaidInitialized = false;
   private lastMermaidTheme: string | null = null;
   private currentConfig: ResolvedMarkdownConfig = { ...DEFAULT_MARKDOWN_CONFIG };
+  /** The mermaid engine, once its lazy chunk has landed. Null until a diagram is actually rendered. */
+  private mermaidEngine: Mermaid | null = null;
+  /** In-flight load, so N diagrams in one document share ONE chunk fetch. */
+  private mermaidLoad: Promise<Mermaid> | null = null;
 
   /**
    * Prism-backed highlight function injected into the core engine. The engine
@@ -122,10 +128,42 @@ export class MarkdownService {
   }
 
   /**
+   * Fetch the mermaid engine, on first use only.
+   *
+   * MEASURED BUNDLE DEFERRAL — this is deliberately a dynamic `import()`, NOT a top-level
+   * one, and must not be "tidied" back into a static import. `mermaid` and the parsing /
+   * graph engines it pulls with it (`@mermaid-js/parser`, `langium`, `chevrotain`,
+   * `cytoscape`, `katex`, `d3`) were ~0.95 MB raw of every host's initial download even
+   * when no document ever contained a diagram. That is a rounding error for an in-app
+   * host and the whole cost for a CDN-loaded embedding of the realtime session overlay
+   * (MJ #3882). Documents with no diagram now never fetch the chunk at all.
+   *
+   * The in-flight promise is cached so N diagrams in one document share one fetch; a
+   * FAILED load clears it, so a later render can retry. Retries are bounded by
+   * user-driven render calls — there is no loop here.
+   */
+  private async loadMermaid(): Promise<Mermaid> {
+    if (this.mermaidEngine) {
+      return this.mermaidEngine;
+    }
+
+    this.mermaidLoad ??= import('mermaid').then((module) => module.default);
+
+    try {
+      this.mermaidEngine = await this.mermaidLoad;
+      return this.mermaidEngine;
+    } catch (error) {
+      this.mermaidLoad = null;
+      throw error;
+    }
+  }
+
+  /**
    * Initialize Mermaid with the current theme configuration.
    * Re-initializes when the effective theme changes.
+   * @param mermaid The lazily-loaded mermaid engine (see {@link loadMermaid})
    */
-  private initializeMermaid(): void {
+  private initializeMermaid(mermaid: Mermaid): void {
     const effectiveTheme = this.resolveEffectiveMermaidTheme();
 
     if (this.mermaidInitialized && this.lastMermaidTheme === effectiveTheme) {
@@ -152,12 +190,25 @@ export class MarkdownService {
   public async renderMermaid(container: HTMLElement): Promise<boolean> {
     if (!this.currentConfig.enableMermaid) return false;
 
-    this.initializeMermaid();
-
-    // Find all mermaid code blocks
+    // Find all mermaid code blocks BEFORE touching the engine — this is the branch the
+    // deferral hangs off: no diagrams in this document means no chunk fetch at all.
     const mermaidBlocks = container.querySelectorAll('pre > code.language-mermaid, .mermaid');
 
     if (mermaidBlocks.length === 0) return false;
+
+    let mermaid: Mermaid;
+    try {
+      mermaid = await this.loadMermaid();
+    } catch (error) {
+      // The chunk could not be fetched (offline, blocked host, bad deploy). Say so on
+      // every block we were going to render — an empty panel would look like the diagram
+      // simply wasn't there.
+      console.error('Failed to load the Mermaid diagram engine:', error);
+      this.markMermaidBlocksFailed(mermaidBlocks, 'Diagram engine failed to load');
+      return false;
+    }
+
+    this.initializeMermaid(mermaid);
 
     for (let i = 0; i < mermaidBlocks.length; i++) {
       const block = mermaidBlocks[i];
@@ -182,13 +233,31 @@ export class MarkdownService {
         elementToReplace?.parentNode?.replaceChild(wrapper, elementToReplace);
       } catch (error) {
         console.warn('Mermaid rendering failed:', error);
-        // Add error class to show it failed
-        const parent = block.tagName === 'CODE' ? block.parentElement : block;
-        parent?.classList.add('mermaid-error');
+        // Show it failed on this block — the source stays visible underneath.
+        this.markMermaidBlocksFailed([block], 'Diagram rendering failed');
       }
     }
 
     return true;
+  }
+
+  /**
+   * Mark mermaid blocks as un-renderable, so the failure is VISIBLE rather than a block of
+   * raw diagram source the reader can't explain. The `.mermaid-error` class carries the
+   * error styling and a default caption; `data-mermaid-error` overrides that caption with
+   * the specific reason (see `.mermaid-error[data-mermaid-error]::before` in the component
+   * stylesheet).
+   *
+   * @param blocks The mermaid code blocks (or `.mermaid` elements) that could not be rendered
+   * @param message Short reason shown above the un-rendered source
+   */
+  private markMermaidBlocksFailed(blocks: ArrayLike<Element>, message: string): void {
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      const target = block.tagName === 'CODE' ? block.parentElement : block;
+      target?.classList.add('mermaid-error');
+      target?.setAttribute('data-mermaid-error', message);
+    }
   }
 
   /**
