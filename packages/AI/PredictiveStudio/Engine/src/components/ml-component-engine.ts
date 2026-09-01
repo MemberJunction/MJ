@@ -228,6 +228,7 @@ export class MLComponentEngine extends BaseEngine<MLComponentEngine> {
       DriverClass: t.DriverClass,
       SpecSchema: t.SpecSchema,
       DefaultSpec: t.DefaultSpec,
+      Story: t.Story,
       Status: t.Status,
     }));
   }

@@ -71,6 +71,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
               @case ('home') { <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent($event)"></ps-home> }
               @case ('pipelines') { <ps-pipelines [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="onAskAgent($event)"></ps-pipelines> }
               @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="onAskAgent($event)"></ps-catalog> }
+              @case ('components') { <ps-components [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-components> }
               @case ('experiments') { <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments> }
               @case ('compare') { <ps-compare [engine]="engine"></ps-compare> }
             }

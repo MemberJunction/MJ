@@ -90,6 +90,12 @@ export interface ComponentTypeNode {
   SpecSchema: string | null;
   /** JSON default Spec (raw JSON string, as stored). */
   DefaultSpec: string | null;
+  /**
+   * The archetype's prose identity — what this KIND of component means, in business terms. The
+   * other half of the dual identity: the fields above say what it IS, this says what it MEANS, and
+   * it is what a component-tree browser shows next to the name.
+   */
+  Story: string | null;
   /** Draft | Published | Deprecated. */
   Status: string;
 }

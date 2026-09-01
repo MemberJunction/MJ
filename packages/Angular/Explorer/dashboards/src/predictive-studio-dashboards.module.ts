@@ -15,6 +15,7 @@ import { ConversationsModule } from '@memberjunction/ng-conversations';
 
 import { PSHomeComponent } from './PredictiveStudio/components/ps-home.component';
 import { PSCatalogComponent } from './PredictiveStudio/components/ps-catalog.component';
+import { PSComponentsComponent } from './PredictiveStudio/components/ps-components.component';
 import { PSPipelinesComponent } from './PredictiveStudio/components/ps-pipelines.component';
 import { PSExperimentsComponent } from './PredictiveStudio/components/ps-experiments.component';
 import { PSRegistryComponent } from './PredictiveStudio/components/ps-registry.component';
@@ -61,6 +62,7 @@ import { PSModelsResourceComponent } from './PredictiveStudio/resources/ps-model
     ConversationsModule,
     PSHomeComponent,
     PSCatalogComponent,
+    PSComponentsComponent,
     PSPipelinesComponent,
     PSExperimentsComponent,
     PSRegistryComponent,

@@ -20,6 +20,10 @@ import {
   MJExperimentSessionIterationEntity,
   MJProcessRunEntity,
   MJRecordProcessEntity,
+  MJMLComponentTypeEntity,
+  MJMLComponentTypePropertyEntity,
+  MJMLComponentTypeSlotEntity,
+  MJMLComponentEntity,
 } from '@memberjunction/core-entities';
 import { PSIterationRow, PSProcessRunRow } from '../predictive-studio.view-models';
 
@@ -91,6 +95,11 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
   private _Experiments: MJExperimentEntity[] = [];
   private _Sessions: MJExperimentSessionEntity[] = [];
   private _Iterations: MJExperimentSessionIterationEntity[] = [];
+  // The component TYPE tables only. Instances grow with every trained model, so they are loaded on
+  // demand (LoadComponentInstances) with StoryVector excluded rather than bulk-cached here.
+  private _ComponentTypes: MJMLComponentTypeEntity[] = [];
+  private _ComponentTypeProperties: MJMLComponentTypePropertyEntity[] = [];
+  private _ComponentTypeSlots: MJMLComponentTypeSlotEntity[] = [];
 
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
     const c: Partial<BaseEnginePropertyConfig>[] = [
@@ -105,6 +114,10 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
       { Type: 'entity', EntityName: 'MJ: Experiments', PropertyName: '_Experiments', OrderBy: 'Name' },
       { Type: 'entity', EntityName: 'MJ: Experiment Sessions', PropertyName: '_Sessions', OrderBy: '__mj_CreatedAt DESC' },
       { Type: 'entity', EntityName: 'MJ: Experiment Session Iterations', PropertyName: '_Iterations', OrderBy: 'Sequence' },
+      { Type: 'entity', EntityName: 'MJ: ML Component Types', PropertyName: '_ComponentTypes', OrderBy: 'Name' },
+      // Sequence order matters for the append-mode property keys; the resolver re-sorts defensively.
+      { Type: 'entity', EntityName: 'MJ: ML Component Type Properties', PropertyName: '_ComponentTypeProperties', OrderBy: 'Sequence' },
+      { Type: 'entity', EntityName: 'MJ: ML Component Type Slots', PropertyName: '_ComponentTypeSlots', OrderBy: 'Sequence' },
     ];
     await super.Load(c, provider ?? Metadata.Provider, forceRefresh, contextUser);
   }
@@ -308,6 +321,72 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
     options?: { sinceDays?: number; maxRows?: number },
   ): Promise<PSProcessRunRow[]> {
     return this.loadRunsForProcessIds(this.RecordProcessIDsForModel(modelId), provider, user, options);
+  }
+
+  /** Component TYPE nodes — the inheritance tree the Components panel renders. */
+  public get ComponentTypes(): MJMLComponentTypeEntity[] {
+    return this._ComponentTypes ?? [];
+  }
+  /** Inheritable property rows, merged root→leaf by the pure resolver in predictive-studio-core. */
+  public get ComponentTypeProperties(): MJMLComponentTypePropertyEntity[] {
+    return this._ComponentTypeProperties ?? [];
+  }
+  /** Slot declarations, inherited by name and narrowable only. */
+  public get ComponentTypeSlots(): MJMLComponentTypeSlotEntity[] {
+    return this._ComponentTypeSlots ?? [];
+  }
+
+  /**
+   * Load component INSTANCES on demand — never bulk-cached, because they grow with every trained
+   * model, and one of their columns (`StoryVector`) is an embedding that would dominate the payload.
+   *
+   * `StoryVector` is therefore deliberately excluded from `Fields`: the panel shows a component's
+   * story as PROSE, and the vector is only ever needed server-side by the reuse search.
+   *
+   * @param provider the owning provider
+   * @param user the acting user
+   * @param options narrow to one component type and/or cap the rows
+   */
+  public async LoadComponentInstances(
+    provider: IMetadataProvider,
+    user: UserInfo | undefined,
+    options?: { componentTypeId?: string; mlModelId?: string; maxRows?: number },
+  ): Promise<MJMLComponentEntity[]> {
+    const filters: string[] = [];
+    if (options?.componentTypeId) {
+      filters.push(`ComponentTypeID='${options.componentTypeId}'`);
+    }
+    if (options?.mlModelId) {
+      filters.push(`MLModelID='${options.mlModelId}'`);
+    }
+
+    const rv = RunView.FromMetadataProvider(provider);
+    const result = await rv.RunView<MJMLComponentEntity>(
+      {
+        EntityName: 'MJ: ML Components',
+        ExtraFilter: filters.join(' AND '),
+        Fields: [
+          'ID',
+          'Name',
+          'ComponentTypeID',
+          'ComponentType',
+          'MLModelID',
+          'ParentComponentID',
+          'SlotName',
+          'IsTrained',
+          'PromotionState',
+          'Status',
+          'Story',
+          'StoryContribution',
+          '__mj_UpdatedAt',
+        ],
+        OrderBy: '__mj_UpdatedAt DESC',
+        MaxRows: options?.maxRows ?? 100,
+        ResultType: 'simple',
+      },
+      user,
+    );
+    return result.Success ? result.Results ?? [] : [];
   }
 
   /** Shared run-loader: recent `MJ: Process Runs` for a set of Record-Process ids (capped, newest-first). */

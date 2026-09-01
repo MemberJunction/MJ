@@ -17,11 +17,12 @@ export interface PSSection {
   readonly group: string;
 }
 
-/** Studio door — the build/run workbench: Overview, then Build (pipelines, algorithms) and Run (experiments, compare). */
+/** Studio door — the build/run workbench: Overview, then Build (pipelines, algorithms, components) and Run (experiments, compare). */
 export const STUDIO_SECTIONS: readonly PSSection[] = [
   { key: 'home', label: 'Overview', icon: 'fa-solid fa-gauge-high', group: '' },
   { key: 'pipelines', label: 'Training Pipelines', icon: 'fa-solid fa-diagram-project', group: 'Build' },
   { key: 'catalog', label: 'Algorithm Catalog', icon: 'fa-solid fa-shapes', group: 'Build' },
+  { key: 'components', label: 'Components', icon: 'fa-solid fa-sitemap', group: 'Build' },
   { key: 'experiments', label: 'Experiments', icon: 'fa-solid fa-flask', group: 'Run' },
   { key: 'compare', label: 'Compare Runs', icon: 'fa-solid fa-chart-column', group: 'Run' },
 ];

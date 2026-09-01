@@ -1398,16 +1398,41 @@ Predictive Studio is an MJ Explorer dashboard built to the ng-dashboards world-c
 
 - **Shell**: `PredictiveStudioDashboardComponent` (`@RegisterClass(BaseDashboard, 'PredictiveStudioDashboard')`, NgModule-declared) — page-chrome trio, a left-nav across six panels, query-param round-trip (`activePanel` survives deep links / back-forward), and `BaseDashboard` auto-calls `NotifyLoadComplete()` after `loadData()`.
 - **Data layer**: `PredictiveStudioEngine` (`engine/predictive-studio.engine.ts`) — a `BaseEngine` singleton that caches the PS reference entities via `RunView` (`Algorithms`, `UseCases`, `Rankings`, `Models`, `Pipelines`, `TrainingRuns`, `Experiments`, `Sessions`, `Iterations`) and exposes domain helpers (`BestLevelsForScenarios`, `RankingsForUseCase`, `IterationsForSession`). No Angular services for data — the canonical MJ pattern.
-- **Six panels** (standalone components in `components/`, each receiving the engine via `@Input()`):
+- **Seven panels** (standalone components in `components/`, each receiving the engine via `@Input()`):
 
   | Panel | Component | Design |
   |---|---|---|
   | Home | `PSHomeComponent` | Action-Forward — hero band + entry paths + activity timeline |
   | Algorithm Catalog | `PSCatalogComponent` | Card-gallery + Guide-me — scenario picker drives recommendations from the rankings matrix |
+  | Components | `PSComponentsComponent` | Tree + inherited-profile inspector — see below |
   | Pipeline Builder | `PSPipelinesComponent` | Visual DAG — SVG feature-assembly graph + node inspector + leakage/validation config |
   | Experiments | `PSExperimentsComponent` | Kanban — Running/Completed/Pruned columns + leaderboard strip + budget gauges |
   | Model Registry | `PSRegistryComponent` | Master-detail — lifecycle stepper, train-vs-holdout, feature importance, lineage, sign-off gate |
   | Compare Runs | `PSCompareComponent` | switchable side-by-side / overlay charts / champion-vs-challenger |
+
+### 18.1 The Components panel — making inheritance legible
+
+The panel exists because a leaf's real capabilities are the ones it **inherits**. XGBoost declares
+almost nothing itself: it gets `impute` from Tree Ensemble, its boosting hyperparameters from
+Boosting, and the leakage gate from the Model root. Rendering its own rows would be accurate and
+actively misleading, so the inspector shows the **resolved profile** with an *"inherited from"* chip
+on every item that came from an ancestor — and no chip where the leaf genuinely declared it itself.
+
+- The **same pure resolver** the server uses (`resolveComponentProfile` in
+  `@memberjunction/predictive-studio-core`) runs here in the browser, so the panel cannot drift from
+  what the engine computes.
+- **`lintComponentTree` runs client-side too**, and its findings badge the offending nodes in the
+  tree with a banner above it. The "principled partition" rule — a property belongs on a node only
+  if it holds for every descendant — is thereby enforceable by a person looking at the tree, not
+  only by a test.
+- Sections are ordered by **decision relevance** (`Works for`, `Explainability`, then the banks and
+  gates) rather than by object-key order, and headed in English rather than by field name.
+- **Instances are loaded on demand**, never cached: they grow with every trained model, and
+  `LoadComponentInstances` excludes `StoryVector` from `Fields` because the panel shows a
+  component's story as *prose* — the vector is only ever needed server-side by the reuse search.
+
+Read-only for now. The compose UI (drag into slots, live `validateComponentGraph`) ships with the
+composition runtime.
 
 - **Embedded copilot**: an `<mj-conversation-chat-area>` (from `@memberjunction/ng-conversations`, see [Conversations UX Stack Guide](CONVERSATIONS_UX_STACK_GUIDE.md)) docked across **all** panels — agent picker hidden, pinned to the Model Development Agent, with an `appContext` carrying the active panel + published-model / running-session counts so the agent can act on the current context.
 - **Knowledge Hub side**: the **Feature Pipelines** panel (`FeaturePipelinesResourceComponent`, §11) lives in the Knowledge Hub dashboard — list / run / author derived-feature pipelines.
@@ -1503,7 +1528,8 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | **Architect sub-agent** (commit/defer/reify/compose + graph validation + execution gate) — §12.7 | ✅ built |
 | **Model stories** (deterministic context + one validated prompt, per-component prose, promotion hook) — §12.8 | ✅ built |
 | **Reuse-by-meaning search** + Browse/Validate Actions (8 PS Actions total) — §12.9 | ✅ built |
-| Studio **Components tab** (tree + resolved-profile inspector + compose UI) | ⏳ planned |
+| Studio **Components tab** (tree + resolved-profile inspector with inherited-from chips) — §18 | ✅ built |
+| Compose UI (drag into slots, live graph validation) | ⏳ planned |
 | Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).

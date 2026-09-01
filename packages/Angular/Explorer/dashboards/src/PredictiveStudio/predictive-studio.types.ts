@@ -6,7 +6,7 @@
  * tested). These interfaces are the contract between those derivations and the Angular templates.
  */
 
-export type PSPanelKey = 'home' | 'catalog' | 'pipelines' | 'experiments' | 'registry' | 'production' | 'compare';
+export type PSPanelKey = 'home' | 'catalog' | 'components' | 'pipelines' | 'experiments' | 'registry' | 'production' | 'compare';
 
 /** A kanban iteration card on the Experiments panel. */
 export interface PSIterationCard {
