@@ -241,13 +241,29 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
         expect(out.FieldIDsToDeactivate).toEqual([]);
     });
 
-    it('FIELD-level: an object that has not declared either way is left alone', () => {
+    it('FIELD-level: an AUTHORITATIVE connector still retires columns its describe no longer returns', () => {
+        // The full-mapping case. A connector that affirms a complete gamut is affirming it for the
+        // fields the same describe returned, so a column absent from it is genuinely gone. Requiring
+        // a separate per-object opt-in would mean no connector ever retires a column.
+        const out = decideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['id'] },
+                FieldsAuthoritativeByObject: { Contacts: true },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'gone_from_source' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual(['f2']);
+    });
+
+    it('FIELD-level: an object that has explicitly opted OUT is left alone', () => {
         // Absence of evidence is not evidence of absence — the same rule the key search follows.
         const out = decideAbsentDeactivations(
             base({
                 DiscoveredObjectNames: ['Contacts'],
                 DiscoveredFieldNamesByObject: { Contacts: ['id'] },
-                FieldsAuthoritativeByObject: {},
+                FieldsAuthoritativeByObject: { Contacts: false },
                 ObjectIDByName: { contacts: 'o1' },
                 ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'email' }] },
             }),

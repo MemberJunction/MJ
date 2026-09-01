@@ -210,10 +210,15 @@ export interface AbsentDeactivationInput {
    * Per discovered object (by ExternalName): whether that field list is the object's COMPLETE
    * column set for this account, as DECLARED by the source (SourceObjectInfo.FieldsAreAuthoritative).
    *
-   * Only a declared-complete list may deactivate columns. This used to be inferred from "the list
-   * came back non-empty", which cannot distinguish a source returning only the account's CUSTOM
-   * columns from one returning the full mapping — so a custom-only source looked complete and its
-   * standard columns became deactivation candidates. An object that has not declared is left alone.
+   * Only a complete list may deactivate columns. This used to be inferred from "the list came back
+   * non-empty", which cannot distinguish a source returning only the account's CUSTOM columns from
+   * one returning the full mapping — so a custom-only source looked complete and its standard
+   * columns became deactivation candidates.
+   *
+   * Now it is DECLARED: per object where the object states one, otherwise inherited from the
+   * connector's own `DiscoveryIsAuthoritative`. A connector affirming a complete gamut is affirming
+   * it for the fields the same describe returned; an object that returns only custom columns sets
+   * this false to opt out.
    */
   FieldsAuthoritativeByObject: Record<string, boolean>;
   /** Current ACTIVE objects in the integration. */
@@ -502,7 +507,13 @@ export class IntegrationSchemaSync {
       for (const r of objectResults) {
         if (!r.ObjectID) continue;
         discoveredFieldNamesByObject[r.srcObj.ExternalName] = r.srcObj.Fields.map((f) => f.Name);
-        fieldsAuthoritativeByObject[r.srcObj.ExternalName] = r.srcObj.FieldsAreAuthoritative === true;
+        // A connector that affirms its discovery is COMPLETE is affirming it for the fields it
+        // described too — that is the same describe call. So the object's own declaration wins,
+        // and where it says nothing we inherit the connector's claim rather than assuming false.
+        // Assuming false would mean no connector ever retires a column, which is the opposite of
+        // what an authoritative full-mapping source is telling us.
+        fieldsAuthoritativeByObject[r.srcObj.ExternalName] =
+          r.srcObj.FieldsAreAuthoritative ?? SourceSchema.IsAuthoritative === true;
         objectIDByName[r.srcObj.ExternalName.toLowerCase()] = r.ObjectID;
         activeFieldsByObjectID[r.ObjectID] = engine
           .GetIntegrationObjectFields(r.ObjectID)
