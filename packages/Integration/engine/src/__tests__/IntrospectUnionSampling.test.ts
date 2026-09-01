@@ -90,7 +90,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
 
         const schema = await host().StageIntrospect(makeEmitter(), opts);
 
-        expect(fetchFields).toHaveBeenCalledWith(opts.CompanyIntegration, 'Invoice', opts.ContextUser);
+        expect(fetchFields).toHaveBeenCalledWith(opts.CompanyIntegration, 'Invoice', opts.ContextUser, expect.anything());
         const note = schema.Objects[0].Fields.find((f) => f.Name === 'note');
         expect(note?.MaxLength).toBe(900); // widened from the declared 255 by what the data actually holds
     });
@@ -183,7 +183,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
         await host().StageIntrospect(makeEmitter(), opts);
 
         expect(fetchFields).toHaveBeenCalledTimes(1);
-        expect(fetchFields).toHaveBeenCalledWith(opts.CompanyIntegration, 'Invoice', opts.ContextUser);
+        expect(fetchFields).toHaveBeenCalledWith(opts.CompanyIntegration, 'Invoice', opts.ContextUser, expect.anything());
     });
 
     it('leaves the declaration intact when sampling throws, and says which knowledge was lost', async () => {
@@ -259,5 +259,23 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
 
             expect(fetchFields.mock.calls.length).toBe(4);   // 0 disables, it does not mean "no time"
         });
+    });
+
+    it('surfaces a connector that silently degraded to the catalog description', async () => {
+        // The connector "succeeds" — it returns fields — but they came from the catalog, not from
+        // records, so no width was observed. Without the stageError the run reports a clean
+        // discovery and the object keeps its guessed width until a sync starts dropping records.
+        const opts = makeOpts({
+            declared: [declaredObject('Invoice')],
+            discoverFieldsViaFetch: vi.fn(async (_ci: unknown, _name: unknown, _user: unknown, o?: { OnFallback?: (e: unknown) => void }) => {
+                o?.OnFallback?.(new Error('stream unavailable'));
+                return [sampledField('id', null, true), sampledField('note', null)];
+            }),
+        });
+        const emitter = makeEmitter();
+
+        await host().StageIntrospect(emitter, opts);
+
+        expect(emitter.errors.some((e) => e.meta?.code === 'discover-fields-fallback')).toBe(true);
     });
 });
