@@ -26,6 +26,8 @@
  */
 import { splitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
 import { splitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
+import { castBooleanInsertValues } from './rules/ExpressionHelpers.js';
+import { seedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
 
 export type ConversionStatus =
   /** Category-B content was transpiled into `pgSQL`. */
@@ -490,7 +492,7 @@ function assemblePgSQL(
   // Committed .pg.sql files use the literal schema (Flyway placeholder substitution
   // is not relied on for PG). Replace both the macro and the dialect's internal
   // sentinel, should it ever leak.
-  return parts
+  const rendered = parts
     .join('\n\n')
     // Replacement FUNCTIONS, not strings: a string replacement expands $$, $&, $` , $' and
     // $1-$99, so any '$' in a schema name would be executed rather than inserted (issue #3171).
@@ -501,8 +503,39 @@ function assemblePgSQL(
     // `${mjSchema}` names MJ CORE, not the app's own schema, so it resolves to a different value
     // and was previously left in the output — surviving into the file AND into the SQL that
     // `--bake-codegen` executes against the working database (issue #3838).
-    .replaceAll('${mjSchema}', () => coreSchema)
-    .concat('\n');
+    .replaceAll('${mjSchema}', () => coreSchema);
+
+  // Boolean coercion runs AFTER schema substitution, not before. The INSERT matcher keys on a
+  // `schema.Table` reference whose schema is word characters; until the replacements above run,
+  // the table is still `${flyway:defaultSchema}."Entity"`, which is not a word-character token, so
+  // an earlier call matches nothing and silently returns the body unchanged.
+  return castCoreMetadataBooleans(rendered).concat('\n');
+}
+
+/**
+ * Rewrite SQL Server BIT literals (`0`/`1`) to `FALSE`/`TRUE` in the entity-registration
+ * INSERTs that deliberately survive the split (see ENTITY_REGISTRATION_TABLES).
+ *
+ * Those rows are CodeGen output against `Entity`, `EntityField`, `EntityPermission` and friends
+ * — long-lived core-metadata tables that no migration re-creates, so the AST dialect never sees a
+ * CREATE TABLE for them and has no column types to infer from. It therefore transpiles a BIT
+ * literal as the integer it looks like, and PostgreSQL rejects the INSERT with
+ * `column "IncludeInAPI" is of type boolean but expression is of type integer` — a failure that
+ * appears only when the migration is APPLIED, which is why the converter's own "0 gaps" summary
+ * cannot catch it. The rule-based (legacy) path already seeds this catalog via
+ * `createConversionContext`; the split path assembles its output from the transpiler directly and
+ * so bypassed it, meaning every migration registering a NEW entity produced a file that failed on
+ * its first apply.
+ *
+ * Only exact `0`/`1` values at known-boolean ordinal positions are rewritten, so an already-TRUE
+ * literal, a NULL, a quoted string containing a comma, and any non-boolean integer column
+ * (`UserViewMaxRows`, `Sequence`) all pass through untouched — making this safe to run over the
+ * whole assembled body rather than a single statement.
+ */
+function castCoreMetadataBooleans(body: string): string {
+  const coreMetadataColumns = new Map<string, Map<string, string>>();
+  seedCoreMetadataBooleanColumns(coreMetadataColumns);
+  return castBooleanInsertValues(body, coreMetadataColumns);
 }
 
 /** The standard committed-`.pg.sql` provenance header. */
