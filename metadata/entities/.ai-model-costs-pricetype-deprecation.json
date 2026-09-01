@@ -29,6 +29,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Costs&Name=PriceTypeID"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T17:00:05.588Z",
+            "checksum": "a005a1aa13a6fb59bfacbcf1527fa6e9bcfd6a1f6dbeb0d0f3947a7a60593d47"
           }
         }
       ]
