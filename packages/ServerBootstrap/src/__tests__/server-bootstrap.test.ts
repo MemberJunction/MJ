@@ -28,7 +28,17 @@ vi.mock('cosmiconfig', () => ({
 // createMJServer()") plus a `load` startup export.
 const ENABLED_APP_RESOLVER = '/abs/node_modules/@test/openapp-server/dist/generated/generated.js';
 const DISABLED_APP_RESOLVER = '/abs/node_modules/@test/disabled-server/dist/generated/generated.js';
-vi.mock('@test/openapp-server', () => ({ RESOLVER_PATHS: [ENABLED_APP_RESOLVER], load: vi.fn() }));
+const OPENAPP_EXTENSION = {
+    Enabled: true,
+    DriverClass: 'TestOpenAppEdge',
+    RootPath: '/test-openapp',
+    Settings: {},
+};
+vi.mock('@test/openapp-server', () => ({
+    RESOLVER_PATHS: [ENABLED_APP_RESOLVER],
+    load: vi.fn(),
+    MJ_SERVER_EXTENSIONS: [OPENAPP_EXTENSION],
+}));
 vi.mock('@test/disabled-server', () => ({ RESOLVER_PATHS: [DISABLED_APP_RESOLVER], load: vi.fn() }));
 
 import { createMJServer, MJServerConfig } from '../index';
@@ -249,6 +259,154 @@ describe('ServerBootstrap', () => {
             expect(servePaths).not.toContain(DISABLED_APP_RESOLVER);
         });
 
+        it("passes an enabled app's MJ_SERVER_EXTENSIONS to serve() as options.serverExtensions", async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    dynamicPackages: {
+                        server: [{ PackageName: '@test/openapp-server', StartupExport: 'load', Enabled: true }],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+
+            await createMJServer();
+
+            const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
+                serverExtensions: Array<{ DriverClass: string; RootPath: string }>;
+            };
+            expect(serveOptions.serverExtensions).toEqual([
+                expect.objectContaining({
+                    DriverClass: 'TestOpenAppEdge',
+                    RootPath: '/test-openapp',
+                    Enabled: true,
+                }),
+            ]);
+        });
+
+        it('logs each discovered extension as PRE-AUTH with DriverClass and RootPath', async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    dynamicPackages: {
+                        server: [{ PackageName: '@test/openapp-server', StartupExport: 'load', Enabled: true }],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+            await createMJServer();
+
+            const lines = logSpy.mock.calls.map((c) => String(c[0]));
+            expect(lines.some((l) => l.includes('TestOpenAppEdge') && l.includes('/test-openapp') && l.includes('PRE-AUTH'))).toBe(true);
+            logSpy.mockRestore();
+        });
+
+        it('does NOT merge host serverExtensions into options — serve() overlays those itself', async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    serverExtensions: [
+                        {
+                            Enabled: true,
+                            DriverClass: 'SlackMessagingExtension',
+                            RootPath: '/webhook/slack',
+                            Settings: {},
+                        },
+                    ],
+                    dynamicPackages: {
+                        server: [{ PackageName: '@test/openapp-server', StartupExport: 'load', Enabled: true }],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+
+            await createMJServer();
+
+            const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
+                serverExtensions: Array<{ DriverClass: string }>;
+            };
+            expect(serveOptions.serverExtensions.map((e) => e.DriverClass)).toEqual(['TestOpenAppEdge']);
+            expect(serveOptions.serverExtensions.map((e) => e.DriverClass)).not.toContain('SlackMessagingExtension');
+        });
+
+        it("does NOT pass a disabled app's serverExtensions to serve()", async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    dynamicPackages: {
+                        server: [{ PackageName: '@test/disabled-server', StartupExport: 'load', Enabled: false }],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+
+            await createMJServer();
+
+            const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
+                serverExtensions: unknown[];
+            };
+            expect(serveOptions.serverExtensions).toEqual([]);
+        });
+
+        it("falls back to package.json memberjunction.serverExtensions when the module has no MJ_SERVER_EXTENSIONS export", async () => {
+            const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+            const { tmpdir } = await import('node:os');
+            const path = (await import('node:path')).default;
+            const hostDir = mkdtempSync(path.join(tmpdir(), 'sb-ext-json-'));
+            try {
+                const pkgDir = path.join(hostDir, 'node_modules', '@sbtest', 'ext-json');
+                mkdirSync(pkgDir, { recursive: true });
+                writeFileSync(
+                    path.join(pkgDir, 'package.json'),
+                    JSON.stringify({
+                        name: '@sbtest/ext-json',
+                        version: '1.0.0',
+                        type: 'module',
+                        main: 'index.js',
+                        memberjunction: {
+                            serverExtensions: [
+                                {
+                                    Enabled: true,
+                                    DriverClass: 'FromPackageJson',
+                                    RootPath: '/from-pkg',
+                                    Settings: { via: 'package.json' },
+                                },
+                            ],
+                        },
+                    }),
+                );
+                writeFileSync(path.join(pkgDir, 'index.js'), 'export const ok = true;');
+                const mockSearch = vi.fn().mockReturnValue({
+                    config: { dynamicPackages: { server: [{ PackageName: '@sbtest/ext-json', Enabled: true }] } },
+                    filepath: path.join(hostDir, 'mj.config.cjs'),
+                    isEmpty: false,
+                });
+                (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+
+                await createMJServer();
+
+                const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
+                    serverExtensions: Array<{ DriverClass: string; RootPath: string; Settings: Record<string, unknown> }>;
+                };
+                expect(serveOptions.serverExtensions).toEqual([
+                    {
+                        Enabled: true,
+                        DriverClass: 'FromPackageJson',
+                        RootPath: '/from-pkg',
+                        Settings: { via: 'package.json' },
+                    },
+                ]);
+            } finally {
+                rmSync(hostDir, { recursive: true, force: true });
+            }
+        });
+
         it('passes only the base resolver globs to serve() when no apps are installed', async () => {
             // Explicit no-dynamicPackages config → serve() gets exactly the base globs, no extras.
             const mockSearch = vi.fn().mockReturnValue({
@@ -262,6 +420,10 @@ describe('ServerBootstrap', () => {
             const servePaths = (serve as ReturnType<typeof vi.fn>).mock.calls[0][0] as string[];
             expect(servePaths.length).toBeGreaterThan(0);
             expect(servePaths.every((p) => p.includes('generated.{js,ts}'))).toBe(true);
+            const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
+                serverExtensions: unknown[];
+            };
+            expect(serveOptions.serverExtensions).toEqual([]);
         });
     });
 

@@ -215,7 +215,7 @@ function makeRepo({ entities, tables = [], extraSql = [] }) {
         writeFileSync(join(dir, rel), content);
     };
     write(
-        ARTIFACTS.subclasses,
+        ARTIFACTS.subclasses.entry,
         entities
             .map(
                 (e) =>
@@ -224,11 +224,11 @@ function makeRepo({ entities, tables = [], extraSql = [] }) {
             .join('\n')
     );
     write(
-        ARTIFACTS.server,
+        ARTIFACTS.server.entry,
         `import { ${entities.map((e) => `MJ${e.name}Entity`).join(', ')} } from '@memberjunction/core-entities';`
     );
     write(
-        ARTIFACTS.forms,
+        ARTIFACTS.forms.entry,
         entities.map((e) => `import { MJ${e.name}FormComponent } from "./Entities/MJ${e.name}/f.form.component";`).join('\n')
     );
     tables.forEach((t, i) =>
@@ -269,8 +269,8 @@ describe('CLI end-to-end', () => {
 
     it('fails on a partial tail — subclass present, resolver and form missing', () => {
         const dir = repo({ entities: [{ name: 'AIModelPriceUnitType', table: 'AIModelPriceUnitType' }], tables: ['AIModelPriceUnitType'] });
-        writeFileSync(join(dir, ARTIFACTS.server), `import { } from '@memberjunction/core-entities';`);
-        writeFileSync(join(dir, ARTIFACTS.forms), '');
+        writeFileSync(join(dir, ARTIFACTS.server.entry), `import { } from '@memberjunction/core-entities';`);
+        writeFileSync(join(dir, ARTIFACTS.forms.entry), '');
         const r = run(dir);
         expect(r.status).toBe(1);
         expect(r.stderr).toContain('no MJServer resolvers entry');
