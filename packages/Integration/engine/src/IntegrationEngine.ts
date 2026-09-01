@@ -2934,7 +2934,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
             const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
             try {
-                if (!partitionReconcile) await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1);
+                if (!partitionReconcile) await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
             } catch (applyErr) {
                 if (applyErr instanceof SchemaNotGeneratedError) {
                     // The destination spCreate/Update/Delete doesn't exist
@@ -4145,7 +4145,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // connection, so when streams run in parallel (syncConcurrency>1) it must not interleave
                 // with another stream's open write transaction (else "Transaction in progress" / dirty read).
                 const resolved = await this.runWriteExclusive(() => this.matchEngine.Resolve(recs, entityMap, fieldMaps, contextUser));
-                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1);
+                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
                 appliedRecords += recs.length;
             }
         } catch (applyErr) {
@@ -4191,7 +4191,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // lost batch atomicity is absorbed by the engine's idempotency (upsert-by-identity + content
         // hash) and the safe-floor watermark (advances only on a clean batch). Default true = the
         // proven atomic serial path, unchanged.
-        useTransaction: boolean = true
+        useTransaction: boolean = true,
+        /**
+         * Requested apply concurrency. Only consulted on the transaction-free path (the one
+         * `useTransaction: false` selects), where records auto-commit independently and can
+         * therefore overlap. Defaults to 1, so a caller that does not pass it keeps the serial
+         * behaviour exactly.
+         */
+        concurrency: number = 1
     ): Promise<void> {
         // Batched application with per-record failure isolation (the "grace gap" fix).
         // Happy path: each batch of up to APPLY_BATCH_SIZE records commits as a single
@@ -4403,7 +4410,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // connection. Per-record error isolation: a poison record is logged + counted; the
                     // rest still commit; the idempotent re-sync + safe-floor watermark reconcile any
                     // partial batch (the atomicity the transactional path provides is not needed here).
-                    for (const record of batch) {
+                    // The records are independent and each auto-commits on its own pooled
+                    // connection, so this is the one place in the apply path where the requested
+                    // concurrency can actually be spent. Running them one at a time made
+                    // syncConcurrency a fetch-only setting: the caller opted into concurrency, paid
+                    // for it by giving up batch atomicity, and then still wrote serially.
+                    //
+                    // A fixed pool of workers pulling from a shared cursor, rather than
+                    // Promise.all over the batch: 500 simultaneous saves would swamp the connection
+                    // pool. The cap is the same knob the fetch side uses, clamped to a sane ceiling.
+                    const applyLimit = Math.max(1, Math.min(16, Math.floor(concurrency) || 1));
+                    let cursor = 0;
+                    // Set by whichever worker sees it; every worker stops at the next pull and the
+                    // error is rethrown after they settle. SchemaNotGeneratedError means the whole
+                    // map cannot proceed, so finishing the remaining records would be wasted work
+                    // against a table that does not exist.
+                    let fatal: unknown;
+                    const applyOne = async (record: MappedRecord): Promise<void> => {
                         result.RecordsProcessed++;
                         try {
                             // §10 — bounded inline retry for provably-transient save failures (auto-commit per
@@ -4421,7 +4444,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                             );
                         } catch (err) {
                             if (err instanceof SchemaNotGeneratedError) {
-                                throw err;
+                                fatal ??= err;
+                                return;
                             }
                             // §10 — permanent / retry-exhausted → dead-letter (count + log), move on; watermark advances regardless.
                             result.RecordsErrored++;
@@ -4434,7 +4458,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                                 Severity: classified.Severity,
                             });
                         }
-                    }
+                    };
+                    // allSettled, not all: a worker must never reject, and the counters/dead-letter
+                    // list are only coherent once every worker has stopped touching them.
+                    await Promise.allSettled(
+                        Array.from({ length: Math.min(applyLimit, batch.length) }, async () => {
+                            for (;;) {
+                                if (fatal !== undefined) return;
+                                const next = cursor++;
+                                if (next >= batch.length) return;
+                                await applyOne(batch[next]);
+                            }
+                        }),
+                    );
+                    if (fatal !== undefined) throw fatal;
                 }
 
                 // After the batch settles (committed, or per-record retried), refresh
