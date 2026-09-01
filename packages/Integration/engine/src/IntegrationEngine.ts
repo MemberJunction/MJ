@@ -2635,7 +2635,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // every run, forever, and says nothing new after the first time. While the marker is fresh
         // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
         // the account later enables heals itself with no operator action.
-        const unavailable = DecideUnavailableSkip(entityMap.Configuration, Date.now(), UnavailableRecheckMs());
+        // A full sync re-tests availability rather than trusting the marker — see DecideUnavailableSkip.
+        const unavailable = DecideUnavailableSkip(
+            entityMap.Configuration, Date.now(), UnavailableRecheckMs(), { fullSync: config.fullSync });
         if (unavailable.skip) {
             logger?.emit('sync.entity-map.skipped', {
                 externalObjectName: entityMap.ExternalObjectName,

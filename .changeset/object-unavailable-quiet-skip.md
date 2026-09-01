@@ -18,3 +18,7 @@ a fetch that succeeds clears the marker — so an account change heals itself wi
 
 Deliberately not modelled by disabling the entity map: `SyncEnabled`/`Status` are the user's levers,
 and writing to them would conflate "this account cannot serve it" with "the user does not want it".
+
+A full sync overrides the marker: the recheck clock is a cost control, not a claim that the account
+cannot change, so an operator who enables the record type at the vendor does not have to wait out
+the window before the product will look again.

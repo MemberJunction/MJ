@@ -74,8 +74,15 @@ export function ReadUnavailableMarker(
 export function DecideUnavailableSkip(
     configurationJSON: string | null | undefined,
     nowMs: number,
-    recheckMs: number = DEFAULT_UNAVAILABLE_RECHECK_MS
+    recheckMs: number = DEFAULT_UNAVAILABLE_RECHECK_MS,
+    opts: { fullSync?: boolean } = {}
 ): { skip: boolean; marker?: ObjectUnavailableMarker } {
+    // A FULL SYNC overrides the marker outright. The recheck clock is a COST control — it stops a
+    // permanently-absent object costing a request every run — not a claim that the account cannot
+    // change. A full sync already means "ignore what you think you know and re-read everything";
+    // honouring that for watermarks but not for availability would leave an operator who just
+    // enabled a record type at the vendor waiting up to a day, with no lever to hurry it.
+    if (opts.fullSync) return { skip: false };
     if (!configurationJSON) return { skip: false };
     let parsed: unknown;
     try {

@@ -129,3 +129,34 @@ describe('ReadUnavailableMarker (§ the rewrite path, no clock judgement)', () =
         expect(ReadUnavailableMarker(JSON.stringify({ objectUnavailable: { message: 'no clock' } }))).toBeUndefined();
     });
 });
+
+describe('a full sync re-tests availability (§ the operator\'s lever)', () => {
+    // The recheck clock is a COST control, not a claim the account cannot change. Without this an
+    // operator who enables a record type at the vendor waits up to the full window before the
+    // product notices, with no way to hurry it — the exact "I fixed it, why is it still ignoring
+    // the object" trap. A full sync already means "ignore what you know and re-read everything".
+    const fresh = JSON.stringify({
+        objectUnavailable: {
+            firstSeenAt: '2026-08-31T11:00:00.000Z',
+            lastCheckedAt: '2026-08-31T11:00:00.000Z',   // one hour old against a 24h window
+            message: "Record 'estimate' was not found",
+        },
+    });
+
+    it('skips on an incremental run while the marker is fresh', () => {
+        expect(DecideUnavailableSkip(fresh, NOW).skip).toBe(true);
+    });
+
+    it('does NOT skip the same map on a full sync', () => {
+        expect(DecideUnavailableSkip(fresh, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, { fullSync: true }).skip).toBe(false);
+    });
+
+    it('fullSync:false is the incremental default, not a bypass', () => {
+        expect(DecideUnavailableSkip(fresh, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, { fullSync: false }).skip).toBe(true);
+        expect(DecideUnavailableSkip(fresh, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, {}).skip).toBe(true);
+    });
+
+    it('a full sync of a map with no marker is unaffected', () => {
+        expect(DecideUnavailableSkip(null, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, { fullSync: true }).skip).toBe(false);
+    });
+});
