@@ -2877,8 +2877,22 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       console.log(`[MarkComplete] Unregistered streaming callback for completed message ${conversationDetail.ID}`);
     }
 
-    // Remove task from active tasks if it exists
-    const task = this.activeTasks.getByConversationDetailId(conversationDetail.ID);
+    // Remove task from active tasks if it exists.
+    //
+    // Tasks are registered against the message that STARTED the turn — every activeTasks.add() call
+    // in this component passes the user message, the Sage delegation message or the status message
+    // as its conversationDetailId. This method, by contrast, is called with the AI REPLY. Those ids
+    // are never equal, so a direct lookup missed on every completion: the task was never removed
+    // here, and the "<agent> completed in <conversation>" toast below never fired for a user who had
+    // navigated away. (The task itself still disappeared, because conversation-chat-area separately
+    // sweeps tasks whose message has left 'In-Progress' — which is why this surfaced only as a
+    // missing notification plus a warning on every turn.)
+    //
+    // Every path already links the reply to its starter through ParentID, so fall back to that.
+    const task = this.activeTasks.getByConversationDetailId(conversationDetail.ID)
+      ?? (conversationDetail.ParentID
+            ? this.activeTasks.getByConversationDetailId(conversationDetail.ParentID)
+            : undefined);
     if (task) {
       console.log(`✅ Task found for message ${conversationDetail.ID} - removing from active tasks:`, {
         taskId: task.id,
