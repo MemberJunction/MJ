@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import { PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE } from '../StreamingDiscovery.js';
 import { BaseRESTIntegrationConnector, type RESTAuthContext, type RESTResponse, type PaginationState } from '../BaseRESTIntegrationConnector.js';
 import type { FetchContext } from '../BaseIntegrationConnector.js';
 
@@ -209,6 +210,11 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
         //   buffer 50 parents  = 25 `/pars` fetches   <- correct
         //   buffer 500 parents = 250 `/pars` fetches  <- the old behaviour
         const parCalls = (c: TestConnector) => c.urls.filter(u => /\/gps\/[^/]+\/pars$/.test(u)).length;
+        // The bound is CONFIGURABLE like every other discovery limit, not a literal. Pinned because
+        // the first version of this fix hardcoded it, which both bypassed the per-connection knob
+        // and duplicated a number the classifier already owns.
+        const ciWith = (cfg: Record<string, unknown>) =>
+            ({ IntegrationID: 'int1', Configuration: JSON.stringify(cfg) } as unknown as MJCompanyIntegrationEntity);
         const kidCalls = (c: TestConnector) => c.urls.filter(u => /\/pars\/[^/]+\/kids$/.test(u)).length;
 
         it('reads only the significance floor of keyless parents before descending', async () => {
@@ -230,6 +236,36 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
             expect(c.urls.some(u => /\/pars\/gp\d+-[ab]\/kids$/.test(u))).toBe(true);   // keyed by pid
             // Target met by flushing the buffer — no need to walk further parents.
             expect(kidCalls(c)).toBe(5);   // 5 x 100 kids = the 500 target
+        });
+
+        it('honours discoveryParentKeySampleRows from the connection Configuration', async () => {
+            const c = new TestConnector();
+            await c.DiscoverFieldsViaFetch(ciWith({ discoveryParentKeySampleRows: 10 }), 'kids', {} as UserInfo, { MaxRecords: 500 });
+            expect(parCalls(c)).toBe(5);   // 10 parent rows at 2 per grandparent fetch
+        });
+
+        it('honours the env override when the connection says nothing', async () => {
+            const prev = process.env.MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS;
+            process.env.MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS = '20';
+            try {
+                const c = new TestConnector();
+                const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+                await c.DiscoverFieldsViaFetch(ci, 'kids', {} as UserInfo, { MaxRecords: 500 });
+                expect(parCalls(c)).toBe(10);   // 20 parent rows at 2 per fetch
+            } finally {
+                if (prev === undefined) delete process.env.MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS;
+                else process.env.MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS = prev;
+            }
+        });
+
+        it('defaults to the classifier\'s OWN floor, not a copy of it', async () => {
+            // If the classifier's significance floor moves, this must move with it — a drifting
+            // duplicate would silently buffer too few rows and make every keyless parent abstain.
+            expect(PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE).toBe(50);
+            const c = new TestConnector();
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            await c.DiscoverFieldsViaFetch(ci, 'kids', {} as UserInfo, { MaxRecords: 500 });
+            expect(parCalls(c)).toBe(PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE / 2);
         });
 
         it('a target BELOW the floor still buffers only the target — the parent stream may be shorter', async () => {

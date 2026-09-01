@@ -216,6 +216,17 @@ function isConventionPkName(name: string): boolean {
 }
 
 /** Minimum distinct/non-null ratio for a convention-named column to qualify as a SOFT key. */
+/**
+ * Rows a value-statistic verdict needs before it counts as significant.
+ *
+ * Below this the classifier abstains (all-distinct over a handful of rows is chance, not a key);
+ * above it more rows change no verdict. Exported because callers must SIZE THEIR SAMPLE to it —
+ * a caller that buffers fewer rows than this gets abstention, and one that buffers more pays for
+ * confidence the classifier will not use. It was written inline three times here and duplicated a
+ * fourth time in the REST parent sampler, where the copy could drift out of step silently.
+ */
+export const PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE = 50;
+
 const SOFT_NEAR_UNIQUE_RATIO = 0.9;
 
 /**
@@ -229,7 +240,7 @@ export function pickPrimaryKeyFromStats(
     columns: DiscoveredColumnStat[],
     opts: PkPickOptions = {},
 ): PkStatVerdict {
-    const minRows = opts.MinRowsForSignificance ?? 50;
+    const minRows = opts.MinRowsForSignificance ?? PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
     const candidates = columns.filter(c =>
         c.TotalRows >= minRows &&
         c.Occurrences === c.TotalRows &&     // non-null on EVERY row
@@ -305,7 +316,7 @@ export function pickCompositeKeyFromStats(
     rowSamples: Array<Record<string, string>>,
     opts: PkPickOptions = {},
 ): CompositePkVerdict {
-    const minRows = opts.MinRowsForSignificance ?? 50;
+    const minRows = opts.MinRowsForSignificance ?? PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
     const n = rowSamples.length;
     if (n < minRows) {
         return { Fields: null, Reason: `Composite key not attempted — only ${n} sampled rows (< ${minRows} for significance).` };
@@ -387,7 +398,7 @@ export function pickKeyFromStats(
     rowSamples: Array<Record<string, string>>,
     opts: PkPickOptions & { MaxKeyColumns?: number; MaxCandidates?: number } = {},
 ): KeyVerdict {
-    const minRows = opts.MinRowsForSignificance ?? 50;
+    const minRows = opts.MinRowsForSignificance ?? PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
     const maxK = opts.MaxKeyColumns ?? 3;
     const maxCandidates = opts.MaxCandidates ?? 15;
     if (rowSamples.length < minRows) {

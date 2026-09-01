@@ -4,6 +4,7 @@ import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrati
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { computeContentHash } from './ContentHash.js';
 import { serializeKeyValue } from './KeySerialization.js';
+import { PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE } from './StreamingDiscovery.js';
 import {
     BaseIntegrationConnector,
     type ExternalObjectSchema,
@@ -98,15 +99,6 @@ interface ResolvedTemplateVar {
  * Concrete connectors (YourMembership, Salesforce, HubSpot, etc.) extend
  * this class and implement only auth, HTTP transport, and response normalization.
  */
-/**
- * Parents held back for key classification when the parent declares no primary key.
- *
- * Matches the value-statistic classifier's own significance floor: fewer rows and it abstains,
- * more rows buy no additional confidence — they only cost parent fetches, which recurse up the
- * dependency chain.
- */
-const PARENT_KEY_CLASSIFY_ROWS = 50;
-
 export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnector {
 
     // ── Abstract methods concrete connectors must implement ──────────
@@ -672,6 +664,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
+     * DISCOVERY-ONLY: how many rows of a KEYLESS parent to read before classifying its key.
+     *
+     * Only reached when a parent declares no primary key — with a declared one nothing is buffered
+     * and the chain stays lazy. The default is the value-statistic classifier's own significance
+     * floor: below it the classifier abstains, above it more rows change no verdict, and every row
+     * here is a fetch that recurses up the whole dependency chain.
+     *
+     * Overridable the same way every other discovery bound is — per-connection `Configuration`
+     * (`discoveryParentKeySampleRows`), then `MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS`,
+     * then this getter. Bounded above by the per-table sample target, so lowering that lowers this
+     * too and the two can never disagree in the direction that matters.
+     */
+    protected DiscoveryParentKeySampleRows(): number {
+        return PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
+    }
+
+    /**
      * REST override (§sample-discover): a SINGLE-template-var CHILD is sampled with the recursive,
      * record-constrained {@link StreamRecordsForDiscovery}. Flat objects fall back to the generic
      * FetchChanges loop; MULTI-var (composition) children are deferred — {@link StreamRecordsForDiscovery}
@@ -719,9 +728,10 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      *
      * Parents are pulled ON DEMAND, so the leaf's `target` is the only bound and it propagates up the
      * whole chain. The single exception is a parent that declares no key: it cannot be descended into
-     * until its key is known, so {@link PARENT_KEY_CLASSIFY_ROWS} of its rows are read first — the
-     * classifier's own significance floor, NOT the leaf's target, which would over-pull by the ratio
-     * between them and recurse that over-pull up every level above.
+     * until its key is known, so a bounded slice of its rows is read first. That slice is sized by
+     * {@link DiscoveryParentKeySampleRows} — per-connection Configuration, then env, then the
+     * classifier's own significance floor — and is capped by the leaf's target so it can never
+     * exceed the per-table sample size.
      *
      * Record-constrained (unlike sync, which walks ALL rows via the DAG): a million-row ancestor is
      * streamed and cut off early. Pure HTTP — no SQL, dialect-agnostic.
@@ -791,7 +801,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // classifier needs MIN_ROWS_FOR_SIGNIFICANCE rows to call a key significant; buffering the
         // leaf's full target instead pulled up to 10x that — and because a parent may itself be a
         // child, those pulls recurse up the whole chain before one child record is yielded.
-        const classifySampleSize = Math.min(target, PARENT_KEY_CLASSIFY_ROWS);
+        const classifySampleSize = Math.min(target, this.ReadDiscoveryConfig(companyIntegration)
+            .int('discoveryParentKeySampleRows', 'MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS',
+                 this.DiscoveryParentKeySampleRows()));
 
         const fetchChildren = async function* (this: BaseRESTIntegrationConnector, key: string, parentRec: ExternalRecord): AsyncGenerator<ExternalRecord> {
             const idVal = parentRec.Fields?.[key];
