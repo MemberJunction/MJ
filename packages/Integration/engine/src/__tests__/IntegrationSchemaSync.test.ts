@@ -18,6 +18,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { decideBooleanOverlay, decidePKPromotion, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, decideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () => {
@@ -167,6 +169,7 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
         IsAuthoritative: true,
         DiscoveredObjectNames: [],
         DiscoveredFieldNamesByObject: {},
+        FieldsAuthoritativeByObject: {},
         ActiveObjects: [],
         ActiveFieldsByObjectID: {},
         ObjectIDByName: {},
@@ -198,11 +201,12 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
         expect(out.ObjectIDsToDeactivate).toEqual([]);
     });
 
-    it('FIELD-level: deactivates an ACTIVE field absent from the discovered field set (case-insensitive)', () => {
+    it('FIELD-level: deactivates an ACTIVE field absent from a DECLARED-COMPLETE field set (case-insensitive)', () => {
         const out = decideAbsentDeactivations(
             base({
                 DiscoveredObjectNames: ['Contacts'],
                 DiscoveredFieldNamesByObject: { Contacts: ['id', 'Name'] },
+                FieldsAuthoritativeByObject: { Contacts: true },
                 ObjectIDByName: { contacts: 'o1' },
                 ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'ID' }, { ID: 'f2', Name: 'name' }, { ID: 'f3', Name: 'oldcol' }] },
             }),
@@ -214,9 +218,56 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
         const out = decideAbsentDeactivations(
             base({
                 DiscoveredObjectNames: ['Stub'],
-                DiscoveredFieldNamesByObject: { Stub: [] }, // DiscoverFields found nothing -> not authoritative for columns
+                DiscoveredFieldNamesByObject: { Stub: [] },
+                FieldsAuthoritativeByObject: { Stub: true }, // even a claim of completeness cannot mean "all of them"
                 ObjectIDByName: { stub: 'o1' },
                 ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'anything' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual([]);
+    });
+
+    it('FIELD-level: a CUSTOM-ONLY source never loses its standard columns', () => {
+        // The case the old non-empty-list inference could not see. A source that returns only the
+        // account's custom columns is ADDITIVE — the standard columns still exist, it just did not
+        // restate them. Inferring completeness from "the list is non-empty" deactivated them.
+        const out = decideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['custom_score'] },
+                FieldsAuthoritativeByObject: { Contacts: false },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'email' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual([]);
+    });
+
+    it('FIELD-level: an AUTHORITATIVE connector still retires columns its describe no longer returns', () => {
+        // The full-mapping case. A connector that affirms a complete gamut is affirming it for the
+        // fields the same describe returned, so a column absent from it is genuinely gone. Requiring
+        // a separate per-object opt-in would mean no connector ever retires a column.
+        const out = decideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['id'] },
+                FieldsAuthoritativeByObject: { Contacts: true },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'gone_from_source' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual(['f2']);
+    });
+
+    it('FIELD-level: an object that has explicitly opted OUT is left alone', () => {
+        // Absence of evidence is not evidence of absence — the same rule the key search follows.
+        const out = decideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['id'] },
+                FieldsAuthoritativeByObject: { Contacts: false },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'email' }] },
             }),
         );
         expect(out.FieldIDsToDeactivate).toEqual([]);
@@ -348,5 +399,24 @@ describe('decidePKPromotion', () => {
             expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: false, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
                 .toEqual({ value: false, winner: 'Declared' });
         });
+    });
+});
+
+describe('the persist call site passes the CONNECTOR\'s authority, not a constant', () => {
+    // decideAbsentDeactivations is pure and well covered, but it only ever sees what the call site
+    // hands it — and that site hardcoded `IsAuthoritative: true`, overriding every connector that
+    // declares its discovery partial. A source that cannot prove absence was still having its
+    // objects disabled on refresh. Pinned against the source because the defect was an argument
+    // value, which no test of the pure function can see.
+    const source = readFileSync(join(__dirname, '..', 'IntegrationSchemaSync.ts'), 'utf8');
+
+    it('does not hardcode IsAuthoritative', () => {
+        expect(source).not.toMatch(/IsAuthoritative:\s*true\s*,/);
+        expect(source).toMatch(/IsAuthoritative:\s*SourceSchema\.IsAuthoritative === true/);
+    });
+
+    it('gates object and field deactivation on the same claim', () => {
+        // If these ever diverge again, one level retires on evidence the other rejects.
+        expect(source).toMatch(/FieldsAreAuthoritative \?\? SourceSchema\.IsAuthoritative === true/);
     });
 });
