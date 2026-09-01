@@ -522,7 +522,12 @@ export class IntegrationSchemaSync {
       }
       const decision = decideAbsentDeactivations({
         DeactivateAbsent: true,
-        IsAuthoritative: true,
+        // The CONNECTOR's claim, not a constant. This was hardcoded true, which silently overrode
+        // every connector that declares it cannot prove absence: a refresh that did not return an
+        // object disabled it even for a source whose discovery is admittedly partial. Same rule the
+        // field level now follows — only a source that says its enumeration is complete may retire
+        // anything from it. Undefined reads as false; a scoped introspect already forces false.
+        IsAuthoritative: SourceSchema.IsAuthoritative === true,
         DiscoveredObjectNames: SourceSchema.Objects.map((o) => o.ExternalName),
         DiscoveredFieldNamesByObject: discoveredFieldNamesByObject,
         FieldsAuthoritativeByObject: fieldsAuthoritativeByObject,

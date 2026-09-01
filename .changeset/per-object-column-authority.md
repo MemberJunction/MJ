@@ -17,3 +17,8 @@ comprehensive refresh.
 columns only for objects that declared it `true`. An object that declares nothing is left alone —
 absence of evidence is not evidence of absence, the same rule the primary-key search already
 follows. Object-level deactivation is unchanged.
+
+The same rule now governs OBJECT deactivation, which was passing a hardcoded `IsAuthoritative: true`
+and so overrode every connector that declares its discovery partial — a refresh that did not return
+an object disabled it even for a source that cannot prove absence. It now reads the connector's own
+claim, like the field level does.

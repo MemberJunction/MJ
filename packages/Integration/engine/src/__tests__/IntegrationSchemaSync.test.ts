@@ -18,6 +18,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { decideBooleanOverlay, decidePKPromotion, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, decideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () => {
@@ -397,5 +399,24 @@ describe('decidePKPromotion', () => {
             expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: false, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
                 .toEqual({ value: false, winner: 'Declared' });
         });
+    });
+});
+
+describe('the persist call site passes the CONNECTOR\'s authority, not a constant', () => {
+    // decideAbsentDeactivations is pure and well covered, but it only ever sees what the call site
+    // hands it — and that site hardcoded `IsAuthoritative: true`, overriding every connector that
+    // declares its discovery partial. A source that cannot prove absence was still having its
+    // objects disabled on refresh. Pinned against the source because the defect was an argument
+    // value, which no test of the pure function can see.
+    const source = readFileSync(join(__dirname, '..', 'IntegrationSchemaSync.ts'), 'utf8');
+
+    it('does not hardcode IsAuthoritative', () => {
+        expect(source).not.toMatch(/IsAuthoritative:\s*true\s*,/);
+        expect(source).toMatch(/IsAuthoritative:\s*SourceSchema\.IsAuthoritative === true/);
+    });
+
+    it('gates object and field deactivation on the same claim', () => {
+        // If these ever diverge again, one level retires on evidence the other rejects.
+        expect(source).toMatch(/FieldsAreAuthoritative \?\? SourceSchema\.IsAuthoritative === true/);
     });
 });
