@@ -47,11 +47,20 @@ describe('engine wiring', () => {
     });
 
     it('warns once instead of erroring, so a dead object is not noise', () => {
-        const idx = source.indexOf('if (IsObjectUnavailable(fetchErr)) {');
-        const branch = source.slice(idx, idx + 1200);
+        // Bounded by the NEXT branch, not by a magic character count — a fixed-size window silently
+        // stops covering the code it is meant to assert about the moment a comment grows.
+        const branch = source.slice(
+            source.indexOf('if (IsObjectUnavailable(fetchErr)) {'),
+            source.indexOf("if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {"));
         expect(branch).toMatch(/logger\?\.warning\(/);
         // Not an error event: 71 of these on one connection is what buried the real failures.
         expect(branch).not.toMatch(/logger\?\.emit\('sync\.record\.error'/);
+        // The warning is filed under the OBJECT, not the literal 'sync' — every sibling warning
+        // passes the object name, and filtering these per-object is the point of having 71 of them.
+        expect(branch).toMatch(/logger\?\.warning\(\s*\n\s*entityMap\.ExternalObjectName \?\? entityMap\.ID,/);
+        // An empty fetch is not a clean one — this is what withholds the watermark, the orphan
+        // sweep and the rollup overwrite. Behaviour asserted in IntegrationEngine.safefloor.test.ts.
+        expect(branch).toMatch(/fetchCompletedCleanly = false;/);
     });
 
     it('does NOT persist the verdict — it is re-asked every run', () => {

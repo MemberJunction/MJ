@@ -2845,7 +2845,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 if (IsObjectUnavailable(fetchErr)) {
                     // Not a failure to retry: the vendor is telling us this account does not serve
                     // this object. Warn once and end the map cleanly — no retry ladder, no
-                    // FETCH_INCOMPLETE, and the watermark left exactly as it was.
+                    // FETCH_INCOMPLETE.
                     //
                     // Deliberately NOT remembered between runs. Persisting it would buy one probe
                     // per object per run, and the object count in any real system is small enough
@@ -2853,8 +2853,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // both bring: a remembered skip is wrong from the moment the account changes,
                     // and every scheme for noticing that is another thing to get right. Re-asking
                     // every run is self-healing by construction and has no configuration.
+                    //
+                    // But the map fetched NOTHING, so it is NOT a clean fetch, and every consequence
+                    // of "we saw the complete set" must be withheld. Breaking out with the flag still
+                    // true fell through to the clean-fetch branch and:
+                    //   - minted a wall-clock Timestamp watermark for an object that returned zero
+                    //     records. When the account later enables the object, the next incremental
+                    //     filters `modified > <that stamp>` and permanently misses every record that
+                    //     already existed — destroying the self-healing described above. (An
+                    //     incremental over an EXISTING watermark merely rewrote the same value; the
+                    //     damage lands on a full sync and on the first encounter, where no watermark
+                    //     row exists yet and one is created at "now".)
+                    //   - ran orphan detection. An empty fetch is not evidence that MJ's rows are gone.
+                    //   - overwrote the partition rollup snapshot with an empty map, forcing a full
+                    //     re-diff next run.
+                    fetchCompletedCleanly = false;
                     logger?.warning(
-                        'sync',
+                        entityMap.ExternalObjectName ?? entityMap.ID,
                         'OBJECT_UNAVAILABLE',
                         `"${entityMap.ExternalObjectName}" is not available to this account; skipping it until the source starts serving it: ${errMsg}`,
                         { externalObjectName: entityMap.ExternalObjectName },
