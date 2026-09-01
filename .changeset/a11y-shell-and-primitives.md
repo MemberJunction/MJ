@@ -1,13 +1,12 @@
 ---
 "@memberjunction/ng-explorer-core": patch
-"@memberjunction/ng-ui-components": patch
 "@memberjunction/ng-shared-generic": patch
 "@memberjunction/ng-whiteboard": patch
 ---
 
-Accessibility: shell landmarks + skip link, focus containment, and nameable primitives.
+Accessibility: shell landmarks + skip link, focus containment, and focus-ring token safety.
 
-Fixes nine WCAG 2.1 A/AA findings raised against the Explorer shell and shared primitives.
+Fixes eight WCAG 2.1 A/AA findings raised against the Explorer shell and shared primitives. A ninth — `mj-dropdown` having no way to be given an accessible name — was fixed independently on this line by #3860 and its follow-ups while this work was in flight, so it is not part of this changeset.
 
 **Shell (`ng-explorer-core`)**
 
@@ -15,11 +14,6 @@ Fixes nine WCAG 2.1 A/AA findings raised against the Explorer shell and shared p
 - The global search input, the account/avatar button and the mobile-nav toggle now carry real accessible names. The avatar's name lives on the button, so it survives the icon-fallback path when the avatar image fails to load.
 - The closed mobile nav drawer and the closed search popup are now `inert` and `visibility: hidden` (transitioned so the slide-out still animates). They previously kept every control inside them in the tab order while closed. When the drawer closes with focus inside it, focus returns to the toggle instead of dropping to `<body>`.
 - The command palette already had `role="dialog"`/`aria-modal`; it now also traps Tab while open and returns focus to whatever was focused when it opened. `aria-modal` never stopped Tab on its own.
-
-**`mj-combobox` (`ng-ui-components`)**
-
-- New `AriaLabel`, `AriaLabelledBy`, `AriaDescribedBy` and `InputId` inputs on the inner text input, mirroring the naming contract `mj-dropdown` gained in #3863 so the two sibling controls do not diverge. Unlike the dropdown's `div[role=combobox]` trigger, this component's focusable element is a native `<input>`, so a real `<label for>` plus `InputId` is the preferred route and needs no aria attribute; `AriaLabelledBy` / `AriaLabel` cover the no-label case.
-- `mj-dropdown`'s own accessible name landed separately in #3863 and is not part of this changeset.
 
 **Focus-ring tokens (`ng-shared-generic`)**
 
