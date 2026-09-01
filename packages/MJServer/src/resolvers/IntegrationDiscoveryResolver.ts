@@ -55,7 +55,7 @@ import { IntegrationProgressEmitter, IntegrationProgressReader } from "@memberju
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideFieldMapReconcile, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
@@ -6028,7 +6028,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
         @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
-        @Arg("autoEnableNewObjects", { defaultValue: false, description: 'newly-appeared objects get their entity maps created DISABLED by default (the user enables them after the refresh). Pass true to auto-enable them instead.' }) autoEnableNewObjects: boolean,
+        @Arg("autoEnableNewObjects", { defaultValue: true, description: 'newly-appeared objects get their entity maps created ENABLED — a refresh is an explicit request to bring the source\'s current shape in. Pass false to create them disabled and enable them by hand instead.' }) autoEnableNewObjects: boolean,
+        @Arg("autoEnableNewColumns", { defaultValue: true, description: 'newly-appeared COLUMNS on an enabled object get their field maps created ENABLED, matching autoEnableNewObjects. Pass false to create them disabled instead. NOTE: this governs the REFRESH only — a column discovered mid-SYNC is never auto-created; it is captured as a candidate and needs acceptance (Configuration.autoPromoteCustomColumns, default false).' }) autoEnableNewColumns: boolean,
         @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
         @Arg("cascadeRemoveDependents", { defaultValue: false, description: 'When a removed object has still-active dependents (DAG parent edges), also disable the transitive dependent closure ("force remove those too"). Default false: dependents stay active and each broken edge is surfaced as a warning.' }) cascadeRemoveDependents: boolean,
         @Ctx() ctx: AppContext
@@ -6233,7 +6234,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             for (const em of continuingMaps) {
                 const io = iosByLowerName.get((em.ExternalObjectName ?? '').toLowerCase());
                 if (!io) continue;
-                const fmChanges = await this.reconcileFieldMapsForEntityMap(em, io.ID, user, md);
+                const fmChanges = await this.reconcileFieldMapsForEntityMap(em, io.ID, user, md, autoEnableNewColumns);
                 if ((fmChanges.Added > 0 || fmChanges.Disabled > 0) && em.ExternalObjectName && !changedObjects.includes(em.ExternalObjectName)) {
                     changedObjects.push(em.ExternalObjectName);
                 }
@@ -6341,7 +6342,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const summary = [
                 newObjects.length > 0 ? `${newObjects.length} new object(s) (${autoEnableNewObjects ? 'enabled' : 'created disabled'})` : null,
                 removedObjects.length > 0 ? `${removedObjects.length} removed object(s) disabled` : null,
-                changedObjects.length > 0 ? `${changedObjects.length} changed object(s), ${addedColumns} column(s) added, ${modifiedColumns} modified` : null,
+                changedObjects.length > 0 ? `${changedObjects.length} changed object(s), ${addedColumns} column(s) added (${autoEnableNewColumns ? 'enabled' : 'created disabled'}), ${modifiedColumns} modified` : null,
                 watermarksReset.length > 0 ? `${watermarksReset.length} watermark(s) reset for backfill` : null,
             ].filter(Boolean).join('; ');
 
@@ -6373,23 +6374,33 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     /**
      * Refresh diff (continuing objects): reconciles one entity map's field maps to the
-     * post-resolution IOF set — source fields WITHOUT a field map get one created (Active when
-     * the map is enabled, Disabled when it isn't), and field maps whose source field is no
-     * longer Active in the resolution are DISABLED (never deleted — a later re-appearance
-     * re-enables via the same reconciliation, since a disabled FM whose field returns flips
-     * back with SetFieldMapsStatus on re-enable or is simply left disabled until then).
+     * post-resolution IOF set.
+     *
+     * A source field with NO field map gets one created **Active** — a refresh is an explicit request
+     * to bring the source's current shape in, so new objects and new columns are both adopted rather
+     * than queued for approval. `autoEnableNewColumns: false` gates it for a connection that wants to
+     * review first, and the map's own state always bounds it: a column is never Active on a map that
+     * isn't.
+     *
+     * REFRESH ONLY. A column first seen mid-SYNC is never auto-created — it is captured as a
+     * candidate and needs acceptance (`CustomColumnPromoter`, default off). A refresh is a
+     * deliberate act; a sync is not, and must not reshape the schema on its own.
+     *
+     * A field map whose source field is no longer Active in the resolution is DISABLED, never
+     * deleted — a later re-appearance re-enables it through the same reconciliation (the
+     * field-is-back branch above), so retiring and restoring a column are both non-destructive.
      */
     private async reconcileFieldMapsForEntityMap(
         em: MJCompanyIntegrationEntityMapEntity,
         integrationObjectID: string,
         user: UserInfo,
-        md: IMetadataProvider
+        md: IMetadataProvider,
+        autoEnableNewColumns = true
     ): Promise<{ Added: number; Disabled: number }> {
         const result = { Added: 0, Disabled: 0 };
         const activeFields = IntegrationEngineBase.Instance
             .GetIntegrationObjectFields(integrationObjectID)
             .filter(f => f.Status === 'Active');
-        const activeFieldNames = new Set(activeFields.map(f => f.Name.toLowerCase()));
         const mapEnabled = em.Status === 'Active' && em.SyncEnabled === true;
 
         const fms = await new RunView().RunView<MJCompanyIntegrationFieldMapEntity>({
@@ -6398,21 +6409,33 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             ResultType: 'entity_object',
             BypassCache: true,
         }, user);
+        const existingRows = fms.Success ? fms.Results : [];
         const existingByLower = new Map(
-            (fms.Success ? fms.Results : []).map(fm => [(fm.SourceFieldName ?? '').toLowerCase(), fm] as const)
+            existingRows.map(fm => [(fm.SourceFieldName ?? '').toLowerCase(), fm] as const)
         );
 
-        // Added source fields → new field maps (state follows the map's enabled state)
-        for (const field of activeFields) {
-            const existing = existingByLower.get(field.Name.toLowerCase());
-            if (existing) {
-                // Field is back in the resolution — re-enable a previously-disabled map row.
-                if (existing.Status !== 'Active' && mapEnabled) {
-                    existing.Status = 'Active';
-                    if (await existing.Save()) result.Added++; // counted as a change for reporting
-                }
-                continue;
-            }
+        // The CHOICES live in a pure function (decideFieldMapReconcile — unit-tested); this method
+        // applies the EFFECTS. Inline, the decision was untestable: this resolver imports
+        // schema-builder and schema-engine, so it cannot be loaded in a unit test at all.
+        const plan = decideFieldMapReconcile(
+            activeFields.map(f => f.Name),
+            existingRows.map(fm => ({ SourceFieldName: fm.SourceFieldName, Status: fm.Status })),
+            mapEnabled,
+            autoEnableNewColumns,
+        );
+        const fieldByLower = new Map(activeFields.map(f => [f.Name.toLowerCase(), f] as const));
+
+        for (const name of plan.Enable) {
+            const existing = existingByLower.get(name.toLowerCase());
+            if (!existing) continue;
+            existing.Status = 'Active';
+            if (await existing.Save()) result.Added++; // counted as a change for reporting
+            else LogError(`[IntegrationSchemaEvolution] Failed to re-enable field map '${name}' on ${em.ExternalObjectName}: ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+
+        for (const toCreate of plan.Create) {
+            const field = fieldByLower.get(toCreate.SourceFieldName.toLowerCase());
+            if (!field) continue;
             const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps', user);
             fm.NewRecord();
             fm.EntityMapID = em.ID;
@@ -6421,16 +6444,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             fm.IsKeyField = field.IsPrimaryKey ?? false; // key on the PRIMARY key (identity), consistent with the initial-apply path + U1 (PK ≠ unique)
             fm.IsRequired = field.IsRequired === true;
             fm.Direction = 'SourceToDest';
-            fm.Status = mapEnabled ? 'Active' : 'Inactive';
+            fm.Status = toCreate.Status;
             fm.Priority = 0;
             if (await fm.Save()) result.Added++;
             else LogError(`[IntegrationSchemaEvolution] Failed to create field map '${field.Name}' on ${em.ExternalObjectName}: ${fm.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
 
         // Vanished source fields → disable their field maps (data/columns kept)
-        for (const [lowerName, fm] of existingByLower) {
-            if (activeFieldNames.has(lowerName)) continue;
-            if (fm.Status === 'Inactive') continue;
+        for (const name of plan.Disable) {
+            const fm = existingByLower.get(name.toLowerCase());
+            if (!fm) continue;
             fm.Status = 'Inactive';
             if (await fm.Save()) result.Disabled++;
             else LogError(`[IntegrationSchemaEvolution] Failed to disable field map '${fm.SourceFieldName}' on ${em.ExternalObjectName}: ${fm.LatestResult?.CompleteMessage ?? 'unknown error'}`);
