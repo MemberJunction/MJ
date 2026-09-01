@@ -38,7 +38,7 @@ vi.mock('@memberjunction/core', async () => {
     };
 });
 
-const { RuntimeSchemaManager } = await import('../RuntimeSchemaManager.js');
+const { RuntimeSchemaManager, MAX_RSU_PENDING_ATTEMPTS } = await import('../RuntimeSchemaManager.js');
 
 const mockContextUser = { ID: 'user-1' } as UserInfo;
 
@@ -236,5 +236,83 @@ describe('RuntimeSchemaManager durable pending work', () => {
             // never look like it persisted anything — this queue exists for durability.
             await expect(rsm.WritePendingWork(samplePayload())).rejects.toThrow(/requires a contextUser/);
         });
+    });
+});
+
+/**
+ * RSU is a long chain — migrations, CodeGen, a git commit, a compile, a restart — and a failure
+ * partway through it is often transient: the process restarted mid-consumption, or one provider
+ * call failed. Failing such an item terminally means the objects it would have mapped are silently
+ * never mapped, and the only recovery is someone noticing and re-applying the connector by hand.
+ */
+describe('RetryPendingWork — a bounded second chance, narrowed to what is left', () => {
+    const rsm = RuntimeSchemaManager.Instance;
+
+    beforeEach(() => {
+        loggedErrors = [];
+        runViewProviders = [];
+        mockRunViewFn = vi.fn().mockResolvedValue({ Success: true, Results: [] });
+        mockGetEntityObjectFn = vi.fn();
+    });
+
+    it('re-queues with the remainder only, and leaves the row PENDING so a consumer picks it up', async () => {
+        const row = createMockRow();
+        mockGetEntityObjectFn.mockResolvedValue(row);
+
+        const ok = await rsm.RetryPendingWork('pw-1', samplePayload(), ['Deal'], mockContextUser);
+
+        expect(ok).toBe(true);
+        expect(row.Status).toBe('Pending');
+        const written = JSON.parse(row.PayloadJSON as unknown as string) as RSUPendingWork;
+        expect(written.SourceObjectNames).toEqual(['Deal']);   // 'Contact' already succeeded
+        expect(written.Attempts).toBe(1);
+    });
+
+    it('counts up across attempts', async () => {
+        const row = createMockRow();
+        mockGetEntityObjectFn.mockResolvedValue(row);
+
+        await rsm.RetryPendingWork('pw-1', { ...samplePayload(), Attempts: 1 }, ['Deal'], mockContextUser);
+
+        expect((JSON.parse(row.PayloadJSON as unknown as string) as RSUPendingWork).Attempts).toBe(2);
+    });
+
+    it('refuses once the budget is spent, so a broken item cannot retry forever', async () => {
+        const row = createMockRow();
+        mockGetEntityObjectFn.mockResolvedValue(row);
+
+        const ok = await rsm.RetryPendingWork('pw-1', { ...samplePayload(), Attempts: MAX_RSU_PENDING_ATTEMPTS - 1 }, ['Deal'], mockContextUser);
+
+        expect(ok).toBe(false);
+        expect(row.Save).not.toHaveBeenCalled();   // caller must fail it terminally instead
+    });
+
+    it('refuses when nothing is outstanding — there is nothing to retry', async () => {
+        const row = createMockRow();
+        mockGetEntityObjectFn.mockResolvedValue(row);
+
+        const ok = await rsm.RetryPendingWork('pw-1', samplePayload(), [], mockContextUser);
+
+        expect(ok).toBe(false);
+        expect(row.Save).not.toHaveBeenCalled();
+    });
+
+    it('reports rather than silently dropping the work when the re-queue write fails', async () => {
+        const row = createMockRow({ Save: vi.fn().mockResolvedValue(false) });
+        mockGetEntityObjectFn.mockResolvedValue(row);
+
+        const ok = await rsm.RetryPendingWork('pw-1', samplePayload(), ['Deal'], mockContextUser);
+
+        expect(ok).toBe(false);
+        expect(loggedErrors.some(m => m.includes('re-queue'))).toBe(true);
+    });
+
+    it('does not touch ProcessedAt — that means "when did this complete", not "when was it touched"', async () => {
+        const row = createMockRow({ ProcessedAt: null });
+        mockGetEntityObjectFn.mockResolvedValue(row);
+
+        await rsm.RetryPendingWork('pw-1', samplePayload(), ['Deal'], mockContextUser);
+
+        expect(row.ProcessedAt).toBeNull();
     });
 });
