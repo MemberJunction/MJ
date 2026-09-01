@@ -34,6 +34,38 @@ export function UnavailableRecheckMs(env: NodeJS.ProcessEnv = process.env): numb
 }
 
 /**
+ * Reads the marker as persisted, with NO clock judgement.
+ *
+ * Separate from {@link DecideUnavailableSkip} on purpose. That function answers "should this fetch
+ * be suppressed right now", so it withholds the marker whenever the clock makes it untrustworthy —
+ * correct for suppression, wrong for the caller that is about to REWRITE the marker and needs the
+ * prior `firstSeenAt` to carry forward. Reaching for the decision function with sentinel clock
+ * arguments silently returned nothing and reset `firstSeenAt` on every recurrence, which is the one
+ * fact the marker exists to keep.
+ */
+export function ReadUnavailableMarker(
+    configurationJSON: string | null | undefined
+): ObjectUnavailableMarker | undefined {
+    if (!configurationJSON) return undefined;
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(configurationJSON);
+    } catch {
+        return undefined;
+    }
+    if (!parsed || typeof parsed !== 'object') return undefined;
+    const marker = (parsed as { objectUnavailable?: unknown }).objectUnavailable;
+    if (!marker || typeof marker !== 'object') return undefined;
+    const { firstSeenAt, lastCheckedAt, message } = marker as Partial<ObjectUnavailableMarker>;
+    if (typeof lastCheckedAt !== 'string') return undefined;
+    return {
+        firstSeenAt: typeof firstSeenAt === 'string' ? firstSeenAt : lastCheckedAt,
+        lastCheckedAt,
+        message: typeof message === 'string' ? message : 'the source reported this object as unavailable',
+    };
+}
+
+/**
  * Decides whether to skip fetching an object outright, from its persisted marker alone.
  *
  * Pure so the policy is testable without a run: the interesting cases are all clock- and

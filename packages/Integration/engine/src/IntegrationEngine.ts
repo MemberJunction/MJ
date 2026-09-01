@@ -44,7 +44,7 @@ import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
-import { DecideUnavailableSkip, ApplyUnavailableMarker, UnavailableRecheckMs, type ObjectUnavailableMarker } from './ObjectAvailability.js';
+import { DecideUnavailableSkip, ReadUnavailableMarker, ApplyUnavailableMarker, UnavailableRecheckMs, type ObjectUnavailableMarker } from './ObjectAvailability.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
@@ -2523,7 +2523,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<void> {
         try {
             const nowISO = new Date().toISOString();
-            const prior = DecideUnavailableSkip(entityMap.Configuration, 0, Number.MAX_SAFE_INTEGER).marker;
+            const prior = ReadUnavailableMarker(entityMap.Configuration);
             const marker: ObjectUnavailableMarker = {
                 firstSeenAt: prior?.firstSeenAt ?? nowISO,
                 lastCheckedAt: nowISO,

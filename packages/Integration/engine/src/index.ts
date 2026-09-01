@@ -113,7 +113,19 @@ export type { IntegrationActionVerb, GenerateIntegrationActionResult } from './I
 
 // Integration Engine (server-side, wraps IntegrationEngineBase via composition)
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
-export { IntegrationEngine } from './IntegrationEngine.js';
+export { IntegrationEngine, ObjectUnavailableError, IsObjectUnavailable } from './IntegrationEngine.js';
+
+// Object availability (§ an object the vendor lists but THIS account cannot serve). A connector may
+// signal one WITHOUT importing anything — the engine duck-types `code === 'OBJECT_UNAVAILABLE'` — but
+// the typed class and the recogniser are exported so a connector can use and unit-test them directly.
+export {
+    ReadUnavailableMarker,
+    DecideUnavailableSkip,
+    ApplyUnavailableMarker,
+    UnavailableRecheckMs,
+    DEFAULT_UNAVAILABLE_RECHECK_MS,
+    type ObjectUnavailableMarker,
+} from './ObjectAvailability.js';
 export { RunOwnershipService, RunOwnershipLostError } from './RunOwnershipService.js';
 // TerminalRunStatus is the parameter type of the public Release() method, so it has to be nameable
 // from outside the package — otherwise a consumer can call Release but cannot declare a variable to

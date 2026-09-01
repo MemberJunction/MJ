@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+    ReadUnavailableMarker,
     DecideUnavailableSkip,
     ApplyUnavailableMarker,
     UnavailableRecheckMs,
@@ -87,5 +88,44 @@ describe('ApplyUnavailableMarker', () => {
     it('returns null rather than an empty document when nothing is left', () => {
         const only = ApplyUnavailableMarker(null, m)!;
         expect(ApplyUnavailableMarker(only, null)).toBeNull();
+    });
+});
+
+describe('ReadUnavailableMarker (§ the rewrite path, no clock judgement)', () => {
+    // The regression this exists for: RecordObjectUnavailable reached for DecideUnavailableSkip with
+    // sentinel clock arguments (nowMs=0) to read the prior marker. Every real lastCheckedAt parses
+    // ABOVE 0, so the `checkedMs > nowMs` untrusted-clock guard fired and returned no marker at all
+    // — firstSeenAt was silently reset on every recurrence, erasing how long the object had been
+    // unavailable, which is the one fact the marker is kept for.
+    const cfg = (m: Record<string, unknown>) => JSON.stringify({ objectUnavailable: m, writeMode: 'batched' });
+
+    it('returns the marker regardless of how old or how future-dated the clock is', () => {
+        const old = ReadUnavailableMarker(cfg({ firstSeenAt: '2026-01-01T00:00:00.000Z', lastCheckedAt: '2026-01-02T00:00:00.000Z', message: 'nope' }));
+        expect(old?.firstSeenAt).toBe('2026-01-01T00:00:00.000Z');
+        // A future clock makes the marker untrustworthy for SUPPRESSION, but it is still what is
+        // persisted — the rewrite path must carry its firstSeenAt forward rather than start over.
+        const future = ReadUnavailableMarker(cfg({ firstSeenAt: '2099-01-01T00:00:00.000Z', lastCheckedAt: '2099-01-02T00:00:00.000Z', message: 'nope' }));
+        expect(future?.firstSeenAt).toBe('2099-01-01T00:00:00.000Z');
+    });
+
+    it('is what DecideUnavailableSkip is NOT: that one withholds a future-dated marker', () => {
+        const c = cfg({ firstSeenAt: '2099-01-01T00:00:00.000Z', lastCheckedAt: '2099-01-02T00:00:00.000Z', message: 'nope' });
+        expect(DecideUnavailableSkip(c, Date.parse('2026-08-31T00:00:00.000Z')).marker).toBeUndefined();
+        expect(ReadUnavailableMarker(c)).toBeDefined();
+    });
+
+    it('falls back to lastCheckedAt when firstSeenAt was never written, and defaults a missing message', () => {
+        const m = ReadUnavailableMarker(cfg({ lastCheckedAt: '2026-03-03T00:00:00.000Z' }));
+        expect(m?.firstSeenAt).toBe('2026-03-03T00:00:00.000Z');
+        expect(m?.message).toBe('the source reported this object as unavailable');
+    });
+
+    it('returns undefined for absent, malformed, non-object and marker-less configuration', () => {
+        expect(ReadUnavailableMarker(null)).toBeUndefined();
+        expect(ReadUnavailableMarker('')).toBeUndefined();
+        expect(ReadUnavailableMarker('{not json')).toBeUndefined();
+        expect(ReadUnavailableMarker('"a string"')).toBeUndefined();
+        expect(ReadUnavailableMarker(JSON.stringify({ writeMode: 'batched' }))).toBeUndefined();
+        expect(ReadUnavailableMarker(JSON.stringify({ objectUnavailable: { message: 'no clock' } }))).toBeUndefined();
     });
 });
