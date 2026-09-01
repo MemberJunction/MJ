@@ -159,6 +159,16 @@ export interface WaveStrategistContext {
   waveIndex: number;
   /** The max iterations this wave may contain (the configured concurrency). */
   maxWaveSize: number;
+  /**
+   * Every experiment already dispatched in this session, in dispatch order (additive).
+   *
+   * The plan-order default never needs this — it only ever draws from `remaining`. A strategist
+   * that GENERATES candidates does: without it, a variant it produced two waves ago is
+   * indistinguishable from a new one, and the search would re-run the same configuration until the
+   * budget ran out. `remaining` cannot serve this purpose because a generated variant was never in
+   * it.
+   */
+  dispatched?: ProposedExperiment[];
 }
 
 /**

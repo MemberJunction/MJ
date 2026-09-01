@@ -524,6 +524,42 @@ A session may spawn **one Process Run per wave** (the two are kept distinct, no 
 
 ---
 
+### 7.5 Searching component combinations
+
+The default strategist works the plan and stops: whatever the Experiment Designer proposed is the
+entire search space. But a component type's resolved profile already declares what is worth varying
+— its `HyperparameterBank` says which knobs matter and over what range — and those declarations are
+**inherited**, so XGBoost gets the boosting knobs from Boosting and the ensemble knobs from Tree
+Ensemble without anyone restating them on the leaf.
+
+`ComponentCombinationWaveStrategist` reads that profile and expands the best result so far along
+those axes. Four rules make it usable rather than merely clever:
+
+- **Seeds first, always.** Wave 0 is the plan's own experiments, untouched, in priority order. What
+  a human or the Experiment Designer explicitly asked for is never displaced by a generated guess.
+- **Deterministic.** Same plan, same leaderboard, same next wave. A search whose shape depends on
+  timing is not reproducible, and a session that cannot be reproduced cannot be trusted.
+- **One factor at a time, interleaved across knobs.** Each variant changes exactly one knob, and the
+  wave takes the first candidate of *every* knob before the second of any — so a 3-wide wave covers
+  three axes rather than three values of whichever knob sorts first alphabetically. Breadth across
+  the declared axes is what tells you which axis deserves depth.
+- **Never repeats itself.** Candidates are compared by a canonical fingerprint of what actually gets
+  trained (algorithm + feature set + hyperparameters, order-insensitive) against everything already
+  dispatched — so a variant produced two waves ago is not silently re-run until the budget is gone,
+  and the leaderboard never fills with duplicates that look like independent evidence.
+
+Two smaller judgments worth stating: an integer-declared range always yields integers, however many
+points were requested (`max_depth` of 7.5 is not a tree depth); and a bank row that declares neither
+a range nor options is **skipped**, because documenting that a knob exists is not guidance on what
+values are reasonable, and inventing one would be the search making up the family's own advice.
+
+This required one additive change to the strategist seam: `WaveStrategistContext.dispatched`. The
+plan-order default never needed it — it only draws from `remaining` — but a strategist that
+*generates* candidates cannot recognize its own past output without it, since a generated variant
+was never in `remaining`.
+
+---
+
 ## 8. The data model — entities and relationships
 
 10 core entities. CodeGen generates timestamps, FK indexes, sprocs, views, and the strongly-typed entity classes (`MJMLModelEntity`, `MJMLTrainingPipelineEntity`, …) in `@memberjunction/core-entities`. Names follow the MJ "MJ: " prefix convention. The three `Experiment*` tables are **generic** (ML-agnostic); everything `ML *` is the Predictive Studio leaf.
@@ -1551,6 +1587,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | `MLModelInferenceProcessor` ('ML Model' RSP work type, ephemeral/write-back) | ✅ built |
 | `ExperimentOrchestrator` (waves, leaderboard, pruning, budget-in-runner) | ✅ built |
 | **`MaterializingPipelineResolver`** (experiment → pipeline, reuse-before-create) — §7.4 | ✅ built |
+| **Component-combination search** (expand the leader along inherited banks) — §7.5 | ✅ built |
 | **6 Remote Operations** (Train/Score/RunFeaturePipeline/Start+Control Experiment/Promote) + **8 Actions** | ✅ built |
 | **Feature Pipelines** (category route — `FeaturePipelineEngine` + KH panel; no new entity) | ✅ built |
 | **Model Development Agent** + 3 sub-agents + **ML Experiment Results artifact** + Angular viewer | ✅ built |
