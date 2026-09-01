@@ -1,5 +1,5 @@
 ---
-"@memberjunction/sqlserver-dataprovider": patch
+"@memberjunction/sqlserver-dataprovider": minor
 ---
 
 Fix batched transaction-group submit failing for any group of two or more change-tracked records — `The variable name '@ResultChangesTable' has already been declared. Variable names must be unique within a query batch or stored procedure.`
