@@ -113,6 +113,10 @@ export class ExperimentOrchestrator {
     const leaderboard: LeaderboardEntry[] = [];
     const modelsByIteration = new Map<string, MJMLModelEntity>();
     const remaining = [...plan.ProposedExperiments];
+    // Everything handed to the trainer so far, in order. A strategist that GENERATES candidates
+    // needs this to avoid re-proposing a variant it already ran; `remaining` cannot serve, because
+    // a generated variant was never in it.
+    const dispatched: ProposedExperiment[] = [];
     const budgetState: BudgetState = { runs: 0, computeCost: 0, startedAtMs: deps.clock.now() };
 
     let stopReason: SessionStopReason = 'completed';
@@ -120,11 +124,12 @@ export class ExperimentOrchestrator {
     let waveIndex = 0;
 
     while (true) {
-      const wave = await this.nextWave(strategist, { plan, remaining, leaderboard, waveIndex, maxWaveSize: concurrency });
+      const wave = await this.nextWave(strategist, { plan, remaining, leaderboard, waveIndex, maxWaveSize: concurrency, dispatched });
       if (wave.length === 0) {
         break;
       }
       this.removeFromRemaining(remaining, wave);
+      dispatched.push(...wave);
 
       const gate = this.gateBeforeWave(budget, budgetState, deps);
       if (gate.exceeded) {

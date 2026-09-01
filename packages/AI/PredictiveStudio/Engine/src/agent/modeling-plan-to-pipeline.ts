@@ -22,6 +22,7 @@ import {
   type ValidationStrategy,
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
+import type { DatedSourceSpec, FeatureAssemblyParams } from '../feature-assembly';
 
 /** The resolved, ready-to-persist configuration for one `MJ: ML Training Pipelines` row. */
 export interface PipelineConfig {
@@ -43,10 +44,27 @@ export interface PipelineConfig {
   featureSteps: FeatureStepGraph;
   /** Point-in-time assembly strategy. */
   asOf: AsOfStrategy;
+  /**
+   * Dated ("as-of") feature sources persisted onto the pipeline row. `TrainingEngine` freezes
+   * these into the trained model's `Lineage`, so scoring assembles the SAME as-of columns
+   * without any caller-supplied configuration. Absent/empty ⇒ the pipeline has no as-of
+   * features. Populated by the Architect sub-agent; not derivable from `ModelingPlanSpec`
+   * today, so plan-built pipelines start empty.
+   */
+  datedSources?: DatedSourceSpec[];
   /** Leakage protection (deny-list + dominance threshold). */
   leakageGuard: LeakageGuard;
   /** Validation strategy. */
   validation: ValidationStrategy;
+  /**
+   * The chosen experiment's starting hyperparameters, persisted on the pipeline row.
+   *
+   * `TrainingEngine` reads them from `MLTrainingPipeline.Hyperparameters`, so a config that omits
+   * them trains at the algorithm's defaults no matter what the Experiment Designer proposed — which
+   * is what happened before this field existed: `ProposedExperiments[i].Hyperparameters` was written
+   * by the agent and then silently dropped on the way to the pipeline.
+   */
+  hyperparameters: Record<string, unknown>;
 }
 
 
@@ -101,10 +119,15 @@ function buildValidation(spec: ModelingPlanSpec): ValidationStrategy {
 }
 
 /** Derive a concise pipeline name from the plan's goal (trim + cap length). */
-function deriveName(goal: string): string {
+function deriveName(goal: string, experimentLabel?: string): string {
   const trimmed = (goal ?? '').trim();
-  if (!trimmed) return 'New prediction';
-  return trimmed.length <= 80 ? trimmed : `${trimmed.slice(0, 77)}…`;
+  const base = trimmed.length > 0 ? trimmed : 'New prediction';
+  // An experiment SESSION materializes one pipeline per proposed experiment. Naming them all after
+  // the goal would leave a registry full of identically-named rows that only differ inside their
+  // JSON columns — so the experiment's own label distinguishes them.
+  const label = experimentLabel?.trim();
+  const full = label ? `${base} — ${label}` : base;
+  return full.length <= 80 ? full : `${full.slice(0, 77)}…`;
 }
 
 /**
@@ -114,9 +137,15 @@ function deriveName(goal: string): string {
  * clean failure rather than creating a broken pipeline.
  *
  * @param spec the approved modeling plan the agent accumulated.
+ * @param targetExperiment map THIS experiment rather than the plan's highest-priority one. An
+ *   experiment SESSION trains several of the plan's proposed experiments, each needing its own
+ *   pipeline; without this the whole session would collapse onto the top-ranked one.
  * @returns the resolved {@link PipelineConfig}.
  */
-export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineConfig {
+export function modelingPlanToPipelineConfig(
+  spec: ModelingPlanSpec,
+  targetExperiment?: ModelingPlanSpec['ProposedExperiments'][number],
+): PipelineConfig {
   const target = spec.TargetDefinition;
   if (!target?.EntityName?.trim()) {
     throw new Error('ModelingPlanSpec.TargetDefinition.EntityName is required to build a pipeline.');
@@ -124,13 +153,13 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineCo
   if (!target.TargetVariable?.trim()) {
     throw new Error('ModelingPlanSpec.TargetDefinition.TargetVariable is required to build a pipeline.');
   }
-  const experiment = chooseExperiment(spec);
+  const experiment = targetExperiment ?? chooseExperiment(spec);
   if (!experiment?.AlgorithmName?.trim()) {
     throw new Error('ModelingPlanSpec needs at least one ProposedExperiment with an AlgorithmName to build a pipeline.');
   }
 
   return {
-    name: deriveName(spec.Goal),
+    name: deriveName(spec.Goal, targetExperiment ? experiment.Label : undefined),
     description: spec.Goal?.trim() || 'Created by the Predictive Studio Agent.',
     targetEntityName: target.EntityName.trim(),
     targetVariable: target.TargetVariable.trim(),
@@ -141,5 +170,39 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineCo
     asOf: target.AsOfStrategy ?? { Mode: 'none' },
     leakageGuard: buildLeakageGuard(spec),
     validation: buildValidation(spec),
+    hyperparameters: experiment.Hyperparameters ?? {},
   };
 }
+
+/**
+ * Project a {@link ModelingPlanSpec} onto the {@link FeatureAssemblyParams} the executor takes —
+ * so the **statistics pre-pass** describes the matrix the plan would actually produce, not an
+ * approximation of it.
+ *
+ * Built on {@link modelingPlanToPipelineConfig} rather than re-deriving anything, which is what
+ * keeps the pre-pass and the eventual pipeline in lockstep: if the plan→pipeline mapping changes,
+ * the pass follows automatically.
+ *
+ * @param spec the (not necessarily approved) plan
+ * @param options row cap + primary-key field, matching the training call's own options
+ */
+export function modelingPlanToAssemblyParams(
+  spec: ModelingPlanSpec,
+  options: { maxRows?: number; primaryKeyField?: string } = {},
+): FeatureAssemblyParams {
+  const config = modelingPlanToPipelineConfig(spec);
+  return {
+    targetEntityName: config.targetEntityName,
+    recordSet: { EntityName: config.targetEntityName, MaxRows: options.maxRows },
+    sources: config.sourceBindings,
+    steps: config.featureSteps,
+    asOf: config.asOf,
+    leakageGuard: config.leakageGuard,
+    datedSources: config.datedSources,
+    targetVariable: config.targetVariable,
+    primaryKeyField: options.primaryKeyField,
+    // Train context: the pre-pass must see exactly what training will see.
+    context: 'train',
+  };
+}
+

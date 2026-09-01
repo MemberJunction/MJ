@@ -983,5 +983,447 @@
       "lastModified": "2026-07-01T17:33:33.586Z",
       "checksum": "235c098a3be2ec1579ed84a9cfc8fad0ae93a9604e71375a4b3c6074249aace7"
     }
+  },
+  {
+    "_comments": [
+      "Browse ML Component Tree — the agent's read surface over the typed component model.",
+      "Reading the tree is not the same as reading a list of algorithms: a leaf's real capabilities are the",
+      "ones it INHERITS, so naming a ComponentTypeName returns the RESOLVED profile (merged banks, gates and",
+      "slots) WITH provenance, so an agent can say where a constraint came from rather than just that it exists."
+    ],
+    "fields": {
+      "Name": "Browse ML Component Tree",
+      "Description": "Explore the ML component catalog: list component types (optionally narrowed to one Kind), or resolve one type's full inherited profile — its effective preprocessing bank, hyperparameter bank, statistical gates and slots, each with the ancestor node that contributed it.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioBrowseComponentTreeAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-sitemap"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentTypeName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Name of one component type to resolve in full (e.g. 'XGBoost'). When supplied, returns the resolved Profile instead of a list."
+          },
+          "primaryKey": {
+            "ID": "33E20C0F-F70C-4315-9FAA-5D517C44C2C2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Kind",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Narrow the listing to one Kind: Model, Preprocessing, Statistic, Input, Output, Parameter, or Structure."
+          },
+          "primaryKey": {
+            "ID": "C75E05FF-F888-43F4-A19A-0B209DE9AF04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConcreteOnly",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When listing by Kind, exclude abstract types (which exist to carry inherited properties and cannot be instantiated). Defaults to false."
+          },
+          "primaryKey": {
+            "ID": "45024FD7-6ED1-48E0-B088-64F0B87EB7E1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentTypes",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "The matching component types (id, name, kind, abstractness, parent, archetype story)."
+          },
+          "primaryKey": {
+            "ID": "683D72B7-01D6-4971-805B-A9E599500075"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Profile",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The resolved profile of the named type: its root-first inheritance Chain, effective Properties, Slots and per-key Provenance."
+          },
+          "primaryKey": {
+            "ID": "84524D30-A857-4292-8086-23C48062C133"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The tree was read."
+          },
+          "primaryKey": {
+            "ID": "3B116A63-4E7E-43B5-9CA2-72994D6DF740"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No component type has that name."
+          },
+          "primaryKey": {
+            "ID": "FDF5109C-43C8-4F5D-9CE3-AA76840637CF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BROWSE_FAILED",
+            "IsSuccess": false,
+            "Description": "The component tree could not be read."
+          },
+          "primaryKey": {
+            "ID": "0D5A8E48-7347-4D30-91CB-FFB0713FE160"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A9966FB8-52C3-46D0-AD2D-DF365BFE0031"
+    }
+  },
+  {
+    "_comments": [
+      "Find Reusable Components — reuse by MEANING, not by name.",
+      "The caller supplies the query embedding deliberately: the component stories were embedded with a",
+      "specific model, and a vector from a different one yields distances that look like numbers and mean",
+      "nothing. Similarity is only half the answer — when ForComponentTypeID + ForSlotName are given, only",
+      "components the slot would LEGALLY accept survive, and unapproved/untrained components are excluded by",
+      "default so unreviewed work is never silently propagated into a new model."
+    ],
+    "fields": {
+      "Name": "Find Reusable Components",
+      "Description": "Find an already-trained ML component worth reusing, by what it means rather than what it is called. Ranks components by the similarity of their stories to a query embedding, and (optionally) keeps only those that can legally fill a named slot on a given component type. Approved, trained components only unless told otherwise.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioFindReusableComponentsAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass-chart"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryVector",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": true,
+            "Description": "The query embedding as a numeric array. MUST come from the same embedding model the component stories were embedded with — a vector from a different model produces distances that mean nothing."
+          },
+          "primaryKey": {
+            "ID": "66B16134-B91F-448D-BA0E-24E128932D19"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopK",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum matches to return. Defaults to 10."
+          },
+          "primaryKey": {
+            "ID": "5A8EB2AD-BD02-43EE-B5DE-4CDC28AD82D4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinSimilarity",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Minimum cosine similarity (0-1). Below this a match is noise dressed as a recommendation."
+          },
+          "primaryKey": {
+            "ID": "DEAEB7A6-4A60-454F-BAD2-EA757968A2C0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ForComponentTypeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The component type whose slot is being filled. Must be supplied together with ForSlotName."
+          },
+          "primaryKey": {
+            "ID": "F97AED05-6A2B-4182-BC2A-688E10E00C59"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ForSlotName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The slot being filled. Only components the slot accepts (its Accepts type or a descendant) are returned."
+          },
+          "primaryKey": {
+            "ID": "1C70E052-AEAB-43BD-8D30-1FB6A764F465"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromotionStates",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Promotion states to consider. Defaults to Approved only — reusing unreviewed work is not a default."
+          },
+          "primaryKey": {
+            "ID": "DD3A72D0-E903-4BCA-AA03-59F8BCA27484"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TrainedOnly",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Only consider components with fitted state worth reusing. Defaults to true."
+          },
+          "primaryKey": {
+            "ID": "1F839859-B3F5-4639-81C0-4C04EC6BABEA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Matches",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Ranked matches: instance id, name, component type, cosine similarity, the component's own story, and its promotion state."
+          },
+          "primaryKey": {
+            "ID": "4348DA63-860C-4587-8F21-A5DA668C2761"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CandidatesConsidered",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "How many components carried a usable story vector and survived the structural filter before ranking."
+          },
+          "primaryKey": {
+            "ID": "28D9206B-6DA1-4789-BD80-94EE3D063D47"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Warnings",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Non-fatal notes — an unresolvable slot, components skipped for an unreadable story vector, or matches excluded because they cannot fill that slot."
+          },
+          "primaryKey": {
+            "ID": "18C63812-CADA-4C3B-BC38-92EAC7358A8F"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The search ran (it may legitimately have found nothing)."
+          },
+          "primaryKey": {
+            "ID": "CCBF98C8-B406-4FDE-ACEB-7041A4EBC872"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The query vector was missing or malformed, or a slot filter was only half specified."
+          },
+          "primaryKey": {
+            "ID": "B7244D52-960E-4ED8-BC31-DEC46B19F042"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "IsSuccess": false,
+            "Description": "The reuse search could not complete."
+          },
+          "primaryKey": {
+            "ID": "CD0F4B64-02D4-47C9-AAEA-87A079B420F6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B58CC333-02AA-4BBD-9F8D-0C98E5A1B0F7"
+    }
+  },
+  {
+    "_comments": [
+      "Validate Component Graph — prove a proposed composition is buildable BEFORE anything trains.",
+      "Accepts either a bare Graph or a whole ArchitectureSpec, because the Architect produces the latter and",
+      "a human composing in the UI produces the former. Findings carry a path and a message that says what",
+      "WOULD have been valid, so a caller can fix its own proposal rather than guessing."
+    ],
+    "fields": {
+      "Name": "Validate Component Graph",
+      "Description": "Check a proposed ML component composition against the real component tree: every referenced type exists, none is abstract, each child fills a slot its parent actually declares, each filler is a type that slot accepts, required slots are filled and bounded ones are not over-filled. Returns per-node findings explaining what would have been valid.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioValidateComponentGraphAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-circle-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Graph",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The composition to check: a node of { ComponentTypeRef, SlotName?, Params?, Children? }. Either this or Architecture is required."
+          },
+          "primaryKey": {
+            "ID": "8AF1DA59-3CA9-450E-8B6F-25D40426FDED"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Architecture",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "A whole ArchitectureSpec; its ComposedGraph is validated. Either this or Graph is required."
+          },
+          "primaryKey": {
+            "ID": "8F650861-957E-4D26-AA82-42575DF49FF9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Valid",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "True when the composition is buildable."
+          },
+          "primaryKey": {
+            "ID": "59AAEC8B-AE0F-426A-BC06-8DFA3AFF712C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Findings",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Per-node findings: severity, rule, dotted path, and a message naming what would have been valid."
+          },
+          "primaryKey": {
+            "ID": "C2242EAC-E3CC-4C53-B717-2C59476732AE"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The composition was checked (it may or may not be valid — see the Valid output)."
+          },
+          "primaryKey": {
+            "ID": "CADAF98E-60D5-4CD7-BE97-30703D8F61C1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Neither a Graph nor a usable Architecture was supplied."
+          },
+          "primaryKey": {
+            "ID": "27FD9878-63FF-4530-BE41-10BBAABD307A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_FAILED",
+            "IsSuccess": false,
+            "Description": "The composition could not be checked against the tree."
+          },
+          "primaryKey": {
+            "ID": "AB99FFAA-5273-4905-9E29-AFC4CAE00F51"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C910B2B5-0B87-4F46-9CDC-8C15A4D61936"
+    }
   }
 ]

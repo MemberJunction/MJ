@@ -1,0 +1,251 @@
+[
+  {
+    "fields": {
+      "Name": "Preprocessing",
+      "Kind": "Preprocessing",
+      "Description": "Root of the transform space: fit-once/apply-everywhere operations on feature columns.",
+      "Story": "Preprocessing is the quiet half of every model: what was filled, scaled, encoded and clamped before anything learned.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1
+    },
+    "primaryKey": {
+      "ID": "614E6FA5-98A7-5E05-A7C8-2A670988357C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Missing Values",
+      "Kind": "Preprocessing",
+      "Description": "Transforms that decide what absence means before a model sees the column.",
+      "Story": "A blank is not a zero; these components make the difference explicit instead of accidental.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Preprocessing"
+    },
+    "primaryKey": {
+      "ID": "4FC82D22-C7F7-53B5-BE11-FB56DBE6B066"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Impute",
+      "Kind": "Preprocessing",
+      "Description": "Fill missing values by mean/median/mode/constant; fitted at train time, replayed at scoring.",
+      "Story": "Standing in for the unknown with the least-surprising value the training data offers.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Missing Values",
+      "DriverClass": "impute"
+    },
+    "primaryKey": {
+      "ID": "F062CAE5-CFCA-54CF-BBDB-7D07E242DB4E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Scaling",
+      "Kind": "Preprocessing",
+      "Description": "Population-relative rescaling; parameters are fit on the training population and frozen.",
+      "Story": "Scaling puts every signal on a comparable footing so no input dominates by unit accident.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Preprocessing"
+    },
+    "primaryKey": {
+      "ID": "C3B037E0-7D90-5D80-B8DA-B235AD80AFEA"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Standardize",
+      "Kind": "Preprocessing",
+      "Description": "Zero-mean/unit-variance scaling.",
+      "Story": "Measures each value in standard deviations from what is normal for the population.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Scaling",
+      "DriverClass": "standardize"
+    },
+    "primaryKey": {
+      "ID": "0AFA6327-FC8B-568F-BDF9-B4DC4D6E466C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Min-Max",
+      "Kind": "Preprocessing",
+      "Description": "Rescale to [0,1] by the training min/max. Ported from Sonar.",
+      "Story": "The simplest normalization there is: where does this value sit between the smallest and largest we have seen?",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Scaling",
+      "DriverClass": "minmax"
+    },
+    "primaryKey": {
+      "ID": "3D3172F8-F889-5D51-A6E2-1E820DB3D67F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Percentile",
+      "Kind": "Preprocessing",
+      "Description": "Rank-based normalization with midpoint tie handling. Ported from Sonar.",
+      "Story": "Ignores magnitudes entirely and asks only: what fraction of the population does this value beat?",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Scaling",
+      "DriverClass": "percentile"
+    },
+    "primaryKey": {
+      "ID": "16DBDB19-4DD2-56F6-882A-8739B70FB3C0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Z-Score Clamped",
+      "Kind": "Preprocessing",
+      "Description": "Z-score clamped to ±3σ and mapped to [0,1]. Ported from Sonar.",
+      "Story": "Standardization with guard rails: outliers stop mattering more than three standard deviations out.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Scaling",
+      "DriverClass": "zscore"
+    },
+    "primaryKey": {
+      "ID": "C4C92314-69C8-5467-9F02-B41922545CBC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Encoding",
+      "Kind": "Preprocessing",
+      "Description": "Categorical/numeric encodings fit on the training vocabulary.",
+      "Story": "Encoders translate categories and ranges into the numbers a model can reason with.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Preprocessing"
+    },
+    "primaryKey": {
+      "ID": "8F767030-417F-5DE4-985A-592E0A7AC256"
+    }
+  },
+  {
+    "fields": {
+      "Name": "One-Hot",
+      "Kind": "Preprocessing",
+      "Description": "Expand a categorical column into indicator columns; vocabulary frozen at train time.",
+      "Story": "Gives every category its own switch instead of pretending categories have an order.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Encoding",
+      "DriverClass": "onehot"
+    },
+    "primaryKey": {
+      "ID": "38C60A98-E73A-5C15-BF79-FDFC700C9AB6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bin",
+      "Kind": "Preprocessing",
+      "Description": "Discretize a numeric column into fitted bins.",
+      "Story": "Turns a continuum into a handful of named ranges a human can also reason about.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Encoding",
+      "DriverClass": "bin"
+    },
+    "primaryKey": {
+      "ID": "6DF8FF32-F4F9-5135-8B17-9F7C088AA134"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Curve Mapping",
+      "Kind": "Preprocessing",
+      "Description": "Stateless, parameterized value→value curves (no population fit). Ported from Sonar.",
+      "Story": "Hand-shaped curves that encode judgment — how quickly goodness saturates, where the cliff is — without any training.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Preprocessing"
+    },
+    "primaryKey": {
+      "ID": "2453867A-7225-578B-ACCE-FA93226E36C5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Logistic Curve",
+      "Kind": "Preprocessing",
+      "Description": "Sigmoid mapping with operator-set midpoint and steepness.",
+      "Story": "An S-curve that says: change near the midpoint matters, change at the extremes does not.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Curve Mapping",
+      "DriverClass": "logistic"
+    },
+    "primaryKey": {
+      "ID": "88A860FA-DC8C-506D-B919-15497362D7DE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Banded",
+      "Kind": "Preprocessing",
+      "Description": "Bucket→fraction step mapping.",
+      "Story": "Judgment as a staircase: these ranges are bad, these fine, these excellent.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Curve Mapping",
+      "DriverClass": "banded"
+    },
+    "primaryKey": {
+      "ID": "BF52C1CE-5B04-5ACD-AC46-1CAE81C9ED3B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lookup",
+      "Kind": "Preprocessing",
+      "Description": "Exact-match table with a fallback value.",
+      "Story": "The bluntest possible meaning function: this value means exactly this, everything else means that.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Curve Mapping",
+      "DriverClass": "lookup"
+    },
+    "primaryKey": {
+      "ID": "36377FF1-5B3A-5520-94DB-5A63231772A4"
+    }
+  }
+]

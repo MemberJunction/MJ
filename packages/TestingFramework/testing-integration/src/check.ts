@@ -22,6 +22,8 @@ import type {
     MJMLTrainingPipelineEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLComponentEntity,
+    MJMLComponentBindingEntity,
     MJUserRoutineEntity
 } from '@memberjunction/core-entities';
 import type sql from 'mssql';
@@ -187,6 +189,19 @@ export interface PredictiveStudioFixture {
     Binding: MJMLModelScoringBindingEntity;
     TargetEntityID: string;
     AlgorithmID: string;
+    /**
+     * The typed-component leg (PS6–PS8): a component INSTANCE of a seeded concrete component type,
+     * hung off `Model`, with one binding onto a real `MJ: Entity Fields` row. Optional because
+     * Setup creates them only when the component tree is seeded, and because a mid-Setup crash must
+     * still leave Teardown a handle to whatever exists.
+     */
+    Component?: MJMLComponentEntity;
+    /** The component's `MJ: ML Component Bindings` row (deleted before `Component`). */
+    ComponentBinding?: MJMLComponentBindingEntity;
+    /** The seeded concrete `MJ: ML Component Types` row the instance was created under. */
+    ComponentTypeID?: string;
+    /** A real `MJ: Entity Fields` id on `TargetEntityID`, bound by `ComponentBinding`. */
+    EntityFieldID?: string;
 }
 
 /**

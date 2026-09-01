@@ -50,6 +50,8 @@ This guide ties together the packages that each document one layer:
 6. [Scoring — a Record Set Processing work type](#6-scoring--a-record-set-processing-work-type)
 7. [The experiment engine — a generic agentic-search primitive](#7-the-experiment-engine--a-generic-agentic-search-primitive)
 8. [The data model — entities and relationships](#8-the-data-model--entities-and-relationships)
+    - 8.1 [The typed-component model (v6.1)](#81-the-typed-component-model-v61)
+    - 8.2 [The runtime layer — reading the tree, binding the meaning](#82-the-runtime-layer--reading-the-tree-binding-the-meaning)
 9. [The guidance layer — algorithm catalog + the 6×7 matrix](#9-the-guidance-layer--algorithm-catalog--the-67-matrix)
 10. [The invocation surface — Actions vs Remote Operations](#10-the-invocation-surface--actions-vs-remote-operations)
 11. [Feature Pipelines — the category route (no new entity)](#11-feature-pipelines--the-category-route-no-new-entity)
@@ -64,7 +66,7 @@ This guide ties together the packages that each document one layer:
 20. [Quick reference — what's built](#20-quick-reference--whats-built)
 
 > **The six invariants** this system is built to protect. Each is enforced by code, not convention — they recur throughout the guide:
-> 1. **Anti train/serve skew** — one assembly code path for train and score; preprocessing is *fit once, applied everywhere*, and the **validation fit happens inside the train/val split** (§4.2, §5.1).
+> 1. **Anti train/serve skew** — one assembly code path for train and score; preprocessing is *fit once, applied everywhere*, the **validation fit happens inside the train/val split** (§4.2, §5.1), and the point-in-time sources a model trained on are frozen into its lineage so scoring rebuilds the *same* as-of columns (§8.2).
 > 2. **Locked holdout** — a slice the search never sees, scored exactly once → the only *honest* metric (§5.1).
 > 3. **Leakage gate** — deny-list at assembly + single-feature-dominance flag post-train, blocking auto-promotion (§4.4); promotion of a flagged model requires an **auditable sign-off reason** (§13).
 > 4. **Point-in-time correctness** — features assembled as-of the decision date, never leaking the future (§4.3).
@@ -319,8 +321,9 @@ The flow:
 5. **Call the sidecar `/train`** — get back the artifact, `fitted_preprocessing`, train+validation metrics, feature importance, and `holdout_metrics`.
 6. **Persist the artifact** to MJStorage (`MJ: Files`) via an injected store.
 7. **Create the immutable `MJ: ML Models` row** (`Status='Draft'`) carrying `FittedPreprocessing`, `FeatureSchema`, `Metrics`, `HoldoutMetrics`, `FeatureImportance`, and full `Lineage`.
-8. **Leakage check** — run `detectSingleFeatureDominance`; a dominant feature flags the run and blocks auto-promotion.
-9. **Finalize the run** (`Completed`/`Failed`, results, costs, notes).
+8. **Materialize the component** (§8.2) — project the model into a root `MJ: ML Components` row + bindings onto real entity fields. Best-effort; skipped when no materializer seam is injected.
+9. **Leakage check** — run `detectSingleFeatureDominance`; a dominant feature flags the run and blocks auto-promotion.
+10. **Finalize the run** (`Completed`/`Failed`, results, costs, notes).
 
 ```mermaid
 sequenceDiagram
@@ -340,12 +343,13 @@ sequenceDiagram
     SC-->>TE: artifact · fitted_preprocessing · metrics · importance · holdout_metrics
     TE->>ST: persist artifact → ArtifactFileID
     TE->>DB: create immutable ML Model (Status='Draft')
+    TE->>DB: materialize root ML Component + Bindings (best-effort)
     TE->>TE: detectSingleFeatureDominance → flag?
     TE->>DB: finalize Training Run (Completed/Failed)
     TE-->>C: { model, run }
 ```
 
-The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §19.4).
+The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`, and the optional `IModelComponentMaterializer` (§8.2). Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §19.4).
 
 ### 5.1 Validation discipline + locked holdout
 
@@ -446,6 +450,42 @@ erDiagram
 - **`MJ: Experiment Sessions`** — one execution. Carries the `Budget` (JSON), the approved `PlanSpec` (for PS, the `ModelingPlanSpec`), a `Leaderboard` snapshot, and `AgentRunID`.
 - **`MJ: Experiment Session Iterations`** — one attempt, the **leaderboard unit**. Carries `Sequence`, `Status`, the normalized `Score` (the Experiment's `TargetMetric`), `ComputeCost`/`TokensUsed`, `Rationale`, and the driving `AIAgentRunID`.
 
+### 7.4 Resolving an experiment to a pipeline
+
+`TrainingEngine` trains by **pipeline id**, so every iteration of an experiment session needs one.
+Mapping "algorithm × feature set × hyperparameters" to a concrete `MJ: ML Training Pipelines` row was
+declared to belong to a higher layer, and the shipped default (`UnresolvedPipelineResolver`) threw —
+which meant a production experiment session could not train anything at all.
+
+`MaterializingPipelineResolver` closes that. Two properties matter more than the mechanics:
+
+- **Reuse before create.** A retried or resumed session, or a second session over the same plan, must
+  land on the SAME pipeline row — otherwise `MJ: ML Models` versions fragment across near-identical
+  pipelines and the registry stops being the history of one thing.
+- **Match on the whole configuration, not on the name.** Two proposed experiments can differ *only*
+  in hyperparameters, or only in feature set. Matching on less would silently train the wrong
+  pipeline and report it as the right one — precisely what the throwing default existed to prevent.
+  The comparison is canonical (key-order-insensitive, `null`/`{}`/`[]` all reading as "nothing"), so
+  a re-serialization never spawns a duplicate, and array order still matters because feature-step
+  order is meaningful.
+
+Two fixes fell out of building it:
+
+- **`ProposedExperiments[i].Hyperparameters` was silently dropped.** `PipelineConfig` carried no
+  hyperparameters and `createPipeline` never wrote the column, while `TrainingEngine` reads them from
+  it — so every agent-built model trained at the algorithm's defaults no matter what the Experiment
+  Designer proposed. Same failure shape as the `DatedSources` gap (§8.2): written by one side, never
+  read by the other, and invisible because the result still looks like a trained model.
+- **`modelingPlanToPipelineConfig` now takes the experiment to map.** It previously always chose the
+  plan's highest-priority one, so a session would have collapsed every iteration onto the same
+  pipeline.
+
+Pipeline creation itself moved to `agent/create-pipeline.ts` — a leaf module with no dependency on
+the training/delegation stack. Leaving it on the builder made the resolver's import a cycle, which
+failed at class-extend time with an undefined base class.
+
+---
+
 ### 7.1 The wave orchestrator
 
 `ExperimentOrchestrator` (`Engine/src/experiment/experiment-orchestrator.ts`) is **deterministic** TS that executes an *already-approved* `ModelingPlanSpec`:
@@ -481,6 +521,42 @@ flowchart LR
 > **The budget gate is enforced *inside* the bounded runner, not just between waves.** As each iteration completes within a wave, `foldOutcome` folds its cost into `budgetState` immediately and re-checks `checkBudget(...)`; if a bound trips it sets `stopReason`, which feeds `runBounded`'s `shouldStop` predicate (each worker calls `if (shouldStop && shouldStop()) return;` before claiming its next task). The comment is explicit: *"fold each completed train into the leaderboard + budget IMMEDIATELY as it finishes … so the `shouldStop` predicate sees up-to-date budget state and can halt further dispatch the instant a bound trips — no in-flight overrun."* There is also a between-waves gate (`gateBeforeWave`) and a `trimWaveToBudget`, but the in-wave `shouldStop` is the tight enforcement.
 
 A session may spawn **one Process Run per wave** (the two are kept distinct, no hard FK in v1). Because scoring *also* composes onto Record Set Processing, the whole feature shares one batching/budget/audit substrate. Like the other engines, the orchestrator is built on injectable seams (`IExperimentEntityFactory`, `IClock`, `IExperimentTrainer`, `IWaveStrategist` — `src/experiment/types.ts` / `seams.ts`).
+
+---
+
+### 7.5 Searching component combinations
+
+The default strategist works the plan and stops: whatever the Experiment Designer proposed is the
+entire search space. But a component type's resolved profile already declares what is worth varying
+— its `HyperparameterBank` says which knobs matter and over what range — and those declarations are
+**inherited**, so XGBoost gets the boosting knobs from Boosting and the ensemble knobs from Tree
+Ensemble without anyone restating them on the leaf.
+
+`ComponentCombinationWaveStrategist` reads that profile and expands the best result so far along
+those axes. Four rules make it usable rather than merely clever:
+
+- **Seeds first, always.** Wave 0 is the plan's own experiments, untouched, in priority order. What
+  a human or the Experiment Designer explicitly asked for is never displaced by a generated guess.
+- **Deterministic.** Same plan, same leaderboard, same next wave. A search whose shape depends on
+  timing is not reproducible, and a session that cannot be reproduced cannot be trusted.
+- **One factor at a time, interleaved across knobs.** Each variant changes exactly one knob, and the
+  wave takes the first candidate of *every* knob before the second of any — so a 3-wide wave covers
+  three axes rather than three values of whichever knob sorts first alphabetically. Breadth across
+  the declared axes is what tells you which axis deserves depth.
+- **Never repeats itself.** Candidates are compared by a canonical fingerprint of what actually gets
+  trained (algorithm + feature set + hyperparameters, order-insensitive) against everything already
+  dispatched — so a variant produced two waves ago is not silently re-run until the budget is gone,
+  and the leaderboard never fills with duplicates that look like independent evidence.
+
+Two smaller judgments worth stating: an integer-declared range always yields integers, however many
+points were requested (`max_depth` of 7.5 is not a tree depth); and a bank row that declares neither
+a range nor options is **skipped**, because documenting that a knob exists is not guidance on what
+values are reasonable, and inventing one would be the search making up the family's own advice.
+
+This required one additive change to the strategist seam: `WaveStrategistContext.dispatched`. The
+plan-order default never needed it — it only draws from `remaining` — but a strategist that
+*generates* candidates cannot recognize its own past output without it, since a generated variant
+was never in `remaining`.
 
 ---
 
@@ -522,11 +598,131 @@ _(Entity names shown without the "MJ: " prefix for diagram clarity. `Record_Proc
 
 ---
 
+### 8.1 The typed-component model (v6.1)
+
+The catalog's flat "6 algorithms" shape is now the trained-leaf slice of a larger **typed
+component model** — "everything is a component": model primitives, preprocessing, statistical
+methods, inputs/outputs, parameters, and slot-bearing structures, organized in an inheritance
+tree whose nodes carry only what is true of every descendant. Five entities
+(migration `V202608301400__v6.1.x__ML_Component_Model.sql`):
+
+- **`MJ: ML Component Types`** — the catalog/tree node (`ParentID` inheritance; seven Kind roots:
+  Model, Preprocessing, Statistic, Input, Output, Parameter, Structure). Carries `IsAbstract`,
+  `Trainable` (a hand-authored matrix or operator-weighted rubric is first-class WITHOUT being
+  trainable), `DriverClass` (sidecar/step key), `SpecSchema`, and the archetype's prose **Story**
+  (+ embedding vector) — a component's dual identity.
+- **`MJ: ML Component Type Properties`** — inheritable lists AS ROWS (preprocessing banks,
+  hyperparameter banks, statistical gates, guidance), merged root→leaf per fixed per-key modes by
+  the pure resolver in `@memberjunction/predictive-studio-core` (`component-resolution.ts`);
+  `lintComponentTree` enforces the principled partition (a property belongs on a node only if it
+  holds for ALL descendants) and the shipped seed tree is test-certified to zero findings.
+- **`MJ: ML Component Type Slots`** — fillable positions (a Bagging Wrapper's `base_estimator`, a
+  rubric's `weights`), inherited by name, narrowable only.
+- **`MJ: ML Components`** — a filled/trained INSTANCE in one model's composition tree
+  (`ParentComponentID` + `SlotName`, `MLModel.RootComponentID` at the top) or standalone reusable
+  (per-component artifact, `SourceComponentID` reuse-by-reference, `PromotionState` gate for
+  code-backed inputs, the instance's Story + StoryContribution).
+- **`MJ: ML Component Bindings`** — instance inputs/outputs/parameters FK'd to real
+  `MJ: Entities`/`MJ: Entity Fields`, so a weight is on Members.DaysSinceLastLogin, not on x3.
+
+`MLAlgorithm.ComponentTypeID` bridges each catalog row onto its leaf; every existing read path is
+unchanged. The seed tree (`metadata/ml-component-types*`) adds the Sonar-ported members: the
+**Glass-Box Rubric** (`rubric` sidecar estimator — given-mode weights are hand-set, search mode
+fits them; exact per-record contributions via `coef_`), the six **normalization** preprocessing
+ops (`minmax`/`percentile`/`zscore`/`logistic`/`banded`/`lookup`), the ten **As-Of Aggregate**
+input leaves (the widened `DatedFeatureSpec.Aggregate` vocabulary with `Rolling`/`Calendar`/
+`SinceEvent`/`RenewalRelative`/`AllTime` windows and the `__present` hadData mask), **Score
+Band** outputs (`Engine/src/components/score-bands.ts`), and the design-time **join-path**
+auto-resolver (`Engine/src/components/join-path.ts`). The `Sequence`/HMM and Structure-wrapper
+subtrees are seeded `Status='Draft'` until the sidecar's `component_graph` execution and the
+`sequence` problem type ship.
+
+### 8.2 The runtime layer — reading the tree, binding the meaning
+
+The five entities of §8.1 are the *shape*. Four runtime pieces make them load, resolve, get
+written, and stay honest.
+
+**`MLComponentEngine`** (`Engine/src/components/ml-component-engine.ts`) — a `BaseEngine`
+subclass caching the three **type** tables (types, properties, slots), never the instances.
+Types are a small, slow-moving catalog; instances grow with every trained model, so they are
+loaded on demand by `MLModelID`/type with narrowed `Fields` instead. The engine exposes
+`ResolveProfile(componentTypeID)` (memoized, cleared in `AdditionalLoading`), `FindTypeByID` /
+`FindTypeByName`, `TypesByKind`, `LeafForAlgorithm`, `IsDescendantOf`, and `Lint()`. The
+resolution itself lives in the pure, browser-safe `component-resolution.ts` in Core, so the
+Studio UI and the server run the *same* fold.
+
+A compile-time test in the Engine pins Core's hand-written `ComponentKind` and
+`ComponentPropertyKey` unions to the CodeGen-emitted `MJMLComponentTypeEntity['Kind']` /
+`MJMLComponentTypePropertyEntity['PropertyKey']`. Widen a CHECK constraint without widening the
+Core union and the build breaks, rather than the resolver silently ignoring the new key.
+
+**The as-of round-trip.** `MLTrainingPipeline.DatedSources` is read by `TrainingEngine`, passed
+to `FeatureAssemblyExecutor`, and frozen into `MLModel.Lineage.datedSources`;
+`MLModelInferenceProcessor` reads it straight back out and **prefers it over its constructor
+option**. Before this, dated sources could only reach scoring from the caller, so a model trained
+WITH as-of features scored WITHOUT them — silently, because the missing columns arrived as `null`
+and the sidecar imputed them. That is exactly the train/serve skew §6.2's fit-once/apply-everywhere
+rule exists to prevent, and it now has the same single-declaration guarantee:
+
+```
+MLTrainingPipeline.DatedSources          ← declared once
+  → TrainingEngine.assemble()
+  → MLModel.Lineage.datedSources         ← frozen with the model
+  → MLModelInferenceProcessor            ← lineage wins; the option is a legacy fallback
+  → the SAME FeatureAssembly executor    ← identical as-of columns
+```
+
+A malformed lineage blob degrades to "no as-of sources" rather than throwing, and a model whose
+lineage predates the column still honors the caller-supplied spec — so nothing that trains today
+stops scoring.
+
+**`ComponentMaterializer`** (`Engine/src/components/component-materializer.ts`) — what turns a
+trained model into something you can *reason* about. A model's `FeatureSchema` is a list of column
+names; a binding says what each one means:
+
+| Feature | Binding |
+|---|---|
+| `tenure` | `Input` → `Members.MembershipTenureMonths`, Number |
+| `activity_count_asof` | `Input` → `Activities`, `RelationshipPath` = the FK hops, "count of rows as of the decision date" |
+| `activity_count_asof__present` | `Input` → the `hadData` mask: "did this record have ANY activity rows" |
+| `class` | `Output` → `Members.Renewed` — the field this model exists to predict |
+
+`planModelMaterialization` is **pure** (plain data in, plan out), so every naming, typing, and
+join-path decision is unit-testable with no provider; `ComponentMaterializer.materialize`
+persists a plan and **never throws**. Three deliberate non-guesses: an unresolvable feature (a
+one-hot, an embedding dimension) gets a binding with a null `EntityFieldID` and a `Meaning`
+saying what it is, never an invented field id; `HigherIsBetter` is left null, because direction
+is a human or story-tagger judgment; and an unreachable or ambiguous join path falls back to the
+DECLARED foreign key with a warning rather than a guessed multi-hop path (`findAutoPathHops`
+fails loud on both, by design — a guessed join is a silently-wrong feature).
+
+The seam is `TrainingDeps.componentMaterializer`, wired into all three production deps builders
+and wrapped in try/catch by the engine. Training has already succeeded by the time it runs, so a
+provenance failure must never be recorded as a failed run. Omit the seam and no component rows
+are written at all — every pre-existing caller is unchanged.
+
+**Server subclasses** (`MJCoreEntitiesServer/src/custom/MJMLComponent{,Type}EntityServer.server.ts`)
+— the write-side guarantees:
+
+| Rule | Why |
+|---|---|
+| `Story` → `StoryVector` on save (both entities) | reuse-by-meaning searches the same text a human reads, and can't drift from it |
+| a child's `Kind` must equal its parent's | Kind partitions the tree into seven independent spaces; a branch that changes Kind makes every inherited property below it wrong, and nothing downstream notices |
+| an **abstract** type cannot be instantiated | `Model`, `Linear`, `Preprocessing` carry inherited properties and have nothing to run — the failure would otherwise surface at train or score time, far from the save that caused it |
+| `Spec` must conform to the type's `SpecSchema` | checked with the dependency-free `ValidateJsonAgainstSchemaLite`. A type with no schema leaves the spec freeform; a type whose schema is *itself* malformed yields a **Warning**, never a Failure — that is a metadata bug on the type row and must not brick every instance of it |
+| no self-parent / self-reuse; no `SlotName` without a parent | a slot is a position *inside* a parent; a root component occupies none |
+
+Whole-tree rules — contradictory `Add`/`Remove` pairs, hoist suggestions, narrowing direction —
+stay in Core's `lintComponentTree`, which runs over the loaded tree. These subclasses enforce
+only what a single row can prove on its own.
+
+---
+
 ## 9. The guidance layer — algorithm catalog + the 6×7 matrix
 
 Neither the agent nor a non-expert user should have to guess which algorithm fits. Three seeded metadata entities encode evidence-based defaults:
 
-- **`MJ: ML Algorithms`** — the fixed, curated catalog (6 algorithms): XGBoost, LightGBM, Logistic Regression, Random Forest, Linear/Ridge Regression, MLP. Each row declares `ProblemTypes`, `DriverClass` (the sidecar key), `HyperparameterSchema`, `DefaultHyperparameters`, and `SupportsFeatureImportance`.
+- **`MJ: ML Algorithms`** — the curated catalog (6 trained algorithms + the Glass-Box Rubric), each row bridged via `ComponentTypeID` onto its `MJ: ML Component Types` leaf (§8.1) so the resolved tree profile adds inherited banks/gates/guidance on top: XGBoost, LightGBM, Logistic Regression, Random Forest, Linear/Ridge Regression, MLP. Each row declares `ProblemTypes`, `DriverClass` (the sidecar key), `HyperparameterSchema`, `DefaultHyperparameters`, and `SupportsFeatureImportance`.
 - **`MJ: ML Algorithm Use Cases`** — **decision-relevant** scenarios that genuinely differentiate algorithms (7 of them), NOT business labels (churn/renewal/attendee-return are all the same *binary classification* shape and so don't differentiate). E.g. "Binary classification", "Regression", "Interpretability required", "Minimal tuning (business-user)", "Large/wide dataset (speed)", "Embedding/LLM-feature-heavy", "Small dataset".
 - **`MJ: ML Algorithm Use Case Rankings`** — the **6×7 join** (42 rows). Each cell carries a `SuitabilityScore` (1–5), a `RecommendationLevel` (`Primary` / `Strong` / `Viable` / `Weak` / `NotRecommended`), and the real payoff: a **`Rationale`** (agent- and human-readable, e.g. *"Gives feature importances but not simple coefficients — if a stakeholder needs to see exactly why each prediction was made, prefer Logistic/Ridge."*).
 
@@ -644,15 +840,21 @@ flowchart TB
     style LEAK fill:#fee2e2,stroke:#dc2626
 ```
 
-### 12.1 Topology — the agent and its three sub-agents
+### 12.1 Topology — the agent and its five sub-agents
 
-The parent **Model Development Agent** is a `Loop` agent (`ModelSelectionMode='Agent'`, `ArtifactCreationMode='Always'`, `DefaultArtifactTypeID → ML Experiment Results`, `InjectNotes=true`, `MaxNotesToInject=10`, `ExposeAsAction=true`). Its four wired Actions are the agent-facing PS Actions plus `Write Entity Field(s)`. Three sub-agents (all `Loop`, `InvocationMode='Sub-Agent'`) refine the plan:
+The parent **Model Development Agent** is a `Loop` agent (`ModelSelectionMode='Agent'`, `ArtifactCreationMode='Always'`, `DefaultArtifactTypeID → ML Experiment Results`, `InjectNotes=true`, `MaxNotesToInject=10`, `ExposeAsAction=true`). Its four wired Actions are the agent-facing PS Actions plus `Write Entity Field(s)`. Five sub-agents (all `Loop`, `InvocationMode='Sub-Agent'`) refine the plan:
 
-| Sub-agent | ExecOrder | Writes (its payload slice) |
-|---|---|---|
-| **Goal Analyst** | 1 | refines the business goal → `Goal`, `TargetDefinition` (target + problem type + success metric) |
-| **Data Scout** | 2 | studies the data → `CandidateSources`, `CandidateFeatures`, `LeakageNotes`; flags leakage risks |
-| **Experiment Designer** | 3 | proposes ranked experiments + validation + budget → `ProposedExperiments`, `ValidationStrategy`, `ProposedBudget` |
+| Sub-agent | ExecOrder | LLM? | Writes (its payload slice) |
+|---|---|---|---|
+| **Goal Analyst** | 1 | yes | refines the business goal → `Goal`, `TargetDefinition` (target + problem type + success metric) |
+| **Data Scout** | 2 | yes | studies the data → `CandidateSources`, `CandidateFeatures`, `LeakageNotes`; flags leakage risks |
+| **Statistics Pass** | 3 | **no — code** | MEASURES the data → `Statistics`, `GateReports` (§12.6) |
+| **Architect** | 4 | yes | decides what KIND of model this is → `Architecture` (§12.7) |
+| **Experiment Designer** | 5 | yes | proposes ranked experiments + validation + budget → `ProposedExperiments`, `ValidationStrategy`, `ProposedBudget` |
+
+The ordering is the point. The data is measured before anything commits to a shape; the shape is
+chosen before experiments are proposed within it; and the Experiment Designer no longer re-picks an
+algorithm from scratch, it fills in the architecture that was already argued for from evidence.
 
 **Sequencing is declarative, not hardcoded control flow** — it's enforced by metadata **payload-path guards**. Each sub-agent has `PayloadDownstreamPaths: ["*"]` (it can *read* the whole plan) and an `PayloadUpstreamPaths` list scoped to exactly the slice it's allowed to *write back* (e.g. Goal Analyst → `["Goal", "TargetDefinition", "TargetDefinition.*"]`). The parent holds `PayloadSelfWritePaths: ["Approved", "Leaderboard"]` — only the orchestrator stamps the approval gate and the execution-phase leaderboard.
 
@@ -687,6 +889,182 @@ The Model Development Agent is elevated to the **Database-Designer / Agent-Manag
 - **`PredictiveStudioPipelineBuilder`** (`pipeline-builder.ts`) — the pure builder: `modelingPlanToPipelineConfig(ModelingPlanSpec)` deterministically maps the plan → the exact `MJ: ML Training Pipelines` field shapes (SourceBindings, the FeatureStep DAG with one-hot for categoricals, AsOfStrategy, LeakageGuard from the plan's exclude-notes, ValidationStrategy); it creates the pipeline, trains via `trainModelViaEngine`, then **publishes the model ONLY if `deriveTrustVerdict` clears the bar** (`@memberjunction/predictive-studio-core`) and training wasn't leakage-flagged — otherwise it stays Draft with a plain held-reason. So a coin-flip model is **never auto-published into the business catalog**.
 
 Proven by: unit tests (mapper, gate logic, projection helpers), an in-process integration test (`ps-inproc-agent-builder.ts` — builds + trains + asserts the publish gate), and an **agent-loop test through the real `AgentRunner`** (`ps-inproc-agent-run.ts` — the sub-agent runs end-to-end and the gate fires). "+ New prediction" on the business surface opens this agent as a docked `mj-conversation-chat-area` co-pilot.
+
+---
+
+### 12.6 The statistics pre-pass — measuring before choosing
+
+`Statistics Pass` (`PredictiveStudioStatisticsPassAgent`, DriverClass-routed like `Pipeline Builder`)
+runs **once, in pure code, with no LLM**. The orchestrator force-routes to it —
+`shouldForceStatisticsPass` — as soon as the plan is describable (a target entity, a target variable
+and at least one candidate feature) and no `Statistics` exist yet. It never re-fires: re-measuring
+the same rows on every turn would spend a sidecar round trip per message and could not change the
+answer. A user-message stamp handles the one failure mode — a pass that ran but produced nothing
+(sidecar down) does not re-fire for the same message, while a fresh message gets a retry.
+
+What it does, in order:
+
+1. Assembles through the **same** `FeatureAssemblyExecutor` the training run will use
+   (`modelingPlanToAssemblyParams` is built on `modelingPlanToPipelineConfig`, so the pass cannot
+   drift from the pipeline the plan would produce).
+2. Carves the locked holdout with the **same** `carveLockedHoldout` (§5.1, extracted to
+   `training/holdout.ts` for exactly this reason) and **discards it**. Describing the holdout would
+   leak it into every downstream decision and `MLModel.HoldoutMetrics` would stop being honest —
+   the one rule in this pass that nothing else in the system would catch if it broke.
+3. Calls the sidecar's read-only `POST /describe`: class balance, per-feature association with the
+   target (single-feature AUC folded to `[0.5, 1]` for classification, `|r|` for regression),
+   mutual information, cardinality, missingness, moments, and an opt-in pairwise correlation matrix.
+4. Derives the **hints** in TypeScript — `leakage-dominance`, `near-duplicate-of-target`, `id-like`,
+   `constant`, `high-cardinality`, `high-missingness`, `collinear` — each carrying the measured
+   value AND the threshold it crossed, so "why was this flagged" is always answerable.
+5. Evaluates each proposed candidate against the `StatisticalGate` rows its `MJ: ML Component Types`
+   leaf **inherits** (§8.1): the `Model` root's rows-per-feature floor of 5 and its
+   `max-single-feature-share` ceiling, `Neural`'s `Replace` of that floor with 50, `Sequence`'s
+   `requires-ordered-sequences`. Each verdict names the tree node that declared it — the node to
+   argue with. An unknown gate kind is `Unevaluated`, **never** a silent pass.
+
+Both results land on `ModelingPlanSpec.Statistics` / `.GateReports`, which means they land on
+`MJ: Experiment Sessions.PlanSpec` automatically — so the numbers the agent saw are stored next to
+the choice it made, and the decision stays auditable long after the session.
+
+Two consequences worth naming:
+
+- **The leakage guard moves earlier.** `max-single-feature-share` catches pre-train what §6.4's
+  `detectSingleFeatureDominance` catches post-train — the same conclusion, without paying for a fit.
+- **Nothing here is an opinion.** The sidecar returns measurements; hints and verdicts come from
+  pure functions with explicit thresholds. The conversational sub-agents may reason about the
+  numbers, but they cannot change them.
+
+The pass is best-effort by construction: if it cannot run, the payload records the absence and the
+plan proceeds as it did before, with the agent saying so plainly rather than quietly guessing.
+
+---
+
+### 12.7 The Architect — deciding what kind of model this is
+
+The agent's first real decision used to be "which of the six algorithms", made from the guidance
+matrix and a goal sentence. That is a decision about a *leaf*. The component tree makes a larger
+space available, so the decision becomes typed — `ArchitectureSpec` records **which** of four
+shapes was chosen and **why**:
+
+| Decision | Means | Must carry |
+|---|---|---|
+| `commit` | one family; the evidence is clear and a search would not change the answer | exactly one candidate |
+| `defer` | several families raced on the leaderboard; the statistics do not separate them | at least two candidates |
+| `reify` | the candidates are variations of one generalized parent, so the parent is what the model *is* | `ReifiedUnderComponentTypeRef` |
+| `compose` | a custom model built by filling a structure's slots — a Bagging Wrapper over a Random Forest, a Stacking Wrapper whose `final_estimator` is a Logistic Regression, a rubric whose `weights` are a hand-authored matrix | `ComposedGraph` |
+
+`Candidates[]` is the record of everything considered, **including what was rejected and why** — so
+the rejections are auditable too, not just the choice.
+
+**Three independent guards** stand between that LLM output and a real pipeline row, and none implies
+the others:
+
+1. **Well-formed** — `validateArchitectureSpec` (zod, in Core). Cross-field rules make the label mean
+   what it says: a `commit` naming three candidates is shaped correctly and says something
+   incoherent, so it is refused.
+2. **Buildable** — `validateComponentGraph` proves a composition against the slots the component
+   types actually declare: every referenced type exists, none is abstract, each child names a real
+   slot on its parent, each filler is the slot's `Accepts` type or a descendant, required slots are
+   filled and bounded ones are not over-filled, and depth is capped so a self-referential graph
+   reports a finding instead of blowing the stack. Every error says what *would* have been valid
+   ("Its slots are: base_estimator"). The validator is pure and takes the tree as three callbacks,
+   so the identical rules run in the Studio UI and on the server.
+3. **Consistent with the evidence** — a candidate the statistics pre-pass found `Admissible: false`
+   cannot be committed to. The gate quotes the failed gate's own message ("only 30 rows per feature,
+   below the floor of 50") rather than restating it, so the user reads the measured reason.
+
+`gateArchitecture` runs all three in `PredictiveStudioPipelineBuilder.build` **before** anything is
+created — after `createPipeline` a refusal would leave an orphan row, and after training it would
+have spent the compute to learn what was knowable up front.
+
+**What is not built yet, said plainly.** `reify` and `compose` are *recordable* today but not
+*executable* — the sidecar's `component_graph` runtime ships later. The gate refuses them with a
+concrete alternative ("commit to one of its concrete descendants, or defer across them, to build
+now") and keeps the proposal on the plan. It does not quietly train the graph's root and let the
+user believe the composition happened.
+
+A plan carrying no `Architecture` at all passes the gate untouched — every pre-Architect plan
+executes exactly as it always did.
+
+---
+
+### 12.8 Stories — the second identity
+
+A trained model has a complete formal identity: an algorithm, a feature schema, coefficients, a
+holdout AUC. That identity is almost useless for the two things people actually do with models —
+deciding whether to **trust** one, and finding a part of one worth **reusing**. Neither is answerable
+from a coefficient vector.
+
+So on publish, every model and every component acquires a **prose identity** alongside the formal
+one. The model story says what it decides, what the data says, and what someone would do
+differently because of it. Each component story says what that part measures and when someone else
+would want it — written to that component's **own row**, so a component found by a similarity search
+months later carries its meaning with it, independent of the model it was born in.
+
+**The tagger is deterministic around one generative step.** `RunViewStoryContextLoader` assembles
+the facts — the trust verdict, holdout-vs-validation metrics, normalized feature importance, and
+each component with its real entity/field bindings — and those facts ride as prompt *data*, not as
+prose in the template, so the writer cannot "remember" a metric differently from what was measured.
+It narrates; it never decides. It cannot upgrade a `Poor` model by describing it warmly.
+
+**Prose cannot be verified. Attribution can, and is.** `validateModelStory` refuses any story whose
+`InstanceID` is not a component the model actually has — otherwise meaning would be written onto the
+wrong row and a later reuse search would surface it as though it were real. It also refuses an empty
+`Caveats` list: every model has limits, and publishing is the moment a user most needs them stated.
+A story that fails either check is discarded whole, never written partially.
+
+**`StoryVector` is generated by the entity server subclass on save** (§8.2), from the `Story` text —
+so the embedding can never drift from the prose it describes, which is what makes "find me something
+that already measures engagement recency" a query rather than an archaeology project.
+
+Two structural changes came with this:
+
+- **`PipelineBuilder.maybePublish` now routes through `ProductionModelPromotionGate`.** It used to
+  set `Status = 'Published'` directly, which bypassed the state machine, the gate's independent
+  leakage re-check, the scoring-Action sync and the story hook — so an agent-built model reached
+  Published by a different road than a human-promoted one. It now promotes with `signOff: false`,
+  because an agent must never sign off on a leakage-flagged model; that override exists for a person
+  who can give a reason and be accountable for it.
+- **The story hook sits beside `syncScoringAction`** in the gate's `Published` transition, and is
+  equally non-contractual: promotion has already succeeded, so a story is a documentation gap when
+  it fails, never a reason to un-promote.
+
+Story tagging is **off unless a host wires a runner** (`ProductionModelPromotionGate.RegisterStoryRunner`).
+`AIPromptRunner` lives in a package the engine does not depend on — the same reason
+`IVisionPromptRunner` is caller-injected — so without one a model trains, promotes and scores
+exactly as it did before.
+
+---
+
+### 12.9 Reuse by meaning — the three component-tree Actions
+
+Stories only pay off if something can search them. Three Actions close that loop, and they are the
+agent-facing surface over everything §8.1–§8.2 built:
+
+| Action | What it answers |
+|---|---|
+| **Browse ML Component Tree** | *What kinds of parts exist, and what does this one inherit?* Naming a type returns its **resolved profile** — merged banks, gates and slots — **with provenance**, so an agent can say *where* a constraint came from rather than only that it exists |
+| **Find Reusable Components** | *Is there already a part that measures this?* Cosine over `StoryVector`, filtered to what can legally fill the slot |
+| **Validate Component Graph** | *Is this composition buildable?* The same `validateComponentGraph` the Architect gate runs, exposed so a caller can check its own proposal first |
+
+Three deliberate constraints on the reuse search:
+
+- **The caller supplies the query embedding.** The stories were embedded with a specific model; a
+  vector from a different one yields distances that look like numbers and mean nothing. Making that
+  the caller's responsibility keeps the mismatch impossible to introduce here by accident, and the
+  Action refuses anything that is not a clean numeric array rather than passing it through.
+- **Similarity is only half the answer.** A semantically perfect component is useless if it cannot
+  legally go where the caller wants to put it, so `ForComponentTypeID` + `ForSlotName` filter by the
+  slot's `Accepts` rule — the same rule `validateComponentGraph` enforces, applied as a filter rather
+  than as an error. Excluded matches are *reported*, not silently dropped.
+- **Approved and trained only, by default.** Reusing a `Draft` component would silently propagate
+  unreviewed work into a new model.
+
+Ranking uses the platform's `SimpleVectorService` (`@memberjunction/ai-vectors-memory`) rather than a
+private cosine, and a component whose stored vector cannot be parsed is **skipped with a warning** —
+coercing it would place it in the ranking at a distance that means nothing, which is worse than
+leaving it out.
 
 ---
 
@@ -1092,16 +1470,41 @@ Predictive Studio is an MJ Explorer dashboard built to the ng-dashboards world-c
 
 - **Shell**: `PredictiveStudioDashboardComponent` (`@RegisterClass(BaseDashboard, 'PredictiveStudioDashboard')`, NgModule-declared) — page-chrome trio, a left-nav across six panels, query-param round-trip (`activePanel` survives deep links / back-forward), and `BaseDashboard` auto-calls `NotifyLoadComplete()` after `loadData()`.
 - **Data layer**: `PredictiveStudioEngine` (`engine/predictive-studio.engine.ts`) — a `BaseEngine` singleton that caches the PS reference entities via `RunView` (`Algorithms`, `UseCases`, `Rankings`, `Models`, `Pipelines`, `TrainingRuns`, `Experiments`, `Sessions`, `Iterations`) and exposes domain helpers (`BestLevelsForScenarios`, `RankingsForUseCase`, `IterationsForSession`). No Angular services for data — the canonical MJ pattern.
-- **Six panels** (standalone components in `components/`, each receiving the engine via `@Input()`):
+- **Seven panels** (standalone components in `components/`, each receiving the engine via `@Input()`):
 
   | Panel | Component | Design |
   |---|---|---|
   | Home | `PSHomeComponent` | Action-Forward — hero band + entry paths + activity timeline |
   | Algorithm Catalog | `PSCatalogComponent` | Card-gallery + Guide-me — scenario picker drives recommendations from the rankings matrix |
+  | Components | `PSComponentsComponent` | Tree + inherited-profile inspector — see below |
   | Pipeline Builder | `PSPipelinesComponent` | Visual DAG — SVG feature-assembly graph + node inspector + leakage/validation config |
   | Experiments | `PSExperimentsComponent` | Kanban — Running/Completed/Pruned columns + leaderboard strip + budget gauges |
   | Model Registry | `PSRegistryComponent` | Master-detail — lifecycle stepper, train-vs-holdout, feature importance, lineage, sign-off gate |
   | Compare Runs | `PSCompareComponent` | switchable side-by-side / overlay charts / champion-vs-challenger |
+
+### 18.1 The Components panel — making inheritance legible
+
+The panel exists because a leaf's real capabilities are the ones it **inherits**. XGBoost declares
+almost nothing itself: it gets `impute` from Tree Ensemble, its boosting hyperparameters from
+Boosting, and the leakage gate from the Model root. Rendering its own rows would be accurate and
+actively misleading, so the inspector shows the **resolved profile** with an *"inherited from"* chip
+on every item that came from an ancestor — and no chip where the leaf genuinely declared it itself.
+
+- The **same pure resolver** the server uses (`resolveComponentProfile` in
+  `@memberjunction/predictive-studio-core`) runs here in the browser, so the panel cannot drift from
+  what the engine computes.
+- **`lintComponentTree` runs client-side too**, and its findings badge the offending nodes in the
+  tree with a banner above it. The "principled partition" rule — a property belongs on a node only
+  if it holds for every descendant — is thereby enforceable by a person looking at the tree, not
+  only by a test.
+- Sections are ordered by **decision relevance** (`Works for`, `Explainability`, then the banks and
+  gates) rather than by object-key order, and headed in English rather than by field name.
+- **Instances are loaded on demand**, never cached: they grow with every trained model, and
+  `LoadComponentInstances` excludes `StoryVector` from `Fields` because the panel shows a
+  component's story as *prose* — the vector is only ever needed server-side by the reuse search.
+
+Read-only for now. The compose UI (drag into slots, live `validateComponentGraph`) ships with the
+composition runtime.
 
 - **Embedded copilot**: an `<mj-conversation-chat-area>` (from `@memberjunction/ng-conversations`, see [Conversations UX Stack Guide](CONVERSATIONS_UX_STACK_GUIDE.md)) docked across **all** panels — agent picker hidden, pinned to the Model Development Agent, with an `appContext` carrying the active panel + published-model / running-session counts so the agent can act on the current context.
 - **Knowledge Hub side**: the **Feature Pipelines** panel (`FeaturePipelinesResourceComponent`, §11) lives in the Knowledge Hub dashboard — list / run / author derived-feature pipelines.
@@ -1172,21 +1575,35 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | Area | Status |
 |---|---|
 | 10-entity data model + CodeGen | ✅ built |
+| **Typed-component model** (5 entities, inheritance tree, seed tree lint-certified) — §8.1 | ✅ built |
+| **`MLComponentEngine`** (type-table cache, memoized profile resolution, compile-time union lockstep) — §8.2 | ✅ built |
+| **As-of round-trip** (`Pipeline.DatedSources` → `Model.Lineage` → scoring; lineage wins) — §8.2 | ✅ built |
+| **`ComponentMaterializer`** (root component + bindings onto real entity fields; pure planner, never fails a train) — §8.2 | ✅ built |
+| **ML component server subclasses** (Story→StoryVector, abstract-instantiation gate, `Spec ⊨ SpecSchema`, Kind-parent match) — §8.2 | ✅ built |
 | Algorithm catalog + use cases + 6×7 rankings (metadata) | ✅ built |
 | `MLSidecar` self-managing Python sidecar (managed + remote) | ✅ built |
 | `FeatureAssemblyExecutor` (raw/preprocessing split, fit-in-split, as-of, leakage guard) | ✅ built |
 | `TrainingEngine` (immutable models, locked holdout, lineage) | ✅ built |
 | `MLModelInferenceProcessor` ('ML Model' RSP work type, ephemeral/write-back) | ✅ built |
 | `ExperimentOrchestrator` (waves, leaderboard, pruning, budget-in-runner) | ✅ built |
-| **6 Remote Operations** (Train/Score/RunFeaturePipeline/Start+Control Experiment/Promote) + **4 Actions** | ✅ built |
+| **`MaterializingPipelineResolver`** (experiment → pipeline, reuse-before-create) — §7.4 | ✅ built |
+| **Component-combination search** (expand the leader along inherited banks) — §7.5 | ✅ built |
+| **6 Remote Operations** (Train/Score/RunFeaturePipeline/Start+Control Experiment/Promote) + **8 Actions** | ✅ built |
 | **Feature Pipelines** (category route — `FeaturePipelineEngine` + KH panel; no new entity) | ✅ built |
 | **Model Development Agent** + 3 sub-agents + **ML Experiment Results artifact** + Angular viewer | ✅ built |
 | **Security model** (scope gate, PK field-name guard, UUID gate, promotion state machine, sign-off reason) | ✅ built |
 | **Maintenance** (staleness + direction-aware challenger-vs-incumbent, never auto-promotes) | ✅ built |
 | **Multimodal** vision-LLM-as-feature (`'vision-llm'` FeatureStep kind, additive) | ✅ built |
+| **Statistics pre-pass** (sidecar `/describe`, feature hints, tree-inherited gates, `Statistics Pass` sub-agent) — §12.6 | ✅ built |
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
 | **Business-user experience** (§16) — agent offers + schedules monthly · generic `'*'` risk-card panel · Models-in-Production section · de-mocked Studio + ops wired · scoring-binding lineage · WorkType value-list + Enrichment-over-GraphQL | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
+| Component **composition** execution (sidecar `component_graph`: bagging/stacking/frozen reuse) — makes `reify`/`compose` trainable | ⏳ planned |
+| **Architect sub-agent** (commit/defer/reify/compose + graph validation + execution gate) — §12.7 | ✅ built |
+| **Model stories** (deterministic context + one validated prompt, per-component prose, promotion hook) — §12.8 | ✅ built |
+| **Reuse-by-meaning search** + Browse/Validate Actions (8 PS Actions total) — §12.9 | ✅ built |
+| Studio **Components tab** (tree + resolved-profile inspector with inherited-from chips) — §18 | ✅ built |
+| Compose UI (drag into slots, live graph validation) | ⏳ planned |
 | Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).

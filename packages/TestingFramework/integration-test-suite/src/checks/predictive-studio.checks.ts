@@ -1,8 +1,11 @@
 /**
- * predictive-studio.checks.ts — the 'predictive-studio' bundle (PS1–PS5): live, full-stack (headless)
+ * predictive-studio.checks.ts — the 'predictive-studio' bundle (PS1–PS8): live, full-stack (headless)
  * integration checks for Predictive Studio's STACK SEAMS over the real provider/transport: ML entity
- * CRUD, the `'ML Model'` Record Set Processing work-type registration + resolution, and the four
- * Predictive Studio Actions in real metadata + invoked through the real Action-execution path.
+ * CRUD, the `'ML Model'` Record Set Processing work-type registration + resolution, the four
+ * Predictive Studio Actions in real metadata + invoked through the real Action-execution path, and
+ * (PS6–PS8) the typed-component model: component-type CRUD with the hierarchy columns the base view
+ * only emits when the self-FK is opted into hierarchy support, profile resolution + tree lint over
+ * the SHIPPED seed tree, and the Model → Component → Binding → Entity Field meaning chain.
  * Graduated verbatim from integration-test-scripts/predictive-studio-tests.ts.
  *
  * Deterministic + sidecar-free by default (PS1–PS5 seams only). The only live-sidecar leg is an
@@ -18,6 +21,9 @@ import {
     MJMLTrainingPipelineEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLComponentEntity,
+    MJMLComponentBindingEntity,
+    MJMLComponentTypeEntity,
 } from '@memberjunction/core-entities';
 import {
     RecordProcessorRegistry,
@@ -35,6 +41,7 @@ import {
     LoadMLModelInferenceProcessor,
     LoadPredictiveStudioActions,
     TRAIN_MODEL_DRIVER_CLASS,
+    MLComponentEngine,
     type MLInferenceDeps,
 } from '@memberjunction/predictive-studio';
 // The sidecar request/response contracts live in the Core package (the engine consumes them and, per
@@ -243,7 +250,160 @@ export const PredictiveStudioChecks: NamedCheck[] = [
                 console.log('      → (skipping the live train invocation — set PS_INTEGRATION=1 to exercise the sidecar path)');
             }
         }
-    }
+    },
+    {
+        Id: 'predictive-studio.PS6',
+        Name: 'PS6: ML Component Type CRUD round-trips, INCLUDING the hierarchy columns the base view only emits when the self-FK is opted in',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const { ComponentTypeID } = fx(ctx);
+            Assert(!!ComponentTypeID, 'no seeded concrete ML Component Type resolved in Setup');
+
+            // Read the row back as a full entity object. This is the check that would have caught the
+            // opt-in trap: MJ registers a virtual Root<FK>ID/Depth/Path/IsLeaf set for a self-referencing
+            // FK, but the BASE VIEW only produces those columns when the field declares
+            // Configuration.Hierarchy.IsHierarchy. Without it every read of this entity fails with
+            // "column does not exist" — and a grid renders "no data" rather than an error, so the
+            // breakage is invisible until someone opens the tree.
+            const r = await new RunView().RunView<MJMLComponentTypeEntity>(
+                { EntityName: 'MJ: ML Component Types', ExtraFilter: `ID='${ComponentTypeID}'`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
+            );
+            const t = r.Results?.[0];
+            Assert(!!t, `seeded ML Component Type ${ComponentTypeID} not readable`);
+            AssertEqual(String(t!.Kind), 'Model', 'component type Kind (typed union)');
+            AssertEqual(String(t!.Status), 'Published', 'component type Status (typed union)');
+            AssertEqual(t!.IsAbstract, false, 'the fixture type must be CONCRETE (abstract types are not instantiable)');
+            Assert(!!t!.DriverClass, 'a concrete Model leaf must carry a DriverClass (the sidecar key)');
+
+            // The hierarchy virtual fields must be PRESENT (not undefined) — that is the opt-in working.
+            Assert(t!.ParentIDPath != null, 'ParentIDPath is null/undefined — the ParentID hierarchy opt-in is missing from the base view');
+            Assert(typeof t!.ParentIDDepth === 'number', 'ParentIDDepth is not a number — hierarchy columns are not being produced');
+            Assert((t!.ParentIDDepth ?? 0) > 0, `a concrete leaf must sit BELOW a root (depth ${t!.ParentIDDepth})`);
+            Assert(!!t!.RootParentID || !!t!.ParentID, 'the leaf has neither a parent nor a resolved hierarchy root');
+            console.log(`      → component type '${t!.Name}' (${t!.Kind}/${t!.Status}) depth=${t!.ParentIDDepth} path=${t!.ParentIDPath}`);
+        }
+    },
+    {
+        Id: 'predictive-studio.PS7',
+        Name: 'PS7: MLComponentEngine resolves inherited profiles over the SHIPPED seed tree, and the tree lints clean',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const engine = MLComponentEngine.Instance;
+            await engine.Config(true, ctx.User, ctx.Provider);
+            Assert(engine.ComponentTypes.length > 0, 'MLComponentEngine loaded zero component types — run `mj sync push` for the ml-component-type* dirs');
+
+            // (a) The principled partition holds on the tree we actually ship. A property may live on a
+            // node only if it is true of every descendant; lintComponentTree is the enforcer, and a
+            // seeded tree with findings means the shipped metadata itself is unsound.
+            const findings = engine.Lint().filter((f) => f.Severity !== 'Info');
+            AssertEqual(
+                findings.length, 0,
+                `seed component tree has ${findings.length} lint finding(s): ${findings.map((f) => `${f.Severity}/${f.Rule}@${f.NodeID}: ${f.Message}`).join(' | ')}`,
+            );
+
+            // (b) Union-with-provenance: XGBoost inherits `impute` from Tree Ensemble and the boosting
+            // hyperparameters from Boosting, neither of which is declared on XGBoost itself.
+            const xgb = engine.FindTypeByName('XGBoost');
+            Assert(!!xgb, "seed tree has no 'XGBoost' component type");
+            const profile = engine.ResolveProfile(xgb!.ID);
+            Assert(profile.Chain.length >= 3, `XGBoost should inherit through Boosting → Tree Ensemble → Model (chain: ${profile.Chain.map((c) => c.Name).join(' → ')})`);
+
+            const bank = (profile.Properties.PreprocessingBank ?? []).map((i) => i.ItemKey);
+            Assert(bank.includes('impute'), `XGBoost's effective PreprocessingBank is missing 'impute' (have: ${bank.join(', ')})`);
+            const hyper = (profile.Properties.HyperparameterBank ?? []).map((i) => i.ItemKey);
+            for (const key of ['n_estimators', 'max_depth', 'learning_rate']) {
+                Assert(hyper.includes(key), `XGBoost's effective HyperparameterBank is missing '${key}' (have: ${hyper.join(', ')})`);
+            }
+            const explain = (profile.Properties.Explainability ?? [])[0]?.Value;
+            AssertEqual(String(explain), 'global-importance', "XGBoost's effective Explainability (override-nearest, inherited from Tree Ensemble)");
+            const gates = (profile.Properties.StatisticalGate ?? []).map((i) => i.ItemKey);
+            Assert(gates.includes('single-feature-dominance'), `the Model root's leakage gate did not reach XGBoost (have: ${gates.join(', ')})`);
+
+            // Provenance is what drives the "inherited from" chips — it must name a node ABOVE the leaf.
+            const bankProvenance = profile.Provenance.PreprocessingBank ?? [];
+            Assert(bankProvenance.length > 0, 'PreprocessingBank resolved with no provenance');
+            Assert(
+                bankProvenance.some((id) => !UUIDsEqual(id, xgb!.ID)),
+                'PreprocessingBank provenance names only XGBoost — inheritance did not contribute',
+            );
+
+            // (c) Override-nearest actually overrides: MLP REPLACES the Model root's min-rows-per-feature
+            // gate, so the effective gate must be MLP's own, not the root's.
+            const mlp = engine.FindTypeByName('Multilayer Perceptron') ?? engine.FindTypeByName('MLP');
+            if (mlp) {
+                const mlpProfile = engine.ResolveProfile(mlp.ID);
+                const mlpExplain = (mlpProfile.Properties.Explainability ?? [])[0]?.Value;
+                AssertEqual(String(mlpExplain), 'none', "MLP's effective Explainability (inherited from Neural)");
+                const replaced = (mlpProfile.Properties.StatisticalGate ?? []).find((g) => g.ItemKey === 'min-rows-per-feature');
+                Assert(!!replaced, 'MLP lost the min-rows-per-feature gate entirely');
+                Assert(
+                    !UUIDsEqual(replaced!.SourceTypeID, profile.Chain[0].ID),
+                    "MLP's min-rows-per-feature gate still resolves to the Model root — the Replace operation did not take effect",
+                );
+            }
+            console.log(`      → ${engine.ComponentTypes.length} types, 0 lint findings; XGBoost chain: ${profile.Chain.map((c) => c.Name).join(' → ')}`);
+        }
+    },
+    {
+        Id: 'predictive-studio.PS8',
+        Name: 'PS8: the Model → Component → Binding → Entity Field meaning chain reads back, and abstract types are refused',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const { Model, Component, ComponentBinding, EntityFieldID, ComponentTypeID } = fx(ctx);
+            Assert(!!Component && !!ComponentBinding, 'PS8 fixtures were not created in Setup');
+
+            // The model points at its root component…
+            const reloaded = await loadModelRow(Model.ID, ctx.User);
+            Assert(!!reloaded, `model ${Model.ID} not found`);
+            Assert(
+                UUIDsEqual(reloaded!.RootComponentID ?? '', Component!.ID),
+                `model RootComponentID ${reloaded!.RootComponentID} != component ${Component!.ID}`,
+            );
+
+            // …the component is an instance of the seeded concrete type, hung off the model…
+            const cRes = await new RunView().RunView<MJMLComponentEntity>(
+                { EntityName: 'MJ: ML Components', ExtraFilter: `ID='${Component!.ID}'`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
+            );
+            const c = cRes.Results?.[0];
+            Assert(!!c, `component ${Component!.ID} not readable`);
+            Assert(UUIDsEqual(c!.ComponentTypeID, ComponentTypeID!), 'component → component type FK');
+            Assert(UUIDsEqual(c!.MLModelID ?? '', Model.ID), 'component → model FK');
+            AssertEqual(String(c!.PromotionState), 'Draft', 'a freshly materialized component must not outrun its Draft model');
+            Assert(c!.ParentComponentIDPath != null, 'ParentComponentIDPath is null — the ParentComponentID hierarchy opt-in is missing');
+
+            // …and the binding ties an input to a REAL entity field. This is the whole point of the
+            // component model: the model's inputs have business meaning, not just column names.
+            const bRes = await new RunView().RunView<MJMLComponentBindingEntity>(
+                { EntityName: 'MJ: ML Component Bindings', ExtraFilter: `ComponentID='${Component!.ID}'`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
+            );
+            const b = bRes.Results?.find((x) => UUIDsEqual(x.ID, ComponentBinding!.ID));
+            Assert(!!b, `binding ${ComponentBinding!.ID} not readable under component ${Component!.ID}`);
+            AssertEqual(String(b!.Role), 'Input', 'binding Role (typed union)');
+            Assert(UUIDsEqual(b!.EntityFieldID ?? '', EntityFieldID!), 'binding → MJ: Entity Fields FK (the meaning link)');
+            AssertEqual(String(b!.DataType), 'Number', 'binding DataType (typed union)');
+            // The denormalized view field proves the FK resolves to a real field row, not a dangling id.
+            Assert(!!b!.EntityField, 'binding EntityField (denormalized view field) is empty — the FK does not resolve');
+
+            // The server subclass must refuse an ABSTRACT type. Save() returns false (never throws) on a
+            // logical failure, so a `true` here means the guard is not wired.
+            const abstractType = MLComponentEngine.Instance.ComponentTypes.find((t) => t.IsAbstract);
+            if (abstractType) {
+                const bad = await ctx.Provider.GetEntityObject<MJMLComponentEntity>('MJ: ML Components', ctx.User);
+                bad.NewRecord();
+                bad.ComponentTypeID = abstractType.ID;
+                bad.Name = `${PREFIX}-abstract-instantiation (safe to delete)`;
+                bad.Sequence = 0;
+                bad.IsTrained = false;
+                bad.PromotionState = 'Draft';
+                bad.Status = 'Draft';
+                bad.Version = 1;
+                const saved = await bad.Save();
+                if (saved) {
+                    await bad.Delete().catch(() => undefined);
+                }
+                Assert(!saved, `instantiating the ABSTRACT component type '${abstractType.Name}' was allowed — the server-side guard is not registered`);
+                console.log(`      → abstract '${abstractType.Name}' correctly refused: ${bad.LatestResult?.CompleteMessage ?? '(no message)'}`);
+            }
+            console.log(`      → model ${Model.ID} → component ${c!.ID} → binding ${b!.Name} → field ${b!.EntityField}`);
+        }
+    },
 ];
 
 for (const check of PredictiveStudioChecks) {
@@ -300,6 +460,56 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         binding.Mode = 'OnDemand';
         Assert(await binding.Save(), `creating test scoring binding failed: ${binding.LatestResult?.CompleteMessage}`);
         fx.Binding = binding;
+
+        // ── PS6/PS8 fixtures: the typed-component leg. Skipped (leaving PS6/PS8 to assert their own
+        // preconditions) when the component tree isn't seeded, so a DB without `mj sync push` for the
+        // ml-component-type* dirs fails with a readable message instead of an FK error here. ──
+        const engine = MLComponentEngine.Instance;
+        await engine.Config(true, user, md);
+        // A CONCRETE Model leaf with a driver — the shape a trained model actually materializes under.
+        const concreteLeaf = engine
+            .TypesByKind('Model', true)
+            .find((t) => !!t.DriverClass && !!t.ParentID);
+        if (!concreteLeaf) {
+            return;
+        }
+        fx.ComponentTypeID = concreteLeaf.ID;
+
+        // A real numeric field on the target entity, so the binding points at something that exists.
+        const targetEntity = md.EntityByID(targetEntityID!);
+        Assert(!!targetEntity, `target entity ${targetEntityID} not in metadata`);
+        const numericField = targetEntity!.Fields.find((f) => f.TSType === 'number') ?? targetEntity!.Fields[0];
+        Assert(!!numericField, `target entity '${targetEntity!.Name}' has no fields to bind`);
+        fx.EntityFieldID = numericField!.ID;
+
+        const component = await md.GetEntityObject<MJMLComponentEntity>('MJ: ML Components', user);
+        component.NewRecord();
+        component.ComponentTypeID = concreteLeaf.ID;
+        component.Name = `${PREFIX}-component (safe to delete)`;
+        component.MLModelID = model.ID;
+        component.Sequence = 0;
+        component.IsTrained = true;
+        component.PromotionState = 'Draft';
+        component.Status = 'Draft';
+        component.Version = 1;
+        Assert(await component.Save(), `creating test ML component failed: ${component.LatestResult?.CompleteMessage}`);
+        fx.Component = component;
+
+        // Point the model at its root component — the link PS8 walks.
+        model.RootComponentID = component.ID;
+        Assert(await model.Save(), `linking model → root component failed: ${model.LatestResult?.CompleteMessage}`);
+
+        const componentBinding = await md.GetEntityObject<MJMLComponentBindingEntity>('MJ: ML Component Bindings', user);
+        componentBinding.NewRecord();
+        componentBinding.ComponentID = component.ID;
+        componentBinding.Role = 'Input';
+        componentBinding.Name = numericField!.Name;
+        componentBinding.EntityID = targetEntityID!;
+        componentBinding.EntityFieldID = numericField!.ID;
+        componentBinding.DataType = 'Number';
+        componentBinding.Meaning = `${targetEntity!.Name}.${numericField!.Name}, read directly off the record being scored.`;
+        Assert(await componentBinding.Save(), `creating test ML component binding failed: ${componentBinding.LatestResult?.CompleteMessage}`);
+        fx.ComponentBinding = componentBinding;
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.PredictiveStudioFixture;
@@ -310,6 +520,18 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         // delete. Each is guarded + best-effort — a mid-Setup crash may have created only some (R4).
         if (f.Binding) {
             await f.Binding.Delete().catch(() => undefined);
+        }
+        // The component leg deletes binding → component BEFORE the model, since the component FKs the
+        // model AND the model's RootComponentID FKs the component — the cycle has to be cut first.
+        if (f.ComponentBinding) {
+            await f.ComponentBinding.Delete().catch(() => undefined);
+        }
+        if (f.Model && f.Component) {
+            f.Model.RootComponentID = null;
+            await f.Model.Save().catch(() => undefined);
+        }
+        if (f.Component) {
+            await f.Component.Delete().catch(() => undefined);
         }
         if (f.Model) {
             await f.Model.Delete().catch(() => undefined);

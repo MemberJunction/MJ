@@ -1,0 +1,71 @@
+[
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "Name": "weights",
+      "AcceptsComponentTypeID": "@lookup:MJ: ML Component Types.Name=Weight Set",
+      "MinCount": 1,
+      "Description": "The named weights (with modes, caps, floors) the rubric combines. Fillable by a hand-authored set or a search-fitted one.",
+      "Sequence": 0,
+      "MaxCount": 1
+    },
+    "primaryKey": {
+      "ID": "03C87BD2-C72D-5EA7-960F-789CDDA11DC2"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "Name": "bands",
+      "AcceptsComponentTypeID": "@lookup:MJ: ML Component Types.Name=Score Band",
+      "MinCount": 0,
+      "Description": "Optional qualitative tiers applied to the rubric’s score.",
+      "Sequence": 1,
+      "MaxCount": 1
+    },
+    "primaryKey": {
+      "ID": "F07C7BF8-1154-508B-B2EF-7975143B9A20"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Bagging Wrapper",
+      "Name": "base_estimator",
+      "AcceptsComponentTypeID": "@lookup:MJ: ML Component Types.Name=Model",
+      "MinCount": 1,
+      "Description": "The model to bootstrap-replicate. Any Model descendant — including a reused trained component (frozen).",
+      "Sequence": 0,
+      "MaxCount": 1
+    },
+    "primaryKey": {
+      "ID": "81935496-4045-5697-A0A2-A04C46BCAF2C"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Stacking Wrapper",
+      "Name": "estimators",
+      "AcceptsComponentTypeID": "@lookup:MJ: ML Component Types.Name=Model",
+      "MinCount": 2,
+      "Description": "The level-0 models whose outputs the final estimator learns to combine.",
+      "Sequence": 0
+    },
+    "primaryKey": {
+      "ID": "CA4A120F-C57D-5CBC-8641-3DFB6E8E7DC9"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Stacking Wrapper",
+      "Name": "final_estimator",
+      "AcceptsComponentTypeID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "MinCount": 1,
+      "Description": "The glass-box combiner over the level-0 outputs.",
+      "Sequence": 1,
+      "MaxCount": 1
+    },
+    "primaryKey": {
+      "ID": "3B0CB5CD-FC7D-5250-9260-6E0638ABA1FC"
+    }
+  }
+]

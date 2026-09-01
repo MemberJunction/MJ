@@ -5991,7 +5991,7 @@ export const MJAIModelCostSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
         * * Default Value: ECE2BCB7-C854-4BF7-A517-D72793A40652
-        * * Description: DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.`),
+        * * Description: DEPRECATED — descriptive only. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained because the column is NOT NULL and referenced by shipped configurations; do not populate it for new cost rows.`),
     InputPricePerUnit: z.number().describe(`
         * * Field Name: InputPricePerUnit
         * * Display Name: Input Price Per Unit
@@ -23469,9 +23469,619 @@ export const MJMLAlgorithmSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ComponentTypeID: z.string().nullable().describe(`
+        * * Field Name: ComponentTypeID
+        * * Display Name: Component Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)
+        * * Description: Bridge to the typed-component catalog: the MJ: ML Component Types leaf this algorithm IS (e.g. the XGBoost row points at Model → Tree Ensemble → Boosting → XGBoost). Every existing read path (DriverClass, HyperparameterSchema, rankings) is unchanged; the component tree adds inherited preprocessing/hyperparameter banks, gates, and guidance on top.`),
+    ComponentType: z.string().nullable().describe(`
+        * * Field Name: ComponentType
+        * * Display Name: Component Type
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJMLAlgorithmEntityType = z.infer<typeof MJMLAlgorithmSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Component Bindings
+ */
+export const MJMLComponentBindingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ComponentID: z.string().describe(`
+        * * Field Name: ComponentID
+        * * Display Name: Component ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)`),
+    Role: z.union([z.literal('Input'), z.literal('Output'), z.literal('Parameter')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+    *   * Parameter
+        * * Description: Input (a feature/signal the component reads), Output (a value it emits — score, class, band), or Parameter (a weight or setting with business meaning).`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Logical name within the component: the feature column, output key ("score", "band"), or parameter key ("w_DaysSinceLastLogin"). Unique per (component, role).`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    EntityFieldID: z.string().nullable().describe(`
+        * * Field Name: EntityFieldID
+        * * Display Name: Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)`),
+    RelationshipPath: z.string().nullable().describe(`
+        * * Field Name: RelationshipPath
+        * * Display Name: Relationship Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON hop list from the component's anchor entity to the bound field's entity (explicit, or auto-resolved by the join-path helper; fails loud on ambiguity).`),
+    DataType: z.union([z.literal('Boolean'), z.literal('Category'), z.literal('Date'), z.literal('Duration'), z.literal('Number'), z.literal('Text')]).nullable().describe(`
+        * * Field Name: DataType
+        * * Display Name: Data Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Boolean
+    *   * Category
+    *   * Date
+    *   * Duration
+    *   * Number
+    *   * Text
+        * * Description: Semantic data type of the bound value: Number, Date, Boolean, Duration, Category, or Text.`),
+    HigherIsBetter: z.boolean().nullable().describe(`
+        * * Field Name: HigherIsBetter
+        * * Display Name: Higher Is Better
+        * * SQL Data Type: bit
+        * * Description: Direction of meaning for an Input: 1 = larger values indicate the "better"/positive end. NULL when direction is unknown or inapplicable.`),
+    Meaning: z.string().nullable().describe(`
+        * * Field Name: Meaning
+        * * Display Name: Meaning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Business prose for this binding ("days since the member last signed in — recency of engagement").`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Component: z.string().describe(`
+        * * Field Name: Component
+        * * Display Name: Component
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    EntityField: z.string().nullable().describe(`
+        * * Field Name: EntityField
+        * * Display Name: Entity Field
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLComponentBindingEntityType = z.infer<typeof MJMLComponentBindingSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Component Type Properties
+ */
+export const MJMLComponentTypePropertySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ComponentTypeID: z.string().describe(`
+        * * Field Name: ComponentTypeID
+        * * Display Name: Component Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)`),
+    PropertyKey: z.union([z.literal('CompatibleProblemTypes'), z.literal('CompatibleSlotTypes'), z.literal('DefaultNormalization'), z.literal('Explainability'), z.literal('GuidanceRationale'), z.literal('HyperparameterBank'), z.literal('MissingDataPolicy'), z.literal('PreprocessingBank'), z.literal('RequiredInputKinds'), z.literal('StatisticalGate'), z.literal('ValidationDefaults')]).describe(`
+        * * Field Name: PropertyKey
+        * * Display Name: Property Key
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CompatibleProblemTypes
+    *   * CompatibleSlotTypes
+    *   * DefaultNormalization
+    *   * Explainability
+    *   * GuidanceRationale
+    *   * HyperparameterBank
+    *   * MissingDataPolicy
+    *   * PreprocessingBank
+    *   * RequiredInputKinds
+    *   * StatisticalGate
+    *   * ValidationDefaults
+        * * Description: Which inheritable list this row contributes to. CompatibleProblemTypes (narrowing set), PreprocessingBank / StatisticalGate / CompatibleSlotTypes / RequiredInputKinds (union, Remove vetoes), HyperparameterBank / GuidanceRationale (append order, Replace overrides by ItemKey), DefaultNormalization / Explainability / MissingDataPolicy (nearest-node override), ValidationDefaults (shallow object merge).`),
+    Operation: z.union([z.literal('Add'), z.literal('Remove'), z.literal('Replace')]).describe(`
+        * * Field Name: Operation
+        * * Display Name: Operation
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Add
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Add
+    *   * Remove
+    *   * Replace
+        * * Description: Add contributes the item; Replace swaps the inherited item with the same ItemKey; Remove vetoes it for this subtree (legal, but the lint reports it as a partition smell — the ancestor claimed something not true of all descendants).`),
+    ItemKey: z.string().nullable().describe(`
+        * * Field Name: ItemKey
+        * * Display Name: Item Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Stable identity of the list item (a preprocessing op key, a gate name, a hyperparameter name) so Remove/Replace can target it across tree levels. NULL for single-valued keys.`),
+    Value: z.string().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON payload of the item (a GateSpec, a PreprocessingOp, a hyperparameter range, a guidance paragraph).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering within (ComponentTypeID, PropertyKey) for append-mode keys.`),
+    Rationale: z.string().nullable().describe(`
+        * * Field Name: Rationale
+        * * Display Name: Rationale
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Why this holds for every descendant of the node it sits on — the honesty test for placing a property at this height.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ComponentType: z.string().describe(`
+        * * Field Name: ComponentType
+        * * Display Name: Component Type
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLComponentTypePropertyEntityType = z.infer<typeof MJMLComponentTypePropertySchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Component Type Slots
+ */
+export const MJMLComponentTypeSlotSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ComponentTypeID: z.string().describe(`
+        * * Field Name: ComponentTypeID
+        * * Display Name: Component Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Slot name, unique per declaring type (e.g. "base_estimator", "estimators", "final_estimator", "weights", "bands").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the slot is for and how its fillers are used at fit/predict time.`),
+    AcceptsComponentTypeID: z.string().describe(`
+        * * Field Name: AcceptsComponentTypeID
+        * * Display Name: Accepts Component Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)`),
+    MinCount: z.number().describe(`
+        * * Field Name: MinCount
+        * * Display Name: Min Count
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Minimum fillers required for a valid instance (0 = optional slot).`),
+    MaxCount: z.number().nullable().describe(`
+        * * Field Name: MaxCount
+        * * Display Name: Max Count
+        * * SQL Data Type: int
+        * * Description: Maximum fillers; NULL = unbounded (a stacking ensemble's estimators).`),
+    DefaultComponentTypeID: z.string().nullable().describe(`
+        * * Field Name: DefaultComponentTypeID
+        * * Display Name: Default Component Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering of slots for display and positional serialization.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ComponentType: z.string().describe(`
+        * * Field Name: ComponentType
+        * * Display Name: Component Type
+        * * SQL Data Type: nvarchar(255)`),
+    AcceptsComponentType: z.string().describe(`
+        * * Field Name: AcceptsComponentType
+        * * Display Name: Accepts Component Type
+        * * SQL Data Type: nvarchar(255)`),
+    DefaultComponentType: z.string().nullable().describe(`
+        * * Field Name: DefaultComponentType
+        * * Display Name: Default Component Type
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLComponentTypeSlotEntityType = z.infer<typeof MJMLComponentTypeSlotSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Component Types
+ */
+export const MJMLComponentTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name, unique across the catalog (seed @lookup references resolve by it). E.g. "Glass-Box Rubric", "As-Of Aggregate", "Bagging Wrapper".`),
+    Kind: z.union([z.literal('Input'), z.literal('Model'), z.literal('Output'), z.literal('Parameter'), z.literal('Preprocessing'), z.literal('Statistic'), z.literal('Structure')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Model
+    *   * Output
+    *   * Parameter
+    *   * Preprocessing
+    *   * Statistic
+    *   * Structure
+        * * Description: Which of the seven component spaces this node belongs to: Model, Preprocessing, Statistic, Input, Output, Parameter, or Structure. A child's Kind always equals its parent's (lint-enforced); the seven roots are the only ParentID-NULL rows.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this component IS, technically — the catalog description a human or agent reads first.`),
+    Story: z.string().nullable().describe(`
+        * * Field Name: Story
+        * * Display Name: Story
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The archetype's semantic identity in prose — the other half of a component's dual identity ("an HMM models a sequence as transitions between hidden regimes"; "a rubric is a hand-weighted linear combination of normalized signals"). Instance-specific stories live on MJ: ML Components.Story.`),
+    StoryVector: z.string().nullable().describe(`
+        * * Field Name: StoryVector
+        * * Display Name: Story Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Embedding vector of Story (JSON float array), for similarity search over component meaning. Written by the entity server on save when Story changes.`),
+    StoryEmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: StoryEmbeddingModelID
+        * * Display Name: Story Embedding Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
+    IsAbstract: z.boolean().describe(`
+        * * Field Name: IsAbstract
+        * * Display Name: Is Abstract
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1 this is an interior/family node (e.g. "Tree Ensemble") that organizes the tree and carries inherited properties but cannot be instantiated; leaves are concrete components. Lint: abstract ⇒ DriverClass NULL.`),
+    Trainable: z.boolean().describe(`
+        * * Field Name: Trainable
+        * * Display Name: Trainable
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1 the component can be FIT to data (an algorithm, a population-relative normalization). 0 is first-class, not lesser: a hand-authored matrix, an operator-weighted rubric in given mode, or a stateless curve mapping is reusable without training.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Execution key for concrete leaves, interpreted by Kind: Model/Structure → the Python-sidecar estimator key ("xgboost", "rubric", "bagging"); Preprocessing → the sidecar preprocessing op ("minmax", "onehot"); Input → the FeatureStep kind or as-of aggregate key ("select", "asof_recency"); Statistic/Output → the TypeScript @RegisterClass key. NULL on abstract nodes.`),
+    SpecSchema: z.string().nullable().describe(`
+        * * Field Name: SpecSchema
+        * * Display Name: Spec Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema an instance's Spec must satisfy (hyperparameters for an algorithm leaf, window shape for an as-of aggregate, weight-set shape for a rubric). Drives UI forms, agent validation, and the server-side save gate.`),
+    DefaultSpec: z.string().nullable().describe(`
+        * * Field Name: DefaultSpec
+        * * Display Name: Default Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON default Spec applied when an instance does not override (mirrors MLAlgorithm.DefaultHyperparameters for algorithm leaves).`),
+    Status: z.union([z.literal('Deprecated'), z.literal('Draft'), z.literal('Published')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deprecated
+    *   * Draft
+    *   * Published
+        * * Description: Lifecycle: Draft (authored, not yet selectable — e.g. the Sequence/HMM subtree before the sequence problem type ships), Published (selectable), Deprecated.`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Monotonic definition version, bumped when SpecSchema/DriverClass semantics change.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    StoryEmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: StoryEmbeddingModel
+        * * Display Name: Story Embedding Model
+        * * SQL Data Type: nvarchar(50)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Parent ID Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Parent ID Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Parent ID Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Parent ID Child Count
+        * * SQL Data Type: int`),
+});
+
+export type MJMLComponentTypeEntityType = z.infer<typeof MJMLComponentTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Components
+ */
+export const MJMLComponentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ComponentTypeID: z.string().describe(`
+        * * Field Name: ComponentTypeID
+        * * Display Name: Component Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Instance name (e.g. "Renewal-risk rubric weights v2", "DaysSinceLastLogin recency, 90d rolling").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional free-form description of the instance.`),
+    MLModelID: z.string().nullable().describe(`
+        * * Field Name: MLModelID
+        * * Display Name: ML Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)`),
+    ParentComponentID: z.string().nullable().describe(`
+        * * Field Name: ParentComponentID
+        * * Display Name: Parent Component ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)`),
+    SlotName: z.string().nullable().describe(`
+        * * Field Name: SlotName
+        * * Display Name: Slot Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Which slot of the parent instance this fills (matches an MJ: ML Component Type Slots.Name declared by the parent's type). NULL on a composition root or a standalone component.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Order among siblings filling the same slot (positional ensembles).`),
+    Spec: z.string().nullable().describe(`
+        * * Field Name: Spec
+        * * Display Name: Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON instance configuration, validated against the type's SpecSchema at save (rubric weights + modes + caps, an as-of window, hyperparameters).`),
+    FittedState: z.string().nullable().describe(`
+        * * Field Name: FittedState
+        * * Display Name: Fitted State
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON fitted parameters for THIS component alone (a standardize op's mean/std, a rubric's population stats) — the per-component slice of what travels with a model; the model-level FittedPreprocessing stays on MJ: ML Models.`),
+    ArtifactFileID: z.string().nullable().describe(`
+        * * Field Name: ArtifactFileID
+        * * Display Name: Artifact File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
+    IsTrained: z.boolean().describe(`
+        * * Field Name: IsTrained
+        * * Display Name: Is Trained
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1 the component has been fit and its FittedState/ArtifactFileID are authoritative; reuse loads them frozen (fit is a no-op on a reused trained component).`),
+    SourceComponentID: z.string().nullable().describe(`
+        * * Field Name: SourceComponentID
+        * * Display Name: Source Component ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)`),
+    ActionID: z.string().nullable().describe(`
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)`),
+    PromotionState: z.union([z.literal('Approved'), z.literal('Deprecated'), z.literal('Draft'), z.literal('InReview')]).describe(`
+        * * Field Name: PromotionState
+        * * Display Name: Promotion State
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Deprecated
+    *   * Draft
+    *   * InReview
+        * * Description: Lifecycle gate for components that execute code or move persisted scores — an Action-backed input must be Approved before it can affect a trained/served model (ported from Sonar's Factor.PromotionState). Draft, InReview, Approved, Deprecated.`),
+    Story: z.string().nullable().describe(`
+        * * Field Name: Story
+        * * Display Name: Story
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The instance's prose story: what relationship/pattern this component captured as constructed and trained, judged for its individual contribution to the story the model tells. Browsable before building a new model — reuse starts here.`),
+    StoryVector: z.string().nullable().describe(`
+        * * Field Name: StoryVector
+        * * Display Name: Story Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Embedding vector of Story (JSON float array) for similarity retrieval of reusable components. Written by the entity server on save when Story changes.`),
+    StoryEmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: StoryEmbeddingModelID
+        * * Display Name: Story Embedding Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
+    StoryContribution: z.string().nullable().describe(`
+        * * Field Name: StoryContribution
+        * * Display Name: Story Contribution
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON judgment of this component's contribution to the model's story ({role, weight, evidence, reusePotential, reuseWhen}), written by the tagging agent at publish.`),
+    ContentHash: z.string().nullable().describe(`
+        * * Field Name: ContentHash
+        * * Display Name: Content Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of Spec, for dedupe of identical hand-authored components.`),
+    Status: z.union([z.literal('Archived'), z.literal('Draft'), z.literal('Published'), z.literal('Validated')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Archived
+    *   * Draft
+    *   * Published
+    *   * Validated
+        * * Description: Instance lifecycle, mirroring MJ: ML Models: Draft, Validated, Published (reusable by other models), Archived.`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Monotonic instance version; a retrain that changes fitted state bumps it.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ComponentType: z.string().describe(`
+        * * Field Name: ComponentType
+        * * Display Name: Component Type
+        * * SQL Data Type: nvarchar(255)`),
+    ParentComponent: z.string().nullable().describe(`
+        * * Field Name: ParentComponent
+        * * Display Name: Parent Component
+        * * SQL Data Type: nvarchar(255)`),
+    ArtifactFile: z.string().nullable().describe(`
+        * * Field Name: ArtifactFile
+        * * Display Name: Artifact File
+        * * SQL Data Type: nvarchar(500)`),
+    SourceComponent: z.string().nullable().describe(`
+        * * Field Name: SourceComponent
+        * * Display Name: Source Component
+        * * SQL Data Type: nvarchar(255)`),
+    Action: z.string().nullable().describe(`
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)`),
+    StoryEmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: StoryEmbeddingModel
+        * * Display Name: Story Embedding Model
+        * * SQL Data Type: nvarchar(50)`),
+    RootParentComponentID: z.string().nullable().describe(`
+        * * Field Name: RootParentComponentID
+        * * Display Name: Root Parent Component ID
+        * * SQL Data Type: uniqueidentifier`),
+    ParentComponentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentComponentIDDepth
+        * * Display Name: Parent Component ID Depth
+        * * SQL Data Type: int`),
+    ParentComponentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentComponentIDPath
+        * * Display Name: Parent Component ID Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentComponentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentComponentIDIsLeaf
+        * * Display Name: Parent Component ID Is Leaf
+        * * SQL Data Type: bit`),
+    ParentComponentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentComponentIDChildCount
+        * * Display Name: Parent Component ID Child Count
+        * * SQL Data Type: int`),
+    RootSourceComponentID: z.string().nullable().describe(`
+        * * Field Name: RootSourceComponentID
+        * * Display Name: Root Source Component ID
+        * * SQL Data Type: uniqueidentifier`),
+    SourceComponentIDDepth: z.number().nullable().describe(`
+        * * Field Name: SourceComponentIDDepth
+        * * Display Name: Source Component ID Depth
+        * * SQL Data Type: int`),
+    SourceComponentIDPath: z.string().nullable().describe(`
+        * * Field Name: SourceComponentIDPath
+        * * Display Name: Source Component ID Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    SourceComponentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: SourceComponentIDIsLeaf
+        * * Display Name: Source Component ID Is Leaf
+        * * SQL Data Type: bit`),
+    SourceComponentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: SourceComponentIDChildCount
+        * * Display Name: Source Component ID Child Count
+        * * SQL Data Type: int`),
+});
+
+export type MJMLComponentEntityType = z.infer<typeof MJMLComponentSchema>;
 
 /**
  * zod schema definition for the entity MJ: ML Model Scoring Bindings
@@ -23667,6 +24277,12 @@ export const MJMLModelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RootComponentID: z.string().nullable().describe(`
+        * * Field Name: RootComponentID
+        * * Display Name: Root Component ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)
+        * * Description: Root of this trained model's materialized component-instance tree (MJ: ML Components). The root instance also carries the model-level Story; walk ParentComponentID/SlotName beneath it for the full composition. NULL for models trained before the component model existed.`),
     Pipeline: z.string().describe(`
         * * Field Name: Pipeline
         * * Display Name: Pipeline
@@ -23679,6 +24295,10 @@ export const MJMLModelSchema = z.object({
         * * Field Name: ArtifactFile
         * * Display Name: Artifact File
         * * SQL Data Type: nvarchar(500)`),
+    RootComponent: z.string().nullable().describe(`
+        * * Field Name: RootComponent
+        * * Display Name: Root Component
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJMLModelEntityType = z.infer<typeof MJMLModelSchema>;
@@ -23785,6 +24405,16 @@ export const MJMLTrainingPipelineSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ComponentGraph: z.string().nullable().describe(`
+        * * Field Name: ComponentGraph
+        * * Display Name: Component Graph
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Declarative component graph (JSON ComponentGraphNode: ComponentTypeRef, SlotName, Params, Children, ReuseComponentID) for models composed from typed components — a rubric with a weight set, a bagging wrapper around a base estimator, a stack of reused trained sub-components. NULL ⇒ the pipeline behaves exactly as before from AlgorithmID + Hyperparameters + FeatureSteps.`),
+    DatedSources: z.string().nullable().describe(`
+        * * Field Name: DatedSources
+        * * Display Name: Dated Sources
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Persisted DatedSourceSpec[] (JSON): the dated/as-of feature sources this pipeline assembles. Closes the train→score round-trip gap — training copies this into MLModel.Lineage so scoring assembles the SAME as-of features without caller-supplied configuration.`),
     TargetEntity: z.string().describe(`
         * * Field Name: TargetEntity
         * * Display Name: Target Entity
@@ -50648,11 +51278,10 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     /**
     * * Field Name: PriceTypeID
     * * Display Name: Price Type
-    * * 
-    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
+    * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
     * * Default Value: ECE2BCB7-C854-4BF7-A517-D72793A40652
-    * * Description: DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.
+    * * Description: DEPRECATED — descriptive only. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained because the column is NOT NULL and referenced by shipped configurations; do not populate it for new cost rows.
     */
     get PriceTypeID(): string {
         return this.Get('PriceTypeID');
@@ -51185,6 +51814,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * DriverClass: This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
     * * Name: This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
+    * * UnitsPerBillingUnit: The number of units per billing unit must be greater than zero to ensure valid billing calculations.
     * @public
     * @method
     * @override
@@ -51193,6 +51823,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
         const result = super.Validate();
         this.ValidateDriverClassNotBlank(result);
         this.ValidateNameHasNonWhitespaceCharacters(result);
+        this.ValidateUnitsPerBillingUnitGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -51219,6 +51850,23 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     public ValidateNameHasNonWhitespaceCharacters(result: ValidationResult) {
     	if (this.Name != null && this.Name.trim().length === 0) {
     		result.Errors.push(new ValidationErrorInfo("Name", "Name cannot be empty or consist only of spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * The number of units per billing unit must be greater than zero to ensure valid billing calculations.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUnitsPerBillingUnitGreaterThanZero(result: ValidationResult) {
+    	if (this.UnitsPerBillingUnit != null && this.UnitsPerBillingUnit <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UnitsPerBillingUnit",
+    			"Units per billing unit must be greater than zero.",
+    			this.UnitsPerBillingUnit,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -53397,6 +54045,8 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * EffortLevel: This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
+    * * InputUnitsUsed: Input units used must be greater than or equal to 0.
+    * * OutputUnitsUsed: Output units used must be greater than or equal to zero.
     * * Table-Level: This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
     * * Table-Level: This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
     * @public
@@ -53406,6 +54056,8 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateInputUnitsUsedGreaterThanOrEqualToZero(result);
+        this.ValidateOutputUnitsUsedGreaterThanOrEqualToZero(result);
         this.ValidateCompletedAtNotBeforeRunAt(result);
         this.ValidateTokensUsedEqualsPromptPlusCompletion(result);
         result.Success = result.Success && (result.Errors.length === 0);
@@ -53422,6 +54074,40 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
     	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
     		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100 if provided.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * Input units used must be greater than or equal to 0.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.InputUnitsUsed != null && this.InputUnitsUsed < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"InputUnitsUsed",
+    			"Input units used must be greater than or equal to 0.",
+    			this.InputUnitsUsed,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Output units used must be greater than or equal to zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.OutputUnitsUsed != null && this.OutputUnitsUsed < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"OutputUnitsUsed",
+    			"Output units used must be greater than or equal to zero.",
+    			this.OutputUnitsUsed,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -89488,6 +90174,41 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: Form Chrome Rules entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that if the TargetKind is 'Relationship', a RelatedEntityID is provided and ContributionKey is left empty. Conversely, if the TargetKind is 'Contribution', a ContributionKey must be provided and RelatedEntityID must be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTargetKindAndReferences(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that if the TargetKind is 'Relationship', a RelatedEntityID is provided and ContributionKey is left empty. Conversely, if the TargetKind is 'Contribution', a ContributionKey must be provided and RelatedEntityID must be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTargetKindAndReferences(result: ValidationResult) {
+        const isRelationship = this.TargetKind === "Relationship" && this.RelatedEntityID != null && this.ContributionKey == null;
+        const isContribution = this.TargetKind === "Contribution" && this.ContributionKey != null && this.RelatedEntityID == null;
+    
+        if (!isRelationship && !isContribution) {
+            result.Errors.push(new ValidationErrorInfo(
+                "TargetKind",
+                "When TargetKind is 'Relationship', RelatedEntityID must be specified and ContributionKey must be empty. When TargetKind is 'Contribution', ContributionKey must be specified and RelatedEntityID must be empty.",
+                this.TargetKind,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -97066,6 +97787,1511 @@ export class MJMLAlgorithmEntity extends BaseEntity<MJMLAlgorithmEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: ComponentTypeID
+    * * Display Name: Component Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)
+    * * Description: Bridge to the typed-component catalog: the MJ: ML Component Types leaf this algorithm IS (e.g. the XGBoost row points at Model → Tree Ensemble → Boosting → XGBoost). Every existing read path (DriverClass, HyperparameterSchema, rankings) is unchanged; the component tree adds inherited preprocessing/hyperparameter banks, gates, and guidance on top.
+    */
+    get ComponentTypeID(): string | null {
+        return this.Get('ComponentTypeID');
+    }
+    set ComponentTypeID(value: string | null) {
+        this.Set('ComponentTypeID', value);
+    }
+
+    /**
+    * * Field Name: ComponentType
+    * * Display Name: Component Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ComponentType(): string | null {
+        return this.Get('ComponentType');
+    }
+}
+
+
+/**
+ * MJ: ML Component Bindings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLComponentBinding
+ * * Base View: vwMLComponentBindings
+ * * @description Grounds a component instance in the business data: one row per named input, output, or parameter, optionally FK'd to the real MJ entity/field it reads or writes — so "weight 0.35" is on Members.DaysSinceLastLogin, not an abstract x3, and "which models touch this field" is an ordinary relational question. This is what makes components make business sense, not just mathematical sense.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Component Bindings')
+export class MJMLComponentBindingEntity extends BaseEntity<MJMLComponentBindingEntityType> {
+    /**
+    * Loads the MJ: ML Component Bindings record from the database
+    * @param ID: string - primary key value to load the MJ: ML Component Bindings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLComponentBindingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)
+    */
+    get ComponentID(): string {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+    *   * Parameter
+    * * Description: Input (a feature/signal the component reads), Output (a value it emits — score, class, band), or Parameter (a weight or setting with business meaning).
+    */
+    get Role(): 'Input' | 'Output' | 'Parameter' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Input' | 'Output' | 'Parameter') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Logical name within the component: the feature column, output key ("score", "band"), or parameter key ("w_DaysSinceLastLogin"). Unique per (component, role).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: EntityFieldID
+    * * Display Name: Entity Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+    */
+    get EntityFieldID(): string | null {
+        return this.Get('EntityFieldID');
+    }
+    set EntityFieldID(value: string | null) {
+        this.Set('EntityFieldID', value);
+    }
+
+    /**
+    * * Field Name: RelationshipPath
+    * * Display Name: Relationship Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON hop list from the component's anchor entity to the bound field's entity (explicit, or auto-resolved by the join-path helper; fails loud on ambiguity).
+    */
+    get RelationshipPath(): string | null {
+        return this.Get('RelationshipPath');
+    }
+    set RelationshipPath(value: string | null) {
+        this.Set('RelationshipPath', value);
+    }
+
+    /**
+    * * Field Name: DataType
+    * * Display Name: Data Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Boolean
+    *   * Category
+    *   * Date
+    *   * Duration
+    *   * Number
+    *   * Text
+    * * Description: Semantic data type of the bound value: Number, Date, Boolean, Duration, Category, or Text.
+    */
+    get DataType(): 'Boolean' | 'Category' | 'Date' | 'Duration' | 'Number' | 'Text' | null {
+        return this.Get('DataType');
+    }
+    set DataType(value: 'Boolean' | 'Category' | 'Date' | 'Duration' | 'Number' | 'Text' | null) {
+        this.Set('DataType', value);
+    }
+
+    /**
+    * * Field Name: HigherIsBetter
+    * * Display Name: Higher Is Better
+    * * SQL Data Type: bit
+    * * Description: Direction of meaning for an Input: 1 = larger values indicate the "better"/positive end. NULL when direction is unknown or inapplicable.
+    */
+    get HigherIsBetter(): boolean | null {
+        return this.Get('HigherIsBetter');
+    }
+    set HigherIsBetter(value: boolean | null) {
+        this.Set('HigherIsBetter', value);
+    }
+
+    /**
+    * * Field Name: Meaning
+    * * Display Name: Meaning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Business prose for this binding ("days since the member last signed in — recency of engagement").
+    */
+    get Meaning(): string | null {
+        return this.Get('Meaning');
+    }
+    set Meaning(value: string | null) {
+        this.Set('Meaning', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Component(): string {
+        return this.Get('Component');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: EntityField
+    * * Display Name: Entity Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityField(): string | null {
+        return this.Get('EntityField');
+    }
+}
+
+
+/**
+ * MJ: ML Component Type Properties - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLComponentTypeProperty
+ * * Base View: vwMLComponentTypeProperties
+ * * @description One inheritable property item on a component-type node — the tree's cargo, one row per list item rather than a JSON blob, so the "principled partition" is mechanically lintable (a Remove below an ancestor's Add of the same ItemKey is a detectable contradiction: the property was NOT true of all descendants and should move down). A leaf's effective profile = fold root→leaf applying each key's fixed merge mode (union-with-veto for banks/gates, append/replace for hyperparameter banks and guidance, override-nearest for defaults, subset-narrowing for CompatibleProblemTypes). The banks are what "everything a model needs to be used well" means: preprocessing banks, hyperparameter banks, statistical gates a candidate must pass, default normalizations, guidance prose.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Component Type Properties')
+export class MJMLComponentTypePropertyEntity extends BaseEntity<MJMLComponentTypePropertyEntityType> {
+    /**
+    * Loads the MJ: ML Component Type Properties record from the database
+    * @param ID: string - primary key value to load the MJ: ML Component Type Properties record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLComponentTypePropertyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ComponentTypeID
+    * * Display Name: Component Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)
+    */
+    get ComponentTypeID(): string {
+        return this.Get('ComponentTypeID');
+    }
+    set ComponentTypeID(value: string) {
+        this.Set('ComponentTypeID', value);
+    }
+
+    /**
+    * * Field Name: PropertyKey
+    * * Display Name: Property Key
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CompatibleProblemTypes
+    *   * CompatibleSlotTypes
+    *   * DefaultNormalization
+    *   * Explainability
+    *   * GuidanceRationale
+    *   * HyperparameterBank
+    *   * MissingDataPolicy
+    *   * PreprocessingBank
+    *   * RequiredInputKinds
+    *   * StatisticalGate
+    *   * ValidationDefaults
+    * * Description: Which inheritable list this row contributes to. CompatibleProblemTypes (narrowing set), PreprocessingBank / StatisticalGate / CompatibleSlotTypes / RequiredInputKinds (union, Remove vetoes), HyperparameterBank / GuidanceRationale (append order, Replace overrides by ItemKey), DefaultNormalization / Explainability / MissingDataPolicy (nearest-node override), ValidationDefaults (shallow object merge).
+    */
+    get PropertyKey(): 'CompatibleProblemTypes' | 'CompatibleSlotTypes' | 'DefaultNormalization' | 'Explainability' | 'GuidanceRationale' | 'HyperparameterBank' | 'MissingDataPolicy' | 'PreprocessingBank' | 'RequiredInputKinds' | 'StatisticalGate' | 'ValidationDefaults' {
+        return this.Get('PropertyKey');
+    }
+    set PropertyKey(value: 'CompatibleProblemTypes' | 'CompatibleSlotTypes' | 'DefaultNormalization' | 'Explainability' | 'GuidanceRationale' | 'HyperparameterBank' | 'MissingDataPolicy' | 'PreprocessingBank' | 'RequiredInputKinds' | 'StatisticalGate' | 'ValidationDefaults') {
+        this.Set('PropertyKey', value);
+    }
+
+    /**
+    * * Field Name: Operation
+    * * Display Name: Operation
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Add
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Add
+    *   * Remove
+    *   * Replace
+    * * Description: Add contributes the item; Replace swaps the inherited item with the same ItemKey; Remove vetoes it for this subtree (legal, but the lint reports it as a partition smell — the ancestor claimed something not true of all descendants).
+    */
+    get Operation(): 'Add' | 'Remove' | 'Replace' {
+        return this.Get('Operation');
+    }
+    set Operation(value: 'Add' | 'Remove' | 'Replace') {
+        this.Set('Operation', value);
+    }
+
+    /**
+    * * Field Name: ItemKey
+    * * Display Name: Item Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Stable identity of the list item (a preprocessing op key, a gate name, a hyperparameter name) so Remove/Replace can target it across tree levels. NULL for single-valued keys.
+    */
+    get ItemKey(): string | null {
+        return this.Get('ItemKey');
+    }
+    set ItemKey(value: string | null) {
+        this.Set('ItemKey', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON payload of the item (a GateSpec, a PreprocessingOp, a hyperparameter range, a guidance paragraph).
+    */
+    get Value(): string {
+        return this.Get('Value');
+    }
+    set Value(value: string) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering within (ComponentTypeID, PropertyKey) for append-mode keys.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Rationale
+    * * Display Name: Rationale
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why this holds for every descendant of the node it sits on — the honesty test for placing a property at this height.
+    */
+    get Rationale(): string | null {
+        return this.Get('Rationale');
+    }
+    set Rationale(value: string | null) {
+        this.Set('Rationale', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ComponentType
+    * * Display Name: Component Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ComponentType(): string {
+        return this.Get('ComponentType');
+    }
+}
+
+
+/**
+ * MJ: ML Component Type Slots - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLComponentTypeSlot
+ * * Base View: vwMLComponentTypeSlots
+ * * @description A fillable position a component type declares — what makes components pluggable. A Structure's slots accept model components (a Bagging Wrapper's base_estimator, a Stacking Wrapper's estimators/final_estimator); a Glass-Box Rubric's weights slot accepts a Parameter/Weight Set. A slot is filled by an MJ: ML Components row whose ParentComponentID points at the filler's parent instance and whose SlotName names this slot. Slots inherit down the type tree (union by Name); a subtype may only NARROW AcceptsComponentTypeID to a descendant.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Component Type Slots')
+export class MJMLComponentTypeSlotEntity extends BaseEntity<MJMLComponentTypeSlotEntityType> {
+    /**
+    * Loads the MJ: ML Component Type Slots record from the database
+    * @param ID: string - primary key value to load the MJ: ML Component Type Slots record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLComponentTypeSlotEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ComponentTypeID
+    * * Display Name: Component Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)
+    */
+    get ComponentTypeID(): string {
+        return this.Get('ComponentTypeID');
+    }
+    set ComponentTypeID(value: string) {
+        this.Set('ComponentTypeID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Slot name, unique per declaring type (e.g. "base_estimator", "estimators", "final_estimator", "weights", "bands").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the slot is for and how its fillers are used at fit/predict time.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: AcceptsComponentTypeID
+    * * Display Name: Accepts Component Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)
+    */
+    get AcceptsComponentTypeID(): string {
+        return this.Get('AcceptsComponentTypeID');
+    }
+    set AcceptsComponentTypeID(value: string) {
+        this.Set('AcceptsComponentTypeID', value);
+    }
+
+    /**
+    * * Field Name: MinCount
+    * * Display Name: Min Count
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Minimum fillers required for a valid instance (0 = optional slot).
+    */
+    get MinCount(): number {
+        return this.Get('MinCount');
+    }
+    set MinCount(value: number) {
+        this.Set('MinCount', value);
+    }
+
+    /**
+    * * Field Name: MaxCount
+    * * Display Name: Max Count
+    * * SQL Data Type: int
+    * * Description: Maximum fillers; NULL = unbounded (a stacking ensemble's estimators).
+    */
+    get MaxCount(): number | null {
+        return this.Get('MaxCount');
+    }
+    set MaxCount(value: number | null) {
+        this.Set('MaxCount', value);
+    }
+
+    /**
+    * * Field Name: DefaultComponentTypeID
+    * * Display Name: Default Component Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)
+    */
+    get DefaultComponentTypeID(): string | null {
+        return this.Get('DefaultComponentTypeID');
+    }
+    set DefaultComponentTypeID(value: string | null) {
+        this.Set('DefaultComponentTypeID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering of slots for display and positional serialization.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ComponentType
+    * * Display Name: Component Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ComponentType(): string {
+        return this.Get('ComponentType');
+    }
+
+    /**
+    * * Field Name: AcceptsComponentType
+    * * Display Name: Accepts Component Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AcceptsComponentType(): string {
+        return this.Get('AcceptsComponentType');
+    }
+
+    /**
+    * * Field Name: DefaultComponentType
+    * * Display Name: Default Component Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultComponentType(): string | null {
+        return this.Get('DefaultComponentType');
+    }
+}
+
+
+/**
+ * MJ: ML Component Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLComponentType
+ * * Base View: vwMLComponentTypes
+ * * @description A typed ML component in the catalog's inheritance tree — the unit "everything is a component" decomposes a model into. Kind roots (ParentID NULL) partition the space: Model primitives (regression, boosting, rubric, HMM), Preprocessing, Statistic methods, Inputs, Outputs, Parameters (trained or hand-authored — a weighted rubric or hand-authored matrix is first-class without being trainable), and Structures (bagging/stacking wrappers whose slots accept other components). Each node holds only what is true of EVERY descendant; a leaf's full profile is resolved by walking up the tree and merging the property rows per fixed per-key semantics. EXAMPLE: Model → Tree Ensemble → Boosting → XGBoost (DriverClass "xgboost").
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Component Types')
+export class MJMLComponentTypeEntity extends BaseEntity<MJMLComponentTypeEntityType> {
+    /**
+    * Loads the MJ: ML Component Types record from the database
+    * @param ID: string - primary key value to load the MJ: ML Component Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLComponentTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name, unique across the catalog (seed @lookup references resolve by it). E.g. "Glass-Box Rubric", "As-Of Aggregate", "Bagging Wrapper".
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Model
+    *   * Output
+    *   * Parameter
+    *   * Preprocessing
+    *   * Statistic
+    *   * Structure
+    * * Description: Which of the seven component spaces this node belongs to: Model, Preprocessing, Statistic, Input, Output, Parameter, or Structure. A child's Kind always equals its parent's (lint-enforced); the seven roots are the only ParentID-NULL rows.
+    */
+    get Kind(): 'Input' | 'Model' | 'Output' | 'Parameter' | 'Preprocessing' | 'Statistic' | 'Structure' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'Input' | 'Model' | 'Output' | 'Parameter' | 'Preprocessing' | 'Statistic' | 'Structure') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this component IS, technically — the catalog description a human or agent reads first.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Story
+    * * Display Name: Story
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The archetype's semantic identity in prose — the other half of a component's dual identity ("an HMM models a sequence as transitions between hidden regimes"; "a rubric is a hand-weighted linear combination of normalized signals"). Instance-specific stories live on MJ: ML Components.Story.
+    */
+    get Story(): string | null {
+        return this.Get('Story');
+    }
+    set Story(value: string | null) {
+        this.Set('Story', value);
+    }
+
+    /**
+    * * Field Name: StoryVector
+    * * Display Name: Story Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Embedding vector of Story (JSON float array), for similarity search over component meaning. Written by the entity server on save when Story changes.
+    */
+    get StoryVector(): string | null {
+        return this.Get('StoryVector');
+    }
+    set StoryVector(value: string | null) {
+        this.Set('StoryVector', value);
+    }
+
+    /**
+    * * Field Name: StoryEmbeddingModelID
+    * * Display Name: Story Embedding Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    */
+    get StoryEmbeddingModelID(): string | null {
+        return this.Get('StoryEmbeddingModelID');
+    }
+    set StoryEmbeddingModelID(value: string | null) {
+        this.Set('StoryEmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: IsAbstract
+    * * Display Name: Is Abstract
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1 this is an interior/family node (e.g. "Tree Ensemble") that organizes the tree and carries inherited properties but cannot be instantiated; leaves are concrete components. Lint: abstract ⇒ DriverClass NULL.
+    */
+    get IsAbstract(): boolean {
+        return this.Get('IsAbstract');
+    }
+    set IsAbstract(value: boolean) {
+        this.Set('IsAbstract', value);
+    }
+
+    /**
+    * * Field Name: Trainable
+    * * Display Name: Trainable
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1 the component can be FIT to data (an algorithm, a population-relative normalization). 0 is first-class, not lesser: a hand-authored matrix, an operator-weighted rubric in given mode, or a stateless curve mapping is reusable without training.
+    */
+    get Trainable(): boolean {
+        return this.Get('Trainable');
+    }
+    set Trainable(value: boolean) {
+        this.Set('Trainable', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Execution key for concrete leaves, interpreted by Kind: Model/Structure → the Python-sidecar estimator key ("xgboost", "rubric", "bagging"); Preprocessing → the sidecar preprocessing op ("minmax", "onehot"); Input → the FeatureStep kind or as-of aggregate key ("select", "asof_recency"); Statistic/Output → the TypeScript @RegisterClass key. NULL on abstract nodes.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: SpecSchema
+    * * Display Name: Spec Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema an instance's Spec must satisfy (hyperparameters for an algorithm leaf, window shape for an as-of aggregate, weight-set shape for a rubric). Drives UI forms, agent validation, and the server-side save gate.
+    */
+    get SpecSchema(): string | null {
+        return this.Get('SpecSchema');
+    }
+    set SpecSchema(value: string | null) {
+        this.Set('SpecSchema', value);
+    }
+
+    /**
+    * * Field Name: DefaultSpec
+    * * Display Name: Default Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON default Spec applied when an instance does not override (mirrors MLAlgorithm.DefaultHyperparameters for algorithm leaves).
+    */
+    get DefaultSpec(): string | null {
+        return this.Get('DefaultSpec');
+    }
+    set DefaultSpec(value: string | null) {
+        this.Set('DefaultSpec', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deprecated
+    *   * Draft
+    *   * Published
+    * * Description: Lifecycle: Draft (authored, not yet selectable — e.g. the Sequence/HMM subtree before the sequence problem type ships), Published (selectable), Deprecated.
+    */
+    get Status(): 'Deprecated' | 'Draft' | 'Published' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Deprecated' | 'Draft' | 'Published') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Monotonic definition version, bumped when SpecSchema/DriverClass semantics change.
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: StoryEmbeddingModel
+    * * Display Name: Story Embedding Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get StoryEmbeddingModel(): string | null {
+        return this.Get('StoryEmbeddingModel');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent ID Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Parent ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Parent ID Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: ML Components - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLComponent
+ * * Base View: vwMLComponents
+ * * @description A component INSTANCE: a catalog type filled with a concrete Spec (weights chosen, window set, hyperparameters fixed) and, when trained, its own fitted state/artifact. Two lives: (1) inside one model's composition tree — MLModelID set on the root, children hanging off ParentComponentID + SlotName; (2) standalone reusable (MLModelID NULL) — a hand-authored matrix, an approved code-feature, or a trained sub-component another model reuses by reference (SourceComponentID), saving training and meaningfully connecting models to each other and to the data. Carries the instance's Story (what pattern THIS one captured, its contribution to the model's story) — the tagging agent writes it at publish.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Components')
+export class MJMLComponentEntity extends BaseEntity<MJMLComponentEntityType> {
+
+  /**
+   * Retrieves all descendant records in the ParentComponentID hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetParentComponentIDDescendants<T extends BaseEntity = this>(maxDepth?: number): Promise<T[]> {
+    return this.GetDescendants<T>({ parentFieldName: 'ParentComponentID', maxDepth });
+  }
+
+  /**
+   * Retrieves all ancestor records in the ParentComponentID hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetParentComponentIDAncestors<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetAncestors<T>('ParentComponentID');
+  }
+
+  /**
+   * Retrieves all direct child records in the ParentComponentID hierarchy of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetParentComponentIDChildren<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetChildren<T>('ParentComponentID');
+  }
+
+  /**
+   * Retrieves all descendant records in the SourceComponentID hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetSourceComponentIDDescendants<T extends BaseEntity = this>(maxDepth?: number): Promise<T[]> {
+    return this.GetDescendants<T>({ parentFieldName: 'SourceComponentID', maxDepth });
+  }
+
+  /**
+   * Retrieves all ancestor records in the SourceComponentID hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetSourceComponentIDAncestors<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetAncestors<T>('SourceComponentID');
+  }
+
+  /**
+   * Retrieves all direct child records in the SourceComponentID hierarchy of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetSourceComponentIDChildren<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetChildren<T>('SourceComponentID');
+  }
+    /**
+    * Loads the MJ: ML Components record from the database
+    * @param ID: string - primary key value to load the MJ: ML Components record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLComponentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ComponentTypeID
+    * * Display Name: Component Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Component Types (vwMLComponentTypes.ID)
+    */
+    get ComponentTypeID(): string {
+        return this.Get('ComponentTypeID');
+    }
+    set ComponentTypeID(value: string) {
+        this.Set('ComponentTypeID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Instance name (e.g. "Renewal-risk rubric weights v2", "DaysSinceLastLogin recency, 90d rolling").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional free-form description of the instance.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: MLModelID
+    * * Display Name: ML Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    */
+    get MLModelID(): string | null {
+        return this.Get('MLModelID');
+    }
+    set MLModelID(value: string | null) {
+        this.Set('MLModelID', value);
+    }
+
+    /**
+    * * Field Name: ParentComponentID
+    * * Display Name: Parent Component ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)
+    */
+    get ParentComponentID(): string | null {
+        return this.Get('ParentComponentID');
+    }
+    set ParentComponentID(value: string | null) {
+        this.Set('ParentComponentID', value);
+    }
+
+    /**
+    * * Field Name: SlotName
+    * * Display Name: Slot Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Which slot of the parent instance this fills (matches an MJ: ML Component Type Slots.Name declared by the parent's type). NULL on a composition root or a standalone component.
+    */
+    get SlotName(): string | null {
+        return this.Get('SlotName');
+    }
+    set SlotName(value: string | null) {
+        this.Set('SlotName', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Order among siblings filling the same slot (positional ensembles).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Spec
+    * * Display Name: Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON instance configuration, validated against the type's SpecSchema at save (rubric weights + modes + caps, an as-of window, hyperparameters).
+    */
+    get Spec(): string | null {
+        return this.Get('Spec');
+    }
+    set Spec(value: string | null) {
+        this.Set('Spec', value);
+    }
+
+    /**
+    * * Field Name: FittedState
+    * * Display Name: Fitted State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON fitted parameters for THIS component alone (a standardize op's mean/std, a rubric's population stats) — the per-component slice of what travels with a model; the model-level FittedPreprocessing stays on MJ: ML Models.
+    */
+    get FittedState(): string | null {
+        return this.Get('FittedState');
+    }
+    set FittedState(value: string | null) {
+        this.Set('FittedState', value);
+    }
+
+    /**
+    * * Field Name: ArtifactFileID
+    * * Display Name: Artifact File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    */
+    get ArtifactFileID(): string | null {
+        return this.Get('ArtifactFileID');
+    }
+    set ArtifactFileID(value: string | null) {
+        this.Set('ArtifactFileID', value);
+    }
+
+    /**
+    * * Field Name: IsTrained
+    * * Display Name: Is Trained
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1 the component has been fit and its FittedState/ArtifactFileID are authoritative; reuse loads them frozen (fit is a no-op on a reused trained component).
+    */
+    get IsTrained(): boolean {
+        return this.Get('IsTrained');
+    }
+    set IsTrained(value: boolean) {
+        this.Set('IsTrained', value);
+    }
+
+    /**
+    * * Field Name: SourceComponentID
+    * * Display Name: Source Component ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)
+    */
+    get SourceComponentID(): string | null {
+        return this.Get('SourceComponentID');
+    }
+    set SourceComponentID(value: string | null) {
+        this.Set('SourceComponentID', value);
+    }
+
+    /**
+    * * Field Name: ActionID
+    * * Display Name: Action ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+    */
+    get ActionID(): string | null {
+        return this.Get('ActionID');
+    }
+    set ActionID(value: string | null) {
+        this.Set('ActionID', value);
+    }
+
+    /**
+    * * Field Name: PromotionState
+    * * Display Name: Promotion State
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Deprecated
+    *   * Draft
+    *   * InReview
+    * * Description: Lifecycle gate for components that execute code or move persisted scores — an Action-backed input must be Approved before it can affect a trained/served model (ported from Sonar's Factor.PromotionState). Draft, InReview, Approved, Deprecated.
+    */
+    get PromotionState(): 'Approved' | 'Deprecated' | 'Draft' | 'InReview' {
+        return this.Get('PromotionState');
+    }
+    set PromotionState(value: 'Approved' | 'Deprecated' | 'Draft' | 'InReview') {
+        this.Set('PromotionState', value);
+    }
+
+    /**
+    * * Field Name: Story
+    * * Display Name: Story
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The instance's prose story: what relationship/pattern this component captured as constructed and trained, judged for its individual contribution to the story the model tells. Browsable before building a new model — reuse starts here.
+    */
+    get Story(): string | null {
+        return this.Get('Story');
+    }
+    set Story(value: string | null) {
+        this.Set('Story', value);
+    }
+
+    /**
+    * * Field Name: StoryVector
+    * * Display Name: Story Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Embedding vector of Story (JSON float array) for similarity retrieval of reusable components. Written by the entity server on save when Story changes.
+    */
+    get StoryVector(): string | null {
+        return this.Get('StoryVector');
+    }
+    set StoryVector(value: string | null) {
+        this.Set('StoryVector', value);
+    }
+
+    /**
+    * * Field Name: StoryEmbeddingModelID
+    * * Display Name: Story Embedding Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    */
+    get StoryEmbeddingModelID(): string | null {
+        return this.Get('StoryEmbeddingModelID');
+    }
+    set StoryEmbeddingModelID(value: string | null) {
+        this.Set('StoryEmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: StoryContribution
+    * * Display Name: Story Contribution
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON judgment of this component's contribution to the model's story ({role, weight, evidence, reusePotential, reuseWhen}), written by the tagging agent at publish.
+    */
+    get StoryContribution(): string | null {
+        return this.Get('StoryContribution');
+    }
+    set StoryContribution(value: string | null) {
+        this.Set('StoryContribution', value);
+    }
+
+    /**
+    * * Field Name: ContentHash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of Spec, for dedupe of identical hand-authored components.
+    */
+    get ContentHash(): string | null {
+        return this.Get('ContentHash');
+    }
+    set ContentHash(value: string | null) {
+        this.Set('ContentHash', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Archived
+    *   * Draft
+    *   * Published
+    *   * Validated
+    * * Description: Instance lifecycle, mirroring MJ: ML Models: Draft, Validated, Published (reusable by other models), Archived.
+    */
+    get Status(): 'Archived' | 'Draft' | 'Published' | 'Validated' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Archived' | 'Draft' | 'Published' | 'Validated') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Monotonic instance version; a retrain that changes fitted state bumps it.
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ComponentType
+    * * Display Name: Component Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ComponentType(): string {
+        return this.Get('ComponentType');
+    }
+
+    /**
+    * * Field Name: ParentComponent
+    * * Display Name: Parent Component
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ParentComponent(): string | null {
+        return this.Get('ParentComponent');
+    }
+
+    /**
+    * * Field Name: ArtifactFile
+    * * Display Name: Artifact File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ArtifactFile(): string | null {
+        return this.Get('ArtifactFile');
+    }
+
+    /**
+    * * Field Name: SourceComponent
+    * * Display Name: Source Component
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceComponent(): string | null {
+        return this.Get('SourceComponent');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Action(): string | null {
+        return this.Get('Action');
+    }
+
+    /**
+    * * Field Name: StoryEmbeddingModel
+    * * Display Name: Story Embedding Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get StoryEmbeddingModel(): string | null {
+        return this.Get('StoryEmbeddingModel');
+    }
+
+    /**
+    * * Field Name: RootParentComponentID
+    * * Display Name: Root Parent Component ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentComponentID(): string | null {
+        return this.Get('RootParentComponentID');
+    }
+
+    /**
+    * * Field Name: ParentComponentIDDepth
+    * * Display Name: Parent Component ID Depth
+    * * SQL Data Type: int
+    */
+    get ParentComponentIDDepth(): number | null {
+        return this.Get('ParentComponentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentComponentIDPath
+    * * Display Name: Parent Component ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentComponentIDPath(): string | null {
+        return this.Get('ParentComponentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentComponentIDIsLeaf
+    * * Display Name: Parent Component ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentComponentIDIsLeaf(): boolean | null {
+        return this.Get('ParentComponentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentComponentIDChildCount
+    * * Display Name: Parent Component ID Child Count
+    * * SQL Data Type: int
+    */
+    get ParentComponentIDChildCount(): number | null {
+        return this.Get('ParentComponentIDChildCount');
+    }
+
+    /**
+    * * Field Name: RootSourceComponentID
+    * * Display Name: Root Source Component ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootSourceComponentID(): string | null {
+        return this.Get('RootSourceComponentID');
+    }
+
+    /**
+    * * Field Name: SourceComponentIDDepth
+    * * Display Name: Source Component ID Depth
+    * * SQL Data Type: int
+    */
+    get SourceComponentIDDepth(): number | null {
+        return this.Get('SourceComponentIDDepth');
+    }
+
+    /**
+    * * Field Name: SourceComponentIDPath
+    * * Display Name: Source Component ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get SourceComponentIDPath(): string | null {
+        return this.Get('SourceComponentIDPath');
+    }
+
+    /**
+    * * Field Name: SourceComponentIDIsLeaf
+    * * Display Name: Source Component ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get SourceComponentIDIsLeaf(): boolean | null {
+        return this.Get('SourceComponentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: SourceComponentIDChildCount
+    * * Display Name: Source Component ID Child Count
+    * * SQL Data Type: int
+    */
+    get SourceComponentIDChildCount(): number | null {
+        return this.Get('SourceComponentIDChildCount');
+    }
 }
 
 
@@ -97552,6 +99778,20 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     }
 
     /**
+    * * Field Name: RootComponentID
+    * * Display Name: Root Component ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)
+    * * Description: Root of this trained model's materialized component-instance tree (MJ: ML Components). The root instance also carries the model-level Story; walk ParentComponentID/SlotName beneath it for the full composition. NULL for models trained before the component model existed.
+    */
+    get RootComponentID(): string | null {
+        return this.Get('RootComponentID');
+    }
+    set RootComponentID(value: string | null) {
+        this.Set('RootComponentID', value);
+    }
+
+    /**
     * * Field Name: Pipeline
     * * Display Name: Pipeline
     * * SQL Data Type: nvarchar(255)
@@ -97576,6 +99816,15 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     */
     get ArtifactFile(): string | null {
         return this.Get('ArtifactFile');
+    }
+
+    /**
+    * * Field Name: RootComponent
+    * * Display Name: Root Component
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RootComponent(): string | null {
+        return this.Get('RootComponent');
     }
 }
 
@@ -97836,6 +100085,32 @@ export class MJMLTrainingPipelineEntity extends BaseEntity<MJMLTrainingPipelineE
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ComponentGraph
+    * * Display Name: Component Graph
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Declarative component graph (JSON ComponentGraphNode: ComponentTypeRef, SlotName, Params, Children, ReuseComponentID) for models composed from typed components — a rubric with a weight set, a bagging wrapper around a base estimator, a stack of reused trained sub-components. NULL ⇒ the pipeline behaves exactly as before from AlgorithmID + Hyperparameters + FeatureSteps.
+    */
+    get ComponentGraph(): string | null {
+        return this.Get('ComponentGraph');
+    }
+    set ComponentGraph(value: string | null) {
+        this.Set('ComponentGraph', value);
+    }
+
+    /**
+    * * Field Name: DatedSources
+    * * Display Name: Dated Sources
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Persisted DatedSourceSpec[] (JSON): the dated/as-of feature sources this pipeline assembles. Closes the train→score round-trip gap — training copies this into MLModel.Lineage so scoring assembles the SAME as-of features without caller-supplied configuration.
+    */
+    get DatedSources(): string | null {
+        return this.Get('DatedSources');
+    }
+    set DatedSources(value: string | null) {
+        this.Set('DatedSources', value);
     }
 
     /**

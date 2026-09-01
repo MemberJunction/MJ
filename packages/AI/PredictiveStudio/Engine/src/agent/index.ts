@@ -8,6 +8,9 @@
  * - {@link PredictiveStudioModelDevAgent} — the orchestrator that FORCES approve→build deterministically
  */
 export * from './modeling-plan-to-pipeline';
+export * from './create-pipeline';
 export * from './pipeline-builder';
 export * from './pipeline-builder-agent';
+export * from './statistics-pass-agent';
+export * from './architecture-gate';
 export * from './model-dev-orchestrator-agent';

@@ -7,6 +7,10 @@
  * how) to build — the orchestrator FORCES routing to the `Pipeline Builder` code sub-agent, which
  * crafts the pipeline + trains + publishes-gated-on-trust. Every other decision (gathering the goal,
  * scouting data, designing experiments, asking for approval) stays LLM-driven via `super`.
+ *
+ * The same override forces the `Statistics Pass` sub-agent once the plan is describable, so the
+ * architecture is chosen from measured evidence rather than from the goal statement alone. Both
+ * forced routes are deterministic and both fire at most once per plan.
  */
 
 import { RegisterClass } from '@memberjunction/global';
@@ -14,6 +18,7 @@ import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import type { PredictiveStudioBuilderPayload, PredictiveStudioBuildOutcome } from './pipeline-builder-agent';
+import { shouldForceStatisticsPass, type PredictiveStudioStatisticsPayload } from './statistics-pass-agent';
 
 /** The minimal payload slice the build decision reads (so it's callable with a partial in tests). */
 type BuildDecisionState = { Approved?: boolean; BuildResult?: PredictiveStudioBuildOutcome; BuildAttemptUserMessageCount?: number };
@@ -21,6 +26,12 @@ type BuildDecisionState = { Approved?: boolean; BuildResult?: PredictiveStudioBu
 /** The sub-agent NAME the orchestrator forces to once the plan is approved (matches the metadata). */
 export const PIPELINE_BUILDER_SUBAGENT_NAME = 'Pipeline Builder';
 const BUILD_MESSAGE = 'The plan is approved — build the pipeline, train it, and apply the publish gate now.';
+
+/** The sub-agent NAME the orchestrator forces to before the architecture is chosen (matches the metadata). */
+export const STATISTICS_PASS_SUBAGENT_NAME = 'Statistics Pass';
+const STATISTICS_MESSAGE =
+  'Measure the data before we choose an approach: describe the training rows, flag suspicious inputs, ' +
+  'and check which model families are admissible.';
 
 /**
  * The deterministic decision: should the orchestrator force the build right now? Pure → unit-testable
@@ -61,6 +72,18 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
   ): Promise<BaseAgentNextStep<P>> {
     const payload = currentPayload as PredictiveStudioBuilderPayload | undefined;
     const userMessageCount = this.userMessageCount(params);
+
+    // Measure BEFORE anything commits to an architecture. Checked first because a build forced in
+    // the same turn would train on a plan whose candidates were never gated — and the pass is the
+    // cheaper of the two by orders of magnitude.
+    const statsPayload = currentPayload as PredictiveStudioStatisticsPayload | undefined;
+    if (shouldForceStatisticsPass(statsPayload, userMessageCount)) {
+      // Stamp the user-message count so a pass that produced nothing (sidecar down) does not
+      // re-fire for the SAME message, while a fresh user message still gets a retry.
+      const stamped = { ...(statsPayload ?? {}), StatisticsAttemptUserMessageCount: userMessageCount } as unknown as P;
+      return this.buildSubAgentStep(STATISTICS_PASS_SUBAGENT_NAME, STATISTICS_MESSAGE, stamped);
+    }
+
     if (shouldForceBuild(payload, this.lastUserMessageText(params), userMessageCount)) {
       // Stamp the user-message count so a FAILED build can distinguish the stale triggering message
       // (no re-force → no loop) from a fresh retry request (deterministic rebuild). The builder spreads

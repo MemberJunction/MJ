@@ -126,7 +126,20 @@ def _mlp(problem_type: str, hp: Dict[str, Any]):
     return MLPRegressor(**params)
 
 
+def _rubric(problem_type: str, hp: Dict[str, Any]):
+    """Glass-box rubric (typed-component leaf 'Glass-Box Rubric').
+
+    Not a trained model in given mode — the hyperparameters ARE the model (operator-set
+    weights); search mode proposes them via a constrained linear fit. Local import keeps
+    module import light and mirrors the optional-driver style.
+    """
+    from .estimators.rubric import RubricEstimator
+
+    return RubricEstimator(problem_type=problem_type, **hp)
+
+
 _REGISTRY: Dict[str, EstimatorFactory] = {
+    "rubric": _rubric,
     "xgboost": _xgboost,
     "lightgbm": _lightgbm,
     "logistic_regression": _logistic_regression,

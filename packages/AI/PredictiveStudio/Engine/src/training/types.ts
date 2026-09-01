@@ -25,6 +25,7 @@ import type {
   MJMLModelEntity,
   MJMLTrainingRunEntity,
 } from '@memberjunction/core-entities';
+import type { IModelComponentMaterializer } from '../components/component-materializer';
 
 /**
  * Factory seam for creating strongly-typed entity objects. Wraps
@@ -180,6 +181,16 @@ export interface TrainingDeps {
   contextUser?: UserInfo;
   /** Optional provider for multi-provider correctness. */
   provider?: IMetadataProvider;
+  /**
+   * Optional component-materialization seam. When supplied, a successfully trained model is
+   * projected into `MJ: ML Components` + `MJ: ML Component Bindings` — the row that says what
+   * KIND of model this is, and the bindings that tie its inputs and outputs to real MJ fields.
+   *
+   * Best-effort by contract: the implementation never throws, and the engine ignores its
+   * result beyond logging. Omitted ⇒ no component rows are written and training is unchanged,
+   * so every existing caller keeps working untouched.
+   */
+  componentMaterializer?: IModelComponentMaterializer;
 }
 
 /**

@@ -46,9 +46,10 @@ import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
+import type { AsOfAggregateKind, AsOfWindowSpec } from '@memberjunction/predictive-studio-core';
 
 import { type IFeatureDataAccess, RunViewDataAccess, type SourceRow } from './data-access';
-import { type DatedRow, resolveAsOfDate, daysSinceLastActivityAsOf, activityCountAsOf } from './as-of';
+import { type DatedRow, resolveAsOfDate, daysSinceLastActivityAsOf, activityCountAsOf, aggregateAsOf, filterAsOf, filterWindow } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
 
@@ -92,8 +93,22 @@ export interface DatedSourceSpec {
 export interface DatedFeatureSpec {
   /** Output column name in the matrix (e.g. `days_since_last_activity_asof`). */
   OutputColumn: string;
-  /** The point-in-time aggregate to compute over the surviving (pre-decision) rows. */
-  Aggregate: 'days_since_last_activity' | 'activity_count';
+  /**
+   * The point-in-time aggregate to compute over the surviving (pre-decision) rows — the widened
+   * Sonar-ported vocabulary ({@link AsOfAggregateKind}), plus the legacy two-kind spelling kept
+   * as aliases (`days_since_last_activity` = `recency`, `activity_count` = `count`).
+   */
+  Aggregate: AsOfAggregateKind | 'days_since_last_activity' | 'activity_count';
+  /** Value column on the dated source for `sum`/`avg`/`min`/`max`/`distinct_count`. */
+  Field?: string;
+  /** Time window relative to the as-of date; absent = AllTime (today's behavior, unchanged). */
+  Window?: AsOfWindowSpec;
+  /**
+   * Also emit `<OutputColumn>__present` (1 when any row survives the window, else 0) — the
+   * `hadData` mask distinguishing a real zero from absence, so a missing-data policy can treat
+   * "no rows" differently from "zero activity". Ported from Sonar's `FactorResult.hadData`.
+   */
+  EmitPresence?: boolean;
 }
 
 /**
@@ -482,6 +497,11 @@ export class FeatureAssemblyExecutor {
         schema.push({ Name: f.OutputColumn, Kind: 'numeric' });
         // The actual value is computed in buildMatrix from the dated index; placeholder emitter.
         emitters.push({ column: f.OutputColumn, kind: 'as-of', datedSource: ds, datedFeature: f });
+        if (f.EmitPresence) {
+          const presenceColumn = `${f.OutputColumn}__present`;
+          schema.push({ Name: presenceColumn, Kind: 'numeric' });
+          emitters.push({ column: presenceColumn, kind: 'as-of', datedSource: ds, datedFeature: f, presence: true });
+        }
       }
     }
 
@@ -696,23 +716,42 @@ export class FeatureAssemblyExecutor {
         return vector && emitter.embeddingDim < vector.length ? vector[emitter.embeddingDim] : 0;
       }
       case 'as-of':
-        return this.emitAsOfValue(emitter, recordId, asOfDate, datedIndex);
+        return this.emitAsOfValue(emitter, record, recordId, asOfDate, datedIndex);
       default:
         return null;
     }
   }
 
-  /** Compute an as-of aggregate for one record from the dated index. */
-  private emitAsOfValue(emitter: Extract<ColumnEmitter, { kind: 'as-of' }>, recordId: string, asOfDate: Date | null, datedIndex: DatedIndex): number | null {
+  /**
+   * Compute an as-of aggregate (or its presence mask) for one record from the dated index. The
+   * rows are as-of filtered FIRST (the leakage boundary), then windowed, then aggregated — the
+   * widened Sonar-ported vocabulary; the legacy two-kind spelling stays as aliases so existing
+   * pipelines assemble byte-identically.
+   */
+  private emitAsOfValue(
+    emitter: Extract<ColumnEmitter, { kind: 'as-of' }>,
+    record: SourceRow,
+    recordId: string,
+    asOfDate: Date | null,
+    datedIndex: DatedIndex,
+  ): number | null {
     const bySource = datedIndex.get(emitter.datedSource.EntityName);
-    const datedRows = bySource?.get(recordId) ?? [];
-    switch (emitter.datedFeature.Aggregate) {
-      case 'days_since_last_activity':
-        return daysSinceLastActivityAsOf(datedRows, asOfDate);
-      case 'activity_count':
-        return activityCountAsOf(datedRows, asOfDate);
+    const surviving = filterAsOf(bySource?.get(recordId) ?? [], asOfDate);
+    const spec = emitter.datedFeature;
+    if (emitter.presence) {
+      return filterWindow(surviving, spec.Window ?? null, asOfDate, record).length > 0 ? 1 : 0;
+    }
+    switch (spec.Aggregate) {
+      case 'days_since_last_activity': // legacy alias of 'recency'
+        return spec.Window
+          ? aggregateAsOf(surviving, 'recency', spec.Field, spec.Window, asOfDate, record)
+          : daysSinceLastActivityAsOf(surviving, asOfDate);
+      case 'activity_count': // legacy alias of 'count'
+        return spec.Window
+          ? aggregateAsOf(surviving, 'count', spec.Field, spec.Window, asOfDate, record)
+          : activityCountAsOf(surviving, asOfDate);
       default:
-        return null;
+        return aggregateAsOf(surviving, spec.Aggregate, spec.Field, spec.Window ?? null, asOfDate, record);
     }
   }
 
@@ -777,6 +816,8 @@ type ColumnEmitter =
       kind: 'as-of';
       datedSource: DatedSourceSpec;
       datedFeature: DatedFeatureSpec;
+      /** When set, emit the presence mask (1 = any row survived the window) instead of the value. */
+      presence?: boolean;
     };
 
 /** Internal — dated rows indexed by source entity → record PK → rows. */

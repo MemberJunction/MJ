@@ -305,6 +305,14 @@ Binds an ML Model to where it scores, so we can detect staleness and drive retra
 
 ---
 
+> **v6.1 — typed components.** §4's entities gained a sibling family: the typed-component model
+> (`MJ: ML Component Types` tree + properties/slots, `MJ: ML Components` instances,
+> `MJ: ML Component Bindings`) — see `guides/PREDICTIVE_STUDIO_GUIDE.md` §8.1 and the seed tree
+> under `metadata/ml-component-types*`. The §7 algorithm catalog is bridged onto the tree's Model
+> leaves (`MLAlgorithm.ComponentTypeID`) and gains the `rubric` glass-box member; §5's dated
+> features gained the widened as-of vocabulary (10 aggregate kinds × 5 window kinds + presence
+> masks), ported from Sonar per its `plans/predictive-studio-contribution-roadmap.md` items 1-8.
+
 ## 5. Feature engineering
 
 ### 5.1 Structured features

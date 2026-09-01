@@ -1,0 +1,38 @@
+{
+  "Headline": "Which members are likely to renew",
+  "Story": "Scores every member on how likely they are to renew, mostly from how long they have been a member and how recently they have engaged. A high score means the member looks like people who have renewed before.",
+  "DataStory": "Trained on 1,840 members, about one in five of whom lapsed. Tenure carries most of the explanation; recent activity adds a meaningful amount on top of it. One input — the survey score — is missing for more than half of members, so it is used as a presence signal rather than a value.",
+  "BusinessConnection": "Lets the team put its renewal outreach where it will matter: the members who look most at risk, rather than the whole list. A member scoring below 0.3 is worth a personal call.",
+  "Components": [
+    {
+      "InstanceID": "11111111-1111-4111-8111-111111111111",
+      "Headline": "Membership tenure",
+      "Story": "How long this person has been a member, read from Members.MembershipTenureMonths. Longer-standing members renew more reliably, and this is the single strongest signal in the model.",
+      "Contribution": {
+        "Role": "primary-driver",
+        "Weight": 0.62,
+        "Evidence": "0.62 of total importance",
+        "ReusePotential": "high",
+        "ReuseWhen": "Any model about member loyalty or lifetime value, wherever a join date is recorded."
+      }
+    },
+    {
+      "InstanceID": "22222222-2222-4222-8222-222222222222",
+      "Headline": "Recent activity count",
+      "Story": "How many activities this member had in the year before the decision date, counted as-of that date so nothing from the future leaks in.",
+      "Contribution": {
+        "Role": "supporting",
+        "Weight": 0.24,
+        "Evidence": "0.24 of total importance",
+        "ReusePotential": "high",
+        "ReuseWhen": "Any model scoring member engagement where dated activity rows are available."
+      }
+    }
+  ],
+  "Caveats": [
+    "The score reflects members who joined before 2026; a very new cohort may behave differently and should be watched.",
+    "It predicts likelihood, not certainty — a low score is a reason to reach out, not a conclusion that someone will leave.",
+    "Survey score is missing for most members, so the model is effectively blind to satisfaction."
+  ],
+  "TrustGrade": "Good"
+}

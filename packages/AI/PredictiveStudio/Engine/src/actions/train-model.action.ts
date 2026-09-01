@@ -24,6 +24,7 @@ import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '..
 import { resolveActiveFileStorageProviderId, buildArtifactStore } from '../training/artifact-store';
 import type { TrainingDeps, TrainModelResult } from '../training/types';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
+import { MetadataComponentMaterializer } from '../components/materialization-seam';
 
 /** The driver-class key this action registers under (matches the metadata row). */
 export const TRAIN_MODEL_DRIVER_CLASS = 'PredictiveStudioTrainModelAction';
@@ -110,6 +111,9 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
       artifactStore: buildArtifactStore(providerId, entityFactory),
       contextUser: params.ContextUser,
       provider: params.Provider,
+      // Project every trained model into the component graph (root `MJ: ML Components` row +
+      // bindings onto real MJ entities/fields). Best-effort by contract — never fails a train.
+      componentMaterializer: new MetadataComponentMaterializer(),
     };
   }
 }

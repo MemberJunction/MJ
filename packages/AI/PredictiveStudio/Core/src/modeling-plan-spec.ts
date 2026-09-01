@@ -10,6 +10,9 @@
  * {@link LeaderboardEntry} shape used to rank experiment iterations.
  */
 
+import type { CandidateGateReport, DatasetStatistics } from './statistics-spec';
+import type { ArchitectureSpec, ComponentGraphNode } from './component-graph-spec';
+
 /**
  * Explicit resource budget for an experiment session — the bounded-autonomy
  * guardrail (plan §8.4). Enforced by Record Set Processing's budget gate within
@@ -73,11 +76,40 @@ export interface ModelingPlanSpec {
     Hyperparameters?: Record<string, unknown>;
     Rationale: string;
     Priority: number;
+    /**
+     * For a `compose` architecture (additive): the composition this experiment trains, instead of
+     * the single leaf `AlgorithmName` names. `AlgorithmName` still identifies the ROOT so every
+     * existing read path keeps working unchanged.
+     */
+    ComponentGraph?: ComponentGraphNode;
   }>;
   /** Validation strategy for the search. */
   ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
   /** Proposed resource budget for the experiment session. */
   ProposedBudget: { MaxComputeCost?: number; MaxRuns?: number; MaxWallclockMinutes?: number };
+  /**
+   * The **architecture decision** (additive) — commit to one model family, defer across candidates,
+   * reify under a generalized parent, or compose a custom model from slots. Written by the Architect
+   * sub-agent from {@link ModelingPlanSpec.Statistics} and {@link ModelingPlanSpec.GateReports}, and
+   * read by the Experiment Designer, which proposes experiments WITHIN the decided architecture
+   * rather than re-picking an algorithm from scratch.
+   */
+  Architecture?: ArchitectureSpec;
+  /**
+   * What the **statistics pre-pass** measured about the training partition (additive). Written by
+   * the `Statistics Pass` code sub-agent before the architecture is chosen, so the decision rests on
+   * evidence rather than on the goal statement alone — and so it stays auditable afterwards: the
+   * numbers the agent saw are persisted next to the choice it made (this whole spec lands on
+   * `MJ: Experiment Sessions.PlanSpec`). Absent when the pass did not run or could not complete.
+   */
+  Statistics?: DatasetStatistics;
+  /**
+   * Per-candidate admissibility, evaluated from each candidate component type's INHERITED
+   * `StatisticalGate` rows against {@link ModelingPlanSpec.Statistics} (additive). A candidate with
+   * `Admissible: false` should not be proposed; one carrying an `Unevaluated` gate should be
+   * proposed only with that caveat stated.
+   */
+  GateReports?: CandidateGateReport[];
   /** User approval gate — execution does not begin until this is true. */
   Approved?: boolean;
   /** Execution-phase leaderboard — one entry per Experiment Session Iteration. */

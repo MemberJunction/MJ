@@ -137,7 +137,78 @@ def _fit_bin(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
     return {"op": "bin", "col": col, "edges": edges}
 
 
+def _norm_meta(op: Dict[str, Any]) -> Dict[str, Any]:
+    """The direction + output-range envelope shared by every normalization op.
+
+    ``higherIsBetter=False`` inverts the normalized fraction before scaling, so "days
+    since last activity" can mean engagement without the model seeing a flipped sign
+    convention. Defaults: higher is better, output range [0, 1].
+    """
+    return {
+        "higherIsBetter": bool(op.get("higherIsBetter", True)),
+        "outputMin": float(op.get("outputMin", 0.0)),
+        "outputMax": float(op.get("outputMax", 1.0)),
+    }
+
+
+def _fit_minmax(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Fit training min/max for [0,1] rescaling (Sonar MinMax). Degenerate range -> width 1."""
+    col = op["col"]
+    numeric = pd.to_numeric(df[col], errors="coerce").dropna()
+    lo = float(numeric.min()) if not numeric.empty else 0.0
+    hi = float(numeric.max()) if not numeric.empty else 1.0
+    if not np.isfinite(hi - lo) or hi == lo:
+        hi = lo + 1.0
+    return {"op": "minmax", "col": col, "min": lo, "max": hi, **_norm_meta(op)}
+
+
+def _fit_percentile(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Fit the sorted training values for rank/percentile normalization (Sonar Percentile).
+
+    Stores at most 1001 evenly-spaced quantile knots so the frozen payload stays small on
+    large populations; apply computes the midpoint rank (count_less + count_equal/2) / n,
+    which reproduces Sonar's tie handling.
+    """
+    col = op["col"]
+    numeric = pd.to_numeric(df[col], errors="coerce").dropna().to_numpy(dtype=float)
+    numeric.sort()
+    if numeric.size == 0:
+        knots = [0.0, 1.0]
+    elif numeric.size <= 1001:
+        knots = [float(v) for v in numeric]
+    else:
+        knots = [float(v) for v in np.quantile(numeric, np.linspace(0.0, 1.0, 1001))]
+    return {"op": "percentile", "col": col, "sorted": knots, **_norm_meta(op)}
+
+
+def _fit_zscore(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Fit mean/std for clamped z-score normalization (Sonar ZScore: clamp ±3σ, map to [0,1])."""
+    col = op["col"]
+    numeric = pd.to_numeric(df[col], errors="coerce")
+    mean = float(numeric.mean()) if numeric.notna().any() else 0.0
+    std = float(numeric.std(ddof=0)) if numeric.notna().any() else 1.0
+    if not np.isfinite(std) or std == 0.0:
+        std = 1.0
+    return {"op": "zscore", "col": col, "mean": mean, "std": std, **_norm_meta(op)}
+
+
+def _fit_stateless_curve(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Carry a stateless curve op (logistic/banded/lookup) through unchanged.
+
+    Nothing is fit — the operator's params ARE the transform (Sonar's Curve Mapping
+    family: parameterized judgment, identical at train and score by construction).
+    """
+    del df  # stateless by design
+    return {"op": op["op"], "col": op["col"], "params": dict(op.get("params") or {}), **_norm_meta(op)}
+
+
 _FIT_DISPATCH = {
+    "minmax": _fit_minmax,
+    "percentile": _fit_percentile,
+    "zscore": _fit_zscore,
+    "logistic": _fit_stateless_curve,
+    "banded": _fit_stateless_curve,
+    "lookup": _fit_stateless_curve,
     "impute": _fit_impute,
     "standardize": _fit_standardize,
     "onehot": _fit_onehot,
@@ -203,6 +274,98 @@ def _apply_bin(params: Dict[str, Any], row: Dict[str, Any]) -> None:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _scale_to_output(frac: float, params: Dict[str, Any]) -> float:
+    """Clamp a normalized fraction to [0,1], apply direction, scale into the output range."""
+    frac = min(1.0, max(0.0, frac))
+    if not params.get("higherIsBetter", True):
+        frac = 1.0 - frac
+    lo = float(params.get("outputMin", 0.0))
+    hi = float(params.get("outputMax", 1.0))
+    return lo + frac * (hi - lo)
+
+
+def _apply_minmax(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    col = params["col"]
+    value = _to_float(row.get(col))
+    if value is None:
+        return  # leave missing for the model/rubric's missing-data policy
+    width = params["max"] - params["min"]
+    frac = (value - params["min"]) / width if width else 0.0
+    row[col] = _scale_to_output(frac, params)
+
+
+def _apply_percentile(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    col = params["col"]
+    value = _to_float(row.get(col))
+    if value is None:
+        return
+    knots = params["sorted"]
+    n = len(knots)
+    if n == 0:
+        row[col] = _scale_to_output(0.5, params)
+        return
+    left = int(np.searchsorted(knots, value, side="left"))
+    right = int(np.searchsorted(knots, value, side="right"))
+    frac = (left + (right - left) / 2.0) / n  # midpoint rank — Sonar's tie handling
+    row[col] = _scale_to_output(frac, params)
+
+
+def _apply_zscore(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    col = params["col"]
+    value = _to_float(row.get(col))
+    if value is None:
+        return
+    z = (value - params["mean"]) / params["std"]
+    z = min(3.0, max(-3.0, z))  # Sonar clamp: outliers stop mattering past ±3σ
+    row[col] = _scale_to_output((z + 3.0) / 6.0, params)
+
+
+def _apply_logistic(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    col = params["col"]
+    value = _to_float(row.get(col))
+    if value is None:
+        return
+    curve = params.get("params") or {}
+    midpoint = float(curve.get("midpoint", 0.0))
+    steepness = float(curve.get("steepness", 1.0))
+    frac = 1.0 / (1.0 + float(np.exp(-steepness * (value - midpoint))))
+    row[col] = _scale_to_output(frac, params)
+
+
+def _apply_banded(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    col = params["col"]
+    value = _to_float(row.get(col))
+    curve = params.get("params") or {}
+    frac = float(curve.get("fallback", 0.0))
+    if value is not None:
+        for band in curve.get("bands") or []:
+            lo, hi = float(band.get("min", float("-inf"))), float(band.get("max", float("inf")))
+            if lo <= value < hi:
+                frac = float(band.get("value", 0.0))
+                break
+    row[col] = _scale_to_output(frac, params)
+
+
+def _apply_lookup(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    col = params["col"]
+    raw = row.get(col)
+    curve = params.get("params") or {}
+    table = curve.get("table") or {}
+    key = "" if raw is None else str(raw)
+    frac = float(table.get(key, curve.get("fallback", 0.0)))
+    row[col] = _scale_to_output(frac, params)
+
+
+_NORMALIZE_APPLY = {
+    "minmax": _apply_minmax,
+    "percentile": _apply_percentile,
+    "zscore": _apply_zscore,
+    "logistic": _apply_logistic,
+    "banded": _apply_banded,
+    "lookup": _apply_lookup,
+}
+
+
 def _row_dict(columns: Sequence[str], values: Sequence[Any]) -> Dict[str, Any]:
     """Zip a positional row (column names + aligned values) into a name->value dict."""
     return {c: values[i] for i, c in enumerate(columns)}
@@ -233,6 +396,8 @@ def _transform_one(
             # categorical column. Global column order is finalized in _build_matrix.
             _apply_onehot(params, row, out)
             onehot_consumed.append(params["col"])
+        elif op in _NORMALIZE_APPLY:
+            _NORMALIZE_APPLY[op](params, row)
         else:
             raise ValueError(f"Unknown preprocessing op '{op}'")
     return out, onehot_consumed

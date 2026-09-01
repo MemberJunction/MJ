@@ -76,6 +76,27 @@
   },
   {
     "fields": {
+      "Name": "Architect - Main Prompt",
+      "Description": "System prompt for the Architect sub-agent. Makes the FIRST real decision in the plan — what kind of thing the model should be — from the measured statistics and the per-candidate gate reports the Statistics Pass produced, not from the goal statement. Chooses commit / defer / reify / compose, records every candidate considered with its rationale, and (when composing) proposes a component graph that is validated against the real component tree before anything runs. Writes only the Architecture slice of the ModelingPlanSpec.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/architect.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/architect.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "F144C61B-CC16-4E4D-BCDF-A254FE36A57C"
+    }
+  },
+  {
+    "fields": {
       "Name": "Experiment Designer - Main Prompt",
       "Description": "System prompt for the Experiment Designer sub-agent. Proposes a ranked set of experiments (features × algorithms × hyperparameters) with rationale, a validation strategy with a locked holdout, and a proposed budget. Writes only the ProposedExperiments, ValidationStrategy, and ProposedBudget slices of the ModelingPlanSpec.",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
@@ -97,6 +118,27 @@
     "sync": {
       "lastModified": "2026-07-01T17:33:37.945Z",
       "checksum": "c347a11bee439a507e51eaa00e4d731f99f94db0b4c6b278a4f4bbd3670e3188"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Model Story Tagger - Main Prompt",
+      "Description": "Writes a published model's STORY — what it decides, how, what the data says, and what someone would do differently because of it — plus a standalone story and contribution judgment for each of its components. The only generative step in the publishing path: every fact it describes is computed and handed to it (trust grade, holdout-vs-validation metrics, feature importance, real entity/field bindings), so it narrates and never decides. Each component's story is written to that component's own row, which is what makes reuse-by-meaning searchable later. Attribution is machine-checked — every InstanceID must be a component the model actually has — and Caveats must not be empty.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/model-story-tagger.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/model-story-tagger.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "B09BD1F0-4BDB-4B8C-B67B-FCD4EB683FB2"
     }
   }
 ]

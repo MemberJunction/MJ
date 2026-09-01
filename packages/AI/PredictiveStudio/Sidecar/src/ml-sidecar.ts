@@ -8,6 +8,8 @@ import type {
   TrainResponse,
   PredictRequest,
   PredictResponse,
+  DescribeRequest,
+  DescribeResponse,
 } from '@memberjunction/predictive-studio-core';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -333,6 +335,20 @@ export class MLSidecar {
   async predict(req: PredictRequest): Promise<PredictResponse> {
     this.assertRunning();
     return this.httpPost<PredictRequest, PredictResponse>('/predict', req);
+  }
+
+  /**
+   * Measure the TRAINING partition via `POST /describe` — the statistics pre-pass.
+   *
+   * Read-only: nothing is fitted, cached, or returned as an artifact. The caller must send
+   * only the training rows; describing the locked holdout would leak it into every
+   * downstream decision and the honest metric would stop being honest.
+   *
+   * @throws {SidecarError} when the sidecar responds with a non-2xx status
+   */
+  async describe(req: DescribeRequest): Promise<DescribeResponse> {
+    this.assertRunning();
+    return this.httpPost<DescribeRequest, DescribeResponse>('/describe', req);
   }
 
   /**

@@ -1,0 +1,82 @@
+[
+  {
+    "fields": {
+      "Name": "Output",
+      "Kind": "Output",
+      "Description": "Root of the emission space: what a component contributes back — scores, labels, bands, explanations.",
+      "Story": "Outputs are promises about form: whatever the internals, this is the shape of the answer.",
+      "IsAbstract": true,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1
+    },
+    "primaryKey": {
+      "ID": "B2031FD4-5205-5362-B66A-000831307DCC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Score",
+      "Kind": "Output",
+      "Description": "A numeric prediction (probability or value).",
+      "Story": "One number standing for a judgment.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Output"
+    },
+    "primaryKey": {
+      "ID": "7206DFB2-B0BA-5957-813C-2E95F2A9BDB9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Class Label",
+      "Kind": "Output",
+      "Description": "A categorical prediction.",
+      "Story": "The named bucket the record fell into.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Output"
+    },
+    "primaryKey": {
+      "ID": "4A94C315-0DD1-56C5-A680-2587CC506804"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Per-Record Contribution",
+      "Kind": "Output",
+      "Description": "Signed per-feature contributions for one prediction, frozen at score time. Ported from Sonar.",
+      "Story": "The receipt: which inputs pushed this particular answer up or down, kept even after the rubric changes.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Output"
+    },
+    "primaryKey": {
+      "ID": "86321EE3-3794-5A6C-9871-0CD521B0C9B0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Score Band",
+      "Kind": "Output",
+      "Description": "Half-open, contiguous qualitative tiers over a score range, with transition detection. Ported from Sonar.",
+      "Story": "Bands turn a float into a word people act on — and crossing one is an event worth reacting to.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Output",
+      "SpecSchema": "@file:schemas/score-bands.schema.json"
+    },
+    "primaryKey": {
+      "ID": "F92C38C2-B2B6-5EEC-9034-0E643A76C7B0"
+    }
+  }
+]

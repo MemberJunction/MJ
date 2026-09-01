@@ -216,6 +216,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       featureSteps: pipeline.featureSteps,
       asOf: pipeline.asOf,
       leakageGuard: pipeline.leakageGuard,
+      datedSources: pipeline.datedSources,
     };
   }
 
@@ -236,6 +237,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       // Scoring never re-fits or re-evaluates leakage — a permissive guard is fine here;
       // the frozen FeatureSchema is the contract that bounds which columns are produced.
       leakageGuard: { DenyFields: [], SingleFeatureDominanceThreshold: 1 },
+      datedSources: toDatedSourceSpecs(lineage.datedSources),
     };
   }
 
@@ -259,7 +261,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       steps: model.featureSteps,
       asOf: model.asOf,
       leakageGuard: model.leakageGuard,
-      datedSources: this.datedSources,
+      // Train/serve parity: the as-of sources FROZEN on the model at train time win. The
+      // constructor option is only a fallback for models trained before `DatedSources` was
+      // persisted (legacy lineage blobs have no `datedSources` key).
+      datedSources: model.datedSources.length > 0 ? model.datedSources : this.datedSources,
       primaryKeyField: this.primaryKeyField,
       // No targetVariable at score time — the label is what we're predicting.
       context: 'on-demand',
@@ -355,6 +360,8 @@ interface ResolvedScoringPipeline {
   featureSteps: FeatureStepGraph;
   asOf: AsOfStrategy;
   leakageGuard: LeakageGuard;
+  /** As-of sources frozen on the model at train time; empty when the model used none. */
+  datedSources: DatedSourceSpec[];
 }
 
 /**
@@ -405,4 +412,27 @@ function isFeatureStepGraph(value: unknown): value is FeatureStepGraph {
 /** Narrow an unknown lineage value to an {@link AsOfStrategy}. */
 function isAsOfStrategy(value: unknown): value is AsOfStrategy {
   return !!value && typeof value === 'object' && typeof (value as { Mode?: unknown }).Mode === 'string';
+}
+
+/**
+ * Narrow an unknown lineage value to a {@link DatedSourceSpec} array, keeping only entries that
+ * carry the three fields the executor dereferences (`EntityName` / `ForeignKeyField` /
+ * `DateField`) plus a `Features` array. A legacy lineage blob with no `datedSources` key, or a
+ * malformed one, yields `[]` — the model then falls back to the constructor option.
+ */
+function toDatedSourceSpecs(value: unknown): DatedSourceSpec[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((v): v is DatedSourceSpec => {
+    const ds = v as Partial<DatedSourceSpec> | null;
+    return (
+      !!ds &&
+      typeof ds === 'object' &&
+      typeof ds.EntityName === 'string' &&
+      typeof ds.ForeignKeyField === 'string' &&
+      typeof ds.DateField === 'string' &&
+      Array.isArray(ds.Features)
+    );
+  });
 }

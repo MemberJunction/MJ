@@ -5,9 +5,11 @@ CPU-only tabular ML training + inference. The server side of the contract in
 feature matrix and orchestrates; this service fits/serves the model.
 
 Endpoints:
-  * ``GET  /health``  — liveness + registered algorithms + warm-cache depth
-  * ``POST /train``   — fit a model, return artifact + fitted preprocessing + metrics
-  * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing
+  * ``GET  /health``   — liveness + registered algorithms + warm-cache depth
+  * ``POST /train``    — fit a model, return artifact + fitted preprocessing + metrics
+  * ``POST /predict``  — score rows by APPLYING (never re-fitting) frozen preprocessing
+  * ``POST /describe`` — READ-ONLY statistics pre-pass over the training partition; fits
+    nothing and returns no artifact (see :mod:`app.describe`)
 """
 
 from __future__ import annotations
@@ -18,8 +20,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import algorithms, artifacts, metrics, preprocessing
+from . import algorithms, artifacts, describe as describe_mod, metrics, preprocessing
 from .schemas import (
+    DescribeRequest,
+    DescribeResponse,
     HealthResponse,
     PredictRequest,
     PredictResponse,
@@ -232,6 +236,7 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
         req, X_dev, y_dev, is_classification, rng,
         dev_rows=dev_rows, columns=columns, feature_cols=feature_cols, ops_spec=ops_spec,
         target_idx=target_idx, encoder=encoder,
+        output_columns=output_columns,
     )
 
     # Stash decode map so the serialized model can map int predictions -> labels.
@@ -311,6 +316,7 @@ def _fit_and_score(
     ops_spec: List[Dict[str, Any]],
     target_idx: int,
     encoder: Any,
+    output_columns: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, float], Any]:
     """Fit the estimator using the configured validation strategy.
 
@@ -329,9 +335,15 @@ def _fit_and_score(
     strategy = req.validation.strategy
 
     def build():
-        return algorithms.build_estimator(
+        est = algorithms.build_estimator(
             req.algorithm, req.problem_type, req.hyperparameters
         )
+        # Name-keyed estimators (the glass-box rubric) need the matrix's column names,
+        # which sklearn's fit(X, y) does not carry. Injected here so BOTH the anti-skew
+        # validation build and the final production build receive them.
+        if output_columns and hasattr(est, "mj_set_feature_names"):
+            est.mj_set_feature_names(output_columns)
+        return est
 
     if strategy == "train_test_split" and X.shape[0] >= 4:
         test_size = req.validation.test_size or 0.2
@@ -611,3 +623,28 @@ def _classification_prediction(
     else:
         score = float(np.ravel(scores)[i])
     return Prediction(score=score, contributions=contributions, **{"class": label})
+
+
+# ---------------------------------------------------------------------------
+# /describe
+# ---------------------------------------------------------------------------
+
+
+@app.post("/describe", response_model=DescribeResponse)
+def describe(req: DescribeRequest) -> DescribeResponse:
+    """Measure the training partition — the statistics pre-pass (read-only).
+
+    Returns per-feature and target statistics so the Model Development Agent can choose an
+    architecture from evidence rather than from the goal statement alone. Nothing is fitted,
+    cached, or persisted; the caller sends ONLY the training partition, because a statistic
+    measured on the locked holdout would leak into every downstream decision.
+
+    Raises 400 on an empty matrix or a target column that is not in the data — both are
+    caller bugs that would otherwise surface as an opaque numeric error deep in the pass.
+    """
+    if not req.data or not req.data.rows:
+        raise HTTPException(status_code=400, detail="describe requires a non-empty inline `data` matrix")
+    try:
+        return describe_mod.describe(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -27,7 +27,7 @@
  * is unit-testable with no live database and no live sidecar.
  */
 
-import { LogError } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
   type TrainRequest,
@@ -46,7 +46,8 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
-import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
+import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
+import { carveLockedHoldout, type HoldoutSplit } from './holdout';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from './types';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
@@ -62,14 +63,12 @@ interface ResolvedPipeline {
   asOf: AsOfStrategy;
   leakageGuard: LeakageGuard;
   validation: ValidationStrategy;
-}
-
-/** The result of carving a matrix into a training portion + a locked holdout. */
-interface HoldoutSplit {
-  training: MatrixData;
-  lockedHoldout: MatrixData;
-  holdoutRowCount: number;
-  trainingRowCount: number;
+  /**
+   * Dated/as-of feature sources. Persisted on the pipeline and copied into the model's Lineage at
+   * train time so scoring assembles the SAME as-of features without caller-supplied configuration —
+   * without this round trip an as-of feature simply computes to null at score time.
+   */
+  datedSources: DatedSourceSpec[];
 }
 
 /**
@@ -107,6 +106,7 @@ export class TrainingEngine {
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
       const model = await this.createModelRow(resolved, input, assembly, split, response, deps);
+      await this.materializeComponents(model, resolved, assembly, deps);
       await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, deps);
       return { model, run };
     } catch (err) {
@@ -142,6 +142,7 @@ export class TrainingEngine {
       asOf: parseJson<AsOfStrategy>(pipeline.AsOfStrategy, { Mode: 'none' }),
       leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
+      datedSources: parseJson<DatedSourceSpec[]>(pipeline.DatedSources, []),
     };
   }
 
@@ -160,6 +161,52 @@ export class TrainingEngine {
     run.StartedAt = new Date();
     await this.saveOrThrow(run, 'create ML Training Run');
     return run;
+  }
+
+  /**
+   * Project the trained model into the component graph — the root `MJ: ML Components` row
+   * plus the bindings tying each feature and output to a real MJ entity/field. Runs only
+   * when a materializer seam is injected, and is **best-effort by contract**: the seam never
+   * throws, and a warning it returns is logged, not propagated. A model that trained fine
+   * must never be lost to a provenance write.
+   */
+  private async materializeComponents(
+    model: MJMLModelEntity,
+    resolved: ResolvedPipeline,
+    assembly: FeatureAssemblyResult,
+    deps: TrainingDeps,
+  ): Promise<void> {
+    if (!deps.componentMaterializer) {
+      return;
+    }
+    try {
+      const result = await deps.componentMaterializer.materializeTrainedModel(
+        {
+          model,
+          algorithmID: resolved.pipeline.AlgorithmID,
+          componentName: `${resolved.pipeline.Name} v${model.Version}`,
+          targetEntityName: resolved.targetEntityName,
+          targetVariable: resolved.targetVariable,
+          problemType: resolved.problemType,
+          featureSchema: assembly.featureSchema,
+          datedSources: resolved.datedSources,
+          hyperparameters: resolved.hyperparameters,
+        },
+        { entityFactory: deps.entityFactory, contextUser: deps.contextUser },
+        deps.provider,
+      );
+      for (const w of result.Warnings) {
+        LogStatus(`TrainingEngine: component materialization — ${w}`);
+      }
+    } catch (err) {
+      // The seam's contract is not to throw, but a third-party implementation might. The model
+      // is already saved and the artifact already stored — swallowing here is what keeps a
+      // successful train from being recorded as a failed run over a provenance write.
+      LogError(
+        `TrainingEngine: component materialization threw for model ${model.ID} (training is unaffected): ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /** Mark the run `Completed`, attach the model + results, and record observations. */
@@ -224,6 +271,7 @@ export class TrainingEngine {
       steps: resolved.featureSteps,
       asOf: resolved.asOf,
       leakageGuard: resolved.leakageGuard,
+      datedSources: resolved.datedSources,
       targetVariable: resolved.targetVariable,
       labelEventDates: input.labelEventDates,
       primaryKeyField: input.primaryKeyField,
@@ -241,19 +289,9 @@ export class TrainingEngine {
    * `LockedHoldoutFraction` of rows; it is never sent in the training `data`.
    */
   private carveLockedHoldout(matrix: MatrixData, validation: ValidationStrategy, _targetVariable: string): HoldoutSplit {
-    const fraction = clamp01(validation.LockedHoldoutFraction);
-    const total = matrix.rows.length;
-    const holdoutCount = total > 1 ? Math.min(Math.max(Math.floor(total * fraction), fraction > 0 ? 1 : 0), total - 1) : 0;
-    const cut = total - holdoutCount;
-
-    const trainingRows = matrix.rows.slice(0, cut);
-    const holdoutRows = matrix.rows.slice(cut);
-    return {
-      training: { columns: matrix.columns, rows: trainingRows },
-      lockedHoldout: { columns: matrix.columns, rows: holdoutRows },
-      holdoutRowCount: holdoutRows.length,
-      trainingRowCount: trainingRows.length,
-    };
+    // Delegates to the SHARED carve so the statistics pre-pass describes exactly the rows this
+    // trains on — see `training/holdout.ts` for why that has to be one implementation.
+    return carveLockedHoldout(matrix, validation);
   }
 
   /** Translate the pipeline's {@link ValidationStrategy} into a sidecar {@link ValidationConfig}. */
@@ -354,6 +392,7 @@ export class TrainingEngine {
       sourceBindings: resolved.sourceBindings,
       featureSteps: resolved.featureSteps,
       asOfStrategy: resolved.asOf,
+      datedSources: resolved.datedSources,
       sidecarVersion: input.sidecarVersion ?? null,
       lockedHoldoutRowCount: split.holdoutRowCount,
       trainingRowCount: split.trainingRowCount,
@@ -388,13 +427,6 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   }
 }
 
-/** Clamp a fraction into [0, 1). */
-function clamp01(value: number): number {
-  if (!Number.isFinite(value) || value < 0) {
-    return 0;
-  }
-  return value > 1 ? 1 : value;
-}
 
 /** Decode a base64 artifact string into raw bytes (no Buffer dependency leak in types). */
 function decodeArtifact(b64: string): Uint8Array {

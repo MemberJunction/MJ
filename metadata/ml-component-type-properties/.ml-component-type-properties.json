@@ -1,0 +1,397 @@
+[
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Model",
+      "PropertyKey": "StatisticalGate",
+      "Operation": "Add",
+      "Value": "{\"Kind\": \"max-single-feature-share\", \"Threshold\": 0.6}",
+      "Sequence": 0,
+      "ItemKey": "single-feature-dominance",
+      "Rationale": "Every model kind — glass-box or trained — is invalid if one feature already contains the answer; dominance is leakage until a human signs off."
+    },
+    "primaryKey": {
+      "ID": "0B008475-D78B-52DC-A171-E92B9DE5317A"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Model",
+      "PropertyKey": "StatisticalGate",
+      "Operation": "Add",
+      "Value": "{\"Kind\": \"min-rows-per-feature\", \"Threshold\": 5}",
+      "Sequence": 0,
+      "ItemKey": "min-rows-per-feature",
+      "Rationale": "No model family below can learn anything real with fewer than a handful of rows per feature."
+    },
+    "primaryKey": {
+      "ID": "FDDAA79B-7040-52C4-99C8-643892D4BFAF"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Model",
+      "PropertyKey": "ValidationDefaults",
+      "Operation": "Add",
+      "Value": "{\"Strategy\": \"train_test_split\", \"TestSize\": 0.2, \"LockedHoldoutFraction\": 0.1}",
+      "Sequence": 0,
+      "Rationale": "Honest-holdout discipline applies to every trainable descendant; given-mode rubrics simply report holdout metrics without searching."
+    },
+    "primaryKey": {
+      "ID": "9E65BD51-114F-592E-92F0-1257527E2827"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "PropertyKey": "CompatibleProblemTypes",
+      "Operation": "Add",
+      "Value": "[\"classification\", \"regression\"]",
+      "Sequence": 0,
+      "Rationale": "Every linear member handles both shapes (logistic for classification, ridge/rubric for either)."
+    },
+    "primaryKey": {
+      "ID": "580C7C4F-690E-57BF-840F-4272552A5D13"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "PropertyKey": "Explainability",
+      "Operation": "Add",
+      "Value": "per-record-exact",
+      "Sequence": 0,
+      "Rationale": "Coefficients give exact signed per-record contributions for every linear member — this is the family’s defining property."
+    },
+    "primaryKey": {
+      "ID": "DE021FAD-94D3-59A0-8CFD-F61AF58AA29B"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"impute\", \"strategy\": \"median\"}",
+      "Sequence": 0,
+      "ItemKey": "impute",
+      "Rationale": "Linear members cannot tolerate missing values; imputation is always in their kit."
+    },
+    "primaryKey": {
+      "ID": "8FB42695-F75A-5B72-8455-BCF97F9079E7"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"standardize\"}",
+      "Sequence": 0,
+      "ItemKey": "standardize",
+      "Rationale": "Comparable coefficient magnitudes — and regularization fairness — require standardized inputs for every linear member."
+    },
+    "primaryKey": {
+      "ID": "A3A2AE4C-61FE-593F-9DDC-0C3DF3A96ED8"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"C/alpha\", \"kind\": \"l2-strength\"}",
+      "Sequence": 0,
+      "ItemKey": "regularization",
+      "Rationale": "All linear members expose one regularization-strength knob."
+    },
+    "primaryKey": {
+      "ID": "01A40F54-2624-589C-99D8-D3F1DB58A0EA"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble",
+      "PropertyKey": "CompatibleProblemTypes",
+      "Operation": "Add",
+      "Value": "[\"classification\", \"regression\"]",
+      "Sequence": 0,
+      "Rationale": "Every tree-ensemble member supports both problem shapes."
+    },
+    "primaryKey": {
+      "ID": "AB51FDCC-28C0-587E-B5EF-A2C8CCF17F11"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble",
+      "PropertyKey": "Explainability",
+      "Operation": "Add",
+      "Value": "global-importance",
+      "Sequence": 0,
+      "Rationale": "Trees give global feature importance but not exact per-record attributions (those need SHAP, which no member ships yet)."
+    },
+    "primaryKey": {
+      "ID": "5A0E00C6-E0E9-520F-A9D8-7BBC5422862A"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"impute\", \"strategy\": \"median\"}",
+      "Sequence": 0,
+      "ItemKey": "impute",
+      "Rationale": "Tree members handle scale natively but not NaN in this sidecar; imputation is the one transform they all need."
+    },
+    "primaryKey": {
+      "ID": "43E8B379-088F-57FC-B3B4-FA83519F2323"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"n_estimators\", \"range\": [50, 1000]}",
+      "Sequence": 0,
+      "ItemKey": "n_estimators",
+      "Rationale": "Every ensemble has a tree count."
+    },
+    "primaryKey": {
+      "ID": "9421C701-5627-53EC-986E-1C3B3EEFF63F"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"max_depth\", \"range\": [2, 16]}",
+      "Sequence": 1,
+      "ItemKey": "max_depth",
+      "Rationale": "Every ensemble bounds tree depth."
+    },
+    "primaryKey": {
+      "ID": "26EE4874-B954-5C65-AA64-7FC1C00E9753"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Boosting",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"learning_rate\", \"range\": [0.005, 0.3]}",
+      "Sequence": 0,
+      "ItemKey": "learning_rate",
+      "Rationale": "Sequential correction is paced by a learning rate in every boosting member; bagging members have none."
+    },
+    "primaryKey": {
+      "ID": "6BB36990-3E2F-51D1-9CDB-A121C61B903C"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Boosting",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"subsample\", \"range\": [0.5, 1.0]}",
+      "Sequence": 1,
+      "ItemKey": "subsample",
+      "Rationale": "Stochastic boosting rate — common to XGBoost and LightGBM."
+    },
+    "primaryKey": {
+      "ID": "C9135212-D2AB-5793-8354-9CBD6E0B5EB7"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "PropertyKey": "CompatibleProblemTypes",
+      "Operation": "Add",
+      "Value": "[\"classification\", \"regression\"]",
+      "Sequence": 0,
+      "Rationale": "The MLP member supports both problem shapes."
+    },
+    "primaryKey": {
+      "ID": "1384DB76-FFE0-50AE-A55F-490FA21525C2"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "PropertyKey": "Explainability",
+      "Operation": "Add",
+      "Value": "none",
+      "Sequence": 0,
+      "Rationale": "No neural member offers faithful per-feature attribution today; claiming otherwise would be dishonest."
+    },
+    "primaryKey": {
+      "ID": "76D9D02F-AB8B-5BFF-A6EA-4E332B591A4A"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"impute\", \"strategy\": \"mean\"}",
+      "Sequence": 0,
+      "ItemKey": "impute",
+      "Rationale": "Dense nets require complete inputs."
+    },
+    "primaryKey": {
+      "ID": "DF8BD169-3DAD-5787-B732-E21F9776989D"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"standardize\", \"required\": true}",
+      "Sequence": 0,
+      "ItemKey": "standardize",
+      "Rationale": "Unscaled inputs break gradient training for every neural member — this is required, not advisory."
+    },
+    "primaryKey": {
+      "ID": "B78FF3C4-5402-5B68-8730-1104E199D733"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "PropertyKey": "StatisticalGate",
+      "Operation": "Replace",
+      "Value": "{\"Kind\": \"min-rows-per-feature\", \"Threshold\": 50}",
+      "Sequence": 0,
+      "ItemKey": "min-rows-per-feature",
+      "Rationale": "Neural members need far more data per feature than the Model-root floor."
+    },
+    "primaryKey": {
+      "ID": "14BB9EA0-E871-53F1-81F9-6FBAA741D64C"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Sequence",
+      "PropertyKey": "CompatibleProblemTypes",
+      "Operation": "Add",
+      "Value": "[\"sequence\"]",
+      "Sequence": 0,
+      "Rationale": "Sequence members consume ordered per-entity events — a different problem type, not a variant of classification."
+    },
+    "primaryKey": {
+      "ID": "351C794F-498D-5654-B0C6-263F1ABDAAD3"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Sequence",
+      "PropertyKey": "StatisticalGate",
+      "Operation": "Add",
+      "Value": "{\"Kind\": \"requires-ordered-sequences\", \"MinLength\": 3}",
+      "Sequence": 0,
+      "ItemKey": "requires-ordered-sequences",
+      "Rationale": "Without ordered per-entity sequences of some minimum length, no sequence member is meaningful."
+    },
+    "primaryKey": {
+      "ID": "9A6C0402-608F-53C7-9CB4-55EA73D863D4"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Structure",
+      "PropertyKey": "Explainability",
+      "Operation": "Add",
+      "Value": "inherits-min-of-fillers",
+      "Sequence": 0,
+      "Rationale": "A wrapper can never be more explainable than the least explainable component filling its slots."
+    },
+    "primaryKey": {
+      "ID": "900FCE0D-40C2-562C-A5DA-D3BB34423434"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Structure",
+      "PropertyKey": "CompatibleProblemTypes",
+      "Operation": "Add",
+      "Value": "[\"classification\", \"regression\"]",
+      "Sequence": 0,
+      "Rationale": "Shipped wrappers compose tabular models; sequence wrapping is out of scope."
+    },
+    "primaryKey": {
+      "ID": "CCCB2811-900C-5527-BE75-BCA99E16A748"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Scaling",
+      "PropertyKey": "GuidanceRationale",
+      "Operation": "Add",
+      "Value": "Population-relative: parameters are fit ONCE on the training population and frozen onto the model, never re-fit at scoring — the anti-skew guarantee.",
+      "Sequence": 0,
+      "ItemKey": "fit-once",
+      "Rationale": "True of every scaling member by construction."
+    },
+    "primaryKey": {
+      "ID": "3A60F64E-DD09-5930-8D7E-9E414FEAB23B"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Curve Mapping",
+      "PropertyKey": "GuidanceRationale",
+      "Operation": "Add",
+      "Value": "Stateless and parameterized: the operator sets the curve; nothing is fit. Identical at train and score by definition.",
+      "Sequence": 0,
+      "ItemKey": "stateless",
+      "Rationale": "Definitional for the family."
+    },
+    "primaryKey": {
+      "ID": "CF66C5E1-DB68-5BD5-86FC-2C0A26BEEFFC"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Input",
+      "PropertyKey": "MissingDataPolicy",
+      "Operation": "Add",
+      "Value": "Zero",
+      "Sequence": 0,
+      "Rationale": "Absent evidence defaults to contributing nothing — the conservative floor every input starts from; models and rubrics may override per binding."
+    },
+    "primaryKey": {
+      "ID": "218BB21A-856C-58D8-AFCB-F10C818520CF"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=As-Of Aggregate",
+      "PropertyKey": "GuidanceRationale",
+      "Operation": "Add",
+      "Value": "Only rows dated at or before the as-of instant may enter the window; using AsOfStrategy Mode=none with these inputs builds a model that has seen the future.",
+      "Sequence": 0,
+      "ItemKey": "leakage-boundary",
+      "Rationale": "The defining constraint of every as-of member."
+    },
+    "primaryKey": {
+      "ID": "73E01AF8-4BC3-5543-8EB4-0A8C82BEF996"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Code Feature",
+      "PropertyKey": "GuidanceRationale",
+      "Operation": "Add",
+      "Value": "An Action-backed input must have PromotionState=Approved before it can feed a trained or served model; Draft/InReview code never moves persisted predictions.",
+      "Sequence": 0,
+      "ItemKey": "promotion-gate",
+      "Rationale": "The gate is the family contract, ported from Sonar."
+    },
+    "primaryKey": {
+      "ID": "FA18B77E-D8A5-5F3F-AA0A-47A8ED1B1FE4"
+    }
+  }
+]

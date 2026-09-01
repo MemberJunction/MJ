@@ -115,6 +115,12 @@ export interface LoadedModel {
   asOf: AsOfStrategy;
   /** Leakage guard frozen on the model's pipeline (assembly input). */
   leakageGuard: LeakageGuard;
+  /**
+   * As-of dated sources frozen on the model at train time (from `Lineage.datedSources`).
+   * Empty when the model trained without any — or when its lineage predates the field, in
+   * which case the processor falls back to {@link MLModelInferenceProcessorOptions.datedSources}.
+   */
+  datedSources: DatedSourceSpec[];
 }
 
 /**
@@ -142,8 +148,10 @@ export interface MLModelInferenceProcessorOptions {
   /** Primary-key field on the target entity (defaults to `ID`). */
   primaryKeyField?: string;
   /**
-   * Optional dated sources supplying point-in-time ("as-of") features, when the
-   * model's pipeline uses them. Carried through to the FeatureAssembly executor.
+   * Optional dated sources supplying point-in-time ("as-of") features. **Fallback only** —
+   * the sources frozen on the model's `Lineage` at train time take precedence, so train and
+   * serve assemble the same as-of columns. Used for models whose lineage predates
+   * `MLTrainingPipeline.DatedSources`, and by tests injecting a spec directly.
    */
   datedSources?: DatedSourceSpec[];
 }

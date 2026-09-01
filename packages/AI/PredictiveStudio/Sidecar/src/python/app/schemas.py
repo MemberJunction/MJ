@@ -45,6 +45,13 @@ class PreprocessingOp(BaseModel):
     fillValue: Optional[Union[str, float, int]] = None
     # bin-specific (the contract leaves `op` open so we extend additively)
     bins: Optional[int] = None
+    # normalization-specific (Sonar-ported ops: minmax/percentile/zscore/logistic/banded/lookup).
+    # Direction + output range apply to every normalization op; `params` carries the
+    # stateless curve parameters (logistic midpoint/steepness, banded bands, lookup table).
+    higherIsBetter: Optional[bool] = None
+    outputMin: Optional[float] = None
+    outputMax: Optional[float] = None
+    params: Optional[Dict[str, Any]] = None
 
 
 class ValidationConfig(BaseModel):
@@ -153,3 +160,76 @@ class HealthResponse(BaseModel):
     status: str
     algorithms: List[str]
     cached_models: int
+
+
+# ---------------------------------------------------------------------------
+# /describe — the statistics pre-pass (additive third endpoint)
+# ---------------------------------------------------------------------------
+
+
+class DescribeRequest(BaseModel):
+    """Request for the read-only statistics pre-pass.
+
+    Mirrors ``DescribeRequest`` in the TS contract. The caller sends ONLY the training
+    partition — the locked holdout is never described, because a number the search has
+    seen is no longer an honest holdout.
+    """
+
+    problem_type: ProblemType
+    feature_schema: List[FeatureSchemaEntry]
+    target: str
+    data: MatrixData
+    top_values_limit: Optional[int] = None
+    include_correlations: Optional[bool] = None
+
+
+class DescribeNumericSummary(BaseModel):
+    """Numeric moments shared by the target and numeric features."""
+
+    mean: float
+    std: float
+    min: float
+    max: float
+    quartiles: List[float]  # [p25, p50, p75]
+    skewness: Optional[float] = None
+
+
+class DescribeTargetValue(BaseModel):
+    """One class of a categorical target (or one frequent value of a categorical feature)."""
+
+    value: str
+    count: int
+
+
+class DescribeTarget(BaseModel):
+    """Label distribution. Exactly one of ``classes`` / ``numeric`` is populated."""
+
+    name: str
+    labeled_row_count: int
+    classes: Optional[List[DescribeTargetValue]] = None
+    numeric: Optional[DescribeNumericSummary] = None
+
+
+class DescribeFeature(BaseModel):
+    """One feature's measurements."""
+
+    name: str
+    kind: str
+    missing_fraction: float
+    distinct_count: int
+    numeric: Optional[DescribeNumericSummary] = None
+    target_association: Optional[float] = None
+    mutual_information: Optional[float] = None
+    top_values: Optional[List[DescribeTargetValue]] = None
+
+
+class DescribeResponse(BaseModel):
+    """The pre-pass result. No artifact, no fitted state — nothing is learned here."""
+
+    row_count: int
+    feature_count: int
+    target: DescribeTarget
+    features: List[DescribeFeature]
+    correlations: Optional[Dict[str, float]] = None
+    duration_sec: float
+    warnings: List[str] = Field(default_factory=list)

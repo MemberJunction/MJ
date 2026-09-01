@@ -1,0 +1,10 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Stacking Wrapper",
+  "type": "object",
+  "properties": {
+    "cv": { "type": "integer", "minimum": 2, "maximum": 10, "default": 5, "description": "Folds used to produce out-of-fold level-0 predictions for the final estimator." },
+    "passthrough": { "type": "boolean", "default": false, "description": "Also feed the raw features to the final estimator." }
+  },
+  "additionalProperties": false
+}

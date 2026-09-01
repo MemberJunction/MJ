@@ -20,7 +20,11 @@ import { RunView, LogError, LogStatus, type UserInfo, type IMetadataProvider } f
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard } from '@memberjunction/predictive-studio-core';
 
+import { deriveTrustVerdict } from '@memberjunction/predictive-studio-core';
+
 import { detectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
+import { ModelStoryTagger, tagModelStoryBestEffort } from '../stories/model-story-tagger';
+import { RunViewStoryPromptLoader, type IStoryPromptRunner } from '../stories/seams';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
 import type {
   IModelPromotionGate,
@@ -40,6 +44,26 @@ function isUuid(value: string | null | undefined): value is string {
  * Loads a model, enforces the leakage sign-off gate, and transitions its status.
  */
 export class ProductionModelPromotionGate implements IModelPromotionGate {
+  /**
+   * The host-wired story-prompt runner, or `null` when story tagging is not enabled. Static because
+   * the gate is constructed per-promotion by callers that have no way to thread a runner through —
+   * the host registers once at bootstrap via {@link RegisterStoryRunner}.
+   */
+  private static storyRunner: IStoryPromptRunner | null = null;
+
+  /**
+   * Enable model-story tagging on publish by supplying the prompt runner. Called once by a host
+   * that depends on `@memberjunction/ai-prompts`; passing `null` turns tagging back off.
+   */
+  public static RegisterStoryRunner(runner: IStoryPromptRunner | null): void {
+    ProductionModelPromotionGate.storyRunner = runner;
+  }
+
+  /** The registered runner, or `null` when tagging is off. */
+  protected static get StoryRunner(): IStoryPromptRunner | null {
+    return ProductionModelPromotionGate.storyRunner;
+  }
+
   /** @inheritdoc */
   public async promote(request: PromoteModelRequest): Promise<PromoteModelOutcome> {
     const model = await this.loadModel(request.modelId, request.contextUser, request.provider);
@@ -209,7 +233,50 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
       return { kind: 'save-failed', message: model.LatestResult?.CompleteMessage ?? 'unknown error' };
     }
     await this.syncScoringAction(model, targetStatus, contextUser, provider);
+    await this.writeModelStory(model, targetStatus, contextUser, provider);
     return { kind: 'promoted', newStatus: targetStatus, signOffNote };
+  }
+
+  /**
+   * Write the model's **story** on `Published` — the prose identity that makes it explainable to a
+   * business user and its components findable by meaning later (see `stories/`).
+   *
+   * Like {@link syncScoringAction} this is a pure enhancement, NOT part of the promotion contract.
+   * The model has already been promoted by the time this runs; a story is a description of a
+   * decision that was already made, so losing it is a documentation gap and never a reason to
+   * un-promote. Every failure is swallowed.
+   *
+   * Off unless a host has wired a story-prompt runner into {@link ModelStoryDeps}. The engine cannot
+   * construct one itself (`AIPromptRunner` lives in a package it does not depend on — the same
+   * reason `IVisionPromptRunner` is caller-injected), so with no runner a model promotes exactly as
+   * it did before.
+   */
+  protected async writeModelStory(
+    model: MJMLModelEntity,
+    targetStatus: PromoteModelRequest['targetStatus'],
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<void> {
+    if (targetStatus !== 'Published') {
+      return;
+    }
+    const runner = ProductionModelPromotionGate.StoryRunner;
+    if (!runner) {
+      return;
+    }
+    try {
+      const result = await tagModelStoryBestEffort(new ModelStoryTagger(), model, deriveTrustVerdict(model), {
+        runner,
+        promptLoader: new RunViewStoryPromptLoader(),
+        contextUser,
+        provider,
+      });
+      for (const reason of result.Reasons) {
+        LogStatus(`ProductionModelPromotionGate: story — ${reason}`);
+      }
+    } catch (err) {
+      LogError(`ProductionModelPromotionGate: story tagging threw (promotion is unaffected): ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   /**

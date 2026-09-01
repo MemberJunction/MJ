@@ -292,12 +292,78 @@
         {
           "fields": {
             "ParentID": "@parent:ID",
+            "Name": "Statistics Pass",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
+            "Description": "Code-based agent (no LLM) that MEASURES the data before any architecture is chosen. Assembles the training partition through the same FeatureAssembly executor training uses, carves the locked holdout away and describes ONLY what remains (describing the holdout would stop MLModel.HoldoutMetrics being an honest number), and calls the sidecar's read-only /describe for class balance, per-feature association with the target, cardinality, missingness and correlations. Derives the feature hints (leakage-dominance, near-duplicate-of-target, id-like, constant, high-cardinality, high-missingness, collinear) and evaluates each proposed candidate against the StatisticalGate rows its ML Component Type INHERITS. Writes Statistics + GateReports onto the plan. The orchestrator forces this sub-agent once the plan is describable, exactly once — re-measuring the same rows cannot change the answer.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 3,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "DriverClass": "PredictiveStudioStatisticsPassAgent",
+            "IconClass": "fa-solid fa-ruler-combined",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "Statistics",
+              "Statistics.*",
+              "GateReports",
+              "GateReports.*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "BC813639-C732-4D43-827E-C2AF42FBF457"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Architect",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
+            "Description": "Makes the architecture decision — what KIND of model this should be — from the measured evidence the Statistics Pass produced rather than from the goal statement. Chooses one of four shapes: commit (one family, when the evidence is clear), defer (race several, when it is not), reify (name the generalized parent the candidates are variations of), or compose (build a custom model by filling a structure's slots). Never proposes a candidate whose gate report says Admissible: false, and records every candidate considered with its rationale so the rejections are auditable too. A composed graph is validated against the real component tree — slots, accepted types, arity, no abstract instantiation — before anything runs.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 4,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-sitemap",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "Architecture",
+              "Architecture.*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "C25E1015-4E6C-4320-BD12-D24B691B8DA1"
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Architect - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "479EBDDA-5FE0-4244-8682-A55C0F4194E2"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
             "Name": "Experiment Designer",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
             "Description": "Predictive Studio sub-agent that turns the target and candidate data into a ranked, justified set of experiments (features × algorithms × hyperparameters, each with rationale and priority), a sound validation strategy with a locked holdout, and a responsible compute budget. Never includes a feature the Data Scout marked exclude. Writes only the ProposedExperiments, ValidationStrategy, and ProposedBudget slices of the ModelingPlanSpec.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
-            "ExecutionOrder": 3,
+            "ExecutionOrder": 5,
             "ExposeAsAction": false,
             "InvocationMode": "Sub-Agent",
             "IconClass": "fa-solid fa-vials",
@@ -348,7 +414,7 @@
             "Description": "Code-based agent (no LLM) that deterministically turns the approved ModelingPlanSpec into a real MJ: ML Training Pipeline, trains the model, and publishes it ONLY if the trust verdict clears the bar (publish gated on trust). Mirrors the Database Designer schema builder. The orchestrator forces this sub-agent once the user approves the plan.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
-            "ExecutionOrder": 4,
+            "ExecutionOrder": 6,
             "ExposeAsAction": false,
             "InvocationMode": "Sub-Agent",
             "DriverClass": "PredictiveStudioPipelineBuilderAgent",
