@@ -50,7 +50,15 @@ describe('engine wiring', () => {
         // The skip must not outlive the operator's own "re-read everything" instruction. Pinned
         // here because the flag is threaded at the call site — a unit test of the pure function
         // cannot see whether the engine actually passes it.
-        expect(source).toMatch(/DecideUnavailableSkip\([\s\S]{0,200}?fullSync:\s*config\.fullSync/);
+        expect(source).toMatch(/DecideUnavailableSkip\([\s\S]{0,300}?fullSync:\s*config\.fullSync/);
+    });
+
+    it('passes the manual flag through, so a person pressing sync re-tests', () => {
+        // The trigger has to REACH the decision. It is threaded RunSync -> LoadRunConfiguration ->
+        // RunConfiguration, and a break anywhere in that chain leaves the pure function correct
+        // while the product still makes the operator wait out the window.
+        expect(source).toMatch(/DecideUnavailableSkip\([\s\S]{0,300}?manual:\s*config\.triggerType === 'Manual'/);
+        expect(source).toMatch(/triggerType: SyncTriggerType = 'Scheduled'/);   // conservative default
     });
 
     it('classifies unavailability before the rate-limit branch, and ends the map without retrying', () => {

@@ -1021,7 +1021,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
 
             // Load config and filter to only remaining entity maps (by map ID)
-            const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions);
+            const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions, resumeTriggerType);
             const remainingMaps = config.entityMaps.filter(
                 em => !completedMapIDs.has(em.ID.toLowerCase())
             );
@@ -1372,7 +1372,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
          */
         await IntegrationEngineBase.Instance.RefreshCatalog(contextUser);
 
-        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
+        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options, triggerType);
         logger.attachIntegrationName(config.companyIntegration.Integration);
         logger.emit('sync.config.loaded', {
             integration: config.companyIntegration.Integration,
@@ -1638,7 +1638,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private async LoadRunConfiguration(
         companyIntegrationID: string,
         contextUser: UserInfo,
-        options?: IntegrationSyncOptions
+        options?: IntegrationSyncOptions,
+        triggerType: SyncTriggerType = 'Scheduled'
     ): Promise<RunConfiguration> {
         const rv = new RunView();
 
@@ -1701,6 +1702,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             connector,
             // Explicit caller request wins; otherwise honor the integration's periodic-reconcile cadence.
             fullSync: options?.FullSync ?? await this.resolveScheduledFullSync(companyIntegration, contextUser),
+            // Defaults to 'Scheduled' — the conservative reading. An unattributed run must not be
+            // treated as a person retrying, or the availability skip stops suppressing anything.
+            triggerType,
             syncDirection: options?.SyncDirection,
         };
     }
@@ -2635,9 +2639,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // every run, forever, and says nothing new after the first time. While the marker is fresh
         // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
         // the account later enables heals itself with no operator action.
-        // A full sync re-tests availability rather than trusting the marker — see DecideUnavailableSkip.
+        // A full sync OR a person pressing sync re-tests availability rather than trusting the
+        // marker — see DecideUnavailableSkip for why each counts.
         const unavailable = DecideUnavailableSkip(
-            entityMap.Configuration, Date.now(), UnavailableRecheckMs(), { fullSync: config.fullSync });
+            entityMap.Configuration, Date.now(), UnavailableRecheckMs(),
+            { fullSync: config.fullSync, manual: config.triggerType === 'Manual' });
         if (unavailable.skip) {
             logger?.emit('sync.entity-map.skipped', {
                 externalObjectName: entityMap.ExternalObjectName,
@@ -6505,6 +6511,12 @@ interface RunConfiguration {
     integration: MJIntegrationEntity;
     connector: BaseIntegrationConnector;
     fullSync: boolean;
+    /**
+     * What started this run. Read by the availability skip: a person pressing "sync now" has almost
+     * always just CHANGED something, so their run re-tests an object the marker says is unavailable.
+     * A scheduled or webhook run trusts the marker — suppressing that traffic is its whole purpose.
+     */
+    triggerType: SyncTriggerType;
     /** When set, overrides each entity map's own SyncDirection for this run. */
     syncDirection?: 'Pull' | 'Push' | 'Bidirectional';
 }

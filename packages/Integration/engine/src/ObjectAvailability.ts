@@ -75,14 +75,25 @@ export function DecideUnavailableSkip(
     configurationJSON: string | null | undefined,
     nowMs: number,
     recheckMs: number = DEFAULT_UNAVAILABLE_RECHECK_MS,
-    opts: { fullSync?: boolean } = {}
+    opts: { fullSync?: boolean; manual?: boolean } = {}
 ): { skip: boolean; marker?: ObjectUnavailableMarker } {
-    // A FULL SYNC overrides the marker outright. The recheck clock is a COST control — it stops a
-    // permanently-absent object costing a request every run — not a claim that the account cannot
-    // change. A full sync already means "ignore what you think you know and re-read everything";
-    // honouring that for watermarks but not for availability would leave an operator who just
-    // enabled a record type at the vendor waiting up to a day, with no lever to hurry it.
-    if (opts.fullSync) return { skip: false };
+    // Two things override the marker outright.
+    //
+    // The recheck clock is a COST control — it stops a permanently-absent object costing a request
+    // on every run — not a claim that the account cannot change. So anything that means "I have
+    // reason to think this is different now" must beat it, or the operator who just enabled a record
+    // type at the vendor waits out the window with no lever to hurry it.
+    //
+    //   - a FULL SYNC already means "ignore what you think you know and re-read everything";
+    //     honouring that for watermarks but not for availability is simply inconsistent.
+    //   - a MANUAL run is a PERSON pressing sync, which nearly always follows them changing
+    //     something. This is the one that matters in practice: the natural move after fixing
+    //     permissions is "sync now", not hunting for the full-sync option, and a product that
+    //     answers that with a day of silence has no answer at all.
+    //
+    // Scheduled and webhook runs still trust the marker — suppressing THEIR traffic is the entire
+    // point of the feature, and neither carries any evidence that the account changed.
+    if (opts.fullSync || opts.manual) return { skip: false };
     if (!configurationJSON) return { skip: false };
     let parsed: unknown;
     try {

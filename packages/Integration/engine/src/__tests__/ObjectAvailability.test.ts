@@ -159,4 +159,18 @@ describe('a full sync re-tests availability (§ the operator\'s lever)', () => {
     it('a full sync of a map with no marker is unaffected', () => {
         expect(DecideUnavailableSkip(null, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, { fullSync: true }).skip).toBe(false);
     });
+
+    it('a MANUAL run re-tests too — the case that actually happens', () => {
+        // The realistic sequence: someone enables the record type at the vendor, comes back and
+        // presses "sync now". That is an incremental run. If it honoured the marker, the product
+        // would answer a deliberate retry with up to a day of silence.
+        expect(DecideUnavailableSkip(fresh, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, { manual: true }).skip).toBe(false);
+        // ...and it does not need to ALSO be a full sync.
+        expect(DecideUnavailableSkip(fresh, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, { manual: true, fullSync: false }).skip).toBe(false);
+    });
+
+    it('SCHEDULED and webhook runs still trust the marker — suppressing them is the whole point', () => {
+        expect(DecideUnavailableSkip(fresh, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, { manual: false }).skip).toBe(true);
+        expect(DecideUnavailableSkip(fresh, NOW, DEFAULT_UNAVAILABLE_RECHECK_MS, {}).skip).toBe(true);
+    });
 });
