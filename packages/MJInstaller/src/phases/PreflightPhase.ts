@@ -109,7 +109,7 @@ export class PreflightPhase {
 
     // Gather environment info
     const packageManager = resolvePackageManager(context.Config.PackageManager);
-    const environment = await this.gatherEnvironment(packageManager);
+    const environment = await this.gatherEnvironment(packageManager, context.TargetDir);
     const diagnostics = new Diagnostics(environment);
     const detectedOS = this.detectOS();
 
@@ -209,12 +209,17 @@ export class PreflightPhase {
   // Individual checks
   // ---------------------------------------------------------------------------
 
-  private async gatherEnvironment(packageManager: PackageManagerType): Promise<EnvironmentInfo> {
+  private async gatherEnvironment(packageManager: PackageManagerType, targetDir: string): Promise<EnvironmentInfo> {
     const nodeVersion = process.version;
-    const npmVersion = await this.probeVersion('npm');
+    // Probe from the target directory: corepack shims and pnpm 10's
+    // manage-package-manager-versions resolve the nearest packageManager pin
+    // by cwd, so this reports the version an existing install actually uses
+    // (for a fresh, still-empty directory it falls back to the PATH default —
+    // the dependencies phase logs the effective version again after pinning).
+    const npmVersion = await this.probeVersion('npm', targetDir);
     const packageManagerVersion = packageManager === 'npm'
       ? npmVersion
-      : await this.probeVersion(packageManager);
+      : await this.probeVersion(packageManager, targetDir);
 
     return {
       OS: `${os.platform()} ${os.release()} (${os.arch()})`,
@@ -226,10 +231,10 @@ export class PreflightPhase {
     };
   }
 
-  /** Run `<binary> --version`, returning `"not found"` when the binary is missing. */
-  private async probeVersion(binary: string): Promise<string> {
+  /** Run `<binary> --version` from `cwd`, returning `"not found"` when the binary is missing. */
+  private async probeVersion(binary: string, cwd: string): Promise<string> {
     try {
-      return await this.processRunner.RunSimple(binary, ['--version']);
+      return await this.processRunner.RunSimple(binary, ['--version'], cwd);
     } catch {
       return 'not found';
     }

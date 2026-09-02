@@ -518,6 +518,69 @@ describe('DependencyPhase package-manager awareness', () => {
       expect(wsWrite).toBeUndefined();
     });
 
+    it('rewrites the npm-shim build, prebuild, and setup scripts on pre-flip bundles', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false); // distribution layout
+      mockFs.ReadJSON.mockResolvedValue({
+        packageManager: 'npm@11.7.0',
+        scripts: {
+          'build': 'npm run build:stream',
+          'build:stream': 'turbo --log-order=stream build',
+          'prebuild': 'node -e "try { require.resolve(\'turbo\') } catch (e) { console.error(\'\\n❌ Dependencies not installed. Run: npm install\\n\'); process.exit(1); }"',
+          'setup': "echo 'Please run: npm run mj:migrate && npm run mj:codegen && npm run build'",
+        },
+      });
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext());
+
+      const write = mockFs.WriteJSON.mock.calls.find(([p2]) => String(p2).endsWith('package.json'));
+      expect(write).toBeDefined();
+      const scripts = (write![1] as { scripts: Record<string, string> }).scripts;
+      expect(scripts['build']).toBe('turbo --log-order=stream build');
+      expect(scripts['prebuild']).not.toContain('Run: npm install');
+      expect(scripts['prebuild']).toContain('pnpm install (or npm install)');
+      expect(scripts['setup']).not.toContain('npm run');
+    });
+
+    it('leaves customized build scripts alone', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.ReadJSON.mockResolvedValue({
+        scripts: { 'build': 'my-custom-build --flag' },
+      });
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext());
+
+      const write = mockFs.WriteJSON.mock.calls.find(([p2]) => String(p2).endsWith('package.json'));
+      expect(write).toBeDefined();
+      const scripts = (write![1] as { scripts: Record<string, string> }).scripts;
+      expect(scripts['build']).toBe('my-custom-build --flag');
+    });
+
+    it('logs the effective package-manager version probed in the install dir after pinning', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockRunner.Run.mockResolvedValue(ok());
+      mockRunner.RunSimple.mockClear().mockResolvedValue('10.33.0');
+
+      const { emitter, emitSpy } = createMockEmitter();
+      await phase.Run(makeContext({ Emitter: emitter }));
+
+      // Probed IN the install dir, so a corepack/pnpm self-switch driven by the
+      // freshly written packageManager pin is what gets recorded.
+      expect(mockRunner.RunSimple).toHaveBeenCalledWith('pnpm', ['--version'], '/test/install');
+      const logs = emittedEvents(emitSpy, 'log') as Array<{ Message: string }>;
+      expect(logs.some((l) => l.Message.includes('pnpm 10.33.0'))).toBe(true);
+    });
+
+    it('does not fail the install when the effective-version probe errors', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockRunner.Run.mockResolvedValue(ok());
+      mockRunner.RunSimple.mockClear().mockRejectedValue(new Error('probe failed'));
+
+      const result = await phase.Run(makeContext());
+      expect(result.InstallSuccess).toBe(true);
+    });
+
     it('does not write pnpm-workspace.yaml under npm', async () => {
       mockFs.DirectoryExists.mockResolvedValue(false);
       mockFs.FileExists.mockResolvedValue(false);

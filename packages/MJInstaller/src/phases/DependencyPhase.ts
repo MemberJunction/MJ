@@ -195,6 +195,12 @@ export class DependencyPhase {
     // (root packageManager pin, PM-neutral scripts, pnpm-workspace.yaml).
     await this.ensurePackageManagerScaffold(context.Dir, pm, emitter);
 
+    // Record the version that will ACTUALLY run the install. Probed in the
+    // install dir AFTER the pin is written, because corepack shims and pnpm
+    // 10's manage-package-manager-versions resolve the packageManager field
+    // by cwd — a preflight PATH probe can report a different version.
+    await this.logEffectiveVersion(context.Dir, pm, emitter);
+
     // Step 1: install
     await this.runInstall(context.Dir, pm, emitter, warnings);
 
@@ -313,6 +319,33 @@ export class DependencyPhase {
       Phase: 'dependencies',
       Message: `${pm.Name} reports dependency vulnerabilities (informational). Do not run "npm audit fix --force".`,
     });
+  }
+
+  /**
+   * Log the package-manager version resolved from the install directory —
+   * the version that actually runs the install (gate-4 evidence). A probe
+   * failure is logged and never fails the install; the preflight PATH check
+   * already guaranteed the binary exists.
+   */
+  private async logEffectiveVersion(
+    dir: string,
+    pm: PackageManagerCommands,
+    emitter: InstallerEventEmitter
+  ): Promise<void> {
+    try {
+      const version = await this.processRunner.RunSimple(pm.Name, ['--version'], dir);
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Using ${pm.Name} ${version.trim()} for this install (root packageManager pin: ${pm.PackageManagerPin}).`,
+      });
+    } catch (err) {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'verbose',
+        Message: `Could not probe the effective ${pm.Name} version: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
   }
 
   /** Build the INSTALL_TIMEOUT error for a (possibly retried) install. */
@@ -655,6 +688,24 @@ export class DependencyPhase {
     const installDeps = `${pm.Name} install`;
     if (scripts['install:deps'] && scripts['install:deps'] !== installDeps) {
       scripts['install:deps'] = installDeps;
+      modified = true;
+    }
+
+    // Pre-flip bundles route `build` through npm (`npm run build:stream`) and
+    // carry npm-only guidance in prebuild/setup. Rewrite those exact shim
+    // forms to PM-neutral equivalents so a pnpm install never shells back
+    // into npm; anything user-customized is left alone.
+    if (scripts['build'] === 'npm run build:stream') {
+      scripts['build'] = 'turbo --log-order=stream build';
+      modified = true;
+    }
+    if (scripts['prebuild']?.includes('Run: npm install')) {
+      scripts['prebuild'] =
+        'node -e "try { require.resolve(\'turbo\') } catch (e) { console.error(\'\\n❌ Dependencies not installed. Run: pnpm install (or npm install)\\n\'); process.exit(1); }"';
+      modified = true;
+    }
+    if (scripts['setup']?.includes('npm run mj:migrate')) {
+      scripts['setup'] = "echo 'Please run the mj:migrate, mj:codegen, and build scripts with your package manager.'";
       modified = true;
     }
 

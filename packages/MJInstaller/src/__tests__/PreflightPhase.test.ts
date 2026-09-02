@@ -226,7 +226,7 @@ describe('PreflightPhase', () => {
       expect(pmCheck).toBeDefined();
       expect(pmCheck!.Status).toBe('pass');
       expect(pmCheck!.Message).toContain('pnpm 10.33.0');
-      expect(mockProcess.RunSimple).toHaveBeenCalledWith('pnpm', ['--version']);
+      expect(mockProcess.RunSimple).toHaveBeenCalledWith('pnpm', ['--version'], '/test/install');
     });
 
     it('should hard-fail when pnpm is configured (default) but missing', async () => {
@@ -261,6 +261,13 @@ describe('PreflightPhase', () => {
       expect(pmCheck!.Status).toBe('fail');
       expect(pmCheck!.Message).toContain('npm not found');
       expect(result.Passed).toBe(false);
+    });
+
+    it('probes the package-manager version from the target directory (corepack/pnpm resolve the packageManager pin by cwd)', async () => {
+      mockVersions({ npm: '10.9.0', pnpm: '10.33.0' });
+      const ctx = makeContext();
+      await phase.Run(ctx);
+      expect(mockProcess.RunSimple).toHaveBeenCalledWith('pnpm', ['--version'], '/test/install');
     });
 
     it('should record the package manager in the environment info', async () => {
