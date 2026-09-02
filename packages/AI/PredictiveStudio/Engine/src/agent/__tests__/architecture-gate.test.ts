@@ -125,26 +125,54 @@ describe('gateArchitecture — consistency with the measured evidence', () => {
   });
 });
 
-describe('gateArchitecture — what is not built yet', () => {
-  it('records a reify decision but refuses to execute it, saying what to do instead', () => {
-    const architecture: ArchitectureSpec = {
-      Decision: 'reify',
-      Rationale: 'both candidates are boosting variants',
-      Candidates: [
-        { ComponentTypeRef: 'XGBoost', Rationale: 'a' },
-        { ComponentTypeRef: 'LightGBM', Rationale: 'b' },
-      ],
-      ReifiedUnderComponentTypeRef: 'Boosting',
-    };
-    const result = gateArchitecture(plan({ Architecture: architecture }));
-    expect(result.Executable).toBe(false);
-    // The decision is still returned — it is recorded on the plan, just not trainable yet.
-    expect(result.Architecture?.Decision).toBe('reify');
-    expect(result.Reasons[0]).toContain('cannot be trained yet');
-    expect(result.Reasons[0]).toContain('Commit to one of its concrete descendants');
+describe('gateArchitecture — composition and reification', () => {
+  const reify = (candidates: string[], parent = 'Boosting'): ArchitectureSpec => ({
+    Decision: 'reify',
+    Rationale: 'the candidates are boosting variants',
+    Candidates: candidates.map((c) => ({ ComponentTypeRef: c, Rationale: 'r' })),
+    ReifiedUnderComponentTypeRef: parent,
   });
 
-  it('records a compose decision but refuses to execute it', () => {
+  /** Minimal tree stand-in: Boosting → {XGBoost, LightGBM}; Linear → Logistic Regression. */
+  const treeEngine = {
+    FindTypeByName: (name: string) =>
+      ({
+        boosting: { ID: 'boosting', Name: 'Boosting', Kind: 'Model', IsAbstract: true },
+        xgboost: { ID: 'xgb', Name: 'XGBoost', Kind: 'Model', IsAbstract: false },
+        lightgbm: { ID: 'lgbm', Name: 'LightGBM', Kind: 'Model', IsAbstract: false },
+        'logistic regression': { ID: 'logreg', Name: 'Logistic Regression', Kind: 'Model', IsAbstract: false },
+      })[name.trim().toLowerCase()],
+    IsDescendantOf: (typeID: string, ancestorID: string) =>
+      ancestorID === 'boosting' ? typeID === 'xgb' || typeID === 'lgbm' || typeID === 'boosting' : typeID === ancestorID,
+  } as unknown as Parameters<typeof gateArchitecture>[1];
+
+  it('executes a reify decision now that the combination search is the production strategist', () => {
+    const result = gateArchitecture(plan({ Architecture: reify(['XGBoost', 'LightGBM']) }), treeEngine);
+    expect(result.Executable).toBe(true);
+    expect(result.Architecture?.Decision).toBe('reify');
+    expect(result.Reasons).toEqual([]);
+  });
+
+  it('refuses a reify whose candidates are not actually variations of one parent', () => {
+    // The entire content of a reify is "these are all Boosting". Unchecked, every model in the
+    // session would be filed against a family it is not in.
+    const result = gateArchitecture(plan({ Architecture: reify(['XGBoost', 'Logistic Regression']) }), treeEngine);
+    expect(result.Executable).toBe(false);
+    expect(result.Reasons[0]).toContain("'Logistic Regression' is not a 'Boosting'");
+    expect(result.Reasons[0]).toContain('defer across them instead');
+  });
+
+  it('refuses a reify under a parent the tree does not have', () => {
+    const result = gateArchitecture(plan({ Architecture: reify(['XGBoost'], 'Gradient Magic') }), treeEngine);
+    expect(result.Reasons[0]).toContain("reifies under 'Gradient Magic', which is not a component type");
+  });
+
+  it('leaves the claim alone when no tree is available, rather than assuming it true', () => {
+    // Same posture as the graph check: no engine ⇒ not structurally verified, still executable.
+    expect(gateArchitecture(plan({ Architecture: reify(['XGBoost', 'Logistic Regression']) })).Executable).toBe(true);
+  });
+
+  it('executes a compose decision now that the composition runtime exists', () => {
     const architecture: ArchitectureSpec = {
       Decision: 'compose',
       Rationale: 'a bagged forest suits the variance here',
@@ -152,19 +180,22 @@ describe('gateArchitecture — what is not built yet', () => {
       ComposedGraph: { ComponentTypeRef: 'Bagging Wrapper', Children: [{ ComponentTypeRef: 'Random Forest', SlotName: 'base_estimator' }] },
     };
     const result = gateArchitecture(plan({ Architecture: architecture }));
-    expect(result.Executable).toBe(false);
-    expect(result.Reasons[0]).toContain('composition runtime');
-    // The proposal survives on the plan rather than being discarded.
+    expect(result.Executable).toBe(true);
+    expect(result.Reasons).toEqual([]);
     expect(result.Architecture?.ComposedGraph?.ComponentTypeRef).toBe('Bagging Wrapper');
   });
 
   it('executes exactly the decisions it claims to', () => {
-    expect([...EXECUTABLE_DECISIONS]).toEqual(['commit', 'defer']);
+    expect([...EXECUTABLE_DECISIONS]).toEqual(['commit', 'defer', 'reify', 'compose']);
     for (const Decision of EXECUTABLE_DECISIONS) {
       const architecture: ArchitectureSpec =
         Decision === 'commit'
           ? commit
-          : { Decision, Rationale: 'r', Candidates: [{ ComponentTypeRef: 'A', Rationale: 'a' }, { ComponentTypeRef: 'B', Rationale: 'b' }] };
+          : Decision === 'compose'
+            ? { Decision, Rationale: 'r', Candidates: [{ ComponentTypeRef: 'A', Rationale: 'a' }], ComposedGraph: { ComponentTypeRef: 'A' } }
+            : Decision === 'reify'
+              ? { Decision, Rationale: 'r', Candidates: [{ ComponentTypeRef: 'A', Rationale: 'a' }], ReifiedUnderComponentTypeRef: 'P' }
+              : { Decision, Rationale: 'r', Candidates: [{ ComponentTypeRef: 'A', Rationale: 'a' }, { ComponentTypeRef: 'B', Rationale: 'b' }] };
       expect(gateArchitecture(plan({ Architecture: architecture })).Executable, Decision).toBe(true);
     }
   });

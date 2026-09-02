@@ -31,6 +31,7 @@ import { buildProductionExperimentDeps } from '../actions/run-experiment.deps';
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
+import { RunViewScoreBandLoader } from '../scoring/output-bands';
 import { LocalArtifactLoader } from '../scoring/artifact-loader';
 import type { MLInferenceDeps } from '../scoring/types';
 import type {
@@ -51,6 +52,7 @@ import type {
   Budget,
 } from '@memberjunction/predictive-studio-core';
 import { MetadataComponentMaterializer } from '../components/materialization-seam';
+import { MetadataTrainComponentGraphResolver } from '../components/train-graph-seam';
 
 // ----- Training ---------------------------------------------------------------
 
@@ -79,6 +81,9 @@ export async function buildTrainingDeps(provider: IMetadataProvider, user: UserI
     // Project every trained model into the component graph (root `MJ: ML Components` row +
     // bindings onto real MJ entities/fields). Best-effort by contract — never fails a train.
     componentMaterializer: new MetadataComponentMaterializer(),
+    // Only a pipeline with a ComponentGraph consults this; without it such a pipeline refuses to
+    // train rather than quietly falling back to its root estimator.
+    componentGraphResolver: new MetadataTrainComponentGraphResolver(new LocalArtifactLoader()),
   };
 }
 
@@ -125,7 +130,13 @@ export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
  * loader; the id contract (read by File id) is unchanged.
  */
 export function buildProductionMLInferenceDeps(): MLInferenceDeps {
-  return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new LocalArtifactLoader() };
+  return {
+    modelLoader: new RunViewMLModelLoader(),
+    sidecar: new MJSidecarPredictor(),
+    artifactLoader: new LocalArtifactLoader(),
+    // A model with a `Score Band` component gets its band (and any crossing) on the payload.
+    bandLoader: new RunViewScoreBandLoader(),
+  };
 }
 
 /**

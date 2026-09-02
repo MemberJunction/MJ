@@ -15,6 +15,7 @@
  * mapping to be someone else's decision.
  */
 
+import { LogStatus } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 import { TrainingEngine } from '../training/training-engine';
@@ -27,8 +28,13 @@ import {
   TrainingEngineExperimentTrainer,
   type IPipelineResolver,
 } from '../experiment/seams';
-import type { ExperimentDeps, TrainExperimentInput } from '../experiment/types';
+import type { ExperimentDeps, IWaveStrategist, TrainExperimentInput } from '../experiment/types';
+import { ComponentCombinationWaveStrategist } from '../experiment/component-combination-wave-strategist';
+import { ComponentEngineProfileSource } from '../components/graph-resolver';
+import { MLComponentEngine } from '../components/ml-component-engine';
 import { MetadataComponentMaterializer } from '../components/materialization-seam';
+import { MetadataTrainComponentGraphResolver } from '../components/train-graph-seam';
+import { LocalArtifactLoader } from '../scoring/artifact-loader';
 import { MaterializingPipelineResolver, type IPipelineMaterializer } from '../experiment/materializing-pipeline-resolver';
 import { createTrainingPipeline } from '../agent/create-pipeline';
 import type { PipelineConfig } from '../agent/modeling-plan-to-pipeline';
@@ -81,6 +87,9 @@ export async function buildProductionExperimentDeps(
     // Project every trained model into the component graph (root `MJ: ML Components` row +
     // bindings onto real MJ entities/fields). Best-effort by contract — never fails a train.
     componentMaterializer: new MetadataComponentMaterializer(),
+    // Only a pipeline with a ComponentGraph consults this; without it such a pipeline refuses to
+    // train rather than quietly falling back to its root estimator.
+    componentGraphResolver: new MetadataTrainComponentGraphResolver(new LocalArtifactLoader()),
   };
 
   const trainer = new TrainingEngineExperimentTrainer(
@@ -95,7 +104,39 @@ export async function buildProductionExperimentDeps(
     clock: new SystemClock(),
     contextUser,
     provider,
+    waveStrategist: await buildCombinationStrategist(contextUser, provider),
   };
+}
+
+/**
+ * The production wave strategist — the component-combination search.
+ *
+ * It had none, so `ExperimentOrchestrator` always fell through to `PlanOrderWaveStrategist`, which
+ * sorts the agent's proposals and slices them. Every session therefore ran the plan and stopped:
+ * the search half of the design loop was built, tested, and unreachable.
+ *
+ * Substituting it is safe because it is a strict SUPERSET of plan order — explicitly proposed
+ * experiments are always dispatched first and are never displaced by a generated one. Generation
+ * only begins once the plan is exhausted, which is precisely where plan order gave up.
+ *
+ * The component tree is loaded here so the search knows what each family's knobs are. If that load
+ * fails the strategist is still returned: `profileFor` finds no type, yields no knobs, and the
+ * session behaves EXACTLY as it does today. A missing tree costs exploration, never correctness.
+ */
+async function buildCombinationStrategist(
+  contextUser?: UserInfo,
+  provider?: IMetadataProvider,
+): Promise<IWaveStrategist> {
+  try {
+    await MLComponentEngine.Instance.Config(false, contextUser, provider);
+  } catch (err) {
+    LogStatus(
+      `PredictiveStudio: the component tree could not be loaded, so the combination search has no ` +
+        `hyperparameter knobs to vary and the session will run the plan as proposed ` +
+        `(${err instanceof Error ? err.message : String(err)}).`,
+    );
+  }
+  return new ComponentCombinationWaveStrategist(new ComponentEngineProfileSource());
 }
 
 /**

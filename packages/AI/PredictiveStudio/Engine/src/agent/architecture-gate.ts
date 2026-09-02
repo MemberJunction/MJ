@@ -15,9 +15,15 @@
  *     not be the one committed to. The gate reports already say why; silently training it anyway
  *     would make the pre-pass decorative.
  *
- * Plus one honesty constraint: `reify` and `compose` are *recordable* today but not yet
- * *executable* — the sidecar's `component_graph` execution ships later. The gate says that plainly
- * rather than quietly training the root and pretending the composition happened.
+ * All four decisions are now executable: `compose` with the sidecar's `component_graph` runtime,
+ * and `reify` once the component-combination search became the production wave strategist — a
+ * generalized parent is trained as a family of parameterizations by searching its knobs, which is
+ * exactly what that strategist does.
+ *
+ * `reify` earns one rule of its own. Its whole claim is that the candidates ARE variations of one
+ * parent; if they are not, the decision is a mislabel, and every model trained under it would be
+ * filed against a family it does not belong to. So the claim is CHECKED against the real tree
+ * rather than taken on the Architect's word.
  *
  * Pure except for the optional tree lookup, and callable with no `Architecture` at all — a plan
  * written before the Architect existed passes untouched.
@@ -33,8 +39,13 @@ import { validateArchitectureSpec } from '@memberjunction/predictive-studio-core
 import { validateGraphAgainstTree } from '../components/graph-resolver';
 import type { MLComponentEngine } from '../components/ml-component-engine';
 
-/** The architecture decisions the deterministic pipeline can execute TODAY. */
-export const EXECUTABLE_DECISIONS = ['commit', 'defer'] as const;
+/**
+ * The architecture decisions the deterministic pipeline can execute TODAY.
+ *
+ * `compose` joined the list with the sidecar composition runtime: a validated graph is translated
+ * to drivers, reused components load frozen, and one `MJ: ML Components` row is written per node.
+ */
+export const EXECUTABLE_DECISIONS = ['commit', 'defer', 'reify', 'compose'] as const;
 
 /** Outcome of gating a plan's architecture. */
 export interface ArchitectureGateResult {
@@ -79,6 +90,7 @@ export function gateArchitecture(spec: ModelingPlanSpec, engine?: MLComponentEng
   const reasons: string[] = [
     ...checkAdmissibility(architecture, spec.GateReports ?? []),
     ...checkGraph(architecture, engine),
+    ...checkReified(architecture, engine),
     ...checkExecutable(architecture),
   ];
 
@@ -132,21 +144,53 @@ function checkGraph(architecture: ArchitectureSpec, engine?: MLComponentEngine):
   return result.Findings.filter((f) => f.Severity === 'Error').map((f) => `${f.Path}: ${f.Message}`);
 }
 
+/**
+ * Rule 4: a `reify` decision's candidates must really be descendants of the parent it names.
+ *
+ * "These are all Boosting variants" is the entire content of a reify — it is what distinguishes it
+ * from a `defer` across an arbitrary set. Left unchecked, an Architect could file XGBoost and a
+ * Logistic Regression under `Boosting` and every model trained in that session would be recorded as
+ * belonging to a family it is not in. The tree already knows the answer, so ask it.
+ *
+ * Needs the engine to check; without one the claim is left alone rather than assumed true, and the
+ * decision still executes — the same posture `checkGraph` takes.
+ */
+function checkReified(architecture: ArchitectureSpec, engine?: MLComponentEngine): string[] {
+  if (architecture.Decision !== 'reify' || !architecture.ReifiedUnderComponentTypeRef || !engine) {
+    return [];
+  }
+  const parentRef = architecture.ReifiedUnderComponentTypeRef;
+  const parent = engine.FindTypeByName(parentRef);
+  if (!parent) {
+    return [`The architecture reifies under '${parentRef}', which is not a component type in the tree.`];
+  }
+
+  const reasons: string[] = [];
+  for (const candidate of architecture.Candidates) {
+    const type = engine.FindTypeByName(candidate.ComponentTypeRef);
+    if (!type) {
+      reasons.push(`'${candidate.ComponentTypeRef}' was proposed but is not a component type in the tree.`);
+      continue;
+    }
+    if (!engine.IsDescendantOf(type.ID, parent.ID)) {
+      reasons.push(
+        `'${candidate.ComponentTypeRef}' is not a '${parent.Name}', so the candidates are not variations of one ` +
+          `parent. Reify under their real common ancestor, or defer across them instead.`,
+      );
+    }
+  }
+  return reasons;
+}
+
 /** The honesty constraint: say what is not built yet rather than silently doing something else. */
 function checkExecutable(architecture: ArchitectureSpec): string[] {
   if ((EXECUTABLE_DECISIONS as readonly string[]).includes(architecture.Decision)) {
     return [];
   }
-  if (architecture.Decision === 'reify') {
-    return [
-      "A 'reify' architecture is recorded but cannot be trained yet — training a generalized parent as a family " +
-        'of parameterizations ships with the composition runtime. Commit to one of its concrete descendants, or ' +
-        'defer across them, to build now.',
-    ];
-  }
+  // Every decision in the union is executable today; this remains as the guard for whatever is
+  // added to `ArchitectureDecision` next, so a new kind cannot silently execute as something else.
   return [
-    "A 'compose' architecture is recorded but cannot be trained yet — executing a component graph (wrappers, " +
-      'stacks, frozen reuse) ships with the sidecar composition runtime. The proposal is kept on the plan; commit ' +
-      'to a single family, or defer across several, to build now.',
+    `A '${architecture.Decision}' architecture is recorded but there is no path that can train it yet. ` +
+      `Commit to a concrete component type, or defer across several, to build now.`,
   ];
 }
