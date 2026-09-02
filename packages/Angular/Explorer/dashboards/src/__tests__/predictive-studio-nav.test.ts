@@ -15,7 +15,7 @@ describe('predictive-studio.nav — door section descriptors', () => {
   it('Studio hosts the build/run sections; Models hosts the lifecycle sections (no overlap, no Predictions)', () => {
     const studio = STUDIO_SECTIONS.map((s) => s.key);
     const models = MODELS_SECTIONS.map((s) => s.key);
-    expect(studio).toEqual(['home', 'pipelines', 'catalog', 'components', 'experiments', 'compare']);
+    expect(studio).toEqual(['home', 'pipelines', 'catalog', 'components', 'compose', 'experiments', 'compare']);
     expect(models).toEqual(['registry', 'production']);
     // disjoint — a section lives in exactly one door
     expect(studio.filter((k) => models.includes(k))).toEqual([]);
@@ -31,7 +31,8 @@ describe('predictive-studio.nav — door section descriptors', () => {
   it('groups Studio as ungrouped Overview, then Build, then Run (first-seen order)', () => {
     expect(sectionGroups(STUDIO_SECTIONS)).toEqual(['', 'Build', 'Run']);
     expect(sectionsInGroup(STUDIO_SECTIONS, '').map((s) => s.key)).toEqual(['home']);
-    expect(sectionsInGroup(STUDIO_SECTIONS, 'Build').map((s) => s.key)).toEqual(['pipelines', 'catalog', 'components']);
+    // Compose sits directly after Components — it is what you DO with them.
+    expect(sectionsInGroup(STUDIO_SECTIONS, 'Build').map((s) => s.key)).toEqual(['pipelines', 'catalog', 'components', 'compose']);
     expect(sectionsInGroup(STUDIO_SECTIONS, 'Run').map((s) => s.key)).toEqual(['experiments', 'compare']);
   });
 

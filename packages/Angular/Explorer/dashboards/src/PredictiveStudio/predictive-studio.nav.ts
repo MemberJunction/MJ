@@ -23,6 +23,7 @@ export const STUDIO_SECTIONS: readonly PSSection[] = [
   { key: 'pipelines', label: 'Training Pipelines', icon: 'fa-solid fa-diagram-project', group: 'Build' },
   { key: 'catalog', label: 'Algorithm Catalog', icon: 'fa-solid fa-shapes', group: 'Build' },
   { key: 'components', label: 'Components', icon: 'fa-solid fa-sitemap', group: 'Build' },
+  { key: 'compose', label: 'Compose', icon: 'fa-solid fa-puzzle-piece', group: 'Build' },
   { key: 'experiments', label: 'Experiments', icon: 'fa-solid fa-flask', group: 'Run' },
   { key: 'compare', label: 'Compare Runs', icon: 'fa-solid fa-chart-column', group: 'Run' },
 ];
