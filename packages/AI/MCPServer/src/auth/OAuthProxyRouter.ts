@@ -253,13 +253,20 @@ function handleAuthorizeEndpoint(
   // Validate client
   const client = clientRegistry.getClient(client_id);
   if (!client) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_client', 'Unknown client_id', state);
+    // SECURITY: do NOT redirect the error to redirect_uri here — the client is unknown, so
+    // redirect_uri is unvalidated and attacker-controlled. Redirecting would be an open redirect
+    // (phishing on the deployment's trusted domain). Render a local error page instead. Per the
+    // OAuth 2.0 Security BCP, errors may only be sent to a redirect_uri once it is validated.
+    sendErrorPage(res, 'Invalid Request', 'Unknown client_id');
     return;
   }
 
   // Validate redirect URI
   if (!clientRegistry.validateRedirectUri(client, redirect_uri)) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_request', 'redirect_uri not registered for this client', state);
+    // SECURITY: redirect_uri is not registered for this client — treat it as untrusted and render
+    // locally rather than 302-ing the browser to it (open redirect). Only AFTER this point is
+    // redirect_uri validated, so later errors may safely use sendAuthorizationError.
+    sendErrorPage(res, 'Invalid Request', 'redirect_uri not registered for this client');
     return;
   }
 
@@ -1113,6 +1120,19 @@ async function handlePostConsentEndpoint(
   } else if (Array.isArray(formScopes)) {
     grantedScopes = formScopes;
   }
+
+  // SECURITY: the granted scopes come from a client-submitted form and are signed straight into
+  // the authorization code / JWT. Intersect them with the scopes that were actually offered on
+  // this consent screen (consentRequest.availableScopes) so a tampered POST cannot mint a token
+  // carrying scopes the user was never shown — the authoritative set is the server's, not the
+  // form body's. Harmless today (availableScopes defaults to all active scopes) but load-bearing
+  // the moment availableScopes is narrowed per-user/per-client.
+  const offeredScopePaths = new Set((consentRequest.availableScopes ?? []).map((s) => s.FullPath));
+  const rejectedScopes = grantedScopes.filter((s) => !offeredScopePaths.has(s));
+  if (rejectedScopes.length > 0) {
+    console.warn(`[OAuth Proxy] Dropping ${rejectedScopes.length} submitted scope(s) not offered on the consent screen: ${rejectedScopes.join(', ')}`);
+  }
+  grantedScopes = grantedScopes.filter((s) => offeredScopePaths.has(s));
 
   // If no scopes selected, log warning but still issue JWT with empty scopes
   // This allows the user to authenticate without any specific permissions
