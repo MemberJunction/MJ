@@ -59,8 +59,31 @@ export interface MJConfig {
   };
   /** Schema name for MemberJunction core tables (defaults to __mj) */
   mjCoreSchema?: string;
+  /**
+   * Installed dynamic server packages (Open Apps) from mj.config.cjs. Each enabled entry
+   * is dynamically imported during provider initialization so its `@RegisterClass` entity
+   * subclasses (e.g. `MJ_BizApps_Common: *`, `BC: *`) are registered before any sync
+   * operation instantiates entity objects. Without this, non-`MJ:`-namespace entities
+   * fall back to bare BaseEntity and primary-key reads silently return undefined (#3415).
+   */
+  dynamicPackages?: {
+    server?: DynamicServerPackageConfig[];
+  };
   /** Allow additional properties for extensibility */
   [key: string]: any;
+}
+
+/**
+ * One `dynamicPackages.server` entry from mj.config.cjs. Shape shared with
+ * ServerBootstrap's loader — MetadataSync consumes the same config section.
+ */
+export interface DynamicServerPackageConfig {
+  /** npm package name to dynamically import (side effect: class registration) */
+  PackageName: string;
+  /** Optional exported function to invoke after import (a registration kicker) */
+  StartupExport?: string;
+  /** Set false to skip the entry without removing it from config */
+  Enabled?: boolean;
 }
 
 /**
