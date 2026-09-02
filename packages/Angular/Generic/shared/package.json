@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-shared-generic",
-  "version": "6.1.0-edge.4",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Generic Angular Shared Package - utility services and reusable elements used in any Angular application.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -24,7 +24,7 @@
   "devDependencies": {
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
-    "@memberjunction/ng-test-utils": "6.1.0-edge.4",
+    "@memberjunction/ng-test-utils": "6.1.0-edge.5",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
@@ -34,11 +34,11 @@
     "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.4",
-    "@memberjunction/ng-base-types": "6.1.0-edge.4",
-    "@memberjunction/core-entities": "6.1.0-edge.4",
-    "@memberjunction/global": "6.1.0-edge.4",
-    "@memberjunction/theme-engine": "6.1.0-edge.4",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/ng-base-types": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/theme-engine": "6.1.0-edge.5",
     "dompurify": "^3.3.0",
     "tslib": "^2.8.1"
   },

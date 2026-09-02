@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-huggingface",
   "type": "module",
-  "version": "6.1.0-edge.4",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction Wrapper for HuggingFace speech-to-speech - self-hosted realtime (voice) driver (OpenAI-Realtime-compatible)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,9 +19,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.4",
-    "@memberjunction/global": "6.1.0-edge.4",
-    "@memberjunction/ai-openai": "6.1.0-edge.4",
+    "@memberjunction/ai": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/ai-openai": "6.1.0-edge.5",
     "openai": "6.18.0"
   },
   "repository": {

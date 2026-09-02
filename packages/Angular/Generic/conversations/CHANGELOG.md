@@ -1,5 +1,134 @@
 # @memberjunction/ng-conversations
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 22ec804: Clickable record-link tokens in Chat messages (`type: "record"`). Agents emit `@{…}` JSON; the renderer turns it into a pill that opens the row via OpenEntityRecord, including composite primary keys. `name` is optional — omit it for an icon-only pill when surrounding prose already names the record. Loop prompt teaches the grammar and asks for world-class UX: prefer icon-only, one citation per record per section.
+- 71ccf29: Realtime: mint and run become separable.
+
+  `RealtimeSessionService.StartRealtimeSession` fused two responsibilities — **minting** the session through the `StartRealtimeClientSession` mutation, and **running** it: resolving the driver from the result's `Provider`, booting it with the ephemeral token, wiring tool and transcript relays, connection state and teardown. A host that must mint the session itself, because it attaches server-side context the stock mutation cannot carry, had no way to reuse the second half. The public API was all-or-nothing.
+
+  The only way through was to subclass `GraphQLDataProvider`, install it on the service's public `Provider` seam, intercept the single armed mint operation, redirect it to the host's own mutation and reshape the reply into the ten fields the client consumes. That works, but it depends on an implementation detail nobody promised — that _every_ GraphQL call the service makes goes through `Provider` — so a refactor entirely reasonable on MJ's own terms would break such a host silently.
+
+  `StartRealtimeSessionFromResult(result, options)` exposes the run half directly, with `StartRealtimeClientSessionResult` and `RealtimeSessionRunOptions` now exported. `StartRealtimeSession` becomes `mintSession` + the new method, so **existing callers see no behavioural change**.
+
+- e1ebab9: Remote Browser: the agent is told when the page moves, whoever moved it (#3496)
+
+  A user takes over the browser and navigates. Asked "what do I have open right now?", the agent
+  confidently describes the **previous** page and corrects only when told to look again.
+
+  `RemoteBrowserChannel` pushed its `[browser] current page:` note from exactly two call sites, both
+  immediately after a server action the model itself initiated. Nothing observed a page change from any
+  other origin: human-relayed input drove the page without producing a note, and pushed screencast
+  frames carried only image bytes. The effective rule was **a surface change the agent did not cause is
+  invisible to it** — not stale caching, it was never told. Human takeover is on by default for
+  `Collaborative` providers, so the default configuration was the broken one, and the failure mode was
+  confident misdescription rather than a visible error.
+
+  Every observation now funnels through one `notePageChange(url, cause)`, so "the agent hears about the
+  page whenever it MOVES" is a property of that method rather than of where callers happen to sit. It
+  is fed from three places: the agent's own actions and goals (as before), the perception poll (which
+  already carried the URL — only the surface read it), and pushed screencast frames, which now carry
+  `currentUrl` because under streaming the poll is stopped and frames were the only thing seeing the
+  page.
+
+  `cause` is the part the agent could never work out for itself. A change it made reads as before; a
+  change it did not reads _"the page changed to X — you did not navigate here, so someone else is
+  driving"_, which is the difference between knowing the page moved and knowing it is no longer the one
+  moving it. The first page of a session is announced plainly: a session opening somewhere is nobody's
+  takeover. Unchanged URLs are silent, which is a requirement rather than an optimisation — the poll
+  runs every ~700ms.
+
+  `currentUrl` on the frame envelope is optional on the client, so an older MJAPI behaves exactly as it
+  did rather than reading a missing field as "the page has no URL". `GetCurrentUrl()` is a synchronous
+  last-known read, so it costs nothing per frame.
+
+  `cause` alone cannot settle attribution, because a pushed frame or a perception poll only says the
+  page moved — never who moved it. Two cases make that decisive rather than pedantic: under streaming,
+  frames of the new page are pushed while the action's mutation is still in flight, so the observation
+  reliably lands BEFORE the URL is returned; and `browser_AchieveGoal` drives an autonomous loop
+  server-side for minutes with nothing returned until it ends. Both would have reported the agent's own
+  navigation back to it as somebody else's takeover — the original lie, inverted. So an agent-initiated
+  operation raises a depth counter for its whole span (a counter, not a flag: goals and actions overlap,
+  and `finally` closes the window on a thrown transport error too), and a change observed inside that
+  window is the agent's own whichever feed spotted it first.
+
+### Patch Changes
+
+- dd6d1f0: The realtime client says it is alive, so the janitor stops reaping live calls.
+
+  `SessionJanitor` force-closed sessions people were actively talking to — three consecutive sessions with conversation throughout, each closed roughly 15 minutes after the last _server-side_ event. This is topology rather than a janitor defect: in the client-direct realtime path audio goes browser → provider over WebRTC, so the server sees the mint, a few early channel actions, then nothing. `RecordActivity` is only reached by server-side events, so `LastActiveAt` freezes about 45 seconds in and never moves again, and an active call is indistinguishable from an abandoned one. A session whose channels are all client-side goes quiet from the server's point of view almost immediately.
+
+  The server half already existed and was simply never connected: `SessionManager.Heartbeat` (coalesced writes, reactivates `Idle → Active`, refuses a `Closed` session) and the `AgentSessionHeartbeat` mutation with its ownership check. A grep for that mutation across the tree returned exactly one hit — its own definition. This change is the missing caller, not new plumbing: a pulse in `RealtimeSessionService`, started where `SessionStarted$` is emitted (the point at which the session is connected _and_ `agentSessionId` is set) and stopped first thing in teardown.
+
+  Three details worth knowing. The 60s interval is chosen against both neighbours — comfortably under the 15-minute close threshold, so several beats must be missed in a row before a live session is reaped, and well above the server's write-coalescing window, so the database sees a trickle rather than a stream. The session id is read at fire time rather than captured at start, so a beat landing during teardown finds `null` and does nothing instead of resurrecting a row that was just closed. And the pulse is stopped _before_ anything else in teardown, so a beat racing the close cannot re-stamp `LastActiveAt` on a session being deliberately ended.
+
+- a8710bf: Realtime: the agent can speak FIRST
+
+  Every existing path into the live model's voice is reactive — the human spoke, or a channel
+  reported input. A host that needs the agent to open the conversation (an interviewer greeting a
+  candidate, a guide introducing a task) had nothing to call, so the session connected and both
+  sides waited for the other. The service already had the primitive; it was private and reachable
+  only from a channel.
+
+  `RealtimeSessionService.RequestSpokenOpening(instructions)` exposes it at the session level. The
+  instructions say what to open with, in the host's words; the model still speaks in its own voice
+  and persona.
+
+  It returns whether the request was DELIVERED, which is the one way it deliberately differs from
+  `SendContextNote` beside it: a dropped context note costs the model a little perception, while a
+  dropped opening line is a session that sits in silence. `false` means no session was live — a host
+  that asked before the connection reached a speaking state can retry, but only if it is told.
+
+- d7feeae: Stop Explorer from showing "Unknown error" with a stuck Running timer when a Skip/sub-agent transport path fails. Pass the real error through invokeSubAgent, keep In-Progress when the agent may still be running, and persist Failed/Error on the run and conversation detail if executeAIAgent throws.
+- Updated dependencies [4273317]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [3c591a3]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [e93f221]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [905820a]
+  - @memberjunction/ng-shared-generic@6.1.0-edge.5
+  - @memberjunction/ng-whiteboard@6.1.0-edge.5
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ng-ui-components@6.1.0-edge.5
+  - @memberjunction/ng-forms@6.1.0-edge.5
+  - @memberjunction/ng-markdown@6.1.0-edge.5
+  - @memberjunction/ng-artifacts@6.1.0-edge.5
+  - @memberjunction/conversations-runtime@6.1.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.5
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.5
+  - @memberjunction/ng-tasks@6.1.0-edge.5
+  - @memberjunction/ng-user-routines@6.1.0-edge.5
+  - @memberjunction/ai-realtime-client@6.1.0-edge.5
+  - @memberjunction/ng-testing@6.1.0-edge.5
+  - @memberjunction/ng-base-types@6.1.0-edge.5
+  - @memberjunction/ng-code-editor@6.1.0-edge.5
+  - @memberjunction/ng-notifications@6.1.0-edge.5
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.5
+  - @memberjunction/ai-agent-client@6.1.0-edge.5
+  - @memberjunction/ng-composer@6.1.0-edge.5
+  - @memberjunction/ng-container-directives@6.1.0-edge.5
+  - @memberjunction/ng-media-player@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+  - @memberjunction/ng-agent-client@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Patch Changes
