@@ -17,7 +17,8 @@ export class MJIdentityClaimTypeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'claimTypeDefinition', sectionName: 'Claim Type Definition', isExpanded: true },
-            { sectionKey: 'driverConfiguration', sectionName: 'Driver Configuration', isExpanded: true },
+            { sectionKey: 'implementationDetails', sectionName: 'Implementation Details', isExpanded: true },
+            { sectionKey: 'lifecycleSettings', sectionName: 'Lifecycle Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false }
         ]);

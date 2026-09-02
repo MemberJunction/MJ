@@ -18,6 +18,7 @@ export class MJAPIScopeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'scopeDefinition', sectionName: 'Scope Definition', isExpanded: true },
             { sectionKey: 'scopeHierarchy', sectionName: 'Scope Hierarchy', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAPIApplicationScopes', sectionName: 'API Application Scopes', isExpanded: false },
             { sectionKey: 'mJAPIKeyScopes', sectionName: 'API Key Scopes', isExpanded: false },

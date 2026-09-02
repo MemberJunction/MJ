@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Claim Type Definition Section -->
+    <!-- Breed Information Section -->
     <mj-collapsible-panel
-        SectionKey="claimTypeDefinition"
-        SectionName="Claim Type Definition"
+        SectionKey="breedInformation"
+        SectionName="Breed Information"
         Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
@@ -28,51 +28,23 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Implementation Details Section -->
-    <mj-collapsible-panel
-        SectionKey="implementationDetails"
-        SectionName="Implementation Details"
-        Icon="fa fa-cogs"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DriverClass"
-            Type="textbox"
+            FieldName="Species"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="code"
+            FieldName="SizeCategory"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Lifecycle Settings Section -->
-    <mj-collapsible-panel
-        SectionKey="lifecycleSettings"
-        SectionName="Lifecycle Settings"
-        Icon="fa fa-hourglass-half"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="DefaultExpirationDays"
+            FieldName="TypicalLifespanYears"
             Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -92,7 +64,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -120,25 +92,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Identity Claims Section -->
+    <!-- Animals Section -->
     <mj-collapsible-panel
-        SectionKey="mJIdentityClaims"
-        SectionName="Identity Claims"
-        Icon="fa fa-id-card"
+        SectionKey="mJAnimals"
+        SectionName="Animals"
+        Icon="fa fa-paw"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJIdentityClaims')"
+        [BadgeCount]="GetSectionRowCount('mJAnimals')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Identity Claims','ClaimTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Identity Claims','ClaimTypeID')"
-                [AllowLoad]="IsSectionExpanded('mJIdentityClaims')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Animals','BreedID')"
+                [NewRecordValues]="NewRecordValues('MJ: Animals','BreedID')"
+                [AllowLoad]="IsSectionExpanded('mJAnimals')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJIdentityClaims', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAnimals', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

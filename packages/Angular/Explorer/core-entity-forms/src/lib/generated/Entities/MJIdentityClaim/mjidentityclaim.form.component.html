@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="claimDetails"
         SectionName="Claim Details"
-        Icon="fa fa-id-card"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -35,22 +35,14 @@
             [FormContext]="formContext"
             LinkType="Email"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Related Resources Section -->
+    <!-- Target Resource Section -->
     <mj-collapsible-panel
-        SectionKey="relatedResources"
-        SectionName="Related Resources"
-        Icon="fa fa-link"
+        SectionKey="targetResource"
+        SectionName="Target Resource"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -82,10 +74,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Configuration Section -->
+    <!-- Technical Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="configuration"
-        SectionName="Configuration"
+        SectionKey="technicalConfiguration"
+        SectionName="Technical Configuration"
         Icon="fa fa-cogs"
         [Form]="this"
         [FormContext]="formContext">
@@ -108,13 +100,21 @@
 
     </mj-collapsible-panel>
 
-    <!-- Timeline Section -->
+    <!-- Claim Lifecycle Section -->
     <mj-collapsible-panel
-        SectionKey="timeline"
-        SectionName="Timeline"
-        Icon="fa fa-calendar-alt"
+        SectionKey="claimLifecycle"
+        SectionName="Claim Lifecycle"
+        Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

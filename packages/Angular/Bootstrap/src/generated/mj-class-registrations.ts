@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (407 classes)
+// @memberjunction/core-entities (409 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -130,6 +130,7 @@ import {
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAnimalEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -150,6 +151,7 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBreedEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -857,6 +859,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAnimalEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -877,6 +880,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBreedEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1405,7 +1409,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 647;
+export const CLASS_REGISTRATIONS_COUNT = 649;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

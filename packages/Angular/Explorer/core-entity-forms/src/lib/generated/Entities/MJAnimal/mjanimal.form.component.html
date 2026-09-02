@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Category Definition Section -->
+    <!-- Animal Profile Section -->
     <mj-collapsible-panel
-        SectionKey="categoryDefinition"
-        SectionName="Category Definition"
-        Icon="fa fa-info-circle"
+        SectionKey="animalProfile"
+        SectionName="Animal Profile"
+        Icon="fa fa-dog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -28,16 +28,51 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="Species"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AssignmentStrategy"
-            Type="textarea"
+            FieldName="BreedID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Sex"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EstimatedBirthDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Identification and Status Section -->
+    <mj-collapsible-panel
+        SectionKey="identificationAndStatus"
+        SectionName="Identification and Status"
+        Icon="fa fa-id-card"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MicrochipNumber"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -52,88 +87,60 @@
 
     </mj-collapsible-panel>
 
-    <!-- Hierarchy Section -->
+    <!-- Intake Details Section -->
     <mj-collapsible-panel
-        SectionKey="hierarchy"
-        SectionName="Hierarchy"
-        Icon="fa fa-info-circle"
+        SectionKey="intakeDetails"
+        SectionName="Intake Details"
+        Icon="fa fa-sign-in-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ParentID"
-            Type="textbox"
+            FieldName="IntakeDate"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="RootParentID"
-            Type="textbox"
+            FieldName="IntakeReason"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Storage Configuration Section -->
+    <!-- Health and Description Section -->
     <mj-collapsible-panel
-        SectionKey="storageConfiguration"
-        SectionName="Storage Configuration"
-        Icon="fa fa-hdd"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="DefaultStorageAccountID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Details Section -->
-    <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="healthAndDescription"
+        SectionName="Health and Description"
+        Icon="fa fa-notes-medical"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ParentIDDepth"
-            Type="textbox"
+            FieldName="WeightKg"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ParentIDPath"
-            Type="textbox"
+            FieldName="Description"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ParentIDIsLeaf"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ParentIDChildCount"
-            Type="textbox"
+            FieldName="PhotoBase64"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -167,60 +174,6 @@
     </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
-
-    <!-- ========================================
-         RELATED ENTITY PANELS
-         ======================================== -->
-
-    <!-- AI Agent Categories Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentCategories"
-        SectionName="AI Agent Categories"
-        Icon="fa fa-sitemap"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentCategories')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Categories','ParentID')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentCategories')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentCategories', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AI Agents Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgents"
-        SectionName="AI Agents"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgents')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agents','CategoryID')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgents')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgents', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
