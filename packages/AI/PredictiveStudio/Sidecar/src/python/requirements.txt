@@ -12,6 +12,9 @@ scikit-learn==1.4.2
 numpy==1.26.4
 pandas==2.2.2
 joblib==1.4.2
+# Optional driver for the `sequence` problem type. Prebuilt wheels on macOS/manylinux; guarded at
+# import like xgboost/lightgbm, so a build without it simply has no `hmm` driver.
+hmmlearn==0.3.2
 
 # Test + smoke deps
 pytest==8.2.2
