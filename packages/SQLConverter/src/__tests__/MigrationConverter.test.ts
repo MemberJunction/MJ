@@ -189,6 +189,84 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
   });
 });
 
+describe('convertMigration — BIT literals in surviving entity-registration INSERTs', () => {
+  // CodeGen registers a new entity by INSERTing into Entity / EntityField / EntityPermission —
+  // long-lived core-metadata tables that no migration re-creates. The AST dialect therefore never
+  // sees a CREATE TABLE for them, has no column types to infer, and emits a SQL Server BIT literal
+  // as the integer it looks like. PostgreSQL then rejects the INSERT at APPLY time with
+  // `column "IncludeInAPI" is of type boolean but expression is of type integer` — which the
+  // converter's own "0 gaps" summary cannot catch, so every migration registering a new entity
+  // produced a file that failed on its first apply.
+  //
+  // The transpiler stub emits PG-shaped SQL that still carries the Flyway schema macro, because
+  // that is what the real MJPostgresTranspiler hands back — substitution happens in assemblePgSQL.
+  const emitting = (out: string): TSQLToPGTranspiler => ({
+    transpile: async () => ({ sql: [out], unhandled: [] }),
+  });
+
+  const entityInsert = [
+    'INSERT INTO ${flyway:defaultSchema}."Entity" (',
+    '  "ID",',
+    '  "Name",',
+    '  "IncludeInAPI",',
+    '  "AllowCreateAPI",',
+    '  "AuditViewRuns",',
+    '  "UserViewMaxRows"',
+    ')',
+    'VALUES',
+    "  ('0dca1987-4d89-4c8f-81b3-b47a8019af97', 'MJ: AI Usage Types', 1, 1, 0, 1000);",
+  ].join('\n');
+
+  const convert = (emitted: string) =>
+    convertMigration('CREATE TABLE [__mj].[AIUsageType] ( [ID] UNIQUEIDENTIFIER NOT NULL );', 'V_AIUsageType.sql', {
+      transpiler: emitting(emitted),
+    });
+
+  it('rewrites BIT 0/1 to TRUE/FALSE for known-boolean core-metadata columns', async () => {
+    const r = await convert(entityInsert);
+    // IncludeInAPI and AllowCreateAPI were 1; AuditViewRuns was 0.
+    expect(r.pgSQL).toContain('TRUE');
+    expect(r.pgSQL).toContain('FALSE');
+    const values = r.pgSQL.slice(r.pgSQL.indexOf("'MJ: AI Usage Types'"));
+    expect(values).toMatch(/TRUE\s*,\s*TRUE\s*,\s*FALSE/);
+  });
+
+  it('leaves a non-boolean integer column alone', async () => {
+    const r = await convert(entityInsert);
+    // UserViewMaxRows is an integer column that happens to sit in the same tuple. Rewriting by
+    // ordinal position — not by "looks like a bit" — is what keeps it intact.
+    expect(r.pgSQL).toContain('1000');
+    expect(r.pgSQL).not.toMatch(/1000\s*::\s*boolean/i);
+  });
+
+  it('runs AFTER schema substitution, not before', async () => {
+    // The ordering is load-bearing and was wrong in the first cut of this fix. The INSERT matcher
+    // keys on a `schema.Table` reference whose schema is word characters; while the table is still
+    // `${flyway:defaultSchema}."Entity"` that pattern matches nothing, so an earlier call silently
+    // returns the body unchanged and the coercion appears to do nothing at all. Asserting on a
+    // macro-carrying input is what pins the order — a regression would leave the 1s as integers.
+    const r = await convert(entityInsert);
+    expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
+    expect(r.pgSQL).toContain('__mj."Entity"');
+    expect(r.pgSQL).not.toMatch(/'MJ: AI Usage Types',\s*1,/);
+  });
+
+  it('does not touch a table outside the core-metadata catalog', async () => {
+    // The catalog is an allow-list of tables whose column types are known. An app table with a
+    // column that merely SHARES a name must not be rewritten on that basis.
+    const appInsert = [
+      'INSERT INTO ${flyway:defaultSchema}."WidgetSetting" (',
+      '  "ID",',
+      '  "IncludeInAPI"',
+      ')',
+      'VALUES',
+      "  ('11111111-1111-4111-8111-111111111111', 1);",
+    ].join('\n');
+    const r = await convert(appInsert);
+    expect(r.pgSQL).toMatch(/'11111111-1111-4111-8111-111111111111',\s*1/);
+  });
+});
+
 describe('convertMigration', () => {
   it('transpiles regular DDL and drops the CodeGen block', async () => {
     const sql = [

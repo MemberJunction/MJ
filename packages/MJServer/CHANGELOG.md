@@ -1,5 +1,443 @@
 # Change Log - @memberjunction/server
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 0d1f748: Remote Browser: a dead browser handle now heals instead of poisoning the session (#3598)
+
+  A surface's browser can disappear without the engine being told — an external Chrome closed, a
+  backend container recycled, a CDP target lost. `RemoteBrowserEngine` kept the handle in its live map,
+  so `StartSessionForAgentSession` handed back the corpse and every later call threw
+  `Browser not launched. Call Launch() before using the adapter.` for the rest of the session. Observed
+  live: 232 of them in one MJAPI run, with the voice agent saying "the shared browser session isn't
+  launched right now" indefinitely while the pane sat frozen on its last good frame.
+
+  `RecoverDeadAgentSession(agentSessionID, error, opts)` discards the dead mapping, launches one
+  replacement, and re-attaches the screencast. The caller hands over the error it already caught and
+  does not decide what "dead" means — that lives in `IsDeadBrowserHandleError`, a closed list of
+  "the browser or its transport is gone". Anything unrecognised is treated as a real answer from a live
+  browser and reported exactly as it is today, because the false-positive cost is a healthy browser
+  losing its cookies, login and scroll position over a bad selector.
+
+  Re-attaching the view is half the fix, not a nicety: healing the backend alone is worse than the
+  original bug, because the client asked for a screencast once at bind time and would keep watching the
+  discarded session while the agent truthfully narrated a page the person could not see. The engine now
+  remembers each session's frame sink so the replacement can be re-piped to it — and a screencast the
+  host deliberately stopped is never resurrected.
+
+  Bounded in both directions: concurrent fault reports (the ~700ms snapshot poll and the next agent
+  action both meet the dead handle) coalesce onto one relaunch rather than each launching their own,
+  and a surface gets at most `MAX_DEAD_HANDLE_RECOVERIES` (3) before the engine logs that it is giving
+  up. A browser that dies on arrival should surface as a visible fault, never as a hang plus a stream
+  of orphaned Chromes.
+
+  Both callers that meet a dead handle report it. `RemoteBrowserSnapshot` — the poll that almost always
+  discovers the fault first — now reports it instead of only degrading around it, and
+  `ExecuteRemoteBrowserAction` reports it too and re-runs the action against the replacement. The action
+  path matters on its own: a surface nobody is watching has no poll to discover anything, so wiring only
+  the poll would leave exactly the agent-driven case in the issue unhealed. Re-running is safe precisely
+  because the handle was dead — the action never reached a browser, so it cannot run twice — and a
+  `navigate` therefore heals in place, while a click or a type is told, in words the agent can act on,
+  that its browser was replaced and is now on a blank page.
+
+- 6a06c80: Remote Browser: an agent session can now hold more than one browser, named by `instanceKey` (#3531)
+
+  `RemoteBrowserEngine` keyed its agent-session map on the agent session id alone, which made "one
+  remote browser per agent session" a framework invariant nothing could opt out of. A second surface's
+  lazy start found the first one's mapping and returned it, so both surfaces drove the same Chrome:
+  one live view, one screencast, one audio stream, and a `StopScreencast` from either tore down the
+  other's. Callers had no way to say which browser they meant, because there was only ever one.
+
+  `StartSessionForAgentSession`, `GetSessionForAgentSession`, `EndSessionForAgentSession` and
+  `AchieveGoal` (via `AchieveGoalParams.InstanceKey`) now take an optional `instanceKey` that names a
+  browser _within_ the agent session, and the six `RemoteBrowserActionResolver` mutations that address
+  a live session — `InterpretRemoteBrowserPage`, `RemoteBrowserSnapshot`, `StopRemoteBrowserScreencast`,
+  `StopRemoteBrowserAudioStream`, `RelayRemoteBrowserHumanInput`, `GetRemoteBrowserSelection` — accept
+  and forward it.
+
+  **Omitting it is exactly today's behaviour**, and that is load-bearing rather than incidental: the
+  key is composed as `agentSessionID` alone when no name is given, so every existing caller keeps
+  resolving the single unnamed instance and the pre-existing agent-session tests pass unchanged. An
+  empty or whitespace key is the unnamed instance too, so a caller threading an absent value through
+  as `''` lands where it did before the argument existed. Keys are trimmed and lowercased — the value
+  is typed by hand into a channel config, and `Primary` versus `primary` being two browsers would be a
+  spelling trap.
+
+  The composite stays scoped to the agent session (`id::name`), so two concurrent sessions that both
+  name their second surface `resume` get their own browsers rather than colliding. Start coalescing —
+  the fix that stopped four near-simultaneous callers launching four Chromes — is keyed the same way,
+  so it still collapses a race on one instance without collapsing two _different_ surfaces into one.
+
+- e1ebab9: Remote Browser: the agent is told when the page moves, whoever moved it (#3496)
+
+  A user takes over the browser and navigates. Asked "what do I have open right now?", the agent
+  confidently describes the **previous** page and corrects only when told to look again.
+
+  `RemoteBrowserChannel` pushed its `[browser] current page:` note from exactly two call sites, both
+  immediately after a server action the model itself initiated. Nothing observed a page change from any
+  other origin: human-relayed input drove the page without producing a note, and pushed screencast
+  frames carried only image bytes. The effective rule was **a surface change the agent did not cause is
+  invisible to it** — not stale caching, it was never told. Human takeover is on by default for
+  `Collaborative` providers, so the default configuration was the broken one, and the failure mode was
+  confident misdescription rather than a visible error.
+
+  Every observation now funnels through one `notePageChange(url, cause)`, so "the agent hears about the
+  page whenever it MOVES" is a property of that method rather than of where callers happen to sit. It
+  is fed from three places: the agent's own actions and goals (as before), the perception poll (which
+  already carried the URL — only the surface read it), and pushed screencast frames, which now carry
+  `currentUrl` because under streaming the poll is stopped and frames were the only thing seeing the
+  page.
+
+  `cause` is the part the agent could never work out for itself. A change it made reads as before; a
+  change it did not reads _"the page changed to X — you did not navigate here, so someone else is
+  driving"_, which is the difference between knowing the page moved and knowing it is no longer the one
+  moving it. The first page of a session is announced plainly: a session opening somewhere is nobody's
+  takeover. Unchanged URLs are silent, which is a requirement rather than an optimisation — the poll
+  runs every ~700ms.
+
+  `currentUrl` on the frame envelope is optional on the client, so an older MJAPI behaves exactly as it
+  did rather than reading a missing field as "the page has no URL". `GetCurrentUrl()` is a synchronous
+  last-known read, so it costs nothing per frame.
+
+  `cause` alone cannot settle attribution, because a pushed frame or a perception poll only says the
+  page moved — never who moved it. Two cases make that decisive rather than pedantic: under streaming,
+  frames of the new page are pushed while the action's mutation is still in flight, so the observation
+  reliably lands BEFORE the URL is returned; and `browser_AchieveGoal` drives an autonomous loop
+  server-side for minutes with nothing returned until it ends. Both would have reported the agent's own
+  navigation back to it as somebody else's takeover — the original lie, inverted. So an agent-initiated
+  operation raises a depth counter for its whole span (a counter, not a flag: goals and actions overlap,
+  and `finally` closes the window on a thrown transport error too), and a change observed inside that
+  window is the agent's own whichever feed spotted it first.
+
+### Patch Changes
+
+- 8206993: `configOverridesJson` names the keys it is about to ignore.
+
+  `StartRealtimeClientSession` accepts `configOverridesJson`, gates it behind the `Realtime: Advanced Session Controls` authorization, and threads it through `PrepareClientSession` — but `normalizeConfig` reads only `merged['realtime']` and returns an object built exclusively from that section. Every other top-level key was discarded with no error, no warning and no log. Authorization-gating a field implies the payload matters, which is what made the silence expensive: a caller sending `{"realtime":{…},"caliber":{…}}` had it serialize, pass the gate, cross the wire and vanish, with its own tests correctly asserting it built the payload right. Every such session ran on default configuration.
+
+  `realtime-coagent-config.ts` is deliberately framework-free — no DB, no metadata provider, no logging imports, every function a pure transformation — so it does not learn to log. It reports the drops as data:
+
+  ```typescript
+  export type IgnoredRealtimeConfigReason =
+    | "unknown-section"
+    | "unknown-key"
+    | "wrong-type";
+  export interface IgnoredRealtimeConfigKey {
+    readonly path: string;
+    readonly reason: IgnoredRealtimeConfigReason;
+  }
+  export function FindIgnoredRealtimeConfigKeys(
+    overridesJson: string | null | undefined,
+  ): readonly IgnoredRealtimeConfigKey[];
+  export const REALTIME_CONFIG_SECTION_KEYS: readonly (keyof RealtimeConfigSection)[];
+  ```
+
+  and `assertRuntimeOverridesAuthorized` — which already logs — does the talking.
+
+  **Warns rather than rejects.** Rejection is stricter and defensible in a major; in a patch it would turn a previously-accepted payload into a hard error for callers that cannot be seen from here. The reasoning sits at the call site so the next reader knows rejection was considered.
+
+  **Reported after the authorization decision, not before.** A payload that fails the gate already throws a structured error, so reporting drops for a request that never ran would be noise. Silence only ever existed for _accepted_ payloads.
+
+- ada8784: Fix `ExecuteSimplePrompt`: four stacked defects in model selection, each reporting as something else (#3532)
+
+  `ExecuteSimplePrompt` could not run at all, and every failure pointed somewhere other than its cause.
+  1. **A model row with a null `DriverClass` threw while BUILDING the candidate list.**
+     `AIAPIKeys.GetAPIKey` did `AIDriverName.toUpperCase()`, so one malformed row took out prompt
+     execution entirely with `Cannot read properties of null (reading 'toUpperCase')`, naming neither
+     the row nor the operation. A driver-less row has no key — that is an answer, and every caller
+     already handles a falsy one.
+  2. **`AIModelType` is a virtual column that is not populated on the engine's model objects**, so the
+     LLM filter matched nothing and the caller was told _"No AI models with valid API keys found"_ — a
+     message about keys for a problem with nothing to do with keys, which sends you to your
+     environment. Selection now resolves the type through `ModelTypesByID` (an ID lookup that cannot be
+     absent), with the virtual column as a fallback rather than the source of truth.
+  3. **`DriverClass` lives on the model's VENDOR now**, so `GetAIAPIKey(model.DriverClass)` could never
+     match and the list stayed empty — the same misleading key message again.
+  4. **`APIName` also moved to the vendor**, so `chatParams.model` went out empty and the provider
+     answered 404 with an empty error message, which reads as "that model doesn't exist" and sends you
+     to a model list where the model is plainly present.
+
+  Selection is now vendor-first and uses MJ's own rules rather than a local heuristic: for each Active
+  LLM model, its Active **inference-provider** vendors (`AIEngine.IsInferenceProvider` — the same
+  predicate `AIPromptRunner` selects with) in `Priority` order, and the first whose `DriverClass`
+  resolves an API key wins. Deliberately not "any vendor whose driver class ends in LLM": a vendor can
+  be attached to a model as its _developer_ without serving an endpoint.
+
+  The model and its chosen vendor are returned as a pair rather than stamped onto the model entity —
+  those entities are the engine's process-wide cache, so writing the winning driver onto one would leak
+  into every other caller and make the next request's answer depend on this one's.
+
+  Both of the issue's asks beyond the fix are covered: the failure message now says **which** of the
+  three walls was hit (no LLM models / no Active inference vendor / no key resolved), and an empty wire
+  name is refused client-side with the row to fix instead of being sent and 404'd.
+
+  `preferredModels` is matched against all three names a caller could plausibly hold — the model's
+  `Name`, the model's own `APIName`, and the vendor's wire name. The vendor's is an implementation
+  detail (an Azure deployment name, a gateway slug) that a caller has no reason to know, so matching
+  only that one would have quietly downgraded existing callers to power selection: not an error, just
+  the wrong model.
+
+- d0568e6: Auto-load Open App `serverExtensions` from packages listed in host `dynamicPackages.server[]`. Packages declare them via the `MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`; `serve()` overlays host `mj.config.cjs` `serverExtensions[]` by DriverClass so operators no longer copy Open App extension blocks into the host config.
+- be99b35: A deselected primary key no longer costs an object its identity.
+
+  The table build force-includes primary-key columns whatever the user selected, so the key column
+  always exists in the created table. The post-restart field-map build did not apply the same rule, so
+  unticking the key produced a table WITH its key column but no field map carrying `IsKeyField`. The
+  sync then had no identity to match on and silently fell back to content-hash matching — nothing
+  errored, records simply stopped being recognised as the same record across syncs, which is how
+  duplicates and phantom orphans begin.
+
+  Nothing enforces selecting the key in the UI, and nothing should: identity is not a preference. The
+  rule now lives in `selectFieldsToMap` alongside the other entity-map lifecycle decisions, so both
+  sides of the apply agree and it is unit-tested.
+
+- c3557f8: Realtime transcript: a streamed utterance's corrections are actually persisted
+
+  A streaming-transcription provider delivers ONE spoken utterance as a growing series of
+  corrections, each replacing the last. `replacePreviousTranscriptTurn` found the prior turn with
+  `RunView({ ResultType: 'entity_object' })` and saved that object — but a RunView-hydrated entity
+  does not carry the context user the way `GetEntityObject(entity, user)` does, so `Save()` ran with
+  no principal and returned false with an EMPTY `LatestResult`. Every correction after the first was
+  dropped, and the stored turn kept only the opening fragment of what was said.
+
+  Nothing looked wrong while it happened: the MODEL has the audio and answers coherently, so the
+  conversation reads normally. The damage lands downstream, where anything scoring the TRANSCRIPT
+  sees a few words. Measured live on a real interview: a 28-second answer persisted as `I`, and a
+  114-second answer as `So I think`.
+
+  The correction now re-loads the turn through `provider.GetEntityObject(...)` before writing, which
+  is what the INSERT path beside it has always done — so the two now succeed and fail for the same
+  reasons. A re-load that cannot find the row logs and returns false instead of silently leaving the
+  shorter text in place.
+
+  The write runs as the CALLER rather than being elevated. Elevating was tried first and is a trap:
+  `ResolveScopedAnonymousRunUser` falls back to `UserCache.GetSystemUser()`, which on an
+  unprovisioned deployment resolves to a placeholder user that does not exist — `Save()` then returns
+  false with a NULL result, indistinguishable from the permission denial it was meant to fix.
+  Ownership is already proved by `loadOwnedActiveSession` and the lookup is pinned to that session,
+  so the only row reachable is a turn the caller just spoke.
+
+- 92af88b: A schema refresh now adopts new objects AND new columns; only sync-discovered columns are suggested.
+
+  Two changes that together make the refresh/sync split explicit:
+  - `autoEnableNewObjects` now defaults to **true**. A refresh is an explicit request to bring the
+    source's current shape in, so an object it finds is adopted rather than left disabled waiting for
+    a second click.
+  - New **columns** gain the matching `autoEnableNewColumns` (also default true). They previously
+    inherited the entity map's enabled state with no flag at all, so the behaviour is unchanged by
+    default — but it is now a stated decision with a way to opt out, instead of an accident.
+
+  The deliberate asymmetry: a column first seen **mid-sync** is still never auto-created. It is
+  captured as a candidate with its statistics and requires acceptance before any DDL runs
+  (`Configuration.autoPromoteCustomColumns`, default false). A refresh is a deliberate act; a sync is
+  not, and must not reshape the schema on its own.
+
+  The map continues to bound the column — nothing is Active on a map that isn't — and a re-added
+  column returns to Active ungated, since that row is not new.
+
+  The decision moves into `decideFieldMapReconcile` in `integration/EntityMapLifecycle`, which is
+  unit-tested. Left inline it could not be tested at all: the resolver imports schema-builder and
+  schema-engine, so it cannot be loaded in a unit test.
+
+- 3014248: Post-restart RSU work gets a bounded second chance instead of failing on first error.
+
+  RSU is a long chain — migrations, CodeGen, a git commit, a compile, a restart — and a failure
+  partway through the post-restart consumer is frequently transient: the process was restarted
+  mid-consumption, or one provider call failed. That item was marked Failed terminally, so the objects
+  it would have mapped were silently never mapped and the only recovery was for someone to notice and
+  re-apply the connector by hand.
+
+  `RuntimeSchemaManager.RetryPendingWork` re-queues such an item with an incremented `Attempts` count,
+  leaving the row Pending. Two guards keep it from becoming a loop: the attempt budget
+  (`MAX_RSU_PENDING_ATTEMPTS`, 3) and the requirement that something still be outstanding.
+
+  The retry carries only the objects that have NOT been mapped yet, so each attempt is strictly
+  smaller and one poison object cannot keep re-running its healthy siblings. When the budget is spent
+  the item is failed terminally as before, but the message now names the objects that were never
+  mapped — that message is the operator's only signal.
+
+- 5fc861f: CodeGen treats schema as the incremental unit at 2,000+ entities: per-schema emit with write-if-changed and dirty-schema regen, `'schema.table'` exclude strings, schema-parallel file generation, incremental `tsc` on core-entities and server, hydrate-by-schema catalog projections, and `schemaOutput` routing so brownfield/demo schemas do not land in published packages. BigSchemaDemo is the droppable test bed.
+- d7feeae: Stop Explorer from showing "Unknown error" with a stuck Running timer when a Skip/sub-agent transport path fails. Pass the real error through invokeSubAgent, keep In-Progress when the agent may still be running, and persist Failed/Error on the run and conversation detail if executeAIAgent throws.
+- 28cd302: Storage driver resolution now fails fast and specifically instead of handing back an unusable base instance.
+
+  `ClassFactory.CreateInstance` does not return `null` for an unregistered key — it falls back to the anchor base class. Because `FileStorageBase` declares every real operation `abstract` (and `abstract` is erased at runtime), an `MJ: File Storage Providers` row whose `ServerDriverKey` resolved to nothing produced a `FileStorageBase` whose methods were all `undefined`. The misconfiguration stayed invisible until some distant subsystem called one, surfacing minutes later as `source.driver.GetObject is not a function` — a message that names neither storage, nor the provider, nor the key.
+  - `FileStorageBase` is now marked `@RequiresSubclass()`, so an unresolved driver key is a hard, named error at the point of resolution rather than a hollow object that fails later somewhere else. This covers every resolution site, including those outside MJStorage.
+  - New exported `resolveStorageDriver(providerEntity)` is the single place a `ServerDriverKey` becomes a driver. It uses `TryCreateInstance` and, on failure, throws naming the unresolved `ServerDriverKey`, the provider's name and ID, the driver keys that _are_ registered, and the two things that actually fix it (import the package declaring the driver so its `@RegisterClass` runs in this process, or correct `ServerDriverKey`). All three `initializeDriver*` paths route through it.
+  - `GET /media/:fileId` no longer answers an unlogged 404 when a file's bytes cannot be located. Each of the three distinct causes — no `MJ: Files` row, no `ProviderKey`, no `MJ: File Storage Accounts` row for the provider — is now logged with its cause. The response stays a bare 404 so the pre-auth route still describes nothing to an unauthenticated caller.
+
+- 29c3dc8: A failed upload reports the driver's real cause instead of "Storage upload failed."
+
+  A realtime recording upload surfaced to the client as `{"Success":false,"FileID":null,"ErrorMessage":"Storage upload failed."}` while the actual cause was Google's, and was actionable: _"Service Accounts do not have storage quota. Leverage shared drives instead."_ Four layers each discarded it — the Drive driver's catch reduced the SDK error to a bare `console.error` and `return false`; `FileStorageEngine.UploadFile` threw a path-only generic; `storeRealtimeRecording` logged and then returned `string | null`, so the reason it had just logged could not leave; and the resolver reported the generic. The layer people see is the fourth; the information died at the first.
+
+  **`PutObject`'s `Promise<boolean>` contract is deliberately untouched.** `FileStorageBase` documents boolean-means-success and every driver implements it, so making it throw would break every driver and caller. Every `return false` / `return true` in the driver is byte-for-byte what it was — this is only about not _erasing_ the cause on the way up.
+
+  The Drive driver gains `describeGoogleApiError`, which extracts named fields (`code`, `message`, `errors[].reason`, `errors[].message`, `response.data.error.message`) — an allowlist rather than a dump, because MJStorage ships `rawErrorLogging.guard.test.ts` forbidding drivers from logging a vendor error wholesale. The four catches that rethrow a generic now append the cause, matching the precedent already in that file at `CreatePreAuthDownloadUrl`.
+
+  **Breaking for direct callers of `storeRealtimeRecording`** (hence minor on `@memberjunction/ai-agents`): it returns `{ FileID, ErrorMessage }` rather than `string | null`. A caller that used the returned id directly now reads `.FileID`; the null check becomes a check on `FileID`, with `ErrorMessage` carrying the reason that was previously unreachable.
+
+- 6d4182d: `MJ_TELEMETRY_ENABLED` could never take effect.
+
+  `telemetrySchema` read the environment variable inside a Zod `.default()`:
+
+  ```ts
+  enabled: zodBooleanWithTransforms().default(
+    process.env.MJ_TELEMETRY_ENABLED !== "false",
+  );
+  ```
+
+  A `.default()` only fires when the key is **absent** from the object being parsed. `loadConfig()` parses `mergeConfigs(DEFAULT_SERVER_CONFIG, userConfig)`, and `DEFAULT_SERVER_CONFIG` always supplies `telemetry: { enabled: true, level: 'standard' }` — so the key was never absent, the default never ran, and the variable had no effect whatsoever. Confirmed on a live deployment: setting it to `false` and restarting left telemetry on; only `telemetry: { enabled: false }` in `mj.config.cjs` worked.
+
+  The env read moves to where the value is actually produced, in `DEFAULT_SERVER_CONFIG` — the same shape already used a few lines below for `loggingSettings.graphql.logVariables`, so this follows the file's existing precedent rather than introducing a second convention. An explicit setting in `mj.config.cjs` still wins over the environment, because the user config is merged on top.
+
+- Updated dependencies [6dbe524]
+- Updated dependencies [323df0f]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [10010b2]
+- Updated dependencies [405c035]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [79483bf]
+- Updated dependencies [6fd0a73]
+- Updated dependencies [d735407]
+- Updated dependencies [22ec804]
+- Updated dependencies [8206993]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [e63ac04]
+- Updated dependencies [1940a4d]
+- Updated dependencies [653c51d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [9fe3019]
+- Updated dependencies [047a80f]
+- Updated dependencies [887ba9c]
+- Updated dependencies
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [b42c125]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [79afbff]
+- Updated dependencies [e3a1425]
+- Updated dependencies [d0568e6]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [0d1f748]
+- Updated dependencies [6a06c80]
+- Updated dependencies [3014248]
+- Updated dependencies [64915b9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [88d751d]
+- Updated dependencies [d7feeae]
+- Updated dependencies [5c1d762]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [4f20e10]
+- Updated dependencies [1f66f31]
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.5
+  - @memberjunction/integration-engine@6.1.0-edge.5
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/actions-apollo@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.5
+  - @memberjunction/ai-agents@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.5
+  - @memberjunction/codegen-lib@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/core-entities-server@6.1.0-edge.5
+  - @memberjunction/core-actions@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/server-extensions-core@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/network-utils@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.5
+  - @memberjunction/communication-sendgrid@6.1.0-edge.5
+  - @memberjunction/remote-browser-server@6.1.0-edge.5
+  - @memberjunction/schema-engine@6.1.0-edge.5
+  - @memberjunction/search-engine@6.1.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/integration-schema-builder@6.1.0-edge.5
+  - @memberjunction/scheduling-engine@6.1.0-edge.5
+  - @memberjunction/computer-use@6.1.0-edge.5
+  - @memberjunction/tag-engine@6.1.0-edge.5
+  - @memberjunction/computer-use-engine@6.1.0-edge.5
+  - @memberjunction/ai-bridge-server@6.1.0-edge.5
+  - @memberjunction/ai-vector-sync@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/communication-ms-graph@6.1.0-edge.5
+  - @memberjunction/livekit-room-server@6.1.0-edge.5
+  - @memberjunction/queue@6.1.0-edge.5
+  - @memberjunction/templates@6.1.0-edge.5
+  - @memberjunction/testing-engine@6.1.0-edge.5
+  - @memberjunction/ai-agent-manager@6.1.0-edge.5
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.5
+  - @memberjunction/task-graph@6.1.0-edge.5
+  - @memberjunction/ai-agent-manager-actions@6.1.0-edge.5
+  - @memberjunction/clustering-engine@6.1.0-edge.5
+  - @memberjunction/tag-engine-base@6.1.0-edge.5
+  - @memberjunction/ai-mcp-client@6.1.0-edge.5
+  - @memberjunction/ai-bridge-base@6.1.0-edge.5
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.5
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.5
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.5
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.5
+  - @memberjunction/remote-browser-base@6.1.0-edge.5
+  - @memberjunction/api-keys@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/communication-engine@6.1.0-edge.5
+  - @memberjunction/entity-communications-base@6.1.0-edge.5
+  - @memberjunction/entity-communications-server@6.1.0-edge.5
+  - @memberjunction/notifications@6.1.0-edge.5
+  - @memberjunction/credentials@6.1.0-edge.5
+  - @memberjunction/doc-utils@6.1.0-edge.5
+  - @memberjunction/encryption@6.1.0-edge.5
+  - @memberjunction/external-change-detection@6.1.0-edge.5
+  - @memberjunction/integration-engine-base@6.1.0-edge.5
+  - @memberjunction/lists@6.1.0-edge.5
+  - @memberjunction/data-context@6.1.0-edge.5
+  - @memberjunction/record-comparison@6.1.0-edge.5
+  - @memberjunction/scheduling-actions@6.1.0-edge.5
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.5
+  - @memberjunction/testing-engine-base@6.1.0-edge.5
+  - @memberjunction/version-history@6.1.0-edge.5
+  - @memberjunction/esignature@6.1.0-edge.5
+  - @memberjunction/remote-browser-cdp@6.1.0-edge.5
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.5
+  - @memberjunction/ai-vectordb@6.1.0-edge.5
+  - @memberjunction/auth-providers@6.1.0-edge.5
+  - @memberjunction/component-registry-client-sdk@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+  - @memberjunction/data-context-server@6.1.0-edge.5
+  - @memberjunction/redis-provider@6.1.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.5
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.5
+  - @memberjunction/scheduling-base-types@6.1.0-edge.5
+  - @memberjunction/config@6.1.0-edge.5
+  - @memberjunction/lists-base@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Minor Changes

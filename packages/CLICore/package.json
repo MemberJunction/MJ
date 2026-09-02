@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/cli-core",
   "type": "module",
-  "version": "6.1.0-edge.4",
+  "version": "6.1.0-edge.5",
   "description": "Pluggable MJ CLI core — BaseCLIPlugin, runtime host, and progressive-disclosure usage primitives shared by mj CLI plugins",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +21,7 @@
   "author": "MemberJunction",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.4",
+    "@memberjunction/global": "6.1.0-edge.5",
     "@oclif/core": "^3.27.0",
     "chalk": "^5.6.2",
     "ora-classic": "^5.4.2"

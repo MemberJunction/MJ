@@ -1,5 +1,28 @@
 # @memberjunction/actions-bizapps-accounting
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- 6dbe524: ERP accounting verbs: a provider-agnostic dispatcher per verb (`CreateJournalEntry`, `GetChartOfAccounts`, `GetAccountBalances`, `GetDimensions`, `GetGLEntries`, `GetCustomers`, `GetSalesInvoices`) plus QBO/BC plugins keyed as `${verb}:${Integration.Name}`. Adds Business Central CreateJournalEntry and GetAccountBalances, dimensions for both ERPs, and shared journal-line validation. Historical vendor RegisterClass keys still resolve.
+
+  SQLConverter: CREATE TABLE CHECK `ISJSON(col) = 1` now becomes `(col) IS JSON` after identifier quoting, so PostgreSQL no longer sees `"ISJSON"(col) = 1`.
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Patch Changes

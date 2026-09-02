@@ -1,5 +1,38 @@
 # @memberjunction/ng-base-forms
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [4273317]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [d66a26a]
+- Updated dependencies [e93f221]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/ng-shared-generic@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ng-ui-components@6.1.0-edge.5
+  - @memberjunction/ng-markdown@6.1.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.5
+  - @memberjunction/ng-file-storage@6.1.0-edge.5
+  - @memberjunction/ng-list-management@6.1.0-edge.5
+  - @memberjunction/ng-record-changes@6.1.0-edge.5
+  - @memberjunction/ng-record-tags@6.1.0-edge.5
+  - @memberjunction/ng-base-types@6.1.0-edge.5
+  - @memberjunction/ng-code-editor@6.1.0-edge.5
+  - @memberjunction/ng-notifications@6.1.0-edge.5
+  - @memberjunction/ng-react@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Patch Changes

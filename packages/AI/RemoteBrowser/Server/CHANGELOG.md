@@ -1,5 +1,92 @@
 # @memberjunction/remote-browser-server
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 0d1f748: Remote Browser: a dead browser handle now heals instead of poisoning the session (#3598)
+
+  A surface's browser can disappear without the engine being told — an external Chrome closed, a
+  backend container recycled, a CDP target lost. `RemoteBrowserEngine` kept the handle in its live map,
+  so `StartSessionForAgentSession` handed back the corpse and every later call threw
+  `Browser not launched. Call Launch() before using the adapter.` for the rest of the session. Observed
+  live: 232 of them in one MJAPI run, with the voice agent saying "the shared browser session isn't
+  launched right now" indefinitely while the pane sat frozen on its last good frame.
+
+  `RecoverDeadAgentSession(agentSessionID, error, opts)` discards the dead mapping, launches one
+  replacement, and re-attaches the screencast. The caller hands over the error it already caught and
+  does not decide what "dead" means — that lives in `IsDeadBrowserHandleError`, a closed list of
+  "the browser or its transport is gone". Anything unrecognised is treated as a real answer from a live
+  browser and reported exactly as it is today, because the false-positive cost is a healthy browser
+  losing its cookies, login and scroll position over a bad selector.
+
+  Re-attaching the view is half the fix, not a nicety: healing the backend alone is worse than the
+  original bug, because the client asked for a screencast once at bind time and would keep watching the
+  discarded session while the agent truthfully narrated a page the person could not see. The engine now
+  remembers each session's frame sink so the replacement can be re-piped to it — and a screencast the
+  host deliberately stopped is never resurrected.
+
+  Bounded in both directions: concurrent fault reports (the ~700ms snapshot poll and the next agent
+  action both meet the dead handle) coalesce onto one relaunch rather than each launching their own,
+  and a surface gets at most `MAX_DEAD_HANDLE_RECOVERIES` (3) before the engine logs that it is giving
+  up. A browser that dies on arrival should surface as a visible fault, never as a hang plus a stream
+  of orphaned Chromes.
+
+  Both callers that meet a dead handle report it. `RemoteBrowserSnapshot` — the poll that almost always
+  discovers the fault first — now reports it instead of only degrading around it, and
+  `ExecuteRemoteBrowserAction` reports it too and re-runs the action against the replacement. The action
+  path matters on its own: a surface nobody is watching has no poll to discover anything, so wiring only
+  the poll would leave exactly the agent-driven case in the issue unhealed. Re-running is safe precisely
+  because the handle was dead — the action never reached a browser, so it cannot run twice — and a
+  `navigate` therefore heals in place, while a click or a type is told, in words the agent can act on,
+  that its browser was replaced and is now on a blank page.
+
+- 6a06c80: Remote Browser: an agent session can now hold more than one browser, named by `instanceKey` (#3531)
+
+  `RemoteBrowserEngine` keyed its agent-session map on the agent session id alone, which made "one
+  remote browser per agent session" a framework invariant nothing could opt out of. A second surface's
+  lazy start found the first one's mapping and returned it, so both surfaces drove the same Chrome:
+  one live view, one screencast, one audio stream, and a `StopScreencast` from either tore down the
+  other's. Callers had no way to say which browser they meant, because there was only ever one.
+
+  `StartSessionForAgentSession`, `GetSessionForAgentSession`, `EndSessionForAgentSession` and
+  `AchieveGoal` (via `AchieveGoalParams.InstanceKey`) now take an optional `instanceKey` that names a
+  browser _within_ the agent session, and the six `RemoteBrowserActionResolver` mutations that address
+  a live session — `InterpretRemoteBrowserPage`, `RemoteBrowserSnapshot`, `StopRemoteBrowserScreencast`,
+  `StopRemoteBrowserAudioStream`, `RelayRemoteBrowserHumanInput`, `GetRemoteBrowserSelection` — accept
+  and forward it.
+
+  **Omitting it is exactly today's behaviour**, and that is load-bearing rather than incidental: the
+  key is composed as `agentSessionID` alone when no name is given, so every existing caller keeps
+  resolving the single unnamed instance and the pre-existing agent-session tests pass unchanged. An
+  empty or whitespace key is the unnamed instance too, so a caller threading an absent value through
+  as `''` lands where it did before the argument existed. Keys are trimmed and lowercased — the value
+  is typed by hand into a channel config, and `Primary` versus `primary` being two browsers would be a
+  spelling trap.
+
+  The composite stays scoped to the agent session (`id::name`), so two concurrent sessions that both
+  name their second surface `resume` get their own browsers rather than colliding. Start coalescing —
+  the fix that stopped four near-simultaneous callers launching four Chromes — is keyed the same way,
+  so it still collapses a race on one instance without collapsing two _different_ surfaces into one.
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/remote-browser-base@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Patch Changes
