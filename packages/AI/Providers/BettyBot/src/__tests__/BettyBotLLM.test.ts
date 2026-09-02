@@ -104,6 +104,15 @@ describe('BettyBotLLM', () => {
     it('should initialize TokenExpiration as a Date', () => {
       expect((llm as unknown as Record<string, unknown>)['TokenExpiration']).toBeInstanceOf(Date);
     });
+
+    it('should leave UserId undefined when not provided', () => {
+      expect((llm as unknown as Record<string, unknown>)['UserId']).toBeUndefined();
+    });
+
+    it('should store the userId when provided', () => {
+      const withUser = new BettyBotLLM('test-api-key', 'izzy');
+      expect((withUser as unknown as Record<string, unknown>)['UserId']).toBe('izzy');
+    });
   });
 
   /* ---- SupportsStreaming ---- */
@@ -271,6 +280,60 @@ describe('BettyBotLLM', () => {
       expect(data.choices).toHaveLength(3);
       expect(data.choices[1].message.content).toContain('Doc 1');
       expect(data.choices[2].finish_reason).toBe('references_json');
+    });
+  });
+
+  /* ---- userId identifier ---- */
+  describe('userId', () => {
+    const successfulExchange = () => {
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
+      });
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { status: 'ok', errorMessage: '', conversationId: 1, response: 'Hi', references: [] },
+      });
+    };
+
+    const callNonStreaming = (instance: BettyBotLLM, params: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      return (instance as unknown as { nonStreamingChatCompletion: (p: unknown) => Promise<Record<string, unknown>> })
+        .nonStreamingChatCompletion(params);
+    };
+
+    it('should send only { input } when constructed without a userId', async () => {
+      successfulExchange();
+
+      await callNonStreaming(llm, {
+        messages: [{ role: ChatMessageRole.user, content: 'hello' }],
+        model: 'betty',
+      });
+
+      expect(mockHttpPost).toHaveBeenCalledTimes(2);
+      expect(mockHttpPost.mock.calls[1][0]).toBe('https://betty-api.test.co/response');
+      expect(mockHttpPost.mock.calls[1][1]).toStrictEqual({ input: 'hello' });
+    });
+
+    it('should include userId in the response body when constructed with one', async () => {
+      const withUser = new BettyBotLLM('test-api-key', 'izzy');
+      successfulExchange();
+
+      await callNonStreaming(withUser, {
+        messages: [{ role: ChatMessageRole.user, content: 'hello' }],
+        model: 'betty',
+      });
+
+      expect(mockHttpPost.mock.calls[1][1]).toStrictEqual({ input: 'hello', userId: 'izzy' });
+    });
+
+    it('should never send userId on the settings (JWT) call', async () => {
+      const withUser = new BettyBotLLM('test-api-key', 'izzy');
+      successfulExchange();
+
+      await callNonStreaming(withUser, {
+        messages: [{ role: ChatMessageRole.user, content: 'hello' }],
+        model: 'betty',
+      });
+
+      expect(mockHttpPost.mock.calls[0][1]).toStrictEqual({ token: 'test-api-key' });
     });
   });
 
