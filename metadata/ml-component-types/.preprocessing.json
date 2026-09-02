@@ -49,6 +49,23 @@
   },
   {
     "fields": {
+      "Name": "Presence",
+      "Kind": "Preprocessing",
+      "Description": "Emit a <col>__present mask and, optionally, keep the column MISSING rather than coercing absence to 0.",
+      "Story": "Records that we did not know, so that not knowing can count for something instead of quietly reading as a zero.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Missing Values",
+      "DriverClass": "present"
+    },
+    "primaryKey": {
+      "ID": "123A2201-8EBD-49EC-8CA1-B9E507133C5D"
+    }
+  },
+  {
+    "fields": {
       "Name": "Scaling",
       "Kind": "Preprocessing",
       "Description": "Population-relative rescaling; parameters are fit on the training population and frozen.",
@@ -118,7 +135,7 @@
     "fields": {
       "Name": "Z-Score Clamped",
       "Kind": "Preprocessing",
-      "Description": "Z-score clamped to ±3σ and mapped to [0,1]. Ported from Sonar.",
+      "Description": "Z-score clamped to \u00b13\u03c3 and mapped to [0,1]. Ported from Sonar.",
       "Story": "Standardization with guard rails: outliers stop mattering more than three standard deviations out.",
       "IsAbstract": false,
       "Trainable": true,
@@ -185,8 +202,8 @@
     "fields": {
       "Name": "Curve Mapping",
       "Kind": "Preprocessing",
-      "Description": "Stateless, parameterized value→value curves (no population fit). Ported from Sonar.",
-      "Story": "Hand-shaped curves that encode judgment — how quickly goodness saturates, where the cliff is — without any training.",
+      "Description": "Stateless, parameterized value\u2192value curves (no population fit). Ported from Sonar.",
+      "Story": "Hand-shaped curves that encode judgment \u2014 how quickly goodness saturates, where the cliff is \u2014 without any training.",
       "IsAbstract": true,
       "Trainable": false,
       "Status": "Published",
@@ -218,7 +235,7 @@
     "fields": {
       "Name": "Banded",
       "Kind": "Preprocessing",
-      "Description": "Bucket→fraction step mapping.",
+      "Description": "Bucket\u2192fraction step mapping.",
       "Story": "Judgment as a staircase: these ranges are bad, these fine, these excellent.",
       "IsAbstract": false,
       "Trainable": false,

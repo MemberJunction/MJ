@@ -45,13 +45,21 @@ import type {
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 import type { AIPromptParams } from '@memberjunction/ai-core-plus';
-import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
+import type { ActionFeatureStep, VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
 import type { AsOfAggregateKind, AsOfWindowSpec } from '@memberjunction/predictive-studio-core';
 
 import { type IFeatureDataAccess, RunViewDataAccess, type SourceRow } from './data-access';
 import { type DatedRow, resolveAsOfDate, daysSinceLastActivityAsOf, activityCountAsOf, aggregateAsOf, filterAsOf, filterWindow } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
+import {
+  ActionFeatureExtractor,
+  type ActionFeatureTarget,
+  type IActionApprovalCheck,
+  type IActionRunner,
+} from './action-feature';
+import { MJActionApprovalCheck, MJActionRunner } from './action-feature-seam';
+import { buildVisionPromptResolver, MJVisionPromptRunner } from './vision-llm-seam';
 
 /**
  * Resolves a {@link VisionLLMFeatureStep}'s `Prompt` (id/name/inline) into the
@@ -171,13 +179,21 @@ export interface FeatureAssemblyParams {
    * it so the step assembles without a live model. When omitted, vision steps
    * yield null feature values (no model call).
    */
-  visionRunner?: IVisionPromptRunner;
+  visionRunner?: IVisionPromptRunner | null;
   /**
    * Optional resolver turning a `vision-llm` step's `Prompt` reference into the
    * prompt entity the runner executes. Required alongside {@link visionRunner}
    * when vision steps are present.
    */
-  visionPromptResolver?: VisionPromptResolver;
+  visionPromptResolver?: VisionPromptResolver | null;
+  /**
+   * Optional overrides for `action` steps (code-as-a-feature). Both default to the real MJ Action
+   * engine, so an action step works with no wiring; tests inject fakes to assemble with no Action
+   * engine and no database.
+   */
+  actionRunner?: IActionRunner;
+  /** @see actionRunner */
+  actionApprovals?: IActionApprovalCheck;
 }
 
 /**
@@ -390,6 +406,7 @@ export class FeatureAssemblyExecutor {
         case 'llm-derived':
         case 'flow-agent':
         case 'vision-llm':
+        case 'action':
           dataSteps.push(step);
           break;
         case 'impute':
@@ -483,6 +500,11 @@ export class FeatureAssemblyExecutor {
           // §11/§5.6: per-row, stateless vision extraction → one RAW feature column.
           this.planVisionLLMColumn(step, guard, schema, emitters);
           break;
+        case 'action':
+          // Donation item 8: code as a feature — one RAW numeric column, computed by running an
+          // approved MJ Action once per record.
+          this.planActionColumn(step, guard, schema, emitters);
+          break;
         default:
           break;
       }
@@ -499,7 +521,10 @@ export class FeatureAssemblyExecutor {
         emitters.push({ column: f.OutputColumn, kind: 'as-of', datedSource: ds, datedFeature: f });
         if (f.EmitPresence) {
           const presenceColumn = `${f.OutputColumn}__present`;
-          schema.push({ Name: presenceColumn, Kind: 'numeric' });
+          // Typed `presence`, not `numeric`: a mask's 0 means "we never knew", where a numeric 0
+          // means "we measured zero". Downstream — the rubric's MissingDataPolicy, the materializer's
+          // binding Meaning, the story tagger — all have to be able to tell those apart.
+          schema.push({ Name: presenceColumn, Kind: 'presence' });
           emitters.push({ column: presenceColumn, kind: 'as-of', datedSource: ds, datedFeature: f, presence: true });
         }
       }
@@ -603,6 +628,27 @@ export class FeatureAssemblyExecutor {
   }
 
   /**
+   * Plan an `action` column. Always numeric — an Action-backed feature contributes a number or
+   * nothing, and "nothing" stays null so the missing-data policy handles it rather than a hard 0.
+   *
+   * The output name goes through the leakage guard like any other, so an operator can deny-list a
+   * code feature that turns out to reach forward in time.
+   */
+  private planActionColumn(
+    step: Extract<FeatureStep, { Kind: 'action' }>,
+    guard: LeakageGuardEnforcer,
+    schema: FeatureSchemaEntry[],
+    emitters: ColumnEmitter[],
+  ): void {
+    const col = step.FeatureName;
+    if (!guard.isFieldAllowed(col)) {
+      return;
+    }
+    schema.push({ Name: col, Kind: 'numeric' });
+    emitters.push({ column: col, kind: 'action', step });
+  }
+
+  /**
    * Build an index of dated rows grouped by target-record primary key, for as-of
    * feature computation. Filtered through the source deny-list.
    */
@@ -661,6 +707,9 @@ export class FeatureAssemblyExecutor {
 
     // Vision extraction context — built once, only when a vision runner is wired.
     const vision = this.buildVisionContext(params);
+    // Action features run BEFORE the row loop: one bounded fan-out per step over the whole
+    // population, rather than a serial call per record inside the emitter loop.
+    const actionValues = await this.runActionFeatures(plan, records, params, pkField);
 
     const rows: Array<Array<string | number | boolean | null>> = [];
     for (const record of records) {
@@ -669,7 +718,7 @@ export class FeatureAssemblyExecutor {
 
       const rowValues: Array<string | number | boolean | null> = [];
       for (const emitter of plan.emitters) {
-        rowValues.push(await this.emitValue(emitter, record, recordId, asOfDate, datedIndex, dataAccess, vision));
+        rowValues.push(await this.emitValue(emitter, record, recordId, asOfDate, datedIndex, dataAccess, vision, actionValues));
       }
       if (params.targetVariable) {
         rowValues.push(normalizeValue(record[params.targetVariable]));
@@ -685,14 +734,53 @@ export class FeatureAssemblyExecutor {
    * wired — vision emitters then yield null (no model call).
    */
   private buildVisionContext(params: FeatureAssemblyParams): VisionContext | null {
-    if (!params.visionRunner) {
+    // Tri-state, like the story runner: `undefined` ⇒ the real runner, an injected value ⇒ that one,
+    // an explicit `null` ⇒ vision is off for this assembly.
+    if (params.visionRunner === null) {
       return null;
     }
+    const resolver =
+      params.visionPromptResolver === null
+        ? undefined
+        : (params.visionPromptResolver ?? buildVisionPromptResolver(params.contextUser, params.provider));
     return {
-      extractor: new VisionFeatureExtractor(params.visionRunner, params.contextUser),
-      resolver: params.visionPromptResolver,
+      extractor: new VisionFeatureExtractor(params.visionRunner ?? new MJVisionPromptRunner(), params.contextUser),
+      resolver,
       promptCache: new Map<string, AIPromptParams['prompt']>(),
     };
+  }
+
+  /**
+   * Run every `action` step across the population, once, before the row loop.
+   *
+   * A configuration failure (unapproved Action, missing Action, bad params) PROPAGATES and fails
+   * the assembly. That is deliberate: it is wrong for every record, and degrading to nulls would
+   * train a model on a feature that silently is not there.
+   */
+  private async runActionFeatures(
+    plan: { emitters: ColumnEmitter[] },
+    records: SourceRow[],
+    params: FeatureAssemblyParams,
+    pkField: string,
+  ): Promise<Map<string, Map<string, number | null>>> {
+    const steps = plan.emitters.filter((e): e is Extract<ColumnEmitter, { kind: 'action' }> => e.kind === 'action');
+    const byStep = new Map<string, Map<string, number | null>>();
+    if (steps.length === 0) {
+      return byStep;
+    }
+    const extractor = new ActionFeatureExtractor(
+      params.actionRunner ?? new MJActionRunner(),
+      params.actionApprovals ?? new MJActionApprovalCheck(),
+      params.contextUser,
+    );
+    const targets: ActionFeatureTarget[] = records.map((record) => {
+      const recordId = String(record[pkField] ?? '');
+      return { recordId, asOf: resolveAsOfDate(params.asOf, record, params.labelEventDates?.[recordId] ?? null) };
+    });
+    for (const emitter of steps) {
+      byStep.set(emitter.step.Id, await extractor.extract(emitter.step, targets));
+    }
+    return byStep;
   }
 
   /** Produce the value for a single planned column on a single record. */
@@ -704,12 +792,16 @@ export class FeatureAssemblyExecutor {
     datedIndex: DatedIndex,
     dataAccess: IFeatureDataAccess,
     vision: VisionContext | null,
+    actionValues: Map<string, Map<string, number | null>>,
   ): Promise<string | number | boolean | null> {
     switch (emitter.kind) {
       case 'select':
         return normalizeValue(record[emitter.sourceColumn]);
       case 'vision-llm':
         return this.emitVisionValue(emitter.step, record, vision);
+      case 'action':
+        // Precomputed above; a record with no entry had no value, which stays null.
+        return actionValues.get(emitter.step.Id)?.get(recordId) ?? null;
       case 'embedding': {
         const vector = await dataAccess.fetchEmbedding(emitter.embeddingEntity, recordId, emitter.embeddingModelRef, emitter.embeddingTotalDims);
         // No persisted vector → zero-fill (never regenerate inline; §6.5).
@@ -758,8 +850,13 @@ export class FeatureAssemblyExecutor {
   /**
    * Emit a `vision-llm` feature value for one record (plan §11). Resolves the
    * step's prompt (memoized per step) and runs the per-row extractor over the
-   * row's OWN image. When no vision runner/resolver is wired, yields `null`
-   * (no model call) so the rest of the matrix still assembles.
+   * row's OWN image.
+   *
+   * The runner and resolver now DEFAULT to the real ones, so a vision step works with no wiring.
+   * They were caller-injected with no default and nobody ever supplied them, which meant every
+   * vision feature quietly evaluated to null for every record — a model trained on one looked
+   * completely normal. A step whose prompt cannot be resolved now throws
+   * (`VisionPromptConfigError`) rather than nulling the column, for the same reason.
    */
   private async emitVisionValue(
     step: VisionLLMFeatureStep,
@@ -767,6 +864,9 @@ export class FeatureAssemblyExecutor {
     vision: VisionContext | null,
   ): Promise<string | number | null> {
     if (!vision || !vision.resolver) {
+      // Vision was explicitly turned off for this assembly (`visionRunner: null`). Every other
+      // path now has a real runner by default, so this is a deliberate opt-out, not the accident
+      // it used to be — the step still yields null rather than failing the whole matrix.
       return null;
     }
     const prompt = await this.resolveVisionPrompt(step, vision);
@@ -803,6 +903,7 @@ interface ColumnPlan {
 type ColumnEmitter =
   | { column: string; kind: 'select'; sourceColumn: string }
   | { column: string; kind: 'vision-llm'; step: VisionLLMFeatureStep }
+  | { column: string; kind: 'action'; step: ActionFeatureStep }
   | {
       column: string;
       kind: 'embedding';

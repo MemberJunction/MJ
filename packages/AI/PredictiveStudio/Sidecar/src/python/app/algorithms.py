@@ -34,6 +34,8 @@ try:
 except Exception:  # pragma: no cover
     _HAVE_LGBM = False
 
+from .estimators.hmm import HMMEstimator, hmmlearn_available
+
 
 # A factory takes (problem_type, hyperparameters) and returns an estimator.
 EstimatorFactory = Callable[[str, Dict[str, Any]], Any]
@@ -41,6 +43,16 @@ EstimatorFactory = Callable[[str, Dict[str, Any]], Any]
 
 class AlgorithmNotSupportedError(ValueError):
     """Raised when a driver key / problem-type pairing has no estimator."""
+
+
+#: Why each optional driver's import typically fails. Per-driver, because a generic hint sends the
+#: reader down the wrong path: hmmlearn has nothing to do with OpenMP, and telling someone to check
+#: their OpenMP runtime when the real cause is a missing wheel costs them the debugging session.
+_IMPORT_HINTS: Dict[str, str] = {
+    "xgboost": "needs an OpenMP runtime (libomp on macOS, libgomp1 on Linux)",
+    "lightgbm": "needs an OpenMP runtime (libomp on macOS, libgomp1 on Linux)",
+    "hmm": "requires the optional 'hmmlearn' package",
+}
 
 
 def _require(flag: bool, name: str) -> None:
@@ -51,13 +63,14 @@ def _require(flag: bool, name: str) -> None:
         name: Driver key, used in the error message.
 
     Raises:
-        AlgorithmNotSupportedError: When ``flag`` is falsy (package missing,
-            typically because the OpenMP runtime libxgboost/lightgbm need is absent).
+        AlgorithmNotSupportedError: When ``flag`` is falsy, with the hint that actually applies to
+            THIS driver.
     """
     if not flag:
+        hint = _IMPORT_HINTS.get(name)
+        detail = f" — it {hint}" if hint else ""
         raise AlgorithmNotSupportedError(
-            f"Driver '{name}' is unavailable — its package failed to import "
-            f"(missing OpenMP runtime?)."
+            f"Driver '{name}' is unavailable: its package failed to import{detail}."
         )
 
 
@@ -138,7 +151,24 @@ def _rubric(problem_type: str, hp: Dict[str, Any]):
     return RubricEstimator(problem_type=problem_type, **hp)
 
 
+def _hmm(problem_type: str, hp: Dict[str, Any]):
+    """Hidden Markov Model over per-entity observation sequences (the `sequence` problem type).
+
+    Rejects classification/regression outright rather than fitting something shaped wrong: an HMM
+    models the ORDER of a record's history, and asking it a per-record question would train fine and
+    mean nothing.
+    """
+    _require(hmmlearn_available(), "hmm")
+    if problem_type != "sequence":
+        raise AlgorithmNotSupportedError(
+            f"Driver 'hmm' models sequences; it cannot answer a '{problem_type}' question. "
+            f"Set problem_type='sequence', or choose a per-record algorithm."
+        )
+    return HMMEstimator(**hp)
+
+
 _REGISTRY: Dict[str, EstimatorFactory] = {
+    "hmm": _hmm,
     "rubric": _rubric,
     "xgboost": _xgboost,
     "lightgbm": _lightgbm,
@@ -147,6 +177,18 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "ridge": _ridge,
     "mlp": _mlp,
 }
+
+
+#: Drivers that can be handed a MISSING value and do something principled with it — the rubric
+#: applies its per-input ``MissingDataPolicy``, and the boosting families learn a default branch.
+#: Everything else raises deep inside sklearn ("Input X contains NaN"), so a pipeline that
+#: preserves missingness is refused up front instead (see ``main._reject_unsupported_missingness``).
+MISSING_TOLERANT_DRIVERS = frozenset({"rubric", "xgboost", "lightgbm"})
+
+
+def tolerates_missing(algorithm: str) -> bool:
+    """Whether this driver can be given a missing value rather than an imputed stand-in."""
+    return algorithm in MISSING_TOLERANT_DRIVERS
 
 
 def supported_algorithms() -> List[str]:

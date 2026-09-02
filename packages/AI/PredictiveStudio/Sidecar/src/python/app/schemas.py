@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 # Scalar cell type used throughout the matrix / row payloads.
 Cell = Union[str, float, int, bool, None]
 
-FeatureKind = str  # 'numeric' | 'categorical' | 'embedding' | 'llm-derived'
+FeatureKind = str  # 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'presence'
 ProblemType = str  # 'classification' | 'regression'
 
 
@@ -52,6 +52,11 @@ class PreprocessingOp(BaseModel):
     outputMin: Optional[float] = None
     outputMax: Optional[float] = None
     params: Optional[Dict[str, Any]] = None
+    # `present`-specific: emit the <col>__present mask, and/or keep `col` MISSING in the matrix
+    # instead of coercing absence to 0 (which is what makes a rubric's Exclude/NeutralMidpoint
+    # policy reachable at all). Both default conservatively — see the TS contract for why.
+    emitMask: Optional[bool] = None
+    preserveMissing: Optional[bool] = None
 
 
 class ValidationConfig(BaseModel):
@@ -73,6 +78,20 @@ class MatrixData(BaseModel):
     rows: List[List[Cell]]
 
 
+class TrainComponentNode(BaseModel):
+    """One node of a composed model.
+
+    Driver-keyed rather than named after a component TYPE: the sidecar knows nothing
+    about the component tree, so the caller resolves names to drivers before sending.
+    """
+
+    driver: str
+    hyperparameters: Optional[Dict[str, Any]] = None
+    slot: Optional[str] = None
+    children: Optional[List["TrainComponentNode"]] = None
+    reuse_instance_id: Optional[str] = None
+
+
 class TrainRequest(BaseModel):
     """``POST /train`` request body."""
 
@@ -91,6 +110,22 @@ class TrainRequest(BaseModel):
     # APPLIED (never re-fit) to these rows and they are scored exactly once. Takes
     # precedence over `validation.holdout_size` (the sidecar-side re-carve).
     holdout: Optional[MatrixData] = None
+    # A composed model to build instead of the single `algorithm` estimator. `algorithm` still names
+    # the ROOT driver so every existing read path is unchanged.
+    component_graph: Optional[TrainComponentNode] = None
+    # Base64 artifacts for nodes that REUSE an already-trained component, keyed by reuse_instance_id.
+    # The sidecar has no database, so a reused child's fitted state has to travel with the request.
+    component_artifacts: Optional[Dict[str, str]] = None
+
+
+class TrainedComponentState(BaseModel):
+    """What the sidecar can say about one node of a composed model after fitting."""
+
+    driver: str
+    slot: Optional[str] = None
+    fitted: bool
+    reuse_instance_id: Optional[str] = None
+    feature_importance: Optional[Dict[str, float]] = None
 
 
 class TrainResponse(BaseModel):
@@ -106,6 +141,10 @@ class TrainResponse(BaseModel):
     # Opaque id callers may pass back on /predict to hit the warm model cache
     # without re-sending the (potentially large) artifact_b64.
     model_id: Optional[str] = None
+    # Per-node facts about a composed model, depth-first. Present only when the request carried a
+    # component_graph — it is what lets the caller write one MJ: ML Components row per node instead
+    # of a single opaque root.
+    component_states: Optional[List[TrainedComponentState]] = None
 
     # `model_id` collides with pydantic's protected `model_` namespace; we use it
     # intentionally as a cache key, so disable the namespace guard here.
@@ -131,6 +170,9 @@ class PredictionContribution(BaseModel):
 
     feature: str
     value: float
+    # False when the record had no value here, so the contribution comes from whatever stood in for
+    # the absence. None when the model cannot tell (absence coerced to 0 before the estimator).
+    hadData: Optional[bool] = None
 
 
 class Prediction(BaseModel):
@@ -141,6 +183,9 @@ class Prediction(BaseModel):
     # Top signed drivers behind THIS row's prediction (linear models only; None otherwise — callers
     # fall back to global feature importance). See app/main.py::_row_contributions.
     contributions: Optional[List[PredictionContribution]] = None
+    # Features this row had NO data for. Only ever populated when preprocessing preserved
+    # missingness (the `present` op); otherwise absence is a real 0 by the time we see it.
+    missingFeatures: Optional[List[str]] = None
 
     model_config = {"populate_by_name": True}
 
@@ -233,3 +278,6 @@ class DescribeResponse(BaseModel):
     correlations: Optional[Dict[str, float]] = None
     duration_sec: float
     warnings: List[str] = Field(default_factory=list)
+
+
+TrainComponentNode.model_rebuild()

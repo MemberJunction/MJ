@@ -230,6 +230,12 @@ describe('FeatureAssemblyExecutor — widened as-of features', () => {
     // silent: no rows → sum null, present 0 — a real zero and absence are DIFFERENT cells
     expect(result.matrix.rows[1][paid]).toBeNull();
     expect(result.matrix.rows[1][present]).toBe(0);
+
+    // ...and the schema SAYS so. A mask typed `numeric` would let the rubric's MissingDataPolicy
+    // and the statistics pass treat "we never knew" as a measured zero.
+    const kinds = new Map(result.featureSchema.map((f) => [f.Name, f.Kind]));
+    expect(kinds.get('paid_90d__present')).toBe('presence');
+    expect(kinds.get('paid_90d')).toBe('numeric');
   });
 
   it('legacy aliases still assemble identically (count/recency spelling)', async () => {

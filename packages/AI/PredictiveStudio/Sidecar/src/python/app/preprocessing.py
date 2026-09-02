@@ -202,6 +202,22 @@ def _fit_stateless_curve(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]
     return {"op": op["op"], "col": op["col"], "params": dict(op.get("params") or {}), **_norm_meta(op)}
 
 
+def _fit_present(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Carry a `present` op through unchanged — absence is observed, never learned.
+
+    Nothing is fit: whether a record had a value is a property of that record, so the mask means
+    the same thing at train and at score by construction. Fitting anything here (a base rate, say)
+    would make the mask depend on the training population, which is exactly what it must not do.
+    """
+    del df  # stateless by design
+    return {
+        "op": "present",
+        "col": op["col"],
+        "emit_mask": True if op.get("emitMask") is None else bool(op.get("emitMask")),
+        "preserve_missing": bool(op.get("preserveMissing")),
+    }
+
+
 _FIT_DISPATCH = {
     "minmax": _fit_minmax,
     "percentile": _fit_percentile,
@@ -213,6 +229,7 @@ _FIT_DISPATCH = {
     "standardize": _fit_standardize,
     "onehot": _fit_onehot,
     "bin": _fit_bin,
+    "present": _fit_present,
 }
 
 
@@ -366,6 +383,18 @@ _NORMALIZE_APPLY = {
 }
 
 
+def _apply_present(params: Dict[str, Any], row: Dict[str, Any], out: List[Tuple[str, Any]]) -> None:
+    """Record whether the column had a value, before anything fills it in.
+
+    Order matters and is the caller's responsibility: a `present` op placed AFTER an `impute` on
+    the same column reports 1 for every row, because by then nothing is missing. The mask has to
+    be taken while absence is still visible.
+    """
+    col = params["col"]
+    if params.get("emit_mask", True):
+        out.append((f"{col}__present", 0.0 if _is_missing(row.get(col)) else 1.0))
+
+
 def _row_dict(columns: Sequence[str], values: Sequence[Any]) -> Dict[str, Any]:
     """Zip a positional row (column names + aligned values) into a name->value dict."""
     return {c: values[i] for i, c in enumerate(columns)}
@@ -391,6 +420,10 @@ def _transform_one(
             _apply_standardize(params, row)
         elif op == "bin":
             _apply_bin(params, row)
+        elif op == "present":
+            # Emits its mask alongside the onehot indicators; the source column is NOT consumed,
+            # because "how much" and "was there any" are two different signals.
+            _apply_present(params, row, out)
         elif op == "onehot":
             # Emit indicator columns at the op's position and consume the raw
             # categorical column. Global column order is finalized in _build_matrix.
@@ -473,6 +506,12 @@ def _build_matrix(
     onehot_cols = {op["col"] for op in fitted_ops if op["op"] == "onehot"}
     # pass-through feature columns = declared features minus those consumed by onehot
     passthrough = [c for c in feature_columns if c not in onehot_cols]
+    # Columns whose ABSENCE is meaningful: they reach the estimator as NaN rather than a real 0,
+    # so a rubric can tell "scored zero" from "no data". Opt-in per column via the `present` op —
+    # every other column keeps the 0.0 coercion every existing pipeline depends on.
+    preserve_missing = {
+        op["col"] for op in fitted_ops if op["op"] == "present" and op.get("preserve_missing")
+    }
 
     transformed_records: List[Dict[str, float]] = []
     for rec in records:
@@ -480,17 +519,24 @@ def _build_matrix(
         emitted, _ = _transform_one(fitted_ops, row)
         rec_map: Dict[str, float] = {name: float(val) for name, val in emitted}
         for c in passthrough:
-            rec_map[c] = _coerce_numeric(row.get(c))
+            raw = row.get(c)
+            if c in preserve_missing and _is_missing(raw):
+                rec_map[c] = float("nan")
+            else:
+                rec_map[c] = _coerce_numeric(raw)
         transformed_records.append(rec_map)
 
     if force_columns is not None:
         output_columns = list(force_columns)
     else:
-        # deterministic order: onehot indicators (in op order) then passthrough
+        # deterministic order: op-emitted columns (onehot indicators, presence masks) in op order,
+        # then the pass-through features
         ordered: List[str] = []
         for op in fitted_ops:
             if op["op"] == "onehot":
                 ordered.extend(f"{op['col']}={cat}" for cat in op["vocabulary"])
+            elif op["op"] == "present" and op.get("emit_mask", True):
+                ordered.append(f"{op['col']}__present")
         ordered.extend(passthrough)
         output_columns = ordered
 

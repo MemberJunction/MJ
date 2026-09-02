@@ -17,12 +17,22 @@
  * sidecar. Embedding dimensions arrive as individual `numeric` columns; this
  * `Kind` describes the *origin* of the feature for schema/UI purposes.
  */
-export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'presence';
 
 /**
- * The two supported supervised-learning problem shapes. Predictive Studio is
- * deliberately opinionated (plan §1.2) — classification (yes/no, multiclass) and
- * regression (predict a number) cover the canonical use cases.
+ * The supported supervised-learning problem shapes. Predictive Studio is deliberately opinionated
+ * (plan §1.2) — classification (yes/no, multiclass) and regression (predict a number) cover the
+ * canonical use cases.
+ *
+ * **`'sequence'` is coming and is deliberately NOT here yet.** The sidecar already trains it (the
+ * `hmm` driver), and the CHECK-constraint widening is written
+ * (`migrations/v6/V202609011200__v6.1.x__ML_ProblemType_Sequence.sql` + its PG twin). What is
+ * missing is the step in between: until that migration is applied AND CodeGen regenerates the
+ * entity types, `MJMLModelEntity.ProblemType` is still a two-value union and the database CHECK
+ * still rejects a third. Widening here first would compile against entities that cannot hold the
+ * value and write rows the database refuses — so the two halves move together, in the order:
+ * migrate → codegen → widen this union → publish the `Sequence` / `Hidden Markov Model` component
+ * types (they are seeded `Status='Draft'` for exactly this reason).
  */
 export type ProblemType = 'classification' | 'regression';
 
@@ -50,7 +60,7 @@ export interface PreprocessingOp {
    * `onehot`. Left as an open string union member so new sidecar-supported ops
    * can be added without a breaking change to this contract.
    */
-  op: 'impute' | 'standardize' | 'onehot' | 'bin' | string;
+  op: 'impute' | 'standardize' | 'onehot' | 'bin' | 'present' | string;
   /** Single target column for column-scoped ops (e.g. `impute`, `onehot`). */
   col?: string;
   /** Multiple target columns for multi-column ops (e.g. `standardize`). */
@@ -61,6 +71,23 @@ export interface PreprocessingOp {
   fillValue?: string | number;
   /** Number of bins to fit when `op` is `bin`. The sidecar fits the edges; absent ⇒ sidecar default. */
   bins?: number;
+  /**
+   * `present` only — emit the `<col>__present` mask column (1 when the record had a value, 0 when
+   * it did not). Default true; set false to use `present` purely for {@link preserveMissing}.
+   */
+  emitMask?: boolean;
+  /**
+   * `present` only — leave `col` **missing** in the matrix instead of coercing absence to 0.
+   *
+   * This is what makes a `MissingDataPolicy` of `Exclude` or `NeutralMidpoint` reachable. Without
+   * it every absent value arrives at the estimator as a real 0, so a rubric cannot tell "scored
+   * zero" from "no data" and its per-row renormalization never fires. Opt-in per column, because
+   * most estimators (logistic regression, ridge, MLP) reject a missing value outright — only the
+   * rubric and the gradient-boosting families handle one.
+   *
+   * Default false, so every pipeline that does not ask for it is unchanged.
+   */
+  preserveMissing?: boolean;
   /**
    * Direction of meaning for the normalization ops (`minmax`/`percentile`/`zscore`/`logistic`/
    * `banded`/`lookup`, ported from Sonar): when false the normalized fraction is inverted before
@@ -174,6 +201,49 @@ export interface TrainRequest {
    * When both `holdout` and `validation.holdout_size` are set, `holdout` wins.
    */
   holdout?: MatrixData;
+  /**
+   * A **composed** model to build instead of the single estimator `algorithm` names (additive).
+   *
+   * When present the sidecar builds an estimator tree — a Bagging Wrapper over a base model, a
+   * Stacking Wrapper over several with a linear final estimator, and so on — from the component
+   * graph the Architect proposed (`component-graph-spec.ts`). `algorithm` still identifies the ROOT
+   * driver, so every existing read path (lineage, the registry, the leaderboard) keeps working
+   * unchanged and a caller that ignores this field behaves exactly as before.
+   */
+  component_graph?: TrainComponentNode;
+  /**
+   * Base64 artifacts for graph nodes that REUSE an already-trained component, keyed by the node's
+   * `reuse_instance_id`. The sidecar has no database, so a reused child's fitted state has to travel
+   * with the request; a node naming a reuse id with no artifact here is an error rather than a
+   * silent re-fit, because silently retraining a component the caller asked to reuse would produce a
+   * different model than the one they described.
+   */
+  component_artifacts?: Record<string, string>;
+}
+
+/**
+ * One node of a composed model, as the sidecar receives it. Deliberately snake_case and
+ * driver-keyed (rather than the TypeScript-side `ComponentTypeRef` names), because the sidecar knows
+ * nothing about the component tree — the caller resolves names to drivers before sending.
+ */
+export interface TrainComponentNode {
+  /**
+   * What to build here. A structure key (`bagging`, `stacking`) composes its children; any other
+   * key is looked up in the estimator registry exactly as `TrainRequest.algorithm` is.
+   */
+  driver: string;
+  /** Constructor hyperparameters for this node. */
+  hyperparameters?: Record<string, unknown>;
+  /** The parent slot this node fills (`base_estimator`, `estimators`, `final_estimator`). */
+  slot?: string;
+  /** Children filling this node's slots. */
+  children?: TrainComponentNode[];
+  /**
+   * Reuse an already-trained component here rather than fitting a fresh one. Its artifact must be
+   * supplied in {@link TrainRequest.component_artifacts}, and it is loaded FROZEN — the enclosing
+   * fit will not update it, which is the whole point of reusing it.
+   */
+  reuse_instance_id?: string;
 }
 
 /**
@@ -200,6 +270,29 @@ export interface TrainResponse {
   duration_sec: number;
   /** Honest metrics on the locked holdout, scored exactly once (plan §8.2). */
   holdout_metrics?: ModelMetrics;
+  /**
+   * Per-node facts about a composed model, in the graph's depth-first order (additive; present only
+   * when the request carried a `component_graph`).
+   *
+   * This is what lets the materializer write a real `MJ: ML Components` row per node instead of one
+   * opaque root — so a composed model's parts stay individually inspectable, story-taggable and
+   * reusable, which is the entire reason for composing in the typed model rather than in a script.
+   */
+  component_states?: TrainedComponentState[];
+}
+
+/** What the sidecar can say about one node of a composed model after fitting. */
+export interface TrainedComponentState {
+  /** The node's driver key, matching the request node. */
+  driver: string;
+  /** The slot it filled in its parent; absent on the root. */
+  slot?: string;
+  /** Whether this node was fitted here, or loaded frozen from a reused artifact. */
+  fitted: boolean;
+  /** The reused component instance id, when this node was frozen rather than fitted. */
+  reuse_instance_id?: string;
+  /** Per-feature contribution for this node alone, when its estimator exposes one. */
+  feature_importance?: FeatureImportance;
 }
 
 /**
@@ -239,6 +332,16 @@ export interface Prediction {
    * `Col=Value`), so a UI should collapse/humanize them for display.
    */
   contributions?: PredictionContribution[];
+  /**
+   * Features this row had **no data** for — the `hadData` signal (Sonar donation item 7).
+   *
+   * Only ever populated for a model that asked for missing values to survive preprocessing (the
+   * `present` op's `preserveMissing`); everywhere else absence is coerced to a real 0 long before
+   * the estimator sees it, and there is nothing left to report. A missing feature is reported here
+   * rather than among `contributions` because it has no magnitude to rank by — but "we had no data
+   * for engagement" is often the most useful thing to say about a prediction.
+   */
+  missingFeatures?: string[];
 }
 
 /** One signed per-record feature contribution: `value > 0` pushes the score up, `< 0` down. */
@@ -247,6 +350,14 @@ export interface PredictionContribution {
   feature: string;
   /** Signed contribution to the model output for this row (log-odds for classification, value for regression). */
   value: number;
+  /**
+   * Whether the record actually had a value for this feature. `false` means the contribution comes
+   * from whatever stood in for the absence (an imputed value, a missing-data policy) — the number
+   * is real, but it is not evidence about this record.
+   *
+   * Absent when the model cannot tell (the usual case: absence was coerced to 0 in preprocessing).
+   */
+  hadData?: boolean;
 }
 
 /**

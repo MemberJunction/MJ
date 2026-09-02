@@ -20,7 +20,14 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import algorithms, artifacts, describe as describe_mod, metrics, preprocessing
+from . import (
+    algorithms,
+    artifacts,
+    composition,
+    describe as describe_mod,
+    metrics,
+    preprocessing,
+)
 from .schemas import (
     DescribeRequest,
     DescribeResponse,
@@ -80,6 +87,7 @@ def train(req: TrainRequest) -> TrainResponse:
 
     started = time.perf_counter()
     try:
+        _reject_unsupported_missingness(req)
         result = _run_training(req)
     except algorithms.AlgorithmNotSupportedError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -107,6 +115,31 @@ def train(req: TrainRequest) -> TrainResponse:
         training_row_count=result["training_row_count"],
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
+        component_states=result.get("component_states"),
+    )
+
+
+def _reject_unsupported_missingness(req: TrainRequest) -> None:
+    """Refuse a pipeline that preserves missingness for an estimator that cannot take it.
+
+    Without this the failure surfaces as a raw sklearn "Input X contains NaN" from somewhere deep
+    in the fit — and, worse, only when a row actually happens to be missing something, which may be
+    long after the model was trained and promoted. Better to say it here, in terms of the two
+    things the operator actually chose.
+    """
+    preserving = [
+        op.col for op in req.preprocessing if op.op == "present" and op.preserveMissing and op.col
+    ]
+    if not preserving:
+        return
+    root = req.component_graph.driver if req.component_graph else req.algorithm
+    if algorithms.tolerates_missing(root):
+        return
+    raise ValueError(
+        f"'{root}' cannot be trained on missing values, but preprocessing preserves them for "
+        f"{', '.join(sorted(preserving))}. Either impute those columns, drop preserveMissing, or "
+        f"choose an algorithm that handles absence "
+        f"({', '.join(sorted(algorithms.MISSING_TOLERANT_DRIVERS))})."
     )
 
 
@@ -253,6 +286,13 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
         "training_row_count": int(len(rows)),
     }
 
+    if req.component_graph is not None:
+        # One state per node, so the caller can write one `MJ: ML Components` row per
+        # component instead of a single opaque root.
+        result["component_states"] = composition.describe_states(
+            req.component_graph, estimator, output_columns
+        )
+
     if X_hold.shape[0] > 0:
         result["holdout_metrics"] = _score(
             estimator, X_hold, y_hold, is_classification
@@ -335,6 +375,15 @@ def _fit_and_score(
     strategy = req.validation.strategy
 
     def build():
+        # A composed model is a TREE of estimators; `algorithm` still names the root driver,
+        # so every path that does not send a graph is untouched.
+        if req.component_graph is not None:
+            return composition.build_from_graph(
+                req.component_graph,
+                req.problem_type,
+                output_columns,
+                req.component_artifacts,
+            )
         est = algorithms.build_estimator(
             req.algorithm, req.problem_type, req.hyperparameters
         )
@@ -537,6 +586,11 @@ def _row_contributions(
     magnitude and return the top ``top_k`` non-negligible ones per row. Any shape mismatch or unexpected
     estimator yields ``[None, ...]`` so /predict never fails because of the explanation layer — the score
     path is unaffected and the UI falls back to global importance.
+
+    A cell that is MISSING (only possible when preprocessing preserved it — see the `present` op)
+    has no contribution to rank: ``coef * nan`` is nan and would silently vanish from the top-k.
+    Those features are reported separately by :func:`_missing_features` instead, so "we had no data
+    for this" stays visible rather than looking like "this did not matter".
     """
     n_rows = int(X.shape[0]) if hasattr(X, "shape") and X.ndim >= 1 else 0
     try:
@@ -548,12 +602,34 @@ def _row_contributions(
             contrib = coef * np.asarray(X[i], dtype=float)
             order = np.argsort(-np.abs(contrib))[:top_k]
             row = [
-                {"feature": feature_names[j], "value": float(contrib[j])}
+                {"feature": feature_names[j], "value": float(contrib[j]), "hadData": True}
                 for j in order
-                if abs(float(contrib[j])) > 1e-9
+                if np.isfinite(contrib[j]) and abs(float(contrib[j])) > 1e-9
             ]
             out.append(row or None)
         return out
+    except Exception:  # never let the explanation layer break scoring
+        return [None] * n_rows
+
+
+def _missing_features(X: np.ndarray, feature_names: List[str]) -> List[Optional[List[str]]]:
+    """Per row, the features whose input value was missing.
+
+    Empty for every row of a pipeline that does not preserve missingness — which is most of them,
+    because absence is coerced to 0.0 unless a `present` op asks otherwise. Reported as ``None``
+    rather than ``[]`` in that case, so "nothing was missing" and "we cannot tell" stay distinct.
+    """
+    n_rows = int(X.shape[0]) if hasattr(X, "shape") and X.ndim >= 1 else 0
+    try:
+        if X.ndim != 2 or len(feature_names) != X.shape[1]:
+            return [None] * n_rows
+        missing_mask = ~np.isfinite(X)
+        if not missing_mask.any():
+            return [None] * n_rows
+        return [
+            [feature_names[j] for j in np.flatnonzero(missing_mask[i])] or None
+            for i in range(n_rows)
+        ]
     except Exception:  # never let the explanation layer break scoring
         return [None] * n_rows
 
@@ -576,17 +652,21 @@ def _build_predictions(
     if X.shape[0] == 0:
         return []
     contribs = _row_contributions(estimator, X, feature_names or [])
+    missing = _missing_features(X, feature_names or [])
     if is_classification:
         # estimator.classes_ are the encoded ints [0..n-1]; map idx -> string label.
         encoded_labels = estimator.predict(X)
         scores = _positive_scores(estimator, X)
         return [
-            _classification_prediction(scores, encoded_labels, label_classes, i, contribs[i])
+            _classification_prediction(
+                scores, encoded_labels, label_classes, i, contribs[i], missing[i]
+            )
             for i in range(X.shape[0])
         ]
     values = np.asarray(estimator.predict(X), dtype=float)
     return [
-        Prediction(score=float(values[i]), contributions=contribs[i]) for i in range(X.shape[0])
+        Prediction(score=float(values[i]), contributions=contribs[i], missingFeatures=missing[i])
+        for i in range(X.shape[0])
     ]
 
 
@@ -596,6 +676,7 @@ def _classification_prediction(
     label_classes: List[str],
     i: int,
     contributions: Optional[List[Dict[str, Any]]] = None,
+    missing_features: Optional[List[str]] = None,
 ) -> Prediction:
     """Assemble the i-th classification :class:`Prediction` (decoded label + score).
 
@@ -622,7 +703,12 @@ def _classification_prediction(
         score = float(scores[i][0])
     else:
         score = float(np.ravel(scores)[i])
-    return Prediction(score=score, contributions=contributions, **{"class": label})
+    return Prediction(
+        score=score,
+        contributions=contributions,
+        missingFeatures=missing_features,
+        **{"class": label},
+    )
 
 
 # ---------------------------------------------------------------------------

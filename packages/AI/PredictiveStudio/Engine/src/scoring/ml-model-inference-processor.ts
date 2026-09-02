@@ -71,6 +71,8 @@ import type {
   MLInferenceDeps,
   LoadedModel,
 } from './types';
+import { bandOutcome, type ScoreBandSpec } from './output-bands';
+import type { BandTransition } from '../components/score-bands';
 
 /** Stable work-type keys this processor is registered under on the ClassFactory. */
 export const ML_INFERENCE_WORK_TYPE = 'ML Model';
@@ -89,6 +91,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   private readonly primaryKeyField: string;
   private readonly datedSources?: DatedSourceSpec[];
   private readonly assembler: FeatureAssemblyExecutor;
+  /**
+   * The model's bands, resolved once alongside the warm model load. `null` means "loaded, and this
+   * model has none" — distinct from `undefined`, which means "not looked up yet".
+   */
+  private bandSpec: ScoreBandSpec | null | undefined = undefined;
 
   /** Warm model cache — loaded once on first record, reused across the batch. */
   private loadedModel: LoadedModel | null = null;
@@ -126,7 +133,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       if (!prediction) {
         return { Status: 'Failed', ErrorMessage: 'Sidecar returned no prediction for the record' };
       }
-      return { Status: 'Succeeded', ResultPayload: this.toPayload(model, prediction) };
+      return { Status: 'Succeeded', ResultPayload: this.toPayload(model, prediction, row) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MLModelInferenceProcessor: scoring failed for record '${record.RecordID}': ${message}`);
@@ -157,7 +164,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       return records.map((_r, i) => {
         const prediction = response.predictions[i];
         return prediction
-          ? { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction) }
+          ? { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction, rows[i]) }
           : { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
       });
     } catch (err) {
@@ -194,6 +201,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (!model.ArtifactFileID) {
       throw new Error(`MLModelInferenceProcessor: ML Model '${this.modelId}' has no ArtifactFileID`);
     }
+    // Bands are an enhancement: the loader never throws, and a model with none simply scores
+    // without one. Resolved here so it costs one query per run, not one per record.
+    this.bandSpec = this.deps.bandLoader
+      ? await this.deps.bandLoader.load(this.modelId, context.contextUser, context.provider)
+      : null;
     const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.contextUser);
     if (!bytes) {
       throw new Error(`MLModelInferenceProcessor: artifact '${model.ArtifactFileID}' not found for model '${this.modelId}'`);
@@ -293,8 +305,14 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   // region: result shaping ------------------------------------------------------
 
-  /** Shape a single sidecar prediction into the record result payload. */
-  private toPayload(model: LoadedModel, prediction: Prediction): MLInferenceResultPayload {
+  /**
+   * Shape a single sidecar prediction into the record result payload.
+   *
+   * @param priorRow the record AS IT WAS before this scoring run — where the previous score and
+   *   band live, and therefore the only way a band crossing can be detected.
+   */
+  private toPayload(model: LoadedModel, prediction: Prediction, priorRow?: SourceRow): MLInferenceResultPayload {
+    const banded = this.bandSpec ? bandOutcome(this.bandSpec, prediction.score, priorRow) : undefined;
     return {
       modelId: model.modelId,
       target: model.targetVariable,
@@ -303,10 +321,20 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       class: prediction.class,
       // Top signed per-record drivers behind THIS prediction (P1-5), when the model supports exact
       // per-row attribution (linear models); omitted otherwise (the UI falls back to global importance).
-      drivers: prediction.contributions?.map((c) => ({ feature: c.feature, value: c.value })),
+      drivers: prediction.contributions?.map((c) => ({ feature: c.feature, value: c.value, hadData: c.hadData })),
+      // Features this record had NO data for (only reported when preprocessing preserved
+      // missingness). "We had no data for engagement" is often the most useful thing to say
+      // about a prediction, and it can never surface among the drivers — absence has no magnitude.
+      missingFeatures: prediction.missingFeatures,
       // Stamp when the prediction was produced so write-back can persist a "last scored at"
       // column via OutputMapping (`{ "<YourColumn>": "$.scoredAt" }`). ISO-8601 UTC.
       scoredAt: new Date().toISOString(),
+      // The word behind the number, when the model has a Score Band component. Absent — rather
+      // than a guessed default — for a model that declares no bands.
+      band: banded?.Band
+        ? { label: banded.Band.Label, severity: banded.Band.Severity, colorHex: banded.Band.ColorHex }
+        : undefined,
+      transition: banded?.Transition,
     };
   }
 
@@ -343,7 +371,13 @@ export interface MLInferenceResultPayload {
    * per-row attribution (linear). Feature names are post-preprocessing output columns; UIs collapse/humanize
    * them. `value > 0` pushed the score up, `< 0` down. Absent for tree/ensemble/multiclass models.
    */
-  drivers?: Array<{ feature: string; value: number }>;
+  drivers?: Array<{ feature: string; value: number; hadData?: boolean }>;
+  /**
+   * Features this record had no value for — the `hadData` signal. Present only for a model whose
+   * preprocessing preserved missingness (the `present` op); elsewhere absence became a real 0
+   * before the estimator saw it, and there is nothing honest left to report.
+   */
+  missingFeatures?: string[];
   /**
    * ISO-8601 UTC timestamp of when this prediction was produced. Lets write-back persist a
    * dedicated "last scored at" column on the target entity via `OutputMapping`
@@ -351,6 +385,17 @@ export interface MLInferenceResultPayload {
    * which moves on any edit, not just scoring.
    */
   scoredAt: string;
+  /**
+   * The band this score falls in, present only for a model with a `Score Band` component. Write-back
+   * persists it with `OutputMapping` (`{ "RiskBand": "$.band.label" }`).
+   */
+  band?: { label: string; severity?: string; colorHex?: string };
+  /**
+   * The band crossing this rescore caused, present only when the record had a previous band (named
+   * by the spec's `PriorBandColumn`) and this score lands in a different one, by more than the
+   * deadband. A first-ever score never produces one — there is nothing to have crossed from.
+   */
+  transition?: BandTransition;
 }
 
 /** Internal — the assembly config resolved off a model for scoring. */
