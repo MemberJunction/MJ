@@ -21,6 +21,7 @@ import {
 } from '../ml-model-inference-processor';
 import { InMemoryArtifactLoader } from '../artifact-loader';
 import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
+import type { IScoreBandLoader, ScoreBandSpec } from '../output-bands';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type {
   IFeatureDataAccess,
@@ -240,5 +241,90 @@ describe('matrixToFeatureRows — frozen-schema mapping', () => {
     expect(rows).toEqual([{ tenure: 12, events_at_signup: null, city: 'NYC' }]);
     // 'extra' (not in schema) is dropped.
     expect(Object.keys(rows[0])).not.toContain('extra');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Score bands on the payload
+// ---------------------------------------------------------------------------
+
+/** Serves a fixed band spec, standing in for the model's `Score Band` component. */
+class FakeBandLoader implements IScoreBandLoader {
+  public Calls = 0;
+  constructor(private readonly spec: ScoreBandSpec | null) {}
+  async load(): Promise<ScoreBandSpec | null> {
+    this.Calls++;
+    return this.spec;
+  }
+}
+
+const PROBABILITY_BANDS: ScoreBandSpec = {
+  Bands: [
+    { Label: 'Unlikely', MinScore: 0, MaxScore: 0.4 },
+    { Label: 'Uncertain', MinScore: 0.4, MaxScore: 0.7 },
+    { Label: 'Likely', MinScore: 0.7, MaxScore: 1 },
+  ],
+  DeadbandDelta: 0.01,
+  PriorScoreColumn: 'PriorScore',
+  PriorBandColumn: 'PriorBand',
+};
+
+describe('MLModelInferenceProcessor — score bands', () => {
+  it('carries the band on the payload when the model has a Score Band component', async () => {
+    const { deps } = buildDeps();
+    deps.bandLoader = new FakeBandLoader(PROBABILITY_BANDS);
+    const result = await buildProcessor(deps).ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), CTX);
+
+    const payload = result.ResultPayload as MLInferenceResultPayload;
+    expect(payload.score).toBe(0.5);
+    expect(payload.band).toEqual({ label: 'Uncertain', severity: undefined, colorHex: undefined });
+    expect(payload.transition).toBeUndefined(); // no prior state on this record
+  });
+
+  it('omits the band entirely for a model with none, rather than inventing one', async () => {
+    const { deps } = buildDeps();
+    deps.bandLoader = new FakeBandLoader(null);
+    const result = await buildProcessor(deps).ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), CTX);
+    expect((result.ResultPayload as MLInferenceResultPayload).band).toBeUndefined();
+  });
+
+  it('detects a crossing against the record as it was before this run', async () => {
+    const { deps } = buildDeps();
+    deps.bandLoader = new FakeBandLoader(PROBABILITY_BANDS);
+    const record = memberRecord('m1', 12, 3, 'NYC');
+    (record.Record as Record<string, unknown>).PriorScore = 0.2;
+    (record.Record as Record<string, unknown>).PriorBand = 'Unlikely';
+
+    const result = await buildProcessor(deps).ProcessRecord(record, CTX);
+    const payload = result.ResultPayload as MLInferenceResultPayload;
+    expect(payload.transition).toEqual({ FromBand: 'Unlikely', ToBand: 'Uncertain', Direction: 'Improving' });
+  });
+
+  it('resolves the bands ONCE per run, not once per record', async () => {
+    const { deps } = buildDeps();
+    const loader = new FakeBandLoader(PROBABILITY_BANDS);
+    deps.bandLoader = loader;
+    const proc = buildProcessor(deps);
+
+    await proc.ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), CTX);
+    await proc.ProcessRecord(memberRecord('m2', 9, 1, 'LA'), CTX);
+
+    expect(loader.Calls).toBe(1);
+  });
+
+  it('bands every row of a batch', async () => {
+    const { deps } = buildDeps();
+    deps.bandLoader = new FakeBandLoader(PROBABILITY_BANDS);
+    const results = await buildProcessor(deps).ProcessBatch(
+      [memberRecord('m1', 12, 3, 'NYC'), memberRecord('m2', 9, 1, 'LA'), memberRecord('m3', 4, 0, 'SF')],
+      CTX,
+    );
+    // FakeSidecar scores 0.5 / 0.6 / 0.7 — the last one crosses into the top band.
+    expect(results.map((r) => (r.ResultPayload as MLInferenceResultPayload).band?.label)).toEqual([
+      'Uncertain',
+      'Uncertain',
+      'Likely',
+    ]);
   });
 });

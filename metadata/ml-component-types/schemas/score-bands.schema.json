@@ -9,19 +9,48 @@
       "items": {
         "type": "object",
         "properties": {
-          "Label": { "type": "string" },
-          "MinScore": { "type": "number" },
-          "MaxScore": { "type": "number" },
-          "Severity": { "type": "string" },
-          "ColorHex": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+          "Label": {
+            "type": "string"
+          },
+          "MinScore": {
+            "type": "number"
+          },
+          "MaxScore": {
+            "type": "number"
+          },
+          "Severity": {
+            "type": "string"
+          },
+          "ColorHex": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          }
         },
-        "required": ["Label", "MinScore", "MaxScore"],
+        "required": [
+          "Label",
+          "MinScore",
+          "MaxScore"
+        ],
         "additionalProperties": false
       },
       "description": "Half-open [Min,Max) tiers that must tile the score scale contiguously; the top band is inclusive."
     },
-    "DeadbandDelta": { "type": "number", "minimum": 0, "description": "Minimum score movement before a band transition is reported." }
+    "DeadbandDelta": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Minimum score movement before a band transition is reported."
+    },
+    "PriorScoreColumn": {
+      "type": "string",
+      "description": "Column on the scored record holding the PREVIOUS score. Without it a band crossing cannot be detected \u2014 a first-ever score and a crossing look identical."
+    },
+    "PriorBandColumn": {
+      "type": "string",
+      "description": "Column holding the previously-assigned band label, compared against the new one to detect a crossing."
+    }
   },
-  "required": ["Bands"],
+  "required": [
+    "Bands"
+  ],
   "additionalProperties": false
 }

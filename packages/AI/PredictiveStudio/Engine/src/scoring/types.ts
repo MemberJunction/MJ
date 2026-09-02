@@ -38,6 +38,7 @@ import type {
 } from '@memberjunction/predictive-studio-core';
 
 import type { DatedSourceSpec } from '../feature-assembly';
+import type { IScoreBandLoader } from './output-bands';
 
 /**
  * Read seam for loading the immutable `MJ: ML Models` row to score against.
@@ -135,6 +136,12 @@ export interface MLInferenceDeps {
   artifactLoader: IArtifactLoader;
   /** Sidecar `/predict` seam. */
   sidecar: ISidecarPredictor;
+  /**
+   * Optional band seam — resolves the model's `Score Band` component. Omitted ⇒ predictions carry
+   * a score and no band, exactly as before. Bands are an enhancement to the payload, never a
+   * precondition for scoring.
+   */
+  bandLoader?: IScoreBandLoader;
 }
 
 /**

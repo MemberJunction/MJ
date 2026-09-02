@@ -30,6 +30,7 @@ import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjun
 
 import { MLModelInferenceProcessor } from '../scoring/ml-model-inference-processor';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
+import { RunViewScoreBandLoader } from '../scoring/output-bands';
 import type { MLInferenceDeps, IArtifactLoader } from '../scoring/types';
 import type { MLInferenceResultPayload } from '../scoring/ml-model-inference-processor';
 import type {
@@ -264,6 +265,9 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       modelLoader: new RunViewMLModelLoader(),
       sidecar: new MJSidecarPredictor(),
       artifactLoader: this.missingArtifactLoader(),
+      // A model with a `Score Band` component gets its band (and any crossing) on the payload;
+      // one without scores exactly as before.
+      bandLoader: new RunViewScoreBandLoader(),
     };
   }
 
