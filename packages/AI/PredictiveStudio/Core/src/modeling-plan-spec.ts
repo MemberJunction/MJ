@@ -1,3 +1,4 @@
+import type { ProblemType } from './sidecar-contract';
 /**
  * @module modeling-plan-spec
  *
@@ -55,8 +56,8 @@ export interface ModelingPlanSpec {
     EntityName: string;
     /** Label expression/column. */
     TargetVariable: string;
-    /** Classification or regression. */
-    ProblemType: 'classification' | 'regression';
+    /** What shape of question this is — see the Core `ProblemType` union. */
+    ProblemType: ProblemType;
     /** The deterministic success metric driving the search. */
     SuccessMetric: 'AUC' | 'F1' | 'Accuracy' | 'RMSE' | string;
     /** Optional point-in-time assembly strategy. */

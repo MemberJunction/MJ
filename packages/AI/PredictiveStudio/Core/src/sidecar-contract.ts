@@ -20,21 +20,19 @@
 export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'presence';
 
 /**
- * The supported supervised-learning problem shapes. Predictive Studio is deliberately opinionated
- * (plan §1.2) — classification (yes/no, multiclass) and regression (predict a number) cover the
- * canonical use cases.
+ * The supported supervised-learning problem shapes.
  *
- * **`'sequence'` is coming and is deliberately NOT here yet.** The sidecar already trains it (the
- * `hmm` driver), and the CHECK-constraint widening is written
- * (`migrations/v6/V202609011200__v6.1.x__ML_ProblemType_Sequence.sql` + its PG twin). What is
- * missing is the step in between: until that migration is applied AND CodeGen regenerates the
- * entity types, `MJMLModelEntity.ProblemType` is still a two-value union and the database CHECK
- * still rejects a third. Widening here first would compile against entities that cannot hold the
- * value and write rows the database refuses — so the two halves move together, in the order:
- * migrate → codegen → widen this union → publish the `Sequence` / `Hidden Markov Model` component
- * types (they are seeded `Status='Draft'` for exactly this reason).
+ * `classification` (yes/no, multiclass) and `regression` (predict a number) both answer a
+ * per-RECORD question: given this record's features, what is the answer for this record.
+ * `sequence` answers a different one — given a record's history IN ORDER, which latent state is it
+ * in now. Renewal risk that builds over four quarters of declining engagement is a different shape
+ * of question from renewal risk read off one snapshot, and flattening it into per-row features
+ * discards the ordering that carried the signal.
+ *
+ * A `sequence` model is trained by the `hmm` driver, which requires the sequence boundaries saying
+ * which rows belong to which entity; see `estimators/hmm.py`.
  */
-export type ProblemType = 'classification' | 'regression';
+export type ProblemType = 'classification' | 'regression' | 'sequence';
 
 /**
  * One entry in the ordered feature schema — the inference input contract. The
