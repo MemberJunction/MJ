@@ -208,7 +208,7 @@ The shared vocabulary across the sidecar, the engine, the UI, and the agent. **S
 |---|---|
 | `sidecar-contract.ts` | `TrainRequest`/`TrainResponse`, `PredictRequest`/`PredictResponse`, `FeatureSchemaEntry`, `PreprocessingOp`, `ValidationConfig`, `MatrixData`, `Prediction`; scalars `FeatureKind`, `ProblemType`, `ModelMetrics`, `FeatureImportance`, `FittedPreprocessing` |
 | `pipeline-spec.ts` | `SourceBinding`, `AsOfStrategy`, `LeakageGuard`, `ValidationStrategy` (the declarative shape of a training pipeline) |
-| `feature-steps.ts` | the visual **FeatureStep DAG** — a discriminated union on `Kind` (**8 kinds**: `select`/`impute`/`standardize`/`onehot`/`bin`/`embedding`/`llm-derived`/`flow-agent`/`vision-llm`) + `FeatureStepGraph` |
+| `feature-steps.ts` | the visual **FeatureStep DAG** — a discriminated union on `Kind` (**10 kinds**: `select`/`impute`/`standardize`/`onehot`/`bin`/`embedding`/`llm-derived`/`flow-agent`/`vision-llm`/`action`) + `FeatureStepGraph` |
 | `modeling-plan-spec.ts` | `ModelingPlanSpec` (the Model Development Agent's strongly-typed payload), `Budget`, `LeaderboardEntry` |
 | `modeling-plan-schema.ts` | **Zod** `ModelingPlanSpecSchema` / `BudgetSchema` + `validateModelingPlanSpec()` / `validateBudget()` — the **runtime** plan/budget validators the Start-Experiment op and Run-Experiment action call before any iteration runs |
 | `metrics-util.ts` | `isErrorMetric(metricKey)` + the canonical **lower-is-better** key set (`rmse`/`mae`/`mse`/`loss`/`logloss`/`log_loss`) — lifted to Core so the leaderboard (§7) and the challenger-vs-incumbent comparison (§14) **cannot drift** on metric direction |
@@ -255,7 +255,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     G["FeatureStep graph (8 kinds)"] --> SPLIT{{"executor partitions<br/>the graph"}}
-    SPLIT -->|"data-assembly steps<br/>select · embedding · llm-derived · flow-agent · vision-llm"| RAW["RAW matrix<br/>built in TypeScript<br/>(RunView · Query · external · vectors · vision-LLM)"]
+    SPLIT -->|"data-assembly steps<br/>select · embedding · llm-derived · flow-agent · vision-llm · action"| RAW["RAW matrix<br/>built in TypeScript<br/>(RunView · Query · external · vectors · vision-LLM · MJ Actions)"]
     SPLIT -->|"preprocessing steps<br/>impute · standardize · onehot · bin"| RECIPE["PreprocessingOp[] recipe<br/>NOT applied in TS — shipped to sidecar"]
     RAW --> TRAIN["sidecar /train"]
     RECIPE --> TRAIN
@@ -270,7 +270,7 @@ flowchart TB
 
 This is the subtle, critical design. The TypeScript executor (`partitionSteps`) partitions the FeatureStep graph into **two kinds of step**:
 
-- **Data-assembly steps** (`select`, `embedding`, `llm-derived`, `flow-agent`, **`vision-llm`**) → produce the **raw matrix** in TypeScript, drawing from `RunView`/`RunViews`, Query bindings, external entities, persisted vectors, and (for `vision-llm`) a per-row vision prompt (§12 note: it's a *dedicated* kind, distinct from `llm-derived`).
+- **Data-assembly steps** (`select`, `embedding`, `llm-derived`, `flow-agent`, **`vision-llm`**, **`action`**) → produce the **raw matrix** in TypeScript, drawing from `RunView`/`RunViews`, Query bindings, external entities, persisted vectors, a per-row vision prompt (`vision-llm` — §12 note: a *dedicated* kind, distinct from `llm-derived`), and an approved MJ Action run once per record (`action` — §5.7).
 - **Preprocessing steps** (`impute`, `standardize`, `onehot`, `bin`) → are **NOT applied in TypeScript**. They are emitted as a `PreprocessingOp[]` recipe and shipped to the sidecar.
 
 > **Why:** Stateful transforms (normalization mean/std, one-hot vocabulary, bin edges, imputation fill values) must be **fit once on the training data** and then *only applied* — never re-fit — at inference. The sidecar (`app/preprocessing.py`) does exactly this: `fit_transform()` at `/train` learns the params and returns them as `fitted_preprocessing`; `transform()` at `/predict` only applies those frozen params ("APPLY ONLY, never re-fit"). The fitted preprocessing is serialized into `MLModel.FittedPreprocessing` alongside the weights and **travels with the model**. This is why `FeatureSchema` alone is insufficient: the fitted pipeline is part of the model's identity. The Python golden test (`src/python/tests/test_preprocessing_golden.py`) locks this down — the same raw row produces an identical transformed vector at train and at predict.
@@ -367,6 +367,50 @@ Be opinionated; don't ship broken models. Default to a train/test split with ove
 
 An ML Model is **immutable + versioned** — each successful run yields a new row, never a mutation. It may *reference* an AI Model in its `Lineage` (e.g. the embedding model used to build features) — a pointer, not membership. The generated entity classes are `MJMLModelEntity` / `MJMLTrainingPipelineEntity` in `@memberjunction/core-entities`. Its lifecycle is the **Draft → Validated → Published → Archived** state machine enforced at promotion (§13).
 
+### 5.7 Code as a feature — the `action` step
+
+Some signals are not a column, an aggregate or a prompt: bespoke math, a call to an external system,
+a rule somebody already wrote and tested. An `action` step makes one of those a feature by running
+an MJ Action once per record.
+
+```jsonc
+{
+  "Id": "engagement",
+  "Kind": "action",
+  "ActionRef": "Compute Engagement Index",   // MJ: Actions id or name
+  "FeatureName": "engagement_index",
+  "RecordParam": "RecordID",   // default — the Action must declare it
+  "AsOfParam":   "AsOf",       // default — so the Action honours the same point-in-time boundary
+  "OutputParam": "Value",      // default — where the number is read from
+  "Params": { "Window": 90 },  // static inputs, bound once
+  "MaxConcurrency": 8,
+  "OutputMin": 0, "OutputMax": 100
+}
+```
+
+Like `vision-llm` it is a per-row, stateless extraction — nothing is fitted — so it produces a RAW
+column and is exempt from the fit-once/apply-everywhere split.
+
+**The approval gate is the point.** Every other step kind declares *what* to compute; this one runs
+code. So the Action must carry `MJ: Actions.CodeApprovalStatus = 'Approved'`, checked once before
+any call is made, and a step naming an unapproved Action **fails the assembly**. Degrading to nulls
+would train a model on a feature that is silently absent — and the model would look entirely normal.
+
+Four more decisions, each a place the system could have been quietly wrong instead:
+
+- **Empty output is no-data, never zero.** `''` → `null`, so the missing-data policy decides what
+  absence means. `Number('')` is `0`, which would score as a real measurement.
+- **A per-record failure is isolated**, so one bad row does not cost the other 999 their feature. A
+  *configuration* failure (missing Action, rejected inputs) is not isolated — it is wrong for
+  everyone, so it fails the run.
+- **Out-of-range output is clamped and counted.** A value outside the declared `OutputMin`/`OutputMax`
+  is contract drift — the Action misbehaving — and is reported rather than absorbed.
+- **Deny-listing the feature name means it never runs**, not that it runs and is discarded.
+
+Cost is linear in the population: one Action call per record, on every train *and* every scoring
+run. `MaxConcurrency` bounds parallelism, not spend; there is no budget guard yet, so a population
+over `ACTION_FEATURE_POPULATION_SOFT_CAP` (1000) logs loudly rather than proceeding quietly.
+
 ---
 
 ## 6. Scoring — a Record Set Processing work type
@@ -432,6 +476,88 @@ These are **four distinct, orthogonal** things. The common confusion is to assum
 | **D** | **#2770 Materialized Results** | A **generic**, not-yet-built primitive for materializing *any query/entity result set* as a cached, auto-refreshed physical table. **Not ML-specific, not run history.** ML can later ride it for population-wide *indexed* prediction columns. | ⏳ deferred (design-doc; gated on PR #2770) | A *future* optimization for indexed, population-wide querying — **never required** to store predictions. |
 
 > **#2770 is NOT "ML Model Run Results."** It's view/entity-materialization infrastructure that ML could *optionally* use later. Per-run prediction history already lives in path B (`MJ: Process Run Details`) and, if you want a typed table, path C (`childRecord`). Writing a prediction into an entity column (path A) is a plain MJ column write — it needs nothing from #2770.
+
+### 6.6 What a prediction says about itself — the explainability payload
+
+Every scored record's `ResultPayload` (`MLInferenceResultPayload`) is what paths A–C read through
+`OutputMapping`. Its full shape:
+
+| Field | JSON path | Present when |
+|---|---|---|
+| `score` | `$.score` | always |
+| `class` | `$.class` | classification |
+| `scoredAt` | `$.scoredAt` | always — ISO-8601 UTC, distinct from the row's `__mj_UpdatedAt` |
+| `drivers` | `$.drivers` | the model has exact per-row attribution (linear families) |
+| `missingFeatures` | `$.missingFeatures` | preprocessing preserved missingness (§6.7) |
+| `band` | `$.band.label` | the model has a `Score Band` component (§6.8) |
+| `transition` | `$.transition` | a band crossing was detected this run |
+
+**Drivers are a child record, not a column.** `drivers` is an array — one entry per contributing
+feature, `{ feature, value, hadData }` — so path A cannot hold it. Persist it through path C:
+define your own entity (`Member Score Drivers`: `MemberID`, `Feature`, `Contribution`, `HadData`,
+`ScoredAt`) and map `OutputMapping.childRecord` at `$.drivers`. One row per driver per scored
+record per run, queryable, append-only.
+
+**Freeze the explanation at score time.** A driver list is only meaningful against the model that
+produced it: coefficients change with every retrain, and a driver row re-derived later would
+describe a different model than the one the decision was made under. So write the drivers WITH the
+score, in the same run, and stamp both with `modelId` and `scoredAt` — never recompute them for a
+historical prediction. This is why path C exists for drivers rather than a "show me why" endpoint.
+
+`value` is signed: positive pushed the score up, negative down. Names are post-preprocessing output
+columns (`City=NYC`), so a UI should collapse and humanize them. `hadData: false` means the number
+is real but came from whatever stood in for an absent value — an imputed mean, a missing-data
+policy — so it is not evidence about *this* record.
+
+### 6.7 When absence is the signal — `hadData`
+
+By default a missing value is coerced to `0.0` before the estimator ever sees it, so "we measured
+zero" and "we never knew" arrive identical. The `present` preprocessing op separates them:
+
+- `{ op: 'present', col: 'engagement' }` emits `engagement__present` (1/0), typed `presence` in the
+  feature schema, so the model can learn from absence itself.
+- `preserveMissing: true` additionally keeps the source column **missing** in the matrix. This is
+  what makes a rubric's `MissingDataPolicy` reachable at all: `Zero` counts absence as 0 and keeps
+  its weight in the denominator, `NeutralMidpoint` scores it 0.5, and `Exclude` drops the input from
+  that row's numerator *and* denominator so the remaining weights renormalize. Without preservation
+  all three collapse onto `Zero` and the operator's declared intent is silently discarded.
+
+Order matters: a `present` op placed after an `impute` on the same column reports 1 for every row.
+And only `rubric`, `xgboost` and `lightgbm` can be handed a missing value — `/train` refuses
+`preserveMissing` for any other algorithm up front rather than letting a raw sklearn NaN error
+surface mid-fit, possibly long after promotion.
+
+A row the rubric cannot score at all (every input excluded) is reported as **unscored**, not zero —
+zero would read as "scored lowest".
+
+### 6.8 Bands — the word behind the number
+
+A model's bands live on an `MJ: ML Components` row of type `Score Band`, whose `Spec` is validated
+against that type's `SpecSchema` on save. Not a column on the scoring binding: an output contract is
+a component, so it inherits, is reusable across models, and can be browsed and narrated like
+anything else in the tree.
+
+```jsonc
+{
+  "Bands": [
+    { "Label": "At Risk", "MinScore": 0,   "MaxScore": 0.4, "Severity": "High", "ColorHex": "#CC3311" },
+    { "Label": "Watch",   "MinScore": 0.4, "MaxScore": 0.7 },
+    { "Label": "Healthy", "MinScore": 0.7, "MaxScore": 1 }
+  ],
+  "DeadbandDelta": 0.01,      // movement smaller than this is float noise, not a crossing
+  "PriorScoreColumn": "RenewalProbability",  // where the previous run wrote its score
+  "PriorBandColumn": "RenewalBand"           // ...and its band
+}
+```
+
+Bands are half-open `[Min, Max)` and must **tile the scale contiguously** — a set with a gap or an
+overlap is refused at load rather than used, because a score in a gap would come back unbanded and
+look exactly like a model that had nothing to say. The top band includes its own `MaxScore`.
+
+A **transition** is reported only when the record already had a band (read from `PriorBandColumn`
+*before* this run's write-back) and this score lands in a different one by more than the deadband.
+A first-ever score never produces one — there is nothing to have crossed from, and inventing a
+transition would fire every alert on the first run.
 
 ---
 
@@ -633,9 +759,10 @@ ops (`minmax`/`percentile`/`zscore`/`logistic`/`banded`/`lookup`), the ten **As-
 input leaves (the widened `DatedFeatureSpec.Aggregate` vocabulary with `Rolling`/`Calendar`/
 `SinceEvent`/`RenewalRelative`/`AllTime` windows and the `__present` hadData mask), **Score
 Band** outputs (`Engine/src/components/score-bands.ts`), and the design-time **join-path**
-auto-resolver (`Engine/src/components/join-path.ts`). The `Sequence`/HMM and Structure-wrapper
-subtrees are seeded `Status='Draft'` until the sidecar's `component_graph` execution and the
-`sequence` problem type ship.
+auto-resolver (`Engine/src/components/join-path.ts`). The Structure wrappers are `Status='Published'`
+now that the sidecar's `component_graph` runtime executes them (§8.5); the `Sequence`/HMM subtree and
+`Code Feature` are `Status='Published'` (the composition runtime §8.5 and the action seam §5.7 both
+exist); the `Sequence`/HMM subtree stays `Status='Draft'` until the `sequence` problem type ships.
 
 ### 8.2 The runtime layer — reading the tree, binding the meaning
 
@@ -715,6 +842,47 @@ are written at all — every pre-existing caller is unchanged.
 Whole-tree rules — contradictory `Add`/`Remove` pairs, hoist suggestions, narrowing direction —
 stay in Core's `lintComponentTree`, which runs over the loaded tree. These subclasses enforce
 only what a single row can prove on its own.
+
+### 8.5 Composition execution — what makes `compose` trainable
+
+Everything above lets a model be *described* as a structure with filled slots. This is what trains
+one. A model can now be a Bagging Wrapper over a Random Forest, or a Stacking Wrapper whose
+`estimators` are three families and whose `final_estimator` is a Logistic Regression — with any
+child optionally **reused** from an already-trained component rather than fitted again.
+
+The chain, end to end:
+
+| Step | Where | What it does |
+|---|---|---|
+| Describe | `MLTrainingPipeline.ComponentGraph` | the `ComponentGraphNode` tree, in component-type **names** |
+| Validate | `validateComponentGraph` (Core) | slots, arity, and what each slot accepts, against the live tree |
+| Translate | `Engine/src/components/graph-to-train.ts` | names → `DriverClass`; refuses an unknown, abstract, or driverless type, and a node that both reuses and declares children |
+| Load reuse | `Engine/src/components/train-graph-seam.ts` | each reused component's artifact, read through the same `IArtifactLoader` scoring uses, into `TrainRequest.component_artifacts` |
+| Execute | `Sidecar/src/python/app/composition.py` | `bagging` → `BaggingClassifier/Regressor(estimator=…)`, `stacking` → `StackingClassifier/Regressor(estimators=[…], final_estimator=…)` |
+| Report | `TrainResponse.component_states` | one state per node, depth-first, with per-node feature importance where the node's own estimator exposes one |
+| Materialize | `planComposedComponents` + `ComponentMaterializer` | one `MJ: ML Components` row per node, parented and slotted |
+
+Four decisions worth knowing, because each one is a place the system could have lied instead:
+
+- **`TrainRequest.algorithm` still names the ROOT driver.** Composition is additive: metrics,
+  leaderboards, and the model row all keep reading the field they always read.
+- **A reused child is genuinely frozen.** `FrozenEstimator` implements `__sklearn_clone__` returning
+  `self` as well as a no-op `fit`, because every sklearn ensemble clones before fitting — without
+  the clone hook the wrapper would be rebuilt around an *unfitted* copy and the freeze silently
+  undone. (Honest caveat: stacking builds meta-features with `cross_val_predict`, so a frozen child
+  whose original training rows overlap this set gives optimistic meta-features. The locked holdout
+  is what keeps the reported numbers truthful.)
+- **A missing or wrong-width reuse artifact is an error, never a re-fit.** Refitting a component the
+  caller asked to reuse would produce a different model than the one described, and nothing
+  downstream could tell.
+- **A composed pipeline with no `componentGraphResolver` fails to train.** Falling back to the bare
+  root estimator would still yield a model, metrics and a leaderboard entry — the worst kind of
+  failure, because it looks exactly like success. Likewise, if the graph walk and the reported
+  states disagree in length or driver, the whole composition is left unmaterialized rather than
+  written with components attached to the wrong parents.
+
+`EXECUTABLE_DECISIONS` is therefore `['commit', 'defer', 'compose']`. `reify` stays refused: it is
+the combination search enumerating a parent's descendants, not a graph to build.
 
 ---
 
@@ -978,8 +1146,10 @@ the others:
 created — after `createPipeline` a refusal would leave an orphan row, and after training it would
 have spent the compute to learn what was knowable up front.
 
-**What is not built yet, said plainly.** `reify` and `compose` are *recordable* today but not
-*executable* — the sidecar's `component_graph` runtime ships later. The gate refuses them with a
+**What is not built yet, said plainly.** `compose` became executable with the sidecar
+`component_graph` runtime (§8.5), so `EXECUTABLE_DECISIONS` is `['commit', 'defer', 'compose']`.
+`reify` is still *recordable* only — training a generalized parent as a family of parameterizations
+is the combination search enumerating its descendants, not a graph. The gate refuses it with a
 concrete alternative ("commit to one of its concrete descendants, or defer across them, to build
 now") and keeps the proposal on the plan. It does not quietly train the graph's root and let the
 user believe the composition happened.
@@ -1030,10 +1200,13 @@ Two structural changes came with this:
   equally non-contractual: promotion has already succeeded, so a story is a documentation gap when
   it fails, never a reason to un-promote.
 
-Story tagging is **off unless a host wires a runner** (`ProductionModelPromotionGate.RegisterStoryRunner`).
-`AIPromptRunner` lives in a package the engine does not depend on — the same reason
-`IVisionPromptRunner` is caller-injected — so without one a model trains, promotes and scores
-exactly as it did before.
+Story tagging is **on by default**, using `AIPromptRunner` built lazily on first promotion.
+`ProductionModelPromotionGate.RegisterStoryRunner` is tri-state: a runner overrides the default,
+`null` opts a deployment out entirely, `undefined` restores it. It was originally caller-injected
+only — on the premise that the engine could not depend on `@memberjunction/ai-prompts` — but the
+engine already depends on it transitively via `@memberjunction/ai-agents`, and no host ever
+registered a runner, so the feature shipped inert. With tagging off a model trains, promotes and
+scores exactly as it did before.
 
 ---
 
@@ -1503,8 +1676,8 @@ on every item that came from an ancestor — and no chip where the leaf genuinel
   `LoadComponentInstances` excludes `StoryVector` from `Fields` because the panel shows a
   component's story as *prose* — the vector is only ever needed server-side by the reuse search.
 
-Read-only for now. The compose UI (drag into slots, live `validateComponentGraph`) ships with the
-composition runtime.
+Read-only for now. The compose UI (drag into slots, live `validateComponentGraph`) is still to come;
+the runtime underneath it (§8.5) is built, so a graph authored by the Architect already trains.
 
 - **Embedded copilot**: an `<mj-conversation-chat-area>` (from `@memberjunction/ng-conversations`, see [Conversations UX Stack Guide](CONVERSATIONS_UX_STACK_GUIDE.md)) docked across **all** panels — agent picker hidden, pinned to the Model Development Agent, with an `appContext` carrying the active panel + published-model / running-session counts so the agent can act on the current context.
 - **Knowledge Hub side**: the **Feature Pipelines** panel (`FeaturePipelinesResourceComponent`, §11) lives in the Knowledge Hub dashboard — list / run / author derived-feature pipelines.
@@ -1594,16 +1767,24 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | **Security model** (scope gate, PK field-name guard, UUID gate, promotion state machine, sign-off reason) | ✅ built |
 | **Maintenance** (staleness + direction-aware challenger-vs-incumbent, never auto-promotes) | ✅ built |
 | **Multimodal** vision-LLM-as-feature (`'vision-llm'` FeatureStep kind, additive) | ✅ built |
+| **Code as a feature** (`'action'` FeatureStep kind, `CodeApprovalStatus` gate, bounded fan-out, output clamping) — §5.7 | ✅ built |
+| **Runtime seams default to production** (vision runner + prompt resolver, action runner + approval check, story prompt runner, **wave strategist**) — each was caller-injected with no default and nobody wired them, so the feature shipped inert | ✅ built |
+| **Component-combination search is the production strategist**, so a session keeps exploring once the plan is exhausted instead of stopping; a strict superset of plan order (seeds first, never displaced) | ✅ built |
+| **All four architecture decisions executable** — `commit` · `defer` · `reify` (checked: the candidates must really descend from the parent they are reified under) · `compose` | ✅ built |
 | **Statistics pre-pass** (sidecar `/describe`, feature hints, tree-inherited gates, `Statistics Pass` sub-agent) — §12.6 | ✅ built |
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
 | **Business-user experience** (§16) — agent offers + schedules monthly · generic `'*'` risk-card panel · Models-in-Production section · de-mocked Studio + ops wired · scoring-binding lineage · WorkType value-list + Enrichment-over-GraphQL | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
-| Component **composition** execution (sidecar `component_graph`: bagging/stacking/frozen reuse) — makes `reify`/`compose` trainable | ⏳ planned |
+| Component **composition** execution (sidecar `component_graph`: bagging/stacking/frozen reuse, per-node component rows) — makes `compose` trainable — §8.5 | ✅ built |
+| `reify` execution (generalized parent as a family of parameterizations, via the combination search) | ⏳ planned |
 | **Architect sub-agent** (commit/defer/reify/compose + graph validation + execution gate) — §12.7 | ✅ built |
 | **Model stories** (deterministic context + one validated prompt, per-component prose, promotion hook) — §12.8 | ✅ built |
 | **Reuse-by-meaning search** + Browse/Validate Actions (8 PS Actions total) — §12.9 | ✅ built |
 | Studio **Components tab** (tree + resolved-profile inspector with inherited-from chips) — §18 | ✅ built |
 | Compose UI (drag into slots, live graph validation) | ⏳ planned |
+| **`hadData` / `Exclude`** (`present` op, preserved missingness, `presence` feature kind, per-row rubric renormalization, `missingFeatures` on the payload) — §6.7 | ✅ built |
+| **Explainability shape** (`$.drivers` as a `childRecord` path, `hadData` per driver, freeze-at-score recipe) — §6.6 | ✅ built |
+| **Score bands wired into scoring** (`Score Band` component → `$.band` / `$.transition`, tiling validation, deadband) — §6.8 | ✅ built |
 | Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).
