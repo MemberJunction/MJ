@@ -22,7 +22,7 @@ const TYPES_DIR = resolve(METADATA, 'ml-component-types');
  * Published leaf may name. Deliberately hard-coded: if the sidecar or executor drops a driver,
  * this test must fail rather than silently follow.
  */
-const PUBLISHED_MODEL_DRIVERS = new Set(['xgboost', 'lightgbm', 'logistic_regression', 'random_forest', 'ridge', 'mlp', 'rubric']);
+const PUBLISHED_MODEL_DRIVERS = new Set(['xgboost', 'lightgbm', 'logistic_regression', 'random_forest', 'ridge', 'mlp', 'rubric', 'hmm']);
 /** Mirror of the sidecar `composition.STRUCTURE_SLOTS` keys — structures compose, they do not fit. */
 const PUBLISHED_STRUCTURE_DRIVERS = new Set(['bagging', 'stacking']);
 const PUBLISHED_PREPROCESSING_DRIVERS = new Set(['impute', 'standardize', 'minmax', 'percentile', 'zscore', 'onehot', 'bin', 'logistic', 'banded', 'lookup', 'present']);
@@ -155,18 +155,16 @@ describe('the shipped component seed tree', () => {
     expect(profile.Leaf.Trainable).toBe(true);
   });
 
-  it('keeps a subtree Draft until the runtime behind it actually ships', () => {
-    // Sequence/HMM wait on the `sequence` problem type.
-    for (const name of ['Sequence', 'Hidden Markov Model']) {
-      const node = nodesById.get(idByName.get(name) as string) as ComponentTypeNode;
-      expect(node.Status, name).toBe('Draft');
-    }
+  it('has no Draft family left — everything seeded has a runtime behind it', () => {
+    // Sequence/HMM were the last to graduate: they needed the ProblemType CHECK widened and
+    // CodeGen re-run before a model could even hold the value.
+    expect(nodes.filter((n) => n.Status === 'Draft').map((n) => n.Name)).toEqual([]);
   });
 
   it('publishes the structure wrappers, whose composition runtime now exists', () => {
-    // The sidecar builds bagging/stacking graphs and loads reused children frozen, and an approved
-    // Action can be a feature — so these are no longer proposals.
-    for (const name of ['Bagging Wrapper', 'Stacking Wrapper', 'Code Feature']) {
+    // The sidecar builds bagging/stacking graphs and loads reused children frozen, an approved
+    // Action can be a feature, and `hmm` trains a sequence — so none of these are proposals now.
+    for (const name of ['Bagging Wrapper', 'Stacking Wrapper', 'Code Feature', 'Hidden Markov Model']) {
       const node = nodesById.get(idByName.get(name) as string) as ComponentTypeNode;
       expect(node.Status, name).toBe('Published');
     }

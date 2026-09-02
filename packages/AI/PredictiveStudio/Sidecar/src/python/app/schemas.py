@@ -92,6 +92,17 @@ class TrainComponentNode(BaseModel):
     reuse_instance_id: Optional[str] = None
 
 
+class SequenceSpec(BaseModel):
+    """How to segment the training matrix into per-entity sequences (problem_type='sequence').
+
+    `group_field` names a column present in `data` but NOT in `feature_schema` — the same way
+    `target` rides along.
+    """
+
+    group_field: str
+    order_field: Optional[str] = None
+
+
 class TrainRequest(BaseModel):
     """``POST /train`` request body."""
 
@@ -116,6 +127,9 @@ class TrainRequest(BaseModel):
     # Base64 artifacts for nodes that REUSE an already-trained component, keyed by reuse_instance_id.
     # The sidecar has no database, so a reused child's fitted state has to travel with the request.
     component_artifacts: Optional[Dict[str, str]] = None
+    # REQUIRED for problem_type='sequence'. Without boundaries an HMM learns transitions between
+    # unrelated entities and still returns a confident-looking fitted model.
+    sequence: Optional[SequenceSpec] = None
 
 
 class TrainedComponentState(BaseModel):

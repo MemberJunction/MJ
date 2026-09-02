@@ -28,6 +28,7 @@ from . import (
     metrics,
     preprocessing,
 )
+from .estimators import hmm as hmm_estimators
 from .schemas import (
     DescribeRequest,
     DescribeResponse,
@@ -119,6 +120,113 @@ def train(req: TrainRequest) -> TrainResponse:
     )
 
 
+def _run_sequence_training(req: TrainRequest) -> Dict[str, Any]:
+    """Train a sequence model (problem_type='sequence') over per-entity observation histories.
+
+    Deliberately separate from the supervised path, because three of its assumptions are wrong here:
+
+    * **There is no supervised target.** An HMM is unsupervised over the observation sequence; the
+      `target` column, if present, rides along and is not fitted against.
+    * **A holdout must split by GROUP, never by row.** Splitting rows would put part of a member's
+      history in train and part in holdout — leaking their future into their past and producing a
+      holdout score that flatters the model. Whole entities are held out instead.
+    * **The metrics are different.** There is no AUC and no R². What is comparable across sequence
+      models is the mean POSTERIOR confidence of the assigned state, bounded 0–1.
+
+    Raises:
+        ValueError: when no sequence spec is supplied, or the group column is absent — either would
+            otherwise train transitions between unrelated entities and still look successful.
+    """
+    if req.sequence is None or not req.sequence.group_field:
+        raise ValueError(
+            "problem_type='sequence' requires a `sequence.group_field` naming the column that says "
+            "which entity each row belongs to. Without it every row would be treated as one long "
+            "sequence and the model would learn transitions between unrelated records."
+        )
+
+    columns = list(req.data.columns)
+    group_field = req.sequence.group_field
+    if group_field not in columns:
+        raise ValueError(
+            f"sequence.group_field '{group_field}' is not a column in `data` "
+            f"(columns: {', '.join(columns)})."
+        )
+
+    feature_cols = [c for c in _feature_columns(req) if c not in (group_field, req.sequence.order_field)]
+    rows = req.data.rows
+    group_idx = columns.index(group_field)
+    group_values = [r[group_idx] for r in rows]
+
+    ops_spec = [op.model_dump(exclude_none=True) for op in req.preprocessing]
+    matrix, output_columns, fitted = preprocessing.fit_transform(columns, rows, ops_spec, feature_cols)
+
+    lengths = hmm_estimators.sequence_lengths_from_groups(group_values)
+    dev_lengths, hold_lengths, dev_rows_n = _split_sequences_by_group(lengths, req.validation.holdout_size)
+
+    X_dev = matrix[:dev_rows_n]
+    X_hold = matrix[dev_rows_n:]
+
+    estimator = algorithms.build_estimator(req.algorithm, req.problem_type, dict(req.hyperparameters or {}))
+    if hasattr(estimator, "mj_set_sequence_lengths"):
+        estimator.mj_set_sequence_lengths(dev_lengths)
+    if output_columns and hasattr(estimator, "mj_set_feature_names"):
+        estimator.mj_set_feature_names(output_columns)
+    estimator.fit(X_dev)
+
+    result: Dict[str, Any] = {
+        "estimator": estimator,
+        "fitted": fitted,
+        "metrics": _sequence_metrics(estimator, X_dev),
+        # An HMM attributes to latent states, not to input features. Reporting a per-feature
+        # importance would be inventing one.
+        "feature_importance": {},
+        "training_row_count": int(len(rows)),
+    }
+    if X_hold.shape[0] > 0 and hold_lengths:
+        result["holdout_metrics"] = _sequence_metrics(estimator, X_hold)
+    return result
+
+
+def _split_sequences_by_group(
+    lengths: List[int], holdout_size: Optional[float]
+) -> Tuple[List[int], List[int], int]:
+    """Hold out WHOLE entities, from the end, so no history is split across the boundary.
+
+    Returns ``(dev_lengths, holdout_lengths, dev_row_count)``. A fraction that would leave no
+    training groups holds nothing out — a holdout is worth less than a model.
+    """
+    fraction = holdout_size if holdout_size and holdout_size > 0 else 0.0
+    if fraction <= 0 or len(lengths) < 2:
+        return lengths, [], sum(lengths)
+    hold_groups = int(len(lengths) * fraction)
+    if hold_groups < 1 or hold_groups >= len(lengths):
+        return lengths, [], sum(lengths)
+    split_at = len(lengths) - hold_groups
+    dev, hold = lengths[:split_at], lengths[split_at:]
+    return dev, hold, sum(dev)
+
+
+def _sequence_metrics(estimator: Any, X: np.ndarray) -> Dict[str, float]:
+    """Posterior-based metrics for a sequence model — bounded and comparable across models.
+
+    `mean_posterior` is the average confidence of the state each observation was assigned;
+    `state_confidence` is the fraction of observations assigned with better than even confidence.
+    A log-likelihood would be unbounded and comparable to nothing, so it is not reported as a score.
+    """
+    if X.shape[0] == 0 or not hasattr(estimator, "score_samples"):
+        return {}
+    try:
+        confidence = np.asarray(estimator.score_samples(X), dtype=float)
+    except Exception:  # pragma: no cover - a scoring failure must not lose the trained model
+        return {}
+    if confidence.size == 0:
+        return {}
+    return {
+        "mean_posterior": float(np.mean(confidence)),
+        "state_confidence": float(np.mean(confidence > 0.5)),
+    }
+
+
 def _reject_unsupported_missingness(req: TrainRequest) -> None:
     """Refuse a pipeline that preserves missingness for an estimator that cannot take it.
 
@@ -202,6 +310,12 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
         A dict with ``estimator``, ``fitted``, ``metrics``, ``feature_importance``,
         ``training_row_count``, and (when a holdout exists) ``holdout_metrics``.
     """
+    if req.problem_type == "sequence":
+        # A sequence model does not fit the supervised path at all: it is unsupervised over the
+        # observation sequence, and a row-wise holdout would split a member's own history — leaking
+        # their future into their past. It gets its own function rather than a branch per step.
+        return _run_sequence_training(req)
+
     feature_cols = _feature_columns(req)
     target = req.target
     columns = list(req.data.columns)

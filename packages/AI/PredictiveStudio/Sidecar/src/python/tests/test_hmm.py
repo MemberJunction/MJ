@@ -162,3 +162,97 @@ def test_a_key_that_reappears_starts_a_NEW_run() -> None:
 
 def test_empty_input_has_no_runs() -> None:
     assert sequence_lengths_from_groups([]) == []
+
+
+# ---------------------------------------------------------------------------
+# End to end through /train — problem_type='sequence'
+# ---------------------------------------------------------------------------
+
+def sequence_request(n_groups: int = 24, per_group: int = 10, **over):
+    """A matrix of per-member histories: engagement drops partway through each member's history."""
+    import numpy as _np
+
+    rng = _np.random.default_rng(11)
+    columns = ["MemberID", "At", "engagement", "spend"]
+    rows = []
+    for g in range(n_groups):
+        for i in range(per_group):
+            level = 0.0 if i < per_group // 2 else 8.0
+            rows.append([f"m{g}", f"2026-0{(i % 9) + 1}-01", float(rng.normal(level, 0.4)), float(rng.normal(level, 0.4))])
+    req = {
+        "algorithm": "hmm",
+        "problem_type": "sequence",
+        "hyperparameters": {"n_states": 2, "n_iter": 30, "random_state": 0},
+        "validation": {"strategy": "none", "holdout_size": 0.25},
+        "feature_schema": [{"Name": "engagement", "Kind": "numeric"}, {"Name": "spend", "Kind": "numeric"}],
+        "preprocessing": [],
+        "target": "engagement",
+        "data": {"columns": columns, "rows": rows},
+        "sequence": {"group_field": "MemberID", "order_field": "At"},
+    }
+    req.update(over)
+    return req
+
+
+def test_a_sequence_model_trains_end_to_end() -> None:
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    resp = TestClient(app).post("/train", json=sequence_request())
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    # Posterior-based, bounded, comparable — never a log-likelihood.
+    assert 0.0 <= body["metrics"]["mean_posterior"] <= 1.0
+    assert 0.0 <= body["metrics"]["state_confidence"] <= 1.0
+    assert body["metrics"]["mean_posterior"] > 0.8  # the planted regimes are well separated
+    # An HMM attributes to latent states, not input features; inventing a per-feature number
+    # would be worse than reporting none.
+    assert body["feature_importance"] == {}
+
+
+def test_the_holdout_holds_out_WHOLE_entities() -> None:
+    """A row-wise split would put part of a member's history in train and part in holdout —
+    leaking their future into their past and flattering the holdout score."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    body = TestClient(app).post("/train", json=sequence_request()).json()
+    assert "holdout_metrics" in body
+    assert 0.0 <= body["holdout_metrics"]["mean_posterior"] <= 1.0
+
+
+def test_sequence_training_refuses_without_a_group_field() -> None:
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    req = sequence_request()
+    del req["sequence"]
+    resp = TestClient(app).post("/train", json=req)
+    assert resp.status_code == 400
+    assert "sequence.group_field" in resp.json()["detail"]
+
+
+def test_sequence_training_refuses_a_group_field_that_is_not_a_column() -> None:
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    resp = TestClient(app).post("/train", json=sequence_request(sequence={"group_field": "Nonexistent"}))
+    assert resp.status_code == 400
+    assert "is not a column" in resp.json()["detail"]
+
+
+def test_group_split_holds_out_whole_groups_or_nothing() -> None:
+    from app.main import _split_sequences_by_group
+
+    dev, hold, dev_rows = _split_sequences_by_group([5, 5, 5, 5], 0.25)
+    assert dev == [5, 5, 5] and hold == [5] and dev_rows == 15
+    # A fraction too small to hold out a whole group holds out nothing — a holdout is worth
+    # less than a model.
+    assert _split_sequences_by_group([5, 5], 0.1) == ([5, 5], [], 10)
+    # With two groups, a large fraction still keeps one to train on.
+    assert _split_sequences_by_group([5, 5], 0.99) == ([5], [5], 5)
+    # ...but it never holds out EVERY group — there would be nothing left to fit.
+    assert _split_sequences_by_group([5, 5], 1.0) == ([5, 5], [], 10)
+    # A single group cannot be split at all.
+    assert _split_sequences_by_group([7], 0.5) == ([7], [], 7)

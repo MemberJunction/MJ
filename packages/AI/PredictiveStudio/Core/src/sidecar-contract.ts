@@ -217,6 +217,15 @@ export interface TrainRequest {
    * different model than the one they described.
    */
   component_artifacts?: Record<string, string>;
+  /**
+   * Sequence boundaries, REQUIRED when `problem_type` is `'sequence'`.
+   *
+   * An HMM learns transitions within one entity's history. Without knowing where one entity's rows
+   * end and the next begin it treats the whole matrix as a single sequence and learns transitions
+   * between unrelated records — returning a fitted model with confident scores that nothing
+   * downstream would question. The sidecar refuses rather than guessing.
+   */
+  sequence?: SequenceSpec;
 }
 
 /**
@@ -224,6 +233,20 @@ export interface TrainRequest {
  * driver-keyed (rather than the TypeScript-side `ComponentTypeRef` names), because the sidecar knows
  * nothing about the component tree — the caller resolves names to drivers before sending.
  */
+/**
+ * How to segment the training matrix into per-entity sequences.
+ *
+ * `group_field` names a column present in `data` but NOT in `feature_schema` — the same way
+ * `target` rides along. Rows are expected already grouped and ordered; `order_field` records what
+ * they were ordered by, so the model's lineage says it rather than leaving it implicit.
+ */
+export interface SequenceSpec {
+  /** Column identifying which entity a row belongs to (the per-entity sequence key). */
+  group_field: string;
+  /** Column the rows were ordered by within each group. Recorded for lineage. */
+  order_field?: string;
+}
+
 export interface TrainComponentNode {
   /**
    * What to build here. A structure key (`bagging`, `stacking`) composes its children; any other

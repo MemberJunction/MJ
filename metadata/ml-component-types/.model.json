@@ -223,7 +223,7 @@
       "Story": "Sequence models care about the order of what happened, not just the totals — trajectories, not snapshots.",
       "IsAbstract": true,
       "Trainable": false,
-      "Status": "Draft",
+      "Status": "Published",
       "Version": 1,
       "ParentID": "@lookup:MJ: ML Component Types.Name=Model"
     },
@@ -239,7 +239,7 @@
       "Story": "An HMM assumes the visible events are shadows of a few hidden regimes — \"engaged\", \"drifting\", \"gone\" — and learns both the regimes and how members move between them.",
       "IsAbstract": false,
       "Trainable": true,
-      "Status": "Draft",
+      "Status": "Published",
       "Version": 1,
       "ParentID": "@lookup:MJ: ML Component Types.Name=Sequence",
       "DriverClass": "hmm",
