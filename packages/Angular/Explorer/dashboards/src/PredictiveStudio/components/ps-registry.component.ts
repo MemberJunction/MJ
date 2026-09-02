@@ -10,6 +10,12 @@ import {
   PredictiveStudioModelTargetStatus,
 } from '@memberjunction/core-entities';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import {
+  buildModelStoryVM,
+  describeRole,
+  type PSModelStoryVM,
+  type StoryComponentRow,
+} from '../model-story.view-models';
 import { PSFeatureBar, PS_LIFECYCLE_STEPS, PSLifecycleStep } from '../predictive-studio.types';
 import {
   PS_FEATURE_DOMINANCE_THRESHOLD,
@@ -125,6 +131,51 @@ interface PendingPromotion {
               </div>
             </div>
 
+            <!-- story: the prose half of the model's identity -->
+            <div class="ps-card" data-testid="ps-registry-story">
+              <div class="ps-card-head">
+                <h3>Story</h3>
+                @if (story && story.HighReuseCount > 0) {
+                  <span class="ps-badge gray" data-testid="ps-registry-story-reuse">{{ story.HighReuseCount }} reusable</span>
+                }
+              </div>
+              <div class="ps-card-body">
+                @if (loadingStory) {
+                  <div class="ps-muted ps-small">Loading…</div>
+                } @else if (!story || story.IsEmpty) {
+                  <div class="ps-muted ps-small" data-testid="ps-registry-story-empty">
+                    No story yet. One is written when the model is published.
+                  </div>
+                } @else {
+                  @if (story.ModelStory) {
+                    <p class="ps-small" data-testid="ps-registry-story-prose">{{ story.ModelStory }}</p>
+                  }
+                  @for (c of story.Components; track c.ID) {
+                    <div class="story-part" [attr.data-testid]="'ps-registry-story-part-' + c.ID">
+                      <div class="ps-section-title">
+                        {{ c.Name }}
+                        @if (c.Contribution?.WeightPercent !== null && c.Contribution) {
+                          <span class="ps-tag ps-mono">{{ c.Contribution.WeightPercent }}%</span>
+                        }
+                      </div>
+                      @if (c.Story) { <div class="ps-small">{{ c.Story }}</div> }
+                      @if (c.Contribution) {
+                        <div class="ps-muted ps-small">
+                          @if (c.Contribution.Role) { {{ roleLabel(c.Contribution.Role) }} }
+                          @if (c.Contribution.Evidence) { · {{ c.Contribution.Evidence }} }
+                        </div>
+                        @if (c.Contribution.ReuseWhen) {
+                          <div class="ps-small reuse-when">
+                            <i class="fa-solid fa-recycle"></i> {{ c.Contribution.ReuseWhen }}
+                          </div>
+                        }
+                      }
+                    </div>
+                  }
+                }
+              </div>
+            </div>
+
             <!-- performance -->
             <div class="ps-card">
               <div class="ps-card-head"><h3>Performance</h3><span class="ps-muted ps-small">Holdout = held-out test fold, never seen in training</span></div>
@@ -235,6 +286,9 @@ export class PSRegistryComponent implements OnInit {
   @Input() currentUser: UserInfo | null = null;
 
   private cdr = inject(ChangeDetectorRef);
+  /** The selected model's story, or null when it has none / could not be read. */
+  public story: PSModelStoryVM | null = null;
+  public loadingStory = false;
   private notifications = inject(MJNotificationService);
 
   public models: ModelRowVM[] = [];
@@ -256,6 +310,43 @@ export class PSRegistryComponent implements OnInit {
 
   public select(id: string): void {
     this.selectedId = id;
+    void this.loadStory();
+  }
+
+  /**
+   * Load the selected model's story from its `MJ: ML Components` rows.
+   *
+   * Best-effort: the story is the model's prose identity, not part of its record. A failure leaves
+   * the card empty rather than breaking a panel whose real job is the model's metrics and lifecycle.
+   */
+  public async loadStory(): Promise<void> {
+    const modelId = this.selectedId;
+    if (!modelId || !this.provider) {
+      this.story = null;
+      return;
+    }
+    this.loadingStory = true;
+    this.cdr.detectChanges();
+    try {
+      const rows = await this.engine.LoadComponentInstances(this.provider, this.currentUser ?? undefined, {
+        mlModelId: modelId,
+      });
+      // Guard against a slow response for a model the user has already navigated away from.
+      if (this.selectedId !== modelId) {
+        return;
+      }
+      this.story = buildModelStoryVM(rows as unknown as StoryComponentRow[], this.selectedEntity?.RootComponentID ?? null);
+    } catch {
+      this.story = null;
+    } finally {
+      this.loadingStory = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Human phrasing for a contribution role — the lookup lives in the view-model, not the template. */
+  public roleLabel(role: Parameters<typeof describeRole>[0]): string {
+    return describeRole(role);
   }
 
   public get selected(): ModelRowVM {

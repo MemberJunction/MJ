@@ -65,3 +65,10 @@
 .ps-registry .ln-card .t { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); font-weight: 700; }
 .ps-registry .ln-card .n { font-weight: 650; color: var(--mj-text-primary); font-size: 13px; margin: 2px 0; }
 .ps-registry .ln-arrow { color: var(--mj-text-disabled); }
+
+/* Story card — the prose half of a model's identity, beside its metrics. */
+.ps-registry .story-part { padding: 8px 0; border-top: 1px solid var(--mj-border-subtle); }
+.ps-registry .story-part:first-of-type { border-top: none; }
+.ps-registry .story-part .ps-section-title { display: flex; align-items: center; gap: 8px; }
+.ps-registry .reuse-when { margin-top: 4px; color: var(--mj-text-secondary); }
+.ps-registry .reuse-when i { color: var(--mj-status-success-text); margin-right: 4px; }

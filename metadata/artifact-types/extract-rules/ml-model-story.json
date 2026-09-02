@@ -1,0 +1,41 @@
+[
+    {
+        "name": "name",
+        "description": "Extracts the model story's headline — the one line a business user would recognize",
+        "type": "string",
+        "standardProperty": "name",
+        "extractor": "@file:ml-model-story/ml-model-story-name.js"
+    },
+    {
+        "name": "description",
+        "description": "Extracts a short summary of what the model decides",
+        "type": "string",
+        "standardProperty": "description",
+        "extractor": "@file:ml-model-story/ml-model-story-description.js"
+    },
+    {
+        "name": "displayMarkdown",
+        "description": "Renders the whole story as markdown: what it decides, what the data says, why it matters, each component's contribution and reuse note, and the caveats",
+        "type": "string",
+        "standardProperty": "displayMarkdown",
+        "extractor": "@file:ml-model-story/ml-model-story-markdown.js"
+    },
+    {
+        "name": "trustGrade",
+        "description": "The deterministic trust grade the story was written against (Poor/Fair/Good/Excellent)",
+        "type": "string",
+        "extractor": "@file:ml-model-story/ml-model-story-trust-grade.js"
+    },
+    {
+        "name": "componentCount",
+        "description": "How many components the story describes",
+        "type": "number",
+        "extractor": "@file:ml-model-story/ml-model-story-component-count.js"
+    },
+    {
+        "name": "reusableComponentCount",
+        "description": "How many of the components are marked high reuse potential — what makes this story worth searching",
+        "type": "number",
+        "extractor": "@file:ml-model-story/ml-model-story-reusable-count.js"
+    }
+]

@@ -1,0 +1,16 @@
+[
+    {
+        "fields": {
+            "Name": "ML Model Story",
+            "Description": "The prose identity of a trained Predictive Studio model, authored at promotion by the Model Story Tagger: what the model decides, what the data says, why it matters to the business, what each of its components contributes and when that component is worth reusing, and the honest limits. Deliberately declares NO DriverClass — it inherits the parent JSON viewer, which renders the `displayMarkdown` extract rule. Naming a plugin that is not registered does not fall back; it renders a 'Viewer Component Not Found' error instead. Add a DriverClass only together with a @RegisterClass(BaseArtifactViewerPluginComponent, ...) component.",
+            "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
+            "ContentType": "application/vnd.mj.ml-model-story",
+            "ExtractRules": "@file:extract-rules/ml-model-story.json",
+            "IsEnabled": true,
+            "Icon": "fa-solid fa-book-open"
+        },
+        "primaryKey": {
+            "ID": "DFCC8756-6D7D-4463-9F0F-7954EB9D5711"
+        }
+    }
+]
