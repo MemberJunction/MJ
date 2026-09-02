@@ -909,6 +909,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- ML Component Types Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLComponentTypes"
+        SectionName="ML Component Types"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLComponentTypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Component Types','StoryEmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Component Types','StoryEmbeddingModelID')"
+                [AllowLoad]="IsSectionExpanded('mJMLComponentTypes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLComponentTypes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ML Components Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLComponents"
+        SectionName="ML Components"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLComponents')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Components','StoryEmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Components','StoryEmbeddingModelID')"
+                [AllowLoad]="IsSectionExpanded('mJMLComponents')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLComponents', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

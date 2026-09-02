@@ -23368,7 +23368,7 @@ export const MJMLAlgorithmUseCaseSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional description of the scenario`),
-    ProblemTypeScope: z.union([z.literal('any'), z.literal('classification'), z.literal('regression')]).describe(`
+    ProblemTypeScope: z.union([z.literal('any'), z.literal('classification'), z.literal('regression'), z.literal('sequence')]).describe(`
         * * Field Name: ProblemTypeScope
         * * Display Name: Problem Type Scope
         * * SQL Data Type: nvarchar(20)
@@ -23378,6 +23378,7 @@ export const MJMLAlgorithmUseCaseSchema = z.object({
     *   * any
     *   * classification
     *   * regression
+    *   * sequence
         * * Description: Which problem type this scenario applies to: classification, regression, or any`),
     Guidance: z.string().nullable().describe(`
         * * Field Name: Guidance
@@ -24211,7 +24212,7 @@ export const MJMLModelSchema = z.object({
         * * Display Name: Target Variable
         * * SQL Data Type: nvarchar(500)
         * * Description: The label this model predicts`),
-    ProblemType: z.union([z.literal('classification'), z.literal('regression')]).describe(`
+    ProblemType: z.union([z.literal('classification'), z.literal('regression'), z.literal('sequence')]).describe(`
         * * Field Name: ProblemType
         * * Display Name: Problem Type
         * * SQL Data Type: nvarchar(20)
@@ -24219,6 +24220,7 @@ export const MJMLModelSchema = z.object({
     * * Possible Values 
     *   * classification
     *   * regression
+    *   * sequence
         * * Description: Problem type: classification or regression`),
     Metrics: z.string().nullable().describe(`
         * * Field Name: Metrics
@@ -24350,7 +24352,7 @@ export const MJMLTrainingPipelineSchema = z.object({
         * * Display Name: Target Variable
         * * SQL Data Type: nvarchar(500)
         * * Description: The label being predicted — a column or expression on the target entity (e.g., "Renewed")`),
-    ProblemType: z.union([z.literal('classification'), z.literal('regression')]).describe(`
+    ProblemType: z.union([z.literal('classification'), z.literal('regression'), z.literal('sequence')]).describe(`
         * * Field Name: ProblemType
         * * Display Name: Problem Type
         * * SQL Data Type: nvarchar(20)
@@ -24358,6 +24360,7 @@ export const MJMLTrainingPipelineSchema = z.object({
     * * Possible Values 
     *   * classification
     *   * regression
+    *   * sequence
         * * Description: Problem type: classification or regression`),
     AlgorithmID: z.string().describe(`
         * * Field Name: AlgorithmID
@@ -97557,12 +97560,13 @@ export class MJMLAlgorithmUseCaseEntity extends BaseEntity<MJMLAlgorithmUseCaseE
     *   * any
     *   * classification
     *   * regression
+    *   * sequence
     * * Description: Which problem type this scenario applies to: classification, regression, or any
     */
-    get ProblemTypeScope(): 'any' | 'classification' | 'regression' {
+    get ProblemTypeScope(): 'any' | 'classification' | 'regression' | 'sequence' {
         return this.Get('ProblemTypeScope');
     }
-    set ProblemTypeScope(value: 'any' | 'classification' | 'regression') {
+    set ProblemTypeScope(value: 'any' | 'classification' | 'regression' | 'sequence') {
         this.Set('ProblemTypeScope', value);
     }
 
@@ -99637,12 +99641,13 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     * * Possible Values 
     *   * classification
     *   * regression
+    *   * sequence
     * * Description: Problem type: classification or regression
     */
-    get ProblemType(): 'classification' | 'regression' {
+    get ProblemType(): 'classification' | 'regression' | 'sequence' {
         return this.Get('ProblemType');
     }
-    set ProblemType(value: 'classification' | 'regression') {
+    set ProblemType(value: 'classification' | 'regression' | 'sequence') {
         this.Set('ProblemType', value);
     }
 
@@ -99966,12 +99971,13 @@ export class MJMLTrainingPipelineEntity extends BaseEntity<MJMLTrainingPipelineE
     * * Possible Values 
     *   * classification
     *   * regression
+    *   * sequence
     * * Description: Problem type: classification or regression
     */
-    get ProblemType(): 'classification' | 'regression' {
+    get ProblemType(): 'classification' | 'regression' | 'sequence' {
         return this.Get('ProblemType');
     }
-    set ProblemType(value: 'classification' | 'regression') {
+    set ProblemType(value: 'classification' | 'regression' | 'sequence') {
         this.Set('ProblemType', value);
     }
 
