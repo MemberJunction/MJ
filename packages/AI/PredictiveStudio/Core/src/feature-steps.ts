@@ -22,7 +22,8 @@ export type FeatureStepKind =
   | 'embedding'
   | 'llm-derived'
   | 'flow-agent'
-  | 'vision-llm';
+  | 'vision-llm'
+  | 'action';
 
 /**
  * Fields shared by every step in the DAG. `Inputs` lists the ids of upstream
@@ -222,6 +223,51 @@ export interface VisionLLMOutput {
 }
 
 /**
+ * `action` — **code as a feature** (Sonar donation item 8). When a signal cannot be expressed as a
+ * column, an aggregate, or a prompt — bespoke math, a call to an external system, a scoring rule
+ * somebody already wrote — the value comes from running an MJ Action once per record.
+ *
+ * Like `vision-llm` this is a **per-row, stateless extraction**: nothing is fitted on the training
+ * set, so it produces a RAW column directly and is exempt from the fit-once/apply-everywhere split.
+ * Unlike every other step kind, it **executes code someone wrote**, which is why the Action must
+ * carry `CodeApprovalStatus = 'Approved'` before assembly will run it at all.
+ *
+ * Cost is linear in the population: one Action call per record per assembly. Bound it with
+ * {@link ActionFeatureStep.MaxConcurrency} and prefer an Action that is cheap and deterministic.
+ */
+export interface ActionFeatureStep extends FeatureStepBase {
+  Kind: 'action';
+  /** The `MJ: Actions` row to run, by id or name. */
+  ActionRef: string;
+  /** The feature column this step produces. */
+  FeatureName: string;
+  /**
+   * Input param that receives the record's primary key. The Action MUST declare it.
+   * Default `RecordID`.
+   */
+  RecordParam?: string;
+  /**
+   * Input param that receives the assembly's as-of date, so the Action can respect the same
+   * point-in-time boundary the rest of the pipeline does. Default `AsOf`.
+   */
+  AsOfParam?: string;
+  /** Output param the numeric value is read from. Default `Value`. */
+  OutputParam?: string;
+  /** Static inputs passed on every call — the step's configuration, bound once. */
+  Params?: Record<string, string | number | boolean>;
+  /** Maximum Action calls in flight at once. Default 8. */
+  MaxConcurrency?: number;
+  /**
+   * Declared lower/upper bounds on the Action's output. A value outside them is clamped and counted
+   * as **contract drift** — the Action misbehaving — rather than accepted, because an out-of-range
+   * feature silently distorts every model trained on it. Omit either end to leave it unbounded.
+   */
+  OutputMin?: number;
+  /** @see OutputMin */
+  OutputMax?: number;
+}
+
+/**
  * A single node in the FeatureStep DAG — a discriminated union over `Kind`.
  */
 export type FeatureStep =
@@ -233,7 +279,8 @@ export type FeatureStep =
   | EmbeddingFeatureStep
   | LLMDerivedFeatureStep
   | FlowAgentFeatureStep
-  | VisionLLMFeatureStep;
+  | VisionLLMFeatureStep
+  | ActionFeatureStep;
 
 /**
  * The whole feature-engineering DAG for a pipeline — the frozen spec the

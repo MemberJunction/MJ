@@ -103,11 +103,11 @@
     "fields": {
       "Name": "Code Feature",
       "Kind": "Input",
-      "Description": "Any Approved MJ Action satisfying the feature contract (anchor + as-of → value); the promotion gate (PromotionState=Approved) is enforced at assembly. Ported from Sonar.",
+      "Description": "Any Approved MJ Action satisfying the feature contract (record id + as-of → value); MJ: Actions.CodeApprovalStatus='Approved' is enforced at assembly, before any call. Ported from Sonar.",
       "Story": "The escape hatch with a lock on it: arbitrary code can be a feature, but only after a human approved what it does.",
       "IsAbstract": false,
       "Trainable": false,
-      "Status": "Draft",
+      "Status": "Published",
       "Version": 1,
       "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
       "DriverClass": "action"

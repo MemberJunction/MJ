@@ -68,6 +68,8 @@ const STEP_ICONS: Record<FeatureStepKind, string> = {
   embedding: 'fa-solid fa-vector-square',
   'llm-derived': 'fa-solid fa-wand-magic-sparkles',
   'flow-agent': 'fa-solid fa-robot',
+  // Code as a feature — a padlock, because an Action reaches the matrix only once approved.
+  action: 'fa-solid fa-code',
   'vision-llm': 'fa-solid fa-eye',
 };
 
@@ -690,6 +692,7 @@ export class PSPipelinesComponent implements OnInit {
       case 'llm-derived': return { ...base, Kind: 'llm-derived', FeaturePipelineRef: '' };
       case 'flow-agent': return { ...base, Kind: 'flow-agent', FlowAgentRef: '', InputMapping: {}, OutputMapping: {} };
       case 'vision-llm': return { ...base, Kind: 'vision-llm', ImageColumn: '', Prompt: { InlinePrompt: '' }, Output: { FeatureName: '', Kind: 'category' } };
+      case 'action': return { ...base, Kind: 'action', ActionRef: '', FeatureName: '' };
     }
   }
 

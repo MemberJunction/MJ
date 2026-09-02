@@ -11,3 +11,6 @@ export * from './as-of';
 export * from './leakage-guard';
 export * from './vision-llm';
 export * from './feature-assembly-executor';
+export * from './action-feature';
+export * from './action-feature-seam';
+export * from './vision-llm-seam';
