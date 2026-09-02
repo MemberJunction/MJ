@@ -166,8 +166,10 @@ describe('FeatureAssemblyExecutor — vision-llm step integration', () => {
       asOf: { Mode: 'none' },
       leakageGuard: noLeakGuard,
       dataAccess,
-      visionRunner: runner,
-      visionPromptResolver: runner ? resolver : undefined,
+      // `null` = vision explicitly OFF. Omitting it now means "use the real runner", which a unit
+      // test must never do — the seams default to production implementations.
+      visionRunner: runner ?? null,
+      visionPromptResolver: runner ? resolver : null,
       ...params,
     };
     return new FeatureAssemblyExecutor().assemble(full);
@@ -282,9 +284,38 @@ describe('FeatureAssemblyExecutor — vision-llm step integration', () => {
     expect(result.matrix.rows[0]).toEqual([5, 'damaged']);
   });
 
-  it('yields null vision values when NO runner is wired (no model call path)', async () => {
-    const result = await assembleWith({ records: [{ ID: 'a', tenure: 5, photo_url: 'http://img/a.png' }] }); // no runner
+  it('yields null vision values when vision is explicitly turned OFF', async () => {
+    // Opting out is deliberate and still supported. What is no longer possible is opting out by
+    // ACCIDENT: the runner used to have no default, so a production caller that forgot to wire one
+    // got null features for every record and a model that looked entirely normal.
+    const result = await assembleWith({ records: [{ ID: 'a', tenure: 5, photo_url: 'http://img/a.png' }] }); // visionRunner: null
     expect(result.matrix.columns).toEqual(['tenure', 'condition']);
     expect(result.matrix.rows[0]).toEqual([5, null]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The production seam: a vision step that cannot resolve its prompt must FAIL,
+// not quietly produce nothing.
+// ---------------------------------------------------------------------------
+
+import { buildVisionPromptResolver, VisionPromptConfigError } from '../feature-assembly/vision-llm-seam';
+
+describe('buildVisionPromptResolver', () => {
+  const stepWithout = (prompt: VisionLLMFeatureStep['Prompt']): VisionLLMFeatureStep => ({
+    Id: 'v',
+    Kind: 'vision-llm',
+    ImageColumn: 'photo_url',
+    Prompt: prompt,
+    Output: { FeatureName: 'condition', Kind: 'category' },
+  });
+
+  it('refuses a step with no stored prompt, explaining why inline is not enough', async () => {
+    // `AIPromptParams.prompt` is what selects the vision model, so an inline body supplements a
+    // stored prompt rather than replacing it. Returning something empty here would put the whole
+    // column back in the silent-null state this seam exists to end.
+    const resolve = buildVisionPromptResolver();
+    await expect(resolve(stepWithout({ InlinePrompt: 'describe the roof' }))).rejects.toThrow(VisionPromptConfigError);
+    await expect(resolve(stepWithout({}))).rejects.toThrow(/no Prompt.PromptRef/);
   });
 });

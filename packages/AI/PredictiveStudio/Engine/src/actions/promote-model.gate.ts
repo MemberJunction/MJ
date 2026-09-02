@@ -24,6 +24,8 @@ import { deriveTrustVerdict } from '@memberjunction/predictive-studio-core';
 
 import { detectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelStoryTagger, tagModelStoryBestEffort } from '../stories/model-story-tagger';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+
 import { RunViewStoryPromptLoader, type IStoryPromptRunner } from '../stories/seams';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
 import type {
@@ -45,23 +47,43 @@ function isUuid(value: string | null | undefined): value is string {
  */
 export class ProductionModelPromotionGate implements IModelPromotionGate {
   /**
-   * The host-wired story-prompt runner, or `null` when story tagging is not enabled. Static because
-   * the gate is constructed per-promotion by callers that have no way to thread a runner through —
-   * the host registers once at bootstrap via {@link RegisterStoryRunner}.
+   * The story-prompt runner. **Tri-state on purpose**: `undefined` means nobody has configured one,
+   * so the default {@link AIPromptRunner} is used; a registered runner overrides it; and an explicit
+   * `null` turns story tagging off. Static because the gate is constructed per-promotion by callers
+   * that have no way to thread a runner through.
    */
-  private static storyRunner: IStoryPromptRunner | null = null;
+  private static storyRunner: IStoryPromptRunner | null | undefined = undefined;
+
+  /** Lazily-built default, so nothing is constructed in a process that never promotes a model. */
+  private static defaultStoryRunner: IStoryPromptRunner | null = null;
 
   /**
-   * Enable model-story tagging on publish by supplying the prompt runner. Called once by a host
-   * that depends on `@memberjunction/ai-prompts`; passing `null` turns tagging back off.
+   * Override the story-prompt runner, turn model-story tagging off, or restore the default.
+   *
+   * Not required to *enable* tagging — the default runner covers that. Pass a runner to swap in a
+   * different implementation (a test double, a differently-configured runner), `null` to opt a
+   * deployment out entirely, or `undefined` to go back to the default.
    */
-  public static RegisterStoryRunner(runner: IStoryPromptRunner | null): void {
+  public static RegisterStoryRunner(runner: IStoryPromptRunner | null | undefined): void {
     ProductionModelPromotionGate.storyRunner = runner;
   }
 
-  /** The registered runner, or `null` when tagging is off. */
+  /**
+   * The runner to use, or `null` when tagging has been explicitly turned off.
+   *
+   * Story tagging is ON by default. It used to be off unless a host registered a runner, and no
+   * host ever did — so the feature shipped inert. Building the runner here is safe: `AIPromptRunner`
+   * comes from `@memberjunction/ai-prompts`, which this package already depends on transitively
+   * through `@memberjunction/ai-agents`, so there is no cycle and no new install weight.
+   */
   protected static get StoryRunner(): IStoryPromptRunner | null {
-    return ProductionModelPromotionGate.storyRunner;
+    if (ProductionModelPromotionGate.storyRunner !== undefined) {
+      return ProductionModelPromotionGate.storyRunner;
+    }
+    if (!ProductionModelPromotionGate.defaultStoryRunner) {
+      ProductionModelPromotionGate.defaultStoryRunner = new AIPromptRunner();
+    }
+    return ProductionModelPromotionGate.defaultStoryRunner;
   }
 
   /** @inheritdoc */
@@ -246,10 +268,8 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
    * decision that was already made, so losing it is a documentation gap and never a reason to
    * un-promote. Every failure is swallowed.
    *
-   * Off unless a host has wired a story-prompt runner into {@link ModelStoryDeps}. The engine cannot
-   * construct one itself (`AIPromptRunner` lives in a package it does not depend on — the same
-   * reason `IVisionPromptRunner` is caller-injected), so with no runner a model promotes exactly as
-   * it did before.
+   * On by default, using {@link AIPromptRunner}; a deployment opts out with
+   * `RegisterStoryRunner(null)`, after which a model promotes exactly as it did before.
    */
   protected async writeModelStory(
     model: MJMLModelEntity,

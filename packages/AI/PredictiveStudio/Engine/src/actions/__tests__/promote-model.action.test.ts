@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
@@ -10,6 +10,7 @@ import type {
   PromoteModelOutcome,
 } from '../promote-model.action';
 import { ProductionModelPromotionGate } from '../promote-model.gate';
+import type { IStoryPromptRunner } from '../../stories/seams';
 
 /**
  * Unit tests for the Promote ML Model action + its leakage sign-off gate. NO live
@@ -229,7 +230,50 @@ function req(over: Partial<PromoteModelRequest> = {}): PromoteModelRequest {
   };
 }
 
+/**
+ * Exposes the protected runner resolution, so the tri-state can be asserted directly rather than
+ * inferred from whether a promotion happened to write a story.
+ */
+class RunnerProbeGate extends ProductionModelPromotionGate {
+  public static Resolve(): IStoryPromptRunner | null {
+    return RunnerProbeGate.StoryRunner;
+  }
+}
+
+describe('ProductionModelPromotionGate — story runner resolution', () => {
+  afterEach(() => {
+    // Reset to the unconfigured state so one test's registration cannot leak into another.
+    ProductionModelPromotionGate.RegisterStoryRunner(undefined);
+  });
+
+  it('defaults to a real runner, so story tagging is ON with no host wiring', () => {
+    // The regression this guards: the seam shipped with no default and no host ever registered
+    // one, so the whole story feature was inert in production while looking wired.
+    expect(RunnerProbeGate.Resolve()).not.toBeNull();
+  });
+
+  it('uses a registered runner in preference to the default', () => {
+    const custom: IStoryPromptRunner = { ExecutePrompt: async () => ({}) as never };
+    ProductionModelPromotionGate.RegisterStoryRunner(custom);
+    expect(RunnerProbeGate.Resolve()).toBe(custom);
+  });
+
+  it('lets a deployment opt out with an explicit null', () => {
+    ProductionModelPromotionGate.RegisterStoryRunner(null);
+    expect(RunnerProbeGate.Resolve()).toBeNull();
+  });
+
+  it('reuses the same default instance rather than building one per promotion', () => {
+    expect(RunnerProbeGate.Resolve()).toBe(RunnerProbeGate.Resolve());
+  });
+});
+
 describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
+  // These assert the leakage contract, not stories. Turning tagging off keeps them from
+  // reaching for a prompt through a provider they deliberately do not have.
+  beforeEach(() => ProductionModelPromotionGate.RegisterStoryRunner(null));
+  afterEach(() => ProductionModelPromotionGate.RegisterStoryRunner(undefined));
+
   it('refuses a leakage-flagged model when SignOff is false', async () => {
     // cancelled_flag dominates (>0.6 share) → flagged.
     const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
