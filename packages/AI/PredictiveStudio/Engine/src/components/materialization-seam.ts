@@ -15,12 +15,14 @@ import type { IMetadataProvider, UserInfo, EntityInfo } from '@memberjunction/co
 import {
   ComponentMaterializer,
   readTargetEntityMetadata,
+  type CompositionMaterializationInput,
   type IModelComponentMaterializer,
   type MaterializationDeps,
   type MaterializationResult,
   type TrainedModelContext,
 } from './component-materializer';
 import type { FkGraphEntity } from './join-path';
+import { MLComponentEngine } from './ml-component-engine';
 
 /**
  * Metadata-backed model materializer. Resolves the algorithm's leaf component type from
@@ -31,7 +33,14 @@ import type { FkGraphEntity } from './join-path';
  * warning, so a training run is never lost to a provenance problem.
  */
 export class MetadataComponentMaterializer implements IModelComponentMaterializer {
-  constructor(private readonly materializer: ComponentMaterializer = new ComponentMaterializer()) {}
+  /**
+   * @param materializer the pure planner + writer this seam delegates to
+   * @param engine component-type tree, consulted only when the model was composed
+   */
+  constructor(
+    private readonly materializer: ComponentMaterializer = new ComponentMaterializer(),
+    private readonly engine: MLComponentEngine = MLComponentEngine.Instance,
+  ) {}
 
   /** @inheritdoc */
   public async materializeTrainedModel(
@@ -60,6 +69,7 @@ export class MetadataComponentMaterializer implements IModelComponentMaterialize
       return await this.materializer.materialize(
         ctx.model,
         {
+          composition: await this.resolveComposition(ctx, deps.contextUser, provider),
           componentName: ctx.componentName,
           componentTypeID,
           mlModelID: ctx.model.ID,
@@ -77,8 +87,36 @@ export class MetadataComponentMaterializer implements IModelComponentMaterialize
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MetadataComponentMaterializer: ${message}`);
-      return { ComponentID: null, BindingCount: 0, Warnings: [`Materialization failed: ${message}`] };
+      return { ComponentID: null, BindingCount: 0, ComposedComponentCount: 0, Warnings: [`Materialization failed: ${message}`] };
     }
+  }
+
+  /**
+   * Build the composition input for a composed model: the graph, the sidecar's per-node states,
+   * and the type-name lookups needed to turn names into rows.
+   *
+   * Returns `undefined` for a plain model, and also when the sidecar reported no per-node states
+   * — a graph with nothing to pair against cannot be materialized honestly.
+   */
+  private async resolveComposition(
+    ctx: TrainedModelContext,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<CompositionMaterializationInput | undefined> {
+    if (!ctx.componentGraph || !ctx.componentStates || ctx.componentStates.length === 0) {
+      return undefined;
+    }
+    await this.engine.Config(false, contextUser, provider);
+    const typeIdsByName = new Map<string, string>();
+    const driverByTypeName = new Map<string, string>();
+    for (const type of this.engine.ComponentTypes) {
+      const key = type.Name.trim().toLowerCase();
+      typeIdsByName.set(key, type.ID);
+      if (type.DriverClass) {
+        driverByTypeName.set(key, type.DriverClass);
+      }
+    }
+    return { graph: ctx.componentGraph, states: ctx.componentStates, typeIdsByName, driverByTypeName };
   }
 
   /** Read the leaf `MJ: ML Component Types` id bridged onto the algorithm row. */
@@ -127,5 +165,5 @@ function entityIdsByName(entities: EntityInfo[]): Map<string, string> {
 /** A skipped materialization: no rows written, one plain-language reason. */
 function skipped(reason: string): MaterializationResult {
   LogStatus(`MetadataComponentMaterializer: skipping materialization — ${reason}.`);
-  return { ComponentID: null, BindingCount: 0, Warnings: [`Materialization skipped: ${reason}.`] };
+  return { ComponentID: null, BindingCount: 0, ComposedComponentCount: 0, Warnings: [`Materialization skipped: ${reason}.`] };
 }

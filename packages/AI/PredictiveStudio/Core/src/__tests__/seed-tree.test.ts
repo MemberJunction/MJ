@@ -23,11 +23,14 @@ const TYPES_DIR = resolve(METADATA, 'ml-component-types');
  * this test must fail rather than silently follow.
  */
 const PUBLISHED_MODEL_DRIVERS = new Set(['xgboost', 'lightgbm', 'logistic_regression', 'random_forest', 'ridge', 'mlp', 'rubric']);
-const PUBLISHED_PREPROCESSING_DRIVERS = new Set(['impute', 'standardize', 'minmax', 'percentile', 'zscore', 'onehot', 'bin', 'logistic', 'banded', 'lookup']);
+/** Mirror of the sidecar `composition.STRUCTURE_SLOTS` keys — structures compose, they do not fit. */
+const PUBLISHED_STRUCTURE_DRIVERS = new Set(['bagging', 'stacking']);
+const PUBLISHED_PREPROCESSING_DRIVERS = new Set(['impute', 'standardize', 'minmax', 'percentile', 'zscore', 'onehot', 'bin', 'logistic', 'banded', 'lookup', 'present']);
 const PUBLISHED_INPUT_DRIVERS = new Set([
   'select', 'embedding', 'llm-derived', 'flow-agent', 'vision-llm',
   'asof_count', 'asof_sum', 'asof_avg', 'asof_min', 'asof_max', 'asof_distinct_count',
   'asof_recency', 'asof_exists', 'asof_rate_per_period', 'asof_trend_slope',
+  'action',
 ]);
 
 interface SeedRecord {
@@ -119,9 +122,11 @@ describe('the shipped component seed tree', () => {
       const isLeaf = (childrenByParent.get(node.ID) ?? []).length === 0;
       if (!isLeaf || node.IsAbstract || node.Status !== 'Published' || node.DriverClass == null) continue;
       const registry =
-        node.Kind === 'Model' || node.Kind === 'Structure'
+        node.Kind === 'Model'
           ? PUBLISHED_MODEL_DRIVERS
-          : node.Kind === 'Preprocessing'
+          : node.Kind === 'Structure'
+            ? PUBLISHED_STRUCTURE_DRIVERS
+            : node.Kind === 'Preprocessing'
             ? PUBLISHED_PREPROCESSING_DRIVERS
             : node.Kind === 'Input'
               ? PUBLISHED_INPUT_DRIVERS
@@ -150,10 +155,20 @@ describe('the shipped component seed tree', () => {
     expect(profile.Leaf.Trainable).toBe(true);
   });
 
-  it('keeps the Sequence subtree Draft until the sequence problem type ships', () => {
-    for (const name of ['Sequence', 'Hidden Markov Model', 'Bagging Wrapper', 'Stacking Wrapper', 'Code Feature']) {
+  it('keeps a subtree Draft until the runtime behind it actually ships', () => {
+    // Sequence/HMM wait on the `sequence` problem type.
+    for (const name of ['Sequence', 'Hidden Markov Model']) {
       const node = nodesById.get(idByName.get(name) as string) as ComponentTypeNode;
       expect(node.Status, name).toBe('Draft');
+    }
+  });
+
+  it('publishes the structure wrappers, whose composition runtime now exists', () => {
+    // The sidecar builds bagging/stacking graphs and loads reused children frozen, and an approved
+    // Action can be a feature — so these are no longer proposals.
+    for (const name of ['Bagging Wrapper', 'Stacking Wrapper', 'Code Feature']) {
+      const node = nodesById.get(idByName.get(name) as string) as ComponentTypeNode;
+      expect(node.Status, name).toBe('Published');
     }
   });
 

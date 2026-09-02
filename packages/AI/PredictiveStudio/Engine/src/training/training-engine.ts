@@ -43,12 +43,13 @@ import {
   type ProblemType,
   type FittedPreprocessing,
   type FeatureStepGraph,
+  type ComponentGraphNode,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
 import { carveLockedHoldout, type HoldoutSplit } from './holdout';
-import type { TrainModelInput, TrainModelResult, TrainingDeps } from './types';
+import type { ResolvedTrainGraph, TrainModelInput, TrainModelResult, TrainingDeps } from './types';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
 interface ResolvedPipeline {
@@ -69,6 +70,11 @@ interface ResolvedPipeline {
    * without this round trip an as-of feature simply computes to null at score time.
    */
   datedSources: DatedSourceSpec[];
+  /**
+   * The composition this pipeline describes, when it describes one. NULL ⇒ a plain
+   * single-estimator pipeline, which behaves exactly as it always has.
+   */
+  componentGraph: ComponentGraphNode | null;
 }
 
 /**
@@ -100,13 +106,14 @@ export class TrainingEngine {
       const assembly = await this.assemble(resolved, input, deps);
       const split = this.carveLockedHoldout(assembly.matrix, resolved.validation, resolved.targetVariable);
       const validation = this.buildValidationConfig(resolved.validation);
-      const trainRequest = this.buildTrainRequest(resolved, assembly, split.training, validation);
+      const graph = await this.resolveComponentGraph(resolved, deps);
+      const trainRequest = this.buildTrainRequest(resolved, assembly, split.training, validation, graph);
 
       const response = await deps.sidecar.train(trainRequest, split.lockedHoldout);
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
       const model = await this.createModelRow(resolved, input, assembly, split, response, deps);
-      await this.materializeComponents(model, resolved, assembly, deps);
+      await this.materializeComponents(model, resolved, assembly, response, deps);
       await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, deps);
       return { model, run };
     } catch (err) {
@@ -143,6 +150,7 @@ export class TrainingEngine {
       leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
       datedSources: parseJson<DatedSourceSpec[]>(pipeline.DatedSources, []),
+      componentGraph: parseJson<ComponentGraphNode | null>(pipeline.ComponentGraph, null),
     };
   }
 
@@ -164,8 +172,9 @@ export class TrainingEngine {
   }
 
   /**
-   * Project the trained model into the component graph — the root `MJ: ML Components` row
-   * plus the bindings tying each feature and output to a real MJ entity/field. Runs only
+   * Project the trained model into the component graph — the root `MJ: ML Components` row,
+   * the bindings tying each feature and output to a real MJ entity/field, and, for a composed
+   * model, one child row per node so the stored tree matches the trained one. Runs only
    * when a materializer seam is injected, and is **best-effort by contract**: the seam never
    * throws, and a warning it returns is logged, not propagated. A model that trained fine
    * must never be lost to a provenance write.
@@ -174,6 +183,7 @@ export class TrainingEngine {
     model: MJMLModelEntity,
     resolved: ResolvedPipeline,
     assembly: FeatureAssemblyResult,
+    response: TrainResponse,
     deps: TrainingDeps,
   ): Promise<void> {
     if (!deps.componentMaterializer) {
@@ -191,6 +201,10 @@ export class TrainingEngine {
           featureSchema: assembly.featureSchema,
           datedSources: resolved.datedSources,
           hyperparameters: resolved.hyperparameters,
+          // Both halves of a composed model's provenance: the shape that was asked for, and what
+          // the sidecar reports it actually fitted. Absent for a plain single-estimator model.
+          componentGraph: resolved.componentGraph ?? undefined,
+          componentStates: response.component_states,
         },
         { entityFactory: deps.entityFactory, contextUser: deps.contextUser },
         deps.provider,
@@ -305,15 +319,44 @@ export class TrainingEngine {
 
   // region: sidecar request -----------------------------------------------------
 
+  /**
+   * Translate the pipeline's composition into sidecar terms, or `null` when it has none.
+   *
+   * This deliberately **fails the run** rather than degrading. A pipeline whose `ComponentGraph`
+   * says "a bagging wrapper over a random forest, with the churn scorer reused frozen" and which
+   * quietly trained a bare root estimator would still produce a model, metrics and a leaderboard
+   * entry — and nothing downstream could tell it was the wrong model. Silence is the failure mode
+   * worth refusing.
+   */
+  private async resolveComponentGraph(resolved: ResolvedPipeline, deps: TrainingDeps): Promise<ResolvedTrainGraph | null> {
+    if (!resolved.componentGraph) {
+      return null;
+    }
+    if (!deps.componentGraphResolver) {
+      throw new Error(
+        `TrainingEngine: pipeline '${resolved.pipeline.ID}' describes a composed model but no componentGraphResolver was supplied. ` +
+          `Training it as a single '${resolved.algorithmDriverKey}' estimator would produce a different model than the pipeline describes.`,
+      );
+    }
+    const graph = await deps.componentGraphResolver.resolve(resolved.componentGraph, deps.contextUser, deps.provider);
+    for (const warning of graph.warnings) {
+      LogStatus(`TrainingEngine: component graph — ${warning}`);
+    }
+    return graph;
+  }
+
   /** Build the `/train` request from the resolved pipeline + assembled training matrix. */
   private buildTrainRequest(
     resolved: ResolvedPipeline,
     assembly: FeatureAssemblyResult,
     trainingMatrix: MatrixData,
     validation: ValidationConfig,
+    graph: ResolvedTrainGraph | null,
   ): TrainRequest {
-    return {
-      algorithm: resolved.algorithmDriverKey,
+    const request: TrainRequest = {
+      // For a composed model this is the ROOT driver, so metrics, leaderboards and the model row
+      // all keep reading the same field they always did.
+      algorithm: graph?.rootDriver ?? resolved.algorithmDriverKey,
       problem_type: resolved.problemType,
       hyperparameters: resolved.hyperparameters,
       validation,
@@ -322,6 +365,13 @@ export class TrainingEngine {
       target: resolved.targetVariable,
       data: trainingMatrix,
     };
+    if (graph) {
+      request.component_graph = graph.node;
+      if (Object.keys(graph.artifacts).length > 0) {
+        request.component_artifacts = graph.artifacts;
+      }
+    }
+    return request;
   }
 
   // region: leakage -------------------------------------------------------------

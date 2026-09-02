@@ -108,6 +108,9 @@ def test_run_training_metrics_use_no_leakage_path():
         feature_schema: list = []
         validation = _Validation()
         holdout = None
+        # A plain single-estimator request: no composed graph, no reused artifacts.
+        component_graph = None
+        component_artifacts = None
 
         class _Data:
             def __init__(self, columns, rows):

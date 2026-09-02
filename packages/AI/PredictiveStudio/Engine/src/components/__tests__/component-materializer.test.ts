@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import type { BaseEntity, UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
-import type { FeatureSchemaEntry } from '@memberjunction/predictive-studio-core';
+import type { ComponentGraphNode, FeatureSchemaEntry, TrainedComponentState } from '@memberjunction/predictive-studio-core';
 
 import {
   ComponentMaterializer,
+  planComposedComponents,
   planModelMaterialization,
   bindingDataTypeForField,
   type BindingPlan,
   type IComponentEntityFactory,
+  type CompositionMaterializationInput,
   type MaterializationInput,
   type TargetEntityMetadata,
   type TargetField,
@@ -257,14 +259,18 @@ class FakeComponent extends FakeRow {
   public ComponentTypeID = '';
   public Name = '';
   public MLModelID: string | null = null;
+  public ParentComponentID: string | null = null;
+  public SlotName: string | null = null;
+  public SourceComponentID: string | null = null;
   public Sequence = 0;
   public Spec: string | null = null;
   public IsTrained = false;
   public PromotionState = '';
   public Status = '';
   public Version = 0;
-  constructor() {
-    super('component-1');
+  /** Distinct ids per row, so parent/child links in a composed model are actually checkable. */
+  constructor(seq = 1) {
+    super(seq === 1 ? 'component-1' : `component-${seq}`);
   }
 }
 
@@ -300,7 +306,7 @@ class FakeFactory implements IComponentEntityFactory {
 
   async getEntityObject<T extends BaseEntity>(entityName: string, _u?: UserInfo): Promise<T> {
     if (entityName === 'MJ: ML Components') {
-      const c = new FakeComponent();
+      const c = new FakeComponent(this.Components.length + 1);
       c.SaveOk = this.ComponentSaveOk;
       this.Components.push(c);
       return c as unknown as T;
@@ -394,5 +400,168 @@ describe('ComponentMaterializer.materialize', () => {
     const { result } = await materialize(factory, model);
     expect(result.ComponentID).toBe('component-1');
     expect(result.Warnings.some((w) => w.includes('was not linked to component'))).toBe(true);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Composed models: one component row per node, not one opaque root.
+// ---------------------------------------------------------------------------
+
+const BAGGED_FOREST: ComponentGraphNode = {
+  ComponentTypeRef: 'Bagging Wrapper',
+  Params: { n_estimators: 5 },
+  Children: [{ ComponentTypeRef: 'Random Forest', SlotName: 'base_estimator', Params: { max_depth: 4 } }],
+};
+
+const BAGGED_STATES: TrainedComponentState[] = [
+  { driver: 'bagging', fitted: true },
+  { driver: 'random_forest', slot: 'base_estimator', fitted: true },
+];
+
+const TYPE_IDS = new Map<string, string>([
+  ['bagging wrapper', 'type-bagging'],
+  ['random forest', 'type-rf'],
+  ['stacking wrapper', 'type-stacking'],
+  ['logistic regression', 'type-logreg'],
+]);
+const TYPE_DRIVERS = new Map<string, string>([
+  ['bagging wrapper', 'bagging'],
+  ['random forest', 'random_forest'],
+  ['stacking wrapper', 'stacking'],
+  ['logistic regression', 'logistic_regression'],
+]);
+
+function composition(overrides: Partial<CompositionMaterializationInput> = {}): CompositionMaterializationInput {
+  return {
+    graph: BAGGED_FOREST,
+    states: BAGGED_STATES,
+    typeIdsByName: TYPE_IDS,
+    driverByTypeName: TYPE_DRIVERS,
+    ...overrides,
+  };
+}
+
+const driverOf = (name: string): string | null => TYPE_DRIVERS.get(name.trim().toLowerCase()) ?? null;
+
+describe('planComposedComponents', () => {
+  it('flattens the graph depth-first, parenting each node by position', () => {
+    const warnings: string[] = [];
+    const plans = planComposedComponents(composition(), driverOf, warnings);
+
+    expect(warnings).toEqual([]);
+    expect(plans).toHaveLength(2);
+    expect(plans[0]).toMatchObject({ ParentIndex: -1, ComponentTypeID: 'type-bagging', SlotName: null });
+    expect(plans[1]).toMatchObject({ ParentIndex: 0, ComponentTypeID: 'type-rf', SlotName: 'base_estimator', Sequence: 0 });
+    // Each node's own params plus the driver it ran as — enough to rebuild the node from the row.
+    expect(plans[1].Spec).toEqual({ max_depth: 4, driver: 'random_forest' });
+  });
+
+  it('marks a reused node as not-trained and records what it reuses', () => {
+    const graph: ComponentGraphNode = {
+      ComponentTypeRef: 'Bagging Wrapper',
+      Children: [{ ComponentTypeRef: 'Random Forest', SlotName: 'base_estimator', ReuseInstanceID: 'comp-a' }],
+    };
+    const states: TrainedComponentState[] = [
+      { driver: 'bagging', fitted: true },
+      { driver: 'random_forest', slot: 'base_estimator', fitted: false, reuse_instance_id: 'comp-a' },
+    ];
+    const plans = planComposedComponents(composition({ graph, states }), driverOf, []);
+    expect(plans[1].IsTrained).toBe(false);
+    expect(plans[1].SourceComponentID).toBe('comp-a');
+  });
+
+  it('refuses the whole composition when the two walks disagree in length', () => {
+    const warnings: string[] = [];
+    const plans = planComposedComponents(composition({ states: [BAGGED_STATES[0]] }), driverOf, warnings);
+    // Half a tree attached to the wrong parents is worse than no tree.
+    expect(plans).toEqual([]);
+    expect(warnings[0]).toContain('has 2 component(s) but the sidecar reported 1');
+  });
+
+  it('refuses the whole composition when a node and its state name different drivers', () => {
+    const warnings: string[] = [];
+    const drifted: TrainedComponentState[] = [
+      { driver: 'bagging', fitted: true },
+      { driver: 'logistic_regression', slot: 'base_estimator', fitted: true },
+    ];
+    expect(planComposedComponents(composition({ states: drifted }), driverOf, warnings)).toEqual([]);
+    expect(warnings[0]).toContain('The two walks have diverged');
+  });
+
+  it('records an unresolved component type instead of guessing one', () => {
+    const warnings: string[] = [];
+    const plans = planComposedComponents(
+      composition({ typeIdsByName: new Map([['bagging wrapper', 'type-bagging']]) }),
+      driverOf,
+      warnings,
+    );
+    expect(plans[1].ComponentTypeID).toBeNull();
+    expect(warnings[0]).toContain("Composed node 'Random Forest' has no matching ML Component Type");
+  });
+});
+
+describe('ComponentMaterializer.materialize — composed models', () => {
+  it('writes a child row per node, parented and slotted', async () => {
+    const factory = new FakeFactory();
+    const { result } = await materialize(factory, new FakeModel(), baseInput({ composition: composition() }));
+
+    expect(result.ComposedComponentCount).toBe(1);
+    expect(factory.Components).toHaveLength(2);
+
+    const [root, child] = factory.Components;
+    expect(child.ParentComponentID).toBe(root.ID);
+    expect(child.SlotName).toBe('base_estimator');
+    expect(child.ComponentTypeID).toBe('type-rf');
+    expect(child.IsTrained).toBe(true);
+    // The model is reached through the root; a sub-component does not claim to BE the model.
+    expect(child.MLModelID).toBeNull();
+    expect(child.Name).toBe('Member Renewal Predictor v5 › base_estimator');
+    expect(child.PromotionState).toBe('Draft');
+  });
+
+  it('writes nothing extra for a plain model', async () => {
+    const factory = new FakeFactory();
+    const { result } = await materialize(factory);
+    expect(result.ComposedComponentCount).toBe(0);
+    expect(factory.Components).toHaveLength(1);
+  });
+
+  it('skips a subtree whose parent could not be written, and says so', async () => {
+    // A stack whose middle node has no resolvable type: its own row is skipped, and so is the
+    // grandchild that would otherwise be re-parented onto something that was never written.
+    const graph: ComponentGraphNode = {
+      ComponentTypeRef: 'Stacking Wrapper',
+      Children: [
+        {
+          ComponentTypeRef: 'Bagging Wrapper',
+          SlotName: 'estimators',
+          Children: [{ ComponentTypeRef: 'Random Forest', SlotName: 'base_estimator' }],
+        },
+        { ComponentTypeRef: 'Logistic Regression', SlotName: 'final_estimator' },
+      ],
+    };
+    const states: TrainedComponentState[] = [
+      { driver: 'stacking', fitted: true },
+      { driver: 'bagging', slot: 'estimators', fitted: true },
+      { driver: 'random_forest', slot: 'base_estimator', fitted: true },
+      { driver: 'logistic_regression', slot: 'final_estimator', fitted: true },
+    ];
+    const typeIdsByName = new Map([
+      ['stacking wrapper', 'type-stacking'],
+      ['random forest', 'type-rf'],
+      ['logistic regression', 'type-logreg'],
+    ]);
+
+    const factory = new FakeFactory();
+    const { result } = await materialize(
+      factory,
+      new FakeModel(),
+      baseInput({ componentTypeID: 'type-stacking', composition: composition({ graph, states, typeIdsByName }) }),
+    );
+
+    expect(result.ComposedComponentCount).toBe(1); // only the final_estimator survives
+    expect(result.Warnings.some((w) => w.includes("'Bagging Wrapper' has no matching ML Component Type"))).toBe(true);
+    expect(result.Warnings.some((w) => w.includes("'Random Forest' was skipped because its parent was not written"))).toBe(true);
   });
 });

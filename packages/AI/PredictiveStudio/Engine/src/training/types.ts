@@ -19,6 +19,8 @@ import type {
   TrainResponse,
   ProblemType,
   MatrixData,
+  ComponentGraphNode,
+  TrainComponentNode,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
@@ -191,6 +193,45 @@ export interface TrainingDeps {
    * so every existing caller keeps working untouched.
    */
   componentMaterializer?: IModelComponentMaterializer;
+  /**
+   * Optional composed-model seam. Required only by a pipeline whose `ComponentGraph` is set —
+   * without it such a pipeline **fails to train** rather than quietly falling back to the single
+   * root estimator, which would train a different model than the one the pipeline describes.
+   */
+  componentGraphResolver?: ITrainComponentGraphResolver;
+}
+
+/** A composition graph, translated into sidecar terms and ready to send. */
+export interface ResolvedTrainGraph {
+  /** The driver-keyed tree the sidecar executes. */
+  node: TrainComponentNode;
+  /** The root node's driver, which stays the value of `TrainRequest.algorithm`. */
+  rootDriver: string;
+  /**
+   * Fitted artifacts for every reused component, base64, keyed by `MJ: ML Components` id. The
+   * sidecar has no database, so a reused child's state has to travel with the request.
+   */
+  artifacts: Record<string, string>;
+  /** Non-fatal observations worth logging (e.g. a deprecated component type still in use). */
+  warnings: string[];
+}
+
+/**
+ * Seam that turns a pipeline's stored `ComponentGraph` into something the sidecar can train:
+ * component-type names resolved to drivers, reused components' artifacts loaded.
+ *
+ * Unlike {@link IModelComponentMaterializer}, this one **must throw** when it cannot do its job.
+ * Materialization failing costs provenance; this failing would cost correctness — the run would
+ * produce a model that is not the one described, and nothing downstream could tell.
+ */
+export interface ITrainComponentGraphResolver {
+  /**
+   * @param graph the parsed composition from `MLTrainingPipeline.ComponentGraph`
+   * @param contextUser request user — threaded through the artifact reads
+   * @param provider optional provider for multi-provider correctness
+   * @throws when a type cannot be resolved, or a reused component has no readable artifact
+   */
+  resolve(graph: ComponentGraphNode, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<ResolvedTrainGraph>;
 }
 
 /**

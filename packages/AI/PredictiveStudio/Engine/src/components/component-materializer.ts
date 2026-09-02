@@ -30,7 +30,12 @@
 import { LogError, LogStatus } from '@memberjunction/core';
 import type { BaseEntity, UserInfo, IMetadataProvider, EntityInfo } from '@memberjunction/core';
 import type { MJMLComponentEntity, MJMLComponentBindingEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import type { FeatureSchemaEntry, ProblemType } from '@memberjunction/predictive-studio-core';
+import type {
+  ComponentGraphNode,
+  FeatureSchemaEntry,
+  ProblemType,
+  TrainedComponentState,
+} from '@memberjunction/predictive-studio-core';
 
 import type { DatedSourceSpec } from '../feature-assembly';
 import { findAutoPathHops, type FkGraphEntity, type RelationshipHop } from './join-path';
@@ -92,6 +97,49 @@ export interface MaterializationInput {
   fkGraph?: FkGraphEntity[];
   /** `MJ: Entities` ids keyed by lowercased entity name, for as-of source resolution. */
   entityIdsByName?: Map<string, string>;
+  /**
+   * The composition this model was trained as, when it was composed. Present ⇒ one child
+   * `MJ: ML Components` row is written per node below the root, so a bagging wrapper over a
+   * forest is stored as two components in a parent/child relationship rather than one opaque
+   * row that merely says "bagging".
+   */
+  composition?: CompositionMaterializationInput;
+}
+
+/** Everything needed to project a composed model's non-root nodes into component rows. */
+export interface CompositionMaterializationInput {
+  /** The graph as the pipeline described it — the source of component-type NAMES and slots. */
+  graph: ComponentGraphNode;
+  /** What the sidecar reported per node, depth-first root-first. Pairs 1:1 with the graph walk. */
+  states: TrainedComponentState[];
+  /** `MJ: ML Component Types` ids keyed by lowercased type name. */
+  typeIdsByName: Map<string, string>;
+  /**
+   * `DriverClass` keyed by lowercased type name. Used only to VERIFY that the graph walk and the
+   * sidecar's reported states line up; a name missing here skips the check for that node rather
+   * than failing the whole composition.
+   */
+  driverByTypeName?: Map<string, string>;
+}
+
+/** One planned non-root `MJ: ML Components` row in a composed model. */
+export interface ComposedComponentPlan {
+  /** Index into the plan list of this node's parent; the root is index -1. */
+  ParentIndex: number;
+  /** Resolved component type, or null when the tree does not have the named type. */
+  ComponentTypeID: string | null;
+  /** The type name as written in the graph — kept for the row name and for warnings. */
+  ComponentTypeRef: string;
+  /** The parent slot this node fills. */
+  SlotName: string | null;
+  /** Position among its siblings within the same slot, so order is reproducible. */
+  Sequence: number;
+  /** Configuration for this node alone. */
+  Spec: Record<string, unknown>;
+  /** False for a reused node — it arrived already fitted and this run did not train it. */
+  IsTrained: boolean;
+  /** The `MJ: ML Components` row this node reuses, when it reuses one. */
+  SourceComponentID: string | null;
 }
 
 /** One planned `MJ: ML Component Bindings` row. */
@@ -126,6 +174,8 @@ export interface MaterializationResult {
   BindingCount: number;
   /** Non-fatal notes from planning and persistence. */
   Warnings: string[];
+  /** How many non-root component rows a composed model produced. Zero for a plain model. */
+  ComposedComponentCount: number;
 }
 
 /** Entity-creation seam (structurally identical to the training engine's `IEntityFactory`). */
@@ -223,6 +273,81 @@ export function planModelMaterialization(input: MaterializationInput): Materiali
     Bindings: bindings,
     Warnings: warnings,
   };
+}
+
+/**
+ * Plan the non-root component rows of a composed model. Pure.
+ *
+ * The graph and the sidecar's `component_states` are both depth-first, root-first, in declared
+ * child order, so they pair positionally. That pairing is **verified, not assumed**: if a node's
+ * driver does not match the state at its position the pairing has drifted, and the whole
+ * composition is reported as unmaterializable rather than written with children attached to the
+ * wrong parents — a wrong provenance tree is worse than none.
+ *
+ * @param input the graph, the reported states, and the type-name lookup
+ * @param driverOf resolves a component-type name to its driver, for the pairing check
+ * @param warnings collector; every skipped or unresolved node explains itself here
+ */
+export function planComposedComponents(
+  input: CompositionMaterializationInput,
+  driverOf: (typeName: string) => string | null,
+  warnings: string[],
+): ComposedComponentPlan[] {
+  const flat: Array<{ node: ComponentGraphNode; parentIndex: number; sequence: number }> = [];
+  walkGraphPreOrder(input.graph, -1, 0, flat);
+
+  if (flat.length !== input.states.length) {
+    warnings.push(
+      `Composition not materialized: the graph has ${flat.length} component(s) but the sidecar reported ${input.states.length}. ` +
+        `Writing them anyway would attach components to the wrong parents.`,
+    );
+    return [];
+  }
+
+  const plans: ComposedComponentPlan[] = [];
+  for (let i = 0; i < flat.length; i++) {
+    const { node, parentIndex, sequence } = flat[i];
+    const state = input.states[i];
+    const expectedDriver = driverOf(node.ComponentTypeRef);
+    if (expectedDriver && state.driver !== expectedDriver) {
+      warnings.push(
+        `Composition not materialized: at position ${i} the graph says '${node.ComponentTypeRef}' (${expectedDriver}) ` +
+          `but the sidecar reported '${state.driver}'. The two walks have diverged.`,
+      );
+      return [];
+    }
+    const componentTypeID = input.typeIdsByName.get(node.ComponentTypeRef.trim().toLowerCase()) ?? null;
+    if (!componentTypeID) {
+      // Recorded, never guessed — an unresolved type leaves a row-less gap with a reason.
+      warnings.push(`Composed node '${node.ComponentTypeRef}' has no matching ML Component Type; its row was skipped.`);
+    }
+    plans.push({
+      ParentIndex: parentIndex,
+      ComponentTypeID: componentTypeID,
+      ComponentTypeRef: node.ComponentTypeRef,
+      SlotName: node.SlotName ?? null,
+      Sequence: sequence,
+      Spec: { ...(node.Params ?? {}), driver: state.driver },
+      IsTrained: state.fitted,
+      SourceComponentID: node.ReuseInstanceID ?? null,
+    });
+  }
+  return plans;
+}
+
+/** Flatten a graph depth-first, root first, recording each node's parent position. */
+function walkGraphPreOrder(
+  node: ComponentGraphNode,
+  parentIndex: number,
+  sequence: number,
+  out: Array<{ node: ComponentGraphNode; parentIndex: number; sequence: number }>,
+): void {
+  const myIndex = out.length;
+  out.push({ node, parentIndex, sequence });
+  const children = node.Children ?? [];
+  for (let i = 0; i < children.length; i++) {
+    walkGraphPreOrder(children[i], myIndex, i, out);
+  }
 }
 
 /** Which dated source (and feature) produced each as-of output column, by column name. */
@@ -411,15 +536,97 @@ export class ComponentMaterializer {
       const component = await this.writeComponent(plan, deps);
       const bindingCount = await this.writeBindings(component.ID, plan, deps, plan.Warnings);
       await this.linkModel(model, component.ID, plan.Warnings);
+      const composedCount = await this.writeComposedComponents(component.ID, input, plan, deps);
       LogStatus(
-        `ComponentMaterializer: model ${model.ID} materialized as component ${component.ID} with ${bindingCount} binding(s).`,
+        `ComponentMaterializer: model ${model.ID} materialized as component ${component.ID} with ${bindingCount} binding(s)` +
+          (composedCount > 0 ? ` and ${composedCount} composed sub-component(s).` : '.'),
       );
-      return { ComponentID: component.ID, BindingCount: bindingCount, Warnings: plan.Warnings };
+      return {
+        ComponentID: component.ID,
+        BindingCount: bindingCount,
+        ComposedComponentCount: composedCount,
+        Warnings: plan.Warnings,
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`ComponentMaterializer: materialization failed for model ${model.ID}: ${message}`);
-      return { ComponentID: null, BindingCount: 0, Warnings: [...plan.Warnings, `Materialization failed: ${message}`] };
+      return {
+        ComponentID: null,
+        BindingCount: 0,
+        ComposedComponentCount: 0,
+        Warnings: [...plan.Warnings, `Materialization failed: ${message}`],
+      };
     }
+  }
+
+  /**
+   * Write one `MJ: ML Components` row per node BELOW the root of a composed model, parented and
+   * slotted so the stored tree matches the trained one.
+   *
+   * The root already exists (it is the model's own component row), so index 0 of the plan is
+   * mapped onto it rather than duplicated. A node whose type could not be resolved is skipped
+   * along with its subtree — attaching grandchildren to a missing parent would fabricate a shape
+   * that was never trained.
+   */
+  private async writeComposedComponents(
+    rootComponentID: string,
+    input: MaterializationInput,
+    plan: MaterializationPlan,
+    deps: MaterializationDeps,
+  ): Promise<number> {
+    if (!input.composition) {
+      return 0;
+    }
+    const nodes = planComposedComponents(
+      input.composition,
+      (name) => input.composition?.driverByTypeName?.get(name.trim().toLowerCase()) ?? null,
+      plan.Warnings,
+    );
+    if (nodes.length === 0) {
+      return 0;
+    }
+
+    // Index 0 IS the root row; every child links to whatever id its parent index resolved to.
+    const idsByIndex: Array<string | null> = [rootComponentID];
+    let written = 0;
+
+    for (let i = 1; i < nodes.length; i++) {
+      const node = nodes[i];
+      const parentID = idsByIndex[node.ParentIndex] ?? null;
+      if (!node.ComponentTypeID || !parentID) {
+        if (!parentID) {
+          plan.Warnings.push(`Composed node '${node.ComponentTypeRef}' was skipped because its parent was not written.`);
+        }
+        idsByIndex.push(null);
+        continue;
+      }
+      const row = await deps.entityFactory.getEntityObject<MJMLComponentEntity>('MJ: ML Components', deps.contextUser);
+      row.NewRecord();
+      row.ComponentTypeID = node.ComponentTypeID;
+      row.Name = `${plan.Name} › ${node.SlotName ?? node.ComponentTypeRef}`;
+      // Sub-components belong to the model through their parent, not directly — MLModelID stays
+      // on the root so "the components OF this model" is one unambiguous query.
+      row.MLModelID = null;
+      row.ParentComponentID = parentID;
+      row.SlotName = node.SlotName;
+      row.Sequence = node.Sequence;
+      row.Spec = JSON.stringify(node.Spec);
+      row.IsTrained = node.IsTrained;
+      row.SourceComponentID = node.SourceComponentID;
+      row.PromotionState = 'Draft';
+      row.Status = 'Draft';
+      row.Version = 1;
+      if (await row.Save()) {
+        idsByIndex.push(row.ID);
+        written++;
+      } else {
+        plan.Warnings.push(
+          `Failed to write composed node '${node.ComponentTypeRef}': ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+        idsByIndex.push(null);
+      }
+    }
+    return written;
   }
 
   /** Create + save the root `MJ: ML Components` row. */
@@ -515,6 +722,10 @@ export interface TrainedModelContext {
   datedSources?: DatedSourceSpec[];
   /** Hyperparameters, stored on the component `Spec`. */
   hyperparameters?: Record<string, unknown>;
+  /** The composition the pipeline described, when it described one. */
+  componentGraph?: ComponentGraphNode;
+  /** What the sidecar reported per composed node — absent for a plain single-estimator model. */
+  componentStates?: TrainedComponentState[];
 }
 
 /**

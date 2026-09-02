@@ -14,6 +14,7 @@ import type {
   AsOfStrategy,
   LeakageGuard,
   ValidationStrategy,
+  ComponentGraphNode,
 } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training-engine';
@@ -22,6 +23,8 @@ import type {
   IEntityFactory,
   IRecordLoader,
   ISidecarTrainer,
+  ITrainComponentGraphResolver,
+  ResolvedTrainGraph,
   TrainingDeps,
 } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
@@ -142,6 +145,8 @@ class FakeMLPipeline {
   public AsOfStrategy: string | null = JSON.stringify({ Mode: 'none' } as AsOfStrategy);
   /** Null on a pipeline with no as-of features — the default. Set per-test to exercise the round-trip. */
   public DatedSources: string | null = null;
+  /** Null on a plain single-estimator pipeline — the default. Set per-test to compose. */
+  public ComponentGraph: string | null = null;
   public LeakageGuard: string | null = JSON.stringify({ DenyFields: [], SingleFeatureDominanceThreshold: 0.6 } as LeakageGuard);
   public ValidationStrategy: string | null = JSON.stringify({
     Strategy: 'train_test_split',
@@ -518,5 +523,89 @@ describe('TrainingEngine.trainModel — component materialization hook', () => {
     expect(run.Status).toBe('Completed');
     expect(model.Status).toBe('Draft');
     expect(model.ArtifactFileID).toBeTruthy();
+  });
+});
+
+
+describe('TrainingEngine.trainModel — composed models', () => {
+  const GRAPH = {
+    ComponentTypeRef: 'Bagging Wrapper',
+    Params: { n_estimators: 5 },
+    Children: [{ ComponentTypeRef: 'Random Forest', SlotName: 'base_estimator' }],
+  };
+
+  /** Stands in for the metadata-backed resolver; records what it was asked to resolve. */
+  class FakeGraphResolver implements ITrainComponentGraphResolver {
+    public LastGraph: ComponentGraphNode | null = null;
+    constructor(private readonly failure?: string) {}
+    public async resolve(graph: ComponentGraphNode): Promise<ResolvedTrainGraph> {
+      this.LastGraph = graph;
+      if (this.failure) {
+        throw new Error(this.failure);
+      }
+      return {
+        rootDriver: 'bagging',
+        node: { driver: 'bagging', hyperparameters: { n_estimators: 5 }, children: [{ driver: 'random_forest', slot: 'base_estimator' }] },
+        artifacts: { 'comp-a': 'YmFzZTY0' },
+        warnings: ['Old Forest is deprecated'],
+      };
+    }
+  }
+
+  function composedPipeline(): FakeMLPipeline {
+    const pipeline = new FakeMLPipeline();
+    pipeline.ComponentGraph = JSON.stringify(GRAPH);
+    return pipeline;
+  }
+
+  it('sends the translated graph and its reuse artifacts to the sidecar', async () => {
+    const engine = buildEngine();
+    const resolver = new FakeGraphResolver();
+    const { deps, sidecar } = buildDeps({ pipeline: composedPipeline() });
+    deps.componentGraphResolver = resolver;
+
+    await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
+
+    expect(resolver.LastGraph).toEqual(GRAPH);
+    expect(sidecar.LastRequest!.component_graph).toEqual({
+      driver: 'bagging',
+      hyperparameters: { n_estimators: 5 },
+      children: [{ driver: 'random_forest', slot: 'base_estimator' }],
+    });
+    expect(sidecar.LastRequest!.component_artifacts).toEqual({ 'comp-a': 'YmFzZTY0' });
+    // `algorithm` names the ROOT driver, so every existing read path keeps working.
+    expect(sidecar.LastRequest!.algorithm).toBe('bagging');
+  });
+
+  it('sends no composition fields at all for a plain pipeline', async () => {
+    const engine = buildEngine();
+    const { deps, sidecar } = buildDeps();
+    deps.componentGraphResolver = new FakeGraphResolver();
+
+    await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
+
+    expect(sidecar.LastRequest!.component_graph).toBeUndefined();
+    expect(sidecar.LastRequest!.component_artifacts).toBeUndefined();
+    expect(sidecar.LastRequest!.algorithm).toBe('xgboost');
+  });
+
+  it('fails the run rather than training the root alone when no resolver is supplied', async () => {
+    // The whole point: a composed pipeline trained as a bare estimator would still produce a
+    // model, metrics and a leaderboard entry, and nothing downstream could tell it was wrong.
+    const engine = buildEngine();
+    const { deps, sidecar } = buildDeps({ pipeline: composedPipeline() });
+
+    await expect(engine.trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/no componentGraphResolver was supplied/);
+    expect(sidecar.LastRequest).toBeNull();
+  });
+
+  it('fails the run when the graph cannot be resolved', async () => {
+    const engine = buildEngine();
+    const { deps, factory } = buildDeps({ pipeline: composedPipeline() });
+    deps.componentGraphResolver = new FakeGraphResolver("there is no component type named 'Ghost'");
+
+    await expect(engine.trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/no component type named 'Ghost'/);
+    // The failure is recorded on the run, not swallowed.
+    expect(factory.Runs[0].Status).toBe('Failed');
   });
 });
