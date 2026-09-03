@@ -44,6 +44,110 @@ depends on local state fails only on fresh installs — CI, new developers, rele
 | 2.9 | **Entity-permission adapter** | Grant a role entity read on an enabled entity → its field rows appear without a codegen run |
 | 2.10 | Reconciliation is idempotent | Second codegen run writes nothing |
 
+### 2.7 / 2.8 expanded — reconciliation follows the BASE VIEW, not the table
+
+**The contract.** FLS reconciliation is driven by `EntityField` rows, never by table columns.
+`reconcileFieldLevelSecurity` walks `provider.Entities` → `entity.Fields`, and
+`ComputeFieldPermissionDelta` computes from that list. `EntityField` rows in turn come from
+`vwSQLColumnsAndEntityFields`, which joins the catalog on
+`c.object_id = COALESCE(e.view_object_id, e.object_id)` — **the base view when one exists**, the
+table only as a fallback. So anything that changes the base view's column list changes the
+permission rows, which is the behaviour we want and must prove.
+
+Two consequences worth stating explicitly, because both are easy to assume away:
+
+- **View-only and computed columns are restrictable and DO get rows.** `isRestrictable` excludes
+  only primary keys, `__mj_` columns and the unrestrictable entities — not `IsVirtual`. A `Name`
+  pulled in from a foreign key is exactly the kind of column that needs securing. Confirmed on
+  `MJ: Employees`: 14 restrictable fields against 9 physical base-table columns.
+- **Ordering is load-bearing.** `reconcileFieldLevelSecurity` runs after the `provider.Refresh()`
+  that follows `manageMetadata` (`runCodeGen.ts`), so it sees the `EntityField` rows that pass
+  just created. Any test that stubs or reorders that has proven nothing.
+
+These belong in the **integration tier** (they need a real schema change plus a CodeGen run), not
+in unit tests. Not yet written.
+
+| # | Base-view change | Pass condition |
+|---|---|---|
+| 2.7a | **Column added to the base table**, base view is `SELECT *` → view gains the column | A row appears for the new field × every qualifying role; existing rows untouched |
+| 2.7b | **Foreign key added**, base view gains the joined display column(s) (e.g. `Name`) | The joined column is treated as an ordinary restrictable field and gets rows — `IsVirtual` must NOT exempt it |
+| 2.7c | **Custom base view** with a computed column | The computed column gets rows like any other field |
+| 2.7d | **Layered base view** (`BaseViewGenerated = 0` + `GeneratedBaseViewName`): a column is added to the table, the generated inner view is regenerated, the wrapper's `SELECT g.*` picks it up | Rows appear for the column the OUTER view exposes. Refresh order matters — inner before outer, or the outer's cached column list hides it and reconciliation legitimately sees nothing |
+| 2.8a | **Column dropped from the base table** (view is `SELECT *`) | The field's permission rows are removed, and `spDeleteUnneededEntityFields` succeeds — see the defect below |
+| 2.8b | **Foreign key dropped**, so the joined display column leaves the view | Same as 2.8a for the joined field |
+| 2.8c | **Custom view narrowed** to stop selecting a column that still exists on the table | Rows removed — this is the case that proves reconciliation follows the VIEW rather than the table |
+| 2.8d | Role loses entity-level read | Its field rows are removed (orphan path, already covered by unit tests but unproven live) |
+
+## ✅ DEFECT found while specifying 2.8 — dropping a column from an FLS-enabled entity broke CodeGen
+
+**Fixed 2026-08-14** in the feature's own migration. Found by inspection plus a live probe against
+`mj_test`, not by any test — which is why 2.8a–2.8c exist.
+
+`spDeleteUnneededEntityFields` removes stale `EntityField` rows for columns that left the base
+view. It clears the one child table it knows about first:
+
+```sql
+DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM #DeletedFields)
+DELETE FROM __mj.EntityField      WHERE ID            IN (SELECT ID FROM #DeletedFields)
+```
+
+`EntityFieldPermission` is a **new child table of `EntityField`** that this proc has never heard
+of, and `FK_EntityFieldPermission_EntityField` is `NO_ACTION` — no cascade. Verified live: with one
+permission row present, deleting its `EntityField` fails with
+
+> The DELETE statement conflicted with the REFERENCE constraint
+> "FK_EntityFieldPermission_EntityField".
+
+`deleteUnneededEntityFields` catches that, logs, and returns false — so **every one of the 2.8
+scenarios currently fails the metadata-sync phase of CodeGen** on an FLS-enabled entity, and the
+stale `EntityField` survives. The comment in `computeOrphanRowIDs` claiming "a row whose FIELD was
+dropped disappears with the field's cascade" is simply wrong; there is no cascade.
+
+### The fix — both mechanisms, and why
+
+**There is no documented MJ preference for this choice**, which is worth stating plainly rather
+than implying one exists. What the codebase actually offers is three mechanisms, and none of them
+covers this path on its own:
+
+| Mechanism | Where it is documented | Why it does not solve this alone |
+|---|---|---|
+| `Entity.CascadeDeletes` | Code only (`sql_codegen.ts`), no prose guide | Generates cascade logic into the **generated `spDelete*`**. `spDeleteUnneededEntityFields` is a hand-written maintenance proc doing raw DML — it never calls that. (`MJ: Entity Fields` has the flag off anyway.) |
+| Server-side `BaseEntity.Delete()` FK cleanup | [`guides/BASE_ENTITY_SERVER_PATTERNS.md`](../guides/BASE_ENTITY_SERVER_PATTERNS.md) §3 | Entity-layer only. Raw DML never reaches a `BaseEntity` subclass. |
+| Database `ON DELETE CASCADE` | Undocumented, but in use | Works everywhere, including raw DML. |
+
+Precedent from the live schema: of 795 FKs in `__mj`, **17 use `ON DELETE CASCADE`** — and they
+are overwhelmingly permission/child-detail tables, exactly this shape: `AIAgentPermission →
+AIAgent`, `ArtifactPermission → Artifact`, `CollectionPermission → Collection`, `APIKeyScope →
+APIKey`, `AIAgentRunStep → AIAgentRun`, `ComponentDependency → Component`. Against that, both FKs
+pointing at `EntityField` today (`EntityFieldValue` included) are `NO_ACTION`, with the cleanup
+written explicitly into the proc.
+
+So the two precedents genuinely point different ways, and **both were applied**:
+
+1. **`ON DELETE CASCADE` on `FK_EntityFieldPermission_EntityField`** — this is what makes the
+   delete succeed. It covers every path that reaches `EntityField`, including raw DML no
+   entity-layer hook can intercept, and makes true what `computeOrphanRowIDs` already assumed.
+2. **`spDeleteUnneededEntityFields` deletes the rows explicitly**, mirroring the `EntityFieldValue`
+   delete it sits beside. Redundant for correctness, and deliberately so: the proc is where a
+   reader looks to find out what happens to a retired field, and finding one child table handled
+   there and the other only in a constraint definition is how the next person misses it.
+
+Rejected: having reconciliation delete the rows first — it runs *after* `manageMetadata`, so it is
+too late by definition.
+
+The proc body is reproduced verbatim from the **v5.46 baseline** (newest of four copies; it carries
+an external-data-source exclusion the older ones lack) with that one statement added.
+
+Both edits went into the feature's existing migration rather than a new one, and the file was
+renamed to a fresh timestamp. All five hand-written batches parse clean on the server under
+`SET PARSEONLY ON` with the `MJ_CodeGen` login.
+
+**🚨 `mj_test` must be rebuilt from scratch before anything else here is meaningful.** The rename
+gives Flyway a new version while history still records the old one, and the migration is not
+idempotent — it opens with `CREATE TABLE`. Wipe + `mj migrate`, which is the Tier 1 run this plan
+already requires. The cascade's *semantics* are unverified until then; 2.8a is the test that
+closes it.
+
 ## Tier 3 — Enforcement as a restricted user (via MJAPI)
 
 Requires: a custom role, a user assigned to it, and an entity with FLS enabled and one column
