@@ -19,8 +19,8 @@
  * for Update and Create.** Two individually legal rows across two roles aggregate to
  * read-denied + update-allowed, so the clamp after aggregation is the actual enforcement.
  *
- * Note what is deliberately absent: any per-USER exemption other than the system user (covered
- * in fieldSecurity.enforcement.test.ts). No human is above a Deny.
+ * Note what is deliberately absent: any per-USER exemption whatsoever, including for the MJ
+ * system user (pinned in fieldSecurity.enforcement.test.ts). Nobody is above a Deny.
  */
 
 import { describe, it, expect } from 'vitest';

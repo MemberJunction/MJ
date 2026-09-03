@@ -1,13 +1,12 @@
-# Entity transactions do not appear to be atomic across nested `BaseEntity` saves
+# Entity transactions and nested `BaseEntity` saves — investigated, NOT a platform bug
 
-> **Status: OPEN, unassigned. Not FLS-specific** — field-level security is where it surfaced,
-> but the mechanism is general and would affect any server-side code that writes several records
-> inside `RunInEntityTransaction`.
+> **Status: CLOSED — could not reproduce; the guarantee holds.** Investigated 2026-08-10 against
+> `mj_test` on `sqlserver.local,1433`, branch `JF_Entity_Field_Security`.
 >
-> Observed 2026-08-09 against `mj_test` on `sqlserver.local,1433`, on branch
-> `JF_Entity_Field_Security`.
+> The original report is kept below because the *observation* was real. What it was not is a
+> torn transaction — see [What it actually was](#what-it-actually-was).
 
-## What was observed
+## Original observation (2026-08-09)
 
 `MJEntityEntityServer.Save()` wraps two writes in a single `RunInEntityTransaction`:
 
@@ -19,86 +18,72 @@ return RunInEntityTransaction(this.ProviderToUse, async () => {
 });
 ```
 
-`snapshotFieldPermissions` throws partway through (it hit a validation guard on row ~29).
+`snapshotFieldPermissions` threw partway through (it hit the system-user-role guard). The
+database was then found holding **28 permission rows with the flag at 0** — apparently half the
+unit of work committed and half rolled back.
 
-**Expected:** both writes roll back — flag stays 0, no permission rows.
+The leading hypothesis was that the ambient transaction and the row writes sat on different
+pooled connections, putting the inserts outside the transaction entirely.
 
-**Actual:** the flag rolled back to 0, but **28 permission rows persisted.**
+## What was actually tested
 
-```
-EFP rows now = 28
-flag = 0
-```
+Five reproductions, all against a live `mj_test`, all through the real provider and the real
+`BaseEntity.Save()` path. Scripts under `packages/MJServer/scratch/` (deleted after the run).
 
-Half the unit of work committed; the other half rolled back.
+| # | Shape | Result |
+|---|---|---|
+| 1 | Flat `RunInEntityTransaction`: `Entity` flag write + 3 `EntityFieldPermission` rows, then a synthetic `throw` | **Atomic.** Nothing persisted |
+| 2 | Nested scope (outer = flag write, inner = reconciler), 27 rows then a `Validate()` failure on row 28 | **Atomic.** Nothing persisted |
+| 3 | Nested scope, 14 rows then a **unique-constraint violation** (batch-aborting SQL error, the doomed-transaction hazard) | **Atomic.** Nothing persisted |
+| 4 | The real `MJEntityEntityServer.Save()` with an invisible pre-seeded row forcing a collision mid-snapshot (test 2.4) | **Atomic.** Flag back to 0, only the pre-seeded row left |
+| 5 | **The original failure, byte-faithful**: pre-`55f933132f` delta (system-user roles included) tripping the `Role 'Developer' is held by the MJ system user` guard mid-write | **Atomic.** `EFP rows = 0, flag = false` |
 
-## What has been ruled out
+Connection identity was checked directly rather than inferred: `SELECT @@SPID, @@TRANCOUNT,
+XACT_STATE()` returned the **same SPID** outside the scope, inside the scope, after the flag
+write and after the row writes, with `TRANCOUNT = 1` throughout. A second, independent
+connection reading `EntityFieldPermission` mid-transaction hit **lock timeout (msg 1222)`** —
+i.e. the rows were genuinely holding uncommitted write locks inside the transaction.
 
-- **Not a missing transaction.** The provider was probed directly:
-  `SupportsEntityTransactions = true`, and `BeginEntityTransaction` is a function. So
-  `RunInEntityTransaction` took its transactional branch rather than the pass-through fallback.
-- **Not a swallowed error.** The throw propagated all the way out of `Save()` and killed the
-  script, so the rollback path definitely ran.
-- **Not the inner scope alone.** `ReconcileFieldPermissions` opens its own nested
-  `RunInEntityTransaction`, which should join the outer as a savepoint. Even if the savepoint
-  rollback misbehaved, the *outer* rollback should still have removed the rows — and it
-  demonstrably removed the flag written by the same outer scope.
+The hypothesis is therefore disproved on both counts: one connection, and the rows were inside
+the transaction.
 
-## Leading hypothesis
+## What it actually was
 
-**The ambient transaction and the row writes are on different pooled connections.**
+`MJEntityPermissionEntityServer.reconcileFieldPermissions`
+([`packages/MJServer/src/entitySubclasses/MJEntityPermissionEntityServer.server.ts:155`](../packages/MJServer/src/entitySubclasses/MJEntityPermissionEntityServer.server.ts#L155))
+runs reconciliation **once per `EntityPermission` row saved**, after that row's own save has
+committed, through `ReconcileFieldPermissionsQuietly` — which swallows failures by design.
 
-The outer `Entity` save and the transaction scope run on the connection the scope acquired. Each
-`EntityFieldPermission` row is written by `provider.GetEntityObject(...)` → `BaseEntity.Save()` →
-`spCreateEntityFieldPermission`, which acquires a connection from the pool at execution time. If
-that is not the scope's connection, those inserts are outside the transaction entirely — they
-commit immediately and no rollback can reach them.
+So granting entity access to several roles on an FLS-enabled entity is **N independent units of
+work**, not one. Each is individually atomic; a failure in the third leaves the first two
+committed. With 14 restrictable fields, two roles succeeding and the third (a system-user role,
+pre-fix) failing produces exactly **28 rows** — the observed number.
 
-That would explain the asymmetry exactly: the flag (written on the scope's own connection) rolls
-back; the rows (written on other connections) do not.
+That is not a broken transaction. It is N transactions, which is what the adapter is designed to
+do: it reconciles as a side effect of a save that has already succeeded, so it cannot roll that
+save back and deliberately does not try.
 
-## Why it matters beyond FLS
+## What this does NOT clear
 
-Any server-side code following the documented pattern from
-[`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md) —
+The per-row adapter's behaviour is correct but worth knowing about: a partial failure across a
+multi-role permission grant leaves a partially reconciled entity, logged and not surfaced. On an
+enabled entity a field with no row denies, so the failure mode is a visible loss of access
+rather than a silent loss of protection — which is the trade the `Quietly` variant documents.
+No change proposed; recorded so the next person reading "28 rows" reaches for the adapter rather
+than the transaction layer.
 
-```typescript
-await RunInEntityTransaction(this.ProviderToUse, async () => {
-    await header.Save();
-    for (const line of lines) await line.Save();
-});
-```
+## Recommendation
 
-— is relying on exactly the guarantee that appears not to hold. The guide states "Atomic ✅" for
-provider transactions and "read-your-writes ✅". If the hypothesis is right, a failure partway
-through a parent/children cascade leaves children committed and the parent rolled back, silently.
-
-Entity graphs (`DeclareRelatedRecords` + `entity.Save()`) route through the same executor, so they
-may be affected too.
-
-## How to confirm
-
-1. Instrument `EntityTransactionScope` and `BaseEntity.Save()`'s SQL execution to log the
-   connection identity (`@@SPID`) each uses. If the SPIDs differ inside one scope, that is the bug.
-2. Minimal repro without FLS: in a server-side script, open `RunInEntityTransaction`, save two
-   unrelated records, throw, and check whether either persisted.
-3. Check whether `DatabaseProviderBase` threads the scope's `sql.Transaction` into the request
-   used by `ExecuteSQL`, or whether it builds a fresh request off the pool.
-
-## Interaction with FLS
-
-The FLS flag flip is the code that exposed this, and it is also the code most harmed by it: a
-partially applied flip leaves an entity whose flag and permission rows disagree, and on an enabled
-entity **a field with no rows denies** — so the failure mode is a silent lockout rather than a
-visible error.
-
-The planned system-user rework (letting the snapshot write rows for the standard roles instead of
-excluding them) makes each flip write *more* rows, widening the window. Worth fixing this first.
+Pin the guarantee with an integration test rather than leaving it resting on this one-off
+investigation — reproductions 2 and 3 (nested scope, validation failure and SQL error) are the
+two shapes worth keeping, since they cover the savepoint join and the doomed-transaction path
+that `SQLServerDataProvider.RollbackTransaction` handles. **Not yet written** — see
+[`fls-redesign-progress.md`](./fls-redesign-progress.md).
 
 ## Related
 
 - [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md) —
-  states the guarantee under test
+  states the guarantee that was under test; it holds as written
 - [`packages/MJCore/src/generic/entityTransactionScope.ts`](../packages/MJCore/src/generic/entityTransactionScope.ts) —
   scope contract and the 6.2 torn-write history that removed `BeginISATransaction`
-- [`plans/fls-redesign-test-plan.md`](./fls-redesign-test-plan.md) — the run that found it
+- [`plans/fls-redesign-test-plan.md`](./fls-redesign-test-plan.md) — the run that raised it

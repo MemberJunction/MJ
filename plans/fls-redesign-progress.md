@@ -17,6 +17,10 @@
 | `641e4b62c8` | Form-field access gate + fail-open `ActiveUser` resolution |
 | `6db09ebb9f` | W4 complete — CodeGen schema-change reconciliation + applier tests |
 | `f1f2f61b4d` | W6 docs — guide + changeset rewritten for the trinary model |
+| `bb90a10a68` | Permission-change propagation to open browsers |
+| `55f933132f` | System-user roles excluded from the snapshot — **superseded, see W7** |
+| `cdb4828fdb` | Entity-transaction atomicity written up as a platform issue — **closed, see below** |
+| *(uncommitted)* | W7 — system-user rework: the runtime bypass removed |
 
 ## Status by workstream
 
@@ -28,13 +32,49 @@
 | W4 | Lifecycle | **Done.** Delta + applier + all 3 adapters (flag flip, entity permissions, CodeGen schema changes) + tests. |
 | W5 | Create enforcement + Get/Set throw | **Done.** `EntityField.CreateSuppressed`, `ApplyFieldLevelCreateSuppression`, `AssertFieldReadable` on `Get`/`Set`, `FieldSecurityDenialMessage` now shared. |
 | W6 | Metadata invalidation + docs | **Done.** Guide + changeset rewritten; `remote-invalidate` → metadata refresh wired and debounced. One known gap accepted — see below. |
+| W7 | System-user rework | **Done, uncommitted.** The runtime bypass is gone; the system user's access is data. See below. |
 
-## Test baseline (all currently passing)
+## W7 — the system-user runtime bypass is gone
 
-MJCore 1998 · MJCoreEntitiesServer 429 · MJServer 826 (+56 skipped) ·
+`55f933132f` fixed a real blocker (the snapshot could not create rows for the standard roles)
+with a workaround that made the runtime bypass load-bearing. This replaces it.
+
+**Before:** `EntityFieldInfo.GetUserFieldPermissions` returned fully-open for the system user via
+`WellKnownUserSource.Instance.IsSystemUser(user)`, and the snapshot skipped that account's roles
+entirely, so its access existed only in code.
+
+**Now:** the aggregation has no identity branch at all, and the snapshot writes rows for every
+role holding entity read — including UI / Developer / Integration. The system user keeps working
+because it holds those roles and they get `Allow` rows like anyone else. What guards the account
+is CONFIGURATION: both save-time guards now refuse only a **restricting** rule (a `Deny` on any
+verb) aimed at a role it holds. Grants and `No Access` save normally — refusing those was exactly
+what made field security impossible to enable in the first place.
+
+Changed: `entityInfo.ts` (exemption removed; new exported `IsRestrictingFieldRule` +
+`FieldPermissionRuleVerbs` next to `FieldPermissionAccess`), `fieldPermissionDelta.ts`
+(`ExcludedRoleIDs` removed), `fieldPermissionReconciler.ts` (`systemUserRoleIDs` removed, and
+with it the `UserCache` dependency), `MJEntityFieldPermissionEntityServer` (guard takes the
+rule's verbs; a role-only pre-check still answers conservatively),
+`MJUserRoleEntityServer` (counts only denying rules), plus the guide, the changeset, and four
+test files.
+
+**Two facts this rests on**, both verified empirically rather than assumed: the system user holds
+exactly UI / Developer / Integration, and custom roles are never auto-assigned to it (proven by
+creating two and running a full CodeGen).
+
+**Consequence to know about:** each flag flip now writes roughly twice the rows — on
+`MJ: Employees`, 84 instead of 42. That widens the window for the per-row cache-invalidation
+broadcast noted under KNOWN GAP below.
+
+## Test baseline (all currently passing, 2026-08-10)
+
+MJCore 1999 · MJCoreEntitiesServer 435 · MJServer 826 (+56 skipped) ·
 GenericDatabaseProvider 894 (+5 skipped) · CodeGenLib 771 (+60 skipped) ·
 GraphQLDataProvider 280 · SQLServerDataProvider 87 · ng-base-forms 196.
-Full build: 299 tasks. `mj standards check` passes.
+`mj standards check` and `check:claude-md` pass.
+
+MJCore and MJCoreEntitiesServer moved up (+1 / +6) with the system-user rework below; every
+other count is unchanged from the previous baseline.
 
 ## Integration tests — deferred to the END, deliberately
 
@@ -134,6 +174,37 @@ unit of work's boundaries, so hanging the batch on the transaction scope would m
 server-side multi-row write correct by default rather than only the ones that remember to opt in.
 That is worth investigating before committing to (a).
 
+## Verification state (2026-08-10)
+
+Tier 1 passed in full on a from-scratch database (see the test plan). **Tier 2 now passes 18/18**
+against the reworked design — snapshot shape, defaults, atomicity under a forced mid-write
+failure, disable/re-enable, idempotency, plus 4.5 and 4.7 relocated there because the system
+user's access became data. Tiers 3, 5 and 6 have not been run yet; Tier 4 is partly covered.
+
+Bug 2 (entity transactions not atomic) is **closed — it does not reproduce**. Five live
+reproductions all rolled back completely, including a byte-faithful replay of the original
+failure; the 28 stray rows came from `MJEntityPermissionEntityServer` reconciling once per
+`EntityPermission` row, which is N independent units of work by design. Full evidence in
+[`entity-transaction-atomicity-gap.md`](./entity-transaction-atomicity-gap.md).
+
+**Still owed:** an integration test pinning the transaction guarantee, so it does not rest on a
+one-off investigation. The two shapes worth keeping are a nested scope failing on validation and
+one failing on a batch-aborting SQL error.
+
+## Environment notes for the live tiers
+
+- `mj_test` on **`sqlserver.local,1433`** — the repo `.env` says `localhost`, which does not
+  resolve. Prefix every command with `DB_HOST=sqlserver.local`.
+- Roles, users and entity permissions on `MJ: Employees` are already set up: roles `FLS Payroll`
+  (read+create+update) and `FLS Intern` (read-only), users `fls_payroll` / `fls_intern`, each
+  also holding `UI`.
+- **Before the next CodeGen run, create the SQL Server database roles `cdp_fls_payroll` and
+  `cdp_fls_intern`.** Both MJ roles carry a `SQLName` with no matching database role, and one
+  missing role fails the permissions batch for every entity.
+- Scratch scripts live in `packages/MJServer/scratch/` (pnpm resolves bare specifiers from the
+  file's own location, so they must sit inside a package that declares the deps). That folder is
+  not gitignored — **delete it before the PR**.
+
 ## Traps already paid for — do not re-learn these
 
 - **`mj sync push` BEFORE `mj codegen`.** Skipping it regenerates from stale DB metadata and
@@ -163,8 +234,12 @@ That is worth investigating before committing to (a).
 
 Trinary Read/Update/Create, each Allow/Deny/No Access. Read required for Update and Create,
 enforced twice (row CHECK + post-aggregation clamp) because a row constraint cannot see across
-roles. System-user exemption stays, resolved via `WellKnownUserSource.IsSystemUser()`; both
-configuration guards stay. No raw DML — `RunInEntityTransaction`, not entity graphs, for
+roles. **No runtime exemption for any user, including the system user** (W7 — supersedes the
+earlier "system-user exemption stays" decision). The configuration guards stay, and judge a change
+by the **projected aggregate** across the system user's roles rather than by whether the changed
+rule says `Deny` — a per-rule test misses three `No Access` edits made one at a time, and reading
+the sibling rules from metadata misses them too, because metadata lags the writes. A startup sweep
+backs them up for state written outside the entity layer. No raw DML — `RunInEntityTransaction`, not entity graphs, for
 reconciliation. Create enforcement silently applies the column default. Server cache holds
 full-width shared slots; the client keeps its allowed-list key. `TrackRecordChanges = 0` on
 `MJ: Entity Field Permissions`. Everything ships in ONE PR.

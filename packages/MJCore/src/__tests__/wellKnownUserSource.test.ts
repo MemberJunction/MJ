@@ -77,4 +77,21 @@ describe('WellKnownUserSource', () => {
         expect(names).toContain('TestWellKnownUserSource');
         expect(names).toContain('HigherPriorityWellKnownUserSource');
     });
+
+    /**
+     * `IsSystemUser` is the synchronous companion used by `BaseEngine` identity resolution.
+     * Field-level security deliberately does NOT call it — see
+     * `fieldSecurity.enforcement.test.ts` — so this is the only place its contract is pinned.
+     */
+    describe('IsSystemUser', () => {
+        it('answers false on the base, so a browser has no system account at all', () => {
+            expect(new WellKnownUserSource().IsSystemUser(SYSTEM_USER)).toBe(false);
+        });
+
+        it('is null-safe', () => {
+            const base = new WellKnownUserSource();
+            expect(base.IsSystemUser(null)).toBe(false);
+            expect(base.IsSystemUser(undefined)).toBe(false);
+        });
+    });
 });

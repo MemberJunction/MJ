@@ -36,11 +36,15 @@ Turning it off keeps the rows, inactive, so re-enabling does not lose the config
 maintain themselves: adding a column, granting a role entity access, or dropping either one is
 reconciled automatically, and an administrator's tightening is never overwritten by that process.
 
-No person is exempt — there is no admin or Owner bypass. The one exemption is the **MJ system
-user**, which is not a person but the account the server runs its own work as. Its engine caches
-are process-wide, so a restricted system user would leave partially loaded records where every
-user reads them; and the exemption protects no data, since the server already reads every column
-through one service login. MJ additionally refuses to attach restricted roles to that account.
+**Nobody is exempt** — no admin bypass, no Owner carve-out, and no exempt account anywhere in
+permission evaluation. That includes the **MJ system user**, the account the server runs its own
+work as: it is not special-cased at runtime, and gets its access from ordinary `Allow` rows
+written for the standard roles it holds. What is protected instead is the CONFIGURATION — a rule
+that *denies* anything to a role the system user holds is refused, and so is giving that account a
+role which already denies a field. Grants save normally, since they are what the server's own
+access depends on. Restricting that account would matter because its engine caches are
+process-wide, so a partially loaded cache would reach every user; a configuration rule stops that
+somewhere an administrator can see it, rather than behind a bypass that has to be trusted.
 Primary keys, `__mj_` columns, and the security/identity entities can never be restricted.
 
 Enforcement (server-side and authoritative):

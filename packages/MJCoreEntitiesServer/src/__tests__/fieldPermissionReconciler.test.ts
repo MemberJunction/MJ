@@ -14,13 +14,6 @@ const { runInTransactionSpy, logErrorSpy, logDebugSpy } = vi.hoisted(() => ({
     logDebugSpy: vi.fn(),
 }));
 
-vi.mock('@memberjunction/generic-database-provider', () => ({
-    // The reconciler asks the cache which roles the system user holds, so those roles can be
-    // excluded from the snapshot. A cold cache degrades to "exclude nothing", which is what
-    // these tests exercise.
-    UserCache: { Instance: { GetSystemUser: () => null } },
-}));
-
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {

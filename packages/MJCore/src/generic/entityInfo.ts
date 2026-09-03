@@ -4,7 +4,6 @@ import { IMetadataProvider } from "./interfaces"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { WellKnownUserSource } from "./wellKnownUserSource"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
@@ -471,6 +470,53 @@ export const FieldPermissionAccess = {
 } as const;
 
 export type FieldPermissionAccess = typeof FieldPermissionAccess[keyof typeof FieldPermissionAccess];
+
+/**
+ * The three trinary verbs of a single field-permission rule, on their own.
+ *
+ * Both `EntityFieldPermissionInfo` (metadata) and the generated `MJ: Entity Field Permissions`
+ * entity satisfy this structurally, so callers can ask about a stored rule or a prospective one
+ * without converting between the two.
+ */
+export type FieldPermissionRuleVerbs = {
+    ReadAccess: FieldPermissionAccess;
+    UpdateAccess: FieldPermissionAccess;
+    CreateAccess: FieldPermissionAccess;
+};
+
+/**
+ * A field-permission rule together with the role it binds to — the minimum
+ * {@link EntityFieldInfo.AggregateFieldRulesForUser} needs to decide whether a rule applies.
+ *
+ * Structurally satisfied by `EntityFieldPermissionInfo` (metadata) and by the generated
+ * `MJ: Entity Field Permissions` entity alike, so a caller can aggregate stored rules, prospective
+ * ones, or a mix of both.
+ */
+export type FieldPermissionRuleForRole = FieldPermissionRuleVerbs & {
+    RoleID: string;
+};
+
+/**
+ * True when a rule takes access AWAY rather than granting or abstaining.
+ *
+ * `Deny` is the only restricting value *within a single rule*. `No Access` is the aggregation's
+ * identity element: it can leave a role without access, but it can never remove access one of the
+ * user's other roles granted.
+ *
+ * **This answers a question about one rule, not about a change.** Whether a CHANGE restricts a
+ * user is a property of the aggregate across every role they hold — setting each of a user's roles
+ * to `No Access` in turn writes no `Deny` anywhere and still ends with the field denied. So this
+ * is sound for an INSERT, which can only add rules and therefore cannot remove an existing
+ * `Allow`, and is NOT sufficient for an edit or a delete. Those must project the resulting rule
+ * set and aggregate it — see {@link EntityFieldInfo.AggregateFieldRulesForUser}.
+ */
+export function IsRestrictingFieldRule(rule: FieldPermissionRuleVerbs | null | undefined): boolean {
+    return (
+        rule?.ReadAccess === FieldPermissionAccess.Deny ||
+        rule?.UpdateAccess === FieldPermissionAccess.Deny ||
+        rule?.CreateAccess === FieldPermissionAccess.Deny
+    );
+}
 
 /**
  * The single wording for "you cannot use this field", modelled on SQL Server's posture of never
@@ -1275,6 +1321,15 @@ export class EntityFieldInfo extends BaseInfo {
      *   has not run — failing closed makes that visible.
      * - **Records exist, none match the user's roles** → fully closed, for want of an Allow.
      *
+     * **There is no exempt user — not even the MJ system user.** Every account, including the
+     * one the server runs its own background work as, gets its access from the rows. The system
+     * user stays working because it holds the standard roles (UI, Developer, Integration),
+     * snapshot initialization writes them `Allow` rows like any other role holding entity read,
+     * and the save-time configuration guards refuse a `Deny` aimed at a role it holds. That is a
+     * constraint on what can be CONFIGURED, which an administrator can see and reason about —
+     * unlike a runtime bypass, which is invisible at the point where access is decided and has
+     * to be trusted rather than checked.
+     *
      * PERFORMANCE: this is the per-FIELD primitive. Enforcement points must never call it
      * inside a per-row loop — `MapFieldNamesToCodeNames` runs once per row, so a naive call
      * site costs `fields x rows` aggregations. Compute the denied-field Set once per
@@ -1285,17 +1340,6 @@ export class EntityFieldInfo extends BaseInfo {
      */
     public GetUserFieldPermissions(user: UserInfo, entityFieldSecurityEnabled: boolean): EntityFieldUserPermissionInfo {
         if (!entityFieldSecurityEnabled) {
-            return EntityFieldInfo.fullyOpenFieldPermissions();
-        }
-
-        // The system user is exempt, and is the ONLY exemption — no human bypass exists.
-        //
-        // It is the account the server runs its own work as. Engine caches are process-wide and
-        // in task mode load on first touch, so a restricted system user would leave partially
-        // loaded records in a cache every subsequent user reads. It also protects nothing to
-        // deny: the server reaches the database through one service login that can already see
-        // every column, so this only limits the server's ability to do its own work.
-        if (WellKnownUserSource.Instance.IsSystemUser(user)) {
             return EntityFieldInfo.fullyOpenFieldPermissions();
         }
 
@@ -1330,10 +1374,31 @@ export class EntityFieldInfo extends BaseInfo {
      * arithmetic.
      */
     private aggregateUserFieldPermissions(user: UserInfo): EntityFieldUserPermissionInfo {
+        return EntityFieldInfo.AggregateFieldRulesForUser(this._FieldPermissions, user);
+    }
+
+    /**
+     * The same aggregation {@link GetUserFieldPermissions} performs, over a rule list the caller
+     * supplies rather than this field's stored one.
+     *
+     * Exists so save-time guards can evaluate a **prospective** outcome — the rules as they would
+     * stand after a proposed insert, edit or delete — instead of classifying a single row in
+     * isolation. That distinction is load-bearing: whether a change restricts a user is a property
+     * of the AGGREGATE across all the roles they hold, not of any one rule. A rule reading
+     * `No Access` restricts nobody on its own, yet setting every one of a user's roles to
+     * `No Access` leaves no `Allow` standing and denies the field outright.
+     *
+     * @param rules the rules to aggregate — any shape carrying a `RoleID` and the three verbs
+     * @param user the user whose roles select which rules apply
+     */
+    public static AggregateFieldRulesForUser(
+        rules: readonly FieldPermissionRuleForRole[],
+        user: UserInfo
+    ): EntityFieldUserPermissionInfo {
         const allow = { CanRead: false, CanUpdate: false, CanCreate: false };
         const deny = { CanRead: false, CanUpdate: false, CanCreate: false };
 
-        for (const fp of this._FieldPermissions) {
+        for (const fp of rules) {
             const roleMatch: UserRoleInfo = user?.UserRoles?.find((r) => UUIDsEqual(r.RoleID, fp.RoleID));
             if (!roleMatch) {
                 continue; // user does not hold this role
