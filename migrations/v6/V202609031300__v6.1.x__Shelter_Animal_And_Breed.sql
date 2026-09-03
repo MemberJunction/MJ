@@ -420,7 +420,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '41020086-e1b4-4dd5-935e-c548c37b8b26',
             'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
-            1,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405') + 1,
             'ID',
             'ID',
             NULL,
@@ -483,7 +483,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '4788c3e9-380e-4d0c-9d09-455fd86f225d',
             'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
-            2,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405') + 2,
             'Name',
             'Name',
             NULL,
@@ -546,7 +546,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '0f724c37-5d74-4ac2-b61e-eaef82511504',
             'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
-            3,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405') + 3,
             'Species',
             'Species',
             NULL,
@@ -609,7 +609,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'df85a3b5-c312-4e9f-8bf9-1e288f83a8c0',
             'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
-            4,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405') + 4,
             'SizeCategory',
             'Size Category',
             NULL,
@@ -672,7 +672,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '3fa1cded-1af0-428e-8b4d-375e0800a008',
             'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
-            5,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405') + 5,
             'TypicalLifespanYears',
             'Typical Lifespan Years',
             NULL,
@@ -735,7 +735,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '724c713e-1d25-4486-9d3b-174220e5dbd0',
             'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
-            6,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405') + 6,
             'IsActive',
             'Is Active',
             NULL,
@@ -798,7 +798,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '1c27c211-40ae-4c14-a9ea-ceb0ba2d7777',
             'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
-            7,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405') + 7,
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -861,7 +861,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'ab6c801c-49c4-4136-80b4-35b151ba9934',
             'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
-            8,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405') + 8,
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -928,7 +928,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '7556a7f6-61ee-4c02-b410-d0de79c4d61b',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            1,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 1,
             'ID',
             'ID',
             NULL,
@@ -991,7 +991,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'c755a802-fa0c-4100-9795-93fbb9a09cad',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            2,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 2,
             'Name',
             'Name',
             NULL,
@@ -1054,7 +1054,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '14af4223-9395-490a-9379-15cdb9d03097',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            3,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 3,
             'Species',
             'Species',
             'Dog or Cat. Duplicated from Breed on purpose: species is known at intake even when breed is not, and it is the discriminator every downstream feature filters on.',
@@ -1117,7 +1117,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'b296835d-7a50-4208-9671-0eaac207f239',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            4,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 4,
             'BreedID',
             'Breed ID',
             NULL,
@@ -1180,7 +1180,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '57a8ee40-9cd3-47ea-afe0-937a5a5fcf7e',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            5,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 5,
             'MicrochipNumber',
             'Microchip Number',
             'Implanted microchip identifier, when the animal has one. Unique across animals that have a number via a filtered index; NULL for the many intakes that arrive un-chipped.',
@@ -1243,7 +1243,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '4992e657-62fc-4b60-8b44-ae19b2643091',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            6,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 6,
             'IntakeDate',
             'Intake Date',
             NULL,
@@ -1306,7 +1306,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '08050f3d-9b49-49d5-bca2-8a416bc864ed',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            7,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 7,
             'IntakeReason',
             'Intake Reason',
             NULL,
@@ -1369,7 +1369,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '61f9a077-4288-4ddd-9e7d-101952be8e0e',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            8,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 8,
             'Sex',
             'Sex',
             NULL,
@@ -1432,7 +1432,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '3379a4db-a473-4fa1-aa5b-4ff5508781be',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            9,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 9,
             'EstimatedBirthDate',
             'Estimated Birth Date',
             NULL,
@@ -1495,7 +1495,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'a26ee0ea-5b2e-4cdc-b458-64861b812713',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            10,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 10,
             'WeightKg',
             'Weight Kg',
             NULL,
@@ -1558,7 +1558,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'c4c52249-5eb8-4886-8431-87e2f1d6d1a0',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            11,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 11,
             'Status',
             'Status',
             'Where the animal sits in the shelter workflow: Intake, Hold, Available, Adopted or Transferred. Drives which animals appear on the adoption floor and is the field the course''s validation rules govern.',
@@ -1621,7 +1621,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '5b541036-b1db-4a16-8873-73e4a880e923',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            12,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 12,
             'Description',
             'Description',
             NULL,
@@ -1684,7 +1684,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '7532c9f4-ceab-44b0-80c1-218fe913c9bb',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            13,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 13,
             'PhotoBase64',
             'Photo Base 64',
             'Base64-encoded photo of the animal, stored inline. Deliberately not MJ Storage: the course teaches entity and UI work, and a single self-contained column keeps photos working with no external provider to configure.',
@@ -1747,7 +1747,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '5f1c007e-9158-4fda-b394-e4720ce1dc0d',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            14,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 14,
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -1810,7 +1810,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '6c4c487e-6616-43a0-b731-e02749033e17',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            15,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 15,
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -2640,7 +2640,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'a2fa8364-00bc-4b78-b404-b62fe5fbc819',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            16,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 16,
             'Breed',
             'Breed',
             NULL,
