@@ -176,7 +176,7 @@ export type FlywayDatabaseConfig = SkywayDatabaseConfig;
  */
 function CauseChainMessages(error: unknown): string[] {
     const messages: string[] = [];
-    const seen = new Set<unknown>();
+    const seen = new Set<Error>();
     let current: unknown = error;
     while (current instanceof Error && !seen.has(current)) {
         seen.add(current);
@@ -184,7 +184,7 @@ function CauseChainMessages(error: unknown): string[] {
         if (message.length > 0 && !messages.includes(message)) {
             messages.push(message);
         }
-        current = (current as { cause?: unknown }).cause;
+        current = current.cause;
     }
     return messages;
 }
