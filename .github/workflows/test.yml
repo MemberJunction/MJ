@@ -212,6 +212,12 @@ jobs:
       # runs are exactly where the freshness gate is skipped. Reads four committed files, no
       # build, no node_modules — costs milliseconds, so it sits with the other pure-file guards.
       - name: Browser manifest server-leakage gate
+        # `!cancelled()` for the same reason as its neighbours above: a step's default
+        # `if: success()` skips it when any EARLIER guard failed, and this is the ONLY
+        # leakage check that fires on a filtered PR run (the post-build re-run below is
+        # gated on the full-suite path). Without this, an unrelated DOM ratchet failure
+        # defers the leak hunt to the next push.
+        if: ${{ !cancelled() }}
         run: node .github/scripts/check-browser-manifest-leakage.mjs
 
       # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
