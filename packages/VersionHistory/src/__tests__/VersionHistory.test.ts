@@ -44,6 +44,19 @@ vi.mock('@memberjunction/core', () => {
     }
     static DefaultValueDelimiter = '|';
     static DefaultFieldDelimiter = '||';
+    // The static constructors the constants helpers now delegate to (see CompositeKey in core).
+    static FromID(id: unknown) {
+      return new FakeCompositeKey([{ FieldName: 'ID', Value: id }]);
+    }
+    static FromEntityRecord(entity: { PrimaryKeys: { Name: string }[] }, record: Record<string, unknown>) {
+      return new FakeCompositeKey(entity.PrimaryKeys.map(pk => ({ FieldName: pk.Name, Value: record[pk.Name] })));
+    }
+    static FromURLSegment(entity: { FirstPrimaryKey?: { Name: string } } | null | undefined, segment: string) {
+      if (!segment.includes('|')) {
+        return new FakeCompositeKey([{ FieldName: entity?.FirstPrimaryKey?.Name ?? 'ID', Value: segment }]);
+      }
+      return new FakeCompositeKey(segment.split('||').map(p => { const [FieldName, Value] = p.split('|'); return { FieldName, Value }; }));
+    }
   }
   return {
     Metadata: FakeMetadata,

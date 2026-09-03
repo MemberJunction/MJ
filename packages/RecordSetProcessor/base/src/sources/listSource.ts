@@ -63,7 +63,7 @@ export class ListSource implements IRecordSetSource {
             BypassCache: true,
             ...(legacyOffset != null
                 ? { StartRow: legacyOffset }
-                : { AfterKey: cursor?.Key != null ? CompositeKey.FromKeyValuePair('ID', cursor.Key) : undefined }),
+                : { AfterKey: cursor?.Key != null ? CompositeKey.FromID(cursor.Key) : undefined }),
         }, contextUser);
         if (!result.Success) {
             throw new Error(`ListSource: failed loading members for list '${this.listID}': ${result.ErrorMessage}`);

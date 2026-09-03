@@ -639,7 +639,7 @@ export class OAuthManager {
             for (const record of expired.Results) {
                 try {
                     const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_AUTHORIZATION_STATES, contextUser);
-                    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: record.ID }]);
+                    const compositeKey = CompositeKey.FromID(record.ID);
                     const loaded = await entity.InnerLoad(compositeKey);
                     if (loaded) {
                         entity.Set('Status', 'Expired');
@@ -851,7 +851,7 @@ export class OAuthManager {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_AUTHORIZATION_STATES, contextUser);
 
-            const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: stateId }]);
+            const compositeKey = CompositeKey.FromID(stateId);
             const loaded = await entity.InnerLoad(compositeKey);
             if (loaded) {
                 entity.Set('Status', status);

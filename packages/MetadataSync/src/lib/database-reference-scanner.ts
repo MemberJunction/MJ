@@ -135,7 +135,7 @@ export class DatabaseReferenceScanner {
                     primaryKey: refPrimaryKey,
                     referencingField: refInfo.fieldName,
                     referencedEntity,
-                    referencedKey: referencedKey ?? CompositeKey.FromID(referencedRaw != null ? referencedRaw.toString() : ''),
+                    referencedKey: referencedKey ?? CompositeKey.FromURLSegment(this.entityInfoByName(referencedEntity), referencedRaw != null ? referencedRaw.toString() : ''),
                     existsInMetadata: metadataKeys.has(this.metadataKey(refInfo.entityName, refPrimaryKey))
                 });
             }
@@ -245,7 +245,7 @@ export class DatabaseReferenceScanner {
             return null;
         }
 
-        // Single primary key
+        // Single primary key — keyed by its real column name, not a hardcoded ID
         if (primaryKeys.length === 1) {
             const pkField = primaryKeys[0].Name;
             const pkValue = record.record.primaryKey?.[pkField] || record.record.fields?.[pkField];
@@ -254,7 +254,7 @@ export class DatabaseReferenceScanner {
                 return null;
             }
 
-            return CompositeKey.FromID(pkValue.toString());
+            return CompositeKey.FromKeyValuePair(pkField, pkValue.toString());
         }
 
         // Composite primary key
@@ -284,7 +284,7 @@ export class DatabaseReferenceScanner {
             return null;
         }
 
-        // Single primary key
+        // Single primary key — keyed by its real column name, not a hardcoded ID
         if (primaryKeys.length === 1) {
             const pkField = primaryKeys[0].Name;
             const pkValue = record[pkField];
@@ -293,7 +293,7 @@ export class DatabaseReferenceScanner {
                 return null;
             }
 
-            return CompositeKey.FromID(pkValue.toString());
+            return CompositeKey.FromKeyValuePair(pkField, pkValue.toString());
         }
 
         // Composite primary key

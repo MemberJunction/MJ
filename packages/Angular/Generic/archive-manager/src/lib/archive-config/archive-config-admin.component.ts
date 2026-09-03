@@ -338,7 +338,7 @@ export class ArchiveConfigAdminComponent extends BaseAngularComponent implements
     const entity = await md.GetEntityObject<MJArchiveConfigurationEntity>('MJ: Archive Configurations', md.CurrentUser);
 
     if (!this.SelectedConfig.ID.startsWith('new-')) {
-      await entity.InnerLoad(CompositeKey.FromKeyValuePair('ID', this.SelectedConfig.ID));
+      await entity.InnerLoad(CompositeKey.FromID(this.SelectedConfig.ID));
     } else {
       entity.NewRecord();
     }
@@ -381,7 +381,7 @@ export class ArchiveConfigAdminComponent extends BaseAngularComponent implements
     const entity = await md.GetEntityObject<MJArchiveConfigurationEntityEntity>('MJ: Archive Configuration Entities', md.CurrentUser);
 
     if (!configEntity.IsNew) {
-      await entity.InnerLoad(CompositeKey.FromKeyValuePair('ID', configEntity.ID));
+      await entity.InnerLoad(CompositeKey.FromID(configEntity.ID));
     } else {
       entity.NewRecord();
     }

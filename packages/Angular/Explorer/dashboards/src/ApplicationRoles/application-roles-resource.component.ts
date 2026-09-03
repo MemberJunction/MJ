@@ -282,7 +282,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
       // Process deletes
       for (const deleteId of this._pendingDeletes) {
         const entity = await md.GetEntityObject('MJ: Application Roles');
-        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: deleteId }]));
+        await entity.InnerLoad(CompositeKey.FromID(deleteId));
         const deleteResult = await entity.Delete();
         if (!deleteResult) {
           this.ErrorMessage = `Failed to delete role assignment: ${entity.LatestResult?.Message || 'Unknown error'}`;
@@ -314,7 +314,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
             row.ID = entity.Get('ID');
           } else {
             const entity = await md.GetEntityObject('MJ: Application Roles');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(row.ID));
             entity.Set('CanAccess', row.CanAccess);
             entity.Set('CanAdmin', row.CanAdmin);
             const saveResult = await entity.Save();

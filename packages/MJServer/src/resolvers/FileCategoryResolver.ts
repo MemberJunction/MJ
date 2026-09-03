@@ -14,9 +14,8 @@ export class FileCategoryResolver extends FileCategoryResolverBase {
     @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput,
     @Ctx() { providers, userPayload }: AppContext
   ) {
-    const key = new CompositeKey();
-    key.LoadFromSingleKeyValuePair('ID', ID);
-    const p = GetReadWriteProvider(providers);    
+    const key = CompositeKey.FromID(ID);
+    const p = GetReadWriteProvider(providers);
 
     if (!(await this.BeforeDelete(p, key))) {
       return null;

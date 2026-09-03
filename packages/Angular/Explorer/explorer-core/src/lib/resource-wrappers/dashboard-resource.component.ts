@@ -985,18 +985,11 @@ export class DashboardResource extends BaseResourceComponent {
                 // ToURLSegment serialize it a second time as `ID|<segment>` and produces a
                 // malformed `Field|Field|Value` URL the host parser silently mis-reads (manifesting
                 // downstream as `BaseEntity.Load(... Key: ID=ID)` and `Primary Key value is not a
-                // valid number`). Parse the segment with `LoadFromURLSegment` against the entity's
-                // PK metadata instead, so single-PK and composite-PK both round-trip correctly.
+                // valid number`). Parse the segment with `FromURLSegment` against the entity's PK
+                // metadata instead, so single-PK and composite-PK both round-trip correctly (it also
+                // owns the last-resort `ID` fallback for an entity name metadata can't resolve).
                 const md = this.ProviderToUse;
-                const entityInfo = md.EntityByName(entityRequest.entityName);
-                const pkey = new CompositeKey();
-                if (entityInfo) {
-                    pkey.LoadFromURLSegment(entityInfo, entityRequest.recordId);
-                } else {
-                    // Last-resort fallback when entity metadata isn't resolvable — preserves
-                    // pre-fix behavior so we don't NRE on an unknown entity name.
-                    pkey.KeyValuePairs = [{ FieldName: 'ID', Value: entityRequest.recordId }];
-                }
+                const pkey = CompositeKey.FromURLSegment(md.EntityByName(entityRequest.entityName), entityRequest.recordId);
                 this.navigationService.OpenEntityRecord(entityRequest.entityName, pkey);
                 break;
             }
@@ -1027,7 +1020,7 @@ export class DashboardResource extends BaseResourceComponent {
             // Try to load dashboard metadata if we have the record ID
             if (data.ResourceRecordID && data.ResourceRecordID.length > 0) {
                 const md = this.ProviderToUse;
-                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
+                const compositeKey = CompositeKey.FromID(data.ResourceRecordID);
                 const name = await md.GetEntityRecordName('Dashboards', compositeKey);
                 if (name) {
                     return name;

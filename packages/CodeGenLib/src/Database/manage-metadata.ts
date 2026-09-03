@@ -3024,7 +3024,7 @@ export class ManageMetadataBase {
             Name: e.Name,
             SchemaName: e.SchemaName,
             BaseTable: e.BaseTable,
-            PrimaryKeyField: e.PrimaryKeys[0]?.Name || 'ID'
+            PrimaryKeyField: e.FirstPrimaryKey?.Name || 'ID'
          }));
 
       logStatus(`   Decorating virtual entity fields with LLM (${virtualEntities.length} entities)...`);

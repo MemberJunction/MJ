@@ -42,6 +42,7 @@ const RUN_INFO = {
     SchemaName: '__mj',
     BaseTable: 'CompanyIntegrationRun',
     PrimaryKeys: [{ Name: 'ID' }],
+    FirstPrimaryKey: { Name: 'ID' },
 };
 const DETAIL_INFO = {
     Name: 'MJ: Company Integration Run Details',

@@ -41,6 +41,8 @@ interface FakeEntityInfo {
   Name: string;
   Fields: FakeFieldInfo[];
   PrimaryKeys: FakeFieldInfo[];
+  /** Mirrors EntityInfo.FirstPrimaryKey — the accessor production code reads for single-column keys. */
+  FirstPrimaryKey?: FakeFieldInfo;
 }
 
 const runViewInvocations: CapturedRunViewParams[] = [];
@@ -137,7 +139,7 @@ function fieldDef(name: string, type: string, needsQuotes: boolean): FakeFieldIn
 
 function registerEntity(name: string, fields: FakeFieldInfo[]): void {
   const pk = fields.find((f) => f.Name === 'ID');
-  entityRegistry.set(name, { Name: name, Fields: fields, PrimaryKeys: pk ? [pk] : [] });
+  entityRegistry.set(name, { Name: name, Fields: fields, PrimaryKeys: pk ? [pk] : [], FirstPrimaryKey: pk });
 }
 
 /** Builds a BatchContextStub — the exported production stand-in for BaseEntity. */
@@ -146,6 +148,7 @@ function makeStub(entityName: string, fields: Record<string, unknown>): BatchCon
     EntityInfo: {
       Name: entityName,
       PrimaryKeys: [{ Name: 'ID' }],
+      FirstPrimaryKey: { Name: 'ID' },
       Fields: Object.keys(fields).map((name) => ({ Name: name })),
     },
     Get: (field: string) => fields[field],

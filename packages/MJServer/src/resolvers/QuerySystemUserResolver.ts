@@ -590,7 +590,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             }
 
             const provider = GetReadWriteProvider(context.providers);    
-            const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+            const key = CompositeKey.FromID(ID);
             
             // Provide default options if none provided
             const deleteOptions = options || {

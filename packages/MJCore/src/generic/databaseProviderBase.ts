@@ -780,7 +780,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const ufEntity: BaseEntity = await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
             if (currentFavoriteId !== null) {
                 // delete the record since we are setting isFavorite to FALSE
-                await ufEntity.InnerLoad(CompositeKey.FromKeyValuePair('ID', currentFavoriteId));
+                await ufEntity.InnerLoad(CompositeKey.FromID(currentFavoriteId));
                 if (await ufEntity.Delete()) return;
                 else throw new Error(`Error deleting user favorite`);
             } else {
@@ -2150,7 +2150,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         }
 
         const listEntity: BaseEntity = await this.GetEntityObject('MJ: Lists', contextUser);
-        await listEntity.InnerLoad(CompositeKey.FromKeyValuePair('ID', params.ListID));
+        await listEntity.InnerLoad(CompositeKey.FromID(params.ListID));
 
         const duplicateRun: BaseEntity = await this.GetEntityObject('MJ: Duplicate Runs', contextUser);
         duplicateRun.NewRecord();

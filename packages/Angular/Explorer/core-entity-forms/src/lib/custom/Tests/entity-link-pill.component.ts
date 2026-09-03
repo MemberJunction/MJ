@@ -139,7 +139,9 @@ export class EntityLinkPillComponent extends BaseAngularComponent implements OnC
 
   openRecord(): void {
     if (this.entityName && this.recordId) {
-      SharedService.Instance.OpenEntityRecord(this.entityName, CompositeKey.FromID(this.recordId));
+      // `entityName` is an input — any entity, any key column name — so resolve the key against
+      // the metadata already loaded in ngOnChanges instead of assuming `ID`.
+      SharedService.Instance.OpenEntityRecord(this.entityName, CompositeKey.FromURLSegment(this.entityInfo, this.recordId));
     }
   }
 }

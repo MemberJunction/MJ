@@ -731,7 +731,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     /** Convert a string ID to a CompositeKey for tree-dropdown binding */
     public ToCompositeKey(id: string | null | undefined): CompositeKey | null {
         if (!id) return null;
-        return new CompositeKey([{ FieldName: 'ID', Value: id }]);
+        return CompositeKey.FromID(id);
     }
 
     /** Extract the ID string from a CompositeKey (from tree-dropdown ValueChange) */
@@ -912,7 +912,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
 
             if (this.FormMode === 'edit-source' && this.EditingSourceID) {
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingSourceID }]));
+                await entity.InnerLoad(CompositeKey.FromID(this.EditingSourceID));
             } else {
                 entity.NewRecord();
             }
@@ -1045,7 +1045,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             const contentType = await md.GetEntityObject<MJContentTypeEntity>('MJ: Content Types', md.CurrentUser);
 
             if (this.FormMode === 'edit-type' && this.EditingTypeID) {
-                await contentType.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingTypeID }]));
+                await contentType.InnerLoad(CompositeKey.FromID(this.EditingTypeID));
             } else {
                 contentType.NewRecord();
             }

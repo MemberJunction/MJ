@@ -196,9 +196,8 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>(entityName, md.CurrentUser);
-            const key = new CompositeKey();
-            key.KeyValuePairs.push({ FieldName: 'ID', Value: row.SourceRecordID });
-            const loaded = await entity.InnerLoad(key);
+            // The sharing entities resolved here are MJ permission tables, all keyed by ID.
+            const loaded = await entity.InnerLoad(CompositeKey.FromID(row.SourceRecordID));
             if (!loaded) {
                 this.setError('Could not load the permission record.');
                 return;

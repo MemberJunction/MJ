@@ -117,7 +117,7 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
 
     /** Opens the linked execution record (Agent Run / Prompt Run / Action Log) in a tab. */
     public OnHistoryRecordOpened(args: HistoryRecordOpenedEventArgs): void {
-        this.navigationService.OpenEntityRecord(args.EntityName, CompositeKey.FromID(args.RecordID));
+        this.navigationService.OpenEntityRecord(args.EntityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(args.EntityName), args.RecordID));
     }
 
     public OnSearchChange(value: string): void {

@@ -278,7 +278,7 @@ export class BatchContextIndex {
       if (!entityInfo || entityInfo.PrimaryKeys.length === 0) {
         return undefined;
       }
-      pkField = entityInfo.PrimaryKeys[0].Name;
+      pkField = entityInfo.FirstPrimaryKey.Name;
       this.pkFieldCache.set(entityName, pkField);
     }
     return entity.Get(pkField);

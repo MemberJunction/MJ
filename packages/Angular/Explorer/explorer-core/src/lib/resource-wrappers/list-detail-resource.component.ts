@@ -18,7 +18,7 @@ export class ListDetailResource extends BaseResourceComponent implements OnInit 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         const md = this.ProviderToUse;
         if (data.ResourceRecordID) {
-            let compositeKey: CompositeKey = new CompositeKey([{FieldName: "ID", Value: data.ResourceRecordID}]);
+            let compositeKey: CompositeKey = CompositeKey.FromID(data.ResourceRecordID);
             const name = await md.GetEntityRecordName('Lists', compositeKey);
             return name ? name : `List: ${data.ResourceRecordID}`;
         }

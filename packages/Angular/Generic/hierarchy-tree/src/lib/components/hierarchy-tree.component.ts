@@ -15,7 +15,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
+import { RunView, CompositeKey, EntityInfo, KeyValuePair } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent, RecordNavigationEvent } from '@memberjunction/ng-base-forms';
@@ -556,22 +556,11 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     }
 
     private extractPrimaryKey(item: Record<string, unknown>): { pk: CompositeKey; id: string } {
-        const pk = new CompositeKey();
-        if (this.entityInfo && this.entityInfo.PrimaryKeys.length > 0) {
-            for (const k of this.entityInfo.PrimaryKeys) {
-                pk.KeyValuePairs.push({
-                    FieldName: k.Name,
-                    Value: this.getItemValue(item, k.Name)
-                });
-            }
-        } else {
-            pk.KeyValuePairs.push({
-                FieldName: 'ID',
-                Value: this.getItemValue(item, 'ID') ?? this.getItemValue(item, 'id') ?? ''
-            });
-        }
-        const id = pk.KeyValuePairs.length === 1 ? String(pk.KeyValuePairs[0].Value) : pk.ToURLSegment();
-        return { pk, id };
+        const pk = this.entityInfo && this.entityInfo.PrimaryKeys.length > 0
+            ? new CompositeKey(this.entityInfo.PrimaryKeys.map(k => new KeyValuePair(k.Name, this.getItemValue(item, k.Name))))
+            // No entity metadata: the tree's default item shape is keyed by ID/id.
+            : CompositeKey.FromID(this.getItemValue(item, 'ID') ?? this.getItemValue(item, 'id') ?? '');
+        return { pk, id: pk.ToCompactURLSegment() };
     }
 
     private wouldCreateCycle(node: HierarchyNodeData, proposedParent: HierarchyNodeData): boolean {

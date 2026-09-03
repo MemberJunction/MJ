@@ -552,7 +552,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     try {
       const md = this.ProviderToUse;
       const entityInfo = md.EntityByID(this.listRecord.EntityID)!;
-      const pk = entityInfo.PrimaryKeys[0].Name;
+      const pk = entityInfo.FirstPrimaryKey.Name;
 
       // Cheap emptiness check before doing any row work
       const rv = RunView.FromMetadataProvider(md);

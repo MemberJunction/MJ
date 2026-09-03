@@ -488,7 +488,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   public openAction(action: MJActionEntity): void {
     this.selectedAction = action;
     this.publishAgentContext();
-    const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
+    const key = CompositeKey.FromID(action.ID);
     this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 
@@ -516,12 +516,12 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   }
 
   public openCategory(categoryId: string): void {
-    const key = new CompositeKey([{ FieldName: 'ID', Value: categoryId }]);
+    const key = CompositeKey.FromID(categoryId);
     this.navigationService.OpenEntityRecord('MJ: Action Categories', key);
   }
 
   public openExecution(execution: MJActionExecutionLogEntity): void {
-    const key = new CompositeKey([{ FieldName: 'ID', Value: execution.ID }]);
+    const key = CompositeKey.FromID(execution.ID);
     this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', key);
   }
 

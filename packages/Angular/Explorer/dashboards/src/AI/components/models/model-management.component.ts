@@ -556,7 +556,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   }
 
   public openModel(modelId: string): void {
-    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: modelId }]);
+    const compositeKey = CompositeKey.FromID(modelId);
     this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
   }
 
@@ -607,7 +607,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         newModel.IsActive = true;
         
         if (await newModel.Save()) {
-          const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: newModel.ID }]);
+          const compositeKey = CompositeKey.FromID(newModel.ID);
           this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
 
           // Reload the data

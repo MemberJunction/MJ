@@ -85,7 +85,9 @@ export async function applyOutputMapping(opts: {
             out.previewFields = resolved;
         } else {
             const obj = await provider.GetEntityObject<BaseEntity>(entity.Name, contextUser);
-            const loaded = await obj.InnerLoad(CompositeKey.FromKeyValuePair(entity.FirstPrimaryKey.Name, record.RecordID));
+            // RecordID is the compact CompositeKey segment sourceUtil.serializeRecordId wrote (bare value
+            // for a single column, "F1|v1||F2|v2" for composite) — parse it, don't assume one column.
+            const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entity, record.RecordID));
             if (!loaded) {
                 throw new Error(`applyOutputMapping: record '${record.RecordID}' of '${entity.Name}' not found`);
             }

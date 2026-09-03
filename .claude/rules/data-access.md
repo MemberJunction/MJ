@@ -54,6 +54,23 @@ const entity = md.Entities.find(e => e.Name === params.EntityName);
 
 This rule applies to any code that needs to look up a single entity by name. Use `Entities` (the array) only when you genuinely need to iterate over all entities (e.g. to filter by `SchemaName`).
 
+### 🚨 Primary keys: never assume a column named `ID`
+
+An MJ entity's primary key can be **any column name(s) and type(s)** — `ID`, `individual_id`, or a composite `(OrderID, LineNo)`. Every MJ core entity happens to use `ID`, so code that hardcodes it works on the whole core product and silently breaks on customer entities mapped from external schemas: `Load()` rejects the invented field name (`Primary key ID not found in entity ...`) or a composite key is truncated to its first column. This was #4179 (search click-through) and ~60 files had the same shape. `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts` gates it.
+
+| Situation | Write | Never |
+|---|---|---|
+| Literal MJ core entity (`'MJ: AI Agents'`) | `CompositeKey.FromID(id)` | `{ FieldName: 'ID', Value: id }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)` |
+| Entity is a **variable** (`entityName`, `entityInfo`, an event's `EntityName`) | `CompositeKey.FromURLSegment(entityInfo, recordId)` — reads a bare value (mapped onto the entity's first PK) or a `F1\|v1\|\|F2\|v2` segment | `CompositeKey.FromID(recordId)` |
+| Key from a `ResultType: 'simple'` row | `CompositeKey.FromEntityRecord(entityInfo, row)` | `row.ID`, `row['ID']` |
+| Key from a `BaseEntity` | `entity.PrimaryKey` | `CompositeKey.FromID(entity.ID)` |
+| Persisting a record id as one string (RecordID columns, search results, URLs) | `key.ToCompactURLSegment()` — bare value for a single column, prefixed segment for composite | `key.Values()` (drops field names — composite keys can never be read back) |
+| Filtering a variable entity by key | `${entityInfo.FirstPrimaryKey.Name} IN (...)` for single-column; `key.ToWhereClause()` per record for composite; `Fields: entityInfo.PrimaryKeys.map(pk => pk.Name)` | `` `ID IN (...)` ``, `Fields: ['ID']` |
+
+`FirstPrimaryKey` is for the places MJ is single-column **by design** — foreign-key targets, keyset `ORDER BY`, IS-A shared keys, the URL shorthand — never for constructing a load key for an arbitrary entity. Use the accessor, never `PrimaryKeys[0]`, and annotate a legitimate use with `// first-pk-ok: <reason>`; the gate ratchets the per-package count.
+
+Two persisted formats already exist and must **not** be unified: Record Changes and Version Label Items store the always-prefixed `ToURLSegment()` form (`ID|abc`); List Details, User Record Logs and search results store the compact form. `FromURLSegment` reads both.
+
 ### 🚨 CRITICAL: Don't Reach for the Global `Metadata` Provider in Per-Provider Code Paths
 
 `new Metadata()` and the static `Metadata.Provider` both resolve to the **process-global default provider**. That's fine in single-provider apps, but **wrong** in any code path that may run under a non-default provider — most importantly:
@@ -499,7 +516,7 @@ while (true) {
     if (result.Results.length < 500) break;
 
     const last = result.Results[result.Results.length - 1];
-    lastSeenKey = CompositeKey.FromID(last.ID);
+    lastSeenKey = last.PrimaryKey;   // an entity_object row carries its own key — never assume the column is named ID
 }
 ```
 

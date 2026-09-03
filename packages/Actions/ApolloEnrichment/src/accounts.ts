@@ -433,7 +433,8 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         currentUser: UserInfo
     ): Promise<boolean> {
         try {
-            const accountEntity = await md.GetEntityObject(params.AccountEntity.EntityName, CompositeKey.FromID(record.ID), currentUser);
+            // The account entity is configured, not fixed — build the key from its real primary key column(s).
+            const accountEntity = await md.GetEntityObject(params.AccountEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.AccountEntity.EntityName)!, record), currentUser);
 
             // Set organization data fields
             this.setFieldIfExists(accountEntity, params.AccountEntity.AddressField, organization.street_address);
@@ -564,7 +565,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
                 // Mark unmatched technologies as ended
                 for (const record of runViewResult.Results) {
                     if (!record.matchFound) {
-                        const entity = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, CompositeKey.FromID(record.ID), currentUser);
+                        const entity = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(ATEntity.EntityName)!, record), currentUser);
                         entity.Set(ATEntity.EndedUseAtField, new Date());
                         
                         const saveResult = await entity.Save();
@@ -965,7 +966,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
                     let historyEntity: BaseEntity | null = null;
                     
                     if (EHRunViewResult.Results.length > 0) {
-                        historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromID(EHRunViewResult.Results[0].ID), currentUser);
+                        historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(CEntity.EntityName)!, EHRunViewResult.Results[0]), currentUser);
                     } else {
                         historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, currentUser);
                         historyEntity.NewRecord();

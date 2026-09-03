@@ -316,9 +316,7 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
   }
 
   public OpenEntityRecord(job: JobStatistics): void {
-    const compositeKey = new CompositeKey();
-    compositeKey.LoadFromSingleKeyValuePair('ID', job.jobId);
-    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Jobs', compositeKey);
+    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Jobs', CompositeKey.FromID(job.jobId));
   }
 
   public GetStatusClass(status: string): string {

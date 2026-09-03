@@ -126,7 +126,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   public onOpenRecord(event: {EntityName: string, RecordID: string}): void {
     this.OpenEntityRecord.emit({
       EntityName: event.EntityName,
-      RecordPKey: new CompositeKey([{FieldName: 'ID', Value: event.RecordID}])
+      RecordPKey: CompositeKey.FromID(event.RecordID)
     });
   }
 

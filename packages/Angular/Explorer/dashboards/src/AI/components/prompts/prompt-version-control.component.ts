@@ -117,8 +117,7 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       this.loadingMessage = 'Loading version history...';
       
       const md = this.ProviderToUse;
-      const primaryKey = new CompositeKey();
-      primaryKey.KeyValuePairs.push({ FieldName: 'ID', Value: this.prompt.ID });
+      const primaryKey = CompositeKey.FromID(this.prompt.ID);
       
       // Get record changes using the new method (GetRecordChanges is on Metadata, not IMetadataProvider)
       const mdForChanges = md as unknown as Metadata;

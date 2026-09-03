@@ -282,13 +282,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
             return;
         }
         const md = this.ProviderToUse;
-        const entityInfo = md.EntityByName(entityName);
-        const pkey = new CompositeKey();
-        if (entityInfo) {
-            pkey.LoadFromURLSegment(entityInfo, recordID);
-        } else {
-            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordID }];
-        }
+        const pkey = CompositeKey.FromURLSegment(md.EntityByName(entityName), recordID);
         this.navigationService.OpenEntityRecord(entityName, pkey);
     }
 

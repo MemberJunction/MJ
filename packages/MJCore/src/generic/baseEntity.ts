@@ -2669,7 +2669,7 @@ export abstract class BaseEntity<T = unknown> {
      * Helper method to return just the first Primary Key
      */
     get FirstPrimaryKey(): EntityField {
-        return this.PrimaryKeys[0];
+        return this.PrimaryKeys[0]; // first-pk-ok: the accessor itself
     }
 
     /**
@@ -3263,7 +3263,7 @@ export abstract class BaseEntity<T = unknown> {
             // Root of an IS-A chain, or a standalone (non-IS-A) entity: generate
             // a single GUID/UUID PK here (SQL Server `uniqueidentifier` /
             // PostgreSQL `uuid`).
-            const pk = this.EntityInfo.PrimaryKeys[0];
+            const pk = this.EntityInfo.FirstPrimaryKey; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
             if (!pk.AutoIncrement &&
                 pk.IsUniqueIdentifier &&
                 !this.Get(pk.Name)) {
@@ -4644,7 +4644,7 @@ export abstract class BaseEntity<T = unknown> {
         const pkValue = this.PrimaryKey.Values();
 
         for (const childEntity of childEntities) {
-            const pkField = childEntity.PrimaryKeys[0];
+            const pkField = childEntity.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             if (!pkField) continue;
 
             const result = await rv.RunView({
@@ -4740,7 +4740,7 @@ export abstract class BaseEntity<T = unknown> {
         const pkValue = primaryKey.Values();
 
         for (const child of childEntities) {
-            const childPK = child.PrimaryKeys[0];
+            const childPK = child.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             if (!childPK) continue;
 
             const result = await rv.RunView({
@@ -4792,14 +4792,15 @@ export abstract class BaseEntity<T = unknown> {
 
         // Build all sibling queries and execute them in a single batch
         const rv = new RunView();
-        const validSiblings = siblingChildEntities.filter(s => s.PrimaryKeys[0]);
+        // first-pk-ok: IS-A siblings share the parent's single key
+        const validSiblings = siblingChildEntities.filter(s => s.FirstPrimaryKey);
         if (validSiblings.length === 0) return;
 
         const viewParams = validSiblings.map(sibling => ({
             EntityName: sibling.Name,
-            ExtraFilter: `${sibling.PrimaryKeys[0].Name} = '${pkValue}'`,
+            ExtraFilter: `${sibling.FirstPrimaryKey.Name} = '${pkValue}'`, // first-pk-ok: IS-A shared key
             ResultType: 'simple' as const,
-            Fields: [sibling.PrimaryKeys[0].Name],
+            Fields: [sibling.FirstPrimaryKey.Name], // first-pk-ok: IS-A shared key
             MaxRows: 1
         }));
 

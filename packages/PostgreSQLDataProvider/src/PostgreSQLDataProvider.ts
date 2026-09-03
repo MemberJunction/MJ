@@ -146,7 +146,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             .map(child => {
                 const schema = child.SchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
-                const pkRef = pgDialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name);
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);
                 return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
             });
@@ -1115,7 +1115,7 @@ SELECT * FROM delete_result`;
         // Single PK: accept either the PK-named column (current codegen) or `_result_id`
         // (legacy baseline sproc). A null value in either means the sproc reported zero
         // rows affected — record was already gone.
-        const pk = entity.PrimaryKeys[0];
+        const pk = entity.FirstPrimaryKey;
         const pkValue = deletedRecord[pk.Name];
         const legacyValue = deletedRecord['_result_id'];
         if (pkValue === pk.Value || legacyValue === pk.Value) {
@@ -1420,7 +1420,7 @@ SELECT * FROM delete_result`;
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
-        const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+        const pkName = entityInfo.FirstPrimaryKey?.Name ?? 'ID';
         const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
         const recordID = entityInfo.PrimaryKeys

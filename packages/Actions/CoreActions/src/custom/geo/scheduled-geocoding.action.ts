@@ -437,7 +437,8 @@ export class ScheduledGeocodingAction extends BaseAction {
         for (const geoRecord of geoRecords) {
             try {
                 const entity = await md.GetEntityObject(entityInfo.Name, contextUser);
-                const pk = new CompositeKey([{ FieldName: 'ID', Value: geoRecord.RecordID }]);
+                // Geocoded entities are arbitrary — the rest of this action already keys by FirstPrimaryKey.
+                const pk = CompositeKey.FromURLSegment(entityInfo, geoRecord.RecordID);
                 const loaded = await entity.InnerLoad(pk);
                 if (loaded) {
                     entities.push(entity);

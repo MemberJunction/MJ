@@ -55,7 +55,8 @@ async function loadTarget(md: Metadata, entry: OfflineMutation): Promise<BaseEnt
         return record;
     }
     if (!entry.primaryKey) return null;
-    const loaded = await record.InnerLoad(CompositeKey.FromID(entry.primaryKey));
+    // Arbitrary entity: resolve the key column from metadata instead of assuming `ID`.
+    const loaded = await record.InnerLoad(CompositeKey.FromURLSegment(md.EntityByName(entry.entityName), entry.primaryKey));
     return loaded ? record : null;
 }
 

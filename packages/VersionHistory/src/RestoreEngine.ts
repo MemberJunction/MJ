@@ -453,10 +453,10 @@ export class RestoreEngine {
             const entityInfo = md.EntityByID(item.EntityID);
             if (!entityInfo) continue;
 
-            const key = new CompositeKey([{
-                FieldName: entityInfo.FirstPrimaryKey.Name,
-                Value: item.RecordID,
-            }]);
+            // VersionLabelItem.RecordID is a CompositeKey segment (SnapshotBuilder writes
+            // ToConcatenatedString). Parse it — wrapping it as the first PK's value would have made
+            // the key `ID='ID|abc'`, and a composite key can't be a single value at all.
+            const key = CompositeKey.FromURLSegment(entityInfo, item.RecordID);
 
             await this.SnapshotBldr.CaptureRecord(
                 preRestoreLabelId,

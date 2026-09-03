@@ -493,7 +493,7 @@ export class RecycleBinComponent extends BaseAngularComponent implements OnInit 
       const v = snapshot[f.Name];
       if (typeof v === 'string' && v.trim().length > 0) return v;
     }
-    return `Record ${snapshot[entityInfo.PrimaryKeys[0]?.Name] ?? ''}`;
+    return `Record ${snapshot[entityInfo.FirstPrimaryKey?.Name] ?? ''}`;
   }
 
   /**

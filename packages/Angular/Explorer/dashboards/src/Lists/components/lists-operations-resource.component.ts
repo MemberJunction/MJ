@@ -2551,7 +2551,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     // If still nothing, include primary key
     if (fields.length === 0 && entityInfo.PrimaryKeys.length > 0) {
-      fields.push(entityInfo.PrimaryKeys[0].Name);
+      fields.push(entityInfo.FirstPrimaryKey.Name);
     }
 
     return fields.slice(0, 3); // Max 3 fields
@@ -2584,11 +2584,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     if (this.currentEntityInfo) {
       SharedService.Instance.InvokeManualResize();
-      // Create composite key for navigation
-      const primaryKeyField = this.currentEntityInfo.PrimaryKeys.length > 0
-        ? this.currentEntityInfo.PrimaryKeys[0].Name
-        : 'ID';
-      const compositeKey = new CompositeKey([{ FieldName: primaryKeyField, Value: record.id }]);
+      // record.id is the compact List Detail RecordID (bare value, or "F1|v1||F2|v2" for composite)
+      const compositeKey = CompositeKey.FromURLSegment(this.currentEntityInfo, record.id);
       SharedService.Instance.OpenEntityRecord(this.currentEntityInfo.Name, compositeKey);
     } else {
       this.notificationService.CreateSimpleNotification('Unable to open record', 'error', 3000);
@@ -3104,7 +3101,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     try {
       const md = this.ProviderToUse;
       const entityInfo = md.EntityByName(entityName)!;
-      const pk = entityInfo.PrimaryKeys[0].Name;
+      const pk = entityInfo.FirstPrimaryKey.Name;
       // Always include the PK in the SELECT — RunView won't filter on
       // a column it didn't pull, and downstream lookups expect it.
       const fieldsForQuery = Array.from(new Set([pk, ...selectedFields]));

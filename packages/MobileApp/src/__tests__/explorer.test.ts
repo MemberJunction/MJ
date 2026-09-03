@@ -36,6 +36,9 @@ vi.mock('@memberjunction/core', () => {
         static FromID(id: string) {
             return { id };
         }
+        static FromURLSegment(_entity: unknown, id: string) {
+            return { id };
+        }
     }
     return { Metadata, RunView, RunQuery, CompositeKey };
 });

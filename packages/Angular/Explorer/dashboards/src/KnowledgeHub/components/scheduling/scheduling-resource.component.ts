@@ -251,7 +251,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
                             ErrorMessage: buildScheduleNotFoundError(v.value, this.AllJobs.map(j => j.Name)),
                         };
                     }
-                    const pkey = new CompositeKey([{ FieldName: 'ID', Value: match.ID }]);
+                    const pkey = CompositeKey.FromID(match.ID);
                     this.navigationService.OpenEntityRecord('MJ: Scheduled Jobs', pkey);
                     return { Success: true, Data: { Job: match.Name } };
                 },

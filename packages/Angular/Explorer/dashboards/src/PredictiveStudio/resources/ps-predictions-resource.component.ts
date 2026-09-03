@@ -516,18 +516,21 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const target = this.targetEntityForModel(model);
       if (!target || this.atRiskRows.length === 0) return;
       const entity = this.ProviderToUse.EntityByName(target.name);
+      if (!entity) return;
+      // The target entity is arbitrary — its key column can have any name.
+      const pkName = entity.FirstPrimaryKey.Name;
       const targets = this.atRiskRows.slice(0, 200); // the rows a user actually acts on
       const ids = targets.map((r) => `'${r.recordId.replace(/'/g, "''")}'`);
       // Only fetch the columns labelFromRecord can actually use — a broad no-Fields fetch pulls every
       // column (incl. large text/JSON) of an arbitrary entity just to render a display name. Fall back
       // to the broad fetch only when the entity has none of the candidate label fields.
       const candidates = ['Name', 'FirstName', 'LastName', 'Email'];
-      const labelFields = entity ? candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase())) : [];
+      const labelFields = candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase()));
       const res = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<Record<string, unknown>>(
         {
           EntityName: target.name,
-          ExtraFilter: `ID IN (${ids.join(',')})`,
-          ...(labelFields.length > 0 ? { Fields: ['ID', ...labelFields] } : {}),
+          ExtraFilter: `${pkName} IN (${ids.join(',')})`,
+          ...(labelFields.length > 0 ? { Fields: [pkName, ...labelFields] } : {}),
           ResultType: 'simple',
           MaxRows: ids.length,
         },
@@ -535,7 +538,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       );
       if (!res.Success) return;
       const byId = new Map<string, Record<string, unknown>>();
-      for (const row of res.Results ?? []) byId.set(NormalizeUUID(String((row as { ID?: unknown }).ID ?? '')), row);
+      for (const row of res.Results ?? []) byId.set(NormalizeUUID(String(row[pkName] ?? '')), row);
       for (const r of this.atRiskRows) {
         const rec = byId.get(NormalizeUUID(r.recordId));
         if (rec) r.label = labelFromRecord(rec);

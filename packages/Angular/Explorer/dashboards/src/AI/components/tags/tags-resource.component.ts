@@ -1763,7 +1763,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     /** Convert a string ID to a CompositeKey for tree-dropdown binding */
     public ToCompositeKey(id: string | null | undefined): CompositeKey | null {
         if (!id) return null;
-        return new CompositeKey([{ FieldName: 'ID', Value: id }]);
+        return CompositeKey.FromID(id);
     }
 
     /** Extract the ID string from a CompositeKey (from tree-dropdown ValueChange) */
@@ -2088,7 +2088,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
 
             if (this.FormMode === 'edit-source' && this.EditingSourceID) {
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingSourceID }]));
+                await entity.InnerLoad(CompositeKey.FromID(this.EditingSourceID));
             } else {
                 entity.NewRecord();
             }
@@ -2177,7 +2177,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Sources');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: card.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(card.ID));
             const deleted = await entity.Delete();
             if (deleted) {
                 MJNotificationService.Instance.CreateSimpleNotification('Source deleted', 'success', 2500);
@@ -2388,7 +2388,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     private async linkScheduleToSource(sourceID: string, scheduledJobID: string | null): Promise<void> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
-        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceID }]));
+        await entity.InnerLoad(CompositeKey.FromID(sourceID));
         entity.ScheduledJobID = scheduledJobID;
         const saved = await entity.Save();
         if (!saved) {
@@ -2431,7 +2431,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Types');
 
             if (this.FormMode === 'edit-type' && this.EditingTypeID) {
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingTypeID }]));
+                await entity.InnerLoad(CompositeKey.FromID(this.EditingTypeID));
             } else {
                 entity.NewRecord();
             }
@@ -3181,21 +3181,14 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     public OpenRecordFromItem(item: ContentItemDetail): void {
         const md = this.ProviderToUse;
-        const pkey = new CompositeKey();
 
         // For entity sources: navigate to the actual entity record, not the ContentItem
         if (item.EntityName && item.EntityRecordID) {
-            const entityInfo = md.Entities.find(e => e.Name === item.EntityName);
-            if (entityInfo) {
-                pkey.LoadFromURLSegment(entityInfo, item.EntityRecordID);
-            } else {
-                pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.EntityRecordID }];
-            }
+            const pkey = CompositeKey.FromURLSegment(md.EntityByName(item.EntityName), item.EntityRecordID);
             this.navigationService.OpenEntityRecord(item.EntityName, pkey);
         } else {
             // For non-entity sources: open the ContentItem record
-            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.ID }];
-            this.navigationService.OpenEntityRecord('MJ: Content Items', pkey);
+            this.navigationService.OpenEntityRecord('MJ: Content Items', CompositeKey.FromID(item.ID));
         }
     }
 
@@ -3334,9 +3327,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     public OpenRecordFromSource(source: SourceDetailInfo): void {
-        const pkey = new CompositeKey();
-        pkey.KeyValuePairs = [{ FieldName: 'ID', Value: source.ID }];
-        this.navigationService.OpenEntityRecord('MJ: Content Sources', pkey);
+        this.navigationService.OpenEntityRecord('MJ: Content Sources', CompositeKey.FromID(source.ID));
     }
 
     public OpenEditSourceFromDetail(): void {
@@ -4092,7 +4083,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.TaxSelectedNode.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(this.TaxSelectedNode.ID));
             entity.Set('Name', this.TaxEditName);
             entity.Set('Description', this.TaxEditDescription);
             const saved = await entity.Save();
@@ -4117,7 +4108,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(node.ID));
             entity.Set('ParentID', newParentId);
             const saved = await entity.Save();
             if (saved) {
@@ -4139,7 +4130,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 try {
                     const md = this.ProviderToUse;
                     const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                    await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+                    await entity.InnerLoad(CompositeKey.FromID(node.ID));
                     const deleted = await entity.Delete();
                     if (deleted) {
                         this.addTaxAuditEntry('deleted', node.Name);
@@ -4293,7 +4284,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         for (const tagID of validIDs) {
             try {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: tagID }]));
+                await entity.InnerLoad(CompositeKey.FromID(tagID));
                 entity.Set('ParentID', targetNode.ID);
                 const saved = await entity.Save();
                 if (saved) movedCount++;
@@ -4333,7 +4324,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         for (const tagID of dragIDs) {
             try {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: tagID }]));
+                await entity.InnerLoad(CompositeKey.FromID(tagID));
                 if (entity.Get('ParentID') != null) {
                     entity.Set('ParentID', null);
                     const saved = await entity.Save();
@@ -4368,7 +4359,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const md = this.ProviderToUse;
             for (const ti of itemsToMove) {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tagged Items');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: ti['ID'] as string }]));
+                await entity.InnerLoad(CompositeKey.FromID(ti['ID'] as string));
                 entity.Set('TagID', targetTagId);
                 await entity.Save();
             }
@@ -4377,7 +4368,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const childTags = this.tagsRaw.filter(t => (t['ParentID'] as string) === sourceTagId);
             for (const child of childTags) {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: child['ID'] as string }]));
+                await entity.InnerLoad(CompositeKey.FromID(child['ID'] as string));
                 entity.Set('ParentID', targetTagId);
                 await entity.Save();
             }
@@ -4387,7 +4378,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             // Delete source tag (original behavior — hard delete)
             const sourceEntity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await sourceEntity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceTagId }]));
+            await sourceEntity.InnerLoad(CompositeKey.FromID(sourceTagId));
             await sourceEntity.Delete();
 
             this.addTaxAuditEntry('merged', `${sourceName} into ${targetName}`);
@@ -4406,7 +4397,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: childTagId }]));
+            await entity.InnerLoad(CompositeKey.FromID(childTagId));
             entity.Set('ParentID', parentTagId);
             const saved = await entity.Save();
             if (saved) {
@@ -4681,7 +4672,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     await this.cleanupTagReferences(orphan.ID);
                     const md = this.ProviderToUse;
                     const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                    await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                    await entity.InnerLoad(CompositeKey.FromID(orphan.ID));
                     const deleted = await entity.Delete();
                     if (deleted) {
                         this.addTaxAuditEntry('deleted', orphan.Name);
@@ -4712,7 +4703,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     try {
                         await this.cleanupTagReferences(orphan.ID);
                         const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                        await entity.InnerLoad(CompositeKey.FromID(orphan.ID));
                         if (await entity.Delete()) {
                             deletedCount++;
                             this.addTaxAuditEntry('deleted', orphan.Name);
@@ -4743,7 +4734,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 for (const orphan of this.TaxOrphans) {
                     try {
                         const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                        await entity.InnerLoad(CompositeKey.FromID(orphan.ID));
                         if (await entity.Delete()) {
                             deletedCount++;
                             this.addTaxAuditEntry('deleted', orphan.Name);

@@ -501,7 +501,7 @@ export class CompositeKey extends FieldValueCollection {
      */
     public static FromID(id: any): CompositeKey {
         let compositeKey = new CompositeKey();
-        compositeKey.LoadFromSingleKeyValuePair('ID', id);
+        compositeKey.LoadFromSingleKeyValuePair('ID', id); // pk-literal-ok: this IS the sanctioned "the key is ID" constructor
         return compositeKey;
     }
 
@@ -528,7 +528,7 @@ export class CompositeKey extends FieldValueCollection {
         } else if (segment.includes(CompositeKey.DefaultValueDelimiter)) {
             compositeKey.SimpleLoadFromURLSegment(segment);
         } else {
-            compositeKey.LoadFromSingleKeyValuePair('ID', segment);
+            compositeKey.LoadFromSingleKeyValuePair('ID', segment); // pk-literal-ok: documented fallback when entity metadata is unresolvable
         }
         return compositeKey;
     }

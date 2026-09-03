@@ -539,7 +539,8 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                                     continue;
                                 }
                                 
-                                const contactEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(params.EntityName, CompositeKey.FromID(entityRecord.ID), params.CurrentUser);
+                                // The contact entity is configured, not fixed — build the key from its real primary key column(s).
+                                const contactEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(params.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.EntityName)!, entityRecord), params.CurrentUser);
 
                                 contactEntity.Set(params.EmailField, match.email);
                                 contactEntity.Set(params.EnrichedAtField, new Date());
@@ -749,7 +750,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                 
                 if(results.length > 0) {
                     // update the existing record
-                    historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, CompositeKey.FromID(results[0].ID), params.CurrentUser);
+                    historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, CompositeKey.FromEntityRecord(params.Md.EntityByName(params.EmploymentHistoryEntityName)!, results[0]), params.CurrentUser);
                 }
                 else {
                     historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, params.CurrentUser);
@@ -800,7 +801,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                     
                     if(educationResults.length > 0){
                         // update the existing record
-                        educationEntity = await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, CompositeKey.FromID(educationResults[0].ID), params.CurrentUser);
+                        educationEntity = await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, CompositeKey.FromEntityRecord(params.Md.EntityByName(params.EducationHistoryEntityName)!, educationResults[0]), params.CurrentUser);
                     }
                     else {
                         educationEntity= await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, params.CurrentUser);

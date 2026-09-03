@@ -685,7 +685,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      * Navigate to the Entity admin form for a given entity ID.
      */
     public NavigateToEntityByID(entityID: string): void {
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityID }]);
+        const pkey = CompositeKey.FromID(entityID);
         this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
     }
 
@@ -935,7 +935,8 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      * Navigates to the selected entity's form using SharedService.
      */
     public onERDOpenRecord(event: { EntityName: string; RecordID: string }): void {
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: event.RecordID }]);
+        // The ERD can open any entity — resolve its key column(s) from metadata, not a hardcoded ID.
+        const pkey = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.EntityName), event.RecordID);
         this.sharedService.OpenEntityRecord(event.EntityName, pkey);
     }
 
@@ -1022,7 +1023,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
     /** Navigate to an entity record in the Entity Explorer */
     public NavigateToEntity(entityInfo: EntityInfo): void {
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityInfo.ID }]);
+        const pkey = CompositeKey.FromID(entityInfo.ID);
         this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
     }
 
@@ -1171,7 +1172,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     public navigateToRelatedEntity(field: EntityFieldInfo): void {
         const related = this.getRelatedEntity(field);
         if (related) {
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: related.ID }]);
+            const pkey = CompositeKey.FromID(related.ID);
             this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
         }
     }
@@ -1181,7 +1182,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      */
     public openRelatedEntityFromField(entityId: string): void {
         if (entityId) {
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityId }]);
+            const pkey = CompositeKey.FromID(entityId);
             this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
         }
     }

@@ -347,7 +347,7 @@ export class AuthServerDiscovery {
 
             if (existing.Success && existing.Results && existing.Results.length > 0) {
                 // Update existing record
-                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: existing.Results[0].ID }]);
+                const compositeKey = CompositeKey.FromID(existing.Results[0].ID);
                 await entity.InnerLoad(compositeKey);
             } else {
                 // Create new record
@@ -401,7 +401,7 @@ export class AuthServerDiscovery {
 
             if (existing.Success && existing.Results && existing.Results.length > 0) {
                 const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_METADATA_CACHE, contextUser);
-                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: existing.Results[0].ID }]);
+                const compositeKey = CompositeKey.FromID(existing.Results[0].ID);
                 const loaded = await entity.InnerLoad(compositeKey);
                 if (loaded) {
                     await entity.Delete();

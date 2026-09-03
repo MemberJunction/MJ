@@ -134,7 +134,7 @@ export class TokenManager {
 
                 // Update OAuthToken metadata
                 const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_TOKENS, contextUser);
-                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: existingRecord.ID }]);
+                const compositeKey = CompositeKey.FromID(existingRecord.ID);
                 await entity.InnerLoad(compositeKey);
 
                 entity.Set('CredentialID', credentialId);
@@ -582,7 +582,7 @@ export class TokenManager {
 
                 // Delete the OAuthToken record first
                 const tokenEntity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_TOKENS, contextUser);
-                const tokenKey = new CompositeKey([{ FieldName: 'ID', Value: record.ID }]);
+                const tokenKey = CompositeKey.FromID(record.ID);
                 const tokenLoaded = await tokenEntity.InnerLoad(tokenKey);
                 if (tokenLoaded) {
                     await tokenEntity.Delete();
@@ -592,7 +592,7 @@ export class TokenManager {
                 if (record.CredentialID) {
                     try {
                         const credEntity = await md.GetEntityObject<BaseEntity>('MJ: Credentials', contextUser);
-                        const credKey = new CompositeKey([{ FieldName: 'ID', Value: record.CredentialID }]);
+                        const credKey = CompositeKey.FromID(record.CredentialID);
                         const credLoaded = await credEntity.InnerLoad(credKey);
                         if (credLoaded) {
                             await credEntity.Delete();

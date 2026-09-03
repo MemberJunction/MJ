@@ -398,7 +398,7 @@ export class ClientRegistration {
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
 
             if (existing.Success && existing.Results && existing.Results.length > 0) {
-                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: existing.Results[0].ID }]);
+                const compositeKey = CompositeKey.FromID(existing.Results[0].ID);
                 await entity.InnerLoad(compositeKey);
             } else {
                 entity.NewRecord();
@@ -437,7 +437,7 @@ export class ClientRegistration {
         try {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
-            const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: registrationId }]);
+            const compositeKey = CompositeKey.FromID(registrationId);
             const loaded = await entity.InnerLoad(compositeKey);
             if (loaded) {
                 await entity.Delete();
@@ -459,7 +459,7 @@ export class ClientRegistration {
         try {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
-            const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: registrationId }]);
+            const compositeKey = CompositeKey.FromID(registrationId);
             const loaded = await entity.InnerLoad(compositeKey);
             if (loaded) {
                 entity.Set('Status', status);

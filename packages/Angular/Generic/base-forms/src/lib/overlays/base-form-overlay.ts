@@ -133,7 +133,9 @@ export abstract class BaseFormOverlay extends BaseAngularComponent {
   /** Resolves the primary key to pass to the host (PrimaryKey beats RecordID). */
   protected get effectivePrimaryKey(): CompositeKey | undefined {
     if (this.PrimaryKey) return this.PrimaryKey;
-    if (this.RecordID) return CompositeKey.FromID(this.RecordID);
+    // The overlay hosts any entity's form — resolve the key column(s) from EntityName's metadata
+    // rather than assuming `ID`. RecordID may be a bare value or a composite segment.
+    if (this.RecordID) return CompositeKey.FromURLSegment(this.EntityName ? this.ProviderToUse.EntityByName(this.EntityName) : undefined, this.RecordID);
     return undefined;
   }
 

@@ -524,7 +524,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * raw value so it matches how List Details store records.
    */
   private buildRawRecordIds(records: Record<string, unknown>[], entity: EntityInfo): string[] {
-    const pkFieldName = entity.PrimaryKeys[0]?.Name;
+    const pkFieldName = entity.FirstPrimaryKey?.Name;
     if (!pkFieldName) {
       return [];
     }

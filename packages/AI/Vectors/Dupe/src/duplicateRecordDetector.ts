@@ -756,9 +756,11 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const sanitizedListID = listID.replace(/'/g, "''");
+        // The entity is arbitrary — its key column can have any name (every other lookup in this
+        // file already uses FirstPrimaryKey). List Details store a single-column key's raw value.
         const rvResult = await this.RunView.RunView<BaseEntity>({
             EntityName: entityInfo.Name,
-            ExtraFilter: `ID IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = '${sanitizedListID}')`,
+            ExtraFilter: `${entityInfo.FirstPrimaryKey.Name} IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = '${sanitizedListID}')`,
             ResultType: 'entity_object',
         }, this.CurrentUser);
 

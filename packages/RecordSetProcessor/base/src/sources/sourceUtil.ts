@@ -23,12 +23,7 @@ const KEYSET_ORDERABLE_PK_TYPES = new Set<string>([
  * raw value; composite-PK entities use `CompositeKey.ToConcatenatedString()`.
  */
 export function serializeRecordId(entity: EntityInfo, row: Record<string, unknown>): string {
-    if (entity.PrimaryKeys.length === 1) {
-        return String(row[entity.PrimaryKeys[0].Name]);
-    }
-    const ck = new CompositeKey();
-    ck.KeyValuePairs = entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: row[pk.Name] as never }));
-    return ck.ToConcatenatedString();
+    return CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
 }
 
 /** Returns true when the entity has a single, orderable primary key suitable for keyset pagination. */

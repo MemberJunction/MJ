@@ -568,7 +568,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   }
 
   public onEditCategory(category: MJActionCategoryEntity): void {
-    const key = new CompositeKey([{ FieldName: 'ID', Value: category.ID }]);
+    const key = CompositeKey.FromID(category.ID);
     this.navigationService.OpenEntityRecord('MJ: Action Categories', key);
   }
 
@@ -592,7 +592,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   }
 
   public onActionClick(action: MJActionEntityExtended): void {
-    const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
+    const key = CompositeKey.FromID(action.ID);
     this.navigationService.OpenEntityRecord('MJ: Actions', key);
   }
 

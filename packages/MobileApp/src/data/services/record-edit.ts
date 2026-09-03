@@ -329,7 +329,8 @@ export async function loadRecordForEdit(
     if (!entity) return null;
 
     const record = await md.GetEntityObject<BaseEntity>(entityName, contextUser);
-    const loaded = await record.InnerLoad(CompositeKey.FromID(recordId));
+    // Arbitrary entity: resolve the key column from metadata instead of assuming `ID`.
+    const loaded = await record.InnerLoad(CompositeKey.FromURLSegment(entity, recordId));
     if (!loaded) return null;
 
     const descriptors = entity.Fields.map(describeField).filter(isEditableField).map(buildDescriptor);

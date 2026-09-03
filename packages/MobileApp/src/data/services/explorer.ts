@@ -164,7 +164,9 @@ export async function loadRecordDetail(
     if (!entityInfo) return null;
 
     const obj = await md.GetEntityObject(entityName, contextUser);
-    const loaded = await obj.InnerLoad(CompositeKey.FromID(recordId));
+    // The entity is arbitrary — its key column can have any name — so resolve the key against
+    // its metadata rather than assuming `ID` via FromID.
+    const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entityInfo, recordId));
     if (!loaded) return null;
 
     const titleField = primaryDisplayField(entityInfo);

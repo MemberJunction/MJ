@@ -700,7 +700,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   }
 
   public openAgentRecord(agentId: string): void {
-    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agentId }]);
+    const compositeKey = CompositeKey.FromID(agentId);
     this.navigationService.OpenEntityRecord('MJ: AI Agents', compositeKey);
   }
 
@@ -770,7 +770,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       this.applyFilters();
 
       // Navigate to the new agent record
-      const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agent.ID }]);
+      const compositeKey = CompositeKey.FromID(agent.ID);
       this.navigationService.OpenEntityRecord('MJ: AI Agents', compositeKey);
 
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -806,7 +806,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   }
 
   public onOpenRecord(entityName: string, recordId: string): void {
-    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: recordId }]);
+    const compositeKey = CompositeKey.FromID(recordId);
     this.navigationService.OpenEntityRecord(entityName, compositeKey);
   }
 

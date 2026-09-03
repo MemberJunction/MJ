@@ -527,7 +527,7 @@ export class RecordDependencyAnalyzer {
     entityInfo: EntityInfo
   ): string | null {
     // Get primary key field name
-    const primaryKeyField = entityInfo.PrimaryKeys[0]?.Name;
+    const primaryKeyField = entityInfo.FirstPrimaryKey?.Name;
     if (!primaryKeyField) return null;
 
     for (const candidate of this.flattenedRecords) {

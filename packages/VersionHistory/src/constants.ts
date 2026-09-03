@@ -83,25 +83,19 @@ export function buildCompositeKeyFromRecord(
     entityInfo: EntityInfo,
     record: Record<string, unknown>
 ): CompositeKey {
-    const pairs = entityInfo.PrimaryKeys.map(pk => ({
-        FieldName: pk.Name,
-        Value: record[pk.Name],
-    }));
-    return new CompositeKey(pairs);
+    return CompositeKey.FromEntityRecord(entityInfo, record);
 }
 
 /**
- * Build a CompositeKey for loading by ID (single-field PK).
- * Uses the entity's actual first primary key name rather than hardcoding 'ID'.
+ * Build a CompositeKey for loading from a stored record id. Accepts the bare value of a
+ * single-column key (any column name) or the `Field1|Value1||Field2|Value2` segment Record
+ * Changes / Version Label Items persist, so composite keys load too.
  */
 export function buildPrimaryKeyForLoad(
     entityInfo: EntityInfo,
     value: string
 ): CompositeKey {
-    return new CompositeKey([{
-        FieldName: entityInfo.FirstPrimaryKey.Name,
-        Value: value,
-    }]);
+    return CompositeKey.FromURLSegment(entityInfo, value);
 }
 
 /**
@@ -110,7 +104,7 @@ export function buildPrimaryKeyForLoad(
  * where we control the schema and know the PK is always 'ID'.
  */
 export function buildIdKey(id: string): CompositeKey {
-    return new CompositeKey([{ FieldName: 'ID', Value: id }]);
+    return CompositeKey.FromID(id);
 }
 
 // ---------------------------------------------------------------------------

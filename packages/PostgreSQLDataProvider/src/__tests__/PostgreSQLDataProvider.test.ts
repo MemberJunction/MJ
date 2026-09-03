@@ -592,7 +592,8 @@ describe('PostgreSQLDataProvider', () => {
         };
 
         function buildEntity(pks: { Name: string; Value: unknown }[]) {
-            return { PrimaryKeys: pks } as unknown as Parameters<Validator['ValidateDeleteResult']>[0];
+            // FirstPrimaryKey mirrors BaseEntity's accessor, which the single-PK path reads.
+            return { PrimaryKeys: pks, FirstPrimaryKey: pks[0] } as unknown as Parameters<Validator['ValidateDeleteResult']>[0];
         }
 
         let validator: Validator;

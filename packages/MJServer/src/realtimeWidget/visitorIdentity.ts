@@ -60,17 +60,20 @@ export async function resolveIdentityByEmail(
     }
     const entityName = target?.entityName?.trim() || 'Users';
     const emailField = target?.emailField?.trim() || 'Email';
-    const entityId = provider.EntityByName(entityName)?.ID;
-    if (!entityId) {
+    const entityInfo = provider.EntityByName(entityName);
+    if (!entityInfo) {
       LogError(`[VisitorIdentity] identity-resolution entity '${entityName}' not found in metadata.`);
       return undefined;
     }
+    const entityId = entityInfo.ID;
+    // The identity entity is configurable, so its key column can have any name.
+    const pkName = entityInfo.FirstPrimaryKey.Name;
     const rv = new RunView();
-    const result = await rv.RunView<{ ID: string }>(
+    const result = await rv.RunView<Record<string, unknown>>(
       {
         EntityName: entityName,
         ExtraFilter: `${emailField} = '${trimmed.replace(/'/g, "''")}'`,
-        Fields: ['ID'],
+        Fields: [pkName],
         MaxRows: 1,
         ResultType: 'simple',
       },
@@ -80,7 +83,8 @@ export async function resolveIdentityByEmail(
       LogError(`[VisitorIdentity] identity lookup failed for '${entityName}.${emailField}': ${result.ErrorMessage}`);
       return undefined;
     }
-    const recordId = result.Results?.[0]?.ID;
+    const rawId = result.Results?.[0]?.[pkName];
+    const recordId = rawId == null ? undefined : String(rawId);
     return recordId ? { entityId, recordId } : undefined;
   } catch (e) {
     LogError(`[VisitorIdentity] resolveIdentityByEmail failed: ${e instanceof Error ? e.message : String(e)}`);

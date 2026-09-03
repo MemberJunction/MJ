@@ -839,7 +839,7 @@ export class PullService {
     }
 
     // Extract all parent primary key values using the entity's actual PK field name
-    const pkFieldName = entityInfo.PrimaryKeys[0].Name;
+    const pkFieldName = entityInfo.FirstPrimaryKey.Name;
     const allParentIds: string[] = [];
     for (const record of records) {
       const id = record.Get(pkFieldName);

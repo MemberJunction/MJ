@@ -152,7 +152,8 @@ export class MjRecordMicroViewComponent extends BaseAngularComponent implements 
     public OnEntityLinkClicked(event: MouseEvent, field: FieldDisplay): void {
         event.stopPropagation();
         if (field.ForeignKeyEntityName && field.ForeignKeyRecordId) {
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: field.ForeignKeyRecordId }]);
+            // The FK target is any entity — resolve its key column from metadata, not a hardcoded ID.
+            const pkey = CompositeKey.FromURLSegment(this.metadata.EntityByName(field.ForeignKeyEntityName), field.ForeignKeyRecordId);
             this.EntityLinkClick.emit({
                 EntityName: field.ForeignKeyEntityName,
                 RecordID: field.ForeignKeyRecordId,
@@ -164,7 +165,8 @@ export class MjRecordMicroViewComponent extends BaseAngularComponent implements 
     public OnOpenRecord(): void {
         if (this.Data.EntityName && this.Data.RecordID) {
             const rawId = this.extractRawId(this.Data.RecordID);
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+            // RecordID is a CompositeKey segment — parse it against the entity's real key column(s).
+            const pkey = CompositeKey.FromURLSegment(this.metadata.EntityByName(this.Data.EntityName), this.Data.RecordID);
             this.OpenRecord.emit({
                 EntityName: this.Data.EntityName,
                 RecordID: rawId,

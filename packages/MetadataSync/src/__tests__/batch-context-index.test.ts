@@ -10,6 +10,7 @@ vi.mock('@memberjunction/core', () => {
           return {
             Name: name,
             PrimaryKeys: [{ Name: 'ID' }],
+            FirstPrimaryKey: { Name: 'ID' },
             Fields: [{ Name: 'ID' }],
           };
         }),
@@ -35,6 +36,7 @@ function makeStub(
     EntityInfo: {
       Name: entityName,
       PrimaryKeys: [{ Name: 'ID' }],
+      FirstPrimaryKey: { Name: 'ID' },
       Fields: fieldNames.map((n) => ({ Name: n })),
     },
     Get(field: string) {

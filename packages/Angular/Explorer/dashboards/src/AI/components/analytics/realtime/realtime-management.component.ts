@@ -170,16 +170,12 @@ export class RealtimeManagementComponent extends BaseAngularComponent implements
 
     /** Opens the AIAgentSession record behind a bridge via the shared record-open path. */
     public OpenSession(sessionId: string): void {
-        const key = new CompositeKey();
-        key.LoadFromSingleKeyValuePair('ID', sessionId);
-        SharedService.Instance.OpenEntityRecord('MJ: AI Agent Sessions', key);
+        SharedService.Instance.OpenEntityRecord('MJ: AI Agent Sessions', CompositeKey.FromID(sessionId));
     }
 
     /** Opens a bridge provider record. */
     public OpenProvider(providerId: string): void {
-        const key = new CompositeKey();
-        key.LoadFromSingleKeyValuePair('ID', providerId);
-        SharedService.Instance.OpenEntityRecord('MJ: AI Bridge Providers', key);
+        SharedService.Instance.OpenEntityRecord('MJ: AI Bridge Providers', CompositeKey.FromID(providerId));
     }
 
     // ── Capability summary accessors (template helpers) ──

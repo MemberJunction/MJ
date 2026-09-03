@@ -845,7 +845,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         // Initialize category selection from the record's CategoryID
         const categoryId = this.record?.CategoryID;
         if (categoryId) {
-            this.SelectedCategoryKey = new CompositeKey([{ FieldName: 'ID', Value: categoryId }]);
+            this.SelectedCategoryKey = CompositeKey.FromID(categoryId);
         }
 
         // Load context compression prompt if one is set
@@ -2197,7 +2197,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Navigates to a related entity
      */
     public navigateToEntity(entityName: string, recordId: string) {
-        this.sharedService.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+        this.sharedService.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
     }
     
     /**

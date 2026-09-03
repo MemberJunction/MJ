@@ -1587,13 +1587,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   OnTagsRecordNavigate(event: { EntityName: string; RecordID: string }): void {
     const md = this.ProviderToUse;
-    const entityInfo = md.Entities.find(e => e.Name === event.EntityName);
-    const pkey = new CompositeKey();
-    if (entityInfo) {
-      pkey.LoadFromURLSegment(entityInfo, event.RecordID);
-    } else {
-      pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.RecordID }];
-    }
+    const pkey = CompositeKey.FromURLSegment(md.EntityByName(event.EntityName), event.RecordID);
     this.Navigate.emit({ Kind: 'record', EntityName: event.EntityName, PrimaryKey: pkey });
   }
 

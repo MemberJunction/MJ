@@ -603,7 +603,7 @@ export class SyncEngine {
             if (allMatch) {
               // Found in batch context, return primary key
               if (entityInfo.PrimaryKeys.length > 0) {
-                const pkeyField = entityInfo.PrimaryKeys[0].Name;
+                const pkeyField = entityInfo.FirstPrimaryKey.Name;
                 const id = entity.Get(pkeyField);
                 if (this.syncMetadataEngine) {
                   this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
@@ -631,7 +631,7 @@ export class SyncEngine {
           }
         }
         if (allMatch) {
-          const pkeyField = entityInfo.PrimaryKeys[0].Name;
+          const pkeyField = entityInfo.FirstPrimaryKey.Name;
           const id = cachedEntity.Get(pkeyField);
           this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
           return id;
@@ -710,7 +710,7 @@ export class SyncEngine {
     
     if (result.Success && result.Results.length > 0) {
       if (entityInfo.PrimaryKeys.length > 0) {
-        const pkeyField = entityInfo.PrimaryKeys[0].Name;
+        const pkeyField = entityInfo.FirstPrimaryKey.Name;
         const id = result.Results[0][pkeyField];
         if (this.syncMetadataEngine) {
           this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
@@ -768,7 +768,7 @@ export class SyncEngine {
       
       // Return the new ID
       if (entityInfo.PrimaryKeys.length > 0) {
-        const pkeyField = entityInfo.PrimaryKeys[0].Name;
+        const pkeyField = entityInfo.FirstPrimaryKey.Name;
         const newId = newEntity.Get(pkeyField);
         if (this.syncMetadataEngine) {
           this.syncMetadataEngine.setCachedLookup(lookupCacheKey, newId, entityName);

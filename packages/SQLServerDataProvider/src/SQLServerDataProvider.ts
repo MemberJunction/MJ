@@ -2249,7 +2249,7 @@ export class SQLServerDataProvider
       .map(child => {
         const schema = child.SchemaName || '__mj';
         const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
-        const pkRef = dialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+        const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name);
         const nameLit = dialect.QuoteStringLiteral(child.Name);
         return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
       });
@@ -2295,7 +2295,7 @@ export class SQLServerDataProvider
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
-    const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+    const pkName = entityInfo.FirstPrimaryKey?.Name ?? 'ID';
     const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
     const recordID = entityInfo.PrimaryKeys

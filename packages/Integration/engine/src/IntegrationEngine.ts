@@ -6203,7 +6203,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const d = provider.Dialect;
             const runTable = `${d.QuoteIdentifier(runInfo.SchemaName)}.${d.QuoteIdentifier(runInfo.BaseTable)}`;
             const detailTable = `${d.QuoteIdentifier(detailInfo.SchemaName)}.${d.QuoteIdentifier(detailInfo.BaseTable)}`;
-            const runPk = d.QuoteIdentifier(runInfo.PrimaryKeys[0].Name);
+            const runPk = d.QuoteIdentifier(runInfo.FirstPrimaryKey.Name);
             const ciCol = d.QuoteIdentifier('CompanyIntegrationID');
             const startedCol = d.QuoteIdentifier('StartedAt');
             const detailFk = d.QuoteIdentifier('CompanyIntegrationRunID');
