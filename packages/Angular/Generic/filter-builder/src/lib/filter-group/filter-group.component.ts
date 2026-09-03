@@ -4,6 +4,7 @@ import {
   FilterDescriptor,
   FilterFieldInfo,
   FilterLogic,
+  FilterSource,
   isCompositeFilter,
   createFilterRule
 } from '../types/filter.types';
@@ -30,6 +31,9 @@ export class FilterGroupComponent implements OnInit {
    * Available fields to filter on
    */
   @Input() fields: FilterFieldInfo[] = [];
+
+  /** Multi-entity sources. Empty = legacy single-entity field list. */
+  @Input() sources: FilterSource[] = [];
 
   /**
    * Whether this is the root group (affects delete button visibility)

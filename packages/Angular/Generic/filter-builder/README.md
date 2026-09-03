@@ -53,6 +53,34 @@ export class YourModule {}
 </mj-filter-builder>
 ```
 
+### Several entities (prices, Open Apps)
+
+Pass `sources` and the builder **always** writes `SourceKey.FieldName`. One source still prefixes. Several sources: two-pane field picker (source list | fields). Bare names in existing JSON still load.
+
+```html
+<mj-filter-builder
+  [sources]="[
+    { key: 'Order', label: 'Order', fields: orderFields },
+    { key: 'BillToOrganization', label: 'Bill-to organization', fields: orgFields }
+  ]"
+  [filter]="filter"
+  [showSummary]="true"
+  (filterChange)="onChange($event)">
+</mj-filter-builder>
+```
+
+JSON: `{ "field": "BillToOrganization.Type", "operator": "eq", "value": "Member" }`.
+
+Evaluate and summarize **without Angular**:
+
+```ts
+import { evaluateFilter, FilterSummary } from '@memberjunction/core';
+evaluateFilter(filter, { BillToOrganization: org, Order: header });
+new FilterSummary({ sourceLabels: { BillToOrganization: 'Bill-to organization' } }).text(filter);
+```
+
+See [Filter Builder & Evaluation](../../../../../guides/FILTER_BUILDER_AND_EVALUATION.md).
+
 ### Defining Fields
 
 ```typescript

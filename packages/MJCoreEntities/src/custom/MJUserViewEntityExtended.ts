@@ -733,9 +733,13 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 // this is a group, we process it with parenthesis
                 whereClause += `(${this.processFilterGroup(filter, entity)})`;
             } else {
-                // this is an individual filter, easy to process
+                // Dotted names (`Organizations.Type`) are the multi-entity encoding.
+                // Views are one table — use the field part. Bare names stay as they are.
+                const stored = String(filter.field ?? '');
+                const dot = stored.indexOf('.');
+                const column = dot > 0 && dot < stored.length - 1 ? stored.slice(dot + 1) : stored;
                 whereClause += `(${this.convertFilterToSQL(
-                    filter.field,
+                    column,
                     filter.operator,
                     filter.value,
                     entity

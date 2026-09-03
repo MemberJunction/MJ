@@ -25,6 +25,7 @@ export {
   FilterFieldInfo,
   FilterValueOption,
   FilterBuilderConfig,
+  FilterSource,
   isCompositeFilter,
   isSimpleFilter,
   createEmptyFilter,

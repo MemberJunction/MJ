@@ -5,9 +5,11 @@ import {
   FilterDescriptor,
   FilterFieldInfo,
   FilterBuilderConfig,
+  FilterSource,
   createEmptyFilter,
   isCompositeFilter
 } from '../types/filter.types';
+import { FilterSummary, formatFilterField } from '@memberjunction/core';
 
 /**
  * Default configuration for the filter builder
@@ -48,6 +50,13 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Available fields to filter on
    */
   @Input() fields: FilterFieldInfo[] = [];
+
+  /**
+   * When set (even one source), every written field is `source.key.fieldName`.
+   * Several sources: two-pane field picker. One source: same JSON prefix, simpler picker.
+   * Omit for legacy views that still persist bare field names.
+   */
+  @Input() sources: FilterSource[] | null = null;
 
   /**
    * Current filter state (Kendo-compatible CompositeFilterDescriptor)
@@ -103,6 +112,22 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Whether there are any active filters
    */
   public hasActiveFilters: boolean = false;
+
+  /**
+   * Fields the rule UI binds to. When `sources` is set, names are always `key.field`.
+   */
+  public get effectiveFields(): FilterFieldInfo[] {
+    if (this.sources?.length) {
+      return this.sources.flatMap((s) =>
+        (s.fields ?? []).map((f) => ({
+          ...f,
+          name: formatFilterField(s.key, f.name),
+          displayName: f.displayName,
+        })),
+      );
+    }
+    return this.fields;
+  }
 
   constructor(private sanitizer: DomSanitizer) {}
 
@@ -220,11 +245,11 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Generate HTML-formatted summary of the filter expression with syntax highlighting
    */
   getFilterSummaryHtml(): SafeHtml {
-    if (!this.hasActiveFilters) {
-      return this.sanitizer.bypassSecurityTrustHtml('<span style="color: #9ca3af; font-style: italic;">No filters applied</span>');
-    }
-    const html = this.buildFilterSummaryHtml(this.internalFilter, 0);
-    return this.sanitizer.bypassSecurityTrustHtml(html);
+    const summary = new FilterSummary({
+      fields: this.effectiveFields.map((f) => ({ name: f.name, displayName: f.displayName })),
+      sourceLabels: Object.fromEntries((this.sources ?? []).map((s) => [s.key, s.label])),
+    });
+    return this.sanitizer.bypassSecurityTrustHtml(summary.html(this.internalFilter));
   }
 
   /**

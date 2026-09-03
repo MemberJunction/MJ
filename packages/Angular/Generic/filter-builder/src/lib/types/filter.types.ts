@@ -97,6 +97,22 @@ export interface FilterFieldInfo {
 }
 
 /**
+ * A record that can contribute fields to a multi-entity filter.
+ * When `sources` is passed to the builder, JSON field names are always `key.name`
+ * (e.g. `BillToOrganization.Type`).
+ */
+export interface FilterSource {
+  /** Stable JSON prefix. No dots. */
+  key: string;
+  /** Staff-facing label (Bill-to organization). */
+  label: string;
+  /** Optional MJ entity name, for callers that load fields from metadata. */
+  entityName?: string;
+  /** Bare field names (not prefixed). */
+  fields: FilterFieldInfo[];
+}
+
+/**
  * A value option for dropdown/select fields
  */
 export interface FilterValueOption {

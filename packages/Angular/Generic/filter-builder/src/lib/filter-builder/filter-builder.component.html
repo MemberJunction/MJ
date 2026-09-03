@@ -42,7 +42,8 @@
   <div class="filter-content">
     <mj-filter-group
       [filter]="internalFilter"
-      [fields]="fields"
+      [fields]="effectiveFields"
+      [sources]="sources || []"
       [isRoot]="true"
       [depth]="0"
       [maxDepth]="mergedConfig.maxDepth"

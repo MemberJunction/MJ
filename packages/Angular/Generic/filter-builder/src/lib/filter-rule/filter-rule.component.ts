@@ -3,8 +3,10 @@ import {
   FilterDescriptor,
   FilterFieldInfo,
   FilterFieldType,
-  FilterOperator
+  FilterOperator,
+  FilterSource
 } from '../types/filter.types';
+import { parseFilterField } from '@memberjunction/core';
 import { getOperatorsForType, OperatorInfo, operatorRequiresValue } from '../types/operators';
 
 /**
@@ -30,6 +32,10 @@ export class FilterRuleComponent implements OnInit, OnChanges {
    * Available fields to filter on
    */
   @Input() fields: FilterFieldInfo[] = [];
+
+  @Input() sources: FilterSource[] = [];
+
+  public activeSourceKey: string | null = null;
 
   /**
    * Whether the component is disabled
@@ -113,7 +119,11 @@ export class FilterRuleComponent implements OnInit, OnChanges {
   private updateFieldSelection(): void {
     if (!this.filter || !this.fields.length) return;
 
-    this.selectedField = this.fields.find(f => f.name === this.filter.field) || null;
+    this.selectedField =
+      this.fields.find((f) => f.name === this.filter.field) ||
+      this.fields.find((f) => parseFilterField(f.name).name === this.filter.field) ||
+      null;
+    this.activeSourceKey = parseFilterField(this.filter.field).source || this.sources[0]?.key || null;
 
     if (this.selectedField) {
       this.availableOperators = getOperatorsForType(this.selectedField.type);
@@ -408,8 +418,29 @@ export class FilterRuleComponent implements OnInit, OnChanges {
    */
   getSelectedFieldDisplayName(): string {
     if (!this.filter.field) return 'Select field...';
-    const field = this.fields.find(f => f.name === this.filter.field);
-    return field?.displayName || this.filter.field;
+    const field =
+      this.fields.find((f) => f.name === this.filter.field) ||
+      this.fields.find((f) => parseFilterField(f.name).name === this.filter.field);
+    const parsed = parseFilterField(this.filter.field);
+    const fieldLabel = field?.displayName || parsed.name;
+    if (this.sources.length > 1 && parsed.source) {
+      const src = this.sources.find((s) => s.key === parsed.source);
+      return src ? `${src.label} · ${fieldLabel}` : fieldLabel;
+    }
+    return fieldLabel;
+  }
+
+  public get isMultiSource(): boolean {
+    return this.sources.length > 1;
+  }
+
+  public fieldsForSource(key: string | null): FilterFieldInfo[] {
+    if (!key) return this.fields;
+    return this.fields.filter((f) => parseFilterField(f.name).source === key);
+  }
+
+  public selectSource(key: string): void {
+    this.activeSourceKey = key;
   }
 
   /**
