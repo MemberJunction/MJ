@@ -559,6 +559,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       ?? null;
   }
 
+  /**
+   * The agent the '/' skill picker should narrow to. Mirrors routing's priority: an explicit
+   * `@agent` chip already in the draft wins (routeMessage's Priority 1), else the agent the message
+   * would otherwise go to ({@link resolveCurrentAgentId}). Bound to `mj-ai-composer`'s
+   * `TargetAgentId`; null = unknown, no narrowing.
+   */
+  public get pickerTargetAgentId(): string | null {
+    const chips = this.inputBox?.getMentionChipsData() || [];
+    const mentioned = chips.find(chip => chip.type === 'agent');
+    return mentioned?.id ?? this.resolveCurrentAgentId();
+  }
+
   /** True when the mic button should be enabled (have an agent + not disabled). */
   public get canStartRealtime(): boolean {
     return !this.disabled && !this.voiceActive && !!this.resolveCurrentAgentId();
