@@ -26,11 +26,11 @@ Same profile with the flag off = stock Gemini Nano v3, used as the A/B baseline.
   and JSON-Schema-constrained output (`responseConstraint`), *if* the router owns one long-lived session.
   A fresh `create()` per request costs 0.25–0.9 s depending on what else is resident, alternating the router
   with a chat session doubles the route cost, and `clone()` per request costs ~1 s in this build.
-- **On 447 real Betty turns (replayed from the prod-copy database), a tenant-aware router prompt agrees with
-  Betty's own research-or-not decision 79% of the time.** A conservative skip rule (skip only smalltalk / out of
-  scope) brings false skips down to 4–5% while still catching ~47% of the turns Betty skips, at ~270 ms per
-  decision. The server-side step this would replace — Betty's root planning prompt — takes ~1.5 s median. Details
-  in *Replay of real Betty turns*.
+- **Replayed against ~450 real production turns of an MJ-based assistant (data kept private), a tenant-aware
+  router prompt agreed with the server-side research-or-not decision 79% of the time.** A conservative skip rule
+  (skip only smalltalk / out of scope) brings false skips down to 4–5% while still catching ~47% of the turns the
+  server skipped, at ~270 ms per decision against ~1.5 s for the server agent's own planning prompt. Summary in
+  *Replay against production traffic*.
 - **Quality is "coarse router" grade, not "planner" grade.** On 12 hand-labelled Betty requests the 2B model got
   9–10/12 on intent and 9–10/12 on target agent across five runs, with run-to-run variance on the ambiguous
   cases. It reliably separates smalltalk / out-of-scope / needs-research / direct-answer; it is unreliable on
@@ -46,7 +46,7 @@ Same profile with the flag off = stock Gemini Nano v3, used as the A/B baseline.
 | Reuse the existing experiment rather than start over | Done. His app, routes and Transformers.js modes are untouched; four files added plus wiring. | `src/app/ai/builtin-ai*.ts`, `src/app/builtin-chat/` |
 | "A very simple chat app … running with Gemma 4" | Done and verified to be Gemma 4 (`gemma4-2b-it`), not the stock Nano. The chat is the core; the activity panel, router probe and hybrid toggle are optional layers on it. | Model identity section |
 | Share findings so we can decide whether to invest more | This document + the shared page. Recommendation: a small second step, not a big investment. | Executive summary, Recommendation |
-| The real question: a local pre/co-processor that routes requests to agents and pre-digests "is research needed?" | Tested three ways: a router probe (intent + target agent as constrained JSON, scored against hand labels), a full hybrid loop (route → plan → fetch → answer), and a **replay of 447 real Betty turns** against Betty's own decisions: 79% agreement with a tenant-aware prompt, 4–5% false skips under a conservative rule, ~270 ms per decision vs Betty's ~1.5 s planning prompt. | Routing, Hybrid path, Replay |
+| The real question: a local pre/co-processor that routes requests to agents and pre-digests "is research needed?" | Tested three ways: a router probe (intent + target agent as constrained JSON, scored against hand labels), a full hybrid loop (route → plan → fetch → answer), and a private replay of ~450 real production turns against the server agent's own decisions: 79% agreement with a tenant-aware prompt, 4–5% false skips under a conservative rule, ~270 ms per decision vs the server's ~1.5 s planning prompt. | Routing, Hybrid path, Replay |
 | "Instant, free, low latency" | Free and local: yes, proven in-page with a network counter and offline runs. Instant: generation yes (40–60 ms first token); decisions cost ~0.3 s each once sessions are warm, 1–2 s while they warm up. | Performance, Hybrid path |
 | Voice as a later possibility | Not tested. The latency profile is right for it and the API reports audio input capability; noted as a follow-up once tool use lands. | Implications |
 
@@ -185,56 +185,33 @@ decision. A grounded prompt that asked the model to end with "Source: …" conta
 small models carry instructions across a shared session. Wikipedia and GitHub are stand-ins; in Betty the fetch is
 the knowledge-base call and the planner's output is the skill/agent selection.
 
-## Replay of real Betty turns — the number that matters
+## Replay against production traffic (summary)
 
-**Source.** The local restore of `betty-sql-prod` (`BettyProdCopy`, 14-Aug snapshot plus a few later turns): every
-top-level `Betty` agent run with the user message that triggered it — **447 turns in 255 conversations**, 90% from
-the NEXA tenant. Ground truth = whether that run spawned the `Topic-Refined Search` sub-agent (**235 did, 212 did
-not**). Betty's own server time: median **21.9 s** when it researched, **3.7 s** when it did not; its first
-planning prompt — the step a local decision would replace or pre-empt — is **~1.5 s median** either way
-(1,568 / 1,531 ms), and non-research turns average 1.3 root prompt steps vs 2.7 for research turns.
-
-**Method.** Same router prompt and JSON Schema as the app (`tools/replay/` re-reads them from source), one
-long-lived session per tenant recycled at 80% of the context window, skill mentions rendered as `@Skill Name`,
-22 skill-form submissions (`@questionCount,{…}`) left in unless stated. "Local says research" = `Intent ==
+To get a number that a 12-item probe cannot give, the router was replayed over **~450 real turns** of a production
+MJ-based assistant (255 conversations), with ground truth = whether the server-side agent actually ran its retrieval
+sub-agent on that turn (about half did). The data and the harness stay outside this repository: they require that
+assistant's database and contain member messages. Method: the same router prompt and schema as the app, one
+long-lived session per tenant recycled at 80% of the context window; "local says research" = `Intent ==
 needs_research` (rule A) or, conservatively, anything that is not `smalltalk` / `out_of_scope` (rule C).
-Each variant replays all turns in 125–179 s wall time with 445–447/447 valid JSON.
 
-| Variant | Agrees with Betty | False skip (Betty researched, local said don't) | Betty's skips caught | Decision time, median (p90) |
-|---------|------------------:|------------------------------------------------:|---------------------:|--------------:|
-| **Betty itself (reference)** — root planning prompt on the server; whole turn 21.9 s / 3.7 s | — | — | — | **1,531 ms** (research) / **1,568 ms** (no research) |
-| Message only, rule A (research ⇔ `Intent == needs_research`) | 76.9% | 24.3% | 78.1% | 263 ms (332) |
-| + previous user/Betty turn as context, rule A | 71.2% | 28.9% | 71.4% | 291 ms (370) |
-| **Tenant-aware prompt** (org name injected), rule A | **78.7%** | 11.9% | 68.4% | 272 ms (607) |
+| Variant | Agrees with the server | False skip (server researched, local said don't) | Server's skips caught | Decision time, median (p90) |
+|---------|-----------------------:|-------------------------------------------------:|----------------------:|----------------------------:|
+| **Server agent itself (reference)** — its first planning prompt; whole turn 21.9 s with research / 3.7 s without | — | — | — | **~1.5 s** either way |
+| Message only, rule A | 76.9% | 24.3% | 78.1% | 263 ms (332) |
+| + previous turn as context, rule A | 71.2% | 28.9% | 71.4% | 291 ms (370) |
+| **Tenant-aware prompt** (organisation named), rule A | **78.7%** | 11.9% | 68.4% | 272 ms (607) |
 | Tenant-aware, **rule C** (skip only smalltalk / out of scope) | 72.3% | **5.1%** | 47.2% | 272 ms (607) |
-| Tenant-aware, rule C, 22 form submissions excluded (425 turns) | 71.5% | **4.2%** | 47.2% | — |
+| Tenant-aware, rule C, structured form submissions excluded | 71.5% | **4.2%** | 47.2% | — |
 
-**Readings.**
-- Conversation context *hurt*: given the previous turn, the 2B model more often decided the conversation already
-  held the answer (`answer_from_knowledge` on 53 researched turns vs 25 without context).
-- The single biggest lever was telling the router who the tenant is. Most false skips were "tell me about NEXA",
-  "NEXA's policy on accessibility", "what topics do you know about" labelled as general knowledge; one sentence
-  naming the organisation halved the false-skip rate. A production prompt would also carry the tenant's content
-  areas.
-- What remains under rule C is mostly non-language input (skill-form submissions, which should never reach a
-  router) and vague follow-ups ("what is standarb 7", "can you pull the chinese documents"), which is exactly
-  where deferring to the server is right.
-- Worth of a correct local decision: trusting a local "no research" verdict removes Betty's ~1.5 s planning step
-  (3.7 s → ~2.2 s on those turns); a local "research" verdict lets the search sub-agent start ~1.5 s earlier, in
-  parallel with the planner. The 18 s gap between researched and non-researched turns is retrieval and response
-  time the local model cannot touch — the win is latency to first action and a saved planning call, not a
-  transformed turn.
-- Betty's decision is the reference, not the truth: some of its 212 skips were probably wrong (Exam Creator turns
-  that should have grounded), so the agreement ceiling is below 100%.
-- Concretely for Amith's framing: at ~270 ms and zero cost, the local model is good enough to (a) drop obvious
-  smalltalk and off-topic turns before they reach the server, (b) pre-warm retrieval when it says research, and
-  (c) attach an advisory hint the planner can weigh — and not yet good enough to be the sole authority on skipping
-  research.
+Readings: naming the tenant in the prompt was the dominant lever (most false skips were "tell me about <org>" /
+"<org>'s policy on X" labelled as general knowledge); conversation context *reduced* accuracy (the 2B model decided
+the conversation already held the answer); what remains under rule C is non-language input (form submissions) and
+vague follow-ups, where deferring to the server is right. About 22% of real turns were smalltalk or off-topic and
+could be answered with no server call; on the rest a ~270 ms verdict replaces or pre-empts a ~1.5 s planning
+prompt — the 18 s gap between researched and unresearched turns is retrieval and generation time the local model
+cannot touch. The server's own decision is the reference, not audited truth.
 
-Harness: `tools/replay/` (extraction SQL, page, driver, scorer). The extracted messages and results stay out of
-the repo.
-
-## Implications for MJ / Betty
+## Implications for MJ
 
 1. **A client-side "first opinion" is affordable now.** ~300 ms with a dedicated session (0.6–0.7 s if it shares
    the page with an active chat session), zero marginal cost, no data leaves the device.
@@ -265,8 +242,8 @@ the repo.
 Worth a *small* second step, not a big investment yet — and the replay supplies the number that was missing:
 
 - Keep this demo as the harness; add the tool-use and embeddings flags when they reach Canary stable enough to
-  run, and re-run the router probe on the 4B/12B components as soon as Chrome exposes a switch (the assets are
-  already in the manifest).
+  run, and re-run the router probe (and the private replay) on the 4B/12B components as soon as Chrome exposes a
+  switch (the assets are already in the manifest).
 - Prototype the speculative `RoutingHint` in Betty's chat host behind a feature toggle, with the tenant-aware
   prompt and the conservative rule (drop smalltalk / out of scope locally, pre-warm retrieval on `needs_research`,
   hint otherwise), and measure live what the replay predicts: ~79% agreement, 4–5% false skips, ~1.5 s of planner

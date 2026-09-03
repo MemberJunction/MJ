@@ -1,7 +1,7 @@
 # Blended Inference: Client/Edge Steps in the MJ Agent Architecture — Design Notes
 
 **Status:** exploratory, September 2026. Written after the Chrome built-in Gemma 4 experiment
-(`FINDINGS-CHROME-BUILTIN-AI.md`) to answer Amith's question: *how would our agent architecture allow some
+(`FINDINGS-CHROME-BUILTIN-AI.md`) to answer the question: *how would our agent architecture allow some
 inference steps to run on the client/edge and some on the back end, so that when edge models are good enough
 (3–6 months?) we can add framework support rather than bolt-ons.* Nothing here is built; the experiment's
 `BuiltInAIService` is the seed for the client half.
@@ -10,7 +10,7 @@ inference steps to run on the client/edge and some on the back end, so that when
 
 | Fact from the experiment | Design consequence |
 |---|---|
-| Edge decisions cost ~300 ms and $0; the equivalent server step (Betty's planning prompt) costs ~1.5 s and a paid call | Edge is a **latency and cost** optimisation for small, structured decisions, not a place to move reasoning |
+| Edge decisions cost ~300 ms and $0; the equivalent server step (the agent's planning prompt) costs ~1.5 s and a paid call | Edge is a **latency and cost** optimisation for small, structured decisions, not a place to move reasoning |
 | The edge model is reliable at the ends (smalltalk / clear research) and unreliable in the middle | Edge results are **advisory by default**; only a narrow, policy-selected set of decisions are **authoritative** |
 | Availability is per browser/hardware/flag and can vanish (origin trial, Canary, hardware floor) | Every edge step needs a **server fallback** and the system must behave identically with edge absent |
 | The API does not identify the model; the client can be anything | Edge output is **untrusted input** at the server boundary; nothing security-relevant may depend on it |
@@ -86,7 +86,7 @@ results start parallel work whose output is discarded if the server's own decisi
 ## 6. The patterns this enables
 
 1. **Pre-send routing hint** (this experiment): tenant-aware router on the client; `smalltalk`/`out_of_scope` handled locally under an `Authoritative` policy with a server post for logging; `needs_research` sent as `Speculative` so retrieval starts before the planner; everything else `Advisory`.
-2. **Speculative retrieval:** on a `needs_research` hint the server launches the search action in parallel with the planning prompt; reconcile when the planner decides (76% agreement in the replay; the cost of disagreement is a wasted search).
+2. **Speculative retrieval:** on a `needs_research` hint the server launches the search action in parallel with the planning prompt; reconcile when the planner decides (76% agreement in the production replay; the cost of disagreement is a wasted search).
 3. **Local-only turns:** greetings, thanks, obvious off-topic — answered by the edge model with the tenant's persona prompt, then posted to the server as a completed turn so conversation history and insights stay whole.
 4. **Edge sub-steps inside a server run:** cheap classification, extraction or reformatting a server agent would otherwise spend a call on — requested via `AutomaticCommands`, with fallback.
 5. **Edge post-processing:** suggested follow-up questions, display reformatting, per-user summarisation of a long answer — after the authoritative answer exists, so nothing is at risk.
@@ -114,7 +114,7 @@ results start parallel work whose output is discarded if the server's own decisi
 
 ## 9. Evaluation loop
 
-The replay harness (`tools/replay/`) is the regression suite: agreement with the server decision, false-skip rate, per-step latency, per hardware class. Run it on every prompt change and on every new edge model, and keep the acceptance bar explicit (today: false skips ≤5% for anything `Authoritative`). Amith's cadence: re-evaluate the edge landscape every three months; a monthly scan routine watches for new models/APIs.
+A replay harness against production traffic (kept outside the repository, since it needs the assistant's database) is the regression suite: agreement with the server decision, false-skip rate, per-step latency, per hardware class. Run it on every prompt change and on every new edge model, and keep the acceptance bar explicit (today: false skips ≤5% for anything `Authoritative`). Cadence: re-evaluate the edge landscape every three months; a monthly scan routine watches for new models/APIs.
 
 ## 10. Phasing
 
