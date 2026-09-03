@@ -10,22 +10,32 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Claim Details Section -->
+    <!-- Claim Definition Section -->
     <mj-collapsible-panel
-        SectionKey="claimDetails"
-        SectionName="Claim Details"
-        Icon="fa fa-id-card"
+        SectionKey="claimDefinition"
+        SectionName="Claim Definition"
+        Icon="fa fa-tags"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="ClaimTypeID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Claimant Information Section -->
+    <mj-collapsible-panel
+        SectionKey="claimantInformation"
+        SectionName="Claimant Information"
+        Icon="fa fa-user-check"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -38,19 +48,20 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
+            FieldName="ClaimedByUserID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Related Resources Section -->
+    <!-- Claim Target Section -->
     <mj-collapsible-panel
-        SectionKey="relatedResources"
-        SectionName="Related Resources"
-        Icon="fa fa-link"
+        SectionKey="claimTarget"
+        SectionName="Claim Target"
+        Icon="fa fa-crosshairs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -70,22 +81,13 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MagicLinkInviteID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Configuration Section -->
+    <!-- Claim Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="configuration"
-        SectionName="Configuration"
+        SectionKey="claimConfiguration"
+        SectionName="Claim Configuration"
         Icon="fa fa-cogs"
         [Form]="this"
         [FormContext]="formContext">
@@ -100,6 +102,15 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="MagicLinkInviteID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="MetadataJSON"
             Type="code"
             [EditMode]="EditMode"
@@ -108,13 +119,21 @@
 
     </mj-collapsible-panel>
 
-    <!-- Timeline Section -->
+    <!-- Claim Lifecycle Section -->
     <mj-collapsible-panel
-        SectionKey="timeline"
-        SectionName="Timeline"
-        Icon="fa fa-calendar-alt"
+        SectionKey="claimLifecycle"
+        SectionName="Claim Lifecycle"
+        Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -130,15 +149,6 @@
             Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ClaimedByUserID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>

@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Claim Type Definition Section -->
+    <!-- Claim Type Details Section -->
     <mj-collapsible-panel
-        SectionKey="claimTypeDefinition"
-        SectionName="Claim Type Definition"
-        Icon="fa fa-id-card"
+        SectionKey="claimTypeDetails"
+        SectionName="Claim Type Details"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -33,29 +33,13 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DefaultExpirationDays"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Driver Configuration Section -->
+    <!-- Integration and Behavior Section -->
     <mj-collapsible-panel
-        SectionKey="driverConfiguration"
-        SectionName="Driver Configuration"
+        SectionKey="integrationAndBehavior"
+        SectionName="Integration and Behavior"
         Icon="fa fa-plug"
         [Form]="this"
         [FormContext]="formContext">
@@ -72,6 +56,32 @@
             [ShowLabel]="true"
             FieldName="Configuration"
             Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Claim Lifecycle Section -->
+    <mj-collapsible-panel
+        SectionKey="claimLifecycle"
+        SectionName="Claim Lifecycle"
+        Icon="fa fa-history"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultExpirationDays"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsActive"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -114,7 +124,7 @@
     <mj-collapsible-panel
         SectionKey="mJIdentityClaims"
         SectionName="Identity Claims"
-        Icon="fa fa-id-card"
+        Icon="fa fa-shield-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

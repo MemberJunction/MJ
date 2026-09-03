@@ -109,14 +109,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="VisitorKey"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -213,7 +205,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AdditionalData"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -224,7 +216,7 @@
     <mj-collapsible-panel
         SectionKey="meetingMedia"
         SectionName="Meeting Media"
-        Icon="fa fa-info-circle"
+        Icon="fa fa-video"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -247,16 +239,24 @@
 
     </mj-collapsible-panel>
 
-    <!-- Conversation History Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="conversationHistory"
-        SectionName="Conversation History"
-        Icon="fa fa-history"
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
+            FieldName="VisitorKey"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="LastConversationID"
             Type="textbox"
             [EditMode]="EditMode"
