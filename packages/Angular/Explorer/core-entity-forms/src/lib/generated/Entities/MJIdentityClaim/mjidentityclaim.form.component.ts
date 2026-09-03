@@ -15,9 +15,10 @@ export class MJIdentityClaimFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'claimDetails', sectionName: 'Claim Details', isExpanded: true },
-            { sectionKey: 'targetResource', sectionName: 'Target Resource', isExpanded: true },
-            { sectionKey: 'technicalConfiguration', sectionName: 'Technical Configuration', isExpanded: true },
+            { sectionKey: 'claimDefinition', sectionName: 'Claim Definition', isExpanded: true },
+            { sectionKey: 'claimantInformation', sectionName: 'Claimant Information', isExpanded: true },
+            { sectionKey: 'claimTarget', sectionName: 'Claim Target', isExpanded: true },
+            { sectionKey: 'claimConfiguration', sectionName: 'Claim Configuration', isExpanded: true },
             { sectionKey: 'claimLifecycle', sectionName: 'Claim Lifecycle', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
