@@ -1,0 +1,34 @@
+[
+  {
+    "fields": {
+      "Name": "authorization",
+      "FullPath": "authorization",
+      "ParentID": null,
+      "Category": "Authorizations",
+      "Description": "Parent scope for named-capability checks (MJ: Authorizations).",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-user-shield",
+        "color": "#7c5295"
+      }
+    },
+    "primaryKey": {
+      "ID": "C6410918-091F-4469-94C0-662B73692EB8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "check",
+      "FullPath": "authorization:check",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=authorization",
+      "Category": "Authorizations",
+      "Description": "Evaluate named authorizations for the calling user — the Authorization.Check Remote Operation (RequiredScope='authorization:check').",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "C8D3F90C-7610-4218-94B7-B3954A6A5C7F"
+    }
+  }
+]

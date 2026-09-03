@@ -1,0 +1,13 @@
+[
+  {
+    "fields": {
+      "Name": "Authorization Check",
+      "Description": "A named MJ: Authorizations capability was evaluated for a user (Authorization.Check Remote Operation). Emitted when the authorization row has UseAuditLog=1.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "37A6A05D-12D0-4A95-9278-3C7E713B3E72"
+    }
+  }
+]
