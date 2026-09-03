@@ -1,5 +1,5 @@
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider } from "@memberjunction/core";
+import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider, ParseFilterField } from "@memberjunction/core";
 import {
     MJUserViewEntity,
     MJUserViewEntity_IColumnFormat as ColumnFormat,
@@ -736,8 +736,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 // Dotted names (`Organizations.Type`) are the multi-entity encoding.
                 // Views are one table — use the field part. Bare names stay as they are.
                 const stored = String(filter.field ?? '');
-                const dot = stored.indexOf('.');
-                const column = dot > 0 && dot < stored.length - 1 ? stored.slice(dot + 1) : stored;
+                const column = ParseFilterField(stored).Name;
                 whereClause += `(${this.convertFilterToSQL(
                     column,
                     filter.operator,

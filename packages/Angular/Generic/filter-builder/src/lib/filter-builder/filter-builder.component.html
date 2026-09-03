@@ -6,7 +6,7 @@
         <i class="fa-solid fa-filter"></i>
       </span>
       @if (hasActiveFilters) {
-        <span class="filter-count">{{ getFilterCount() }} condition{{ getFilterCount() !== 1 ? 's' : '' }}</span>
+        <span class="filter-count">{{ GetFilterCount() }} condition{{ GetFilterCount() !== 1 ? 's' : '' }}</span>
       } @else {
         <span class="filter-count no-filters">No filters applied</span>
       }
@@ -75,11 +75,11 @@
       <ng-template mjAccordionTitle>
         <i class="fa-solid fa-code expression-icon"></i>
         <span class="expression-label">View Filter Expression</span>
-        <span class="mj-accordion-badge mj-accordion-badge--right">{{ getFilterCount() }}</span>
+        <span class="mj-accordion-badge mj-accordion-badge--right">{{ GetFilterCount() }}</span>
       </ng-template>
       <ng-template mjAccordionBody>
         <div class="expression-content">
-          <pre class="expression-text" [innerHTML]="getFilterSummaryHtml()"></pre>
+          <pre class="expression-text" [innerHTML]="GetFilterSummaryHtml()"></pre>
         </div>
       </ng-template>
     </mj-accordion-panel>

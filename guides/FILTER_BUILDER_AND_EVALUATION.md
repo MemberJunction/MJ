@@ -22,9 +22,9 @@ Staff build filters in **`mj-filter-builder`** (`@memberjunction/ng-filter-build
 | Runtime | Who | How |
 |---|---|---|
 | **SQL** | User Views | `MJUserViewEntityExtended.GenerateWhereClause` → `WHERE` on **one** entity |
-| **In-memory** | Prices, processes, Open Apps | `evaluateFilter(descriptor, context)` in `@memberjunction/core` |
+| **In-memory** | Prices, processes, Open Apps | `CompositeFilter.FromJSON(json).Evaluate(context)` in `@memberjunction/core` |
 
-Do **not** invent a second tree (custom `scope` / `groups` / `rules`). Do **not** ask staff to type `SafeExpression` strings. `SafeExpressionEvaluator` (`@memberjunction/global`) stays the sandbox for *authored* JS-like expressions (Flow agents). Filter JSON is data; `evaluateFilter` walks it.
+Do **not** invent a second tree (custom `scope` / `groups` / `rules`). Do **not** ask staff to type `SafeExpression` strings. `SafeExpressionEvaluator` (`@memberjunction/global`) stays the sandbox for *authored* JS-like expressions (Flow agents). Filter JSON is data; `CompositeFilter` walks it.
 
 ---
 
@@ -37,8 +37,8 @@ Do **not** invent a second tree (custom `scope` / `groups` / `rules`). Do **not*
 **Read:**
 
 ```ts
-parseFilterField('Type')                      // { source: null, name: 'Type' }
-parseFilterField('BillToOrganization.Type')   // { source: 'BillToOrganization', name: 'Type' }
+CompositeFilter.ParseFilterField('Type')                      // { Source: null, Name: 'Type' }
+CompositeFilter.ParseFilterField('BillToOrganization.Type')   // { Source: 'BillToOrganization', Name: 'Type' }
 ```
 
 - SQL views: `GenerateWhereClause` uses the **name** part (the view is one table). Prefixed `Organizations.Type` and bare `Type` both become `[Type]`.
@@ -91,26 +91,27 @@ AND/OR, Add Condition, Add Group, typed operators, lookup/value-list editors —
 The accordion “View Filter Expression” is **not** shown by default (`showSummary`). The same wording belongs on a pricing grid cell.
 
 ```ts
-import { FilterSummary, evaluateFilter } from '@memberjunction/core';
+import { CompositeFilter } from '@memberjunction/core';
 
-const summary = new FilterSummary({
-  fields: [{ name: 'BillToOrganization.Type', displayName: 'Type' }],
-  sourceLabels: { BillToOrganization: 'Bill-to organization' },
+const filter = CompositeFilter.FromDescriptor(descriptor);
+filter.SummaryText({
+  Fields: [{ Name: 'BillToOrganization.Type', DisplayName: 'Type' }],
+  SourceLabels: { BillToOrganization: 'Bill-to organization' },
 });
-summary.text(filter);  // "Bill-to organization Type equals Member"
-summary.html(filter);  // highlighted HTML; host sanitizes if injecting
+// "Bill-to organization Type equals Member"
+filter.SummaryHTML(options);  // highlighted HTML; host sanitizes if injecting
 ```
 
-The builder accordion calls `FilterSummary.html`. Grids call `.text`. Do not duplicate the sentence builder in Open Apps.
+The builder accordion calls `SummaryHTML`. Grids call `SummaryText`. Do not duplicate the sentence builder in Open Apps.
 
 ---
 
 ## 5. In-memory evaluation
 
 ```ts
-import { evaluateFilter } from '@memberjunction/core';
+import { CompositeFilter } from '@memberjunction/core';
 
-const ok = evaluateFilter(filter, {
+const ok = CompositeFilter.FromJSON(json).Evaluate({
   Order: { CompanyID: '…', Status: 'Open' },
   Product: { SKU: 'CONF-2027' },
   BillToOrganization: { Type: 'Member' },
@@ -118,6 +119,11 @@ const ok = evaluateFilter(filter, {
   ShipToOrganization: null,
   ShipToPerson: null,
 });
+
+// Or build by hand:
+const built = new CompositeFilter();
+built.Add({ field: 'BillToOrganization.Type', operator: 'eq', value: 'Member' });
+built.Evaluate(context);
 ```
 
 A missing source record makes `eq` false and `isnull` / `isempty` true. Empty `filters` is true (no restriction). Operators match the view SQL set (`eq`, `contains`, `isnull`, …).
@@ -126,7 +132,7 @@ A missing source record makes `eq` false and `isnull` / `isempty` true. Empty `f
 
 ## 6. Orders (thin wrap)
 
-Product prices store this JSON in `ProductPrice.Applicability`. The resolver builds the context bag from the order (header, product, bill-to/ship-to person/org/address) and calls `evaluateFilter`. No second builder. No formula language.
+Product prices store this JSON in `ProductPrice.Applicability`. The resolver builds the context bag from the order (header, product, bill-to/ship-to person/org/address) and calls `CompositeFilter.FromJSON(row.Applicability).Evaluate(context)`. No second builder. No formula language.
 
 ---
 
@@ -134,7 +140,7 @@ Product prices store this JSON in `ProductPrice.Applicability`. The resolver bui
 
 | Piece | Package |
 |---|---|
-| Types, parse/format, `evaluateFilter`, `FilterSummary` | `@memberjunction/core` → `generic/filters/` |
+| `CompositeFilterDescriptor` + `CompositeFilter` (`FromJSON`, `Evaluate`, `SummaryText` / `SummaryHTML`) | `@memberjunction/core` → `generic/filters/` |
 | UI | `@memberjunction/ng-filter-builder` |
 | View SQL | `MJUserViewEntityExtended.GenerateWhereClause` (strips prefix) |
 | Authored JS expressions | `@memberjunction/global` `SafeExpressionEvaluator` — **not** this JSON |

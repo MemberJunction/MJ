@@ -6,10 +6,10 @@ import {
   FilterFieldInfo,
   FilterBuilderConfig,
   FilterSource,
-  createEmptyFilter,
-  isCompositeFilter
+  CreateEmptyFilter,
+  IsCompositeFilter
 } from '../types/filter.types';
-import { FilterSummary, formatFilterField } from '@memberjunction/core';
+import { CompositeFilter } from '@memberjunction/core';
 
 /**
  * Default configuration for the filter builder
@@ -101,7 +101,7 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   /**
    * Internal filter state
    */
-  public internalFilter: CompositeFilterDescriptor = createEmptyFilter();
+  public internalFilter: CompositeFilterDescriptor = CreateEmptyFilter();
 
   /**
    * Merged configuration
@@ -121,7 +121,7 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
       return this.sources.flatMap((s) =>
         (s.fields ?? []).map((f) => ({
           ...f,
-          name: formatFilterField(s.key, f.name),
+          name: CompositeFilter.FormatFilterField(s.key, f.name),
           displayName: f.displayName,
         })),
       );
@@ -149,10 +149,10 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Initialize the internal filter state
    */
   private initializeFilter(): void {
-    if (this.filter && isCompositeFilter(this.filter)) {
+    if (this.filter && IsCompositeFilter(this.filter)) {
       this.internalFilter = this.deepCloneFilter(this.filter);
     } else {
-      this.internalFilter = createEmptyFilter();
+      this.internalFilter = CreateEmptyFilter();
     }
     this.updateHasActiveFilters();
   }
@@ -188,7 +188,7 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Handle Clear button click
    */
   onClear(): void {
-    this.internalFilter = createEmptyFilter();
+    this.internalFilter = CreateEmptyFilter();
     this.updateHasActiveFilters();
     this.filterChange.emit(this.internalFilter);
     this.clear.emit();
@@ -197,7 +197,7 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   /**
    * Get the count of active filter rules
    */
-  getFilterCount(): number {
+  GetFilterCount(): number {
     return this.countFilters(this.internalFilter);
   }
 
@@ -207,7 +207,7 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   private countFilters(filter: CompositeFilterDescriptor): number {
     let count = 0;
     for (const item of filter.filters || []) {
-      if (isCompositeFilter(item)) {
+      if (IsCompositeFilter(item)) {
         count += this.countFilters(item);
       } else {
         // Only count if the filter has a valid field and value (or null-check operators)
@@ -224,7 +224,7 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Update hasActiveFilters flag
    */
   private updateHasActiveFilters(): void {
-    this.hasActiveFilters = this.getFilterCount() > 0;
+    this.hasActiveFilters = this.GetFilterCount() > 0;
   }
 
   /**
@@ -244,191 +244,11 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   /**
    * Generate HTML-formatted summary of the filter expression with syntax highlighting
    */
-  getFilterSummaryHtml(): SafeHtml {
-    const summary = new FilterSummary({
-      fields: this.effectiveFields.map((f) => ({ name: f.name, displayName: f.displayName })),
-      sourceLabels: Object.fromEntries((this.sources ?? []).map((s) => [s.key, s.label])),
+  GetFilterSummaryHtml(): SafeHtml {
+    const html = CompositeFilter.FromDescriptor(this.internalFilter).SummaryHTML({
+      Fields: this.effectiveFields.map((f) => ({ Name: f.name, DisplayName: f.displayName })),
+      SourceLabels: Object.fromEntries((this.sources ?? []).map((s) => [s.key, s.label])),
     });
-    return this.sanitizer.bypassSecurityTrustHtml(summary.html(this.internalFilter));
-  }
-
-  /**
-   * Inline styles for syntax highlighting (needed because Angular view encapsulation
-   * doesn't apply component CSS to dynamically injected innerHTML)
-   */
-  private readonly styles = {
-    fieldName: 'color: #0369a1; font-weight: 600;',
-    operator: 'color: #6b7280; font-style: italic;',
-    valueString: 'color: #059669; font-weight: 500;',
-    valueNumber: 'color: #7c3aed; font-weight: 500;',
-    valueDate: 'color: #c2410c; font-weight: 500;',
-    valueTrue: 'color: #16a34a; font-weight: 600;',
-    valueFalse: 'color: #dc2626; font-weight: 600;',
-    logicAnd: 'display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; background: #dbeafe; color: #1d4ed8;',
-    logicOr: 'display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; background: #fef3c7; color: #b45309;',
-    groupBracket: 'color: #9333ea; font-weight: 700; font-size: 15px;'
-  };
-
-  /**
-   * Build HTML summary recursively with indentation and syntax highlighting
-   */
-  private buildFilterSummaryHtml(filter: CompositeFilterDescriptor, depth: number): string {
-    const parts: string[] = [];
-    const indent = '  '.repeat(depth);
-
-    for (const item of filter.filters || []) {
-      if (isCompositeFilter(item)) {
-        const groupSummary = this.buildFilterSummaryHtml(item, depth + 1);
-        if (groupSummary) {
-          parts.push(`<span style="${this.styles.groupBracket}">(</span>\n${groupSummary}\n${indent}<span style="${this.styles.groupBracket}">)</span>`);
-        }
-      } else {
-        const rule = item as FilterDescriptor;
-        const ruleSummary = this.buildRuleSummaryHtml(rule);
-        if (ruleSummary) {
-          parts.push(ruleSummary);
-        }
-      }
-    }
-
-    if (parts.length === 0) {
-      return '';
-    }
-
-    const logicStyle = filter.logic === 'and' ? this.styles.logicAnd : this.styles.logicOr;
-    const logicLabel = filter.logic === 'and' ? 'AND' : 'OR';
-    const connector = `\n${indent}<span style="${logicStyle}">${logicLabel}</span>\n${indent}`;
-
-    return `${indent}${parts.join(connector)}`;
-  }
-
-  /**
-   * Build HTML summary for a single rule with syntax highlighting
-   */
-  private buildRuleSummaryHtml(rule: FilterDescriptor): string {
-    if (!rule.field) {
-      return '';
-    }
-
-    // Get the field display name
-    const field = this.fields.find(f => f.name === rule.field);
-    const fieldName = field?.displayName || rule.field;
-
-    // Get the operator label
-    const operatorLabel = this.getOperatorLabel(rule.operator);
-
-    // Format the value
-    const formattedValue = this.formatValueHtml(rule.value, rule.operator);
-
-    // Build the summary based on operator type
-    const fieldHtml = `<span style="${this.styles.fieldName}">${this.escapeHtml(fieldName)}</span>`;
-    const operatorHtml = `<span style="${this.styles.operator}">${operatorLabel}</span>`;
-
-    if (this.isNullCheckOperator(rule.operator)) {
-      return `${fieldHtml} ${operatorHtml}`;
-    }
-
-    return `${fieldHtml} ${operatorHtml} ${formattedValue}`;
-  }
-
-  /**
-   * Check if operator is a null-check operator (doesn't need a value)
-   */
-  private isNullCheckOperator(operator: string): boolean {
-    return ['isnull', 'isnotnull', 'isempty', 'isnotempty'].includes(operator);
-  }
-
-  /**
-   * Get human-readable label for an operator
-   */
-  private getOperatorLabel(operator: string): string {
-    const labels: Record<string, string> = {
-      'eq': 'equals',
-      'neq': 'does not equal',
-      'contains': 'contains',
-      'doesnotcontain': 'does not contain',
-      'startswith': 'starts with',
-      'endswith': 'ends with',
-      'isnull': 'is empty',
-      'isnotnull': 'is not empty',
-      'isempty': 'is empty',
-      'isnotempty': 'is not empty',
-      'gt': 'is greater than',
-      'gte': 'is greater than or equal to',
-      'lt': 'is less than',
-      'lte': 'is less than or equal to'
-    };
-    return labels[operator] || operator;
-  }
-
-  /**
-   * Format a value for HTML display with syntax highlighting
-   */
-  private formatValueHtml(value: unknown, operator: string): string {
-    if (value === null || value === undefined) {
-      return '';
-    }
-
-    // Don't show value for null-check operators
-    if (this.isNullCheckOperator(operator)) {
-      return '';
-    }
-
-    // Handle ISO date strings
-    if (typeof value === 'string' && this.isIsoDateString(value)) {
-      const date = new Date(value);
-      const formatted = date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-      return `<span style="${this.styles.valueDate}">${formatted}</span>`;
-    }
-
-    // Handle strings
-    if (typeof value === 'string') {
-      return `<span style="${this.styles.valueString}">"${this.escapeHtml(value)}"</span>`;
-    }
-
-    // Handle booleans
-    if (typeof value === 'boolean') {
-      const boolStyle = value ? this.styles.valueTrue : this.styles.valueFalse;
-      return `<span style="${boolStyle}">${value ? 'Yes' : 'No'}</span>`;
-    }
-
-    // Handle numbers
-    if (typeof value === 'number') {
-      return `<span style="${this.styles.valueNumber}">${value}</span>`;
-    }
-
-    // Handle Date objects
-    if (value instanceof Date) {
-      const formatted = value.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-      return `<span style="${this.styles.valueDate}">${formatted}</span>`;
-    }
-
-    // Default
-    return `<span style="font-weight: 500;">${this.escapeHtml(String(value))}</span>`;
-  }
-
-  /**
-   * Check if a string looks like an ISO date
-   */
-  private isIsoDateString(value: string): boolean {
-    // Match ISO 8601 date format
-    return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/.test(value);
-  }
-
-  /**
-   * Escape HTML characters to prevent XSS
-   */
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 }

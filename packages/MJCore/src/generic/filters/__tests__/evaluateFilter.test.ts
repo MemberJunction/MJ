@@ -1,31 +1,31 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateFilter } from '../evaluateFilter';
-import { parseFilterField, formatFilterField } from '../filter.types';
-import { FilterSummary } from '../filterSummary';
+import { CompositeFilter } from '../compositeFilter';
+import { FormatFilterField, ParseFilterField } from '../filter.types';
 import type { CompositeFilterDescriptor } from '../filter.types';
 
-describe('parseFilterField', () => {
+describe('ParseFilterField', () => {
     it('treats a bare name as unscoped', () => {
-        expect(parseFilterField('Type')).toEqual({ source: null, name: 'Type' });
+        expect(ParseFilterField('Type')).toEqual({ Source: null, Name: 'Type' });
     });
     it('splits on the first dot', () => {
-        expect(parseFilterField('BillToOrganization.Type')).toEqual({
-            source: 'BillToOrganization',
-            name: 'Type',
+        expect(ParseFilterField('BillToOrganization.Type')).toEqual({
+            Source: 'BillToOrganization',
+            Name: 'Type',
         });
     });
     it('keeps extra dots on the field name', () => {
-        expect(parseFilterField('Order.Custom.JSON')).toEqual({ source: 'Order', name: 'Custom.JSON' });
+        expect(ParseFilterField('Order.Custom.JSON')).toEqual({ Source: 'Order', Name: 'Custom.JSON' });
     });
 });
 
-describe('formatFilterField', () => {
+describe('FormatFilterField', () => {
     it('always writes the prefix', () => {
-        expect(formatFilterField('BillToOrganization', 'Type')).toBe('BillToOrganization.Type');
+        expect(FormatFilterField('BillToOrganization', 'Type')).toBe('BillToOrganization.Type');
+        expect(CompositeFilter.FormatFilterField('BillToOrganization', 'Type')).toBe('BillToOrganization.Type');
     });
 });
 
-describe('evaluateFilter', () => {
+describe('CompositeFilter.Evaluate', () => {
     const ctx = {
         '': { Type: 'Member', Status: 'Active' },
         BillToOrganization: { Type: 'Member', Status: 'Active' },
@@ -34,7 +34,8 @@ describe('evaluateFilter', () => {
     };
 
     it('empty group is true', () => {
-        expect(evaluateFilter({ logic: 'and', filters: [] }, ctx)).toBe(true);
+        expect(new CompositeFilter({ logic: 'and', filters: [] }).Evaluate(ctx)).toBe(true);
+        expect(CompositeFilter.FromJSON(null).Evaluate(ctx)).toBe(true);
     });
 
     it('reads a bare field from the unscoped record', () => {
@@ -42,7 +43,7 @@ describe('evaluateFilter', () => {
             logic: 'and',
             filters: [{ field: 'Type', operator: 'eq', value: 'Member' }],
         };
-        expect(evaluateFilter(f, ctx)).toBe(true);
+        expect(CompositeFilter.FromDescriptor(f).Evaluate(ctx)).toBe(true);
     });
 
     it('reads a prefixed field from that source', () => {
@@ -50,7 +51,7 @@ describe('evaluateFilter', () => {
             logic: 'and',
             filters: [{ field: 'BillToOrganization.Type', operator: 'eq', value: 'Member' }],
         };
-        expect(evaluateFilter(f, ctx)).toBe(true);
+        expect(CompositeFilter.FromJSON(JSON.stringify(f)).Evaluate(ctx)).toBe(true);
     });
 
     it('missing source record makes equality false', () => {
@@ -58,7 +59,7 @@ describe('evaluateFilter', () => {
             logic: 'and',
             filters: [{ field: 'ShipToPerson.Email', operator: 'eq', value: 'a@b.c' }],
         };
-        expect(evaluateFilter(f, ctx)).toBe(false);
+        expect(new CompositeFilter(f).Evaluate(ctx)).toBe(false);
     });
 
     it('isnull is true when the source record is missing', () => {
@@ -66,7 +67,7 @@ describe('evaluateFilter', () => {
             logic: 'and',
             filters: [{ field: 'ShipToPerson.Email', operator: 'isnull', value: null }],
         };
-        expect(evaluateFilter(f, ctx)).toBe(true);
+        expect(new CompositeFilter(f).Evaluate(ctx)).toBe(true);
     });
 
     it('OR / AND groups', () => {
@@ -77,25 +78,32 @@ describe('evaluateFilter', () => {
                 { field: 'BillToOrganization.Type', operator: 'eq', value: 'Member' },
             ],
         };
-        expect(evaluateFilter(f, ctx)).toBe(true);
+        expect(new CompositeFilter(f).Evaluate(ctx)).toBe(true);
+    });
+
+    it('Add builds a filter without a descriptor', () => {
+        const filter = new CompositeFilter();
+        filter.Add({ field: 'Type', operator: 'eq', value: 'Member' });
+        expect(filter.Evaluate(ctx)).toBe(true);
+        expect(filter.ToDescriptor().filters).toHaveLength(1);
     });
 });
 
-describe('FilterSummary', () => {
-    const summary = new FilterSummary({
-        sourceLabels: { BillToOrganization: 'Bill-to organization' },
-        fields: [{ name: 'Type', displayName: 'Type' }],
+describe('CompositeFilter summary', () => {
+    const filter = CompositeFilter.FromDescriptor({
+        logic: 'and',
+        filters: [{ field: 'BillToOrganization.Type', operator: 'eq', value: 'Member' }],
     });
+    const options = {
+        SourceLabels: { BillToOrganization: 'Bill-to organization' },
+        Fields: [{ Name: 'Type', DisplayName: 'Type' }],
+    };
 
     it('writes a compact sentence', () => {
-        const text = summary.text({
-            logic: 'and',
-            filters: [{ field: 'BillToOrganization.Type', operator: 'eq', value: 'Member' }],
-        });
-        expect(text).toBe('Bill-to organization Type equals Member');
+        expect(filter.SummaryText(options)).toBe('Bill-to organization Type equals Member');
     });
 
     it('empty filter is empty text', () => {
-        expect(summary.text({ logic: 'and', filters: [] })).toBe('');
+        expect(new CompositeFilter().SummaryText(options)).toBe('');
     });
 });

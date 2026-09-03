@@ -6,8 +6,8 @@ import {
   FilterOperator,
   FilterSource
 } from '../types/filter.types';
-import { parseFilterField } from '@memberjunction/core';
-import { getOperatorsForType, OperatorInfo, operatorRequiresValue } from '../types/operators';
+import { CompositeFilter } from '@memberjunction/core';
+import { GetOperatorsForType, OperatorInfo, OperatorRequiresValue } from '../types/operators';
 
 /**
  * FilterRuleComponent - A single filter condition row
@@ -121,13 +121,13 @@ export class FilterRuleComponent implements OnInit, OnChanges {
 
     this.selectedField =
       this.fields.find((f) => f.name === this.filter.field) ||
-      this.fields.find((f) => parseFilterField(f.name).name === this.filter.field) ||
+      this.fields.find((f) => CompositeFilter.ParseFilterField(f.name).Name === this.filter.field) ||
       null;
-    this.activeSourceKey = parseFilterField(this.filter.field).source || this.sources[0]?.key || null;
+    this.activeSourceKey = CompositeFilter.ParseFilterField(this.filter.field).Source || this.sources[0]?.key || null;
 
     if (this.selectedField) {
-      this.availableOperators = getOperatorsForType(this.selectedField.type);
-      this.requiresValue = operatorRequiresValue(this.filter.operator);
+      this.availableOperators = GetOperatorsForType(this.selectedField.type);
+      this.requiresValue = OperatorRequiresValue(this.filter.operator);
     } else {
       this.availableOperators = [];
       this.requiresValue = true;
@@ -420,11 +420,11 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     if (!this.filter.field) return 'Select field...';
     const field =
       this.fields.find((f) => f.name === this.filter.field) ||
-      this.fields.find((f) => parseFilterField(f.name).name === this.filter.field);
-    const parsed = parseFilterField(this.filter.field);
-    const fieldLabel = field?.displayName || parsed.name;
-    if (this.sources.length > 1 && parsed.source) {
-      const src = this.sources.find((s) => s.key === parsed.source);
+      this.fields.find((f) => CompositeFilter.ParseFilterField(f.name).Name === this.filter.field);
+    const parsed = CompositeFilter.ParseFilterField(this.filter.field);
+    const fieldLabel = field?.displayName || parsed.Name;
+    if (this.sources.length > 1 && parsed.Source) {
+      const src = this.sources.find((s) => s.key === parsed.Source);
       return src ? `${src.label} · ${fieldLabel}` : fieldLabel;
     }
     return fieldLabel;
@@ -436,7 +436,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
 
   public fieldsForSource(key: string | null): FilterFieldInfo[] {
     if (!key) return this.fields;
-    return this.fields.filter((f) => parseFilterField(f.name).source === key);
+    return this.fields.filter((f) => CompositeFilter.ParseFilterField(f.name).Source === key);
   }
 
   public selectSource(key: string): void {
@@ -505,11 +505,11 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     if (!field) return;
 
     this.selectedField = field;
-    this.availableOperators = getOperatorsForType(field.type);
+    this.availableOperators = GetOperatorsForType(field.type);
 
     // Get default operator for the new field type
     const defaultOperator = this.availableOperators[0]?.value || 'eq';
-    this.requiresValue = operatorRequiresValue(defaultOperator);
+    this.requiresValue = OperatorRequiresValue(defaultOperator);
 
     // Emit updated filter with new field and reset value
     this.emitChange({
@@ -523,7 +523,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
    * Handle operator selection change
    */
   onOperatorChange(operator: FilterOperator): void {
-    this.requiresValue = operatorRequiresValue(operator);
+    this.requiresValue = OperatorRequiresValue(operator);
 
     // If operator doesn't require value, clear it
     const value = this.requiresValue ? this.filter.value : null;
