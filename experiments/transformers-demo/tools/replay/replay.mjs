@@ -1,0 +1,41 @@
+import puppeteer from 'puppeteer-core';
+import fs from 'node:fs';
+const variant = process.argv[2] || 'message';
+const routerTs = fs.readFileSync(new URL('../../src/app/ai/builtin-ai-router.ts', import.meta.url), 'utf8');
+const systemPrompt = routerTs.match(/ROUTER_SYSTEM_PROMPT = `([\s\S]*?)`;/)[1];
+const schemaText = routerTs.match(/ROUTER_RESPONSE_SCHEMA: Record<string, unknown> = (\{[\s\S]*?\n\});/)[1];
+const schema = new Function('return ' + schemaText)();
+const raw = JSON.parse(fs.readFileSync('betty-turns.json', 'utf8')).filter(t => t.UserMessage);
+// Clean skill-mention tokens (@{"type":"skill",...,"name":"Exam Creator"}) into a readable "@Exam Creator"
+const clean = (m) => m.replace(/@\{[^}]*"name"\s*:\s*"([^"]+)"[^}]*\}/g, '@$1').replace(/\s+/g, ' ').trim();
+raw.sort((a, b) => a.ConversationID.localeCompare(b.ConversationID) || a.AiAt.localeCompare(b.AiAt));
+const turns = raw.map((t, idx) => {
+  const prev = idx > 0 && raw[idx - 1].ConversationID === t.ConversationID ? raw[idx - 1] : null;
+  return { Message: clean(t.UserMessage).slice(0, 1200), Researched: t.Researched, ServerMs: t.ServerMs, Org: t.Org || null,
+           PrevUser: prev ? clean(prev.UserMessage).slice(0, 300) : null, PrevAi: prev?.AiMessage ? prev.AiMessage.replace(/\s+/g, ' ').slice(0, 300) : null };
+});
+const browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9333', defaultViewport: null });
+const page = await browser.newPage();
+page.on('console', m => { if (m.text().startsWith('[replay]')) console.log(m.text()); });
+await page.goto('file://' + process.cwd() + '/replay.html');
+const t0 = Date.now();
+await page.evaluate((cfg) => { window.__run(cfg); }, { variant, turns, systemPrompt, schema });
+await page.waitForFunction(() => window.__out.phase === 'done', { timeout: 900000, polling: 1000 });
+const out = await page.evaluate(() => window.__out);
+out.rows.forEach((r, i) => { r.Message = turns[i].Message; r.ServerMs = turns[i].ServerMs; r.HasPrev = !!turns[i].PrevUser; });
+fs.writeFileSync(`results-${variant}.json`, JSON.stringify(out, null, 1));
+const rows = out.rows;
+const predResearch = (r) => r.Intent === 'needs_research';
+const tp = rows.filter(r => predResearch(r) && r.Researched).length, fn = rows.filter(r => !predResearch(r) && r.Researched).length;
+const fp = rows.filter(r => predResearch(r) && !r.Researched).length, tn = rows.filter(r => !predResearch(r) && !r.Researched).length;
+const med = a => a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)];
+console.log(`\n=== ${variant} · ${rows.length} turns · wall ${Math.round((Date.now() - t0) / 1000)}s · sessions created ${out.sessionsCreated} ===`);
+console.log(`valid JSON ${rows.filter(r => r.Intent).length}/${rows.length} · errors ${rows.filter(r => r.err).length} · latency median ${med(rows.map(r => r.ms))} ms, p90 ${rows.map(r => r.ms).sort((a, b) => a - b)[Math.floor(rows.length * 0.9)]} ms`);
+console.log(`agreement with Betty on research-or-not: ${(100 * (tp + tn) / rows.length).toFixed(1)}%   [TP ${tp} · TN ${tn} · FP ${fp} · FN ${fn}]`);
+console.log(`Betty researched ${tp + fn}: local said research ${tp} (${(100 * tp / (tp + fn)).toFixed(1)}%), said skip ${fn} (false skip ${(100 * fn / (tp + fn)).toFixed(1)}%)`);
+console.log(`Betty skipped ${fp + tn}: local said skip ${tn} (${(100 * tn / (fp + tn)).toFixed(1)}%), said research ${fp}`);
+const dist = {}; rows.forEach(r => { const k = (r.Intent || 'invalid') + (r.Researched ? ' | researched' : ' | not'); dist[k] = (dist[k] || 0) + 1; });
+console.log('intent × Betty outcome:'); Object.entries(dist).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => console.log('   ', String(v).padStart(4), k));
+console.log('false-skip examples (Betty researched, local said not):'); rows.filter(r => !predResearch(r) && r.Researched).slice(0, 8).forEach(r => console.log('    ', r.Intent, '|', JSON.stringify(r.Message.slice(0, 80))));
+console.log('server ms median when Betty researched:', med(rows.filter(r => r.Researched && r.ServerMs > 0).map(r => r.ServerMs)), '| when not:', med(rows.filter(r => !r.Researched && r.ServerMs > 0).map(r => r.ServerMs)));
+await page.close(); browser.disconnect();

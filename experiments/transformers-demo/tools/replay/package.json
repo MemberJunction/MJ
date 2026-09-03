@@ -1,0 +1,13 @@
+{
+  "name": "builtin-ai-replay",
+  "private": true,
+  "type": "module",
+  "description": "Replay real Betty turns through the Chrome built-in AI router and score against what Betty did",
+  "scripts": {
+    "replay": "node replay.mjs",
+    "score": "node summarize.mjs message context tenant"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}
