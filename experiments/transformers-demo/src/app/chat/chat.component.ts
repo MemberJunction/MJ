@@ -14,10 +14,9 @@ import { ChatService, ChatMessage } from '../ai/chat.service';
 import { BROWSER_CHAT_MODELS, type BrowserModelDefinition } from '../ai/model-registry';
 
 @Component({
-  selector: 'app-chat',
-  standalone: true,
-  imports: [DecimalPipe, FormsModule],
-  template: `
+    selector: 'app-chat',
+    imports: [DecimalPipe, FormsModule],
+    template: `
     <!-- Loading state -->
     @if (IsLoading) {
       <div class="loading-overlay">
@@ -120,7 +119,7 @@ import { BROWSER_CHAT_MODELS, type BrowserModelDefinition } from '../ai/model-re
       </div>
     }
   `,
-  styles: [`
+    styles: [`
     :host { display: flex; flex-direction: column; height: 100vh; font-family: system-ui, sans-serif; }
 
     .loading-overlay {
@@ -200,7 +199,7 @@ import { BROWSER_CHAT_MODELS, type BrowserModelDefinition } from '../ai/model-re
     .init-prompt h2 { font-size: 24px; margin-bottom: 8px; }
     .init-prompt p { color: #666; margin-bottom: 24px; }
     .error { color: #ef4444; margin-top: 16px; }
-  `],
+  `]
 })
 export class ChatComponent implements OnInit {
   @ViewChild('messagesContainer') MessagesContainer!: ElementRef;
