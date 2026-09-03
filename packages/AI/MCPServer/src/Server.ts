@@ -25,6 +25,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
 import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
+import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import { loadAgentManagementTools } from './tools/agentManagementTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -869,6 +870,21 @@ async function registerAllTools(
  * SERVER INITIALIZATION
  ******************************************************************************/
 
+/** Process ID this server identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
+export const MCP_SERVER_PROCESS_ID = 'mcp';
+
+/**
+ * Loads the installed Open Apps' server packages (mj.config.cjs `dynamicPackages.server[]`) and the
+ * host's generated packages so entity/action tools construct the apps' real subclasses — the same
+ * step MJAPI performs at boot. Must run BEFORE the SQL Server client is set up (startup exports
+ * register classes; they never touch a provider). The parsed `configInfo` strips `dynamicPackages`,
+ * so the raw config is re-discovered here.
+ */
+async function loadOpenAppServerPackages(): Promise<void> {
+    const { config, configFilePath } = DiscoverMJConfig();
+    await LoadDynamicPackages({ processId: MCP_SERVER_PROCESS_ID, tier: 'server', config, configFilePath });
+}
+
 /**
  * Initializes and starts the MemberJunction MCP server.
  *
@@ -911,6 +927,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
 
         // Initialize configuration (loads .env and mj.config.cjs)
         _config = await initConfig();
+        await loadOpenAppServerPackages();
         mcpServerPort = _config.mcpServerSettings?.port || 3100;
 
         // Store filter options and custom providers for use by tool registration
@@ -3284,6 +3301,7 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
     try {
         // Initialize configuration (loads .env and mj.config.cjs)
         _config = await initConfig();
+        await loadOpenAppServerPackages();
 
         if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");

@@ -212,6 +212,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.5
         version: link:../../MJCoreEntities
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.5
         version: link:../../Encryption
@@ -309,6 +312,9 @@ importers:
       '@memberjunction/core-entities-server':
         specifier: 6.1.0-edge.5
         version: link:../../MJCoreEntitiesServer
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0-edge.5
         version: link:../../GenericDatabaseProvider
@@ -1147,6 +1153,9 @@ importers:
       '@memberjunction/credentials':
         specifier: 6.1.0-edge.5
         version: link:../../Credentials/Engine
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.5
         version: link:../../Encryption
@@ -9767,6 +9776,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.5
         version: link:../MJCoreEntities
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../DynamicPackages
       '@memberjunction/global':
         specifier: 6.1.0-edge.5
         version: link:../MJGlobal
@@ -10210,6 +10222,22 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/DynamicPackages:
+    dependencies:
+      cosmiconfig:
+        specifier: ^9.0.0
+        version: 9.0.0(typescript@5.9.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Encryption:
     dependencies:
@@ -11148,6 +11176,9 @@ importers:
       '@memberjunction/db-auto-doc':
         specifier: 6.1.0-edge.5
         version: link:../DBAutoDoc
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../DynamicPackages
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0-edge.5
         version: link:../GenericDatabaseProvider
@@ -13971,6 +14002,9 @@ importers:
       '@memberjunction/doc-utils':
         specifier: 6.1.0-edge.5
         version: link:../DocUtils
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../DynamicPackages
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.5
         version: link:../Encryption
@@ -14469,6 +14503,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.5
         version: link:../../MJCoreEntities
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0-edge.5
         version: link:../../GenericDatabaseProvider
@@ -14780,6 +14817,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.5
         version: link:../../MJCoreEntities
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0-edge.5
         version: link:../../GenericDatabaseProvider

@@ -2,6 +2,7 @@ import { SetProvider, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import { loadAIConfig } from '../config';
+import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -39,6 +40,12 @@ export async function initializeMJProvider(): Promise<IMetadataProvider> {
 
   try {
     const config = await loadAIConfig();
+
+    // Installed Open App server packages register their entity/action subclasses here, before the
+    // provider exists. Idempotent: when this CLI runs inside `mj`, the `mj` prerun hook has already
+    // loaded them under `cli:ai:…` and the loader skips packages already loaded in the process.
+    const raw = DiscoverMJConfig();
+    await LoadDynamicPackages({ processId: 'ai-cli', tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
     
     // Validate required configuration
     if (!config.dbDatabase) {

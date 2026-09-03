@@ -17,6 +17,7 @@ import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provi
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
+import { describeMissingEntitySubclass } from './entity-subclass-guard';
 import { BatchContextIndex, BatchContextStub } from './batch-context-index';
 import { SyncMetadataEngine } from './sync-metadata-engine';
 import {
@@ -721,7 +722,12 @@ export class SyncEngine {
     
     // If not found and auto-create is enabled, create the record
     if (autoCreate) {
-      
+      // Same silent-fallback hazard as PushService (issue #4199), on the lookup auto-create path.
+      const subclassWarning = describeMissingEntitySubclass(entityName);
+      if (subclassWarning) {
+        console.warn(`⚠️  ${subclassWarning}`);
+      }
+
       const newEntity = await this.metadata.GetEntityObject(entityName, this.contextUser);
       if (!newEntity) {
         throw new Error(`Failed to create entity object for: ${entityName}`);

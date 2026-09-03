@@ -18,6 +18,7 @@ import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-depende
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
+import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
@@ -673,6 +674,14 @@ export class PushService {
     let deferred = 0;
     let errors = 0;
     
+    // Issue #4199: a push against an entity whose subclass is not loaded in this process
+    // "succeeds" with a generic BaseEntity and silently skips the entity's custom logic. Say so.
+    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''));
+    if (subclassWarning) {
+      this.warnings.push(subclassWarning);
+      callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
+    }
+
     // Find all JSON files in the directory
     const pattern = entityConfig.filePattern || '*.json';
     const files = await fastGlob(pattern, {

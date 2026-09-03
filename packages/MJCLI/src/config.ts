@@ -66,6 +66,10 @@ const dynamicPackageEntrySchema = z.object({
   StartupExport: z.string().optional(),
   AppName: z.string(),
   Enabled: z.boolean().default(true),
+  // Hand-authored per-process scoping, read by @memberjunction/dynamic-packages: process IDs
+  // (or prefixes — `cli:sync` covers every `mj sync` command) the entry loads in / never loads in.
+  Processes: z.array(z.string()).optional(),
+  ExcludeProcesses: z.array(z.string()).optional(),
 });
 
 // Schema for Open App configuration section
@@ -109,6 +113,9 @@ const openAppsConfigSchema = z.object({
 const dynamicPackagesSchema = z.object({
   server: z.array(dynamicPackageEntrySchema).optional(),
   client: z.array(dynamicPackageEntrySchema).optional(),
+  // Per-process on/off switch keyed by process ID or prefix (`{ 'cli:migrate': 'none' }`);
+  // the most specific key wins. MJ_DYNAMIC_PACKAGES / --no-app-packages override it.
+  policy: z.record(z.string(), z.enum(['load', 'none'])).optional(),
 }).optional();
 
 // Schema for database-dependent config (required fields)
@@ -187,6 +194,16 @@ const mjConfigSchemaOptional = z.object({
 
 // Don't validate at module load - let commands decide when they need validated config
 export const config = result?.config as MJConfig | undefined;
+
+/**
+ * The discovered mj.config.cjs BEFORE any Zod parse, plus its path. The dynamic-package loader
+ * needs the raw object (a parsed config keeps only the keys its schema names) and the file path
+ * (the resolution anchor for packages the host, not the CLI, declares).
+ */
+export const getRawConfig = (): { config: Record<string, unknown> | undefined; configFilePath?: string } => ({
+  config: result?.config as Record<string, unknown> | undefined,
+  configFilePath: result?.filepath || undefined,
+});
 
 /**
  * Get validated config for commands that require database connection.

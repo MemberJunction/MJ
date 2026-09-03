@@ -1,7 +1,7 @@
 /**
  * Host-anchored dynamic import for runtime-configured packages.
  *
- * A bare `import(pkgName)` resolves from THIS package (server-bootstrap), which cannot
+ * A bare `import(pkgName)` resolves from THIS package (dynamic-packages), which cannot
  * declare packages whose names are only known at runtime — mj.config.cjs supplies them.
  * npm's hoisted node_modules let that bare import resolve by accident; pnpm's strict
  * per-package layout does not, because the packages are declared by (and linked into) the
@@ -31,8 +31,8 @@ import path from 'node:path';
  * or the pnpm fallback silently stops working under ts-node hosts.
  *
  * Keep in sync with `IsModuleResolutionFailure` in @memberjunction/open-app-engine's
- * `src/install/migration-runner.ts` — same heuristic, duplicated because the two
- * packages cannot depend on each other and cross-package re-exports are disallowed.
+ * `src/install/migration-runner.ts` — same heuristic, duplicated because the engine
+ * cannot depend on this package and cross-package re-exports are disallowed.
  */
 export function isResolutionFailure(error: unknown): boolean {
   const { code, message } = (error as { code?: string; message?: string }) ?? {};

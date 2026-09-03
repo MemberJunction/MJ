@@ -16,14 +16,18 @@
 
 import { serve, MJServerOptions } from '@memberjunction/server';
 import {
+  MJ_SERVER_EXTENSIONS_EXPORT,
   describeServerExtensionMount,
-  extractServerExtensionsFromModule,
   extractServerExtensionsFromPackageJson,
+  normalizeServerExtensionConfigs,
   type ServerExtensionConfig,
 } from '@memberjunction/server-extensions-core';
+import { LoadDynamicPackages, resolvePackageJsonFromHost, type LoadedDynamicPackage } from '@memberjunction/dynamic-packages';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { readFileSync } from 'node:fs';
-import { importFromHost, isResolutionFailure, resolvePackageJsonFromHost } from './host-import.js';
+
+/** Process ID MJAPI identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
+export const MJAPI_PROCESS_ID = 'mjapi';
 
 /**
  * Configuration options for creating an MJ Server
@@ -57,100 +61,30 @@ export interface MJServerConfig {
 }
 
 /**
- * Discovers and loads generated packages from the workspace based on configuration.
+ * Loads the host's generated packages (`codeGeneration.packages`) and the installed Open Apps'
+ * server packages (`dynamicPackages.server[]`, written by `mj app install`) through the shared,
+ * process-agnostic loader in @memberjunction/dynamic-packages — the same loader the `mj` CLI,
+ * the MCP/A2A servers and the test bootstraps use, so an app's entity subclasses register in
+ * every process, not only here. Generated packages load first, apps after, so an app's
+ * @RegisterClass wins via the ClassFactory's load-order priority.
  *
- * Generated packages (entities, actions, resolvers) register themselves via side effects when imported.
- * This function uses the mj.config.cjs to determine which packages to load.
+ * What stays MJAPI-specific is what happens AFTER a package is loaded:
  *
- * @param config - The loaded MemberJunction configuration
- */
-async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown>; configFilePath?: string }): Promise<void> {
-  const codeGeneration = configResult.config?.codeGeneration as Record<string, Record<string, string>> | undefined;
-  if (!codeGeneration?.packages) {
-    // Common case for app deployments that import their generated package directly —
-    // not actionable, so stay silent (was a verbose-only console.debug).
-    return;
-  }
-
-  console.log('Loading generated packages...');
-
-  const packages = codeGeneration.packages;
-
-  // Attempt to import each configured generated package
-  // These imports trigger class registration via @RegisterClass decorators
-  const packageTypes = ['entities', 'actions', 'angularForms', 'graphqlResolvers'];
-
-  for (const pkgType of packageTypes) {
-    const pkgConfig = packages[pkgType] as unknown as Record<string, string> | undefined;
-    if (pkgConfig?.name) {
-      const pkgName = pkgConfig.name;
-      try {
-        // Dynamic import to trigger side effects (class registration)
-        await importFromHost(pkgName, configResult.configFilePath);
-        console.log(`  Loaded generated package: ${pkgName}`);
-      } catch (error: unknown) {
-        // Not finding a package is expected in some cases (e.g., no forms generated yet).
-        // isResolutionFailure (not a bare code check) because ts-node's ESM shim throws
-        // resolution failures with no code at all. Only claim "not found" when THIS package
-        // is the error's QUOTED subject ("Cannot find package '<name>'") — a missing
-        // TRANSITIVE dependency of a package that WAS found quotes the transitive name
-        // instead (this package's name still appears UNQUOTED in the imported-from path,
-        // which is why a bare includes(pkgName) check is not enough); its message is the
-        // true cause and must reach the operator via the warn path.
-        const message = error instanceof Error ? error.message : String(error);
-        if (isResolutionFailure(error) && message.includes(`'${pkgName}'`)) {
-          console.log(`  Generated package not found (may not exist yet): ${pkgName}`);
-        } else {
-          console.warn(`  Error loading generated package ${pkgName}:`, error);
-        }
-      }
-    }
-  }
-
-  console.log('');
-}
-
-/** One entry of `dynamicPackages.server[]` in mj.config.cjs (written by `mj app install`). */
-interface DynamicServerPackage {
-  /** npm package name to import. */
-  PackageName?: string;
-  /** Optional named export to invoke after import (a startup hook). */
-  StartupExport?: string;
-  /** Open App name this package belongs to (for tracking). */
-  AppName?: string;
-  /** Whether this package should be loaded. Treated as enabled unless explicitly `false`. */
-  Enabled?: boolean;
-}
-
-/**
- * Imports the server packages of installed Open Apps, declared in
- * `mj.config.cjs` under `dynamicPackages.server[]` by `mj app install`.
+ * - Each package's exported `RESOLVER_PATHS` (absolute paths to its generated resolver files)
+ *   are collected and returned. This is required for the app's GraphQL mutations/queries to
+ *   actually enter the live schema: side-effect-importing a resolver class only registers
+ *   type-graphql metadata, but `buildSchema` includes a resolver ONLY if it is PASSED in.
+ *   `serve()` builds its resolver set by globbing the paths it is given — so the caller must
+ *   hand these paths to `serve()`, or the app's entity-specific mutations (e.g. `CreateXxx`)
+ *   never appear in the API. The app's own `packages/MJAPI/src/generated/generated.ts` does
+ *   NOT regenerate the app's entities, so the package is the only source of these resolvers.
+ * - Each package's server-extension declarations (`MJ_SERVER_EXTENSIONS` export, falling back
+ *   to `package.json` `memberjunction.serverExtensions`) are collected so `serve()` can mount
+ *   Open App routes (webhooks, anonymous checkout, …) without the operator copying those
+ *   blocks into the host `mj.config.cjs`. Host `serverExtensions[]` still overlays by DriverClass.
  *
- * Importing each package triggers its `@RegisterClass` decorators; if an entry
- * declares a `StartupExport`, that named export is invoked after import. This is
- * called AFTER {@link discoverAndLoadGeneratedPackages} (and after the bootstrap
- * manifests imported at module load), so an app's registrations land last and
- * therefore win via the ClassFactory's load-order priority — letting an app
- * override a base class.
- *
- * It ALSO collects each package's exported `RESOLVER_PATHS` (absolute paths to the
- * package's generated resolver files) and returns them. This is required for the app's
- * GraphQL mutations/queries to actually enter the live schema: side-effect-importing a
- * resolver class only registers type-graphql metadata, but `buildSchema` includes a
- * resolver ONLY if it is PASSED in. `serve()` builds its resolver set by globbing the
- * paths it is given — so the caller must hand these paths to `serve()`, or the app's
- * entity-specific mutations (e.g. `CreateXxx`) never appear in the API. The app's own
- * `packages/MJAPI/src/generated/generated.ts` does NOT regenerate the app's entities, so
- * the package is the only source of these resolvers.
- *
- * It ALSO collects each package's server-extension declarations (`MJ_SERVER_EXTENSIONS`
- * export, falling back to `package.json` `memberjunction.serverExtensions`) so `serve()`
- * can mount Open App routes (webhooks, anonymous checkout, …) without the operator
- * copying those blocks into the host `mj.config.cjs`. Host `serverExtensions[]` still
- * overlays by DriverClass.
- *
- * Mirrors the generated-package loader's robustness contract: no-op when the
- * section is absent, per-package try/catch, tolerate `ERR_MODULE_NOT_FOUND`
+ * The loader's robustness contract is unchanged from the loader that used to live here: no-op
+ * when nothing is configured, per-package try/catch, tolerate a package that cannot be resolved
  * (e.g. before `npm install`), warn on anything else, and never crash boot.
  *
  * @param configResult - The loaded MemberJunction configuration
@@ -162,94 +96,89 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
   resolverPaths: string[];
   serverExtensions: ServerExtensionConfig[];
 }> {
-  const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicServerPackage[] } | undefined;
-  const serverPackages = dynamicPackages?.server;
+  const report = await LoadDynamicPackages({
+    processId: MJAPI_PROCESS_ID,
+    tier: 'server',
+    config: configResult.config,
+    configFilePath: configResult.configFilePath,
+  });
+
   const resolverPaths: string[] = [];
   const serverExtensions: ServerExtensionConfig[] = [];
-  if (!serverPackages || serverPackages.length === 0) {
-    // No installed Open App server packages — the common case. Stay silent, no paths.
-    return { resolverPaths, serverExtensions };
-  }
-
-  console.log('Loading Open App server packages...');
-
-  for (const entry of serverPackages) {
-    const pkgName = entry?.PackageName;
-    if (!pkgName || entry.Enabled === false) {
-      continue;
+  for (const loaded of report.Loaded) {
+    if (loaded.Source === 'generated') {
+      continue; // the host's own generated resolvers are globbed from the standard locations below
     }
-    try {
-      // Dynamic import to trigger side effects (class registration).
-      const mod = await importFromHost(pkgName, configResult.configFilePath);
-      // Invoke the declared startup export, if any (e.g. a registration kicker).
-      const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
-      if (typeof startup === 'function') {
-        await Promise.resolve((startup as () => unknown)());
+    const added = collectResolverPaths(loaded, resolverPaths);
+    const extensions = collectServerExtensions(loaded, configResult.configFilePath);
+    serverExtensions.push(...extensions);
+    if (added > 0 || extensions.length > 0) {
+      console.log(
+        `    ${loaded.Entry.PackageName}:` +
+          `${added > 0 ? ` +${added} resolver path${added === 1 ? '' : 's'}` : ''}` +
+          `${extensions.length > 0 ? ` +${extensions.length} server extension${extensions.length === 1 ? '' : 's'}` : ''}`
+      );
+    }
+    for (const ext of extensions) {
+      // Inventory is the consent surface: these routes mount BEFORE auth.
+      console.log(`    ${describeServerExtensionMount(ext)}`);
+    }
+  }
+  if (report.Loaded.length > 0) {
+    console.log('');
+  }
+  return { resolverPaths, serverExtensions };
+}
+
+/** Appends the package's exported `RESOLVER_PATHS` strings to `into`; returns how many were added. */
+function collectResolverPaths(loaded: LoadedDynamicPackage, into: string[]): number {
+  const pkgResolverPaths = loaded.Module.RESOLVER_PATHS;
+  let added = 0;
+  if (Array.isArray(pkgResolverPaths)) {
+    for (const p of pkgResolverPaths) {
+      if (typeof p === 'string' && p.length > 0) {
+        into.push(p);
+        added++;
       }
-      // Collect the package's exported resolver paths so serve() globs them into the schema.
-      const pkgResolverPaths = mod.RESOLVER_PATHS;
-      let added = 0;
-      if (Array.isArray(pkgResolverPaths)) {
-        for (const p of pkgResolverPaths) {
-          if (typeof p === 'string' && p.length > 0) {
-            resolverPaths.push(p);
-            added++;
-          }
-        }
-      }
-      // Server extensions: runtime export wins; package.json is the static fallback
-      // for packages that declare metadata without a named export. Isolated from the
-      // package-load try so a collect failure still leaves resolvers registered.
-      let extensions: ServerExtensionConfig[] = [];
-      try {
-        extensions = extractServerExtensionsFromModule(mod, {
-          source: pkgName,
+    }
+  }
+  return added;
+}
+
+/**
+ * Server extensions: runtime export wins; package.json is the static fallback for packages that
+ * declare metadata without a named export. Isolated in its own try so a collect failure still
+ * leaves the package's resolvers registered.
+ */
+function collectServerExtensions(loaded: LoadedDynamicPackage, configFilePath?: string): ServerExtensionConfig[] {
+  const pkgName = loaded.Entry.PackageName;
+  try {
+    // Read the export by property access rather than `in`: the loader hands back whatever
+    // `import()` produced, and a wrapped/proxied namespace (vitest's mocks are one) can answer
+    // `get` for an export while answering `has` with false.
+    const exported = loaded.Module[MJ_SERVER_EXTENSIONS_EXPORT];
+    let extensions =
+      exported === undefined
+        ? []
+        : normalizeServerExtensionConfigs(exported, {
+            source: pkgName,
+            onInvalid: (message) => console.warn(`  ${message}`),
+          });
+    if (extensions.length === 0) {
+      const pkgJsonPath = resolvePackageJsonFromHost(pkgName, configFilePath);
+      if (pkgJsonPath) {
+        const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as unknown;
+        extensions = extractServerExtensionsFromPackageJson(pkgJson, {
+          source: `${pkgName} package.json`,
           onInvalid: (message) => console.warn(`  ${message}`),
         });
-        if (extensions.length === 0) {
-          const pkgJsonPath = resolvePackageJsonFromHost(pkgName, configResult.configFilePath);
-          if (pkgJsonPath) {
-            const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as unknown;
-            extensions = extractServerExtensionsFromPackageJson(pkgJson, {
-              source: `${pkgName} package.json`,
-              onInvalid: (message) => console.warn(`  ${message}`),
-            });
-          }
-        }
-      } catch (collectError: unknown) {
-        console.warn(`  Error collecting serverExtensions from ${pkgName}:`, collectError);
-      }
-      if (extensions.length > 0) {
-        serverExtensions.push(...extensions);
-      }
-
-      console.log(
-        `  Loaded Open App server package: ${pkgName}` +
-          `${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}` +
-          `${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}` +
-          `${extensions.length > 0 ? ` (+${extensions.length} server extension${extensions.length === 1 ? '' : 's'})` : ''}`
-      );
-      for (const ext of extensions) {
-        // Inventory is the consent surface: these routes mount BEFORE auth.
-        console.log(`    ${describeServerExtensionMount(ext)}`);
-      }
-    } catch (error: unknown) {
-      // isResolutionFailure (not a bare code check) because ts-node's ESM shim throws
-      // resolution failures with no code at all. The quoted-name guard keeps a missing
-      // TRANSITIVE dependency on the warn path with its true cause: resolution errors QUOTE
-      // the missing name, and a transitive failure quotes the transitive dep — this
-      // package's name only appears unquoted in the imported-from path.
-      const message = error instanceof Error ? error.message : String(error);
-      if (isResolutionFailure(error) && message.includes(`'${pkgName}'`)) {
-        console.log(`  Open App server package not found (run 'npm install'?): ${pkgName}`);
-      } else {
-        console.warn(`  Error loading Open App server package ${pkgName}:`, error);
       }
     }
+    return extensions;
+  } catch (collectError: unknown) {
+    console.warn(`  Error collecting serverExtensions from ${pkgName}:`, collectError);
+    return [];
   }
-
-  console.log('');
-  return { resolverPaths, serverExtensions };
 }
 
 /**
@@ -257,7 +186,7 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
  *
  * This is the primary entry point for MJ 3.0 applications. It:
  * 1. Loads configuration from mj.config.cjs (or specified path)
- * 2. Auto-discovers and imports generated packages (triggering @RegisterClass decorators)
+ * 2. Auto-discovers and imports generated + installed Open App packages (triggering @RegisterClass decorators)
  * 3. Middleware is discovered via ClassFactory from @RegisterClass(BaseServerMiddleware, key) classes
  * 4. Builds the GraphQL schema with all registered resolvers
  * 5. Starts the server with proper lifecycle hooks
@@ -307,17 +236,14 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
     configFilePath: configSearchResult?.filepath
   };
 
-  // Discover and load generated packages automatically
-  // This triggers their @RegisterClass decorators to register entities, actions, etc.
-  await discoverAndLoadGeneratedPackages(configResult);
-
-  // Load installed Open App server packages (dynamicPackages.server[] from `mj app
-  // install`). Done AFTER the generated packages so an app's @RegisterClass wins via
-  // ClassFactory load-order priority. Without this, `mj app install` writes the
-  // section but nothing consumes it — the app's server classes never load. The returned
-  // resolver paths are the app packages' generated resolver files, which must be globbed
-  // into the schema below (loading the classes alone does NOT put their mutations/queries
-  // in the GraphQL schema — type-graphql only includes resolvers passed to serve()).
+  // Load the host's generated packages and the installed Open App server packages
+  // (dynamicPackages.server[] from `mj app install`) — generated first, apps after, so an
+  // app's @RegisterClass wins via ClassFactory load-order priority. Without this, `mj app
+  // install` writes the section but nothing consumes it — the app's server classes never
+  // load. The returned resolver paths are the app packages' generated resolver files, which
+  // must be globbed into the schema below (loading the classes alone does NOT put their
+  // mutations/queries in the GraphQL schema — type-graphql only includes resolvers passed
+  // to serve()).
   const { resolverPaths: dynamicResolverPaths, serverExtensions: dynamicServerExtensions } =
     await loadDynamicAppPackages(configResult);
 

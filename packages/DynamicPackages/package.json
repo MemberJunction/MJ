@@ -1,0 +1,37 @@
+{
+  "name": "@memberjunction/dynamic-packages",
+  "version": "6.1.0-edge.5",
+  "description": "MemberJunction: process-agnostic loader for runtime-configured packages (Open App server/client packages, generated entity packages) with per-process scoping",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "memberjunction",
+    "open-app",
+    "dynamic-packages",
+    "bootstrap"
+  ],
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "cosmiconfig": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
