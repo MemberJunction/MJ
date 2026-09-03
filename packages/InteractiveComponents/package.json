@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/interactive-component-types",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Interactive Component - Type specifications for MJ Interactive UI Componentry",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,8 +32,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/ai-vectors-memory": "6.1.0-edge.3"
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/ai-vectors-memory": "6.1.0-edge.5"
   },
   "repository": {
     "type": "git",

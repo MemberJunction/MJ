@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-agent-manager",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "Core interfaces and types for the MemberJunction Agent Manager system",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,14 +21,14 @@
   "author": "MemberJunction",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai-agents": "6.1.0-edge.3",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.3",
-    "@memberjunction/ai-engine-base": "6.1.0-edge.3",
-    "@memberjunction/aiengine": "6.1.0-edge.3",
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/templates": "6.1.0-edge.3"
+    "@memberjunction/ai-agents": "6.1.0-edge.5",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.5",
+    "@memberjunction/ai-engine-base": "6.1.0-edge.5",
+    "@memberjunction/aiengine": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/templates": "6.1.0-edge.5"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

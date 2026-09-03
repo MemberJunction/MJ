@@ -566,9 +566,11 @@ export const getUserPayload = async (
     // the IdP's email_verified assertion so an unverified email can never auto-claim.
     // Anonymous magic-link guests are skipped: their principal is synthetic and per-session.
     if (sessionUser.Email && !sessionUser.IsMagicLinkAnonymous && markSessionAuditSeen(sessionAuditKey('claims', payload))) {
-      // global-provider-ok: pre-context auth path; per-request providers do not exist yet here —
-      // same posture as every other pre-context call on this path.
-      const claimProvider = Metadata.Provider as unknown as IMetadataProvider;
+      // Pre-context auth path: per-request providers do not exist yet here, so the global is the
+      // only provider available — same posture as every other pre-context call on this path.
+      // The allowlist marker has to sit on the reference line itself; MultiProviderCompliance
+      // matches per-line, so a marker on its own line above is invisible to the scanner.
+      const claimProvider = Metadata.Provider as unknown as IMetadataProvider; // global-provider-ok: pre-context auth path
       if (claimProvider) {
         void IdentityClaimEngineServer.Instance.AutoClaimForUser(sessionUser, claimProvider, { EmailVerified: emailVerified }).catch(
           (err) => console.warn(`Auto-claim on login failed for ${sessionUser.Email}: ${err instanceof Error ? err.message : err}`),

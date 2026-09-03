@@ -20,10 +20,13 @@ import type {
     ListContext,
     ListResult,
 } from './types.js';
+import { ClassifyError } from './types.js';
+import { ExtractRetryAfterFromError } from './RetryAfter.js';
 import {
     discoverFromStream,
     pickKeyFromStats,
     pickPrimaryKeyFromStats,
+    PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE,
     type StreamDiscoveryOptions,
     type PkPickOptions,
 } from './StreamingDiscovery.js';
@@ -374,6 +377,17 @@ export interface RateLimitPolicy {
     MinTokensPerSec?: number;
 }
 
+/**
+ * Records sampled per table during discovery, by default.
+ *
+ * Deliberately equal to the classifier's significance floor
+ * ({@link PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE}): sampling exists to answer three questions, and 50 rows
+ * fully answers two of them. Raising it only sharpens the third (largest observed string), which has
+ * its own safety nets, so the extra rows are paid on every object of every connection to improve one
+ * answer in three. Per-connection `discoveryMaxRecords` raises it where that trade is worth making.
+ */
+const DEFAULT_DISCOVERY_SAMPLE_TARGET = PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
+
 export abstract class BaseIntegrationConnector {
 
     // ─── Capability Getters ──────────────────────────────────────────
@@ -522,8 +536,25 @@ export abstract class BaseIntegrationConnector {
      * Parse a Retry-After / rate-limit signal out of a failed response or thrown error into
      * milliseconds so the engine can back off precisely. Return `undefined` when the error is not a
      * throttle (or carries no hint).
+     *
+     * The default reads the standard `Retry-After` header (RFC 9110 §10.2.3 — the header a 429 and a
+     * 503 carry), in both its delay-seconds and HTTP-date forms, from wherever the HTTP client put
+     * it. That is not a heuristic and not vendor-specific: there is one correct reading of it, and
+     * every HTTP connector benefits from having it read.
+     *
+     * This used to return `undefined` unconditionally, and no connector in this repo overrode it —
+     * so the engine's limiter never learned a delay any vendor had actually stated, and discovery's
+     * throttle check (which asked this and only this) concluded "not a throttle" for every 429 MJ
+     * ever received.
+     *
+     * Override when the vendor signals its delay somewhere non-standard — in the response body, or
+     * in prose (PheedLoop's "Expected available in N second"). Deliberately not parsed here:
+     * guessing a duration out of message text risks inventing one, and a wrong Retry-After is worse
+     * than none, since it freezes the token bucket for a made-up interval.
      */
-    public ExtractRetryAfterMs(_error: unknown): number | undefined { return undefined; }
+    public ExtractRetryAfterMs(error: unknown): number | undefined {
+        return ExtractRetryAfterFromError(error);
+    }
 
     /**
      * Highest SAFE per-layer concurrency the source tolerates (plan.md §7 peak parallelization) — the
@@ -719,7 +750,18 @@ export abstract class BaseIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity,
         objectName: string,
         contextUser: UserInfo,
-        opts: { TimeBudgetMs?: number; BatchSize?: number; MaxRecords?: number } = {}
+        opts: {
+            TimeBudgetMs?: number;
+            BatchSize?: number;
+            MaxRecords?: number;
+            /**
+             * Called when streaming fails and this method degrades to single-sample `DiscoverFields`.
+             * The degradation is silent otherwise, and it is not a small one: the fallback returns
+             * the catalog's own description, which carries no observed widths — so the caller
+             * believes it sampled, and the object keeps whatever width the catalog guessed.
+             */
+            OnFallback?: (err: unknown) => void;
+        } = {}
     ): Promise<ExternalFieldSchema[]> {
         // Discovery budgets are operator-tunable via env (time- or record-count-based — either bounds it);
         // explicit opts win, then env, then the sensible defaults. The record cap usually hits before time.
@@ -751,7 +793,20 @@ export abstract class BaseIntegrationConnector {
         // discovery budget an operator actually wants to lower for a slow source the ONLY one that needed
         // an app setting and a process restart. Same precedence as the others now:
         // explicit opts > per-connection Configuration > operator env > default.
-        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
+        // The DEFAULT is the per-table sample target: ~50 records, the same figure the value-statistic
+        // classifier treats as significant (PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE). It was 500, which is
+        // 10x what any of the three questions sampling answers actually needs:
+        //   - a significant primary key — 50 rows IS the significance floor; more changes no verdict,
+        //   - custom-discoverable columns — a column present in the data shows up almost immediately,
+        //   - the largest string — the only one that genuinely benefits from more rows.
+        // That last one is why this is a KNOB and not a constant. Width has real safety nets (the
+        // bucket pads to 2x the observed max, the overlay only ever GROWS a width, and a value that
+        // overflows at sync time is recorded as a widening candidate rather than lost), so paying 10x
+        // the discovery time on every object by default to sharpen one of three answers is the wrong
+        // trade. A connection that needs deeper width fidelity raises `discoveryMaxRecords`.
+        //
+        // Precedence unchanged: explicit opts > per-connection Configuration > operator env > default.
+        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', DEFAULT_DISCOVERY_SAMPLE_TARGET);
         // Announce intent AND cost. Until now only the FAILURE branch below said anything, so a
         // healthy-but-slow object, an object grinding out its whole time budget, and one that will
         // never return were indistinguishable from outside the process. The watchdog names whatever
@@ -787,6 +842,11 @@ export abstract class BaseIntegrationConnector {
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.warn(`[DiscoverFieldsViaFetch] <- FAILED "${objectName}" after ${Date.now() - startedMs}ms (${msg}); falling back to single-sample DiscoverFields.`);
+            // Tell the caller BEFORE returning: from the outside a fallback is indistinguishable
+            // from a successful sample, so a discovery that learned nothing about real widths
+            // reports as a discovery that did. A throwing notifier must not turn a degraded
+            // discovery into a failed one.
+            try { opts.OnFallback?.(err); } catch { /* a notifier is never allowed to break discovery */ }
             return this.DiscoverFields(companyIntegration, objectName, contextUser);
         } finally {
             watchdog.End(watchKey);
@@ -1079,7 +1139,29 @@ export abstract class BaseIntegrationConnector {
                 // U11 — determinate discovery progress: a skipped object still advances the bar.
                 try { options?.OnProgress?.(succeeded + skipped, total); } catch { /* progress must never break introspection */ }
                 // A real rate-limit failure cuts the in-flight cap (AIMD); a plain describe error does not.
-                return { ok: false, throttled: this.ExtractRetryAfterMs(err) !== undefined };
+                //
+                // `ExtractRetryAfterMs` alone is not enough to make that distinction. Its base
+                // implementation returns `undefined`, and NO connector in this repo overrides it — so
+                // asking only that question answered "not a throttle" for every connector MJ ships, and
+                // discovery kept all 8 describes in flight straight through a vendor's 429s. That is the
+                // shape of a brittle discovery: the source says slow down, the fan-out doesn't, more
+                // objects fail, and the enumeration comes back short for a reason that was transient.
+                //
+                // `ClassifyError` reads the error's own text ('rate limit' / 'throttl' / '429'), which
+                // costs a connector nothing to benefit from — the same classifier the sync fetch path at
+                // IntegrationEngine already uses for exactly this decision. Keep `ExtractRetryAfterMs`
+                // first: a connector that DOES parse the vendor's header gives a precise signal, and this
+                // is a fallback under it, not a replacement for it.
+                const retryAfterMs = this.ExtractRetryAfterMs(err);
+                const throttled = retryAfterMs !== undefined || ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED';
+                if (throttled) {
+                    console.log(JSON.stringify({
+                        ts: new Date().toISOString(), event: 'introspect.object.throttled',
+                        objectName: obj.Name, total, retryAfterMs: retryAfterMs ?? null,
+                        source: retryAfterMs !== undefined ? 'connector' : 'classifier',
+                    }));
+                }
+                return { ok: false, throttled };
             }
             console.log(JSON.stringify({
                 ts: new Date().toISOString(), event: 'introspect.object.complete',

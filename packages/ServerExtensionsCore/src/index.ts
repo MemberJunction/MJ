@@ -8,8 +8,11 @@
  *
  * This package defines the plugin architecture that allows any package to register
  * Express routes and lifecycle hooks on a running MJServer instance. Extensions
- * are discovered via MJ's standard `@RegisterClass` + `ClassFactory` pattern and
- * configured in `mj.config.cjs`.
+ * are discovered via MJ's standard `@RegisterClass` + `ClassFactory` pattern.
+ * Open App packages listed in host `dynamicPackages.server[]` declare their
+ * extensions via the `MJ_SERVER_EXTENSIONS` export (or `package.json`
+ * `memberjunction.serverExtensions`); the host `mj.config.cjs` `serverExtensions[]`
+ * overlays those by `DriverClass` and remains the place host-only extensions live.
  *
  * ## Quick Start
  *
@@ -34,3 +37,19 @@ export {
     ExtensionInitResult,
     ExtensionHealthResult,
 } from './types.js';
+export {
+    MJ_SERVER_EXTENSIONS_EXPORT,
+    MJ_SERVER_EXTENSIONS_PACKAGE_JSON_PATH,
+    MAX_SERVER_EXTENSION_ROOT_PATH_LENGTH,
+    RESERVED_SERVER_EXTENSION_ROOTS,
+    RESERVED_SERVER_EXTENSION_ROOT_PREFIXES,
+    describeServerExtensionMount,
+    extractServerExtensionsFromModule,
+    extractServerExtensionsFromPackageJson,
+    mergeServerExtensionConfigs,
+    normalizeServerExtensionConfigs,
+    prepareServerExtensionConfigs,
+    serverExtensionRootsOverlap,
+    validateServerExtensionRootPath,
+} from './collect.js';
+export type { NormalizeServerExtensionOptions, PrepareServerExtensionOptions } from './collect.js';
