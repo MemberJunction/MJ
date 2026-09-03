@@ -1,6 +1,6 @@
 import {
-  ChangeDetectorRef, Component, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output,
-  ViewChild, inject
+  ChangeDetectorRef, Component, ElementRef, EventEmitter, HostBinding, HostListener, Input,
+  OnDestroy, OnInit, Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
@@ -77,6 +77,23 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Input() BoardTitle = 'Whiteboard';
   /** Persistence chip text (e.g. "Saved to session · v14"). */
   @Input() SavedLabel = 'Saved to session';
+  /**
+   * Opt back in to DOCUMENT-WIDE keyboard shortcuts.
+   *
+   * The host binds eleven bare single-character tool shortcuts (v h p r s t m w i c e). While
+   * those listened on `document` unconditionally they fired wherever the user was on the page,
+   * which fails WCAG 2.1.4 (Character Key Shortcuts): a speech-input user saying an ordinary
+   * word, or anyone typing in a non-input control elsewhere, silently switched the board tool.
+   * They are now scoped to focus being inside this host, which satisfies the criterion's
+   * "active only on focus" branch.
+   *
+   * Scoping covers the host's ENTIRE keydown handler, not only the letters: undo/redo
+   * (Cmd/Ctrl+Z, +Y), Escape and Delete/Backspace are focus-gated as well.
+   *
+   * Set `true` only for a surface where the whiteboard is the entire page AND the 2.1.4
+   * exposure has been accepted — it is an accessibility regression, not a convenience flag.
+   */
+  @Input() EnableGlobalShortcuts = false;
 
   /** Debounced (750 ms), coalesced scene-delta JSON — the live perception feed. */
   @Output() SceneDelta = new EventEmitter<string>();
@@ -380,8 +397,48 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
 
   // ────────────────────────────────────────────── keyboard shortcuts
 
+  /**
+   * The board is made focusable so its shortcuts have a focus scope to be bound to. `-1`, not
+   * `0`: the canvas has no keyboard interaction model yet (see the whiteboard keyboard-
+   * operability work), so adding a real Tab stop would put a stop in the page that a keyboard
+   * user can reach and do nothing with. Click focuses it; that is the whole contract today.
+   */
+  @HostBinding('attr.tabindex') readonly HostTabIndex = '-1';
+
+  private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
+
+  /**
+   * Clicking the board takes focus, so the shortcuts below apply. The browser would usually do
+   * this on its own by focusing the nearest focusable ancestor, but the board's pointer
+   * pipeline is elaborate enough (drag, marquee, handles, transient shapes) that relying on
+   * that default is fragile — one `preventDefault()` added later would silently kill every
+   * shortcut. This makes it explicit.
+   */
+  @HostListener('pointerdown')
+  public OnHostPointerDown(): void {
+    if (!this.hasFocusWithin()) {
+      this.host.nativeElement.focus({ preventScroll: true });
+    }
+  }
+
+  /** Whether focus currently sits on, or inside, this whiteboard host. */
+  private hasFocusWithin(): boolean {
+    const el = this.host.nativeElement;
+    const active = document.activeElement;
+    return !!active && (active === el || el.contains(active));
+  }
+
   @HostListener('document:keydown', ['$event'])
   public OnKeydown(event: KeyboardEvent): void {
+    // WCAG 2.1.4: only live while focus is on the board. NOTE this gates the WHOLE handler,
+    // not just the single-character tool keys that 2.1.4 is about — undo/redo (Cmd/Ctrl+Z,
+    // +Y), Escape and Delete/Backspace are scoped too. That is deliberate: a board that
+    // swallows the document's Cmd+Z from anywhere on the page is its own bug, and "the board
+    // responds to keys when you are on the board" is the only model that stays predictable.
+    // See {@link EnableGlobalShortcuts} for the (discouraged) opt-out.
+    if (!this.EnableGlobalShortcuts && !this.hasFocusWithin()) {
+      return;
+    }
     const target = event.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
       return;

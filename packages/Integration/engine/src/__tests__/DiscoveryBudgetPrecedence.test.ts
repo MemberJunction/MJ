@@ -27,6 +27,7 @@ import type {
     FetchBatchResult,
 } from '../BaseIntegrationConnector.js';
 import type { StreamDiscoveryOptions, PkPickOptions } from '../StreamingDiscovery.js';
+import { PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE } from '../StreamingDiscovery.js';
 
 /** The three budgets as `DiscoverFieldsViaFetch` resolved them for a given call. */
 type ResolvedBudgets = { BatchSize: number; MaxRecords: number; TimeBudgetMs: number | undefined };
@@ -81,8 +82,20 @@ function connectionWithConfiguration(configuration: string | null): MJCompanyInt
 
 const NO_USER = {} as unknown as UserInfo;   // passed straight through to the overridden stream
 
-/** Engine defaults, asserted here so a silent change to one shows up as a test failure. */
-const DEFAULTS = { BatchSize: 500, MaxRecords: 500, TimeBudgetMs: 5 * 60 * 1000 } as const;
+/**
+ * Engine defaults, asserted here so a silent change to one shows up as a test failure.
+ *
+ * MaxRecords is the per-table sample TARGET and is deliberately the classifier's significance floor,
+ * not a round number: 50 rows fully answers two of the three questions sampling asks (significant
+ * primary key, custom-discoverable columns) and only the third (largest observed string) benefits
+ * from more — and that one has its own safety nets. Sourced from the constant rather than restated,
+ * so the two cannot drift apart.
+ */
+const DEFAULTS = {
+    BatchSize: 500,
+    MaxRecords: PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE,
+    TimeBudgetMs: 5 * 60 * 1000,
+} as const;
 
 const ENV_KEYS = [
     'MJ_INTEGRATION_DISCOVERY_TIME_BUDGET_MS',
@@ -120,7 +133,7 @@ describe('BaseIntegrationConnector.DiscoverFieldsViaFetch — discovery budget p
     });
 
     it('reads ALL THREE budgets from per-connection Configuration', async () => {
-        // maxRecords is the one that was missing its read: before the fix this came back as 500.
+        // maxRecords is the one that was missing its read: before that fix it ignored Configuration entirely.
         const budgets = await resolve(JSON.stringify({
             discoveryTimeBudgetMs: 90_000,
             discoveryBatchSize: 25,

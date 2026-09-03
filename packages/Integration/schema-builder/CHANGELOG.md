@@ -1,5 +1,87 @@
 # @memberjunction/integration-schema-builder
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [323df0f]
+- Updated dependencies [405c035]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [1940a4d]
+- Updated dependencies [653c51d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [79afbff]
+- Updated dependencies [e3a1425]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [3014248]
+- Updated dependencies [64915b9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [5c1d762]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [4f20e10]
+- Updated dependencies [1f66f31]
+  - @memberjunction/integration-engine@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/schema-engine@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 29187f8: An explicit MAX width (`-1`) survives discovery instead of being silently narrowed.
+
+  `-1` is the unbounded convention both dialects already speak — `sqlServerDialect` renders `len === -1` as `NVARCHAR(MAX)` and `postgresqlDialect` as `TEXT`. So it is the WIDEST width available, but two places ranked it as the narrowest:
+  - `decideLengthOverlay` compared numerically, so `decideLengthOverlay(-1, 4000)` returned `4000` — any sampled width beat MAX. An operator who widened a column to unbounded because real values exceed every bounded width had it narrowed again on the next discovery.
+  - `TypeMapper` routed `-1` through the `string` modality, where `resolveStringType`'s `maxLength > 0` test is false and the fallback is `NVARCHAR(255)` — the narrowest possible column for a field explicitly asked to be the widest.
+
+  The consequence is worse than truncation: records too long for the re-narrowed column are **skipped whole**, so the data simply stops arriving with no error on the row.
+
+  `decideLengthOverlay` now treats `-1` as the widest on both sides — a persisted MAX is never narrowed, and a source that reports unbounded upgrades a finite persisted width, consistent with the existing grow-only rule. `TypeMapper` resolves an unbounded width through the `text` modality, which each dialect already maps to its own unbounded type. A primary key is clamped to the dialect's key ceiling instead, since MAX is not indexable — a special case rather than a comparison, because `Math.min` would return `-1` here.
+
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/schema-engine@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

@@ -13,6 +13,7 @@ Key capabilities:
 - **Configurable field mappings** -- JSON-based parameter configuration maps Apollo.io fields to your custom entity fields
 - **Rate limit handling** -- automatic retry with intelligent backoff for both per-minute and hourly Apollo.io rate limits
 - **Batch processing** -- concurrent group processing with configurable batch sizes and pagination for large datasets
+- **List management, search and prospecting** -- seven further actions that read and create Apollo lists (labels), page through a list's members, search Apollo's people database for net-new prospects, and move records between lists without destroying their other memberships. See [List management, search and prospecting](#list-management-search-and-prospecting)
 
 For general Actions framework architecture and design philosophy, see the [parent Actions README](../README.md) and [Actions CLAUDE.md](../CLAUDE.md).
 
@@ -321,6 +322,84 @@ const result = await engine.RunAction({
     ContextUser: contextUser
 });
 ```
+
+## List management, search and prospecting
+
+Seven actions cover the other half of Apollo: which records are on which list, and moving them between lists. They are the outbound-campaign surface — build a list, drain it through a sequence of stages, and see what is where.
+
+These talk to a **different Apollo base path** from enrichment: `api.apollo.io/api/v1` rather than `api.apollo.io/v1`. The paths are not interchangeable; the same path under the wrong prefix returns 404. Both are declared side by side in `src/config.ts`.
+
+| Action | Purpose | Key required |
+|---|---|---|
+| `ApolloGetListsAction` | Every label with its kind (`accounts`/`contacts`) and cached member count. Run this first — every other action addresses lists by exact name | MASTER |
+| `ApolloCreateListAction` | Create a list, idempotently. A same-named label is returned as-is with `AlreadyExisted: true` | MASTER |
+| `ApolloGetListAccountsAction` | One page of a list's accounts, with each one's current label names | MASTER |
+| `ApolloGetListContactsAction` | One page of a list's contacts, same shape | MASTER |
+| `ApolloSearchPeopleAction` | Search Apollo's people database by organization, title and seniority. At least one filter is required | scoped is fine |
+| `ApolloMoveListAccountsAction` | Move accounts between lists, preserving every other membership | MASTER |
+| `ApolloMoveListContactsAction` | The same for contacts | MASTER |
+
+### The five Apollo behaviours these encode
+
+These are the load-bearing part. They are documented in full on `src/generic/apollo-lists.types.ts` and referenced by number throughout the client.
+
+1. **A PATCH replaces the whole `label_names` array.** There is no add-one-label call, so a move is *two* writes, each carrying the complete intended set: first `current ∪ {toList}`, then `(current ∪ {toList}) \ {fromList}`. Writing a bare `['Warm']` would silently delete every other list the record was on — and nothing in the response would say so. This is why the move actions re-read the source list for current labels and only accept ids from the caller, never labels.
+2. **Roughly 15–17% of removes return success without applying.** Removes are therefore verified by re-reading the destination list, and a record still carrying the source label is reported as `possiblyStuck` — never auto-retried, because an immediate retry flakes the same way. The next page-1 drain sees it carrying both labels and finishes the job. A possibly-stuck record is **not** a failure: the write succeeded and Apollo did not honour it.
+3. **A list drain always reads page 1.** Removing records shifts every later page, so advancing to page 2 skips records. Paging therefore defaults to page 1 rather than to "wherever you left off".
+4. **Label reads and every write need a MASTER API key.** A scoped key authenticates fine and then 403s, which is indistinguishable from a wrong key — so the client rewrites that 403 into a message naming the requirement.
+5. **Labels are read as `label_ids` but written as `label_names`.** The client fetches the label list once per instance and resolves ids to names on every read. An id with no matching label is dropped rather than passed through, since a raw id inside a `label_names` write would create a label named after a hex string.
+
+### Credentials
+
+Two paths, in order:
+
+1. A `CompanyID` param → that company's active `Apollo` **MJ: Company Integrations** row → its `CredentialID` → the `apiKey` inside **MJ: Credentials** `Values`. This is the multi-tenant path.
+2. `APOLLO_API_KEY` from the environment, which is what the enrichment actions have always used. Single-tenant deployments keep working with no credential rows.
+
+Every action reports which path supplied its key as a `KeySource` output.
+
+`CompanyIntegration.APIKey` is deliberately **not** read. That column is not a decrypt-on-read field, so a key written through metadata sync comes back as the literal ciphertext string `$ENC$…`; sending that to Apollo produces a 401 that looks exactly like a wrong key. `MJ: Credentials` is the field that decrypts, so it is the only one used. A credential that exists but whose `Values` will not parse fails with `CONFIGURATION_ERROR` rather than falling back to the environment — a broken credential should not silently borrow another workspace's key.
+
+### A typical drain
+
+```typescript
+// 1. See the real label names.
+await engine.RunAction({ Action: getLists, Params: [], ContextUser: contextUser });
+
+// 2. Read page 1 of the source list — this is where current label names come from.
+const page = await engine.RunAction({
+    Action: getListAccounts,
+    Params: [{ Name: 'ListName', Value: 'Cold Outreach', Type: 'Input' }],
+    ContextUser: contextUser
+});
+
+// 3. Move by id. The action re-reads page 1 itself, so the labels it writes are
+//    never the ones you read above going stale in between.
+await engine.RunAction({
+    Action: moveListAccounts,
+    Params: [
+        { Name: 'AccountIDs', Value: ['5f2a…', '5f2b…'], Type: 'Input' },
+        { Name: 'FromList', Value: 'Cold Outreach', Type: 'Input' },
+        { Name: 'ToList', Value: 'Engaged', Type: 'Input' }
+    ],
+    ContextUser: contextUser
+});
+```
+
+Every list param (`AccountIDs`, `Titles`, `Seniorities`, …) accepts a real array, a JSON array string, or a comma-separated string, because these actions get called from an agent input mapping, from an LLM writing params, and from a human typing in a UI. Genuinely malformed input still fails loudly rather than becoming an empty filter — on a people search that is the difference between a scoped query and an unscoped firehose.
+
+### Additional endpoints
+
+| Endpoint | HTTP Method | Purpose |
+|---|---|---|
+| `/labels` | GET / POST | List and create labels (MASTER) |
+| `/accounts/search` | POST | Saved accounts, filtered by `account_label_ids` |
+| `/contacts/search` | POST | Saved contacts, filtered by `contact_label_ids` |
+| `/mixed_people/api_search` | POST | Prospecting people search — no emails or phones by design |
+| `/accounts/{id}` | PATCH | Replace one account's label set (MASTER) |
+| `/contacts/{id}` | PATCH | Replace one contact's label set (MASTER) |
+
+There is no delete surface. The only writes are label-array replacements and label creation.
 
 ## API Reference
 

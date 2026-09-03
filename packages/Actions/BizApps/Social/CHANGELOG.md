@@ -1,5 +1,86 @@
 # @memberjunction/actions-bizapps-social
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 6fd0a73: Buffer: publish as another identity, pass per-service metadata, and fix the createPost assets shape.
+
+  **`CredentialID`** is now accepted by every Buffer action. When given, the calls are made with the `accessToken` from that `MJ: Credentials` row instead of the CompanyIntegration's own token — which is what publishing to an employee's personal channel, or reading the queue of the person who owns it, requires. `CompanyIntegrationID` stays required: it is what identifies which Buffer integration this is, and the organization and channel context still come from it. A `CredentialID` that was supplied but cannot be read is **fatal** (`INVALID_CREDENTIAL`), never a silent fallback to the tenant token — falling back would publish under the wrong identity with nothing for the caller to notice. The token itself never travels through action params; only its id does.
+
+  **`PlatformMetadata`** on `Create Post (Buffer)` passes Buffer's per-service extras through to the mutation — `{ "linkedin": { "annotations": [...] } }` is how a LinkedIn @mention survives the trip, and without it the post publishes as plain text with the mention spelled out. It is accepted as an object or as a JSON string, since both forms arrive in practice. It is passed through untouched rather than modelled, because its shape belongs to whichever network the channel points at and Buffer extends it independently of this package. Unparseable input **fails** rather than being dropped, for the same reason the credential failure is fatal: quietly posting without the metadata publishes something other than what the caller composed.
+
+  **Fix — the createPost assets shape.** Buffer moved createPost's input to `[AssetInput!]` (`[{ image: { url } }]`, one entry per attachment naming its kind) on 2026-05-25 and rejects the older `{ images: [...] }` object, which is what this package was sending. Any post with `ImageURLs`, `VideoURLs` or `MediaLink` was therefore being rejected by Buffer. Reads are unaffected — Buffer still _returns_ the object form — so the input shape is now its own type, `BufferAssetInput`, alongside the unchanged `BufferAssets` response type.
+
+  This is a breaking change for any caller passing a hand-built `assets` object to the protected `createBufferPost`; the action's own `ImageURLs`/`VideoURLs`/`MediaLink` params are unchanged.
+
+  27 tests cover the credential override, the metadata passthrough and the asset shape.
+
+  `minor` because this branch now ships `metadata/**` — the `MJ: Actions` / `MJ: Action Params` / `MJ: Action Result Codes` records these classes need to be invocable. Metadata becomes a migration at release via the build engineer's `mj sync push`, which is exactly what the `minor` trigger tracks. Without the metadata this would be `patch`.
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/network-utils@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/credentials@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 7857d8e: Add `@memberjunction/network-utils` and remove `axios` from the repository.
+
+  The SSRF guard added for the web/HTTP actions was Actions-specific but the concern is not, so it
+  moves into a new dependency-free, Node-only package (`node:dns` + `node:net` only) that any
+  server-side package can depend on: `AssertPublicUrl`, `SafeFetch`, `IsBlockedIPAddress`, `SSRFError`.
+
+  The same package ships `HttpClient` / `HttpRequest` — a native-`fetch` HTTP client that replaces
+  `axios` across all 11 packages that used it. Consolidating on one client removes the third-party
+  dependency and puts the SSRF guard one option flag (`ValidateUrl`) away from every outbound call
+  site, which was impossible when each package reached for `axios` directly.
+
+  Also fixes an SSRF sink the original pass missed: the `API Rate Limiter` action takes a
+  caller-controlled URL and returns the response body, and is now guarded.
+
+  Public exports use `PascalCase`, per repo convention.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/network-utils@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

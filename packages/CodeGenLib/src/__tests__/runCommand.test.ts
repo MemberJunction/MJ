@@ -27,8 +27,24 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
     resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
-import { RunCommandsBase } from '../Misc/runCommand';
+import { RunCommandsBase, formatCommandFailureDetail } from '../Misc/runCommand';
 import type { CommandExecutionResult } from '../Misc/runCommand';
+
+describe('formatCommandFailureDetail', () => {
+    it('keeps the last lines of a long diagnostic', () => {
+        const lines = Array.from({ length: 80 }, (_, i) => `line ${i + 1}`);
+        const detail = formatCommandFailureDetail({
+            output: lines.join('\n'),
+            error: 'Process exited with code 2',
+            success: false,
+            elapsedTime: 10,
+        }, 5);
+        expect(detail).toMatch(/Process exited with code 2/);
+        expect(detail).toMatch(/line 80/);
+        expect(detail).not.toMatch(/line 1\b/);
+        expect(detail.startsWith('Process exited with code 2')).toBe(true);
+    });
+});
 
 describe('CommandExecutionResult type', () => {
     it('should represent a successful command', () => {
@@ -97,6 +113,45 @@ describe('RunCommandsBase', () => {
     describe('runCommand', () => {
         it('should be a function', () => {
             expect(typeof runner.runCommand).toBe('function');
+        });
+
+        it('treats a zero exit as success even when stderr contains the word ERROR', async () => {
+            // runCommand concatenates command+args and spawn()s with shell:true,
+            // so quoting inside `args` is not preserved. Put the whole line in
+            // `command` — that is how AFTER entries in mj.config.cjs are invoked.
+            const result = await runner.runCommand({
+                command: 'printf "%s\\n" "error TS0000 is a word in the log" >&2',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 5000,
+            });
+            expect(result.success).toBe(true);
+            expect(result.output).toMatch(/error TS0000/i);
+        });
+
+        it('resolves a non-zero exit as success:false and keeps captured output', async () => {
+            const result = await runner.runCommand({
+                command: 'printf "%s\\n" "error TS2307: cannot find module" >&2; exit 2',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 5000,
+            });
+            expect(result.success).toBe(false);
+            expect(result.error).toMatch(/exited with code 2/i);
+            expect(result.output).toMatch(/error TS2307/i);
+            expect(formatCommandFailureDetail(result)).toMatch(/error TS2307/i);
+        });
+
+        it('keeps running later commands after a non-zero exit', async () => {
+            const results = await runner.runCommands([
+                { command: 'false', args: [], workingDirectory: '/tmp', when: 'test', timeout: 5000 },
+                { command: 'true', args: [], workingDirectory: '/tmp', when: 'test', timeout: 5000 },
+            ]);
+            expect(results).toHaveLength(2);
+            expect(results[0].success).toBe(false);
+            expect(results[1].success).toBe(true);
         });
 
         it('should reject for invalid commands', async () => {

@@ -25,13 +25,13 @@
 import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
-import type { InstallerEventEmitter, DiagnosticEvent } from '../events/InstallerEvents.js';
+import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
 import type { PartialInstallConfig } from '../models/InstallConfig.js';
-import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
 import { Diagnostics, type DiagnosticCheck, type EnvironmentInfo } from '../models/Diagnostics.js';
+import { resolvePackageManager, type PackageManagerType } from '../models/PackageManager.js';
 
 /** Hard minimum Node.js major version. Update this when MJ raises the floor. */
 const MIN_NODE_VERSION = 22;
@@ -108,7 +108,8 @@ export class PreflightPhase {
     const hardFailures: string[] = [];
 
     // Gather environment info
-    const environment = await this.gatherEnvironment();
+    const packageManager = resolvePackageManager(context.Config.PackageManager);
+    const environment = await this.gatherEnvironment(packageManager, context.TargetDir);
     const diagnostics = new Diagnostics(environment);
     const detectedOS = this.detectOS();
 
@@ -119,11 +120,11 @@ export class PreflightPhase {
     this.emitDiagnostic(emitter, nodeCheck);
     if (nodeCheck.Status === 'fail') hardFailures.push(nodeCheck.Message);
 
-    emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking npm...' });
-    const npmCheck = await this.checkNpm(environment.NpmVersion);
-    diagnostics.AddCheck(npmCheck);
-    this.emitDiagnostic(emitter, npmCheck);
-    if (npmCheck.Status === 'fail') hardFailures.push(npmCheck.Message);
+    emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: `Checking ${packageManager}...` });
+    const pmCheck = this.checkPackageManager(packageManager, environment.PackageManagerVersion ?? 'not found');
+    diagnostics.AddCheck(pmCheck);
+    this.emitDiagnostic(emitter, pmCheck);
+    if (pmCheck.Status === 'fail') hardFailures.push(pmCheck.Message);
 
     emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking disk space...' });
     const diskCheck = await this.checkDiskSpace(context.TargetDir);
@@ -208,22 +209,35 @@ export class PreflightPhase {
   // Individual checks
   // ---------------------------------------------------------------------------
 
-  private async gatherEnvironment(): Promise<EnvironmentInfo> {
-    let nodeVersion = process.version;
-    let npmVersion = 'unknown';
-
-    try {
-      npmVersion = await this.processRunner.RunSimple('npm', ['--version']);
-    } catch {
-      npmVersion = 'not found';
-    }
+  private async gatherEnvironment(packageManager: PackageManagerType, targetDir: string): Promise<EnvironmentInfo> {
+    const nodeVersion = process.version;
+    // Probe from the target directory: corepack shims and pnpm 10's
+    // manage-package-manager-versions resolve the nearest packageManager pin
+    // by cwd, so this reports the version an existing install actually uses
+    // (for a fresh, still-empty directory it falls back to the PATH default —
+    // the dependencies phase logs the effective version again after pinning).
+    const npmVersion = await this.probeVersion('npm', targetDir);
+    const packageManagerVersion = packageManager === 'npm'
+      ? npmVersion
+      : await this.probeVersion(packageManager, targetDir);
 
     return {
       OS: `${os.platform()} ${os.release()} (${os.arch()})`,
       NodeVersion: nodeVersion,
       NpmVersion: npmVersion,
       Architecture: os.arch(),
+      PackageManager: packageManager,
+      PackageManagerVersion: packageManagerVersion,
     };
+  }
+
+  /** Run `<binary> --version` from `cwd`, returning `"not found"` when the binary is missing. */
+  private async probeVersion(binary: string, cwd: string): Promise<string> {
+    try {
+      return await this.processRunner.RunSimple(binary, ['--version'], cwd);
+    } catch {
+      return 'not found';
+    }
   }
 
   private async checkNodeVersion(versionString: string): Promise<DiagnosticCheck> {
@@ -260,20 +274,30 @@ export class PreflightPhase {
     return null;
   }
 
-  private async checkNpm(npmVersion: string): Promise<DiagnosticCheck> {
-    if (npmVersion === 'not found') {
+  /**
+   * Verify the configured package manager is on PATH. This is a hard failure —
+   * there is deliberately no silent fallback to another package manager, so
+   * two installs of the same version always produce the same dependency tree.
+   */
+  private checkPackageManager(packageManager: PackageManagerType, version: string): DiagnosticCheck {
+    if (version === 'not found') {
+      const suggestedFix = packageManager === 'pnpm'
+        ? 'Enable pnpm with "corepack enable pnpm" (corepack ships with Node.js), or install it from https://pnpm.io/installation. ' +
+          'To install with npm instead, set PackageManager to "npm" in your install config.'
+        : 'npm is included with Node.js. Reinstall Node.js from https://nodejs.org';
+
       return {
-        Name: 'npm',
+        Name: 'Package manager',
         Status: 'fail',
-        Message: 'npm not found on PATH',
-        SuggestedFix: 'npm is included with Node.js. Reinstall Node.js from https://nodejs.org',
+        Message: `${packageManager} not found on PATH`,
+        SuggestedFix: suggestedFix,
       };
     }
 
     return {
-      Name: 'npm',
+      Name: 'Package manager',
       Status: 'pass',
-      Message: `npm ${npmVersion}`,
+      Message: `${packageManager} ${version}`,
     };
   }
 
@@ -508,8 +532,22 @@ export class PreflightPhase {
   }
 
   private async checkCodeGenArtifacts(targetDir: string, diagnostics: Diagnostics, emitter: InstallerEventEmitter): Promise<void> {
-    const genEntitiesPath = `${targetDir}/node_modules/mj_generatedentities`;
-    const exists = await this.fileSystem.DirectoryExists(genEntitiesPath);
+    // The root node_modules symlink is an npm-workspaces artifact; pnpm only
+    // creates it when the root manifest depends on the package. Accept any
+    // layout that proves the generated entities exist.
+    const candidates = [
+      `${targetDir}/node_modules/mj_generatedentities`,   // npm workspaces symlink
+      `${targetDir}/packages/GeneratedEntities`,          // distribution / monorepo package dir
+      `${targetDir}/GeneratedEntities`,                   // legacy ZIP layout
+    ];
+
+    let exists = false;
+    for (const candidate of candidates) {
+      if (await this.fileSystem.DirectoryExists(candidate)) {
+        exists = true;
+        break;
+      }
+    }
 
     const check: DiagnosticCheck = exists
       ? { Name: 'CodeGen artifacts', Status: 'pass', Message: 'mj_generatedentities found' }

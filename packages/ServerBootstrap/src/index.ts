@@ -15,8 +15,15 @@
  */
 
 import { serve, MJServerOptions } from '@memberjunction/server';
+import {
+  describeServerExtensionMount,
+  extractServerExtensionsFromModule,
+  extractServerExtensionsFromPackageJson,
+  type ServerExtensionConfig,
+} from '@memberjunction/server-extensions-core';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { importFromHost, isResolutionFailure } from './host-import.js';
+import { readFileSync } from 'node:fs';
+import { importFromHost, isResolutionFailure, resolvePackageJsonFromHost } from './host-import.js';
 
 /**
  * Configuration options for creating an MJ Server
@@ -136,21 +143,32 @@ interface DynamicServerPackage {
  * `packages/MJAPI/src/generated/generated.ts` does NOT regenerate the app's entities, so
  * the package is the only source of these resolvers.
  *
+ * It ALSO collects each package's server-extension declarations (`MJ_SERVER_EXTENSIONS`
+ * export, falling back to `package.json` `memberjunction.serverExtensions`) so `serve()`
+ * can mount Open App routes (webhooks, anonymous checkout, …) without the operator
+ * copying those blocks into the host `mj.config.cjs`. Host `serverExtensions[]` still
+ * overlays by DriverClass.
+ *
  * Mirrors the generated-package loader's robustness contract: no-op when the
  * section is absent, per-package try/catch, tolerate `ERR_MODULE_NOT_FOUND`
  * (e.g. before `npm install`), warn on anything else, and never crash boot.
  *
  * @param configResult - The loaded MemberJunction configuration
- * @returns absolute resolver-file paths to add to `serve()`'s resolver globs (empty when
- *          no Open App server packages are installed — the common case).
+ * @returns absolute resolver-file paths to add to `serve()`'s resolver globs, plus
+ *          server-extension configs discovered from those packages (empty when no
+ *          Open App server packages are installed — the common case).
  */
-async function loadDynamicAppPackages(configResult: { config: Record<string, unknown>; configFilePath?: string }): Promise<string[]> {
+async function loadDynamicAppPackages(configResult: { config: Record<string, unknown>; configFilePath?: string }): Promise<{
+  resolverPaths: string[];
+  serverExtensions: ServerExtensionConfig[];
+}> {
   const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicServerPackage[] } | undefined;
   const serverPackages = dynamicPackages?.server;
   const resolverPaths: string[] = [];
+  const serverExtensions: ServerExtensionConfig[] = [];
   if (!serverPackages || serverPackages.length === 0) {
     // No installed Open App server packages — the common case. Stay silent, no paths.
-    return resolverPaths;
+    return { resolverPaths, serverExtensions };
   }
 
   console.log('Loading Open App server packages...');
@@ -179,7 +197,42 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
           }
         }
       }
-      console.log(`  Loaded Open App server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}`);
+      // Server extensions: runtime export wins; package.json is the static fallback
+      // for packages that declare metadata without a named export. Isolated from the
+      // package-load try so a collect failure still leaves resolvers registered.
+      let extensions: ServerExtensionConfig[] = [];
+      try {
+        extensions = extractServerExtensionsFromModule(mod, {
+          source: pkgName,
+          onInvalid: (message) => console.warn(`  ${message}`),
+        });
+        if (extensions.length === 0) {
+          const pkgJsonPath = resolvePackageJsonFromHost(pkgName, configResult.configFilePath);
+          if (pkgJsonPath) {
+            const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as unknown;
+            extensions = extractServerExtensionsFromPackageJson(pkgJson, {
+              source: `${pkgName} package.json`,
+              onInvalid: (message) => console.warn(`  ${message}`),
+            });
+          }
+        }
+      } catch (collectError: unknown) {
+        console.warn(`  Error collecting serverExtensions from ${pkgName}:`, collectError);
+      }
+      if (extensions.length > 0) {
+        serverExtensions.push(...extensions);
+      }
+
+      console.log(
+        `  Loaded Open App server package: ${pkgName}` +
+          `${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}` +
+          `${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}` +
+          `${extensions.length > 0 ? ` (+${extensions.length} server extension${extensions.length === 1 ? '' : 's'})` : ''}`
+      );
+      for (const ext of extensions) {
+        // Inventory is the consent surface: these routes mount BEFORE auth.
+        console.log(`    ${describeServerExtensionMount(ext)}`);
+      }
     } catch (error: unknown) {
       // isResolutionFailure (not a bare code check) because ts-node's ESM shim throws
       // resolution failures with no code at all. The quoted-name guard keeps a missing
@@ -196,7 +249,7 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
   }
 
   console.log('');
-  return resolverPaths;
+  return { resolverPaths, serverExtensions };
 }
 
 /**
@@ -265,7 +318,8 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   // resolver paths are the app packages' generated resolver files, which must be globbed
   // into the schema below (loading the classes alone does NOT put their mutations/queries
   // in the GraphQL schema — type-graphql only includes resolvers passed to serve()).
-  const dynamicResolverPaths = await loadDynamicAppPackages(configResult);
+  const { resolverPaths: dynamicResolverPaths, serverExtensions: dynamicServerExtensions } =
+    await loadDynamicAppPackages(configResult);
 
   // Build resolver paths - auto-discover standard locations if not provided
   // This enables truly minimal MJAPI files without needing to specify paths
@@ -288,10 +342,12 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   // Build server options.
   // All extensibility (middleware, hooks, plugins, schema transformers) is now
   // handled by @RegisterClass(BaseServerMiddleware, key) classes discovered by serve().
-  const serverOptions: MJServerOptions = {
+  const serverOptions = {
     onBeforeServe: options.beforeStart,
     restApiOptions: options.restApiOptions,
-  };
+    // Discovered only — serve() overlays host mj.config.cjs serverExtensions[] by DriverClass.
+    serverExtensions: dynamicServerExtensions,
+  } as MJServerOptions;
 
   // Start the MJ Server
   // The serve() function from @memberjunction/server handles:

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/external-data-sources",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: External Data Sources — live, runtime-proxied read access to remote data systems (Snowflake, Oracle, MongoDB, external SQL Server / PostgreSQL / MySQL) via pluggable @RegisterClass drivers.",
   "type": "module",
   "main": "dist/index.js",
@@ -15,12 +15,12 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/credentials": "6.1.0-edge.3",
-    "@memberjunction/sql-parser": "6.1.0-edge.3",
-    "@memberjunction/sql-dialect": "6.1.0-edge.3"
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/credentials": "6.1.0-edge.5",
+    "@memberjunction/sql-parser": "6.1.0-edge.5",
+    "@memberjunction/sql-dialect": "6.1.0-edge.5"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
