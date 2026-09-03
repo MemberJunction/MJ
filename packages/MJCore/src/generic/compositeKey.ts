@@ -230,8 +230,10 @@ export class FieldValueCollection {
             const parts = concatenatedString.split(fieldDelimiter);
             const pkVals: KeyValuePair[] = [];
             for (let p of parts) {
+              // Everything after the first delimiter is the value, so a value that itself contains the
+              // delimiter ("Code|a|b") round-trips instead of being silently truncated to "a".
               const kv = p.split(valueDelimiter);
-              pkVals.push({ FieldName: kv[0], Value: kv[1] });
+              pkVals.push({ FieldName: kv[0], Value: kv.slice(1).join(valueDelimiter) });
             }
   
             this.KeyValuePairs = pkVals;  
@@ -255,8 +257,10 @@ export class FieldValueCollection {
      * The exact inverse of {@link CompositeKey.LoadFromURLSegment}. A single-field key serializes to
      * just its value — the shorthand `LoadFromURLSegment` maps back onto the entity's first primary
      * key — while a multi-field key serializes to the full `Field1|Value1||Field2|Value2` segment.
-     * A single value that itself contains the value delimiter also gets the full segment, so the
-     * reader can never mis-split it.
+     * A single value that itself contains the value delimiter also gets the full segment; the parsers
+     * (`SimpleLoadFromURLSegment`, `LoadFromConcatenatedString`) treat everything after the first
+     * delimiter as the value, so it round-trips rather than being truncated. A value containing the
+     * field delimiter (`||`) remains unrepresentable — a pre-existing limit of the format.
      *
      * This is the "compact" record-id form carried by search results, `MJ: List Details`,
      * `MJ: User Record Logs` and Explorer record URLs: for the overwhelmingly common single-column
@@ -315,8 +319,10 @@ export class FieldValueCollection {
             const parts = urlSegment.split(CompositeKey.DefaultFieldDelimiter);
             const pkVals: KeyValuePair[] = [];
             for (let p of parts) {
+              // Everything after the first '|' is the value, so a value that itself contains '|'
+              // ("Code|a|b") round-trips instead of being silently truncated to "a".
               const kv = p.split('|');
-              pkVals.push({ FieldName: kv[0], Value: kv[1] });
+              pkVals.push({ FieldName: kv[0], Value: kv.slice(1).join('|') });
             }
   
             this.KeyValuePairs = pkVals;  

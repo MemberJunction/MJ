@@ -657,7 +657,21 @@ describe('ToCompactURLSegment', () => {
 
   it('keeps the field prefix when a lone value itself contains the value delimiter', () => {
     // Bare "a|b" would be mis-read by the parser as field "a" with value "b".
-    expect(CompositeKey.FromKeyValuePair('Code', 'a|b').ToCompactURLSegment()).toBe('Code|a|b');
+    const key = CompositeKey.FromKeyValuePair('Code', 'a|b');
+    expect(key.ToCompactURLSegment()).toBe('Code|a|b');
+    // ...and the prefixed form must round-trip: a parser that kept only the second split piece would
+    // yield { Code: 'a' } — a VALID key with a truncated value, which Load() would silently satisfy
+    // with the wrong record. Both parsers rejoin the remainder, so the value comes back intact.
+    expect(CompositeKey.FromURLSegment(mockEntity('Code'), key.ToCompactURLSegment()).Equals(key)).toBe(true);
+    const viaConcatenated = new CompositeKey();
+    viaConcatenated.LoadFromConcatenatedString(key.ToConcatenatedString());
+    expect(viaConcatenated.Equals(key)).toBe(true);
+  });
+
+  it('preserves a multi-part value inside a composite segment too', () => {
+    const key = CompositeKey.FromKeyValuePairs([new KeyValuePair('Code', 'a|b'), new KeyValuePair('Seq', 2)]);
+    const parsed = CompositeKey.FromURLSegment(mockEntity('Code', 'Seq'), key.ToCompactURLSegment());
+    expect(parsed.KeyValuePairs).toEqual([{ FieldName: 'Code', Value: 'a|b' }, { FieldName: 'Seq', Value: '2' }]);
   });
 
   it('serializes a null single value as an empty string', () => {
