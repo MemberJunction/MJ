@@ -56,7 +56,7 @@ export class UserViewResolver extends MJUserViewResolverBase {
     const u = this.GetUserFromPayload(userPayload);
     const viewEntity = <MJUserViewEntityExtended>await p.GetEntityObject('MJ: User Views', u);
     await viewEntity.Load(ID);
-    viewEntity.UpdateWhereClause();
+    await viewEntity.UpdateWhereClause(true); // force regeneration regardless of dirty state — that is the whole point of this endpoint
 
     if (await viewEntity.Save()) {
       return viewEntity.GetAll();

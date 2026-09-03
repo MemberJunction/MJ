@@ -90,6 +90,7 @@ vi.mock('../generated/entity_subclasses', () => ({
         Fields: unknown[] = [];
         Set(_name: string, _value: unknown) { /* no-op */ }
         CheckPermissions() { return true; }
+        Save(_options?: unknown) { return Promise.resolve(true); }
 
         // Mock *Object accessors matching the CodeGen-generated pattern
         get GridStateObject() { return this.GridState ? JSON.parse(this.GridState) : null; }
@@ -1478,5 +1479,113 @@ describe('MJUserViewEntityExtended - UserCanView resource-type resolution', () =
         const view = makeView({ userID: 'owner-x', currentUserID: 'global-user', contextUserID: 'ctx-user' });
         expect(view.UserCanView).toBe(true);
         expect(engine.GetUserResourcePermissionLevel).toHaveBeenCalledWith('rt-user-views', 'view-1', { ID: 'ctx-user', Type: 'User' });
+    });
+});
+
+// ============================================================================
+// Save() / UpdateWhereClause() — WhereClause regeneration on new vs. existing records
+//
+// Regression: NewRecord() pre-assigns a UUID primary key and the first write to a fresh
+// field seeds its OldValue, so on a brand-new view the ID is populated AND nothing is
+// Dirty. Newness must be detected via IsSaved, otherwise neither the Smart Filter (AI)
+// nor the Traditional Filter (FilterState) WhereClause is ever generated on create.
+// ============================================================================
+
+describe('MJUserViewEntityExtended WhereClause regeneration', () => {
+    interface MockDirtyField { Name: string; Dirty: boolean }
+
+    class SmartFilterTestView extends MJUserViewEntityExtended {
+        public GenerateCalls: Array<{ prompt: string }> = [];
+        public GeneratedWhereClause = '[IsActive] = 1';
+        protected override get SmartFilterImplemented(): boolean {
+            return true;
+        }
+        public override async GenerateSmartFilterWhereClause(prompt: string): Promise<{ whereClause: string; userExplanation: string }> {
+            this.GenerateCalls.push({ prompt });
+            return { whereClause: this.GeneratedWhereClause, userExplanation: `explains: ${prompt}` };
+        }
+    }
+
+    function makeSmartView(init: {
+        isSaved: boolean;
+        smartEnabled: boolean;
+        prompt?: string | null;
+        promptDirty?: boolean;
+        existingSmartWhere?: string | null;
+        filterState?: string;
+    }): SmartFilterTestView {
+        const view = bare(SmartFilterTestView);
+        view.GenerateCalls = [];
+        const fields: MockDirtyField[] = [
+            { Name: 'FilterState', Dirty: false },
+            { Name: 'SmartFilterEnabled', Dirty: false },
+            { Name: 'SmartFilterPrompt', Dirty: init.promptDirty ?? false },
+        ];
+        const r = view as unknown as Record<string, unknown>;
+        r['ID'] = '0F8FAD5B-D9CB-469F-A165-70867728950E'; // always populated — NewRecord() assigns one
+        r['IsSaved'] = init.isSaved;
+        r['Fields'] = fields;
+        r['CustomWhereClause'] = false;
+        r['SmartFilterEnabled'] = init.smartEnabled;
+        r['SmartFilterPrompt'] = init.prompt ?? null;
+        r['SmartFilterWhereClause'] = init.existingSmartWhere ?? null;
+        r['SmartFilterExplanation'] = null;
+        r['WhereClause'] = '';
+        r['FilterState'] = init.filterState ?? JSON.stringify({ logic: 'and', filters: [] });
+        r['_ViewEntityInfo'] = makeMockEntityInfo([
+            { Name: 'Name', NeedsQuotes: true, TSType: 'String' },
+            { Name: 'IsActive', NeedsQuotes: false, TSType: 'Boolean' },
+        ]);
+        Object.defineProperty(view, 'UserCanEdit', { value: true, configurable: true });
+        return view;
+    }
+
+    it('Save() on a NEW record with a smart filter generates the AI WhereClause even though the ID is set and nothing is Dirty', async () => {
+        const view = makeSmartView({ isSaved: false, smartEnabled: true, prompt: 'Only active records' });
+        expect(await view.Save()).toBe(true);
+        expect(view.GenerateCalls).toEqual([{ prompt: 'Only active records' }]);
+        expect(view.SmartFilterWhereClause).toBe('[IsActive] = 1');
+        expect(view.WhereClause).toBe('[IsActive] = 1');
+        expect(view.SmartFilterExplanation).toBe('explains: Only active records');
+    });
+
+    it('Save() on a NEW record with a traditional filter generates the WhereClause from FilterState', async () => {
+        const fs = JSON.stringify({ logic: 'and', filters: [{ field: 'Name', operator: 'eq', value: 'Acme' }] });
+        const view = makeSmartView({ isSaved: false, smartEnabled: false, filterState: fs });
+        expect(await view.Save()).toBe(true);
+        expect(view.GenerateCalls).toEqual([]);
+        expect(view.WhereClause).toBe("([Name] = 'Acme')");
+    });
+
+    it('Save() on an EXISTING record with an unchanged prompt reuses the stored SmartFilterWhereClause without calling the AI', async () => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: '[IsActive] = 1' });
+        // Nothing filter-related is dirty, so Save() should not even enter UpdateWhereClause
+        expect(await view.Save()).toBe(true);
+        expect(view.GenerateCalls).toEqual([]);
+        // And a forced UpdateWhereClause() (no ignoreDirtyState) still reuses the stored clause
+        await view.UpdateWhereClause();
+        expect(view.GenerateCalls).toEqual([]);
+        expect(view.WhereClause).toBe('[IsActive] = 1');
+    });
+
+    it('UpdateWhereClause() on an EXISTING record whose SmartFilterWhereClause was never generated calls the AI', async () => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: null });
+        await view.UpdateWhereClause();
+        expect(view.GenerateCalls).toHaveLength(1);
+        expect(view.WhereClause).toBe('[IsActive] = 1');
+    });
+
+    it('Save() on an EXISTING record with a changed prompt regenerates via the AI', async () => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Inactive only', promptDirty: true, existingSmartWhere: '[IsActive] = 1' });
+        view.GeneratedWhereClause = '[IsActive] = 0';
+        expect(await view.Save()).toBe(true);
+        expect(view.GenerateCalls).toEqual([{ prompt: 'Inactive only' }]);
+        expect(view.WhereClause).toBe('[IsActive] = 0');
+    });
+
+    it('UpdateWhereClause(true) forces AI regeneration on an existing record', async () => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: '[IsActive] = 1' });
+        await view.UpdateWhereClause(true);
+        expect(view.GenerateCalls).toHaveLength(1);
     });
 });
