@@ -308,7 +308,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'e21860b9-6f4a-4908-9e3b-65634e1880a8',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            1,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 1,
             'ID',
             'ID',
             NULL,
@@ -371,7 +371,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '2f816d23-db75-44fe-b15f-fe23317e3f18',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            2,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 2,
             'Name',
             'Name',
             NULL,
@@ -434,7 +434,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'c5a86050-f091-42c0-8d44-cedd19d7e954',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            3,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 3,
             'Building',
             'Building',
             NULL,
@@ -497,7 +497,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'cf9fac6f-98dd-4882-a8cd-7452c0390cec',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            4,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 4,
             'Species',
             'Species',
             'Which species the unit accepts: Dog, Cat, or Any. Prevents a cat being assigned to a dog run. Allows Any because some units take either, which Animal.Species does not.',
@@ -560,7 +560,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '7860f7ba-72d5-4759-9a5c-224e1176ee6f',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            5,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 5,
             'Capacity',
             'Capacity',
             'How many animals this unit is designed to hold. Assignment rules compare live occupancy against this number, which is why it cannot be answered without a database read.',
@@ -623,7 +623,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '0fc4ba4e-6f2c-4ed8-99e3-2a45ca6be12c',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            6,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 6,
             'IsQuarantine',
             'Is Quarantine',
             'Marks the unit as quarantine space, used to keep new or sick intakes away from the adoptable population.',
@@ -686,7 +686,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'cfe52948-8b08-41f1-b34e-fc2dd72fc63e',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            7,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 7,
             'IsActive',
             'Is Active',
             NULL,
@@ -749,7 +749,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '38661252-7c52-45e9-a22c-ba33129bb9ef',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            8,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 8,
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -812,7 +812,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'd807069a-e7a4-4cd8-bb93-2331285f7098',
             'BADE4114-5159-4461-9AF5-8819623ABD0C', -- Entity: MJ: Housings
-            9,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BADE4114-5159-4461-9AF5-8819623ABD0C') + 9,
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -879,7 +879,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '3c9ea97f-d1f7-4cba-b037-f367e3520c70',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            16,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 16,
             'HousingID',
             'Housing ID',
             'The housing unit this animal is currently assigned to. Nullable because an animal is logged at intake, usually before anyone has placed it.',
@@ -1614,7 +1614,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '3fde852d-4f5f-424b-8e36-e64feb8c0781',
             '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
-            18,
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D') + 18,
             'Housing',
             'Housing',
             NULL,
