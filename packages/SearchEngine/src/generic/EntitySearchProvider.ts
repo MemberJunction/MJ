@@ -8,7 +8,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
@@ -291,7 +291,15 @@ export class EntitySearchProvider extends BaseSearchProvider {
         const totalSearchableFields = Math.max(searchFields.length, 1);
 
         return records.map((record) => {
-            const recordID = String(record.ID ?? '');
+            // Build the key from the entity's actual primary-key column(s) and emit it in compact
+            // CompositeKey form: the bare value for a single-column key (whatever it is called),
+            // "F1|v1||F2|v2" for a composite one. Reading `record.ID` yielded '' for any entity whose
+            // key isn't named ID, and SearchFusion drops empty RecordIDs — so this lane silently
+            // contributed nothing for those entities. RunView always returns the PK columns, even
+            // with an explicit Fields list, so the values are guaranteed present on the row.
+            const recordID = entityInfo
+                ? CompositeKey.FromEntityRecord(entityInfo, record).ToCompactURLSegment()
+                : String(record.ID ?? '');
             const title = this.extractTitle(record, entityInfo);
             const snippet = this.extractSnippet(record, entityInfo);
 
