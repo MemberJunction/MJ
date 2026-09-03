@@ -60,7 +60,7 @@ export interface CompositeFilterDescriptor {
 /**
  * Type guard to check if a filter is a composite (group) filter
  */
-export function isCompositeFilter(
+export function IsCompositeFilter(
   filter: FilterDescriptor | CompositeFilterDescriptor
 ): filter is CompositeFilterDescriptor {
   return 'logic' in filter && 'filters' in filter;
@@ -69,7 +69,7 @@ export function isCompositeFilter(
 /**
  * Type guard to check if a filter is a simple filter descriptor
  */
-export function isSimpleFilter(
+export function IsSimpleFilter(
   filter: FilterDescriptor | CompositeFilterDescriptor
 ): filter is FilterDescriptor {
   return 'field' in filter && 'operator' in filter;
@@ -94,6 +94,22 @@ export interface FilterFieldInfo {
   lookupEntityName?: string;
   /** For fields with a fixed set of values, the available options */
   valueList?: FilterValueOption[];
+}
+
+/**
+ * A record that can contribute fields to a multi-entity filter.
+ * When `sources` is passed to the builder, JSON field names are always `key.name`
+ * (e.g. `BillToOrganization.Type`).
+ */
+export interface FilterSource {
+  /** Stable JSON prefix. No dots. */
+  key: string;
+  /** Staff-facing label (Bill-to organization). */
+  label: string;
+  /** Optional MJ entity name, for callers that load fields from metadata. */
+  entityName?: string;
+  /** Bare field names (not prefixed). */
+  fields: FilterFieldInfo[];
 }
 
 /**
@@ -167,7 +183,7 @@ export const EMPTY_FILTER: CompositeFilterDescriptor = {
 /**
  * Create a new empty filter descriptor
  */
-export function createEmptyFilter(): CompositeFilterDescriptor {
+export function CreateEmptyFilter(): CompositeFilterDescriptor {
   return { logic: 'and', filters: [] };
 }
 
@@ -176,18 +192,18 @@ export function createEmptyFilter(): CompositeFilterDescriptor {
  * @param field The field name to filter on
  * @param type Optional field type (defaults to 'string')
  */
-export function createFilterRule(field: string, type: FilterFieldType = 'string'): FilterDescriptor {
+export function CreateFilterRule(field: string, type: FilterFieldType = 'string'): FilterDescriptor {
   return {
     field,
-    operator: getDefaultOperator(type),
-    value: getDefaultValue(type)
+    operator: GetDefaultOperator(type),
+    value: GetDefaultValue(type)
   };
 }
 
 /**
  * Get the default operator for a field type
  */
-export function getDefaultOperator(type: FilterFieldType): FilterOperator {
+export function GetDefaultOperator(type: FilterFieldType): FilterOperator {
   switch (type) {
     case 'string':
       return 'contains';
@@ -207,7 +223,7 @@ export function getDefaultOperator(type: FilterFieldType): FilterOperator {
 /**
  * Get the default value for a field type
  */
-export function getDefaultValue(type: FilterFieldType): unknown {
+export function GetDefaultValue(type: FilterFieldType): unknown {
   switch (type) {
     case 'string':
       return '';
