@@ -789,5 +789,32 @@
       "lastModified": "2026-08-20T22:30:53.918Z",
       "checksum": "539da9d1f411241289a3296151d08ee671b180c2da09ef0e31f7345bf14c6c8e"
     }
+  },
+  {
+    "fields": {
+      "Name": "Check Authorization",
+      "OperationKey": "Authorization.Check",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Authorizations",
+      "Description": "Ask whether the calling user can execute one or more named MJ: Authorizations, including ancestor grants. Unknown names fail closed (Allowed=false, Unknown=true). When a row has UseAuditLog, a MJ: Audit Logs record is written. Implemented by AuthorizationCheckOperation in @memberjunction/core-entities.",
+      "InputTypeName": "AuthorizationCheckInput",
+      "InputTypeDefinition": "@file:types/authorization-check.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "AuthorizationCheckOutput",
+      "OutputTypeDefinition": "@file:types/authorization-check.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "authorization:check",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "609A73BA-C78A-4D4C-9CD6-D3E41A0C0C3A"
+    },
+    "sync": {
+      "lastModified": "2026-09-03T17:21:12.659Z",
+      "checksum": "b294b54f1ae52cd124495dea88232bfa2aab0bf7f11731a69d40b5dcf1eb82ab"
+    }
   }
 ]
