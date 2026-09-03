@@ -16,7 +16,7 @@ export class MJBreedFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'breedInformation', sectionName: 'Breed Information', isExpanded: true },
+            { sectionKey: 'breedDetails', sectionName: 'Breed Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAnimals', sectionName: 'Animals', isExpanded: false }
         ]);

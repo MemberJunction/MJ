@@ -15,10 +15,10 @@ export class MJAnimalFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
+            { sectionKey: 'animalIdentity', sectionName: 'Animal Identity', isExpanded: true },
+            { sectionKey: 'shelterHistory', sectionName: 'Shelter History', isExpanded: true },
+            { sectionKey: 'physicalAttributes', sectionName: 'Physical Attributes', isExpanded: true },
             { sectionKey: 'animalProfile', sectionName: 'Animal Profile', isExpanded: true },
-            { sectionKey: 'identificationAndStatus', sectionName: 'Identification and Status', isExpanded: true },
-            { sectionKey: 'intakeDetails', sectionName: 'Intake Details', isExpanded: true },
-            { sectionKey: 'healthAndDescription', sectionName: 'Health and Description', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -8490,6 +8490,110 @@ export const MJAIVendorSchema = z.object({
 export type MJAIVendorEntityType = z.infer<typeof MJAIVendorSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Animals
+ */
+export const MJAnimalSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)`),
+    Species: z.union([z.literal('Cat'), z.literal('Dog')]).describe(`
+        * * Field Name: Species
+        * * Display Name: Species
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cat
+    *   * Dog
+        * * Description: Dog or Cat. Duplicated from Breed on purpose: species is known at intake even when breed is not, and it is the discriminator every downstream feature filters on.`),
+    BreedID: z.string().nullable().describe(`
+        * * Field Name: BreedID
+        * * Display Name: Breed Reference
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Breeds (vwBreeds.ID)`),
+    MicrochipNumber: z.string().nullable().describe(`
+        * * Field Name: MicrochipNumber
+        * * Display Name: Microchip Number
+        * * SQL Data Type: nvarchar(30)
+        * * Description: Implanted microchip identifier, when the animal has one. Unique across animals that have a number via a filtered index; NULL for the many intakes that arrive un-chipped.`),
+    IntakeDate: z.date().describe(`
+        * * Field Name: IntakeDate
+        * * Display Name: Intake Date
+        * * SQL Data Type: date`),
+    IntakeReason: z.union([z.literal('Other'), z.literal('Returned'), z.literal('Stray'), z.literal('Surrender'), z.literal('Transfer')]).nullable().describe(`
+        * * Field Name: IntakeReason
+        * * Display Name: Intake Reason
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Other
+    *   * Returned
+    *   * Stray
+    *   * Surrender
+    *   * Transfer`),
+    Sex: z.union([z.literal('Female'), z.literal('Male'), z.literal('Unknown')]).nullable().describe(`
+        * * Field Name: Sex
+        * * Display Name: Sex
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Female
+    *   * Male
+    *   * Unknown`),
+    EstimatedBirthDate: z.date().nullable().describe(`
+        * * Field Name: EstimatedBirthDate
+        * * Display Name: Estimated Birth Date
+        * * SQL Data Type: date`),
+    WeightKg: z.number().nullable().describe(`
+        * * Field Name: WeightKg
+        * * Display Name: Weight (kg)
+        * * SQL Data Type: decimal(6, 2)`),
+    Status: z.union([z.literal('Adopted'), z.literal('Available'), z.literal('Hold'), z.literal('Intake'), z.literal('Transferred')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Intake
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Adopted
+    *   * Available
+    *   * Hold
+    *   * Intake
+    *   * Transferred
+        * * Description: Where the animal sits in the shelter workflow: Intake, Hold, Available, Adopted or Transferred. Drives which animals appear on the adoption floor and is the field the course's validation rules govern.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    PhotoBase64: z.string().nullable().describe(`
+        * * Field Name: PhotoBase64
+        * * Display Name: Photo
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Base64-encoded photo of the animal, stored inline. Deliberately not MJ Storage: the course teaches entity and UI work, and a single self-contained column keeps photos working with no external provider to configure.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Breed: z.string().nullable().describe(`
+        * * Field Name: Breed
+        * * Display Name: Breed
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAnimalEntityType = z.infer<typeof MJAnimalSchema>;
+
+/**
  * zod schema definition for the entity MJ: API Application Scopes
  */
 export const MJAPIApplicationScopeSchema = z.object({
@@ -10609,6 +10713,60 @@ export const MJAuthorizationSchema = z.object({
 });
 
 export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Breeds
+ */
+export const MJBreedSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)`),
+    Species: z.union([z.literal('Cat'), z.literal('Dog')]).describe(`
+        * * Field Name: Species
+        * * Display Name: Species
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cat
+    *   * Dog`),
+    SizeCategory: z.union([z.literal('Giant'), z.literal('Large'), z.literal('Medium'), z.literal('Small')]).nullable().describe(`
+        * * Field Name: SizeCategory
+        * * Display Name: Size Category
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Giant
+    *   * Large
+    *   * Medium
+    *   * Small`),
+    TypicalLifespanYears: z.number().nullable().describe(`
+        * * Field Name: TypicalLifespanYears
+        * * Display Name: Typical Lifespan (Years)
+        * * SQL Data Type: int`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJBreedEntityType = z.infer<typeof MJBreedSchema>;
 
 /**
  * zod schema definition for the entity MJ: Cluster Analysis
@@ -57622,6 +57780,285 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
 
 
 /**
+ * MJ: Animals - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Animal
+ * * Base View: vwAnimals
+ * * @description One row per animal in the shelter's care, from intake through outcome. The central record of the shelter app: kennel assignments, care logs, medical conditions and adoptions all hang off it.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Animals')
+export class MJAnimalEntity extends BaseEntity<MJAnimalEntityType> {
+    /**
+    * Loads the MJ: Animals record from the database
+    * @param ID: string - primary key value to load the MJ: Animals record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAnimalEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Animals entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * WeightKg: If the animal's weight is specified, it must be greater than 0 kg to ensure realistic and accurate physical measurements.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateWeightKgGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If the animal's weight is specified, it must be greater than 0 kg to ensure realistic and accurate physical measurements.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateWeightKgGreaterThanZero(result: ValidationResult) {
+    	if (this.WeightKg != null && this.WeightKg <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"WeightKg",
+    			"Weight must be greater than 0 kg.",
+    			this.WeightKg,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Species
+    * * Display Name: Species
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cat
+    *   * Dog
+    * * Description: Dog or Cat. Duplicated from Breed on purpose: species is known at intake even when breed is not, and it is the discriminator every downstream feature filters on.
+    */
+    get Species(): 'Cat' | 'Dog' {
+        return this.Get('Species');
+    }
+    set Species(value: 'Cat' | 'Dog') {
+        this.Set('Species', value);
+    }
+
+    /**
+    * * Field Name: BreedID
+    * * Display Name: Breed Reference
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Breeds (vwBreeds.ID)
+    */
+    get BreedID(): string | null {
+        return this.Get('BreedID');
+    }
+    set BreedID(value: string | null) {
+        this.Set('BreedID', value);
+    }
+
+    /**
+    * * Field Name: MicrochipNumber
+    * * Display Name: Microchip Number
+    * * SQL Data Type: nvarchar(30)
+    * * Description: Implanted microchip identifier, when the animal has one. Unique across animals that have a number via a filtered index; NULL for the many intakes that arrive un-chipped.
+    */
+    get MicrochipNumber(): string | null {
+        return this.Get('MicrochipNumber');
+    }
+    set MicrochipNumber(value: string | null) {
+        this.Set('MicrochipNumber', value);
+    }
+
+    /**
+    * * Field Name: IntakeDate
+    * * Display Name: Intake Date
+    * * SQL Data Type: date
+    */
+    get IntakeDate(): Date {
+        return this.Get('IntakeDate');
+    }
+    set IntakeDate(value: Date) {
+        this.Set('IntakeDate', value);
+    }
+
+    /**
+    * * Field Name: IntakeReason
+    * * Display Name: Intake Reason
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Other
+    *   * Returned
+    *   * Stray
+    *   * Surrender
+    *   * Transfer
+    */
+    get IntakeReason(): 'Other' | 'Returned' | 'Stray' | 'Surrender' | 'Transfer' | null {
+        return this.Get('IntakeReason');
+    }
+    set IntakeReason(value: 'Other' | 'Returned' | 'Stray' | 'Surrender' | 'Transfer' | null) {
+        this.Set('IntakeReason', value);
+    }
+
+    /**
+    * * Field Name: Sex
+    * * Display Name: Sex
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Female
+    *   * Male
+    *   * Unknown
+    */
+    get Sex(): 'Female' | 'Male' | 'Unknown' | null {
+        return this.Get('Sex');
+    }
+    set Sex(value: 'Female' | 'Male' | 'Unknown' | null) {
+        this.Set('Sex', value);
+    }
+
+    /**
+    * * Field Name: EstimatedBirthDate
+    * * Display Name: Estimated Birth Date
+    * * SQL Data Type: date
+    */
+    get EstimatedBirthDate(): Date | null {
+        return this.Get('EstimatedBirthDate');
+    }
+    set EstimatedBirthDate(value: Date | null) {
+        this.Set('EstimatedBirthDate', value);
+    }
+
+    /**
+    * * Field Name: WeightKg
+    * * Display Name: Weight (kg)
+    * * SQL Data Type: decimal(6, 2)
+    */
+    get WeightKg(): number | null {
+        return this.Get('WeightKg');
+    }
+    set WeightKg(value: number | null) {
+        this.Set('WeightKg', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Intake
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Adopted
+    *   * Available
+    *   * Hold
+    *   * Intake
+    *   * Transferred
+    * * Description: Where the animal sits in the shelter workflow: Intake, Hold, Available, Adopted or Transferred. Drives which animals appear on the adoption floor and is the field the course's validation rules govern.
+    */
+    get Status(): 'Adopted' | 'Available' | 'Hold' | 'Intake' | 'Transferred' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Adopted' | 'Available' | 'Hold' | 'Intake' | 'Transferred') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PhotoBase64
+    * * Display Name: Photo
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64-encoded photo of the animal, stored inline. Deliberately not MJ Storage: the course teaches entity and UI work, and a single self-contained column keeps photos working with no external provider to configure.
+    */
+    get PhotoBase64(): string | null {
+        return this.Get('PhotoBase64');
+    }
+    set PhotoBase64(value: string | null) {
+        this.Set('PhotoBase64', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Breed
+    * * Display Name: Breed
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Breed(): string | null {
+        return this.Get('Breed');
+    }
+}
+
+
+/**
  * MJ: API Application Scopes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: APIApplicationScope
@@ -63080,6 +63517,174 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: Breeds - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Breed
+ * * Base View: vwBreeds
+ * * @description Breeds the shelter recognises, scoped by species. Reference data maintained by staff rather than per-animal data; Animal.BreedID is nullable because a stray's breed is often unknown at intake.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Breeds')
+export class MJBreedEntity extends BaseEntity<MJBreedEntityType> {
+    /**
+    * Loads the MJ: Breeds record from the database
+    * @param ID: string - primary key value to load the MJ: Breeds record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJBreedEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Breeds entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * TypicalLifespanYears: The typical lifespan in years, if provided, must be a positive number greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTypicalLifespanYearsGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The typical lifespan in years, if provided, must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTypicalLifespanYearsGreaterThanZero(result: ValidationResult) {
+    	if (this.TypicalLifespanYears != null && this.TypicalLifespanYears <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TypicalLifespanYears",
+    			"Typical lifespan years must be a positive number greater than zero.",
+    			this.TypicalLifespanYears,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Species
+    * * Display Name: Species
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cat
+    *   * Dog
+    */
+    get Species(): 'Cat' | 'Dog' {
+        return this.Get('Species');
+    }
+    set Species(value: 'Cat' | 'Dog') {
+        this.Set('Species', value);
+    }
+
+    /**
+    * * Field Name: SizeCategory
+    * * Display Name: Size Category
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Giant
+    *   * Large
+    *   * Medium
+    *   * Small
+    */
+    get SizeCategory(): 'Giant' | 'Large' | 'Medium' | 'Small' | null {
+        return this.Get('SizeCategory');
+    }
+    set SizeCategory(value: 'Giant' | 'Large' | 'Medium' | 'Small' | null) {
+        this.Set('SizeCategory', value);
+    }
+
+    /**
+    * * Field Name: TypicalLifespanYears
+    * * Display Name: Typical Lifespan (Years)
+    * * SQL Data Type: int
+    */
+    get TypicalLifespanYears(): number | null {
+        return this.Get('TypicalLifespanYears');
+    }
+    set TypicalLifespanYears(value: number | null) {
+        this.Set('TypicalLifespanYears', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

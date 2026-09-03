@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Animal Profile Section -->
+    <!-- Animal Identity Section -->
     <mj-collapsible-panel
-        SectionKey="animalProfile"
-        SectionName="Animal Profile"
-        Icon="fa fa-dog"
+        SectionKey="animalIdentity"
+        SectionName="Animal Identity"
+        Icon="fa fa-id-card"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -45,53 +45,19 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Sex"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="EstimatedBirthDate"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Identification and Status Section -->
-    <mj-collapsible-panel
-        SectionKey="identificationAndStatus"
-        SectionName="Identification and Status"
-        Icon="fa fa-id-card"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="MicrochipNumber"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Intake Details Section -->
+    <!-- Shelter History Section -->
     <mj-collapsible-panel
-        SectionKey="intakeDetails"
-        SectionName="Intake Details"
-        Icon="fa fa-sign-in-alt"
+        SectionKey="shelterHistory"
+        SectionName="Shelter History"
+        Icon="fa fa-history"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -110,16 +76,40 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Health and Description Section -->
+    <!-- Physical Attributes Section -->
     <mj-collapsible-panel
-        SectionKey="healthAndDescription"
-        SectionName="Health and Description"
-        Icon="fa fa-notes-medical"
+        SectionKey="physicalAttributes"
+        SectionName="Physical Attributes"
+        Icon="fa fa-weight"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Sex"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EstimatedBirthDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -128,6 +118,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Animal Profile Section -->
+    <mj-collapsible-panel
+        SectionKey="animalProfile"
+        SectionName="Animal Profile"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

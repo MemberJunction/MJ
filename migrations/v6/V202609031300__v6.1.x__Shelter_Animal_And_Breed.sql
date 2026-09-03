@@ -168,6 +168,15 @@ GO
 
 
 
+
+
+
+
+
+
+/* ==============================================================================================
+   Codegen Output below this point
+   ============================================================================================== */
 /* SQL generated to create new entity MJ: Breeds */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
@@ -194,7 +203,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'd0ef843d-8155-4a0e-aec4-24d13572e32a',
+         'a40310aa-94bf-43b5-9aa5-6e2757ff1405',
          'MJ: Breeds',
          'Breeds',
          'Breeds the shelter recognises, scoped by species. Reference data maintained by staff rather than per-animal data; Animal.BreedID is nullable because a stray''s breed is often unknown at intake.',
@@ -216,22 +225,27 @@ GO
          , GETUTCDATE()
          , GETUTCDATE()
       );
+
 /* SQL generated to add new entity MJ: Breeds to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'd0ef843d-8155-4a0e-aec4-24d13572e32a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'a40310aa-94bf-43b5-9aa5-6e2757ff1405', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+
 /* SQL generated to add new permission for entity MJ: Breeds for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('d0ef843d-8155-4a0e-aec4-24d13572e32a', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('a40310aa-94bf-43b5-9aa5-6e2757ff1405', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+
 /* SQL generated to add new permission for entity MJ: Breeds for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('d0ef843d-8155-4a0e-aec4-24d13572e32a', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('a40310aa-94bf-43b5-9aa5-6e2757ff1405', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+
 /* SQL generated to add new permission for entity MJ: Breeds for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('d0ef843d-8155-4a0e-aec4-24d13572e32a', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('a40310aa-94bf-43b5-9aa5-6e2757ff1405', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+
 /* SQL generated to create new entity MJ: Animals */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
@@ -258,7 +272,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '70d5576a-43d5-4e26-aacb-19cd866ab2f8',
+         '22e4f4de-9a9b-4fe3-ab1a-ecac7ef5ef9d',
          'MJ: Animals',
          'Animals',
          'One row per animal in the shelter''s care, from intake through outcome. The central record of the shelter app: kennel assignments, care logs, medical conditions and adoptions all hang off it.',
@@ -280,77 +294,98 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , GETUTCDATE()
          , GETUTCDATE()
       );
+
 /* SQL generated to add new entity MJ: Animals to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '70d5576a-43d5-4e26-aacb-19cd866ab2f8', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '22e4f4de-9a9b-4fe3-ab1a-ecac7ef5ef9d', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+
 /* SQL generated to add new permission for entity MJ: Animals for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('70d5576a-43d5-4e26-aacb-19cd866ab2f8', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('22e4f4de-9a9b-4fe3-ab1a-ecac7ef5ef9d', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+
 /* SQL generated to add new permission for entity MJ: Animals for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('70d5576a-43d5-4e26-aacb-19cd866ab2f8', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('22e4f4de-9a9b-4fe3-ab1a-ecac7ef5ef9d', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+
 /* SQL generated to add new permission for entity MJ: Animals for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('70d5576a-43d5-4e26-aacb-19cd866ab2f8', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Animal */
-ALTER TABLE [${flyway:defaultSchema}].[Animal] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Animal */
-UPDATE [${flyway:defaultSchema}].[Animal] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Animal */
-ALTER TABLE [${flyway:defaultSchema}].[Animal] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Animal */
-ALTER TABLE [${flyway:defaultSchema}].[Animal] ADD CONSTRAINT [DF___mj_Animal___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Animal */
-ALTER TABLE [${flyway:defaultSchema}].[Animal] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Animal */
-UPDATE [${flyway:defaultSchema}].[Animal] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Animal */
-ALTER TABLE [${flyway:defaultSchema}].[Animal] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Animal */
-ALTER TABLE [${flyway:defaultSchema}].[Animal] ADD CONSTRAINT [DF___mj_Animal___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
+                                                   ('22e4f4de-9a9b-4fe3-ab1a-ecac7ef5ef9d', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Breed */
 ALTER TABLE [${flyway:defaultSchema}].[Breed] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
+
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Breed */
 UPDATE [${flyway:defaultSchema}].[Breed] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
 GO
+
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Breed */
 ALTER TABLE [${flyway:defaultSchema}].[Breed] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
 GO
+
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Breed */
 ALTER TABLE [${flyway:defaultSchema}].[Breed] ADD CONSTRAINT [DF___mj_Breed___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
 GO
+
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Breed */
 ALTER TABLE [${flyway:defaultSchema}].[Breed] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
 GO
+
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Breed */
 UPDATE [${flyway:defaultSchema}].[Breed] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
 GO
+
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Breed */
 ALTER TABLE [${flyway:defaultSchema}].[Breed] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
 GO
+
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Breed */
 ALTER TABLE [${flyway:defaultSchema}].[Breed] ADD CONSTRAINT [DF___mj_Breed___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Animal */
+ALTER TABLE [${flyway:defaultSchema}].[Animal] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Animal */
+UPDATE [${flyway:defaultSchema}].[Animal] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Animal */
+ALTER TABLE [${flyway:defaultSchema}].[Animal] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Animal */
+ALTER TABLE [${flyway:defaultSchema}].[Animal] ADD CONSTRAINT [DF___mj_Animal___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Animal */
+ALTER TABLE [${flyway:defaultSchema}].[Animal] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Animal */
+UPDATE [${flyway:defaultSchema}].[Animal] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Animal */
+ALTER TABLE [${flyway:defaultSchema}].[Animal] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Animal */
+ALTER TABLE [${flyway:defaultSchema}].[Animal] ADD CONSTRAINT [DF___mj_Animal___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
 /* SQL text to insert 25 new entity field(s) */
 UPDATE [${flyway:defaultSchema}].[EntityField]
          SET [Sequence] = [Sequence] + 100000
-       WHERE [EntityID] = '70D5576A-43D5-4E26-AACB-19CD866AB2F8'
+       WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405'
          AND [Sequence] < 100000;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '71a3f940-d814-42c4-86e9-9d82302b2448' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '41020086-e1b4-4dd5-935e-c548c37b8b26' OR (EntityID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -383,8 +418,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '71a3f940-d814-42c4-86e9-9d82302b2448',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
+            '41020086-e1b4-4dd5-935e-c548c37b8b26',
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
             1,
             'ID',
             'ID',
@@ -413,7 +448,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '732bf16b-9602-424f-9af4-1e248c9a427f' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4788c3e9-380e-4d0c-9d09-455fd86f225d' OR (EntityID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -446,957 +481,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '732bf16b-9602-424f-9af4-1e248c9a427f',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            2,
-            'Name',
-            'Name',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8e4a652f-0d84-43b8-a880-cb84e8ae6f77' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'Species')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8e4a652f-0d84-43b8-a880-cb84e8ae6f77',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            3,
-            'Species',
-            'Species',
-            'Dog or Cat. Duplicated from Breed on purpose: species is known at intake even when breed is not, and it is the discriminator every downstream feature filters on.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bc48ea0b-8bfe-4b3f-8ca1-5f49755e4206' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'BreedID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'bc48ea0b-8bfe-4b3f-8ca1-5f49755e4206',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            4,
-            'BreedID',
-            'Breed ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '37c2257d-1163-42bf-a71d-474538ad83db' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'MicrochipNumber')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '37c2257d-1163-42bf-a71d-474538ad83db',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            5,
-            'MicrochipNumber',
-            'Microchip Number',
-            'Implanted microchip identifier, when the animal has one. Unique across animals that have a number via a filtered index; NULL for the many intakes that arrive un-chipped.',
-            'nvarchar',
-            60,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '89dc5992-dfad-4661-9d97-374c166cfd52' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'IntakeDate')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '89dc5992-dfad-4661-9d97-374c166cfd52',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            6,
-            'IntakeDate',
-            'Intake Date',
-            NULL,
-            'date',
-            3,
-            10,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bf881c85-20f3-4563-9b25-550ac5ad01cb' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'IntakeReason')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'bf881c85-20f3-4563-9b25-550ac5ad01cb',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            7,
-            'IntakeReason',
-            'Intake Reason',
-            NULL,
-            'nvarchar',
-            60,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a8dd289b-74c5-4ea5-8a98-7305457e224d' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'Sex')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a8dd289b-74c5-4ea5-8a98-7305457e224d',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            8,
-            'Sex',
-            'Sex',
-            NULL,
-            'nvarchar',
-            20,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e767149a-2363-4240-b26c-d9febe088483' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'EstimatedBirthDate')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e767149a-2363-4240-b26c-d9febe088483',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            9,
-            'EstimatedBirthDate',
-            'Estimated Birth Date',
-            NULL,
-            'date',
-            3,
-            10,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5fd993ee-b784-4ef7-9242-3a6863f4b52f' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'WeightKg')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5fd993ee-b784-4ef7-9242-3a6863f4b52f',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            10,
-            'WeightKg',
-            'Weight Kg',
-            NULL,
-            'decimal',
-            5,
-            6,
-            2,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '49172a81-b6b4-4cd1-ad66-d5ff08abca6f' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '49172a81-b6b4-4cd1-ad66-d5ff08abca6f',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            11,
-            'Status',
-            'Status',
-            'Where the animal sits in the shelter workflow: Intake, Hold, Available, Adopted or Transferred. Drives which animals appear on the adoption floor and is the field the course''s validation rules govern.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Intake',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '703d02fa-dc7a-45be-bf64-4d21ce176c45' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'Description')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '703d02fa-dc7a-45be-bf64-4d21ce176c45',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            12,
-            'Description',
-            'Description',
-            NULL,
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'db181ad0-830c-4cc9-bd68-7fae3662e41e' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'PhotoBase64')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'db181ad0-830c-4cc9-bd68-7fae3662e41e',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            13,
-            'PhotoBase64',
-            'Photo Base 64',
-            'Base64-encoded photo of the animal, stored inline. Deliberately not MJ Storage: the course teaches entity and UI work, and a single self-contained column keeps photos working with no external provider to configure.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cca8f56c-1d65-4af9-9f3b-f5dc6036fef9' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'cca8f56c-1d65-4af9-9f3b-f5dc6036fef9',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            14,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '000d31d7-39aa-4582-be24-93df839398b7' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '000d31d7-39aa-4582-be24-93df839398b7',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
-            15,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-UPDATE [${flyway:defaultSchema}].[EntityField]
-         SET [Sequence] = [Sequence] + 100000
-       WHERE [EntityID] = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A'
-         AND [Sequence] < 100000;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '942ad296-3dd7-4a4c-aaf6-c90e666e697c' OR (EntityID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '942ad296-3dd7-4a4c-aaf6-c90e666e697c',
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A', -- Entity: MJ: Breeds
-            1,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fa404650-9e00-4c33-aee6-f4be7eb464ed' OR (EntityID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'fa404650-9e00-4c33-aee6-f4be7eb464ed',
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A', -- Entity: MJ: Breeds
+            '4788c3e9-380e-4d0c-9d09-455fd86f225d',
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
             2,
             'Name',
             'Name',
@@ -1425,7 +511,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0f7e95f3-01d2-44a0-9958-000f06a82c3a' OR (EntityID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A' AND Name = 'Species')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0f724c37-5d74-4ac2-b61e-eaef82511504' OR (EntityID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405' AND Name = 'Species')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1458,8 +544,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '0f7e95f3-01d2-44a0-9958-000f06a82c3a',
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A', -- Entity: MJ: Breeds
+            '0f724c37-5d74-4ac2-b61e-eaef82511504',
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
             3,
             'Species',
             'Species',
@@ -1488,7 +574,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b9c63424-dd79-44c2-82a2-a2f4ad065dd9' OR (EntityID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A' AND Name = 'SizeCategory')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'df85a3b5-c312-4e9f-8bf9-1e288f83a8c0' OR (EntityID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405' AND Name = 'SizeCategory')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1521,8 +607,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            'b9c63424-dd79-44c2-82a2-a2f4ad065dd9',
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A', -- Entity: MJ: Breeds
+            'df85a3b5-c312-4e9f-8bf9-1e288f83a8c0',
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
             4,
             'SizeCategory',
             'Size Category',
@@ -1551,7 +637,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'efc94585-72ee-453b-a991-c63a4df8964e' OR (EntityID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A' AND Name = 'TypicalLifespanYears')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3fa1cded-1af0-428e-8b4d-375e0800a008' OR (EntityID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405' AND Name = 'TypicalLifespanYears')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1584,8 +670,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            'efc94585-72ee-453b-a991-c63a4df8964e',
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A', -- Entity: MJ: Breeds
+            '3fa1cded-1af0-428e-8b4d-375e0800a008',
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
             5,
             'TypicalLifespanYears',
             'Typical Lifespan Years',
@@ -1614,7 +700,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fb915382-fe9f-4202-92f3-5efa943f1093' OR (EntityID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A' AND Name = 'IsActive')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '724c713e-1d25-4486-9d3b-174220e5dbd0' OR (EntityID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405' AND Name = 'IsActive')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1647,8 +733,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            'fb915382-fe9f-4202-92f3-5efa943f1093',
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A', -- Entity: MJ: Breeds
+            '724c713e-1d25-4486-9d3b-174220e5dbd0',
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
             6,
             'IsActive',
             'Is Active',
@@ -1677,7 +763,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2dd5f54c-4269-4328-b274-595cc1c5ce8f' OR (EntityID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1c27c211-40ae-4c14-a9ea-ceb0ba2d7777' OR (EntityID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1710,8 +796,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '2dd5f54c-4269-4328-b274-595cc1c5ce8f',
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A', -- Entity: MJ: Breeds
+            '1c27c211-40ae-4c14-a9ea-ceb0ba2d7777',
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
             7,
             '__mj_CreatedAt',
             'Created At',
@@ -1740,7 +826,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e2691fa-c831-447a-a1fe-3717a7c35a53' OR (EntityID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ab6c801c-49c4-4136-80b4-35b151ba9934' OR (EntityID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1773,8 +859,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '1e2691fa-c831-447a-a1fe-3717a7c35a53',
-            'D0EF843D-8155-4A0E-AEC4-24D13572E32A', -- Entity: MJ: Breeds
+            'ab6c801c-49c4-4136-80b4-35b151ba9934',
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405', -- Entity: MJ: Breeds
             8,
             '__mj_UpdatedAt',
             'Updated At',
@@ -1802,131 +888,1110 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
             GETUTCDATE()
          )
       END;
-/* SQL text to insert entity field value with ID 5a19c21c-958c-43d8-8746-c7d8f647a52f */
+UPDATE [${flyway:defaultSchema}].[EntityField]
+         SET [Sequence] = [Sequence] + 100000
+       WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D'
+         AND [Sequence] < 100000;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7556a7f6-61ee-4c02-b410-d0de79c4d61b' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7556a7f6-61ee-4c02-b410-d0de79c4d61b',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            1,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c755a802-fa0c-4100-9795-93fbb9a09cad' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c755a802-fa0c-4100-9795-93fbb9a09cad',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            2,
+            'Name',
+            'Name',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '14af4223-9395-490a-9379-15cdb9d03097' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'Species')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '14af4223-9395-490a-9379-15cdb9d03097',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            3,
+            'Species',
+            'Species',
+            'Dog or Cat. Duplicated from Breed on purpose: species is known at intake even when breed is not, and it is the discriminator every downstream feature filters on.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b296835d-7a50-4208-9671-0eaac207f239' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'BreedID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b296835d-7a50-4208-9671-0eaac207f239',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            4,
+            'BreedID',
+            'Breed ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'A40310AA-94BF-43B5-9AA5-6E2757FF1405',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '57a8ee40-9cd3-47ea-afe0-937a5a5fcf7e' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'MicrochipNumber')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '57a8ee40-9cd3-47ea-afe0-937a5a5fcf7e',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            5,
+            'MicrochipNumber',
+            'Microchip Number',
+            'Implanted microchip identifier, when the animal has one. Unique across animals that have a number via a filtered index; NULL for the many intakes that arrive un-chipped.',
+            'nvarchar',
+            60,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4992e657-62fc-4b60-8b44-ae19b2643091' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'IntakeDate')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4992e657-62fc-4b60-8b44-ae19b2643091',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            6,
+            'IntakeDate',
+            'Intake Date',
+            NULL,
+            'date',
+            3,
+            10,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '08050f3d-9b49-49d5-bca2-8a416bc864ed' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'IntakeReason')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '08050f3d-9b49-49d5-bca2-8a416bc864ed',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            7,
+            'IntakeReason',
+            'Intake Reason',
+            NULL,
+            'nvarchar',
+            60,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '61f9a077-4288-4ddd-9e7d-101952be8e0e' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'Sex')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '61f9a077-4288-4ddd-9e7d-101952be8e0e',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            8,
+            'Sex',
+            'Sex',
+            NULL,
+            'nvarchar',
+            20,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3379a4db-a473-4fa1-aa5b-4ff5508781be' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'EstimatedBirthDate')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '3379a4db-a473-4fa1-aa5b-4ff5508781be',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            9,
+            'EstimatedBirthDate',
+            'Estimated Birth Date',
+            NULL,
+            'date',
+            3,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a26ee0ea-5b2e-4cdc-b458-64861b812713' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'WeightKg')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a26ee0ea-5b2e-4cdc-b458-64861b812713',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            10,
+            'WeightKg',
+            'Weight Kg',
+            NULL,
+            'decimal',
+            5,
+            6,
+            2,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c4c52249-5eb8-4886-8431-87e2f1d6d1a0' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c4c52249-5eb8-4886-8431-87e2f1d6d1a0',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            11,
+            'Status',
+            'Status',
+            'Where the animal sits in the shelter workflow: Intake, Hold, Available, Adopted or Transferred. Drives which animals appear on the adoption floor and is the field the course''s validation rules govern.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Intake',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5b541036-b1db-4a16-8873-73e4a880e923' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5b541036-b1db-4a16-8873-73e4a880e923',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            12,
+            'Description',
+            'Description',
+            NULL,
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7532c9f4-ceab-44b0-80c1-218fe913c9bb' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'PhotoBase64')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7532c9f4-ceab-44b0-80c1-218fe913c9bb',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            13,
+            'PhotoBase64',
+            'Photo Base 64',
+            'Base64-encoded photo of the animal, stored inline. Deliberately not MJ Storage: the course teaches entity and UI work, and a single self-contained column keeps photos working with no external provider to configure.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5f1c007e-9158-4fda-b394-e4720ce1dc0d' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5f1c007e-9158-4fda-b394-e4720ce1dc0d',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            14,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6c4c487e-6616-43a0-b731-e02749033e17' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '6c4c487e-6616-43a0-b731-e02749033e17',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
+            15,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID 1e56443f-1bce-4eaa-964e-cf41a03d9414 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('5a19c21c-958c-43d8-8746-c7d8f647a52f', '0F7E95F3-01D2-44A0-9958-000F06A82C3A', 1, 'Cat', 'Cat', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID 7779d88f-5ed9-4285-aa1a-f82d5bdfe366 */
+                                       ('1e56443f-1bce-4eaa-964e-cf41a03d9414', '0F724C37-5D74-4AC2-B61E-EAEF82511504', 1, 'Cat', 'Cat', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID e1ca93fc-b36c-4623-8adc-e6416361c670 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7779d88f-5ed9-4285-aa1a-f82d5bdfe366', '0F7E95F3-01D2-44A0-9958-000F06A82C3A', 2, 'Dog', 'Dog', GETUTCDATE(), GETUTCDATE());
-/* SQL text to update ValueListType for entity field ID 0F7E95F3-01D2-44A0-9958-000F06A82C3A */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='0F7E95F3-01D2-44A0-9958-000F06A82C3A';
-/* SQL text to insert entity field value with ID b450216b-dea2-4023-a3a9-afd63ce13244 */
+                                       ('e1ca93fc-b36c-4623-8adc-e6416361c670', '0F724C37-5D74-4AC2-B61E-EAEF82511504', 2, 'Dog', 'Dog', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 0F724C37-5D74-4AC2-B61E-EAEF82511504 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='0F724C37-5D74-4AC2-B61E-EAEF82511504';
+
+/* SQL text to insert entity field value with ID 2463b356-cae6-43d8-80cb-8d00f1f27dd4 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b450216b-dea2-4023-a3a9-afd63ce13244', 'B9C63424-DD79-44C2-82A2-A2F4AD065DD9', 1, 'Giant', 'Giant', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID 92488eb2-47ac-411b-8c93-34c4a16e5849 */
+                                       ('2463b356-cae6-43d8-80cb-8d00f1f27dd4', 'DF85A3B5-C312-4E9F-8BF9-1E288F83A8C0', 1, 'Giant', 'Giant', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 772a67f4-1245-4831-8126-0f5e7f2d39e3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('92488eb2-47ac-411b-8c93-34c4a16e5849', 'B9C63424-DD79-44C2-82A2-A2F4AD065DD9', 2, 'Large', 'Large', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID ca03dda5-ab36-4efe-82e9-c0f6a6b8d28b */
+                                       ('772a67f4-1245-4831-8126-0f5e7f2d39e3', 'DF85A3B5-C312-4E9F-8BF9-1E288F83A8C0', 2, 'Large', 'Large', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 0720d4ba-581a-498c-8e2e-f21e244f6eec */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ca03dda5-ab36-4efe-82e9-c0f6a6b8d28b', 'B9C63424-DD79-44C2-82A2-A2F4AD065DD9', 3, 'Medium', 'Medium', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID 366ad1ae-3761-4bd7-9bcb-0bcdc3267ed9 */
+                                       ('0720d4ba-581a-498c-8e2e-f21e244f6eec', 'DF85A3B5-C312-4E9F-8BF9-1E288F83A8C0', 3, 'Medium', 'Medium', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 6be48a4e-736b-4fa0-8356-475fdd3e2187 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('366ad1ae-3761-4bd7-9bcb-0bcdc3267ed9', 'B9C63424-DD79-44C2-82A2-A2F4AD065DD9', 4, 'Small', 'Small', GETUTCDATE(), GETUTCDATE());
-/* SQL text to update ValueListType for entity field ID B9C63424-DD79-44C2-82A2-A2F4AD065DD9 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='B9C63424-DD79-44C2-82A2-A2F4AD065DD9';
-/* SQL text to insert entity field value with ID 37d4f454-b5e6-482e-b86e-75c741992eeb */
+                                       ('6be48a4e-736b-4fa0-8356-475fdd3e2187', 'DF85A3B5-C312-4E9F-8BF9-1E288F83A8C0', 4, 'Small', 'Small', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID DF85A3B5-C312-4E9F-8BF9-1E288F83A8C0 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='DF85A3B5-C312-4E9F-8BF9-1E288F83A8C0';
+
+/* SQL text to insert entity field value with ID 4ca30bf9-db53-40c4-a22f-d88f163dda67 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('37d4f454-b5e6-482e-b86e-75c741992eeb', '8E4A652F-0D84-43B8-A880-CB84E8AE6F77', 1, 'Cat', 'Cat', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID aebb302e-dba9-41ee-9a7e-11e6579f9294 */
+                                       ('4ca30bf9-db53-40c4-a22f-d88f163dda67', '14AF4223-9395-490A-9379-15CDB9D03097', 1, 'Cat', 'Cat', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID d12e793a-859c-4ce4-bf1d-c6ccbe92e6c4 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('aebb302e-dba9-41ee-9a7e-11e6579f9294', '8E4A652F-0D84-43B8-A880-CB84E8AE6F77', 2, 'Dog', 'Dog', GETUTCDATE(), GETUTCDATE());
-/* SQL text to update ValueListType for entity field ID 8E4A652F-0D84-43B8-A880-CB84E8AE6F77 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='8E4A652F-0D84-43B8-A880-CB84E8AE6F77';
-/* SQL text to insert entity field value with ID c6c3762c-80d8-4771-a336-3d1521b2008a */
+                                       ('d12e793a-859c-4ce4-bf1d-c6ccbe92e6c4', '14AF4223-9395-490A-9379-15CDB9D03097', 2, 'Dog', 'Dog', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 14AF4223-9395-490A-9379-15CDB9D03097 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='14AF4223-9395-490A-9379-15CDB9D03097';
+
+/* SQL text to insert entity field value with ID 7abcee97-dcde-4bf8-be56-d5a4d0d1b752 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c6c3762c-80d8-4771-a336-3d1521b2008a', 'A8DD289B-74C5-4EA5-8A98-7305457E224D', 1, 'Female', 'Female', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID e2e15d2f-77e0-4f58-afb0-4288c7715045 */
+                                       ('7abcee97-dcde-4bf8-be56-d5a4d0d1b752', '61F9A077-4288-4DDD-9E7D-101952BE8E0E', 1, 'Female', 'Female', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID ed6ef6a2-a5c3-4946-bf93-2fb3b5551cc9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e2e15d2f-77e0-4f58-afb0-4288c7715045', 'A8DD289B-74C5-4EA5-8A98-7305457E224D', 2, 'Male', 'Male', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID 1f0b1248-ca6b-4e9c-99a4-c9e6ebf87009 */
+                                       ('ed6ef6a2-a5c3-4946-bf93-2fb3b5551cc9', '61F9A077-4288-4DDD-9E7D-101952BE8E0E', 2, 'Male', 'Male', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 4c23dfb9-034c-4085-95ac-c07170aec62c */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('1f0b1248-ca6b-4e9c-99a4-c9e6ebf87009', 'A8DD289B-74C5-4EA5-8A98-7305457E224D', 3, 'Unknown', 'Unknown', GETUTCDATE(), GETUTCDATE());
-/* SQL text to update ValueListType for entity field ID A8DD289B-74C5-4EA5-8A98-7305457E224D */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='A8DD289B-74C5-4EA5-8A98-7305457E224D';
-/* SQL text to insert entity field value with ID 222d4252-5fab-4d6e-a511-2b9759980297 */
+                                       ('4c23dfb9-034c-4085-95ac-c07170aec62c', '61F9A077-4288-4DDD-9E7D-101952BE8E0E', 3, 'Unknown', 'Unknown', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 61F9A077-4288-4DDD-9E7D-101952BE8E0E */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='61F9A077-4288-4DDD-9E7D-101952BE8E0E';
+
+/* SQL text to insert entity field value with ID 4d5b2151-ace9-4de4-8856-5a47d254f4b6 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('222d4252-5fab-4d6e-a511-2b9759980297', 'BF881C85-20F3-4563-9B25-550AC5AD01CB', 1, 'Other', 'Other', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID af01189a-cb9a-4779-b9fb-7fe3b0d71ee3 */
+                                       ('4d5b2151-ace9-4de4-8856-5a47d254f4b6', '08050F3D-9B49-49D5-BCA2-8A416BC864ED', 1, 'Other', 'Other', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID a5ff581f-6da2-4894-b054-77d19530c2ab */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('af01189a-cb9a-4779-b9fb-7fe3b0d71ee3', 'BF881C85-20F3-4563-9B25-550AC5AD01CB', 2, 'Returned', 'Returned', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID 8547cfc3-64bb-4d87-9c68-838807ce4050 */
+                                       ('a5ff581f-6da2-4894-b054-77d19530c2ab', '08050F3D-9B49-49D5-BCA2-8A416BC864ED', 2, 'Returned', 'Returned', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 14d0cb5d-e14c-4f6d-a4c2-806083c473bb */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('8547cfc3-64bb-4d87-9c68-838807ce4050', 'BF881C85-20F3-4563-9B25-550AC5AD01CB', 3, 'Stray', 'Stray', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID bc66e203-d317-46df-af18-3432c973d721 */
+                                       ('14d0cb5d-e14c-4f6d-a4c2-806083c473bb', '08050F3D-9B49-49D5-BCA2-8A416BC864ED', 3, 'Stray', 'Stray', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID d0172605-9a2a-4e73-a699-de5124746743 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('bc66e203-d317-46df-af18-3432c973d721', 'BF881C85-20F3-4563-9B25-550AC5AD01CB', 4, 'Surrender', 'Surrender', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID a451a421-eff3-44ef-be76-aa9a4c077a9e */
+                                       ('d0172605-9a2a-4e73-a699-de5124746743', '08050F3D-9B49-49D5-BCA2-8A416BC864ED', 4, 'Surrender', 'Surrender', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID fb2eb099-a938-4f8a-95d2-085341283d5b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a451a421-eff3-44ef-be76-aa9a4c077a9e', 'BF881C85-20F3-4563-9B25-550AC5AD01CB', 5, 'Transfer', 'Transfer', GETUTCDATE(), GETUTCDATE());
-/* SQL text to update ValueListType for entity field ID BF881C85-20F3-4563-9B25-550AC5AD01CB */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='BF881C85-20F3-4563-9B25-550AC5AD01CB';
-/* SQL text to insert entity field value with ID ebf6beea-824d-444e-810e-4450987766f9 */
+                                       ('fb2eb099-a938-4f8a-95d2-085341283d5b', '08050F3D-9B49-49D5-BCA2-8A416BC864ED', 5, 'Transfer', 'Transfer', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 08050F3D-9B49-49D5-BCA2-8A416BC864ED */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='08050F3D-9B49-49D5-BCA2-8A416BC864ED';
+
+/* SQL text to insert entity field value with ID 909b0765-3be6-4890-87da-ee1c398edade */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ebf6beea-824d-444e-810e-4450987766f9', '49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F', 1, 'Adopted', 'Adopted', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID d6648e34-b734-42d7-b906-31a407dced7f */
+                                       ('909b0765-3be6-4890-87da-ee1c398edade', 'C4C52249-5EB8-4886-8431-87E2F1D6D1A0', 1, 'Adopted', 'Adopted', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID b85bf995-7097-40aa-bc7d-8a8e82e5d6bb */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d6648e34-b734-42d7-b906-31a407dced7f', '49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F', 2, 'Available', 'Available', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID ce754320-d21f-4a92-bfc3-9f8959c6b778 */
+                                       ('b85bf995-7097-40aa-bc7d-8a8e82e5d6bb', 'C4C52249-5EB8-4886-8431-87E2F1D6D1A0', 2, 'Available', 'Available', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID a138e61a-aadb-4a5f-89a1-4aa9db2be329 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ce754320-d21f-4a92-bfc3-9f8959c6b778', '49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F', 3, 'Hold', 'Hold', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID 2bc55331-edb5-4c32-9b6c-8fe63abb1801 */
+                                       ('a138e61a-aadb-4a5f-89a1-4aa9db2be329', 'C4C52249-5EB8-4886-8431-87E2F1D6D1A0', 3, 'Hold', 'Hold', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 7ecc910f-f107-4c0e-8f69-bb96a6ff8975 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2bc55331-edb5-4c32-9b6c-8fe63abb1801', '49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F', 4, 'Intake', 'Intake', GETUTCDATE(), GETUTCDATE());
-/* SQL text to insert entity field value with ID 5a52806c-c634-486d-8c61-ffc8de8121af */
+                                       ('7ecc910f-f107-4c0e-8f69-bb96a6ff8975', 'C4C52249-5EB8-4886-8431-87E2F1D6D1A0', 4, 'Intake', 'Intake', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID bc1003dc-0235-432f-93c2-7121b473cfe8 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('5a52806c-c634-486d-8c61-ffc8de8121af', '49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F', 5, 'Transferred', 'Transferred', GETUTCDATE(), GETUTCDATE());
-/* SQL text to update ValueListType for entity field ID 49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F';
+                                       ('bc1003dc-0235-432f-93c2-7121b473cfe8', 'C4C52249-5EB8-4886-8431-87E2F1D6D1A0', 5, 'Transferred', 'Transferred', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID C4C52249-5EB8-4886-8431-87E2F1D6D1A0 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='C4C52249-5EB8-4886-8431-87E2F1D6D1A0';
+
+
 /* Create Entity Relationship: MJ: Breeds -> MJ: Animals (One To Many via BreedID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd47118f6-1d0d-4cbf-bf4b-41c8bce8dd8b'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '2522580f-6378-49f4-a82c-7e74bca63c8f'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('d47118f6-1d0d-4cbf-bf4b-41c8bce8dd8b', 'D0EF843D-8155-4A0E-AEC4-24D13572E32A', '70D5576A-43D5-4E26-AACB-19CD866AB2F8', 'BreedID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('2522580f-6378-49f4-a82c-7e74bca63c8f', 'A40310AA-94BF-43B5-9AA5-6E2757FF1405', '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', 'BreedID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
+
 /* Index for Foreign Keys for Animal */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1944,8 +2009,10 @@ IF NOT EXISTS (
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Animal]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Animal_BreedID ON [${flyway:defaultSchema}].[Animal] ([BreedID]);
-/* SQL text to update entity field related entity name field map for entity field ID BC48EA0B-8BFE-4B3F-8CA1-5F49755E4206 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='BC48EA0B-8BFE-4B3F-8CA1-5F49755E4206', @RelatedEntityNameFieldMap='Breed';
+
+/* SQL text to update entity field related entity name field map for entity field ID B296835D-7A50-4208-9671-0EAAC207F239 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='B296835D-7A50-4208-9671-0EAAC207F239', @RelatedEntityNameFieldMap='Breed';
+
 /* Base View SQL for MJ: Animals */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1979,6 +2046,7 @@ LEFT OUTER JOIN
     [a].[BreedID] = MJBreed_BreedID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAnimals] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
 /* Base View Permissions SQL for MJ: Animals */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1990,6 +2058,7 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwAnimals] TO [cdp_UI], [cdp_Develope
 -----------------------------------------------------------------
 
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAnimals] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
 /* spCreate SQL for MJ: Animals */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2111,9 +2180,11 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAnimal] TO [cdp_Developer], [cdp_Integration];
+
 /* spCreate Permissions for MJ: Animals */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAnimal] TO [cdp_Developer], [cdp_Integration];
+
 /* spUpdate SQL for MJ: Animals */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2216,9 +2287,11 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
+
 /* spUpdate Permissions for MJ: Animals */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAnimal] TO [cdp_Developer], [cdp_Integration];
+
 /* spDelete SQL for MJ: Animals */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2256,9 +2329,11 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAnimal] TO [cdp_Developer], [cdp_Integration];
+
 /* spDelete Permissions for MJ: Animals */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAnimal] TO [cdp_Developer], [cdp_Integration];
+
 /* Index for Foreign Keys for Breed */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2268,6 +2343,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAnimal] TO [cdp_Developer], 
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
+
 /* Base View SQL for MJ: Breeds */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2296,6 +2372,7 @@ FROM
     [${flyway:defaultSchema}].[Breed] AS b
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwBreeds] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
 /* Base View Permissions SQL for MJ: Breeds */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2307,6 +2384,7 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwBreeds] TO [cdp_UI], [cdp_Developer
 -----------------------------------------------------------------
 
 GRANT SELECT ON [${flyway:defaultSchema}].[vwBreeds] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
 /* spCreate SQL for MJ: Breeds */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2387,9 +2465,11 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateBreed] TO [cdp_Developer], [cdp_Integration];
+
 /* spCreate Permissions for MJ: Breeds */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateBreed] TO [cdp_Developer], [cdp_Integration];
+
 /* spUpdate SQL for MJ: Breeds */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2472,9 +2552,11 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
+
 /* spUpdate Permissions for MJ: Breeds */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateBreed] TO [cdp_Developer], [cdp_Integration];
+
 /* spDelete SQL for MJ: Breeds */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2512,16 +2594,18 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteBreed] TO [cdp_Developer], [cdp_Integration];
+
 /* spDelete Permissions for MJ: Breeds */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteBreed] TO [cdp_Developer], [cdp_Integration];
+
 /* SQL text to insert 2 new entity field(s) */
 UPDATE [${flyway:defaultSchema}].[EntityField]
          SET [Sequence] = [Sequence] + 100000
-       WHERE [EntityID] = '70D5576A-43D5-4E26-AACB-19CD866AB2F8'
+       WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D'
          AND [Sequence] < 100000;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7daaeb2b-ba3e-46ac-9650-14b9ee888f29' OR (EntityID = '70D5576A-43D5-4E26-AACB-19CD866AB2F8' AND Name = 'Breed')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a2fa8364-00bc-4b78-b404-b62fe5fbc819' OR (EntityID = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D' AND Name = 'Breed')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2554,8 +2638,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '7daaeb2b-ba3e-46ac-9650-14b9ee888f29',
-            '70D5576A-43D5-4E26-AACB-19CD866AB2F8', -- Entity: MJ: Animals
+            'a2fa8364-00bc-4b78-b404-b62fe5fbc819',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', -- Entity: MJ: Animals
             16,
             'Breed',
             'Breed',
@@ -2583,63 +2667,66 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
             GETUTCDATE()
          )
       END;
+
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '0F7E95F3-01D2-44A0-9958-000F06A82C3A'
+               WHERE ID = '0F724C37-5D74-4AC2-B61E-EAEF82511504'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'B9C63424-DD79-44C2-82A2-A2F4AD065DD9'
+               WHERE ID = 'DF85A3B5-C312-4E9F-8BF9-1E288F83A8C0'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'FB915382-FE9F-4202-92F3-5EFA943F1093'
+               WHERE ID = '724C713E-1D25-4486-9D3B-174220E5DBD0'
                AND AutoUpdateDefaultInView = 1;
 
             UPDATE [${flyway:defaultSchema}].[Entity]
             SET AllowUserSearchAPI = 0
-            WHERE ID = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A'
+            WHERE ID = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405'
             AND AutoUpdateAllowUserSearchAPI = 1;
+
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '8E4A652F-0D84-43B8-A880-CB84E8AE6F77'
+               WHERE ID = '14AF4223-9395-490A-9379-15CDB9D03097'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '89DC5992-DFAD-4661-9D97-374C166CFD52'
+               WHERE ID = '4992E657-62FC-4B60-8B44-AE19B2643091'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F'
+               WHERE ID = 'C4C52249-5EB8-4886-8431-87E2F1D6D1A0'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '7DAAEB2B-BA3E-46AC-9650-14B9EE888F29'
+               WHERE ID = 'A2FA8364-00BC-4B78-B404-B62FE5FBC819'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '37C2257D-1163-42BF-A71D-474538AD83DB'
+               WHERE ID = '57A8EE40-9CD3-47EA-AFE0-937A5A5FCF7E'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '732BF16B-9602-424F-9AF4-1E248C9A427F'
+               WHERE ID = 'C755A802-FA0C-4100-9795-93FBB9A09CAD'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '37C2257D-1163-42BF-A71D-474538AD83DB'
+               WHERE ID = '57A8EE40-9CD3-47EA-AFE0-937A5A5FCF7E'
                AND AutoUpdateUserSearchPredicate = 1;
+
 /* Set categories for 8 fields */
 
 -- UPDATE Entity Field Category Info MJ: Breeds.ID 
@@ -2650,58 +2737,59 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '942AD296-3DD7-4A4C-AAF6-C90E666E697C' AND AutoUpdateCategory = 1;
+   ID = '41020086-E1B4-4DD5-935E-C548C37B8B26' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Breeds.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Breed Information',
+   Category = 'Breed Details',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'FA404650-9E00-4C33-AEE6-F4BE7EB464ED' AND AutoUpdateCategory = 1;
+   ID = '4788C3E9-380E-4D0C-9D09-455FD86F225D' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Breeds.Species 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Breed Information',
+   Category = 'Breed Details',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0F7E95F3-01D2-44A0-9958-000F06A82C3A' AND AutoUpdateCategory = 1;
+   ID = '0F724C37-5D74-4AC2-B61E-EAEF82511504' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Breeds.SizeCategory 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Breed Information',
+   Category = 'Breed Details',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'B9C63424-DD79-44C2-82A2-A2F4AD065DD9' AND AutoUpdateCategory = 1;
+   ID = 'DF85A3B5-C312-4E9F-8BF9-1E288F83A8C0' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Breeds.TypicalLifespanYears 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Breed Information',
+   Category = 'Breed Details',
    GeneratedFormSection = 'Category',
    DisplayName = 'Typical Lifespan (Years)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'EFC94585-72EE-453B-A991-C63A4DF8964E' AND AutoUpdateCategory = 1;
+   ID = '3FA1CDED-1AF0-428E-8B4D-375E0800A008' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Breeds.IsActive 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Breed Information',
+   Category = 'Breed Details',
    GeneratedFormSection = 'Category',
+   DisplayName = 'Active',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'FB915382-FE9F-4202-92F3-5EFA943F1093' AND AutoUpdateCategory = 1;
+   ID = '724C713E-1D25-4486-9D3B-174220E5DBD0' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Breeds.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2711,7 +2799,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '2DD5F54C-4269-4328-B274-595CC1C5CE8F' AND AutoUpdateCategory = 1;
+   ID = '1C27C211-40AE-4C14-A9EA-CEB0BA2D7777' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Breeds.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2721,25 +2809,30 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '1E2691FA-C831-447A-A1FE-3717A7C35A53' AND AutoUpdateCategory = 1;
+   ID = 'AB6C801C-49C4-4136-80B4-35B151BA9934' AND AutoUpdateCategory = 1;
+
 /* Set entity icon to fa fa-paw */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-paw', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A';
+               WHERE [ID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405';
+
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('62efa75d-b6ae-495f-ad1e-b80199c38202', 'D0EF843D-8155-4A0E-AEC4-24D13572E32A', 'FieldCategoryInfo', '{"Breed Information":{"icon":"fa fa-info-circle","description":"Descriptive attributes defining the shelter-recognized breed"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('190cf227-eee2-4ebc-8911-24bb06518579', 'A40310AA-94BF-43B5-9AA5-6E2757FF1405', 'FieldCategoryInfo', '{"Breed Details":{"icon":"fa fa-info-circle","description":"Descriptive attributes of the animal breed including species, size, and lifespan"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('6bdcdca6-6b35-4ff0-8ae4-b9389e54c927', 'D0EF843D-8155-4A0E-AEC4-24D13572E32A', 'FieldCategoryIcons', '{"Breed Information":"fa fa-info-circle","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('b63c0d6d-a843-4aa4-8a05-00945f1bbbd1', 'A40310AA-94BF-43B5-9AA5-6E2757FF1405', 'FieldCategoryIcons', '{"Breed Details":"fa fa-info-circle","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+
 /* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'D0EF843D-8155-4A0E-AEC4-24D13572E32A';
+         WHERE [EntityID] = 'A40310AA-94BF-43B5-9AA5-6E2757FF1405';
+
 /* Set categories for 16 fields */
 
 -- UPDATE Entity Field Category Info MJ: Animals.ID 
@@ -2750,139 +2843,140 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '71A3F940-D814-42C4-86E9-9D82302B2448' AND AutoUpdateCategory = 1;
+   ID = '7556A7F6-61EE-4C02-B410-D0DE79C4D61B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Animal Profile',
+   Category = 'Animal Identity',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '732BF16B-9602-424F-9AF4-1E248C9A427F' AND AutoUpdateCategory = 1;
+   ID = 'C755A802-FA0C-4100-9795-93FBB9A09CAD' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.Species 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Animal Profile',
+   Category = 'Animal Identity',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '8E4A652F-0D84-43B8-A880-CB84E8AE6F77' AND AutoUpdateCategory = 1;
+   ID = '14AF4223-9395-490A-9379-15CDB9D03097' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.Breed 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Animal Profile',
+   Category = 'Animal Identity',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '7DAAEB2B-BA3E-46AC-9650-14B9EE888F29' AND AutoUpdateCategory = 1;
+   ID = 'A2FA8364-00BC-4B78-B404-B62FE5FBC819' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.BreedID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Animal Profile',
+   Category = 'Animal Identity',
    GeneratedFormSection = 'Category',
+   DisplayName = 'Breed Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'BC48EA0B-8BFE-4B3F-8CA1-5F49755E4206' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Animals.Sex 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Animal Profile',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A8DD289B-74C5-4EA5-8A98-7305457E224D' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Animals.EstimatedBirthDate 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Animal Profile',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E767149A-2363-4240-B26C-D9FEBE088483' AND AutoUpdateCategory = 1;
+   ID = 'B296835D-7A50-4208-9671-0EAAC207F239' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.MicrochipNumber 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Identification and Status',
+   Category = 'Animal Identity',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '37C2257D-1163-42BF-A71D-474538AD83DB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Animals.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Identification and Status',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '49172A81-B6B4-4CD1-AD66-D5FF08ABCA6F' AND AutoUpdateCategory = 1;
+   ID = '57A8EE40-9CD3-47EA-AFE0-937A5A5FCF7E' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.IntakeDate 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Intake Details',
+   Category = 'Shelter History',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '89DC5992-DFAD-4661-9D97-374C166CFD52' AND AutoUpdateCategory = 1;
+   ID = '4992E657-62FC-4B60-8B44-AE19B2643091' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.IntakeReason 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Intake Details',
+   Category = 'Shelter History',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'BF881C85-20F3-4563-9B25-550AC5AD01CB' AND AutoUpdateCategory = 1;
+   ID = '08050F3D-9B49-49D5-BCA2-8A416BC864ED' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Animals.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Shelter History',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C4C52249-5EB8-4886-8431-87E2F1D6D1A0' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Animals.Sex 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Physical Attributes',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '61F9A077-4288-4DDD-9E7D-101952BE8E0E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Animals.EstimatedBirthDate 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Physical Attributes',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3379A4DB-A473-4FA1-AA5B-4FF5508781BE' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.WeightKg 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Health and Description',
+   Category = 'Physical Attributes',
    GeneratedFormSection = 'Category',
    DisplayName = 'Weight (kg)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5FD993EE-B784-4EF7-9242-3A6863F4B52F' AND AutoUpdateCategory = 1;
+   ID = 'A26EE0EA-5B2E-4CDC-B458-64861B812713' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Health and Description',
+   Category = 'Animal Profile',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '703D02FA-DC7A-45BE-BF64-4D21CE176C45' AND AutoUpdateCategory = 1;
+   ID = '5B541036-B1DB-4A16-8873-73E4A880E923' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.PhotoBase64 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Health and Description',
+   Category = 'Animal Profile',
    GeneratedFormSection = 'Category',
    DisplayName = 'Photo',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'DB181AD0-830C-4CC9-BD68-7FAE3662E41E' AND AutoUpdateCategory = 1;
+   ID = '7532C9F4-CEAB-44B0-80C1-218FE913C9BB' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2892,7 +2986,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'CCA8F56C-1D65-4AF9-9F3B-F5DC6036FEF9' AND AutoUpdateCategory = 1;
+   ID = '5F1C007E-9158-4FDA-B394-E4720CE1DC0D' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Animals.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2902,25 +2996,30 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '000D31D7-39AA-4582-BE24-93DF839398B7' AND AutoUpdateCategory = 1;
+   ID = '6C4C487E-6616-43A0-B731-E02749033E17' AND AutoUpdateCategory = 1;
+
 /* Set entity icon to fa fa-paw */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-paw', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '70D5576A-43D5-4E26-AACB-19CD866AB2F8';
+               WHERE [ID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D';
+
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('e3450924-8db3-4af7-9ec1-a83abac94295', '70D5576A-43D5-4E26-AACB-19CD866AB2F8', 'FieldCategoryInfo', '{"Animal Profile":{"icon":"fa fa-dog","description":"Core identity and biological information for the animal"},"Identification and Status":{"icon":"fa fa-id-card","description":"Tracking identifiers and current workflow status"},"Intake Details":{"icon":"fa fa-sign-in-alt","description":"Information regarding the animal''s arrival at the shelter"},"Health and Description":{"icon":"fa fa-notes-medical","description":"Physical attributes, health metrics, and descriptive notes"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('ecb58174-c7f1-4030-8c0b-8546a05988ea', '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', 'FieldCategoryInfo', '{"Animal Identity":{"icon":"fa fa-id-card","description":"Core identifying details including name, species, breed, and microchip information"},"Shelter History":{"icon":"fa fa-history","description":"Information regarding intake, shelter workflow status, and arrival context"},"Physical Attributes":{"icon":"fa fa-weight","description":"Biological and physical characteristics including sex, age, and weight"},"Animal Profile":{"icon":"fa fa-align-left","description":"Descriptive notes and visual media for the animal"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('e16697dc-bbaa-4479-8115-f8dafb8ff56b', '70D5576A-43D5-4E26-AACB-19CD866AB2F8', 'FieldCategoryIcons', '{"Animal Profile":"fa fa-dog","Identification and Status":"fa fa-id-card","Intake Details":"fa fa-sign-in-alt","Health and Description":"fa fa-notes-medical","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('38ba5c2a-1607-4a7a-ad9b-5e9058ccfceb', '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D', 'FieldCategoryIcons', '{"Animal Identity":"fa fa-id-card","Shelter History":"fa fa-history","Physical Attributes":"fa fa-weight","Animal Profile":"fa fa-align-left","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+
 /* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '70D5576A-43D5-4E26-AACB-19CD866AB2F8';
+         WHERE [EntityID] = '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D';
+
 /* Generated Validation Functions for MJ: Animals */
 -- CHECK constraint for MJ: Animals: Field: WeightKg was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
@@ -2933,17 +3032,19 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedB
 			ValidationErrorType.Failure
 		));
 	}
-}', 'The weight of the animal must be greater than 0 kg if it is specified.', 'ValidateWeightKgGreaterThanZero', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '5FD993EE-B784-4EF7-9242-3A6863F4B52F');
+}', 'If the animal''s weight is specified, it must be greater than 0 kg to ensure realistic and accurate physical measurements.', 'ValidateWeightKgGreaterThanZero', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'A26EE0EA-5B2E-4CDC-B458-64861B812713');
+
 /* Generated Validation Functions for MJ: Breeds */
 -- CHECK constraint for MJ: Breeds: Field: TypicalLifespanYears was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([TypicalLifespanYears] IS NULL OR [TypicalLifespanYears]>(0))', 'public ValidateTypicalLifespanYearsPositive(result: ValidationResult) {
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([TypicalLifespanYears] IS NULL OR [TypicalLifespanYears]>(0))', 'public ValidateTypicalLifespanYearsGreaterThanZero(result: ValidationResult) {
 	if (this.TypicalLifespanYears != null && this.TypicalLifespanYears <= 0) {
 		result.Errors.push(new ValidationErrorInfo(
 			"TypicalLifespanYears",
-			"Typical lifespan must be greater than 0 years.",
+			"Typical lifespan years must be a positive number greater than zero.",
 			this.TypicalLifespanYears,
 			ValidationErrorType.Failure
 		));
 	}
-}', 'The typical lifespan in years, if specified, must be a positive number greater than zero.', 'ValidateTypicalLifespanYearsPositive', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'EFC94585-72EE-453B-A991-C63A4DF8964E');
+}', 'The typical lifespan in years, if provided, must be a positive number greater than zero.', 'ValidateTypicalLifespanYearsGreaterThanZero', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '3FA1CDED-1AF0-428E-8B4D-375E0800A008');
+
