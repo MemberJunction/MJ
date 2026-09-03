@@ -695,8 +695,27 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         deadlineMs?: number,
         watchKey?: string,
     ): AsyncGenerator<Record<string, unknown>> {
-        const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
-        if (this.DetectTemplateVars(obj.APIPath).length === 0) {
+        // A RUNTIME-DISCOVERED object has NO IntegrationObject row yet — sampling is what decides
+        // the row's contents, so it necessarily runs BEFORE the row is persisted. `GetCachedObject`
+        // is documented to THROW when the object is not in the engine's cache, and that throw fired
+        // here, on the first line, before the connector was ever consulted.
+        //
+        // The blast radius is exactly the objects discovery exists to learn: the whole sampling
+        // chain ran with zero records for them, so no statistical primary key and no observed column
+        // widths — the object was then persisted from the catalog's guesses alone.
+        //
+        // A missing row only disqualifies the record-constrained sampler BELOW, which needs
+        // `obj.APIPath` to detect template vars and `obj.ID` to walk parents. The generic
+        // FetchChanges loop in the base needs neither: it hands routing to the connector, which owns
+        // first contact with an object the catalog has never seen. So a missing row routes to the
+        // fallback rather than aborting the sample.
+        let obj: MJIntegrationObjectEntity | null = null;
+        try {
+            obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
+        } catch {
+            /* Not persisted yet. Not an error here — the fallback below needs no row. */
+        }
+        if (!obj || this.DetectTemplateVars(obj.APIPath).length === 0) {
             // FORWARD THE DEADLINE. Dropping it here silently un-bounds every REST connector that
             // lands on this fallback — which is every connector expressing parent scope as
             // CONFIGURATION rather than as URL template vars.
