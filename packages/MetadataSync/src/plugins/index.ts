@@ -259,6 +259,9 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         errorCount: result.errors,
         dryRun: !!flags['dry-run'],
         sqlLogPath: result.sqlLogPath,
+        // Every part when size-based splitting rotated the capture; a JSON consumer that
+        // commits/renames the migration must take all of these, not just sqlLogPath (= part 1).
+        sqlLogPaths: result.sqlLogPaths,
       },
       errors,
       warnings,
@@ -327,7 +330,15 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     } else {
       this.Host.Log('\n⚠️  Push completed with errors', 'warn');
     }
-    if (result.sqlLogPath) this.Host.Log(`\n📄 SQL log saved to: ${path.relative(process.cwd(), result.sqlLogPath)}`);
+    const logParts = result.sqlLogPaths;
+    if (logParts && logParts.length > 1) {
+      // A size-split capture is several files — list every part so none is missed when
+      // committing/renaming the migration.
+      this.Host.Log(`\n📄 SQL log saved in ${logParts.length} parts:`);
+      logParts.forEach((p) => this.Host.Log(`   ${path.relative(process.cwd(), p)}`));
+    } else if (result.sqlLogPath) {
+      this.Host.Log(`\n📄 SQL log saved to: ${path.relative(process.cwd(), result.sqlLogPath)}`);
+    }
   }
 
   private fail(startTime: number, errors: MJCLIResultError[]): MJCLIResult {

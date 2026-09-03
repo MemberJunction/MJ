@@ -266,6 +266,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return {
             id: session.id,
             filePath: session.filePath,
+            get filePaths() {
+                return session.filePaths;
+            },
             startTime: session.startTime,
             get statementCount() {
                 return session.statementCount;

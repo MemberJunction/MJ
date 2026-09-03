@@ -15,6 +15,16 @@ import fs from 'fs-extra';
 import { configManager } from './lib/config-manager';
 
 /**
+ * Default maximum size (bytes) for a captured SQL migration file when `sqlLogging.maxFileSize`
+ * is not set: 90 MiB. Chosen to sit safely below GitHub's 100 MiB hard push-block (files over
+ * that are rejected) while keeping ~10 MiB of headroom and minimizing the number of part files.
+ * (GitHub's 50 MB "large file" notice is only a soft warning, not a block, so we don't optimize
+ * for it.) Applied by the metadata-sync push/watch capture paths so a large push splits into
+ * multiple `*.partNNN.sql` files automatically. Set `maxFileSize: 0` in `.mj-sync.json` to disable.
+ */
+export const DEFAULT_SQL_LOG_MAX_FILE_SIZE = 90 * 1024 * 1024;
+
+/**
  * MemberJunction database configuration
  * 
  * Defines connection parameters and settings for connecting to the MemberJunction
@@ -136,6 +146,16 @@ export interface SyncConfig {
      * while avoiding one GO per statement. Defaults to 200. Set to 0 for legacy per-statement behavior.
      */
     variableBatchThreshold?: number;
+    /**
+     * Maximum size, in bytes, of a single generated SQL migration file. When a push capture would
+     * exceed this, the logger splits the output into multiple ordered part files (`*.partNNN.sql`),
+     * each individually runnable and under the limit — so a large metadata push stays under host
+     * file-size limits (e.g. GitHub's 100 MiB cap). Splitting happens strictly on statement
+     * boundaries; a push whose output fits under the limit produces a single file at the original
+     * path (no part suffix). Defaults to 94371840 (90 MiB) for the metadata-sync push/watch paths.
+     * Set to 0 to disable splitting.
+     */
+    maxFileSize?: number;
   };
   /** Watch command configuration */
   watch?: {
