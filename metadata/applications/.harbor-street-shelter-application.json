@@ -1,0 +1,106 @@
+{
+  "fields": {
+    "Name": "Harbor Street Animal Shelter",
+    "Description": "Intake, housing, care and adoption for the Harbor Street shelter. The teaching application for MJ Academy course 1.",
+    "Icon": "fa-solid fa-paw",
+    "Color": "#264FAF",
+    "Status": "Active",
+    "NavigationStyle": "App Switcher",
+    "DefaultForNewUser": true,
+    "DefaultSequence": 60,
+    "DefaultNavItems": [
+      {
+        "Label": "Animals",
+        "Description": "Every animal in the shelter. A dynamic view -- Explorer's generic entity grid, addressed by entity name, with no saved view record behind it.",
+        "Icon": "fa-solid fa-paw",
+        "ResourceType": "Custom",
+        "DriverClass": "ShelterAnimalsGrid",
+        "isDefault": true,
+        "Status": "Active"
+      },
+      {
+        "Label": "Housing",
+        "Description": "Housing units and their capacity. Records you can open and edit.",
+        "Icon": "fa-solid fa-house-chimney",
+        "ResourceType": "Custom",
+        "DriverClass": "ShelterHousingGrid",
+        "isDefault": false,
+        "Status": "Active"
+      },
+      {
+        "Label": "Breeds",
+        "Description": "Reference data: the breeds the shelter recognises.",
+        "Icon": "fa-solid fa-dog",
+        "ResourceType": "Custom",
+        "DriverClass": "ShelterBreedsGrid",
+        "isDefault": false,
+        "Status": "Active"
+      },
+      {
+        "Label": "Occupancy",
+        "Description": "How full each unit is, computed live. These rows are not records -- this is RunQuery.",
+        "Icon": "fa-solid fa-chart-simple",
+        "ResourceType": "Queries",
+        "RecordID": "@lookup:MJ: Queries.Name=Housing Occupancy",
+        "isDefault": false,
+        "Status": "Active"
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": [
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Animals",
+          "Sequence": 10,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "B9EFCCC3-88B3-4BEA-9D75-4AF49A13E848"
+        },
+        "sync": {
+          "lastModified": "2026-09-03T18:57:37.174Z",
+          "checksum": "93f1d615bac174205098e9d9de1195141d26a21242cf8d867702e8194461161c"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Housings",
+          "Sequence": 20,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "F0E9D953-95EF-4665-91EF-A28EA56C7111"
+        },
+        "sync": {
+          "lastModified": "2026-09-03T18:57:37.188Z",
+          "checksum": "cd2e84c208fc7042a94c57da41e970db03aa1c7d5aa357a9f29d006db6367d57"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Breeds",
+          "Sequence": 30,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "0B0A8C02-D8FB-4893-BC66-A2293CC4857C"
+        },
+        "sync": {
+          "lastModified": "2026-09-03T18:57:37.199Z",
+          "checksum": "28296d84a911cb909eac06db4ddbb73820f64d0ff1026cf3050228dc381cd206"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "B1E4A7C2-3F5D-4A88-9C10-6D2E8F4B7A91"
+  },
+  "sync": {
+    "lastModified": "2026-09-03T19:37:43.222Z",
+    "checksum": "9b515b5e9019eb38bb3b29164ce0302f2657fe076c381099213410d5239c65c8"
+  }
+}

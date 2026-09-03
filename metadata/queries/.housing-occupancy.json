@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "Housing Occupancy",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Shelter",
+      "UserQuestion": "How full is each housing unit right now?",
+      "Description": "Live occupancy against capacity for every active housing unit. The RunQuery example for MJ Academy module 4: the answer is computed, so these rows are not entity records and cannot be opened or edited.",
+      "TechnicalDescription": "LEFT JOINs vwAnimals onto vwHousings and counts assignments per unit, so empty units still report zero. Returns Unit, Building, Species, Capacity, Occupied, Spaces. No parameters. TWO CONSTRAINTS ON THIS SQL, both because MJ wraps a Query in 'WITH [__count] AS ( ... )' to get a row count: (1) NO ORDER BY -- it is illegal inside a CTE and fails with 'The ORDER BY clause is invalid in ... common table expressions'; let the grid sort. (2) the schema is written literally as __mj, NOT as ${flyway:defaultSchema} -- migrations are flyway-processed but metadata files are not, so a placeholder is stored verbatim and fails at runtime.",
+      "SQL": "@file:SQL/housing-occupancy.sql",
+      "Status": "Approved",
+      "Reusable": true,
+      "UsesTemplate": false,
+      "QualityRank": 8,
+      "ExecutionCostRank": 1
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "2B3C4D5E-0002-4B00-8C00-6D7E8F9A0002"
+    },
+    "sync": {
+      "lastModified": "2026-09-03T19:27:03.655Z",
+      "checksum": "566b0a3fc41f1fd6a4ad527c61caa213132f55580a6cb43663943371a1bf519e"
+    }
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "Name": "Shelter",
+      "Description": "Queries for the Harbor Street Animal Shelter teaching application (MJ Academy course 1).",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "2B3C4D5E-0001-4B00-8C00-6D7E8F9A0001"
+    }
+  }
+]

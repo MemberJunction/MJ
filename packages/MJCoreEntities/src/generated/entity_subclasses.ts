@@ -8513,7 +8513,7 @@ export const MJAnimalSchema = z.object({
         * * Description: Dog or Cat. Duplicated from Breed on purpose: species is known at intake even when breed is not, and it is the discriminator every downstream feature filters on.`),
     BreedID: z.string().nullable().describe(`
         * * Field Name: BreedID
-        * * Display Name: Breed Reference
+        * * Display Name: Breed ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Breeds (vwBreeds.ID)`),
     MicrochipNumber: z.string().nullable().describe(`
@@ -8585,10 +8585,20 @@ export const MJAnimalSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    HousingID: z.string().nullable().describe(`
+        * * Field Name: HousingID
+        * * Display Name: Housing ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Housings (vwHousings.ID)
+        * * Description: The housing unit this animal is currently assigned to. Nullable because an animal is logged at intake, usually before anyone has placed it.`),
     Breed: z.string().nullable().describe(`
         * * Field Name: Breed
         * * Display Name: Breed
         * * SQL Data Type: nvarchar(100)`),
+    Housing: z.string().nullable().describe(`
+        * * Field Name: Housing
+        * * Display Name: Housing
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type MJAnimalEntityType = z.infer<typeof MJAnimalSchema>;
@@ -20787,6 +20797,64 @@ export const MJGeneratedCodeSchema = z.object({
 });
 
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Housings
+ */
+export const MJHousingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)`),
+    Building: z.string().nullable().describe(`
+        * * Field Name: Building
+        * * Display Name: Building
+        * * SQL Data Type: nvarchar(50)`),
+    Species: z.union([z.literal('Any'), z.literal('Cat'), z.literal('Dog')]).describe(`
+        * * Field Name: Species
+        * * Display Name: Species
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Any
+    *   * Cat
+    *   * Dog
+        * * Description: Which species the unit accepts: Dog, Cat, or Any. Prevents a cat being assigned to a dog run. Allows Any because some units take either, which Animal.Species does not.`),
+    Capacity: z.number().describe(`
+        * * Field Name: Capacity
+        * * Display Name: Capacity
+        * * SQL Data Type: int
+        * * Description: How many animals this unit is designed to hold. Assignment rules compare live occupancy against this number, which is why it cannot be answered without a database read.`),
+    IsQuarantine: z.boolean().describe(`
+        * * Field Name: IsQuarantine
+        * * Display Name: Is Quarantine
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Marks the unit as quarantine space, used to keep new or sick intakes away from the adoptable population.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJHousingEntityType = z.infer<typeof MJHousingSchema>;
 
 /**
  * zod schema definition for the entity MJ: Identity Claim Types
@@ -57885,7 +57953,7 @@ export class MJAnimalEntity extends BaseEntity<MJAnimalEntityType> {
 
     /**
     * * Field Name: BreedID
-    * * Display Name: Breed Reference
+    * * Display Name: Breed ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Breeds (vwBreeds.ID)
     */
@@ -58048,12 +58116,35 @@ export class MJAnimalEntity extends BaseEntity<MJAnimalEntityType> {
     }
 
     /**
+    * * Field Name: HousingID
+    * * Display Name: Housing ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Housings (vwHousings.ID)
+    * * Description: The housing unit this animal is currently assigned to. Nullable because an animal is logged at intake, usually before anyone has placed it.
+    */
+    get HousingID(): string | null {
+        return this.Get('HousingID');
+    }
+    set HousingID(value: string | null) {
+        this.Set('HousingID', value);
+    }
+
+    /**
     * * Field Name: Breed
     * * Display Name: Breed
     * * SQL Data Type: nvarchar(100)
     */
     get Breed(): string | null {
         return this.Get('Breed');
+    }
+
+    /**
+    * * Field Name: Housing
+    * * Display Name: Housing
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Housing(): string | null {
+        return this.Get('Housing');
     }
 }
 
@@ -90458,6 +90549,186 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     */
     get LinkedEntity(): string | null {
         return this.Get('LinkedEntity');
+    }
+}
+
+
+/**
+ * MJ: Housings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Housing
+ * * Base View: vwHousings
+ * * @description A physical place an animal can be kept: a dog run, a cat condo, an isolation room. Occupancy is deliberately not stored here -- it is derived by counting the animals assigned to the unit, so it can never go stale.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Housings')
+export class MJHousingEntity extends BaseEntity<MJHousingEntityType> {
+    /**
+    * Loads the MJ: Housings record from the database
+    * @param ID: string - primary key value to load the MJ: Housings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJHousingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Housings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Capacity: The capacity must be a positive number greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCapacityGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The capacity must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCapacityGreaterThanZero(result: ValidationResult) {
+    	if (this.Capacity !== undefined && this.Capacity !== null && this.Capacity <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Capacity",
+    			"Capacity must be greater than zero.",
+    			this.Capacity,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Building
+    * * Display Name: Building
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Building(): string | null {
+        return this.Get('Building');
+    }
+    set Building(value: string | null) {
+        this.Set('Building', value);
+    }
+
+    /**
+    * * Field Name: Species
+    * * Display Name: Species
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Any
+    *   * Cat
+    *   * Dog
+    * * Description: Which species the unit accepts: Dog, Cat, or Any. Prevents a cat being assigned to a dog run. Allows Any because some units take either, which Animal.Species does not.
+    */
+    get Species(): 'Any' | 'Cat' | 'Dog' {
+        return this.Get('Species');
+    }
+    set Species(value: 'Any' | 'Cat' | 'Dog') {
+        this.Set('Species', value);
+    }
+
+    /**
+    * * Field Name: Capacity
+    * * Display Name: Capacity
+    * * SQL Data Type: int
+    * * Description: How many animals this unit is designed to hold. Assignment rules compare live occupancy against this number, which is why it cannot be answered without a database read.
+    */
+    get Capacity(): number {
+        return this.Get('Capacity');
+    }
+    set Capacity(value: number) {
+        this.Set('Capacity', value);
+    }
+
+    /**
+    * * Field Name: IsQuarantine
+    * * Display Name: Is Quarantine
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Marks the unit as quarantine space, used to keep new or sick intakes away from the adoptable population.
+    */
+    get IsQuarantine(): boolean {
+        return this.Get('IsQuarantine');
+    }
+    set IsQuarantine(value: boolean) {
+        this.Set('IsQuarantine', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
