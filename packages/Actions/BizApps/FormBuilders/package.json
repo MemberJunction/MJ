@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions-bizapps-formbuilders",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "Form builder and survey platform integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,12 +24,12 @@
   "author": "MemberJunction",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/actions": "6.1.0-edge.3",
-    "@memberjunction/actions-base": "6.1.0-edge.3",
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "axios": "^1.13.4",
+    "@memberjunction/actions": "6.1.0-edge.5",
+    "@memberjunction/actions-base": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/network-utils": "6.1.0-edge.5",
     "exceljs": "^4.4.0",
     "mammoth": "^1.11.0",
     "pdf-parse": "^1.1.1"

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/scheduling-actions",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Scheduling Actions - agentic tools for managing scheduled jobs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,15 +16,15 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/actions": "6.1.0-edge.3",
-    "@memberjunction/actions-base": "6.1.0-edge.3",
-    "@memberjunction/scheduling-base-types": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/actions": "6.1.0-edge.5",
+    "@memberjunction/actions-base": "6.1.0-edge.5",
+    "@memberjunction/scheduling-base-types": "6.1.0-edge.5",
     "cron-parser": "^4.9.0",
     "luxon": "^3.2.1",
-    "@memberjunction/scheduling-engine": "6.1.0-edge.3"
+    "@memberjunction/scheduling-engine": "6.1.0-edge.5"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

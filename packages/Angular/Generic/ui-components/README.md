@@ -79,8 +79,16 @@ Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, option
 ### `mj-dropdown` — MJDropdownComponent
 Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`.
 
+**Give every dropdown an accessible name.** The trigger is a `div[role=combobox]`, so `<label for>` neither names nor focuses it — an unnamed dropdown announces as "combobox, collapsed" (WCAG 2.1 4.1.2). Use `AriaLabelledBy` when a visible label already exists, `AriaLabel` when none does; `AriaDescribedBy` carries hint/error text, and `InputId` puts an id on the trigger for other markup to reference. All are applied to the popup listbox as well as the trigger, and a filterable panel's filter box takes its name from the same source.
+
 ```html
-<mj-dropdown [Data]="items" TextField="name" ValueField="id"
+<!-- A visible label already on screen (preferred) -->
+<span id="persona-label">Interview persona</span>
+<mj-dropdown AriaLabelledBy="persona-label" [Data]="items" TextField="name" ValueField="id"
+             [(ngModel)]="selectedId" [ValuePrimitive]="true" />
+
+<!-- No visible label -->
+<mj-dropdown AriaLabel="Interview persona" [Data]="items" TextField="name" ValueField="id"
              [(ngModel)]="selectedId" [ValuePrimitive]="true" />
 ```
 

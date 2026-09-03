@@ -63,6 +63,10 @@ export interface EnvironmentInfo {
   NpmVersion: string;
   /** CPU architecture (e.g., `"x64"`, `"arm64"`). */
   Architecture: string;
+  /** Configured package manager for this install (default `'pnpm'`). */
+  PackageManager?: 'npm' | 'pnpm';
+  /** Version of the configured package manager, or `"not found"`. */
+  PackageManagerVersion?: string;
 }
 
 /**

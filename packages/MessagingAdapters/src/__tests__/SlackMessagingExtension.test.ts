@@ -43,9 +43,18 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/generic-database-provider', () => {
+    // Models the real UserCache: BaseSingleton's constructor returns the shared instance, and
+    // `Instance` is the only supported accessor (see BaseMessagingAdapter.test.ts for the full
+    // note — `new UserCache()` wipes the shared cache and is why this mock must expose Instance).
     const users = [{ ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' }];
+    const store: { instance?: MockUserCache } = {};
     class MockUserCache {
-        get Users() { return users; }
+        _users = users;
+        get Users() { return this._users; }
+        static get Instance(): MockUserCache {
+            if (!store.instance) store.instance = new MockUserCache();
+            return store.instance;
+        }
     }
     return { UserCache: MockUserCache };
 });
@@ -59,6 +68,12 @@ vi.mock('@memberjunction/ai-agents', () => ({
 // Mock signature verification
 vi.mock('../slack/slack-routes.js', () => ({
     verifySlackSignature: vi.fn().mockReturnValue(true)
+}));
+
+// Mock the interaction handler so the Socket Mode routing test observes the call without
+// exercising Slack's modal API.
+vi.mock('../slack/slack-interactivity.js', () => ({
+    handleSlackInteraction: vi.fn().mockResolvedValue(undefined)
 }));
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
@@ -106,6 +121,8 @@ describe('SlackMessagingExtension', () => {
         socketMocks.disconnect.mockReset().mockResolvedValue(undefined);
         socketMocks.on.mockReset();
         vi.mocked(verifySlackSignature).mockReset().mockReturnValue(true);
+        const { handleSlackInteraction } = await import('../slack/slack-interactivity.js');
+        vi.mocked(handleSlackInteraction).mockReset().mockResolvedValue(undefined);
 
         const { RunView } = await import('@memberjunction/core');
         vi.mocked(RunView).mockImplementation(() => {
@@ -192,6 +209,47 @@ describe('SlackMessagingExtension', () => {
             const eventNames = socketMocks.on.mock.calls.map((call: string[]) => call[0]);
             expect(eventNames).toContain('message');
             expect(eventNames).toContain('app_mention');
+        });
+
+        it('registers interactivity listeners so buttons and modals work in Socket Mode', async () => {
+            // Without these, every interactive element the block builder renders was inert: the
+            // click produced an event nothing listened for, so a human-in-the-loop agent asking a
+            // question via a form could not be answered at all.
+            const app = createMockApp();
+            const config = createConfig({ ConnectionMode: 'socket', AppToken: 'xapp-test-token' });
+
+            await extension.Initialize(app, config);
+
+            const eventNames = socketMocks.on.mock.calls.map((call: string[]) => call[0]);
+            expect(eventNames).toContain('interactive');
+            // Only that one. For an events_api envelope the SDK emits the INNER event type; for
+            // every other envelope it emits the envelope type, and Slack labels all block actions
+            // and view submissions 'interactive'. Subscribing to those names never fired, and a
+            // view submission that DID double-fire would run the agent twice.
+            expect(eventNames).not.toContain('block_actions');
+            expect(eventNames).not.toContain('view_submission');
+        });
+
+        it('routes a Socket Mode interaction payload to the interaction handler', async () => {
+            const { handleSlackInteraction } = await import('../slack/slack-interactivity.js');
+            const app = createMockApp();
+            const config = createConfig({ ConnectionMode: 'socket', AppToken: 'xapp-test-token' });
+            await extension.Initialize(app, config);
+
+            const call = socketMocks.on.mock.calls.find((c: unknown[]) => c[0] === 'interactive');
+            expect(call).toBeDefined();
+            const handler = call![1] as (arg: { body: unknown; ack: () => Promise<void> }) => Promise<void>;
+
+            const ack = vi.fn().mockResolvedValue(undefined);
+            // Socket Mode delivers the payload as an OBJECT; the handler's contract is a string.
+            const payload = { type: 'block_actions', actions: [{ action_id: 'mj:form_modal:open' }] };
+            await handler({ body: { payload }, ack });
+
+            expect(ack).toHaveBeenCalled();
+            expect(vi.mocked(handleSlackInteraction)).toHaveBeenCalled();
+            const raw = vi.mocked(handleSlackInteraction).mock.calls[0][0];
+            expect(typeof raw).toBe('string');
+            expect(JSON.parse(raw as string).actions[0].action_id).toBe('mj:form_modal:open');
         });
 
         it('should call start on SocketModeClient', async () => {

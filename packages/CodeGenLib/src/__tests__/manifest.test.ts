@@ -3,7 +3,7 @@ import ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import { generateClassRegistrationsManifest, resolveSubpathExports } from '../Manifest/GenerateClassRegistrationsManifest';
+import { generateClassRegistrationsManifest, resolveSubpathExports, resolveLazySubpathExports } from '../Manifest/GenerateClassRegistrationsManifest';
 
 // We test the pure functions from the manifest generator by importing via a module-level mock setup.
 // Many functions in the manifest generator are module-private, but we can test the exported types
@@ -1357,5 +1357,325 @@ describe('Lazy Config Generation - Integration', () => {
         // Keys still map to their (renamed) loaders
         expect(content).toMatch(/'BaseResourceComponent::AlphaPlugin':\s*loadAlphaPlugins/);
         expect(content).toMatch(/'BaseResourceComponent::BetaPlugin':\s*loadBetaPlugins/);
+    });
+});
+
+// =============================================================================
+// RegisterClassEx (options-bag decorator) — issue #3944
+//
+// These drive the REAL generator over a virtual filesystem rather than a local
+// copy of its AST logic, because the bug being guarded against was in the
+// scanner itself: it matched the decorator identifier literally, so every
+// @RegisterClassEx class was silently absent from the manifest — and from the
+// coverage audit built on the same scan.
+// =============================================================================
+
+describe('generateClassRegistrationsManifest - RegisterClassEx decorator', () => {
+    let virtualFiles: Record<string, string>;
+    const appDir = path.resolve('/test-register-ex').replace(/\\/g, '/');
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
+    const pkgDir = `${appDir}/node_modules/@test/panels`;
+
+    /** Package with a src/ tree — the TypeScript-source scan path. */
+    function setupSourcePackage(panelSource: string, declaredClasses: string[]): void {
+        virtualFiles = {
+            [`${appDir}/package.json`]: JSON.stringify({
+                name: 'test-register-ex-app',
+                dependencies: { '@test/panels': '1.0.0' }
+            }, null, 2),
+            [`${pkgDir}/package.json`]: JSON.stringify({
+                name: '@test/panels',
+                version: '1.0.0',
+                types: './dist/index.d.ts',
+                dependencies: {}
+            }),
+            [`${pkgDir}/src/panels.ts`]: panelSource,
+            [`${pkgDir}/dist/index.d.ts`]:
+                declaredClasses.map(c => `export declare class ${c} extends BaseFormPanel {}`).join('\n') + '\n',
+        };
+    }
+
+    const norm = (p: string) => p.replace(/\\/g, '/');
+
+    function wireFsMocks(): void {
+        vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return true;
+            return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
+        });
+
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
+            const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+            (err as NodeJS.ErrnoException).code = 'ENOENT';
+            throw err;
+        });
+
+        vi.mocked(fs.writeFileSync).mockImplementation(() => undefined);
+        vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
+
+        vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
+            const cwd = norm((opts?.cwd as string) || '');
+            const patternStr = Array.isArray(_pattern) ? _pattern.join(',') : _pattern;
+            const wantsTS = patternStr.includes('.ts');
+            const wantsJS = patternStr.includes('js');
+            return Object.keys(virtualFiles).filter(f => {
+                if (!f.startsWith(cwd + '/')) return false;
+                if (wantsTS && f.endsWith('.ts') && !f.endsWith('.d.ts')) return true;
+                if (wantsJS && (f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.cjs')) && !f.endsWith('.d.ts')) return true;
+                return false;
+            });
+        });
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    async function run(options: Record<string, unknown> = {}) {
+        wireFsMocks();
+        return generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            ...options,
+        });
+    }
+
+    it('should detect a TypeScript @RegisterClassEx class and read its key from the options bag', async () => {
+        setupSourcePackage([
+            "import { RegisterClassEx } from '@memberjunction/global';",
+            "@RegisterClassEx(BaseFormPanel, {",
+            "    key: 'content-sources:tag-pipeline',",
+            "    skipNullKeyWarning: true,",
+            "    metadata: { entity: 'MJ: Content Sources', slot: 'after-fields', sortKey: 100 },",
+            "})",
+            "export class TagPipelinePanel extends BaseFormPanel {}",
+        ].join('\n'), ['TagPipelinePanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        const cls = result.classes.find(c => c.className === 'TagPipelinePanel');
+        expect(cls).toBeDefined();
+        expect(cls!.baseClassName).toBe('BaseFormPanel');
+        expect(cls!.key).toBe('content-sources:tag-pipeline');
+    });
+
+    it('should detect a keyless @RegisterClassEx class (metadata-only options bag)', async () => {
+        setupSourcePackage([
+            "import { RegisterClassEx } from '@memberjunction/global';",
+            "@RegisterClassEx(BaseFormPanel, { metadata: { entity: 'MJ: Users' } })",
+            "export class UserRolePanel extends BaseFormPanel {}",
+        ].join('\n'), ['UserRolePanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        const cls = result.classes.find(c => c.className === 'UserRolePanel');
+        expect(cls).toBeDefined();
+        expect(cls!.baseClassName).toBe('BaseFormPanel');
+        expect(cls!.key).toBeUndefined();
+    });
+
+    it('should detect both decorator forms in the same file and emit both in the manifest', async () => {
+        setupSourcePackage([
+            "import { RegisterClass, RegisterClassEx } from '@memberjunction/global';",
+            "@RegisterClass(BaseFormPanel, 'positional-panel')",
+            "export class PositionalPanel extends BaseFormPanel {}",
+            "@RegisterClassEx(BaseFormPanel, { key: 'options-bag-panel' })",
+            "export class OptionsBagPanel extends BaseFormPanel {}",
+        ].join('\n'), ['PositionalPanel', 'OptionsBagPanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(result.classes.map(c => c.className).sort()).toEqual(['OptionsBagPanel', 'PositionalPanel']);
+        expect(result.classes.find(c => c.className === 'PositionalPanel')!.key).toBe('positional-panel');
+        expect(result.classes.find(c => c.className === 'OptionsBagPanel')!.key).toBe('options-bag-panel');
+    });
+
+    it('should ignore a decorator whose name merely starts with RegisterClass', async () => {
+        setupSourcePackage([
+            "@RegisterClassSomethingElse(BaseFormPanel, { key: 'not-a-registration' })",
+            "export class NotRegisteredPanel extends BaseFormPanel {}",
+        ].join('\n'), ['NotRegisteredPanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(result.classes.some(c => c.className === 'NotRegisteredPanel')).toBe(false);
+    });
+
+    it('should leave the key undefined when the options bag key is not a string literal', async () => {
+        setupSourcePackage([
+            "import { RegisterClassEx } from '@memberjunction/global';",
+            "const PANEL_KEY = 'computed-key';",
+            "@RegisterClassEx(BaseFormPanel, { key: PANEL_KEY })",
+            "export class ComputedKeyPanel extends BaseFormPanel {}",
+        ].join('\n'), ['ComputedKeyPanel']);
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        const cls = result.classes.find(c => c.className === 'ComputedKeyPanel');
+        expect(cls).toBeDefined();
+        expect(cls!.key).toBeUndefined();
+    });
+
+    it('should detect @RegisterClassEx in compiled __decorate output when scanning dist/', async () => {
+        virtualFiles = {
+            [`${appDir}/package.json`]: JSON.stringify({
+                name: 'test-register-ex-app',
+                dependencies: { '@test/dist-panels': '1.0.0' }
+            }, null, 2),
+            [`${appDir}/node_modules/@test/dist-panels/package.json`]: JSON.stringify({
+                name: '@test/dist-panels',
+                version: '1.0.0',
+                types: './dist/index.d.ts',
+                dependencies: {}
+            }),
+            [`${appDir}/node_modules/@test/dist-panels/dist/index.js`]: [
+                'var __decorate = (this && this.__decorate) || function (d, t, k, desc) { return t; };',
+                'import { RegisterClass, RegisterClassEx } from "@memberjunction/global";',
+                'let DistPositionalPanel = class DistPositionalPanel extends BaseFormPanel {};',
+                'DistPositionalPanel = __decorate([',
+                "    RegisterClass(BaseFormPanel, 'dist-positional')",
+                '], DistPositionalPanel);',
+                'export { DistPositionalPanel };',
+                'let DistOptionsBagPanel = class DistOptionsBagPanel extends BaseFormPanel {};',
+                'DistOptionsBagPanel = __decorate([',
+                "    RegisterClassEx(BaseFormPanel, { key: 'dist-options-bag', metadata: { entity: 'MJ: AI Models' } })",
+                '], DistOptionsBagPanel);',
+                'export { DistOptionsBagPanel };',
+            ].join('\n'),
+            [`${appDir}/node_modules/@test/dist-panels/dist/index.d.ts`]: [
+                'export declare class DistPositionalPanel extends BaseFormPanel {}',
+                'export declare class DistOptionsBagPanel extends BaseFormPanel {}',
+            ].join('\n') + '\n',
+        };
+
+        const result = await run({ scanDist: true });
+
+        expect(result.success).toBe(true);
+        expect(result.classes.map(c => c.className).sort()).toEqual(['DistOptionsBagPanel', 'DistPositionalPanel']);
+        expect(result.classes.find(c => c.className === 'DistOptionsBagPanel')!.key).toBe('dist-options-bag');
+        expect(result.classes.find(c => c.className === 'DistOptionsBagPanel')!.baseClassName).toBe('BaseFormPanel');
+    });
+});
+
+// ---------------------------------------------------------------------------------------
+// A package that DECLARES subpath exports but has not been built used to resolve to "no
+// subpaths", which is indistinguishable from a package that genuinely has none — and sends it
+// down the whole-package branch, collapsing its per-subpath lazy chunks into one eager import.
+// The emitted config still compiles, so nothing downstream catches it. These pin the refusal.
+// ---------------------------------------------------------------------------------------
+describe('Manifest Generator - lazy subpath resolution refuses to guess', () => {
+    const PKG_DIR = '/repo/packages/Angular/Explorer/dashboards';
+
+    /** Route existsSync/readFileSync by path: package.json present, every .d.ts absent unless listed. */
+    function mockPackage(packageJson: Record<string, unknown>, presentDtsFiles: string[] = []): void {
+        const present = new Set(presentDtsFiles);
+        vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+            const s = String(p);
+            if (s.endsWith('package.json')) return true;
+            return present.has(s);
+        });
+        vi.mocked(fs.readFileSync).mockImplementation(((p: fs.PathOrFileDescriptor) => {
+            const s = String(p);
+            if (s.endsWith('package.json')) return JSON.stringify(packageJson);
+            return 'export declare class Whatever {}';
+        }) as unknown as typeof fs.readFileSync);
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('throws when subpath exports are declared but none of their .d.ts targets exist', () => {
+        mockPackage({
+            name: '@memberjunction/ng-dashboards',
+            exports: {
+                '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                './core-dashboards.module': { types: './dist/core-dashboards.module.d.ts', default: './dist/core-dashboards.module.js' },
+                './ai-dashboards.module': { types: './dist/ai-dashboards.module.d.ts', default: './dist/ai-dashboards.module.js' }
+            }
+        });
+
+        expect(() => resolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).toThrow(/has not been built/);
+    });
+
+    it('names the package and the directory it looked in, so the message is actionable', () => {
+        mockPackage({
+            exports: {
+                '.': { types: './dist/index.d.ts' },
+                './core-dashboards.module': { types: './dist/core-dashboards.module.d.ts' }
+            }
+        });
+
+        expect(() => resolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR))
+            .toThrow(/@memberjunction\/ng-dashboards/);
+        expect(() => resolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR))
+            .toThrow(new RegExp(PKG_DIR.replace(/\//g, '\\/')));
+    });
+
+    it('does NOT throw for a package that legitimately declares no subpath exports', () => {
+        mockPackage({ name: '@memberjunction/ng-shared', exports: { '.': { types: './dist/index.d.ts' } } });
+
+        expect(() => resolveLazySubpathExports('@memberjunction/ng-shared', PKG_DIR)).not.toThrow();
+        expect(resolveLazySubpathExports('@memberjunction/ng-shared', PKG_DIR).size).toBe(0);
+    });
+
+    it('does NOT throw for a package with no exports field at all', () => {
+        mockPackage({ name: '@memberjunction/legacy', main: './dist/index.js' });
+
+        expect(() => resolveLazySubpathExports('@memberjunction/legacy', PKG_DIR)).not.toThrow();
+    });
+
+    // Regression: the first cut of this guard asked "is there any key besides '.'", which is true
+    // for every ng-packagr output — they all publish `"./package.json"`, an entry with no `types`
+    // field that resolution skips by design. That flagged built Angular packages as unbuilt and
+    // broke lazy-config generation outright. The guard must count only entries carrying `types`.
+    it('does NOT throw for a built ng-packagr output whose only extra export is ./package.json', () => {
+        mockPackage({
+            name: '@memberjunction/ng-bootstrap',
+            exports: {
+                './package.json': { default: './package.json' },
+                '.': { types: './types/memberjunction-ng-bootstrap.d.ts', default: './fesm2022/memberjunction-ng-bootstrap.mjs' }
+            }
+        });
+
+        expect(() => resolveLazySubpathExports('@memberjunction/ng-bootstrap', PKG_DIR)).not.toThrow();
+    });
+
+    it('does NOT throw when the only extra exports are untyped, however many there are', () => {
+        mockPackage({
+            name: '@memberjunction/whatever',
+            exports: {
+                '.': { types: './dist/index.d.ts' },
+                './package.json': { default: './package.json' },
+                './styles.css': { default: './dist/styles.css' }
+            }
+        });
+
+        expect(() => resolveLazySubpathExports('@memberjunction/whatever', PKG_DIR)).not.toThrow();
+    });
+
+    it('does NOT throw once the package is built — the subpaths resolve', () => {
+        mockPackage(
+            {
+                name: '@memberjunction/ng-dashboards',
+                exports: {
+                    '.': { types: './dist/index.d.ts' },
+                    './core-dashboards.module': { types: './dist/core-dashboards.module.d.ts' }
+                }
+            },
+            [path.resolve(PKG_DIR, './dist/core-dashboards.module.d.ts')]
+        );
+
+        expect(() => resolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).not.toThrow();
     });
 });

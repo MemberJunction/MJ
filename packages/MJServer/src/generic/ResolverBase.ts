@@ -31,7 +31,7 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
@@ -341,6 +341,58 @@ export class ResolverBase {
     return dataObjectArray;
   }
 
+  /**
+   * Renders one `findBy` predicate value as the SQL literal text it will become inside the
+   * `ExtraFilter` that method builds.
+   *
+   * The two slots have different exposure, so they are handled differently:
+   *
+   * - **Quoted slot** (`NeedsQuotes` — every type except Number and Boolean). The value sits
+   *   inside a single-quoted literal, so it is escaped with `EscapeSQLString`: quotes are
+   *   doubled and null bytes stripped, leaving the payload inert *inside* the literal.
+   * - **Unquoted slot** (Number and Boolean fields). There is no literal to break out of
+   *   here — the value lands in the clause bare, so a string value simply *is* SQL and no
+   *   amount of quote escaping helps. Only a genuine number or boolean is accepted; anything
+   *   else is refused rather than interpolated. Numeric and boolean strings are accepted too
+   *   (a client may legitimately send `"42"`), since neither can carry SQL.
+   *
+   * A `null`/`undefined` value is refused in either slot. `EscapeSQLString` maps both to `''`
+   * by design, which would silently turn a by-value lookup into `Field = ''` — for this
+   * caller a missing value is a bug, not a query.
+   *
+   * @param value the raw value supplied for the field
+   * @param fieldName field name, for the error message
+   * @param entity entity name, for the error message
+   * @param needsQuotes whether the field's type requires a quoted literal
+   * @returns the literal text (including quotes when the slot is quoted)
+   * @throws when the value cannot be rendered safely for the slot it is destined for
+   */
+  private formatFilterValue(value: unknown, fieldName: string, entity: string, needsQuotes: boolean): string {
+    if (value === null || value === undefined) {
+      throw new Error(
+        `Field ${fieldName} in entity ${entity} was given a ${value === null ? 'null' : 'undefined'} value. findBy builds an equality predicate, which needs a value to compare against.`
+      );
+    }
+
+    if (needsQuotes) {
+      return `'${EscapeSQLString(String(value))}'`;
+    }
+
+    // Unquoted slot — accept only what cannot carry SQL, and render it exactly as before.
+    if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) {
+      return String(value);
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (/^-?\d+(\.\d+)?$/.test(trimmed)) return trimmed;
+      if (/^(true|false)$/i.test(trimmed)) return trimmed.toLowerCase();
+    }
+
+    throw new Error(
+      `Field ${fieldName} in entity ${entity} is a numeric or boolean field, so its value is not quoted in the filter — only a number or boolean can be used. Received: ${typeof value}.`
+    );
+  }
+
   protected async findBy<T = any>(provider: DatabaseProviderBase, entity: string, params: any, contextUser: UserInfo): Promise<Array<T>> {
     // build the SQL query based on the params passed in
     const rv = provider as any as IRunViewProvider;
@@ -354,8 +406,7 @@ export class ResolverBase {
       // look up the field in the entityInfo to see if it needs quotes
       const field = e.Fields.find((f) => f.Name === k);
       if (!field) throw new Error(`Field ${k} not found in entity ${entity}`);
-      const quotes = field.NeedsQuotes ? "'" : '';
-      extraFilter += `${k} = ${quotes}${params[k]}${quotes}`;
+      extraFilter += `${k} = ${this.formatFilterValue(params[k], k, entity, field.NeedsQuotes)}`;
     });
 
     // ok, now we have a SQL string, run it and return the results
@@ -382,7 +433,8 @@ export class ResolverBase {
       const rv = provider as any as IRunViewProvider;
       const result = await rv.RunView<MJUserViewEntityExtended>({
         EntityName: 'MJ: User Views',
-        ExtraFilter: "Name='" + viewInput.ViewName + "'",
+        // SECURITY: the view name is client-supplied and lands inside a SQL literal.
+        ExtraFilter: "Name='" + EscapeSQLString(viewInput.ViewName) + "'",
       }, userPayload.userRecord);
       if (result && result.Success && result.Results.length > 0) {
         const viewInfo = result.Results[0];
@@ -1545,6 +1597,10 @@ export class ResolverBase {
   ) {
     // Check API key scope authorization for entity delete operations
     await this.CheckAPIKeyScopeAuthorization('entity:delete', entityName, userPayload);
+
+    // ...which authorizes "may you delete", never "may you delete without an audit row". Strip
+    // the capabilities no client may exercise before they reach the entity.
+    options = DeleteOptionsInput.SanitizeFromWire(options, entityName, userPayload?.email);
 
     if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled

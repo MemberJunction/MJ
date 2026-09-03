@@ -1187,6 +1187,110 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * IS-A PROMOTION (#3825): binds this NEW child record to an EXISTING parent row, so saving it
+     * ADDS a subtype to a person/org/product that already exists instead of trying to create a
+     * duplicate parent.
+     *
+     * Before this existed the operation was impossible: `NewRecord()` always starts a fresh parent
+     * chain, so "this existing Person is now also an Applicant" INSERTed a second Person and
+     * collided with the existing primary key (or, with parent fields unset, failed the parent's
+     * NOT NULL validation as if it were brand new). Discovery ran the other way only — a loaded
+     * parent finds its existing child — and promotion is the normal case in a multi-app install,
+     * where a shared entity like Person accumulates subtypes owned by different applications.
+     *
+     * What it does, in the existing machinery rather than beside it:
+     *  1. LOADS the parent chain by the supplied key (`InnerLoad`, which also hydrates any
+     *     grandparents from the same row). A loaded parent saves as an UPDATE, which is the whole
+     *     trick — the chain save that already runs parent-first now updates the existing row and
+     *     INSERTs only this child.
+     *  2. Mirrors the shared primary key into this child's local fields, restoring `_NeverSet`
+     *     exactly as `NewRecord()`'s adoption path does, so the ReadOnly mirror stays writable for
+     *     the rest of the lifecycle.
+     *
+     * Everything else is deliberately UNTOUCHED: field routing still sends parent-held values to
+     * the (now loaded) parent, permissions and validation run at every level, and
+     * `EnforceDisjointSubtype` still refuses a second subtype where the parent forbids overlap.
+     * If loading the parent discovers an existing child of ANOTHER subtype, the chain save is
+     * unaffected — parent saves run with `IsParentEntitySave`, which bypasses leaf delegation.
+     *
+     * Call AFTER `NewRecord()` and BEFORE `Save()`:
+     * ```typescript
+     * const applicant = await md.GetEntityObject<ApplicantEntity>('Applicants', contextUser);
+     * applicant.NewRecord();
+     * if (!await applicant.AttachToParent(CompositeKey.FromID(personId))) {
+     *     // no such parent row — decide whether to create a fresh chain instead
+     * }
+     * applicant.Set('CompanyID', companyId);   // child-held fields as usual
+     * await applicant.Save();                  // Person UPDATEd, Applicant INSERTed, one transaction
+     * ```
+     *
+     * @param parentKey Primary key of the EXISTING parent row to promote.
+     * @returns `true` when the parent loaded and this record is now bound to it; `false` when no
+     *   parent row exists under that key (this record is left exactly as it was — still a fresh
+     *   chain — so the caller can choose to save it as one).
+     * @throws When this entity is not an IS-A child type, or has already been saved — promotion
+     *   is a decision about what a NEW record IS, not an edit to an existing one.
+     */
+    public async AttachToParent(parentKey: CompositeKey): Promise<boolean> {
+        if (!this.EntityInfo.IsChildType || !this._parentEntity) {
+            throw new Error(
+                `AttachToParent: '${this.EntityInfo.Name}' is not an IS-A child type — there is no parent to attach to.`);
+        }
+        if (this.IsSaved) {
+            throw new Error(
+                `AttachToParent: '${this.EntityInfo.Name}' record is already saved. Promotion binds a NEW record to an existing parent; it cannot re-parent a saved one.`);
+        }
+        // The PARENT's primary keys drive everything here, not the child's. The shared-PK mirror
+        // is a same-name convention, and a child EntityInfo is not obliged to re-declare the key as
+        // its own PrimaryKey — iterating the child's list silently does nothing on such a schema,
+        // which is exactly the empty-loop bug the first draft of this method had.
+        const parentPks = this._parentEntity.EntityInfo.PrimaryKeys;
+        // Captured BEFORE the load: InnerLoad wipes the parent chain's state before it reads, so a
+        // MISSING parent row would otherwise leave the fresh chain gutted — root PK nulled, record
+        // unsaveable — when the contract is "left exactly as it was, so the caller can still save
+        // it as a fresh chain".
+        const freshPkValues = parentPks.map(pk => ({
+            name: pk.Name,
+            value: this._parentEntity!.Get(pk.Name) as unknown,
+        }));
+        const loaded = await this._parentEntity.InnerLoad(parentKey);
+        if (!loaded) {
+            // Restore the fresh chain the failed load destroyed: re-seed the parent chain, then put
+            // the ORIGINAL minted key back (Set routes to the root), so the record the caller holds
+            // is bit-for-bit the fresh record they built.
+            this._parentEntity.NewRecord();
+            for (const pk of freshPkValues) {
+                if (pk.value != null) {
+                    this._parentEntity.Set(pk.name, pk.value);
+                    this.mirrorSharedKey(pk.name, pk.value);
+                }
+            }
+            return false;
+        }
+        for (const pk of parentPks) {
+            const parentValue = this._parentEntity.Get(pk.Name);
+            if (parentValue != null) {
+                this.mirrorSharedKey(pk.Name, parentValue);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Writes one shared-key value onto this child's LOCAL mirror, when a same-named field exists —
+     * a schema that leaves the shared key entirely to routing has no mirror to maintain, and that
+     * is fine. Restores `_NeverSet` exactly as `NewRecord()`'s adoption path does, so the ReadOnly
+     * mirror stays writable for the rest of the lifecycle.
+     */
+    private mirrorSharedKey(name: string, value: unknown): void {
+        if (!this.GetFieldByName(name)) {
+            return;
+        }
+        this.SetLocal(name, value);
+        this.GetFieldByName(name)?.ResetNeverSetFlag();
+    }
+
+    /**
      * Discovers and initializes the IS-A child entity for a loaded record.
      *
      * After a record is loaded, this method checks whether a more-derived child entity

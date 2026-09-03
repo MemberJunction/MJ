@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/testing-cli",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction Testing Framework CLI - Command-line interface for test execution and management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,14 +22,14 @@
     "@types/mssql": "^9.1.9"
   },
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/testing-engine": "6.1.0-edge.3",
-    "@memberjunction/testing-engine-base": "6.1.0-edge.3",
-    "@memberjunction/testing-integration": "6.1.0-edge.3",
-    "@memberjunction/generic-database-provider": "6.1.0-edge.3",
-    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/testing-engine": "6.1.0-edge.5",
+    "@memberjunction/testing-engine-base": "6.1.0-edge.5",
+    "@memberjunction/testing-integration": "6.1.0-edge.5",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.5",
+    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.5",
     "@oclif/core": "^3.27.0",
     "ora-classic": "^5.4.2",
     "chalk": "^5.6.2",
@@ -44,6 +44,6 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "optionalDependencies": {
-    "@memberjunction/postgresql-dataprovider": "6.1.0-edge.3"
+    "@memberjunction/postgresql-dataprovider": "6.1.0-edge.5"
   }
 }

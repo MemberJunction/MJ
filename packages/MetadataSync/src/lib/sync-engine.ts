@@ -11,7 +11,7 @@
 import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
-import axios from 'axios';
+import { HttpGet } from '@memberjunction/network-utils';
 import { EntityInfo, IMetadataProvider, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
@@ -352,8 +352,10 @@ export class SyncEngine {
       const url = extractKeywordValue(value) as string;
       
       try {
-        const response = await axios.get(url);
-        return response.data;
+        // A developer-authored `@url:` reference in a local metadata file — it may legitimately
+        // point at an internal host, so this is deliberately not SSRF-guarded.
+        const response = await HttpGet(url);
+        return response.Data;
       } catch (error) {
         throw new Error(`Failed to fetch URL: ${url} - ${error}`);
       }
