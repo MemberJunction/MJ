@@ -72,9 +72,10 @@ denied to that role.
 | 4.2 | `No Access` is neutral | User in a `No Access` role and an `Allow` role → allowed |
 | 4.3 | **Read-required clamp across roles** | Role A `Read+Update=Allow`, role B `Read=Deny` → user has neither read NOR update |
 | 4.4 | Missing row on an enabled entity | Denied (fail closed) |
-| 4.5 | System user exempt | System user reads every column on a restricted entity |
+| 4.5 | **System user is NOT exempt — its access is data** | The aggregation has no identity branch; the system user reads every column of a restricted entity because snapshot initialization wrote `Allow` rows for the standard roles it holds, not because it is bypassed |
 | 4.6 | Unrestrictable targets | Rows targeting a PK are rejected at save |
-| 4.7 | Config guards | A rule aimed at a system-user role is refused; assigning such a role to the system user is refused |
+| 4.7 | Config guards, all four vectors | Each is refused: a `Deny` on a system-user role; the **last** edit turning its roles to `No Access`; the **last** delete of its `Allow` rows; assigning it a role that already denies a field. A non-system role stays freely restrictable |
+| 4.8 | Startup sweep | A lockout introduced by direct SQL is reported at startup; a clean database reports nothing; cost is negligible with no entity enabled |
 
 ## Tier 5 — DB tier and propagation
 
@@ -152,7 +153,7 @@ never involve the real system user or the real user cache.
 system user's roles. Same reasoning that already excludes unrestrictable fields — the system user
 is exempt in the aggregation, so rows for its roles are inert clutter.
 
-### 🔴 BUG 2 (OPEN) — flag flip is NOT atomic in practice
+### ⚪ BUG 2 (CLOSED 2026-08-10 — not a bug) — flag flip *is* atomic
 
 After the failure above, the database was left with **28 permission rows and
 `EnableFieldLevelSecurity = 0`** — half the unit of work committed, half rolled back.
@@ -166,18 +167,71 @@ while `spCreateEntityFieldPermission` executes on another, putting the inserts o
 transaction entirely. Worth checking whether `RunInEntityTransaction`'s scope and
 `BaseEntity.Save()`'s SQL execution resolve to the same connection.
 
-**Written up separately as a general platform issue** —
-[`entity-transaction-atomicity-gap.md`](./entity-transaction-atomicity-gap.md) — because the
-mechanism is not FLS-specific: any server-side code using `RunInEntityTransaction` to write
-several records relies on the same guarantee.
+**Investigated on 2026-08-10 and closed: the transaction layer is correct.** Five live
+reproductions — flat scope, nested scope with a validation failure, nested scope with a
+batch-aborting SQL error, the real `MJEntityEntityServer.Save()` with a forced mid-snapshot
+collision, and a byte-faithful replay of the original pre-fix failure — **all rolled back
+completely**. `@@SPID` was identical across the scope and every write, `TRANCOUNT` stayed at 1
+throughout, and a second connection reading the rows mid-transaction hit lock timeout 1222,
+proving they were inside it.
 
-For FLS specifically it must be resolved before the PR. A partially applied flag flip leaves an
-entity whose rows say one thing and whose flag says another, and on an enabled entity a missing
-row denies — so the failure mode is a silent lockout.
+The 28 rows came from `MJEntityPermissionEntityServer`, which reconciles **once per
+`EntityPermission` row saved** via `ReconcileFieldPermissionsQuietly` — N independent,
+individually-atomic units of work, of which two succeeded (14 fields × 2 roles = 28) and the
+third hit the pre-fix system-user-role guard. Full evidence in
+[`entity-transaction-atomicity-gap.md`](./entity-transaction-atomicity-gap.md).
 
 ## Not yet run
 
-Tiers 2.2–2.10 (blocked behind bug 2), 3, 4, 5, 6.
+Tiers 3, 4, 5, 6.
+
+---
+
+# Results — second run (2026-08-10)
+
+## Tier 2 — PASSED, 15/15
+
+Run through the real `MJEntityEntityServer.Save()` against `MJ: Employees` (14 restrictable
+fields × 3 non-system roles = 42 rows).
+
+| # | Result |
+|---|---|
+| 2.1 | ✅ 42 rows written; none target primary keys or `__mj_` columns; none target system-user roles |
+| 2.2 | ✅ `FLS Payroll` (read+update+create) → `Allow/Allow/Allow`; `FLS Intern` and `Widget Guest` (read-only) → `Allow/No Access/No Access` |
+| 2.4 | ✅ A forced mid-snapshot failure left the flag at 0 and wrote no rows |
+| 2.5 | ✅ Disable kept all 42 rows |
+| 2.6 | ✅ Tighten → disable → re-enable: no rows added, the `Deny` survived |
+| 2.10 | ✅ Re-saving with the flag already on (not dirty) wrote nothing |
+
+Not covered here: 2.3 (visible column set unchanged — belongs with Tier 3, which has the
+restricted users), and 2.7–2.9 (CodeGen reconciliation and the entity-permission adapter).
+
+## Tier 4.5 / 4.7 / 4.8 — system-user access, PASSED 11/11
+
+Run after the system-user rework removed the runtime exemption. The account's access is now
+ordinary data, so these verify that nothing can quietly take it away.
+
+| # | Result |
+|---|---|
+| 4.5 | ✅ System user denied no field on the restricted entity — from `Allow` rows, with no identity branch anywhere in the aggregation |
+| 4.7a | ✅ Turning every system-user role to `No Access` one at a time: the **last** edit is refused, access retained |
+| 4.7b | ✅ Deleting every system-user `Allow` row one at a time: the **last** delete is refused, access retained |
+| 4.7c | ✅ A `Deny` on a system-user role is refused outright |
+| 4.7d | ✅ A non-system role remains freely restrictable — `Deny` and delete both permitted, no false refusals |
+| 4.8a | ✅ Clean database: zero violations reported |
+| 4.8b | ✅ A lockout written by **direct SQL** — which no entity-layer guard sees — is caught by the startup sweep |
+| 4.8c | ✅ Cost: **0.09 ms** across 375 entities with none enabled; 0.3 ms with one enabled |
+
+**The `No Access` hole this found.** The first version of the guard refused only a rule containing
+a `Deny`, reasoning that `No Access` is the aggregation's identity element and so cannot take away
+what another role granted. True of one rule, false of a *change*: setting every one of the system
+user's roles to `No Access` in turn writes no `Deny` anywhere and still ends with the field denied.
+Proven live before the fix — every save permitted, `email` denied to the system user.
+
+The second version read the projected rules from **metadata** and was still defeated, because
+metadata lags recent writes: each save saw its siblings' stale `Allow` and passed. The guard now
+loads the field's rules from the database (`BypassCache`) on the update and delete paths, gated
+behind a role check so it costs nothing for ordinary permission administration.
 
 ## Environment note
 

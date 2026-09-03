@@ -71,22 +71,52 @@ needs both:
 So a write-only field is not a configuration MJ supports. If you need one, capture the value
 through a purpose-built action rather than a restricted column.
 
-### 1.4 No person is exempt
+### 1.4 Nobody is exempt
 
-There is no admin bypass and no Owner carve-out — deliberately. A feature whose purpose is
-confidentiality cannot ship with a role that quietly reads everything. Administering FLS never
-requires reading the secured *values*; the admin UI edits permission rows, not the data.
+There is no admin bypass, no Owner carve-out, and **no exempt account at all** — deliberately. A
+feature whose purpose is confidentiality cannot ship with a role that quietly reads everything.
+Administering FLS never requires reading the secured *values*; the admin UI edits permission
+rows, not the data.
 
-The one exemption is the **MJ system user**, which is not a person: it is the account the server
-runs its own work as. Its engine caches are process-wide and shared across every user, so a
-restricted system user would leave partially loaded records where everyone reads them, with
-nothing at the point of failure pointing back at the rule that caused it. The exemption also
-protects no data — the server reaches the database through a single service login that can
-already see every column, so denying it at this layer only stops the server doing its own work.
+That includes the **MJ system user** — the account the server runs its own work as. It is not
+special-cased anywhere in the permission evaluation. Its access comes from ordinary permission
+rows, like everyone else's: it holds the standard roles (UI, Developer, Integration), and
+enabling field security on an entity writes `Allow` rows for every role that can read that
+entity, including those.
 
-MJ refuses to entangle that account with restricted roles in the first place: you cannot save a
-field rule aimed at a role the system user holds, and you cannot give the system user a role
-that already carries field rules.
+What MJ protects instead is the **configuration**. The system user's engine caches are
+process-wide and shared across every user, so a restricted system user would leave partially
+loaded records where everyone reads them, with nothing at the point of failure pointing back at
+the rule that caused it. So MJ refuses any change that would leave that account with less field
+access than its entity-level permissions already give it:
+
+- a rule that **denies** anything to a role the system user holds is refused;
+- an edit that would turn its **last** `Allow` on a field into `No Access` is refused;
+- a delete that would remove its **last** `Allow` on a field is refused;
+- giving the system user a role that already denies a field is refused.
+
+Anything that does not reduce its access saves normally — including `Allow` and `No Access` rows
+on those roles, which is the mechanism the server's own access depends on. Rules aimed at any
+other role are untouched by all of this.
+
+> **Why the guard looks at the whole field, not the rule you are editing.** Whether a change
+> restricts someone is a property of the **aggregate across every role they hold**, never of one
+> rule on its own. `No Access` cannot take away what another role granted — but set *every* one of
+> the system user's roles to `No Access` in turn and no `Deny` was ever written, yet nothing is
+> left granting the field. So the guard evaluates the rules as they would stand *after* your
+> change, for update and delete. Inserts need only the `Deny` check, since adding a rule can never
+> remove an existing `Allow`.
+
+A **startup check** sweeps FLS-enabled entities and logs any field the system user has lost access
+to. It is the backstop for states the save path never saw — direct SQL, a migration, a role taken
+off the account. It warns rather than refusing to boot: bad configuration should be loud, but a
+server that will not start is worse, not least because the application is usually how an
+administrator would fix the rows. Cost is negligible (entities without the flag are skipped on a
+boolean read; no queries at all).
+
+The difference matters. A configuration rule is visible in the data and an administrator can
+reason about it; a runtime bypass is invisible at the one place access is decided, and can only
+be trusted rather than checked.
 
 ### 1.5 What "no rows" means
 
@@ -191,7 +221,8 @@ query's SQL against your FLS posture *when granting run access*.
 Entity objects loaded server-side retain every column in memory — the trust boundary is the
 API output, exactly as with encrypted fields. Engines are no longer a concern here: on a
 server, `BaseEngine` always loads its shared caches as the MJ system user regardless of who
-triggered the load, so engine data cannot be narrowed by a restricted caller. For NON-engine
+triggered the load, so engine data cannot be narrowed by a restricted caller — and the
+configuration guards in §1.4 are what keep the system user itself unrestricted. For NON-engine
 server code (an action or agent step holding a restricted `contextUser`), single-record loads
 fetch only the caller's allowed columns; anything beyond that remains code the server trusts.
 

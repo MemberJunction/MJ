@@ -62,13 +62,16 @@ type RoleEntityAccessForFieldVerbs = {
  * **Unrestrictable fields (primary keys, `__mj_` columns) get no rows.** They are forced open
  * in the aggregation regardless, so rows for them are clutter that would also trip the
  * save-time guard.
+ *
+ * **No role is excluded — including the ones the MJ system user holds.** Those rows are what
+ * keeps the system user working now that the aggregation has no bypass for it: it holds the
+ * standard roles (UI, Developer, Integration), which carry entity read on essentially
+ * everything, so the snapshot grants them `Allow` here and the save-time guards refuse any
+ * later `Deny` aimed at them. Access the server relies on is therefore visible in the data
+ * rather than implied by an exemption in code.
  */
-export function ComputeFieldPermissionDelta(
-    entity: EntityInfo,
-    options: FieldPermissionDeltaOptions = {}
-): FieldPermissionDelta {
-    const excluded = new Set((options.ExcludedRoleIDs ?? []).map(normalizeID).filter(Boolean));
-    const accessByRoleID = buildRoleEntityAccessMap(entity, excluded);
+export function ComputeFieldPermissionDelta(entity: EntityInfo): FieldPermissionDelta {
+    const accessByRoleID = buildRoleEntityAccessMap(entity);
     const restrictableFields = entity.Fields.filter(isRestrictable);
 
     return {
@@ -76,29 +79,6 @@ export function ComputeFieldPermissionDelta(
         ToDelete: computeOrphanRowIDs(entity, accessByRoleID),
     };
 }
-
-/** Caller-supplied narrowing for {@link ComputeFieldPermissionDelta}. */
-export type FieldPermissionDeltaOptions = {
-    /**
-     * Roles that must never receive permission rows — in practice, the roles the MJ system user
-     * holds.
-     *
-     * Two independent reasons, and the first is fatal without this:
-     *
-     * 1. `MJEntityFieldPermissionEntityServer` REFUSES to save a row aimed at a system-user role.
-     *    Since the standard roles (UI, Developer, Integration) hold entity permissions on
-     *    essentially everything and the system user holds those roles, a snapshot that included
-     *    them would fail on the very first row — making it impossible to enable field security on
-     *    any entity at all.
-     * 2. Even if it saved, the row would do nothing. The system user is exempt in the
-     *    aggregation, so rows for its roles are clutter — exactly the reasoning that excludes
-     *    unrestrictable fields.
-     *
-     * Passed in rather than resolved here so this module stays pure and testable; the reconciler
-     * reads the roles off the user cache.
-     */
-    ExcludedRoleIDs?: string[];
-};
 
 /**
  * A field is restrictable when field security could meaningfully apply to it. Primary keys and
@@ -116,16 +96,13 @@ function isRestrictable(field: EntityFieldInfo): boolean {
  * Roles resolving to no read access are omitted entirely, so callers can treat presence in the
  * map as "this role should have rows."
  */
-function buildRoleEntityAccessMap(
-    entity: EntityInfo,
-    excludedRoleIDs: ReadonlySet<string>
-): Map<string, RoleEntityAccessForFieldVerbs> {
+function buildRoleEntityAccessMap(entity: EntityInfo): Map<string, RoleEntityAccessForFieldVerbs> {
     const allow = new Map<string, RoleEntityAccessForFieldVerbs>();
     const deny = new Map<string, RoleEntityAccessForFieldVerbs>();
 
     for (const permission of entity.Permissions) {
         const roleID = normalizeID(permission.RoleID);
-        if (!roleID || excludedRoleIDs.has(roleID)) {
+        if (!roleID) {
             continue;
         }
         const bucket = isDenyPermission(permission) ? deny : allow;
