@@ -28,6 +28,7 @@
     "@angular-devkit/build-angular": "^18.2.21",
     "@angular/cli": "^18.2.21",
     "@angular/compiler-cli": "^18.2.0",
+    "@types/dom-chromium-ai": "^0.0.17",
     "@types/jasmine": "~5.1.0",
     "@webgpu/types": "^0.1.69",
     "jasmine-core": "~5.2.0",
