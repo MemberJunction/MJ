@@ -713,6 +713,11 @@ export class BaseEntityResult {
      * Nothing catches this at compile time because `Errors` is `any[]`; nothing catches it at runtime
      * because `JSON.stringify` always succeeds. It is only visible by reading the message a user got.
      *
+     * The parameter is `unknown` rather than `any` — per `.claude/rules/typescript-style.md` — because
+     * not knowing the shape is the whole reason this helper exists, and `unknown` forces the narrowing
+     * that makes each shape's handling explicit. Callers pass `any` (the `Errors` array and the `Error`
+     * property are both legacy `any`), which is assignable, so no call site changes.
+     *
      * `Message` is preferred over `message` because a `ValidationErrorInfo` has only the former,
      * while an `Error` has only the latter — so the order matters solely for an object carrying both,
      * where the MJ-native field is the better answer.
@@ -720,15 +725,21 @@ export class BaseEntityResult {
      * @param err - One entry from the `Errors` array.
      * @returns The entry's human-readable text, falling back to JSON for a shape with neither field.
      */
-    public static ErrorText(err: any): string {
+    public static ErrorText(err: unknown): string {
         if (err === null || err === undefined) {
             return '';
         }
         if (typeof err === 'string') {
             return err;
         }
-        const text = err.Message ?? err.message;
-        return typeof text === 'string' && text.trim().length > 0 ? text : JSON.stringify(err);
+        if (typeof err === 'object') {
+            const shaped = err as { Message?: unknown; message?: unknown };
+            const text = shaped.Message ?? shaped.message;
+            if (typeof text === 'string' && text.trim().length > 0) {
+                return text;
+            }
+        }
+        return JSON.stringify(err);
     }
 
     /**
