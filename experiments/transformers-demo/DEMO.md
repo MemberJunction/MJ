@@ -28,7 +28,7 @@ examples to try. Findings and numbers are in `FINDINGS-CHROME-BUILTIN-AI.md`.
 
 ```bash
 cd experiments/transformers-demo
-nvm use 20        # Angular 18 CLI; Node 24 is reported as unsupported
+nvm use 24        # Angular 21 CLI; matches the workspace .nvmrc
 npm install
 npm start         # http://localhost:4200
 ```
