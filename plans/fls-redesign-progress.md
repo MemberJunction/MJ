@@ -88,6 +88,35 @@ them into a tracked file.**
 
 ## Remaining work, in order
 
+### ✅ FIXED — `EntityFieldPermission` had no delete path from `EntityField`
+
+Found and fixed 2026-08-14, in the feature's own migration (now
+`V202609031645__v6.1.x__Entity_Field_Permissions.sql`).
+
+`FK_EntityFieldPermission_EntityField` was `NO_ACTION`, and `spDeleteUnneededEntityFields` — the
+proc CodeGen uses to retire `EntityField` rows for columns that left the base view — clears
+`EntityFieldValue` but knew nothing about `EntityFieldPermission`. So on an FLS-enabled entity,
+**dropping any column from the base view failed CodeGen's metadata-sync phase** with an FK
+violation, and the stale `EntityField` survived. Verified live against `mj_test` before the fix.
+
+**Both fixes applied**, deliberately:
+
+- `ON DELETE CASCADE` on the FK — covers every path that reaches `EntityField`, including the raw
+  DML ones no entity-layer hook can intercept, and makes true what `computeOrphanRowIDs` already
+  assumed.
+- `spDeleteUnneededEntityFields` also deletes the rows explicitly, mirroring the `EntityFieldValue`
+  delete beside it — so a reader working out what happens to a retired field finds both answers in
+  the same proc rather than one there and one in a constraint definition.
+
+The proc body is reproduced verbatim from the v5.46 baseline (the newest of the four copies; it
+carries an external-data-source exclusion the older ones lack) with that single statement added.
+
+**🚨 `mj_test` must be rebuilt from scratch.** The migration was renamed to a new timestamp, so
+Flyway sees a new version while history still records the old one — and the file is not idempotent
+(it starts with `CREATE TABLE`). A wipe + `mj migrate` is required, which is the Tier 1 run the
+test plan calls for anyway. Until then the cascade is proven only by parse-checking; the semantics
+land with 2.8a.
+
 ### W4 — DONE
 The CodeGen adapter is `reconcileFieldLevelSecurity` in `CodeGenLib/src/Database/`, called from
 `runCodeGen.ts` **after** the `provider.Refresh()` that follows `manageMetadata` — it must see the
