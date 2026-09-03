@@ -76,8 +76,20 @@ CREATE TABLE ${flyway:defaultSchema}.EntityFieldPermission (
     UpdateAccess  NVARCHAR(20)     NOT NULL CONSTRAINT DF_EntityFieldPermission_UpdateAccess DEFAULT (N'No Access'),
     CreateAccess  NVARCHAR(20)     NOT NULL CONSTRAINT DF_EntityFieldPermission_CreateAccess DEFAULT (N'No Access'),
     CONSTRAINT PK_EntityFieldPermission PRIMARY KEY (ID),
+    -- ON DELETE CASCADE: a rule about a column that no longer exists is meaningless, and the
+    -- column's own metadata row is retired by CodeGen whenever it leaves the entity's BASE VIEW
+    -- (a dropped column, a dropped foreign key taking its joined display column with it, a custom
+    -- view narrowed to stop selecting it). That retirement runs through
+    -- spDeleteUnneededEntityFields, which does raw DML rather than going through the entity layer
+    -- -- so no BaseEntity subclass, and no Entity.CascadeDeletes setting, can clean up ahead of
+    -- it. Without the cascade that DELETE fails on this constraint and CodeGen's whole
+    -- metadata-sync phase reports failure on any FLS-enabled entity that loses a column.
+    -- spDeleteUnneededEntityFields is ALSO taught to clear these rows first (below), which is the
+    -- belt to this braces: the proc keeps the deletion explicit and greppable, the cascade covers
+    -- every other path that reaches EntityField.
     CONSTRAINT FK_EntityFieldPermission_EntityField
-        FOREIGN KEY (EntityFieldID) REFERENCES ${flyway:defaultSchema}.EntityField(ID),
+        FOREIGN KEY (EntityFieldID) REFERENCES ${flyway:defaultSchema}.EntityField(ID)
+        ON DELETE CASCADE,
     CONSTRAINT FK_EntityFieldPermission_Role
         FOREIGN KEY (RoleID) REFERENCES ${flyway:defaultSchema}.Role(ID),
     -- One row per (field, role): a role's stance on a field is always a single
@@ -128,6 +140,132 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'EntityFieldPermission',
     @level2type = N'COLUMN', @level2name = N'CreateAccess';
 GO
+
+-- ============================================================================
+-- spDeleteUnneededEntityFields — teach CodeGen's field-retirement proc about
+-- EntityFieldPermission
+-- ============================================================================
+-- CodeGen retires EntityField rows for columns that have left an entity's BASE VIEW, through
+-- this proc. It does raw DML rather than going through the entity layer, so neither a
+-- BaseEntity subclass nor Entity.CascadeDeletes can clean up the new child table ahead of it —
+-- the DELETE simply fails on FK_EntityFieldPermission_EntityField, and CodeGen's whole
+-- metadata-sync phase reports failure for any field-security-enabled entity that loses a column.
+--
+-- Reproduced verbatim from the v5.46 baseline with ONE addition: the EntityFieldPermission
+-- delete, placed alongside the EntityFieldValue delete it mirrors. Everything else is unchanged.
+-- ============================================================================
+CREATE OR ALTER PROC [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
+    @ExcludedSchemaNames NVARCHAR(MAX),
+    @EntityIDs NVARCHAR(MAX) = NULL
+AS
+-- Get rid of any EntityFields that are NOT virtual and are not part of the underlying VIEW or TABLE - these are orphaned meta-data elements
+-- where a field once existed but no longer does either it was renamed or removed from the table or view
+SET NOCOUNT ON;
+
+IF OBJECT_ID('tempdb..#ef_spDeleteUnneededEntityFields') IS NOT NULL
+    DROP TABLE #ef_spDeleteUnneededEntityFields
+IF OBJECT_ID('tempdb..#actual_spDeleteUnneededEntityFields') IS NOT NULL
+    DROP TABLE #actual_spDeleteUnneededEntityFields
+IF OBJECT_ID('tempdb..#DeletedFields') IS NOT NULL
+    DROP TABLE #DeletedFields
+
+-- Materialize the optional entity scope list once. @IsScoped lets the WHERE clauses
+-- short-circuit to the unscoped path with a single int compare instead of joining
+-- against an empty table variable.
+DECLARE @ScopedEntityIDs TABLE (EntityID UNIQUEIDENTIFIER PRIMARY KEY);
+DECLARE @IsScoped BIT = 0;
+IF @EntityIDs IS NOT NULL AND LEN(@EntityIDs) > 0
+BEGIN
+    INSERT INTO @ScopedEntityIDs (EntityID)
+    SELECT DISTINCT TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value)))
+    FROM STRING_SPLIT(@EntityIDs, ',')
+    WHERE LTRIM(RTRIM(value)) <> ''
+      AND TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value))) IS NOT NULL;
+    IF EXISTS (SELECT 1 FROM @ScopedEntityIDs) SET @IsScoped = 1;
+END
+
+-- put these two views into temp tables, for some SQL systems, this makes the join below WAY faster
+SELECT
+    ef.*
+INTO
+    #ef_spDeleteUnneededEntityFields
+FROM
+    vwEntityFields ef
+INNER JOIN
+    vwEntities e
+ON
+    ef.EntityID = e.ID
+-- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas
+LEFT JOIN
+    STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
+ON
+    e.SchemaName = excludedSchemas.value
+WHERE
+    e.VirtualEntity = 0 AND -- exclude virtual entities from this always
+    e.ExternalDataSourceID IS NULL AND -- exclude external-data-source entities (no physical table/view; data is remote)
+    excludedSchemas.value IS NULL AND -- This ensures rows with matching SchemaName are excluded
+    (@IsScoped = 0 OR ef.EntityID IN (SELECT EntityID FROM @ScopedEntityIDs)) -- scoped run: only listed entities
+
+-- get actual fields from the database so we can compare MJ metadata to the SQL catalog.
+-- When scoped, narrow vwSQLColumnsAndEntityFields the same way so the orphan join below stays correct.
+SELECT *
+INTO #actual_spDeleteUnneededEntityFields
+FROM vwSQLColumnsAndEntityFields
+WHERE @IsScoped = 0 OR EntityID IN (SELECT EntityID FROM @ScopedEntityIDs)
+
+-- now figure out which fields are NO longer in the DB and should be removed from MJ metadata
+SELECT ef.* INTO #DeletedFields
+    FROM
+      #ef_spDeleteUnneededEntityFields ef
+    LEFT JOIN
+      #actual_spDeleteUnneededEntityFields actual
+      ON
+      ef.EntityID=actual.EntityID AND
+      ef.Name = actual.EntityFieldName
+    WHERE
+      actual.column_id IS NULL
+
+
+-- first update the entity UpdatedAt so that our metadata timestamps are right
+UPDATE ${flyway:defaultSchema}.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
+(
+  SELECT DISTINCT EntityID FROM #DeletedFields
+)
+
+-- next delete the entity field values
+DELETE FROM ${flyway:defaultSchema}.EntityFieldValue WHERE EntityFieldID IN (
+  SELECT ID FROM #DeletedFields
+)
+
+-- and the field-level security rules for those fields. A rule about a column that no longer
+-- exists is meaningless, and FK_EntityFieldPermission_EntityField would otherwise block the
+-- EntityField delete below -- which is what happens on any field-security-enabled entity that
+-- loses a column from its BASE VIEW (a dropped column, a dropped foreign key taking its joined
+-- display column with it, or a custom view narrowed to stop selecting one).
+--
+-- The FK is also ON DELETE CASCADE, so this statement is not what makes the delete succeed. It
+-- is here because this proc already states its child-table cleanup explicitly for
+-- EntityFieldValue, and a reader working out what happens to a retired field should find both
+-- answers in the same place rather than one here and one in a constraint definition.
+DELETE FROM ${flyway:defaultSchema}.EntityFieldPermission WHERE EntityFieldID IN (
+  SELECT ID FROM #DeletedFields
+)
+
+-- now delete the entity fields themsevles
+DELETE FROM ${flyway:defaultSchema}.EntityField WHERE ID IN
+(
+  SELECT ID FROM #DeletedFields
+)
+
+-- return the deleted fields to the caller
+SELECT * FROM #DeletedFields
+
+-- clean up and get rid of our temp tables now
+DROP TABLE #ef_spDeleteUnneededEntityFields
+DROP TABLE #actual_spDeleteUnneededEntityFields
+DROP TABLE #DeletedFields
+GO
+
 
 
 
