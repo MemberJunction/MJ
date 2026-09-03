@@ -608,15 +608,20 @@ export class SQLServerDataProvider
    * instanceName is only inserted if it is provided in the options
    */
   public get InstanceConnectionString(): string {
-    // For mssql, we need to access the pool's internal connection options
-    // Since mssql v11 doesn't expose config directly, we'll construct from what we know
+    // mssql exposes the pool's connection options as the public `config` property.
+    // Do NOT read the private `_config` member — in mssql v11+ it is a method, so
+    // every `_config?.x` access silently returned undefined and this getter
+    // degenerated to 'mssql://localhost:1433/' for every connection. Anything
+    // keyed by this string (e.g. shared Redis result caches) then collided
+    // across processes connected to entirely different databases.
     const pool = this._pool as any;
+    const config = pool.config;
     const options = {
       type: 'mssql',
-      host: pool._config?.server || 'localhost',
-      port: pool._config?.port || 1433,
-      instanceName: pool._config?.options?.instanceName ? '/' + pool._config.options.instanceName : '',
-      database: pool._config?.database || '',
+      host: config?.server || 'localhost',
+      port: config?.port || 1433,
+      instanceName: config?.options?.instanceName ? '/' + config.options.instanceName : '',
+      database: config?.database || '',
     };
     return options.type + '://' + options.host + ':' + options.port + options.instanceName + '/' + options.database;
   }

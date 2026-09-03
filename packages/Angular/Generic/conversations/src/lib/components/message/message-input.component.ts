@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { ConnectedPosition } from '@angular/cdk/overlay';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo, Metadata } from '@memberjunction/core';
+import { UserInfo, Metadata, LogStatusEx } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine, TaskGraphSubmitOperation, type TaskGraphSubmitInput } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, AppContextSnapshot } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
@@ -2874,17 +2874,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     if (callback) {
       this.streamingService.unregisterMessageCallback(conversationDetail.ID, callback);
       this.registeredCallbacks.delete(conversationDetail.ID);
-      console.log(`[MarkComplete] Unregistered streaming callback for completed message ${conversationDetail.ID}`);
+      LogStatusEx({ message: `[MarkComplete] Unregistered streaming callback for completed message ${conversationDetail.ID}`, verboseOnly: true });
     }
 
     // Remove task from active tasks if it exists
     const task = this.activeTasks.getByConversationDetailId(conversationDetail.ID);
     if (task) {
-      console.log(`✅ Task found for message ${conversationDetail.ID} - removing from active tasks:`, {
-        taskId: task.id,
-        agentName: task.agentName,
-        conversationId: task.conversationId,
-        conversationName: task.conversationName
+      LogStatusEx({
+        message: `✅ Task found for message ${conversationDetail.ID} - removing from active tasks:`,
+        additionalArgs: [{
+          taskId: task.id,
+          agentName: task.agentName,
+          conversationId: task.conversationId,
+          conversationName: task.conversationName
+        }],
+        verboseOnly: true,
       });
 
       this.activeTasks.remove(task.id);
@@ -2901,7 +2905,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         );
       }
     } else {
-      console.warn(`⚠️ No task found for completed message ${conversationDetail.ID} - task may have been removed prematurely or not added`);
+      // verboseOnly, and no longer a warning. A turn registers ONE task, against whichever message
+      // its flow chose — activeTasks.add() is called with the user message, a Sage delegation
+      // message, a status message or the agent response depending on the path — while this method
+      // runs for EVERY message in the turn reaching Complete or Error. Most calls therefore land
+      // here, so it is the normal case rather than the lifecycle race the old text described
+      // ("task may have been removed prematurely or not added"). Kept for tracing, off by default.
+      LogStatusEx({ message: `[MarkComplete] No task registered against completed message ${conversationDetail.ID} — expected for any message that did not start the turn`, verboseOnly: true });
     }
 
     // Emit completion event to parent so it can refresh agent run data
