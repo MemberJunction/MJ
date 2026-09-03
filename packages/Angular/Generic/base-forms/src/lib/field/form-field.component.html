@@ -324,6 +324,20 @@
                 class="mj-forms-field-input mj-forms-field-input--date"
                 [value]="DateInputValue"
                 (change)="OnDateChange($event)">
+              <!--
+                An unreadable stored value renders as an EMPTY date box, identical to a field that
+                was never set - and the next save writes that emptiness over whatever is stored. The
+                element cannot display the bad value itself, so the warning has to sit beside it.
+              -->
+              @if (StoredDateIsUnreadable) {
+                <div class="mj-forms-field-validation mj-forms-field-validation--warning">
+                  <div class="mj-forms-field-validation-item">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>This field holds a value that is not a readable date, so the box below is
+                      empty. Saving now will replace it.</span>
+                  </div>
+                </div>
+              }
             }
             @case ('checkbox') {
               <div class="mj-forms-field-checkbox">

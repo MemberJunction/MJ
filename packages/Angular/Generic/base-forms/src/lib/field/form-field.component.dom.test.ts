@@ -411,5 +411,43 @@ describe('date-only fields are a calendar day, not an instant', () => {
             const shown = text(f, '.mj-forms-field-value');
             expect(shown, 'a datetime must keep local-time rendering').toMatch(/\d{1,2}:\d{2}/);
         });
+describe('an unreadable stored date is announced, not hidden (bc-aidp-next-golive#185)', () => {
+    /**
+     * THE FAILURE THIS PREVENTS IS DATA LOSS, not an ugly form.
+     *
+     * `DateInputValue` returns '' for a value it cannot render, and `<input type="date">` shows ''
+     * as an empty box - the same box it shows for a field that was never set. So the field reads as
+     * "no date", and the next save writes that emptiness over whatever was actually stored. The
+     * element cannot display the bad value itself; there is no string that makes it show
+     * `not-a-date`. Saying so beside the control is the only option available.
+     */
+    const WARNING = '.mj-forms-field-validation--warning';
+
+    it('warns when the stored value cannot be shown in the date editor', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('not a date') }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        const input = query(f, 'input[type="date"]') as HTMLInputElement | null;
+        expect(input!.value, 'precondition: the editor is blank').toBe('');
+        expect(query(f, WARNING), 'a blank box with no explanation is the defect').not.toBeNull();
+    });
+
+    it('does NOT warn for a field that is simply empty', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: null }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect(query(f, 'input[type="date"]')).not.toBeNull();
+        expect(query(f, WARNING), 'empty means empty and must not be decorated as a fault').toBeNull();
+    });
+
+    it('does NOT warn for a perfectly good date', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('2026-11-20T00:00:00.000Z') }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        const input = query(f, 'input[type="date"]') as HTMLInputElement | null;
+        expect(input!.value).toBe('2026-11-20');
+        expect(query(f, WARNING)).toBeNull();
+    });
+
+    it('stays out of READ mode, which already surfaces the value itself', () => {
+        // FormatValue() renders 'Invalid Date' / the raw text, so read mode needs no warning and
+        // adding one there would be noise on a surface that is already honest.
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('not a date') }), FieldName: 'LaunchDate', Type: 'datepicker' });
+        expect(query(f, WARNING)).toBeNull();
+        expect(text(f, '.mj-forms-field-value')).toContain('Invalid Date');
     });
 });
