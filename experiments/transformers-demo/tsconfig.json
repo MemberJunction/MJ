@@ -21,9 +21,10 @@
     "module": "ES2022",
     "lib": [
       "ES2022",
-      "dom"
+      "dom",
+      "dom.asynciterable"
     ],
-    "types": ["@webgpu/types"]
+    "types": ["@webgpu/types", "dom-chromium-ai"]
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
