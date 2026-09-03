@@ -25,7 +25,7 @@ import { EvaluateAuthorizationChecks } from './EvaluateAuthorizationChecks';
 const AUDIT_TYPE_NAME = 'Authorization Check';
 
 @RegisterClass(BaseRemotableOperation, 'Authorization.Check')
-export class AuthorizationCheckOperation extends AuthorizationCheckOperationBase {
+export class AuthorizationCheckServerOperation extends AuthorizationCheckOperationBase {
     protected async InternalExecute(
         input: AuthorizationCheckInput,
         provider: IMetadataProvider,

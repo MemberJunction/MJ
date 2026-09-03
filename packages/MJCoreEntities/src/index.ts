@@ -49,7 +49,7 @@ export * from './engines/IdentityClaimEngine';
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
 export * from './custom/operations/EvaluateAuthorizationChecks';
-export * from './custom/operations/AuthorizationCheckOperation';
+export { AuthorizationCheckServerOperation, LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 
 export * from './artifact-extraction/artifact-extract-rules';
 export * from './artifact-extraction/artifact-extractor';
