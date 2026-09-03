@@ -75,7 +75,9 @@
     "entity-settings",
     "roles",
     "entity-permissions",
-    "widget-instances"
+    "widget-instances",
+    "remote-operation-categories",
+    "remote-operations"
   ],
   "sqlLogging": {
     "enabled": true,
