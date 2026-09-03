@@ -6,7 +6,7 @@ Make the conversation UI's diagnostic logging opt-in instead of unconditional.
 
 Reported from a deployed app: "the browser's dev console is absolutely packed with spam. Every single character a user types into the input box triggers a message in the console. This isn't something we can put out into the world since some users will bring that up and it looks terrible."
 
-Nothing is removed — twelve `console.*` calls become `LogStatusEx({ …, verboseOnly: true })`, so they are silent by default and still there for anyone tracing this code. In a browser, verbose is enabled by `window.MJ_VERBOSE = true`, `localStorage.setItem('MJ_VERBOSE','true')`, or a `?mj_verbose=true` URL parameter.
+Nothing is removed — twelve `console.*` calls become `LogStatusEx({ …, verboseOnly: true })`, so they are silent by default and still there for anyone tracing this code. In a browser, verbose is enabled by `window.MJ_VERBOSE = true`, `localStorage.setItem('MJ_VERBOSE','true')`, or a `?MJ_VERBOSE=true` URL parameter.
 
 **The per-keystroke pair**, which is the specific behaviour in the report: `ComposerDraftStore.SetDraft` logs on every character typed, and `conversation-chat-area` logs the same event again on the way in. Together they are the largest single source of console output in the app.
 
