@@ -8,12 +8,17 @@
  * system user could leave partially loaded records in a cache everyone reads afterward.
  *
  * Two saves can reach that state, so both are refused:
- *   1. a field rule aimed at a role the system user already holds
+ *   1. a field **Deny** aimed at a role the system user already holds
  *      (`MJEntityFieldPermissionEntityServer`)
- *   2. giving the system user a role that already carries field rules
+ *   2. giving the system user a role that already denies a field
  *      (`MJUserRoleEntityServer`)
  *
- * This restricts CONFIGURATION only. There is still no user exempt from a Deny at runtime.
+ * Only DENYING rules are refused. The system user's own access comes from ordinary `Allow`
+ * rows that snapshot initialization writes for the standard roles it holds, so a guard that
+ * counted every rule would make field security impossible to enable at all.
+ *
+ * This restricts CONFIGURATION only. There is no user exempt from a Deny at runtime — the
+ * runtime aggregation has no system-user branch.
  *
  * Both checks are exposed as static helpers, so they are tested directly against a stubbed
  * `UserCache` and stubbed metadata rather than through the heavy generated bases.
@@ -74,6 +79,13 @@ function systemUserHolding(...roleIDs: string[]): void {
     };
 }
 
+/** A rule that takes read access away. */
+const DENYING = { ReadAccess: 'Deny', UpdateAccess: 'No Access', CreateAccess: 'No Access' } as const;
+/** The snapshot default for a role with full entity access — a grant, not a restriction. */
+const GRANTING = { ReadAccess: 'Allow', UpdateAccess: 'Allow', CreateAccess: 'Allow' } as const;
+/** Read-only snapshot default. `No Access` is the aggregation's identity, so this restricts nobody. */
+const NEUTRAL = { ReadAccess: 'Allow', UpdateAccess: 'No Access', CreateAccess: 'No Access' } as const;
+
 /**
  * Metadata where `Employees.Salary` carries a rule bound to the given role.
  *
@@ -81,14 +93,18 @@ function systemUserHolding(...roleIDs: string[]): void {
  * The guard walks rules regardless of the flag, so that the two halves of the system-user
  * guard compose.
  */
-function metadataWithRuleForRole(roleID: string, enableFieldLevelSecurity: boolean = true): void {
+function metadataWithRuleForRole(
+    roleID: string,
+    enableFieldLevelSecurity: boolean = true,
+    verbs: typeof DENYING | typeof GRANTING | typeof NEUTRAL = DENYING
+): void {
     entitiesStub.value = [
         {
             Name: 'Employees',
             EnableFieldLevelSecurity: enableFieldLevelSecurity,
             Fields: [
                 { Name: 'ID', HasFieldPermissions: false, FieldPermissions: [] },
-                { Name: 'Salary', HasFieldPermissions: true, FieldPermissions: [{ RoleID: roleID }] },
+                { Name: 'Salary', HasFieldPermissions: true, FieldPermissions: [{ RoleID: roleID, ...verbs }] },
             ],
         },
         { Name: 'Unsecured Entity', EnableFieldLevelSecurity: false, Fields: [] },
@@ -103,47 +119,90 @@ beforeEach(() => {
 // ─── Direction 1: a rule aimed at a role the system user holds ────────────
 
 describe('MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason', () => {
-    it('refuses a rule targeting a role the system user holds, and says why', () => {
+    it('refuses a DENYING rule targeting a role the system user holds, and says why', () => {
         systemUserHolding(RESTRICTED_ROLE_ID);
-        const reason = MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID);
+        const reason = MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID, DENYING);
         expect(reason).toBeTruthy();
         expect(reason).toContain('system user');
         expect(reason).toContain('Remove the role from the system user');
     });
 
+    it('ALLOWS a granting rule on a system-user role — that is what keeps the server working', () => {
+        // With no runtime exemption left, the system user's access comes from these very rows.
+        // Refusing them would make field security impossible to enable on any entity, since the
+        // standard roles carry entity permissions almost everywhere.
+        systemUserHolding(RESTRICTED_ROLE_ID);
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID, GRANTING)).toBeNull();
+    });
+
+    it('allows a neutral rule on a system-user role — No Access cannot take access away', () => {
+        systemUserHolding(RESTRICTED_ROLE_ID);
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID, NEUTRAL)).toBeNull();
+    });
+
+    it('refuses a Deny on ANY of the three verbs, not just read', () => {
+        systemUserHolding(RESTRICTED_ROLE_ID);
+        const updateDeny = { ReadAccess: 'Allow', UpdateAccess: 'Deny', CreateAccess: 'No Access' } as const;
+        const createDeny = { ReadAccess: 'Allow', UpdateAccess: 'No Access', CreateAccess: 'Deny' } as const;
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID, updateDeny)).toBeTruthy();
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID, createDeny)).toBeTruthy();
+    });
+
+    it('treats a role-only pre-check as though the rule denied', () => {
+        // Callers vetting a ROLE rather than a specific rule get the conservative answer.
+        systemUserHolding(RESTRICTED_ROLE_ID);
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID)).toBeTruthy();
+    });
+
     it('allows a rule targeting any other role', () => {
         systemUserHolding(RESTRICTED_ROLE_ID);
-        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(ORDINARY_ROLE_ID)).toBeNull();
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(ORDINARY_ROLE_ID, DENYING)).toBeNull();
     });
 
     it('matches role IDs case-insensitively (UUID casing differs by platform)', () => {
         systemUserHolding(RESTRICTED_ROLE_ID.toLowerCase());
-        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID.toUpperCase())).toBeTruthy();
+        expect(
+            MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID.toUpperCase(), DENYING)
+        ).toBeTruthy();
     });
 
     it('does not block when the user cache is cold or the system user has no roles', () => {
         systemUserStub.value = null;
-        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID)).toBeNull();
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID, DENYING)).toBeNull();
         systemUserStub.value = { ID: SYSTEM_USER_ID, UserRoles: [] };
-        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID)).toBeNull();
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(RESTRICTED_ROLE_ID, DENYING)).toBeNull();
     });
 
     it('does not block when no role is set yet', () => {
         systemUserHolding(RESTRICTED_ROLE_ID);
-        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(null)).toBeNull();
+        expect(MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(null, DENYING)).toBeNull();
     });
 });
 
 // ─── Direction 2: giving the system user a role that carries rules ────────
 
 describe('MJUserRoleEntityServer.SystemUserRejectionReason', () => {
-    it('refuses giving the system user a role that carries field rules, and names the entity', () => {
+    it('refuses giving the system user a role that DENIES a field, and names the entity', () => {
         systemUserHolding();
-        metadataWithRuleForRole(RESTRICTED_ROLE_ID);
+        metadataWithRuleForRole(RESTRICTED_ROLE_ID, true, DENYING);
         const reason = MJUserRoleEntityServer.SystemUserRejectionReason(SYSTEM_USER_ID, RESTRICTED_ROLE_ID);
         expect(reason).toBeTruthy();
         expect(reason).toContain('Employees');
         expect(reason).toContain('system user');
+    });
+
+    it('allows giving the system user a role whose rules only GRANT', () => {
+        // The standard roles the system user holds pick up Allow rows on every enabled entity.
+        // Counting those would make its own role set unassignable.
+        systemUserHolding();
+        metadataWithRuleForRole(RESTRICTED_ROLE_ID, true, GRANTING);
+        expect(MJUserRoleEntityServer.SystemUserRejectionReason(SYSTEM_USER_ID, RESTRICTED_ROLE_ID)).toBeNull();
+    });
+
+    it('allows giving the system user a role whose rules are neutral', () => {
+        systemUserHolding();
+        metadataWithRuleForRole(RESTRICTED_ROLE_ID, true, NEUTRAL);
+        expect(MJUserRoleEntityServer.SystemUserRejectionReason(SYSTEM_USER_ID, RESTRICTED_ROLE_ID)).toBeNull();
     });
 
     it('allows giving the system user a role with no field rules', () => {

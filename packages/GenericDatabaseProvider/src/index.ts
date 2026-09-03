@@ -18,6 +18,16 @@ export {
 } from './crudSprocFieldRules.js';
 export { resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
+export {
+    SystemUserFieldAccessLossReason,
+    FindSystemUserFieldAccessViolations,
+    SystemUserFieldAccessViolation,
+    SystemUserHoldsRole,
+    SystemUserFieldAccessSweepOptions,
+} from './systemUserFieldAccess.js';
+// Side-effect import: registers the startup sweep that reports a system user which has lost
+// field-level access on an FLS-enabled entity.
+export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './SystemUserFieldAccessCheck.js';
 export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 export { SqlLoggingSessionImpl } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';

@@ -49,10 +49,9 @@ import { RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
 const SystemUserID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
 
 /**
- * Stands in for the server-side source. The field-security exemption resolves the system user
- * through the class factory, so MJCore tests must register one — which is itself the contract:
- * with no server-side source loaded (a browser), NO user is the system user and the exemption
- * correctly never fires.
+ * Stands in for the server-side source, so these tests can prove that even a process that CAN
+ * identify the system user does not treat it specially. Field security asks
+ * `WellKnownUserSource` nothing — the block below is the regression guard for that.
  */
 @RegisterClassEx(WellKnownUserSource, { priority: 10, skipNullKeyWarning: true })
 class TestFieldSecurityWellKnownUserSource extends WellKnownUserSource {
@@ -305,54 +304,71 @@ describe('EntityInfo denied-field sets (per-request precompute)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 1b. The system-user exemption — the ONE exemption, and why it exists
+// 1b. NO exempt user — not even the system account
 //
-//   1. TASK MODE. Job and agent runners load engines on first touch, and engine caches are
-//      process-wide — whoever touches one first would otherwise configure it for every
-//      subsequent user in the process. BaseEngine.ResolveContextUser() forces the system user
-//      on Database providers; this exemption is what makes that resolution safe.
-//   2. IT PROTECTS NOTHING TO DENY IT. The server reads through one service login that can
-//      already see every column, so denying the system user here only breaks the server's
-//      ability to do its own work.
+// The aggregation has no identity branch at all. Every account's access comes from rows,
+// including the one the server runs its own background work as.
+//
+// The system user keeps working because of CONFIGURATION, not code: it holds the standard
+// roles (UI, Developer, Integration), snapshot initialization writes those roles Allow rows on
+// every entity they can read, and the save-time guards in MJCoreEntitiesServer refuse a Deny
+// aimed at a role it holds. That is a rule an administrator can see in the data and reason
+// about — unlike a runtime bypass, which is invisible exactly where access is decided.
+//
+// These tests are the regression guard for the bypass NOT coming back.
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('System-user exemption', () => {
-    /** The system user, holding no roles at all — the shape that would otherwise be denied. */
+describe('No runtime exemption — including the system user', () => {
+    /** The system user, holding no roles at all. */
     const systemUser = (): UserInfo => buildUser([], SystemUserID);
 
-    it('is exempt from a Deny that would otherwise catch it', () => {
+    it('denies the system user a field it holds no Allow row for', () => {
         const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
-        expect(entity.GetDeniedReadFields(systemUser()).size).toBe(0);
-        expect(entity.GetDeniedUpdateFields(systemUser()).size).toBe(0);
-        expect(entity.GetDeniedCreateFields(systemUser()).size).toBe(0);
+        expect(entity.GetDeniedReadFields(systemUser()).has('salary')).toBe(true);
+        expect(entity.GetDeniedUpdateFields(systemUser()).has('salary')).toBe(true);
+        expect(entity.GetDeniedCreateFields(systemUser()).has('salary')).toBe(true);
     });
 
-    it('reads, updates and creates a secured field while holding NO matching role', () => {
+    it('gives the system user access from ORDINARY rows, exactly like any other account', () => {
+        // This is the shape reconciliation actually produces: the roles the system user holds
+        // pick up Allow rows wherever they carry entity read.
         const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
-        const perms = entity.Fields.find(f => f.Name === 'Salary')!.GetUserFieldPermissions(systemUser(), true);
+        const sysWithHR = buildUser([HR_ROLE_ID], SystemUserID);
+        const perms = entity.Fields.find(f => f.Name === 'Salary')!.GetUserFieldPermissions(sysWithHR, true);
         expect(perms).toEqual({ CanRead: true, CanUpdate: true, CanCreate: true });
     });
 
-    it('is exempt even from an explicit Deny row aimed at a role it holds', () => {
+    it('applies a Deny aimed at a role the system user holds', () => {
+        // Unreachable through the product — the save-time guards refuse to create this row —
+        // but if one exists the aggregation honors it rather than quietly ignoring it.
         const denyIntern = [
             ...hrOnlySalary,
             { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, ReadAccess: DENY, UpdateAccess: DENY, CreateAccess: DENY },
         ];
         const entity = new EntityInfo(employeeEntityInit(denyIntern));
         const sysWithRole = buildUser([INTERN_ROLE_ID], SystemUserID);
-        expect(entity.GetDeniedReadFields(sysWithRole).size).toBe(0);
+        expect(entity.GetDeniedReadFields(sysWithRole).has('salary')).toBe(true);
     });
 
-    it('is exempt from the fail-closed default too — a field reconciliation never reached', () => {
-        // The exemption has to cover more than Denies now: on an FLS-enabled entity a field
-        // with NO rows is denied, and the server would otherwise lose a brand-new column
-        // between a schema change and the next reconciliation run.
+    it('fails closed for the system user on a field reconciliation never reached', () => {
         const entity = new EntityInfo(employeeEntityInit([]));
-        expect(entity.GetDeniedReadFields(systemUser()).size).toBe(0);
+        expect(entity.GetDeniedReadFields(systemUser()).has('salary')).toBe(true);
         expect(entity.GetDeniedReadFields(buildUser([HR_ROLE_ID])).has('salary')).toBe(true);
     });
 
-    it('does NOT exempt anyone else — no human bypass, including a role-less user', () => {
+    it('never consults WellKnownUserSource, even where one can identify the system user', () => {
+        // A source IS registered at the top of this file and answers true for SystemUserID.
+        // The aggregation reaching the same answer for the system user and for an unknown
+        // role-less user is what proves the identity check is gone.
+        const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
+        expect(WellKnownUserSource.Instance.IsSystemUser(systemUser())).toBe(true);
+
+        const asSystem = [...entity.GetDeniedReadFields(systemUser())].sort();
+        const asStranger = [...entity.GetDeniedReadFields(buildUser([], 'some-other-user'))].sort();
+        expect(asSystem).toEqual(asStranger);
+    });
+
+    it('grants nothing to a role-less user, and keeps the primary key out of the denied set', () => {
         const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
 
         // The intern holds Allow rows on Name and Notes, so only Salary is denied.
@@ -365,20 +381,6 @@ describe('System-user exemption', () => {
         const roleless = [...entity.GetDeniedReadFields(buildUser([], 'some-other-user'))];
         expect(roleless.sort()).toEqual(['name', 'notes', 'salary']);
         expect(roleless).not.toContain('id');
-    });
-
-    it('recognizes the system user case-insensitively and is null-safe', () => {
-        const source = WellKnownUserSource.Instance;
-        expect(source.IsSystemUser(buildUser([], SystemUserID.toUpperCase()))).toBe(true);
-        expect(source.IsSystemUser(buildUser([], 'not-the-system-user'))).toBe(false);
-        expect(source.IsSystemUser(null)).toBe(false);
-        expect(source.IsSystemUser(undefined)).toBe(false);
-    });
-
-    it('does not exempt anyone when no server-side source is registered (the browser case)', () => {
-        // The base source says there are no well-known users, so the exemption cannot fire —
-        // which is correct on a client, where there is no system account at all.
-        expect(new WellKnownUserSource().IsSystemUser(buildUser([], SystemUserID))).toBe(false);
     });
 });
 
