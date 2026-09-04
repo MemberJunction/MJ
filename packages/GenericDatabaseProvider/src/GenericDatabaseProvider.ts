@@ -1879,7 +1879,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
-            const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
+            // SkipTotalRowCount is an explicit caller opt-out of the count (see RunViewParams);
+            // count_only still counts — that result IS the count, the flag cannot mean anything there.
+            const skipCount = params.SkipTotalRowCount === true && params.ResultType !== 'count_only';
+            const willNeedCount = countSQL && ((usingPagination && !skipCount) || params.ResultType === 'count_only');
             if (willNeedCount) {
                 queries.push(this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
                 queryKeys.push('count');
@@ -1906,7 +1909,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
+            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed && !skipCount) {
+                // Full-page fallback: the page filled to its cap, so the true total is unknown —
+                // count it in a SECOND round trip. Note what that means for a MaxRows:1 lookup:
+                // finding the row IS a full page, so every successful single-row existence check
+                // pays this extra sequential query unless the caller opts out (SkipTotalRowCount).
                 const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
