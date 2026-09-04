@@ -89,7 +89,7 @@
 
   <!-- EDIT MODE -->
   @if (EditMode && !IsFieldReadOnly) {
-    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings">
+    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings || StoredDateIsUnreadable">
       @if (ShowLabel) {
         <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
       }
@@ -324,20 +324,6 @@
                 class="mj-forms-field-input mj-forms-field-input--date"
                 [value]="DateInputValue"
                 (change)="OnDateChange($event)">
-              <!--
-                An unreadable stored value renders as an EMPTY date box, identical to a field that
-                was never set - and the next save writes that emptiness over whatever is stored. The
-                element cannot display the bad value itself, so the warning has to sit beside it.
-              -->
-              @if (StoredDateIsUnreadable) {
-                <div class="mj-forms-field-validation mj-forms-field-validation--warning">
-                  <div class="mj-forms-field-validation-item">
-                    <i class="fa-solid fa-triangle-exclamation"></i>
-                    <span>This field holds a value that is not a readable date, so the box below is
-                      empty. Saving now will replace it.</span>
-                  </div>
-                </div>
-              }
             }
             @case ('checkbox') {
               <div class="mj-forms-field-checkbox">
@@ -415,6 +401,20 @@
               <span>{{ warning.Message }}</span>
             </div>
           }
+        </div>
+      }
+      <!--
+        An unreadable stored value renders as an EMPTY date box, identical to a field that
+        was never set - and the next save writes that emptiness over whatever is stored. The
+        element cannot display the bad value itself, so the warning sits with the other validation messages, beneath the control.
+      -->
+      @if (StoredDateIsUnreadable) {
+        <div class="mj-forms-field-validation mj-forms-field-validation--warning">
+          <div class="mj-forms-field-validation-item">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>This field holds a value that is not a readable date, so the box above is
+              empty. Saving now will replace it.</span>
+          </div>
         </div>
       }
     </div>
