@@ -293,6 +293,20 @@ mj-collapsible-panel.mj-form-role-more {
   border-radius: var(--mj-radius-md);
 }
 
+/* The rail is as tall as the body column; when it has more items than fit,
+   the ITEMS scroll (the pin / collapse toolbar above stays fixed). Without
+   this the overflow was clipped by the panels container. */
+.mj-forms-chrome-rail-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+
 .mj-forms-chrome-rail.is-resizing {
   user-select: none;
 }
