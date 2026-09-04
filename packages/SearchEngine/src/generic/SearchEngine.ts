@@ -20,7 +20,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { EntityInfo, EntityPermissionType, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, EntityPermissionType, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     SearchEngineBase,
     MJSearchProviderEntity,
@@ -30,7 +30,7 @@ import {
     MJAISkillEntity,
     ScopeBundle
 } from '@memberjunction/core-entities';
-import { BaseSingleton, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     SearchParams,
     SearchResult,
@@ -2057,18 +2057,22 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             return;
         }
 
-        const pkFieldName = pkField.Name;
-        const recordIDs = entityResults.map(r => `'${r.RecordID.replace(/'/g, "''")}'`).join(',');
+        // `RecordID` is a compact CompositeKey segment: the bare value for a single-column key, a
+        // "F1|v1||F2|v2" segment for a composite one. A single-column key is verified with one IN();
+        // a composite key needs a (F1=.. AND F2=..) term per record — an IN() on the first column
+        // alone could never match the segment, and this check fails closed, so every composite-key
+        // result would have been dropped as unauthorized.
+        const membership = entity.PrimaryKeys.length === 1
+            ? this.buildSingleKeyMembership(pkField.Name, entityResults)
+            : this.buildCompositeKeyMembership(entity, entityResults);
         // Without a row filter this is a pure existence check against the entity's own view.
-        const filter = rlsClause
-            ? `${pkFieldName} IN (${recordIDs}) AND (${rlsClause})`
-            : `${pkFieldName} IN (${recordIDs})`;
+        const filter = rlsClause ? `(${membership}) AND (${rlsClause})` : membership;
 
         const rv = new RunView();
-        const result = await rv.RunView<Record<string, string>>({
+        const result = await rv.RunView<Record<string, unknown>>({
             EntityName: entity.Name,
             ExtraFilter: filter,
-            Fields: [pkFieldName],
+            Fields: entity.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple'
         }, contextUser);
 
@@ -2078,15 +2082,45 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             return;
         }
 
-        const validIDs = new Set(
-            result.Results.map(r => NormalizeUUID(String(r[pkFieldName])))
+        const validKeys = new Set(
+            result.Results.map(r => this.canonicalKeyValues(entity, CompositeKey.FromEntityRecord(entity, r)))
         );
 
         for (const item of entityResults) {
-            if (validIDs.has(NormalizeUUID(item.RecordID))) {
+            const key = CompositeKey.FromURLSegment(entity, item.RecordID);
+            if (validKeys.has(this.canonicalKeyValues(entity, key))) {
                 permitted.push(item);
             }
         }
+    }
+
+    /** `PK IN ('a','b',...)` — the fast path for the overwhelmingly common single-column key. */
+    private buildSingleKeyMembership(pkFieldName: string, results: SearchResultItem[]): string {
+        const ids = results.map(r => `'${EscapeSQLString(r.RecordID)}'`).join(',');
+        return `${pkFieldName} IN (${ids})`;
+    }
+
+    /** `(F1='v1' AND F2='v2') OR (...)` — one term per composite-key result. */
+    private buildCompositeKeyMembership(entity: EntityInfo, results: SearchResultItem[]): string {
+        return results
+            .map(r => `(${CompositeKey.FromURLSegment(entity, r.RecordID).ToWhereClause()})`)
+            .join(' OR ');
+    }
+
+    /**
+     * Key values in primary-key metadata order, UUID-normalized and joined — the comparison form for
+     * matching a result's RecordID against the rows the database returned. Field-name lookup is
+     * case-insensitive and values are normalized so a segment written by an external index (lowercase
+     * UUIDs, differently-cased column names) still matches. For a single-column key this is exactly
+     * `NormalizeUUID(value)`.
+     */
+    private canonicalKeyValues(entity: EntityInfo, key: CompositeKey): string {
+        return entity.PrimaryKeys
+            .map(pk => {
+                const match = key.KeyValuePairs.find(kv => kv.FieldName.trim().toLowerCase() === pk.Name.trim().toLowerCase());
+                return NormalizeUUID(String(match?.Value ?? ''));
+            })
+            .join('||');
     }
 
     /** Build an error SearchResult */

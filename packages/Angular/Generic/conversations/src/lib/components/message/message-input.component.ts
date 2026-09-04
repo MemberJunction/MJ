@@ -268,7 +268,28 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   @ViewChild('inputBox') inputBox!: AiComposerComponent;
 
-  public messageText: string = '';
+  private _messageText: string = '';
+  /**
+   * The composer's text. An accessor pair rather than a plain field because every write reaches the
+   * editor through `[value]` -> `ngModel.writeValue`, which rebuilds or empties the chip DOM WITHOUT
+   * emitting `valueChange` — so a write is exactly the event {@link mentionedAgentId} has to hear
+   * about, and the setter is the one place that cannot be bypassed.
+   *
+   * Bypassing it is not hypothetical: `handleSuccessfulSend` and the empty-state submit clear the
+   * text without touching the editor, and `conversation-chat-area` assigns `messageText` on this
+   * component from the outside (three call sites). Invalidating at the individual call sites instead
+   * would leave every future one to remember.
+   *
+   * Read is a plain field read; there is no two-way `ngModel` on this property (the template binds
+   * `[value]="messageText"` one-way), so the pair is transparent to callers.
+   */
+  public get messageText(): string {
+    return this._messageText;
+  }
+  public set messageText(value: string) {
+    this._messageText = value;
+    this.mentionedAgentId = undefined;
+  }
 
   /**
    * Prefills the composer with draft text WITHOUT sending (unlike pendingMessage,
@@ -558,6 +579,49 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       ?? this.converationManagerAgent?.ID
       ?? null;
   }
+
+  /**
+   * The agent the '/' skill picker should narrow to. Mirrors routing's priority: an explicit
+   * `@agent` chip already in the draft wins (routeMessage's Priority 1), else the agent the message
+   * would otherwise go to ({@link resolveCurrentAgentId}). Bound to `mj-ai-composer`'s
+   * `TargetAgentId`; null = unknown, no narrowing.
+   */
+  public get pickerTargetAgentId(): string | null {
+    if (this.mentionedAgentId === undefined) {
+      const chips = this.inputBox?.getMentionChipsData() || [];
+      this.mentionedAgentId = chips.find(chip => chip.type === 'agent')?.id ?? null;
+    }
+    return this.mentionedAgentId ?? this.resolveCurrentAgentId();
+  }
+
+  /**
+   * Memo for the first `@agent` chip in the draft, so the template-bound
+   * {@link pickerTargetAgentId} does not walk the editor DOM on every change-detection cycle.
+   *
+   * `undefined` = dirty, recompute on next read; `null` = computed, no `@agent` chip present.
+   * The two are NOT interchangeable — collapsing them to `null` is what makes a cleared or restored
+   * draft read as "no chip" forever.
+   *
+   * Invalidated from {@link messageText}'s setter, which is the only choke point every chip change
+   * passes through. Chips reach the editor by two kinds of path and only one announces itself:
+   *
+   *   - user editing (autocomplete insert, backspace-delete, `InsertMention`) and `clear()` all end
+   *     in the editor's `onInput()`, which emits `valueChange` -> {@link OnComposerValueChanged},
+   *     which assigns `messageText`;
+   *   - a programmatic write — a restored draft (`[initialDraft]` -> {@link SetDraft}), a post-send
+   *     reset, or a host assigning `messageText` directly — goes `[value]` ->
+   *     `ngModel.writeValue` -> `setEditorContent`, which rebuilds the chips with `appendChild` (or
+   *     empties the editor) and never calls `onInput()`. No `valueChange`, so no hook fires.
+   *
+   * Invalidate-and-lazy rather than eager refresh, because an eager read in the setter would be too
+   * early: `ngModel` writes the editor on a later change-detection pass, so the read would predate
+   * the chips it wants. Marking dirty is timing-independent — the recompute happens on the next
+   * read, by which point the editor holds the new content.
+   *
+   * The picker can be opened by the Skills button as well as by typing `/`, so "the next keystroke
+   * would repair it" is not a defence: the button path takes whatever the memo holds.
+   */
+  private mentionedAgentId: string | null | undefined = undefined;
 
   /** True when the mic button should be enabled (have an agent + not disabled). */
   public get canStartRealtime(): boolean {

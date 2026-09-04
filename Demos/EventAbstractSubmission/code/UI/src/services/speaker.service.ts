@@ -1,15 +1,15 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { SpeakerEntity, SubmissionSpeakerEntity } from 'mj_generatedentities';
+import { EventsSpeakerEntity, EventsSubmissionSpeakerEntity } from 'mj_generatedentities';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SpeakerService {
 
-  async getAllSpeakers(): Promise<SpeakerEntity[]> {
+  async getAllSpeakers(): Promise<EventsSpeakerEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<SpeakerEntity>({
+    const result = await rv.RunView<EventsSpeakerEntity>({
       EntityName: 'Speakers',
       OrderBy: 'LastName, FirstName',
       ResultType: 'entity_object'
@@ -18,22 +18,22 @@ export class SpeakerService {
     return result.Success ? (result.Results || []) : [];
   }
 
-  async getSpeakerById(id: string): Promise<SpeakerEntity | null> {
+  async getSpeakerById(id: string): Promise<EventsSpeakerEntity | null> {
     const md = new Metadata();
-    const speaker = await md.GetEntityObject('Speakers') as unknown as SpeakerEntity;
+    const speaker = await md.GetEntityObject('Speakers') as unknown as EventsSpeakerEntity;
     const loaded = await speaker.Load(id);
     return loaded ? speaker : null;
   }
 
-  async createSpeaker(): Promise<SpeakerEntity> {
+  async createSpeaker(): Promise<EventsSpeakerEntity> {
     const md = new Metadata();
-    return await md.GetEntityObject('Speakers') as unknown as SpeakerEntity;
+    return await md.GetEntityObject('Speakers') as unknown as EventsSpeakerEntity;
   }
 
-  async getSpeakersForSubmission(submissionId: string): Promise<SpeakerEntity[]> {
+  async getSpeakersForSubmission(submissionId: string): Promise<EventsSpeakerEntity[]> {
     // First get the SubmissionSpeaker junction records
     const rv = new RunView();
-    const junctionResult = await rv.RunView<SubmissionSpeakerEntity>({
+    const junctionResult = await rv.RunView<EventsSubmissionSpeakerEntity>({
       EntityName: 'Submission Speakers',
       ExtraFilter: `SubmissionID='${submissionId}'`,
       ResultType: 'entity_object'
@@ -50,7 +50,7 @@ export class SpeakerService {
     }
 
     // Load the speakers
-    const speakersResult = await rv.RunView<SpeakerEntity>({
+    const speakersResult = await rv.RunView<EventsSpeakerEntity>({
       EntityName: 'Speakers',
       ExtraFilter: `ID IN ('${speakerIds.join("','")}')`,
       ResultType: 'entity_object'

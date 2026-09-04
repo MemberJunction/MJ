@@ -49,7 +49,10 @@ const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
  * Delegates the actual search to `SearchEngine.Search()` with `ScopeIDs: [resolvedScopeID]`.
  *
  * The SKILL PRINCIPAL (`AISkillID`, optional) is resolved and permission-checked alongside the
- * agent: `AISkill.SearchScopeAccess` can deny a scope the user's roles allow, or grant one they do
+ * agent. Inside an agent run it is bound to the RUN: `Context.ActiveSkillIDs` (stamped by
+ * BaseAgent) must contain a named skill, and a lone active skill becomes the principal when none is
+ * named — so the model steering a Loop agent cannot widen retrieval by naming a skill it never
+ * activated. Otherwise: `AISkill.SearchScopeAccess` can deny a scope the user's roles allow, or grant one they do
  * not, and it binds as `Principals.SkillID` for a dimension's expansion query. A value that is not a
  * UUID, or will not load, is refused rather than dropped.
  *
@@ -130,44 +133,19 @@ export class ScopedSearchAction extends BaseAction {
             // skill that steers retrieval without being handed to ResolveEffectivePermission is a
             // principal that widens and is never judged. ExplainScope already passes it, so leaving
             // it out here would also make a preview disagree with the search it previews.
-            const aiSkillID = this.getStringParam(params, "aiskillid");
-            let skill: MJAISkillEntity | null = null;
-            if (aiSkillID) {
-                if (!SCOPED_SEARCH_UUID_RE.test(aiSkillID)) {
-                    return this.createErrorResult(
-                        `AISkillID '${aiSkillID}' is not a valid identifier.`, 'INVALID_PARAM');
-                }
-                skill = await this.loadSkill(aiSkillID, params.ContextUser);
-                if (!skill) {
-                    // FAIL CLOSED. Carrying on with skill=null would bind the ID into the
-                    // dimension's expansion query while the skill rules never ran.
-                    return this.createErrorResult(
-                        `AISkillID '${aiSkillID}' could not be loaded.`, 'INVALID_PARAM');
-                }
-
-
-                // SearchScopeAccess='None' is a VETO, and it must be enforced structurally rather
-                // than only inside ResolveEffectivePermission. resolveScope() already does exactly
-                // this for the agent, and for the same reason: the resolver is reached only once a
-                // scope has resolved, and `resolveScopeAll` yields `GlobalScope?.ID` — undefined on
-                // any installation with no IsGlobal scope row. On that path the gate below is
-                // skipped entirely while runSearch still threads AISkillID, so a skill documented
-                // and tested as a veto would have silently permitted an unbounded search.
-                if (skill.SearchScopeAccess === 'None') {
-                    await SearchEngine.Instance.LogForbiddenSearch({
-                        Query: query,
-                        ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
-                        FailureReason: `Skill '${skill.Name}' has SearchScopeAccess='None' and cannot steer a scoped search.`,
-                        StartTime: startTime,
-                        ContextUser: params.ContextUser,
-                        AIAgentID: agent.ID,
-                        AISkillID: skill.ID,
-                    });
-                    return this.createErrorResult(
-                        `Forbidden: AISkillID '${aiSkillID}' cannot steer a scoped search.`, 'ACCESS_DENIED');
-                }
-
-            }
+            // THE RUN IS THE AUTHORITY ON THE SKILL PRINCIPAL. Inside an agent run, BaseAgent stamps
+            // `Context.ActiveSkillIDs` (the skills it actually activated this run) before every action
+            // call. Then: a named skill the run never activated is REFUSED — inside a Loop agent this
+            // parameter is written by the model, and a model must not be able to widen its own reach by
+            // naming a skill — and, when exactly one skill is active and none is named, it becomes the
+            // principal without the model having to say so. Outside a run (no ActiveSkillIDs on the
+            // context) the explicit parameter is the only source, unchanged.
+            const principal = this.resolveSkillPrincipalID(params);
+            if ('result' in principal) return principal.result;
+            const aiSkillID = principal.skillID;
+            const vetted = await this.loadAndVetSkillPrincipal(aiSkillID, params, agent, query, requestedScopeID, startTime);
+            if ('result' in vetted) return vetted.result;
+            const skill = vetted.skill;
 
             // 2. Resolve scope (agent-side SearchScopeAccess gate, with denial logging)
             await SearchEngineBase.Instance.Config(false, params.ContextUser);
@@ -239,7 +217,17 @@ export class ScopedSearchAction extends BaseAction {
         if (!params.ContextUser) {
             return { ok: false, result: this.createErrorResult("User context is required", "MISSING_USER_CONTEXT") };
         }
-        const agentID = this.resolveAgentID(params);
+        const explicitAgentID = this.getStringParam(params, "agentid");
+        const contextAgentID = this.readContextAgentID(params);
+        // THE RUN IS THE AUTHORITY ON THE AGENT PRINCIPAL TOO. Inside a Loop agent the AgentID
+        // parameter is model-written; it may restate the run's identity but never replace it.
+        if (explicitAgentID && contextAgentID && !UUIDsEqual(explicitAgentID, contextAgentID)) {
+            return { ok: false, result: this.createErrorResult(
+                `AgentID '${explicitAgentID}' is not the agent running this action; the search principal is the calling agent.`,
+                "INVALID_PARAM"
+            )};
+        }
+        const agentID = explicitAgentID ?? contextAgentID;
         if (!agentID) {
             return { ok: false, result: this.createErrorResult(
                 "Calling agent identity could not be resolved. Pass the AgentID parameter or stamp params.Context.AgentID before invoking this action.",
@@ -661,17 +649,89 @@ export class ScopedSearchAction extends BaseAction {
 
     // ─── Agent identity ────────────────────────────────────────────────
 
-    private resolveAgentID(params: RunActionParams): string | undefined {
-        const explicit = this.getStringParam(params, "agentid");
-        if (explicit) return explicit;
+    /**
+     * Step 1b — which skill (if any) steers this search. THE RUN IS THE AUTHORITY: inside an agent run
+     * BaseAgent stamps `Context.ActiveSkillIDs` (the skills the run actually activated) before every
+     * action call. A named skill the run never activated is REFUSED — inside a Loop agent this parameter
+     * is written by the model, and a model must not be able to widen its own reach by naming a skill —
+     * and, when exactly one skill is active and none is named, it becomes the principal without the
+     * model having to say so. Several active and none named: no principal (logged as verbose). Outside
+     * a run (no ActiveSkillIDs on the context) the explicit parameter is the only source, unchanged.
+     */
+    private resolveSkillPrincipalID(params: RunActionParams): { skillID: string | undefined } | { result: ActionResultSimple } {
+        const activeInRun = this.readActiveSkillIDs(params);
+        const named = this.getStringParam(params, "aiskillid");
+        if (!activeInRun) return { skillID: named };
+        if (named && !activeInRun.some(id => UUIDsEqual(id, named))) {
+            return { result: this.createErrorResult(
+                `AISkillID '${named}' is not a skill active in this agent run; the search principal must be a skill the run activated.`,
+                'INVALID_PARAM') };
+        }
+        if (!named && activeInRun.length === 1) return { skillID: activeInRun[0] };
+        if (!named && activeInRun.length > 1) {
+            LogStatusEx({
+                message: `ScopedSearchAction: ${activeInRun.length} skills are active in this run and none was named as AISkillID — searching with no skill principal.`,
+                verboseOnly: true, isVerboseEnabled: IsVerboseLoggingEnabled,
+            });
+        }
+        return { skillID: named };
+    }
 
+    /**
+     * Step 1c — load the skill principal and apply the structural veto. FAIL CLOSED on a malformed or
+     * unloadable id (carrying on with skill=null would bind the id into the dimension's expansion query
+     * while the skill rules never ran). SearchScopeAccess='None' is a VETO enforced here, not only inside
+     * ResolveEffectivePermission: the resolver is reached only once a scope has resolved, and
+     * `resolveScopeAll` yields `GlobalScope?.ID` — undefined on an installation with no IsGlobal scope
+     * row — so on that path the gate would be skipped while runSearch still threads AISkillID.
+     */
+    private async loadAndVetSkillPrincipal(
+        aiSkillID: string | undefined, params: RunActionParams, agent: MJAIAgentEntity,
+        query: string, requestedScopeID: string | undefined, startTime: number,
+    ): Promise<{ skill: MJAISkillEntity | null } | { result: ActionResultSimple }> {
+        if (!aiSkillID) return { skill: null };
+        if (!SCOPED_SEARCH_UUID_RE.test(aiSkillID)) {
+            return { result: this.createErrorResult(`AISkillID '${aiSkillID}' is not a valid identifier.`, 'INVALID_PARAM') };
+        }
+        const skill = await this.loadSkill(aiSkillID, params.ContextUser);
+        if (!skill) {
+            return { result: this.createErrorResult(`AISkillID '${aiSkillID}' could not be loaded.`, 'INVALID_PARAM') };
+        }
+        if (skill.SearchScopeAccess === 'None') {
+            await SearchEngine.Instance.LogForbiddenSearch({
+                Query: query,
+                ScopeIDs: requestedScopeID ? [requestedScopeID] : undefined,
+                FailureReason: `Skill '${skill.Name}' has SearchScopeAccess='None' and cannot steer a scoped search.`,
+                StartTime: startTime,
+                ContextUser: params.ContextUser,
+                AIAgentID: agent.ID,
+                AISkillID: skill.ID,
+            });
+            return { result: this.createErrorResult(`Forbidden: AISkillID '${aiSkillID}' cannot steer a scoped search.`, 'ACCESS_DENIED') };
+        }
+        return { skill };
+    }
+
+    /**
+     * The skills active in the calling agent run, when this action runs inside one. BaseAgent stamps
+     * `Context.ActiveSkillIDs` on every action call (an empty array when the run has no active skill);
+     * `undefined` means there is no agent-run context at all, and the explicit `AISkillID` input is
+     * then the only source of the skill principal.
+     */
+    private readActiveSkillIDs(params: RunActionParams): string[] | undefined {
         const ctx = params.Context as Record<string, unknown> | undefined;
-        if (ctx) {
-            const candidates = ['AgentID', 'agentID', 'agentId'];
-            for (const key of candidates) {
-                const v = ctx[key];
-                if (typeof v === 'string' && v.trim().length > 0) return v;
-            }
+        const raw = ctx?.ActiveSkillIDs;
+        if (!Array.isArray(raw)) return undefined;
+        return raw.filter((v): v is string => typeof v === 'string' && SCOPED_SEARCH_UUID_RE.test(v));
+    }
+
+    /** The calling agent's identity as stamped on the run context (undefined outside an agent run). */
+    private readContextAgentID(params: RunActionParams): string | undefined {
+        const ctx = params.Context as Record<string, unknown> | undefined;
+        if (!ctx) return undefined;
+        for (const key of ['AgentID', 'agentID', 'agentId']) {
+            const v = ctx[key];
+            if (typeof v === 'string' && v.trim().length > 0) return v;
         }
         return undefined;
     }
