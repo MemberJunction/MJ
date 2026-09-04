@@ -25,7 +25,7 @@ function providerOf(ctx: IntegrationCheckContext): GenericDatabaseProvider {
 }
 
 function isPostgres(ctx: IntegrationCheckContext): boolean {
-    return ctx.Provider.PlatformKey === 'postgresql';
+    return providerOf(ctx).PlatformKey === 'postgresql';
 }
 
 function poolSource(ctx: IntegrationCheckContext): unknown {
@@ -39,7 +39,7 @@ async function exec(
     onPool = false,
 ): Promise<unknown> {
     const opts = onPool && poolSource(ctx) ? { connectionSource: poolSource(ctx) } : undefined;
-    return ctx.Provider.ExecuteSQL(sql, null, opts as never);
+    return providerOf(ctx).ExecuteSQL(sql, null, opts as never);
 }
 
 async function scalar(ctx: IntegrationCheckContext, sql: string, onPool = false): Promise<unknown> {
@@ -53,7 +53,6 @@ async function scalar(ctx: IntegrationCheckContext, sql: string, onPool = false)
 }
 
 async function committed(ctx: IntegrationCheckContext, id: string): Promise<boolean> {
-    const name = isPostgres(ctx) ? '"Name"' : '[Name]';
     const table = isPostgres(ctx) ? '"__mj"."vwActionCategories"' : '[__mj].[vwActionCategories]';
     const n = await scalar(
         ctx,
@@ -73,10 +72,10 @@ async function newCategory(ctx: IntegrationCheckContext, label: string): Promise
 
 async function doomAmbient(ctx: IntegrationCheckContext): Promise<void> {
     if (isPostgres(ctx)) {
-        await ctx.Provider.ExecuteSQL(`DO $$ BEGIN RAISE EXCEPTION 'mj-it-doom'; END $$`);
+        await providerOf(ctx).ExecuteSQL(`DO $$ BEGIN RAISE EXCEPTION 'mj-it-doom'; END $$`);
         return;
     }
-    await ctx.Provider.ExecuteSQL(
+    await providerOf(ctx).ExecuteSQL(
         `EXEC sp_executesql N'SET XACT_ABORT ON; THROW 50000, N''mj-it-doom'', 1;'`,
     );
 }
@@ -290,13 +289,16 @@ export const NestedTransactionChecks: NamedCheck[] = [
             if (isPostgres(ctx)) {
                 return;
             }
-            const p = ctx.Provider as { transactionState$?: { subscribe: (fn: (v: boolean) => void) => { unsubscribe: () => void } }; isTransactionActive?: boolean };
+            const p = providerOf(ctx) as GenericDatabaseProvider & {
+                transactionState$?: { subscribe: (fn: (v: boolean) => void) => { unsubscribe: () => void } };
+                isTransactionActive?: boolean;
+            };
             const seen: boolean[] = [];
             const sub = p.transactionState$?.subscribe((v) => seen.push(v));
-            await ctx.Provider.BeginTransaction();
-            await ctx.Provider.CommitTransaction();
+            await p.BeginTransaction();
+            await p.CommitTransaction();
             sub?.unsubscribe();
-            AssertEqual(ctx.Provider.TransactionDepth, 0, 'NT9: depth 0');
+            AssertEqual(p.TransactionDepth, 0, 'NT9: depth 0');
             Assert(p.isTransactionActive === false, 'NT9: isTransactionActive false');
             Assert(seen.includes(false), 'NT9: observed false emission');
         },
@@ -313,7 +315,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('nested-transactions', {
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         if (!fixture) return;
-        const p = ctx.Provider;
+        const p = providerOf(ctx);
         try { await p.ResetTransactionState(); } catch { /* already clean */ }
         for (const id of [...fixture.Ids].reverse()) {
             try {
