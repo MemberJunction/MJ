@@ -193,7 +193,7 @@ Check if there are any pending metadata changes (new/updated records in `metadat
 
 #### If metadata has changed since the last release:
 
-1. **Verify MJ CLI is up to date — against the channel of the content you're preparing.** `npm view @memberjunction/cli dist-tags` shows all channels; `latest` is the newest *certified* build, not the newest build. Prefer the repo-local CLI (`npx mj`, wired via the root `@memberjunction/cli` dependency), which rides the workspace version. If you use a global `mj`, install it from the matching tag (`npm install -g @memberjunction/cli@edge` for Edge-era content) — a stale CLI produces stale sync/codegen output
+1. **Verify MJ CLI is up to date — against the channel of the content you're preparing.** `npm view @memberjunction/cli dist-tags` shows all channels; `latest` is the newest *certified* build, not the newest build. Prefer the repo-local CLI (`pnpm mj`, the root script that runs `node packages/MJCLI/bin/run.js`), which rides the workspace version. Do NOT use `npx mj` in this repo: the root `@memberjunction/cli` devDependency was removed to keep turbo's `hashOfInternalDependencies` empty, so there is no workspace-root `node_modules/.bin/mj` and `npx` falls through to an **unrelated** registry package of that name. If you use a global `mj`, install it from the matching tag (`npm install -g @memberjunction/cli@edge` for Edge-era content) — a stale CLI produces stale sync/codegen output
 2. **Start a fresh database** — a new empty database on your existing dev SQL Server works fine (no separate instance needed). Example, with the standard MJ logins mapped in:
    ```bash
    docker exec <your-sql-container> bash -c '
