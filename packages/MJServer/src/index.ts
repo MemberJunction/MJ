@@ -127,6 +127,16 @@ export {
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 export * from './auth/actingContextResolver.js';
+// The context-user ladder (#4209). Public because `auth/exampleNewUserSubClass.ts` — the template
+// integrators are told to copy into their OWN package — resolves through it, and `package.json`
+// publishes only "."; without this the example compiles here and cannot be reused anywhere else.
+export {
+    ResolveConfiguredPrincipal,
+    resolvePrincipalFrom,
+    ReportedMisconfigurationCount,
+    MAX_REPORTED_MISCONFIGURATIONS,
+} from './auth/principals.js';
+export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
 export * from './generic/PushStatusResolver.js';
