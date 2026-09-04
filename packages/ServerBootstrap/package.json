@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "prebuild": "mj codegen manifest --output ./src/generated/mj-class-registrations.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
+    "prebuild": "node ../../packages/MJCLI/bin/run.js codegen manifest --output ./src/generated/mj-class-registrations.ts || echo 'Warning: workspace CLI not built yet (build @memberjunction/cli first), using existing manifest'",
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
@@ -108,7 +108,6 @@
     "@memberjunction/database-designer-actions": "6.1.0-edge.5",
     "@memberjunction/database-designer-core": "6.1.0-edge.5",
     "@memberjunction/doc-utils": "6.1.0-edge.5",
-    "@memberjunction/dynamic-packages": "6.1.0-edge.5",
     "@memberjunction/encryption": "6.1.0-edge.5",
     "@memberjunction/entity-communications-base": "6.1.0-edge.5",
     "@memberjunction/esignature": "6.1.0-edge.5",
