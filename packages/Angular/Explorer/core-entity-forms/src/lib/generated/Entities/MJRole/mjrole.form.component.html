@@ -498,9 +498,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Field Permissions','RoleID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Field Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Field Permissions','RoleID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityFieldPermissions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityFieldPermissions', $event.totalRowCount)"
                 >
