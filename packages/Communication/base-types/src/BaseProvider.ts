@@ -252,6 +252,82 @@ export type GetMessagesResult<T = Record<string, any>> = BaseMessageResult & {
     Messages: GetMessageMessage[];
 };
 
+/**
+ * Calendar retrieval.
+ *
+ * SEPARATE FROM GetMessages RATHER THAN A MODE OF IT. A calendar read is bounded by a TIME WINDOW,
+ * not by a count and a folder: "the next 200 messages" is a sensible request and "the next 200
+ * events" is not — what a caller wants is "everything between these two instants". Folding that into
+ * `GetMessagesParams` would have left `NumMessages` meaning something different depending on a flag.
+ */
+export type GetEventsParams<T = Record<string, any>> = {
+    /**
+     * Whose calendar to read - typically an email address. Optional for providers whose credentials
+     * are already scoped to one calendar, matching `GetMessagesParams.Identifier`.
+     */
+    Identifier?: string;
+    /** Hard cap on events returned. A window can be far larger than a caller wants to process. */
+    NumEvents: number;
+    /**
+     * Inclusive start of the window.
+     *
+     * SUPPLYING BOTH BOUNDS CHANGES WHAT YOU GET, and providers must say which they did via
+     * `RecurrenceExpanded`. With a window, a provider that can expand recurrence returns one entry
+     * per OCCURRENCE; without one it returns series masters, and a weekly stand-up is a single row
+     * whose start time is months old. For logging what actually happened, occurrences are what you
+     * want — so callers doing incremental sync should pass both.
+     */
+    StartDateTime?: Date;
+    /** Inclusive end of the window. See {@link GetEventsParams.StartDateTime}. */
+    EndDateTime?: Date;
+    /**
+     * Whether to include events the organizer cancelled. Default false: a cancellation is normally
+     * noise, but a system that logs history needs it, and it cannot be recovered after the fact.
+     */
+    IncludeCancelled?: boolean;
+    /** Provider-specific escape hatch, matching `GetMessagesParams.ContextData`. */
+    ContextData?: T;
+};
+
+/**
+ * One calendar event, normalized.
+ *
+ * Deliberately thin. `SourceData` on the result carries the provider's own payload verbatim, and a
+ * caller that needs fidelity should read that — the same split `GetMessagesResult` makes, and for
+ * the same reason: normalizing is lossy and the losses differ per provider.
+ */
+export type GetEventsEvent = {
+    /** Provider's stable id for this event or occurrence. The de-duplication key. */
+    ExternalSystemRecordID: string;
+    /** The series this occurrence belongs to, when the provider distinguishes them. */
+    SeriesID?: string | null;
+    Subject: string;
+    Body?: string;
+    /** Null when the provider supplied a start that could not be interpreted - never silently "now". */
+    StartTime: Date | null;
+    EndTime: Date | null;
+    Location?: string | null;
+    Organizer?: string;
+    /** Bare addresses, organizer excluded. */
+    Attendees: string[];
+    IsCancelled: boolean;
+};
+
+export type GetEventsResult<T = Record<string, any>> = BaseMessageResult & {
+    /** The provider's own payloads, verbatim. */
+    SourceData?: T[];
+    /** Normalized events. */
+    Events: GetEventsEvent[];
+    /**
+     * Whether recurring series were expanded into individual occurrences.
+     *
+     * Reported rather than assumed because it silently changes what the caller received, and the two
+     * are indistinguishable by inspection: a series master and a single occurrence look alike. A
+     * caller logging attendance needs occurrences; one listing "what meetings exist" may not.
+     */
+    RecurrenceExpanded?: boolean;
+};
+
 export type ForwardMessageParams = {
     /**
      * The ID of the message to forward
@@ -1027,7 +1103,8 @@ export type ProviderOperation =
     | 'CreateSubscription'
     | 'RenewSubscription'
     | 'DeleteSubscription'
-    | 'ParseNotification';
+    | 'ParseNotification'
+    | 'GetEvents';
 
 
 /**
@@ -1195,6 +1272,33 @@ export abstract class BaseCommunicationProvider {
         return {
             Success: false,
             ErrorMessage: `${this.ProviderName} does not support MoveMessage (MessageID: ${params.MessageID}, DestinationFolderID: ${params.DestinationFolderID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Reads calendar events for one identifier.
+     *
+     * CONCRETE, NOT ABSTRACT, and deliberately so: making it abstract would break every existing
+     * provider at compile time for a capability most of them will never have. A provider that
+     * supports it overrides this and adds 'GetEvents' to getSupportedOperations(); everything else
+     * inherits a refusal that NAMES ITSELF, so a caller learns which provider declined rather than
+     * receiving an empty list it cannot distinguish from an empty calendar.
+     *
+     * That distinction is the whole reason this returns Success:false rather than `{Events: []}`.
+     * "This provider cannot look" and "there was nothing in the window" are different facts, and a
+     * caller advancing a watermark must not treat the first as the second.
+     *
+     * @param params - which calendar, what window, how many
+     * @param credentials - optional per-request credentials override
+     */
+    public async GetEvents(
+        params: GetEventsParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<GetEventsResult> {
+        return {
+            Success: false,
+            Events: [],
+            ErrorMessage: `${this.ProviderName} does not support GetEvents (Identifier: ${params.Identifier || 'none'}, credentials provided: ${!!credentials})`
         };
     }
 
