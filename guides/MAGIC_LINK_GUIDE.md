@@ -89,7 +89,7 @@ module.exports = {
     //   Empty (default) ⇒ restricted-role-only. A caller-supplied roleId outside this
     //   set is rejected — this is what blocks granting Owner/Admin to an external user.
     grantableRoleNames: [],                    // e.g. ['Recruiter']
-    contextUserForProvisioning: 'system@yourco.com', // owns provisioning writes
+    contextUserForProvisioning: 'System',      // owns provisioning writes; matched against User.Name, then User.Email
     communicationProvider: 'SendGrid', // CommunicationEngine provider for invite emails
     fromAddress: 'no-reply@yourco.com',
     audience: 'mj-magic-link',
@@ -381,7 +381,7 @@ No new mechanism — it's reads over existing data:
 | `restrictedRoleName` | `Magic Link Baseline` | Default role when an invite omits `roleId` |
 | `inviteIssuerRoleNames` | `[]` | Roles (besides Owner) allowed to call `/create`. Empty ⇒ Owner-only |
 | `grantableRoleNames` | `[]` | Roles (besides the restricted role) an invite may grant |
-| `contextUserForProvisioning` | — | User context for provisioning writes |
+| `contextUserForProvisioning` | — | User context for provisioning writes. Matched against `User.Name` first, then `User.Email`; falls back to `userHandling.contextUserForNewUserCreation`, then the system user, then the lowest-ID active Owner (see #4209) |
 | `communicationProvider` | — | CommunicationEngine provider for invite email |
 | `fromAddress` | — | Invite email From |
 | `audience` | `mj-magic-link` | JWT audience + provider audience |

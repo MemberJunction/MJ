@@ -24,7 +24,7 @@ mutually inconsistent versions of the same ladder. It now resolves in this order
 1. `User.Name` — tried first, so **every host that resolves today resolves to the same user**
 2. `User.Email` — the identity column used everywhere else in MJServer, and the only one the schema
    makes unique (`UQ_User_Email`). This is the rung that fixes MJ's own default
-3. the system user, by ID — so it survives the system user being renamed
+3. the system user, by ID — so it survives the system user being renamed (active only)
 4. the lowest-ID **active** Owner — a last resort, but a deterministic one
 
 An unresolvable candidate is now reported **once per distinct setting + value** rather than once per
@@ -36,10 +36,25 @@ whose configured user resolves is unaffected):
 - Provisioning that previously landed on an arbitrary Owner now lands on the system user, so
   `CreatedByUserID` for newly provisioned users changes — to a stable value. Historical rows are
   untouched.
-- The Owner fallback now requires `IsActive`. A deployment whose only Owner is deactivated
-  previously provisioned under that inactive account and now resolves to no principal at all,
-  failing loudly instead of silently acting as a disabled user.
+- **No rung returns an inactive user** — the system rung as well as the Owner fallback. A
+  deployment whose system user (or whose only Owner) is deactivated previously provisioned under
+  that disabled account, and now resolves to no principal at all, failing loudly instead of
+  silently acting as a disabled user.
+- **Every rung breaks ties by lowest ID**, not by array position. `User.Name` has no unique
+  constraint, so two rows can share one; resolving that by whatever order
+  `SELECT * FROM vwUsers` returned would be the same attribution drift one rung further down.
 
-The shipped default is now `'System'`, and the config comments, `MJServer/README.md` and the
-`mj.config.cjs` / docker templates say which columns the setting is matched against — the previous
-wording described it purely in email terms, so an operator following it reproduced the bug.
+The shipped default is now `'System'`, and the config comments, `MJServer/README.md`,
+`guides/MAGIC_LINK_GUIDE.md` and the `mj.config.cjs` / docker templates say which columns the
+setting is matched against — the previous wording described it purely in email terms, so an
+operator following it reproduced the bug.
+
+`auth/exampleNewUserSubClass.ts` — the template the docs tell you to copy — resolved the same
+setting against `Email` alone, so with the default now naming the system user it could no longer
+reach it. It goes through the shared ladder too, and a new source-scanning test
+(`principals.callSites.test.ts`) fails if a fourth hand-rolled variant ever appears.
+
+The misconfiguration report is de-duplicated with a bounded LRU rather than a capped `Set`: a
+capped set stops admitting once full, so every candidate first seen after that logged on *every*
+call — this bug's own symptom, reintroduced for exactly the dynamic caller the cap existed to
+defend against.

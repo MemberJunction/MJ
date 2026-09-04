@@ -1,6 +1,6 @@
 # Resolving an Operator-Named Context User
 
-Fixes [#4209](https://github.com/MemberJunction/MJ/issues/4209). Architecture signed off; not yet built.
+Fixes [#4209](https://github.com/MemberJunction/MJ/issues/4209). Built and shipped in PR #4231; §8 records the decision taken during implementation.
 
 ## 1. Problem
 
@@ -214,4 +214,13 @@ makes the resolver async too. All three call sites sit in async contexts, so thi
 cheap; it needs confirming against `WidgetSessionService.resolveLookupUser` before committing
 to it. **Decide during implementation; do not silently leave mode 6 unaddressed.**
 
-Approach and doc scope signed off 2026-09-04.
+**Decision taken (PR #4231): mode 6 stays as-is — the ladder remains synchronous and returns
+null on a cold cache, exactly as today.** Routing rung 3 through `auth/index.ts:184`'s async
+`getSystemUser()` would make `resolvePrincipalFrom` async, and with it
+`WidgetSessionService.resolveLookupUser`, `MagicLinkService.resolveProvisioningContextUser` and
+their callers — a change in the shape of three call sites to fix a failure mode this PR does not
+introduce and does not make worse. It is a pre-existing gap in `UserCache`, and it belongs with
+the other `UserCache` items in "Deliberately out of scope" above rather than inside a fix for the
+column mismatch. Every caller already handles the null this returns.
+
+Approach and doc scope signed off 2026-09-04. Implemented 2026-09-04.

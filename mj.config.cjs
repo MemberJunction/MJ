@@ -92,7 +92,10 @@ module.exports = {
    * Ephemeral RS256 key (no rsaPrivateKey) — fine for local testing; restart
    * invalidates outstanding magic-link sessions. No communicationProvider, so
    * POST /magic-link/create returns the raw redemption link in its response
-   * instead of emailing it. Provisioning context user falls back to an Owner.
+   * instead of emailing it. No contextUserForProvisioning is set, so provisioning
+   * runs as userHandling.contextUserForNewUserCreation — which defaults to the
+   * seeded system user. (It used to say "falls back to an Owner": that was issue
+   * #4209's symptom written down as if it were the design.)
    */
   magicLink: {
     // Off by default — opt-in feature. Flip to true locally to exercise the
