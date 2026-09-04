@@ -5327,4 +5327,240 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         return out;
     }
+
+    // ─── Nested transactions ─────────────────────────────────────────
+    //
+    // Depth 1 = physical BEGIN on the driver. Depth 2+ = a dialect savepoint
+    // on that same transaction. Nested begin with no physical TX begins one
+    // first — otherwise SAVE TRANSACTION / SAVEPOINT runs outside a
+    // transaction (mssql: "Call begin() first.").
+
+    private _transactionDepth = 0;
+    private _savepointCounter = 0;
+    private _savepointStack: string[] = [];
+
+    /**
+     * Nesting depth: 0 = none, 1 = physical transaction, 2+ = savepoints.
+     * SQL Server leaves {@link IsInTransaction} false on purpose; callers that
+     * need the truth (order confirm joining a booking TX) use this.
+     */
+    public get transactionDepth(): number {
+        return this._transactionDepth;
+    }
+
+    protected override get CurrentTransactionDepth(): number {
+        return this._transactionDepth;
+    }
+
+    /** Copy of the savepoint stack, outermost first. */
+    public get savepointStack(): string[] {
+        return [...this._savepointStack];
+    }
+
+    /** True when the driver has a begun physical transaction object. */
+    protected get HasPhysicalTransaction(): boolean {
+        return false;
+    }
+
+    /** Outermost BEGIN. Subclasses publish the driver object only after it has begun. */
+    protected async BeginPhysicalTransaction(): Promise<void> {
+        throw new Error(`${this.constructor.name} must implement BeginPhysicalTransaction`);
+    }
+
+    /** Outermost COMMIT. Subclasses release the driver object. */
+    protected async CommitPhysicalTransaction(): Promise<void> {
+        throw new Error(`${this.constructor.name} must implement CommitPhysicalTransaction`);
+    }
+
+    /** Outermost ROLLBACK. Subclasses release the driver object. */
+    protected async RollbackPhysicalTransaction(): Promise<void> {
+        throw new Error(`${this.constructor.name} must implement RollbackPhysicalTransaction`);
+    }
+
+    /** Replace a published-but-unbegun driver object, then begin. Default is BeginPhysicalTransaction. */
+    protected async RecoverPhysicalTransaction(): Promise<void> {
+        await this.BeginPhysicalTransaction();
+    }
+
+    protected SavepointName(n: number): string {
+        return `SavePoint_${n}`;
+    }
+
+    /** Serialize begin/commit/rollback. PostgreSQL overrides with a mutex; SQL Server waits on in-flight begin. */
+    protected async WithTransactionLock<T>(fn: () => Promise<T>): Promise<T> {
+        return fn();
+    }
+
+    /** Called when a begin fails and depth is back to 0 — unpublish any leftover driver object. */
+    protected async OnBeginFailedAtDepthZero(): Promise<void> {
+        /* subclasses clear the physical TX handle */
+    }
+
+    /**
+     * SQL Server dooms the whole TX on some errors so savepoint rollback throws.
+     * Default rethrows; SQL Server overrides to full-rollback and reset.
+     */
+    protected async HandleFailedSavepointRollback(_savepointName: string, error: unknown): Promise<void> {
+        throw error;
+    }
+
+    public async BeginTransaction(): Promise<void> {
+        return this.WithTransactionLock(() => this.beginTransactionCore());
+    }
+
+    public async CommitTransaction(): Promise<void> {
+        return this.WithTransactionLock(() => this.commitTransactionCore());
+    }
+
+    public async RollbackTransaction(): Promise<void> {
+        return this.WithTransactionLock(() => this.rollbackTransactionCore());
+    }
+
+    private async beginTransactionCore(): Promise<void> {
+        this._transactionDepth++;
+        try {
+            if (this._transactionDepth === 1) {
+                await this.BeginPhysicalTransaction();
+            } else {
+                if (!this.HasPhysicalTransaction) {
+                    await this.BeginPhysicalTransaction();
+                }
+                const savepointName = this.SavepointName(++this._savepointCounter);
+                this._savepointStack.push(savepointName);
+                try {
+                    await this.createSavepoint(savepointName);
+                } catch (savepointError) {
+                    this._savepointStack.pop();
+                    this._savepointCounter--;
+                    throw savepointError;
+                }
+            }
+        } catch (e) {
+            this._transactionDepth--;
+            if (this._transactionDepth === 0) {
+                this.clearSavepointState();
+                await this.OnBeginFailedAtDepthZero();
+            }
+            LogError(e);
+            throw e;
+        }
+    }
+
+    private async createSavepoint(savepointName: string): Promise<void> {
+        const sql = this.Dialect.CreateSavepointSQL(savepointName);
+        const options: ExecuteSQLOptions = {
+            description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
+            ignoreLogging: true,
+        };
+        try {
+            await this.ExecuteSQL(sql, undefined, options);
+        } catch (savepointError) {
+            if (!this.isUnbegunPhysicalTransactionError(savepointError)) {
+                throw savepointError;
+            }
+            await this.RecoverPhysicalTransaction();
+            await this.ExecuteSQL(sql, undefined, {
+                ...options,
+                description: `${options.description} (retry after begin)`,
+            });
+        }
+    }
+
+    private isUnbegunPhysicalTransactionError(error: unknown): boolean {
+        const msg = error instanceof Error ? error.message : String(error);
+        return /has not begun|not been begun|SAVEPOINT can only be used in transaction blocks/i.test(msg);
+    }
+
+    private async commitTransactionCore(): Promise<void> {
+        if (!this.HasPhysicalTransaction) {
+            throw new Error('No active transaction to commit');
+        }
+        if (this._transactionDepth === 0) {
+            throw new Error('Transaction depth mismatch - no transaction to commit');
+        }
+        if (this._transactionDepth === 1) {
+            try {
+                await this.CommitPhysicalTransaction();
+            } catch (e) {
+                try {
+                    await this.RollbackPhysicalTransaction();
+                } catch {
+                    /* rollback after failed commit is best-effort */
+                }
+                this.clearTransactionState();
+                LogError(e);
+                throw e;
+            }
+            this.clearTransactionState();
+            return;
+        }
+        const savepointName = this._savepointStack[this._savepointStack.length - 1];
+        if (!savepointName) {
+            throw new Error(`Savepoint stack mismatch — expected savepoint at depth ${this._transactionDepth}.`);
+        }
+        const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
+        if (releaseSQL) {
+            await this.ExecuteSQL(releaseSQL, undefined, {
+                description: `Releasing savepoint ${savepointName}`,
+                ignoreLogging: true,
+            });
+        }
+        this._savepointStack.pop();
+        this._transactionDepth--;
+    }
+
+    private async rollbackTransactionCore(): Promise<void> {
+        if (!this.HasPhysicalTransaction) {
+            throw new Error('No active transaction to rollback');
+        }
+        if (this._transactionDepth === 0) {
+            throw new Error('Transaction depth mismatch - no transaction to rollback');
+        }
+        if (this._transactionDepth === 1) {
+            try {
+                await this.RollbackPhysicalTransaction();
+            } finally {
+                this.clearTransactionState();
+            }
+            return;
+        }
+        const savepointName = this._savepointStack[this._savepointStack.length - 1];
+        if (!savepointName) {
+            throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
+        }
+        try {
+            await this.ExecuteSQL(this.Dialect.RollbackToSavepointSQL(savepointName), undefined, {
+                description: `Rolling back to savepoint ${savepointName}`,
+                ignoreLogging: true,
+            });
+            const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
+            if (releaseSQL) {
+                await this.ExecuteSQL(releaseSQL, undefined, {
+                    description: `Releasing savepoint ${savepointName} after rollback`,
+                    ignoreLogging: true,
+                });
+            }
+            this._savepointStack.pop();
+            this._transactionDepth--;
+        } catch (savepointError) {
+            try {
+                await this.HandleFailedSavepointRollback(savepointName, savepointError);
+            } finally {
+                if (!this.HasPhysicalTransaction) {
+                    this.clearTransactionState();
+                }
+            }
+            throw savepointError;
+        }
+    }
+
+    private clearSavepointState(): void {
+        this._savepointStack = [];
+        this._savepointCounter = 0;
+    }
+
+    private clearTransactionState(): void {
+        this._transactionDepth = 0;
+        this.clearSavepointState();
+    }
 }

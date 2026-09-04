@@ -67,9 +67,19 @@ class TestGenericProvider extends GenericDatabaseProvider {
         return `LIMIT ${maxRows} OFFSET ${startRow}`;
     }
 
-    async BeginTransaction(): Promise<void> {}
-    async CommitTransaction(): Promise<void> {}
-    async RollbackTransaction(): Promise<void> {}
+    protected override get HasPhysicalTransaction(): boolean {
+        return this.physicalOpen;
+    }
+    protected physicalOpen = false;
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = true;
+    }
+    protected override async CommitPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = false;
+    }
+    protected override async RollbackPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = false;
+    }
 
     // Expose protected virtual methods for testing
     public testBuildTopClause(maxRows: number): string { return this.BuildTopClause(maxRows); }
@@ -1804,5 +1814,79 @@ ORDER BY Cnt DESC`,
         expect(result.ErrorMessage).toBeTruthy();
         // RenderedSQL is undefined because the rendering step itself failed
         expect(result.RenderedSQL).toBeUndefined();
+    });
+});
+
+class RecordingProvider extends TestGenericProvider {
+    public beginCount = 0;
+
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        this.beginCount++;
+        this.physicalOpen = true;
+    }
+}
+
+describe('GenericDatabaseProvider nested transactions', () => {
+    it('outermost begin starts a physical transaction and issues no savepoint SQL', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(p.transactionDepth).toBe(1);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('nested begin with a live physical TX issues a dialect savepoint', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(p.transactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('nested begin with leaked depth and no physical TX begins one first', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(p.transactionDepth).toBe(1);
+        p.physicalOpen = false;
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(2);
+        expect(p.transactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('retries the savepoint after a has-not-begun error by recovering the physical TX', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        const orig = p.ExecuteSQL.bind(p);
+        let attempts = 0;
+        p.ExecuteSQL = async (sql?: string, params?: unknown[]) => {
+            attempts++;
+            if (attempts === 1) {
+                throw new Error('Transaction has not begun. Call begin() first.');
+            }
+            return orig(sql, params);
+        };
+        p.beginCount = 0;
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(attempts).toBe(2);
+        expect(p.transactionDepth).toBe(3);
+    });
+
+    it('nested commit is a no-op SQL on SQL Server (no RELEASE) and decrements depth', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        await p.CommitTransaction();
+        expect(p.transactionDepth).toBe(1);
+        expect(p.executeSQLCalls).toEqual([]);
+        expect(p.physicalOpen).toBe(true);
+        await p.CommitTransaction();
+        expect(p.transactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
     });
 });

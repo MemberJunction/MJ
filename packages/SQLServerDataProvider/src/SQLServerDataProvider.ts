@@ -312,17 +312,16 @@ export class SQLServerDataProvider
 
   private _pool: sql.ConnectionPool;
   
-  // Instance transaction properties
+  // Instance transaction properties. Nesting depth and savepoints live on
+  // GenericDatabaseProvider; this handle is the mssql Transaction those
+  // savepoints run against.
   private _transaction: sql.Transaction;
-  private _transactionDepth: number = 0;
   /**
-   * Set while an OUTERMOST `BeginTransaction` is awaiting `sql.Transaction.begin()`. Concurrent
+   * Set while an OUTERMOST `BeginPhysicalTransaction` is awaiting `sql.Transaction.begin()`. Concurrent
    * `BeginTransaction` callers await this first so they cannot take the nested-savepoint branch
    * before `_transaction` exists. Null whenever no begin is in flight.
    */
   private _beginInFlight: Promise<void> | null = null;
-  private _savepointCounter: number = 0;
-  private _savepointStack: string[] = [];
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _fileSystemProvider: IFileSystemProvider;
@@ -397,24 +396,6 @@ export class SQLServerDataProvider
   }
   
   /**
-   * Gets the current transaction nesting depth
-   * 0 = no transaction, 1 = first level, 2+ = nested transactions
-   */
-  public get transactionDepth(): number {
-    // Request-specific depth should be accessed via getTransactionContext
-    return this._transactionDepth;
-  }
-
-  /**
-   * Feeds real nesting depth to the entity-transaction machinery (`IsNested`, out-of-order settle
-   * detection). Deliberately separate from `IsInTransaction`, which this provider leaves `false`
-   * so `RunMaybeSerial` keeps fanning out — see the note in `packages/MJCore/src/generic/util.ts`.
-   */
-  protected override get CurrentTransactionDepth(): number {
-    return this._transactionDepth;
-  }
-  
-  /**
    * Checks if we're currently in a transaction (at any depth)
    */
   public get inTransaction(): boolean {
@@ -426,14 +407,6 @@ export class SQLServerDataProvider
    */
   public get inNestedTransaction(): boolean {
     return this.transactionDepth > 1;
-  }
-  
-  /**
-   * Gets the current savepoint names in the stack (for debugging)
-   * Returns a copy to prevent external modification
-   */
-  public get savepointStack(): string[] {
-    return [...this._savepointStack];
   }
   
   /**
@@ -2325,7 +2298,11 @@ IF ${varName} IS NOT NULL
         @Comments=NULL;`;
   }
 
-  public async BeginTransaction() {
+  protected override get HasPhysicalTransaction(): boolean {
+    return !!this._transaction;
+  }
+
+  protected override async WithTransactionLock<T>(fn: () => Promise<T>): Promise<T> {
     // Serialize against an outermost begin that is still in flight. Without this, a second caller
     // arriving during that window takes the depth-2 savepoint branch and issues
     // `SAVE TRANSACTION` while `this._transaction` is still null — which silently runs it on the
@@ -2334,253 +2311,95 @@ IF ${varName} IS NOT NULL
     while (this._beginInFlight) {
       await this._beginInFlight.catch(() => undefined);
     }
-    try {
-      this._transactionDepth++;
-
-      if (this._transactionDepth === 1) {
-        // First transaction - actually begin using mssql Transaction object.
-        //
-        // 🚨 BEGIN LOCALLY, PUBLISH AFTER. `this._transaction` is a SHARED provider field that
-        // every ExecuteSQL call with no explicit connectionSource picks up (see ~1768). Assigning
-        // it before `begin()` resolves publishes an UN-BEGUN transaction to the whole process, and
-        // any concurrent query in that window dies with mssql's
-        //   "Transaction has not begun. Call begin() first."
-        // Worse, if `begin()` THROWS, the old code's catch block restored the depth but left the
-        // un-begun object assigned — poisoning the provider PERMANENTLY, so every later save on it
-        // failed with that same message until the process restarted.
-        //
-        // Found during the 6.1 release: it silently destroyed AI agent run persistence. Agent-run,
-        // step, prompt-run and heartbeat saves all failed ("Failed to create agent run record",
-        // "N step record save(s) failed"), leaving IT56/IT57's live checks with no steps to read.
-        // They therefore reported `model-noncompliance:` — byte-identically across every run and
-        // every model tier — for a defect that had nothing to do with the model.
-        const begun = (async () => {
-          const transaction = new sql.Transaction(this._pool);
-          await transaction.begin();
-          this._transaction = transaction;
-
-          // Emit transaction state change
-          this._transactionState$.next(true);
-        })();
-        this._beginInFlight = begun;
-        try {
-          await begun;
-        } finally {
-          this._beginInFlight = null;
-        }
-      } else {
-        // Nested transaction - create a savepoint. Depth can be > 0 while `_transaction`
-        // is still null (a prior outermost begin leaked, or a concurrent caller raced
-        // past `_beginInFlight`). SAVE TRANSACTION through mssql's Request(transaction)
-        // then throws "Transaction has not begun. Call begin() first."
-        await this.ensurePhysicalTransaction();
-        const savepointName = `SavePoint_${++this._savepointCounter}`;
-        this._savepointStack.push(savepointName);
-        try {
-          await this.createSavepoint(savepointName);
-        } catch (savepointError) {
-          this._savepointStack.pop();
-          this._savepointCounter--;
-          throw savepointError;
-        }
-      }
-    } catch (e) {
-      this._transactionDepth--; // Restore depth on error
-      // Never leave a transaction object published once the depth is back to 0 — a non-null
-      // `_transaction` with no live transaction behind it poisons every subsequent ExecuteSQL on
-      // this provider. The publish-after-begin above already prevents the common case; this is the
-      // backstop that keeps the invariant true no matter how the begin failed.
-      if (this._transactionDepth === 0) {
-        this._transaction = null;
-        this._transactionState$.next(false);
-      }
-      LogError(e);
-      throw e; // force caller to handle
-    }
+    return fn();
   }
 
-  /**
-   * Guarantee `this._transaction` is a begun mssql Transaction. Nested savepoints
-   * (`SAVE TRANSACTION`) go through `Request(transaction)` and throw
-   * "Transaction has not begun. Call begin() first." when the field is null or
-   * still holds an un-begun leftover.
-   */
-  private async ensurePhysicalTransaction(): Promise<void> {
+  protected override async BeginPhysicalTransaction(): Promise<void> {
+    // 🚨 BEGIN LOCALLY, PUBLISH AFTER. `this._transaction` is a SHARED provider field that
+    // every ExecuteSQL call with no explicit connectionSource picks up. Assigning it before
+    // `begin()` resolves publishes an UN-BEGUN transaction to the whole process, and any
+    // concurrent query in that window dies with mssql's
+    //   "Transaction has not begun. Call begin() first."
+    // Worse, if `begin()` THROWS, a leftover un-begun object poisons the provider PERMANENTLY.
+    //
+    // Found during the 6.1 release: it silently destroyed AI agent run persistence.
     if (this._transaction) {
       return;
     }
+    const begun = (async () => {
+      const transaction = new sql.Transaction(this._pool);
+      await transaction.begin();
+      this._transaction = transaction;
+      this._transactionState$.next(true);
+    })();
+    this._beginInFlight = begun;
+    try {
+      await begun;
+    } finally {
+      this._beginInFlight = null;
+    }
+  }
+
+  protected override async RecoverPhysicalTransaction(): Promise<void> {
     const transaction = new sql.Transaction(this._pool);
     await transaction.begin();
     this._transaction = transaction;
     this._transactionState$.next(true);
   }
 
-  private async createSavepoint(savepointName: string): Promise<void> {
-    try {
-      await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
-        description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
-        ignoreLogging: true
-      });
-    } catch (savepointError) {
-      const msg = savepointError instanceof Error ? savepointError.message : String(savepointError);
-      if (!/has not begun/i.test(msg)) {
-        throw savepointError;
-      }
-      // Non-null `_transaction` that mssql has not begun — replace and retry once.
-      const transaction = new sql.Transaction(this._pool);
-      await transaction.begin();
-      this._transaction = transaction;
-      this._transactionState$.next(true);
-      await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
-        description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth} (retry after begin)`,
-        ignoreLogging: true
-      });
+  protected override async CommitPhysicalTransaction(): Promise<void> {
+    if (!this._transaction) {
+      throw new Error('No active transaction to commit');
+    }
+    await this._transaction.commit();
+    this._transaction = null;
+    this._transactionState$.next(false);
+    await this.processDeferredTasks();
+  }
+
+  protected override async RollbackPhysicalTransaction(): Promise<void> {
+    if (!this._transaction) {
+      throw new Error('No active transaction to rollback');
+    }
+    await this._transaction.rollback();
+    this._transaction = null;
+    this._transactionState$.next(false);
+    const deferredCount = this._deferredTasks.length;
+    this._deferredTasks = [];
+    if (deferredCount > 0) {
+      LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
     }
   }
 
-  public async CommitTransaction() {
-    try {
-      if (!this._transaction) {
-        throw new Error('No active transaction to commit');
-      }
-      
-      if (this._transactionDepth === 0) {
-        throw new Error('Transaction depth mismatch - no transaction to commit');
-      }
-      
-      this._transactionDepth--;
-      
-      if (this._transactionDepth === 0) {
-        // Outermost transaction - use mssql Transaction object to commit
-        await this._transaction.commit();
-        this._transaction = null;
-        
-        // Clear savepoint tracking
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        
-        // Emit transaction state change
-        this._transactionState$.next(false);
-        
-        // Process any deferred tasks after successful commit
-        await this.processDeferredTasks();
-      } else {
-        // Nested transaction - just remove the savepoint from stack
-        this._savepointStack.pop();
-      }
-    } catch (e) {
-      // If commit() threw after we already decremented _transactionDepth to 0,
-      // the caller's RollbackTransaction() will see depth===0 and refuse to act,
-      // leaving the mssql transaction permanently open on SQL Server and holding
-      // row locks until the TCP connection drops (requires MJAPI restart).
-      // Detect this state and force a direct rollback to release the locks.
-      if (this._transactionDepth === 0 && this._transaction) {
-        try {
-          await this._transaction.rollback();
-        } catch (rollbackError) {
-          LogError('Rollback after commit failure also failed:', undefined, rollbackError);
-        } finally {
-          this._transaction = null;
-          this._savepointStack = [];
-          this._savepointCounter = 0;
-          this._transactionState$.next(false);
-        }
-      }
-      LogError(e);
-      throw e; // force caller to handle
-    }
+  protected override async OnBeginFailedAtDepthZero(): Promise<void> {
+    this._transaction = null;
+    this._transactionState$.next(false);
   }
 
-  public async RollbackTransaction() {
+  protected override async HandleFailedSavepointRollback(savepointName: string, error: unknown): Promise<void> {
+    // SQL Server dooms the ENTIRE transaction (XACT_STATE() = -1) on deadlock-victim,
+    // batch-aborting and XACT_ABORT errors. In that state `ROLLBACK TRANSACTION <savepoint>`
+    // is illegal (Msg 3931). The only recovery is a FULL rollback plus a complete state reset.
+    LogError(
+      `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
+      `(XACT_STATE() = -1). Performing a full rollback and resetting transaction state.`
+    );
     try {
-      if (!this._transaction) {
-        throw new Error('No active transaction to rollback');
-      }
-      
-      if (this._transactionDepth === 0) {
-        throw new Error('Transaction depth mismatch - no transaction to rollback');
-      }
-      
-      if (this._transactionDepth === 1) {
-        // Outermost transaction - rollback everything
+      if (this._transaction) {
         await this._transaction.rollback();
-        this._transaction = null;
-        this._transactionDepth = 0;
-        
-        // Clear savepoint tracking
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        
-        // Emit transaction state change
-        this._transactionState$.next(false);
-        
-        // Clear deferred tasks after rollback
-        const deferredCount = this._deferredTasks.length;
-        this._deferredTasks = [];
-        if (deferredCount > 0) {
-          LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
-        }
-      } else {
-        // Nested transaction - rollback to savepoint
-        const savepointName = this._savepointStack[this._savepointStack.length - 1];
-        if (!savepointName) {
-          throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
-        }
-
-        try {
-          await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
-            description: `Rolling back to savepoint ${savepointName}`,
-            ignoreLogging: true
-          });
-
-          this._savepointStack.pop();
-          this._transactionDepth--;
-        } catch (savepointError) {
-          // SQL Server dooms the ENTIRE transaction (XACT_STATE() = -1) on deadlock-victim,
-          // batch-aborting and XACT_ABORT errors. In that state `ROLLBACK TRANSACTION <savepoint>`
-          // is illegal (Msg 3931) and throws — and leaving the depth/stack untouched would strand
-          // a dead physical transaction that every subsequent statement on this provider silently
-          // joins, with nested Commit calls "succeeding" against a transaction that can never
-          // commit. The only recovery is a FULL rollback plus a complete state reset; the outer
-          // scopes' own settles then fail loudly against depth 0 instead of pretending to work.
-          // (The old per-chain BeginISATransaction never hit this — sql.Transaction.rollback() is
-          // legal on an aborted transaction — so this hazard is specific to savepoint joining.)
-          LogError(
-            `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
-            `(XACT_STATE() = -1). Performing a full rollback and resetting transaction state.`
-          );
-          try {
-            await this._transaction.rollback();
-          } catch (fullRollbackError) {
-            LogError('Full rollback after savepoint rollback failure also failed:', undefined, fullRollbackError);
-          } finally {
-            this._transaction = null;
-            this._transactionDepth = 0;
-            this._savepointStack = [];
-            this._savepointCounter = 0;
-            this._transactionState$.next(false);
-            const deferredCount = this._deferredTasks.length;
-            this._deferredTasks = [];
-            if (deferredCount > 0) {
-              LogStatus(`Cleared ${deferredCount} deferred tasks after doomed-transaction recovery`);
-            }
-          }
-          throw savepointError; // the caller's unit of work still failed — report it
-        }
       }
-    } catch (e) {
-      // On error in outer transaction, reset everything
-      if (this._transactionDepth === 1 || !this._transaction) {
-        this._transaction = null;
-        this._transactionDepth = 0;
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        this._transactionState$.next(false);
+    } catch (fullRollbackError) {
+      LogError('Full rollback after savepoint rollback failure also failed:', undefined, fullRollbackError);
+    } finally {
+      this._transaction = null;
+      this._transactionState$.next(false);
+      const deferredCount = this._deferredTasks.length;
+      this._deferredTasks = [];
+      if (deferredCount > 0) {
+        LogStatus(`Cleared ${deferredCount} deferred tasks after doomed-transaction recovery`);
       }
-
-      LogError(e);
-      throw e; // force caller to handle
     }
+    throw error;
   }
 
   /**
