@@ -1,5 +1,417 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- 8b78695: Regenerate the class-registration manifests so every one of them is on the chunked format.
+
+  The chunked manifest format (`CLASS_REGISTRATIONS_0`, `CLASS_REGISTRATIONS_1`, …) was introduced to keep
+  TypeScript from hitting TS2590 on a single union that had grown too large. Only `server-bootstrap` and
+  `server-bootstrap-lite` were regenerated at the time, so the remaining manifests stayed on the old
+  single-array shape and the `Build` job's manifest gate has been failing on `next` ever since.
+
+  This regenerates all of them from a fully-built workspace. Alongside the format change the sweep picks up
+  registrations that had drifted out: `MJAIUsageTypeEntity` and the `LinearPriceUnitType` /
+  `PerImagePriceUnitType` / `TimePerHourPriceUnitType` / `TimePerMinutePriceUnitType` pricing unit types in the
+  Angular bootstraps, and `MJEntityPermissionEntityServer` / `MJTenantFilterMiddleware` / `RateLimitMiddleware`
+  from `@memberjunction/server` in the server bootstrap.
+
+  Generated output only; no hand edits, no runtime behaviour change.
+
+  One thing worth knowing for anyone regenerating these in future: **the manifest generator is sensitive to
+  build state.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the
+  `.d.ts` each `exports` entry points at, and it `continue`s past any that is missing. Run `mj codegen manifest`
+  against a workspace whose `dist/` folders are absent and the subpaths silently resolve to nothing — the
+  package falls through to the whole-package branch and `lazy-feature-config.ts` collapses its twelve
+  per-dashboard chunks into one eager import, with no warning. Build the workspace first.
+
+- Updated dependencies [6dbe524]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [10010b2]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [79483bf]
+- Updated dependencies [6fd0a73]
+- Updated dependencies [22ec804]
+- Updated dependencies [8206993]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [e63ac04]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [eac9819]
+- Updated dependencies [d66a26a]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [88d751d]
+- Updated dependencies [d7feeae]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/actions-apollo@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-agents@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/core-entities-server@6.1.0-edge.5
+  - @memberjunction/ai-groq@6.1.0-edge.5
+  - @memberjunction/ai-openai@6.1.0-edge.5
+  - @memberjunction/core-actions@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.5
+  - @memberjunction/search-engine@6.1.0-edge.5
+  - @memberjunction/scheduling-engine@6.1.0-edge.5
+  - @memberjunction/ai-agent-harness@6.1.0-edge.5
+  - @memberjunction/predictive-studio@6.1.0-edge.5
+  - @memberjunction/ai-anthropic@6.1.0-edge.5
+  - @memberjunction/ai-assemblyai@6.1.0-edge.5
+  - @memberjunction/ai-azure@6.1.0-edge.5
+  - @memberjunction/ai-bedrock@6.1.0-edge.5
+  - @memberjunction/ai-betty-bot@6.1.0-edge.5
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.5
+  - @memberjunction/ai-cerebras@6.1.0-edge.5
+  - @memberjunction/ai-cohere@6.1.0-edge.5
+  - @memberjunction/ai-fireworks@6.1.0-edge.5
+  - @memberjunction/ai-gemini@6.1.0-edge.5
+  - @memberjunction/ai-heygen@6.1.0-edge.5
+  - @memberjunction/ai-inception@6.1.0-edge.5
+  - @memberjunction/ai-inworld@6.1.0-edge.5
+  - @memberjunction/ai-lmstudio@6.1.0-edge.5
+  - @memberjunction/ai-llamacpp@6.1.0-edge.5
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.5
+  - @memberjunction/ai-minimax@6.1.0-edge.5
+  - @memberjunction/ai-mistral@6.1.0-edge.5
+  - @memberjunction/ai-ollama@6.1.0-edge.5
+  - @memberjunction/ai-openrouter@6.1.0-edge.5
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.5
+  - @memberjunction/ai-vertex@6.1.0-edge.5
+  - @memberjunction/ai-zhipu@6.1.0-edge.5
+  - @memberjunction/ai-xai@6.1.0-edge.5
+  - @memberjunction/ai-reranker@6.1.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/content-autotagging@6.1.0-edge.5
+  - @memberjunction/queue@6.1.0-edge.5
+  - @memberjunction/templates@6.1.0-edge.5
+  - @memberjunction/testing-engine@6.1.0-edge.5
+  - @memberjunction/ai-agent-manager@6.1.0-edge.5
+  - @memberjunction/ai-form-builder@6.1.0-edge.5
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.5
+  - @memberjunction/record-set-processor@6.1.0-edge.5
+  - @memberjunction/task-graph@6.1.0-edge.5
+  - @memberjunction/tag-engine-base@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/doc-utils@6.1.0-edge.5
+  - @memberjunction/encryption@6.1.0-edge.5
+  - @memberjunction/react-linter@6.1.0-edge.5
+  - @memberjunction/record-comparison@6.1.0-edge.5
+  - @memberjunction/scheduling-actions@6.1.0-edge.5
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.5
+  - @memberjunction/geo-core@6.1.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.5
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.5
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.5
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.5
+  - @memberjunction/data-context-server@6.1.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [de6eb14]
+- Updated dependencies [a2c528f]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [647bd71]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [faac5b5]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/geo-core@6.1.0-edge.4
+  - @memberjunction/core-actions@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.4
+  - @memberjunction/actions-apollo@6.1.0-edge.4
+  - @memberjunction/content-autotagging@6.1.0-edge.4
+  - @memberjunction/doc-utils@6.1.0-edge.4
+  - @memberjunction/ai-betty-bot@6.1.0-edge.4
+  - @memberjunction/ai-heygen@6.1.0-edge.4
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.4
+  - @memberjunction/ai-agent-harness@6.1.0-edge.4
+  - @memberjunction/ai-agents@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/predictive-studio@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-anthropic@6.1.0-edge.4
+  - @memberjunction/ai-assemblyai@6.1.0-edge.4
+  - @memberjunction/ai-azure@6.1.0-edge.4
+  - @memberjunction/ai-bedrock@6.1.0-edge.4
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.4
+  - @memberjunction/ai-cerebras@6.1.0-edge.4
+  - @memberjunction/ai-cohere@6.1.0-edge.4
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.4
+  - @memberjunction/ai-fireworks@6.1.0-edge.4
+  - @memberjunction/ai-gemini@6.1.0-edge.4
+  - @memberjunction/ai-groq@6.1.0-edge.4
+  - @memberjunction/ai-inception@6.1.0-edge.4
+  - @memberjunction/ai-inworld@6.1.0-edge.4
+  - @memberjunction/ai-lmstudio@6.1.0-edge.4
+  - @memberjunction/ai-llamacpp@6.1.0-edge.4
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.4
+  - @memberjunction/ai-minimax@6.1.0-edge.4
+  - @memberjunction/ai-mistral@6.1.0-edge.4
+  - @memberjunction/ai-ollama@6.1.0-edge.4
+  - @memberjunction/ai-openai@6.1.0-edge.4
+  - @memberjunction/ai-openrouter@6.1.0-edge.4
+  - @memberjunction/ai-vertex@6.1.0-edge.4
+  - @memberjunction/ai-zhipu@6.1.0-edge.4
+  - @memberjunction/ai-xai@6.1.0-edge.4
+  - @memberjunction/ai-reranker@6.1.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/queue@6.1.0-edge.4
+  - @memberjunction/search-engine@6.1.0-edge.4
+  - @memberjunction/templates@6.1.0-edge.4
+  - @memberjunction/testing-engine@6.1.0-edge.4
+  - @memberjunction/ai-agent-manager@6.1.0-edge.4
+  - @memberjunction/ai-form-builder@6.1.0-edge.4
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.4
+  - @memberjunction/record-set-processor@6.1.0-edge.4
+  - @memberjunction/task-graph@6.1.0-edge.4
+  - @memberjunction/tag-engine-base@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/encryption@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/react-linter@6.1.0-edge.4
+  - @memberjunction/record-comparison@6.1.0-edge.4
+  - @memberjunction/scheduling-actions@6.1.0-edge.4
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.4
+  - @memberjunction/scheduling-engine@6.1.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.4
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.4
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.4
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.4
+  - @memberjunction/data-context-server@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- be0bdb2: Follow-up hardening for Query & Entity Materialization (#3735). Each item below fails toward doing the
+  wrong thing rather than doing nothing, so none of them surface as an error in normal operation.
+
+  **Row-restriction gates read both fence layers.** MJ enforces row restrictions in two AND-composed
+  layers — role RLS and API-key row filters — and the mint, drift and runtime Leak-1 gates each re-derived
+  a role-only predicate inline. An entity fenced _only_ by an API-key row filter therefore read as
+  unrestricted; because the mint gives the materialized entity a NEW EntityID, the key's EntityID-keyed
+  binding stops matching it, and the principal is served a full unscoped snapshot of rows it cannot read
+  live. All gates now compose both layers, and an unproven layer counts as restricted.
+
+  **Lost provenance is now drift.** Deleting a source query cascade-deletes the `MaterializedResultQuery`
+  join row while the snapshot, the minted entity and its read grants all survive — which silently disarmed
+  both the RLS re-check and the read-grant re-narrow, leaving the unscoped snapshot serving indefinitely.
+  It now revokes read and holds.
+
+  **A zero-row external query no longer destroys the snapshot.** Columns are derived from the returned
+  rows, so an empty result built a surrogate-only shadow, dropped the canonical table and renamed that
+  shell into its place — every subsequent read failing on a missing column while the refresh reported
+  success. An empty result now refuses the rebuild and leaves the existing snapshot serving.
+
+  **The refresher snapshots the statement the read path executes.** Reads resolve SQL through
+  `GetPlatformSQL(PlatformKey)`; the refresher snapshotted the base `SQL`, so a query carrying a
+  per-platform variant was materialized from a different statement than live serves.
+
+  **`XACT_ABORT` no longer escapes onto the pooled connection.** The swap, recompute and dirty-group
+  batches each set it ON and never restored it. SET options persist for the session, so unrelated requests
+  handed the same physical connection inherited it — turning their recoverable statement-level errors into
+  full transaction aborts, far from anything to do with materialization.
+
+  **The DDL identifier guard no longer opens on its own failure.** `assertSafeObjectNames` throws on a
+  tampered `SchemaName`, but the failure path then passed that same rejected name to the best-effort shadow
+  cleanup, which interpolated it raw into `DROP TABLE`/`OBJECT_ID`. The cleanup now re-checks and declines.
+
+  **Two analyzers that produced silently wrong rows.** A `UNION`/`EXCEPT`/`INTERSECT` parses to a single
+  `select` root whose `groupby` and `columns` describe only the first branch, so a set operation yielded an
+  aggregation key covering one branch and the incremental MERGE collided both branches on the same hash.
+  And a row-filter predicate was bound to an output column by bare name, which cannot tell `o.Status` from
+  `c.Status` across a join, nor an alias from the column it rebinds.
+
+  **Missing manifest registrations.** Neither new `@RegisterClass` class was in the pre-built manifests, so
+  a bundled MJAPI tree-shook both away: the refresh driver never resolved, nothing was ever refreshed, and
+  `Status` stayed `Active` while the read paths served mint-time data forever.
+
+  **Read-routing distinguishes a failed lookup from "not materialized".** Only three roles hold `CanRead`
+  on `MJ: Materialized Results`, so a restricted user silently got live data for every materialized request
+  while an admin got the snapshot. The live fallback is correct and unchanged; the silence was the defect.
+
+  **Note on coverage.** The predicate-binding proof and the join-qualifier requirement are deliberately
+  conservative and will refuse shapes that previously qualified: a row-filter query whose predicate or
+  projection is unqualified across a join now stays live-only, and an aggregation over a join with an
+  unqualified `GROUP BY` loses its incremental key and falls back to `FullRebuild`. Both refusals are
+  logged with the specific reason. Falling back to live is always correct — but a query that silently gets
+  slower is easier to diagnose knowing this changed.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [d4a5b4c]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [8c9ed6f]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [2875f6f]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e68d90d]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [3b6be0b]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [2741d46]
+- Updated dependencies [b6416f4]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ae2baef]
+- Updated dependencies [4b1257f]
+- Updated dependencies [6cd337d]
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ai-agents@6.1.0-edge.3
+  - @memberjunction/scheduling-engine@6.1.0-edge.3
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.3
+  - @memberjunction/content-autotagging@6.1.0-edge.3
+  - @memberjunction/core-entities-server@6.1.0-edge.3
+  - @memberjunction/ai-azure@6.1.0-edge.3
+  - @memberjunction/ai-cerebras@6.1.0-edge.3
+  - @memberjunction/ai-groq@6.1.0-edge.3
+  - @memberjunction/ai-minimax@6.1.0-edge.3
+  - @memberjunction/ai-mistral@6.1.0-edge.3
+  - @memberjunction/ai-ollama@6.1.0-edge.3
+  - @memberjunction/ai-openrouter@6.1.0-edge.3
+  - @memberjunction/ai-zhipu@6.1.0-edge.3
+  - @memberjunction/task-graph@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.3
+  - @memberjunction/testing-engine@6.1.0-edge.3
+  - @memberjunction/react-linter@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/core-actions@6.1.0-edge.3
+  - @memberjunction/queue@6.1.0-edge.3
+  - @memberjunction/search-engine@6.1.0-edge.3
+  - @memberjunction/ai-agent-harness@6.1.0-edge.3
+  - @memberjunction/ai-agent-manager@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/ai-form-builder@6.1.0-edge.3
+  - @memberjunction/tag-engine-base@6.1.0-edge.3
+  - @memberjunction/predictive-studio@6.1.0-edge.3
+  - @memberjunction/ai-anthropic@6.1.0-edge.3
+  - @memberjunction/ai-assemblyai@6.1.0-edge.3
+  - @memberjunction/ai-bedrock@6.1.0-edge.3
+  - @memberjunction/ai-betty-bot@6.1.0-edge.3
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.3
+  - @memberjunction/ai-cohere@6.1.0-edge.3
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.3
+  - @memberjunction/ai-fireworks@6.1.0-edge.3
+  - @memberjunction/ai-gemini@6.1.0-edge.3
+  - @memberjunction/ai-heygen@6.1.0-edge.3
+  - @memberjunction/ai-inception@6.1.0-edge.3
+  - @memberjunction/ai-inworld@6.1.0-edge.3
+  - @memberjunction/ai-lmstudio@6.1.0-edge.3
+  - @memberjunction/ai-llamacpp@6.1.0-edge.3
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.3
+  - @memberjunction/ai-openai@6.1.0-edge.3
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.3
+  - @memberjunction/ai-vertex@6.1.0-edge.3
+  - @memberjunction/ai-xai@6.1.0-edge.3
+  - @memberjunction/ai-reranker@6.1.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.3
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.3
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.3
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.3
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.3
+  - @memberjunction/actions-apollo@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.3
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+  - @memberjunction/communication-types@6.1.0-edge.3
+  - @memberjunction/doc-utils@6.1.0-edge.3
+  - @memberjunction/encryption@6.1.0-edge.3
+  - @memberjunction/data-context-server@6.1.0-edge.3
+  - @memberjunction/record-comparison@6.1.0-edge.3
+  - @memberjunction/record-set-processor@6.1.0-edge.3
+  - @memberjunction/scheduling-actions@6.1.0-edge.3
+  - @memberjunction/templates@6.1.0-edge.3
+  - @memberjunction/geo-core@6.1.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

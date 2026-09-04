@@ -2,7 +2,7 @@
   "name": "@memberjunction/communication-expo-push",
   "license": "BUSL-1.1",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.5",
   "description": "Expo push notification provider for MemberJunction Communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,9 +15,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/communication-types": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
     "dotenv": "^17.2.4",
     "env-var": "^7.4.1"
   },

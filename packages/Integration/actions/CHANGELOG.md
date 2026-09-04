@@ -1,5 +1,138 @@
 # @memberjunction/integration-actions
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [323df0f]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [405c035]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [653c51d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [79afbff]
+- Updated dependencies [e3a1425]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [64915b9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [5c1d762]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [4f20e10]
+- Updated dependencies [1f66f31]
+  - @memberjunction/integration-engine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [2003cd3]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

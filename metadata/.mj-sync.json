@@ -18,6 +18,7 @@
     "credential-categories",
     "credential-types",
     "authentication-providers",
+    "identity-claim-types",
     "resource-types",
     "search-providers",
     "search-scopes",
@@ -25,6 +26,7 @@
     "integration-source-types",
     "integrations",
     "ai-model-types",
+    "ai-usage-types",
     "ai-vendors",
     "ai-models",
     "ml-algorithms",
@@ -73,7 +75,9 @@
     "entity-settings",
     "roles",
     "entity-permissions",
-    "widget-instances"
+    "widget-instances",
+    "remote-operation-categories",
+    "remote-operations"
   ],
   "sqlLogging": {
     "enabled": true,

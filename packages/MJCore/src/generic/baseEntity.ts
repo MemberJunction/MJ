@@ -347,6 +347,21 @@ export class EntityField {
                     }
                 }
             }
+
+            // Value-list validation (MJ issue #3969): a field whose ValueListType is `List` carries an
+            // EXHAUSTIVE set of legal values in metadata, and for an `IN (...)` CHECK constraint that
+            // list is the only runtime representation CodeGen produces — so without this rung an
+            // out-of-list value reached the database as a raw constraint violation attributed to no
+            // field, on every path that is not a form. Which modes and value types the rule applies
+            // to, how values are compared, and why, all live in
+            // EntityFieldInfo.ValueIsPermittedByValueList: the normalized set of legal values is
+            // derived from immutable metadata SHARED by every EntityField instance of this field, so
+            // it is built once per field rather than rebuilt on every record's validation.
+            if (!ef.ValueIsPermittedByValueList(this.Value)) {
+                result.Success = false;
+                const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
+                result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
+            }
         }
 
         return result;
@@ -677,6 +692,57 @@ export class BaseEntityResult {
     }
 
     /**
+     * Renders ONE entry of the {@link Errors} array as human-readable text.
+     *
+     * `Errors` is typed `any[]`, and two shapes land in it from different places:
+     *
+     *  - **`ValidationErrorInfo`** — carries **`Message`** (capital M), plus `Source`, `Value` and
+     *    `Type`. This is what `_InnerSave` puts there when validation refuses a save: it throws the
+     *    `ValidationResult`, and the catch block assigns `newResult.Errors = e.Errors`.
+     *  - **`Error`** (and anything error-like) — carries lowercase **`message`**.
+     *
+     * This used to read `err.message` ONLY, so every `ValidationErrorInfo` fell through to
+     * `JSON.stringify(err)`. That is not a cosmetic difference: `CompleteMessage` is the string the
+     * server hands the client on a failed save — every write-refusal throw in `ResolverBase`
+     * (`CreateRecord`/`UpdateRecord`/`DeleteRecord`) puts it in the `GraphQLError`, and
+     * `SaveEntityGraphOperation` puts it in `ErrorMessage` — so the whole point of writing a careful,
+     * field-named refusal in a subclass's `ValidateAsync()` was defeated at the last step, and the
+     * user saw
+     * `{"Source":"ParentContractID","Message":"…","Value":null,"Type":"Failure"}` in a toast.
+     *
+     * Nothing catches this at compile time because `Errors` is `any[]`; nothing catches it at runtime
+     * because `JSON.stringify` always succeeds. It is only visible by reading the message a user got.
+     *
+     * The parameter is `unknown` rather than `any` — per `.claude/rules/typescript-style.md` — because
+     * not knowing the shape is the whole reason this helper exists, and `unknown` forces the narrowing
+     * that makes each shape's handling explicit. Callers pass `any` (the `Errors` array and the `Error`
+     * property are both legacy `any`), which is assignable, so no call site changes.
+     *
+     * `Message` is preferred over `message` because a `ValidationErrorInfo` has only the former,
+     * while an `Error` has only the latter — so the order matters solely for an object carrying both,
+     * where the MJ-native field is the better answer.
+     *
+     * @param err - One entry from the `Errors` array.
+     * @returns The entry's human-readable text, falling back to JSON for a shape with neither field.
+     */
+    public static ErrorText(err: unknown): string {
+        if (err === null || err === undefined) {
+            return '';
+        }
+        if (typeof err === 'string') {
+            return err;
+        }
+        if (typeof err === 'object') {
+            const shaped = err as { Message?: unknown; message?: unknown };
+            const text = shaped.Message ?? shaped.message;
+            if (typeof text === 'string' && text.trim().length > 0) {
+                return text;
+            }
+        }
+        return JSON.stringify(err);
+    }
+
+    /**
      * Returns a complete message that includes the Message property (if present), the Error property (if present), and any Errors array items (if present).
      */
     public get CompleteMessage(): string {
@@ -687,24 +753,27 @@ export class BaseEntityResult {
             msg = this.Message;
         }   
 
-        // now check the simple Error property
+        // now check the simple Error property. Same shape problem as the Errors array below, so the
+        // same helper answers it: a string, an Error (lowercase `message`), or an MJ
+        // ValidationErrorInfo (capital `Message`) all render as their text rather than as JSON.
         if (this.Error) {
-            msg = (msg ? msg + '\n' : '')
-            if (typeof this.Error === 'string') {
-                msg += this.Error;
-            }
-            else if (this.Error.message) {
-                msg += this.Error.message;
-            }
-            else {
-                msg += JSON.stringify(this.Error);
-            }
+            msg = (msg ? msg + '\n' : '') + BaseEntityResult.ErrorText(this.Error);
         }
-        
-        // now check the Errors array
+
+        // now check the Errors array.
+        //
+        // NOT de-duplicated, deliberately. Some producers set BOTH `Message` and `Errors` and build
+        // the former out of the latter — `_InnerSave`/`_InnerDelete` do on an IS-A parent failure —
+        // so their text does appear twice here. Suppressing a repeat was tried and reverted: any
+        // containment test is lossy in ways a reader cannot detect. Three fields failing with the
+        // same sentence collapse to one line; an entry whose text is a substring of another is kept
+        // or dropped depending on ARRAY ORDER; and a distinct error vanishes when its text happens to
+        // appear inside the summary. Saying something twice is ugly. Silently reporting one problem
+        // when there were three is the failure this whole class of bug is about, so the duplication
+        // stays until a producer-side fix removes it at the source.
         if (this.Errors && this.Errors.length > 0) {
             // append
-            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => err.message || JSON.stringify(err)).join('\n');
+            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => BaseEntityResult.ErrorText(err)).join('\n');
         }
 
         return msg;
@@ -1139,6 +1208,110 @@ export abstract class BaseEntity<T = unknown> {
 
         // Cache the parent field names for O(1) routing lookups
         this._parentEntityFieldNames = this.EntityInfo.ParentEntityFieldNames;
+    }
+
+    /**
+     * IS-A PROMOTION (#3825): binds this NEW child record to an EXISTING parent row, so saving it
+     * ADDS a subtype to a person/org/product that already exists instead of trying to create a
+     * duplicate parent.
+     *
+     * Before this existed the operation was impossible: `NewRecord()` always starts a fresh parent
+     * chain, so "this existing Person is now also an Applicant" INSERTed a second Person and
+     * collided with the existing primary key (or, with parent fields unset, failed the parent's
+     * NOT NULL validation as if it were brand new). Discovery ran the other way only — a loaded
+     * parent finds its existing child — and promotion is the normal case in a multi-app install,
+     * where a shared entity like Person accumulates subtypes owned by different applications.
+     *
+     * What it does, in the existing machinery rather than beside it:
+     *  1. LOADS the parent chain by the supplied key (`InnerLoad`, which also hydrates any
+     *     grandparents from the same row). A loaded parent saves as an UPDATE, which is the whole
+     *     trick — the chain save that already runs parent-first now updates the existing row and
+     *     INSERTs only this child.
+     *  2. Mirrors the shared primary key into this child's local fields, restoring `_NeverSet`
+     *     exactly as `NewRecord()`'s adoption path does, so the ReadOnly mirror stays writable for
+     *     the rest of the lifecycle.
+     *
+     * Everything else is deliberately UNTOUCHED: field routing still sends parent-held values to
+     * the (now loaded) parent, permissions and validation run at every level, and
+     * `EnforceDisjointSubtype` still refuses a second subtype where the parent forbids overlap.
+     * If loading the parent discovers an existing child of ANOTHER subtype, the chain save is
+     * unaffected — parent saves run with `IsParentEntitySave`, which bypasses leaf delegation.
+     *
+     * Call AFTER `NewRecord()` and BEFORE `Save()`:
+     * ```typescript
+     * const applicant = await md.GetEntityObject<ApplicantEntity>('Applicants', contextUser);
+     * applicant.NewRecord();
+     * if (!await applicant.AttachToParent(CompositeKey.FromID(personId))) {
+     *     // no such parent row — decide whether to create a fresh chain instead
+     * }
+     * applicant.Set('CompanyID', companyId);   // child-held fields as usual
+     * await applicant.Save();                  // Person UPDATEd, Applicant INSERTed, one transaction
+     * ```
+     *
+     * @param parentKey Primary key of the EXISTING parent row to promote.
+     * @returns `true` when the parent loaded and this record is now bound to it; `false` when no
+     *   parent row exists under that key (this record is left exactly as it was — still a fresh
+     *   chain — so the caller can choose to save it as one).
+     * @throws When this entity is not an IS-A child type, or has already been saved — promotion
+     *   is a decision about what a NEW record IS, not an edit to an existing one.
+     */
+    public async AttachToParent(parentKey: CompositeKey): Promise<boolean> {
+        if (!this.EntityInfo.IsChildType || !this._parentEntity) {
+            throw new Error(
+                `AttachToParent: '${this.EntityInfo.Name}' is not an IS-A child type — there is no parent to attach to.`);
+        }
+        if (this.IsSaved) {
+            throw new Error(
+                `AttachToParent: '${this.EntityInfo.Name}' record is already saved. Promotion binds a NEW record to an existing parent; it cannot re-parent a saved one.`);
+        }
+        // The PARENT's primary keys drive everything here, not the child's. The shared-PK mirror
+        // is a same-name convention, and a child EntityInfo is not obliged to re-declare the key as
+        // its own PrimaryKey — iterating the child's list silently does nothing on such a schema,
+        // which is exactly the empty-loop bug the first draft of this method had.
+        const parentPks = this._parentEntity.EntityInfo.PrimaryKeys;
+        // Captured BEFORE the load: InnerLoad wipes the parent chain's state before it reads, so a
+        // MISSING parent row would otherwise leave the fresh chain gutted — root PK nulled, record
+        // unsaveable — when the contract is "left exactly as it was, so the caller can still save
+        // it as a fresh chain".
+        const freshPkValues = parentPks.map(pk => ({
+            name: pk.Name,
+            value: this._parentEntity!.Get(pk.Name) as unknown,
+        }));
+        const loaded = await this._parentEntity.InnerLoad(parentKey);
+        if (!loaded) {
+            // Restore the fresh chain the failed load destroyed: re-seed the parent chain, then put
+            // the ORIGINAL minted key back (Set routes to the root), so the record the caller holds
+            // is bit-for-bit the fresh record they built.
+            this._parentEntity.NewRecord();
+            for (const pk of freshPkValues) {
+                if (pk.value != null) {
+                    this._parentEntity.Set(pk.name, pk.value);
+                    this.mirrorSharedKey(pk.name, pk.value);
+                }
+            }
+            return false;
+        }
+        for (const pk of parentPks) {
+            const parentValue = this._parentEntity.Get(pk.Name);
+            if (parentValue != null) {
+                this.mirrorSharedKey(pk.Name, parentValue);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Writes one shared-key value onto this child's LOCAL mirror, when a same-named field exists —
+     * a schema that leaves the shared key entirely to routing has no mirror to maintain, and that
+     * is fine. Restores `_NeverSet` exactly as `NewRecord()`'s adoption path does, so the ReadOnly
+     * mirror stays writable for the rest of the lifecycle.
+     */
+    private mirrorSharedKey(name: string, value: unknown): void {
+        if (!this.GetFieldByName(name)) {
+            return;
+        }
+        this.SetLocal(name, value);
+        this.GetFieldByName(name)?.ResetNeverSetFlag();
     }
 
     /**

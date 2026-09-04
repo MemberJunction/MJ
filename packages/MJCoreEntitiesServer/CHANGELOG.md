@@ -1,5 +1,465 @@
 # @memberjunction/core-entities-server
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 1a2ce13: Pricing for models that aren't billed by the token, and OpenAI as a second Whisper provider.
+
+  **The problem.** MJ's pricing _schema_ was always general — a cost row names a price unit type, and the unit type names a `DriverClass` the ClassFactory resolves. The _execution layer_ was not: `BasePriceUnitType` took two token counts, only the three token drivers were ever registered, and `MJAIPromptRunEntityServer` refused to cost any run reporting zero tokens. So the three continuous-media unit types that already shipped — `Per Image`, `Per Minute`, `Per Hour` — resolved to nothing, and every run priced by one was silently uncosted. Six ACTIVE image cost rows were in that state. (Bug register B60.)
+
+  Speech-to-text made it concrete: Groq bills Whisper by the audio-hour, the just-landed `GroqAudioGenerator` requested `response_format: 'json'` which discards the duration entirely, and the two Whisper models shipped with no cost rows because there was no honest way to write one.
+
+  **Usage grows a second axis.** `ModelUsage` gains `unitKind` (`'Tokens' | 'Seconds' | 'Characters' | 'Images'`), `inputUnits` and `outputUnits`, plus a `ModelUsage.ForMedia(kind, input, output?)` constructor. Continuous quantities are deliberately _not_ folded into the token fields: a run reporting 90 "tokens" that means 90 minutes corrupts `TokensUsed`, every rollup above it, and every dashboard downstream. `SpeechResult` gains `usage?`, matching `ImageGenerationResult`.
+
+  Quantities are always recorded in the **base** measure, never the billing measure — audio billed per hour is still recorded in seconds, and the driver converts. That is what lets one measured duration be priced against a per-minute row from one vendor and a per-hour row from another.
+
+  **Pricing takes quantities.** `BasePriceUnitType` gains a `UnitKind` getter (defaulting to `'Tokens'`, so external subclasses need no change) and `CalculateCost(activeCost, usage)`, the preferred entry point — its default delegates to the existing cache-aware path, so every current driver behaves identically. `TimePerMinutePriceUnitType`, `TimePerHourPriceUnitType` and `PerImagePriceUnitType` register against the unit types that were already seeded, closing the driver half of B60.
+
+  Each driver also exposes `UnitsPerBillingUnit` — 1,000,000 for a per-million-token rate, 3,600 for per-hour, 1 for per-image — so a divisor exists in exactly one place per driver. `TOKEN_PRICE_UNIT_TYPE_DIVISORS` is _derived_ from the driver instances rather than restated, which makes drift between the exported table and the arithmetic that prices every run impossible instead of merely detectable. The map deliberately covers only the token drivers: a missing key is the signal for a consumer doing token-rate math to SKIP a row priced by audio duration, not to fall back to a per-token divisor.
+
+  `BasePriceUnitType` is marked `@RequiresSubclass()`. `ClassFactory.CreateInstance` has never returned `null` for an unregistered key — it falls back to `new BaseClass(...)` — so `if (!calculator)` was a dead branch that installed a hollow object whose only pricing method is `undefined`, surfacing as a `TypeError` inside cost math rather than "this driver is not registered". The new `UnitKind` default made that hollow instance _more_ convincing, since it answers `'Tokens'` and so passes the measure check before throwing. `GetPriceCalculator` now resolves via `TryCreateInstance` and reports the failure, so its documented `null` return is real.
+
+  `AIEngineBase.CalculateModelCost(modelID, vendorID, usage)` is a new costing surface for callers holding a result but no prompt run — transcription and image actions, downstream apps. It returns `null`, having logged why, when there is no active cost row in the measure the run recorded, no registered driver, or a mismatch between what the run measured and what the row prices. A null means "we don't know what this cost" and must never be read as zero.
+
+  **Cost-row selection is measure-aware.** `GetActiveModelCost` takes an optional `usageKind` and excludes rows priced in any other measure before the most-recently-started tiebreak. Without it the effective key is `(Model, Vendor, ProcessingType)`, which cannot represent a model billing in two measures — per-image output alongside per-token prompt — so which measure you got was a sort-order coin flip that was then refused downstream and reported as a pricing gap. The measure is now established _before_ a row is chosen. Omitting the argument keeps the previous behaviour, and no shipped model+vendor carries two measures today, so nothing changes for existing data.
+
+  **The measure is a first-class row, not a string.** A new `MJ: AI Usage Types` entity (`Tokens`, `Seconds`, `Characters`, `Images`) is what a run and a price unit type point at, so "what does this price buy" is answerable by a join instead of by convention. An earlier revision carried it as `AIPromptRun.UnitsKind NVARCHAR(20)` behind a CHECK constraint, which made the set of measures a property of a constraint on one column: nothing else in the schema could reference a measure, and adding one meant editing a CHECK on a table with nothing to do with pricing.
+
+  Note the usage type and the price unit type answer **different** questions and stay separate: `AIUsageType` is the BASE measure of a quantity, while `AIModelPriceUnitType` is the BILLING unit and its scale. Audio is recorded in `Seconds` and billed `Per Hour`. Collapsing them would force a new usage type per billing granularity.
+
+  **The measure lives on `AIModelPriceUnitType`, and nowhere else.** It gains `UsageTypeID` — so a cost row has exactly one place to look for its measure, reached through its `UnitTypeID`, and the FK there means whatever it finds is a real catalog row rather than a string. `AIModelCost` deliberately carries **no** usage-type column: it would be a second copy of a derivable fact, and nothing would arbitrate a cost row claiming `Seconds` while its unit type says `Tokens` — which is precisely the comparison the safety checks depend on. Single-sourcing makes that contradiction unrepresentable rather than merely unlikely.
+
+  **The divisor becomes data, which closes B60's class rather than its instance.** `AIModelPriceUnitType.UnitsPerBillingUnit` (`CHECK > 0`) holds the number that converts base measure to billed unit — 1,000,000 for per-1M-tokens, 3,600 for per-hour, 1 for per-image. That number previously existed _only_ inside a TypeScript class, and that is the root cause of B60: `Per Image` / `Per Minute` / `Per Hour` were seeded as data by one person while the driver classes were never written by another, and the seam was silent for months. A new `LinearPriceUnitType` (`DriverClass = 'Linear'`) reads both columns off its own row, so a linear billing unit — "Per 1,000 Characters" — now ships as one seeded row with no class, no registration and no build. `DriverClass` remains the escape hatch for genuinely non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments like the Groq 10-second floor). An _unregistered_ driver still refuses to price, deliberately: `DriverClass` is NOT NULL, so an unrecognised name is ambiguous between "a new linear unit" and "a non-linear driver whose code is missing", and pricing the second linearly would produce a confident wrong number.
+
+  **`AIModelPriceType` is demoted alongside.** It was a NOT NULL FK that nothing prices, filters or branches on, while `AIModelPriceUnitType` carried the real contract — three vocabularies for one concept, with the _mandatory_ one the one nothing read. Adding a usage type without demoting it would have locked that ambiguity in permanently. Not dropped (NOT NULL, 235 metadata rows, and dropping is on the Forbidden list in `PUBLISH_NO_BREAK_POLICY.md`): the field is flagged `Status = 'Deprecated'`, removed from the generated form (`IncludeInGeneratedForm = 0`, which is the step that actually ends the ambiguity rather than documenting it), and has `AutoUpdateDescription` cleared so CodeGen cannot overwrite the demotion text — all declared in `metadata/entities`, where field-level editorial decisions belong, rather than as EntityField UPDATEs in a migration. The migration keeps only the schema half: a database default of `Tokens`, so new cost rows need not name a value from the vocabulary they are being told to ignore.
+
+  **Prompt runs can record it.** `AIPromptRun` gains `InputUnitsUsed`, `OutputUnitsUsed` (both `CHECK >= 0`) and `UsageTypeID`, where NULL means token-billed — which is what every row written before the column existed IS, since the schema had no way to say anything else. That reading happens at exactly one seam (`MJAIPromptRunEntityServer.RecordedUsage`) rather than in four places, so the rest of the runtime still sees a definite measure. The save-time cost gate passes on units as well as tokens, and refuses — loudly — to price a run whose measure disagrees with its cost row's, rather than dividing seconds by a million and reporting the ~$0 that produces. No units rollup was added: units of different kinds cannot be summed, so cost remains the universal aggregate.
+
+  **The catalog rows are declarative metadata, and that is what makes the new columns nullable.** The four measures live in `metadata/ai-usage-types`, and the measure + divisor for all six shipped billing units in `metadata/ai-model-price-unit-types` — seeded and backfilled by `mj sync push`, not by INSERT and UPDATE statements in the migration, so they are reviewable data in the same form as the rest of the catalog. Metadata is pushed by the release-time consolidated `*__Metadata_Sync.sql`, which by construction carries a later timestamp than any migration a PR can author, so a NOT NULL column defaulted to the Tokens row would fail the from-scratch build on the ADD itself: SQL Server materialises the default into every existing row and the foreign key has nothing to resolve. Nullable + FK is the strongest guarantee available before the seed exists — any non-null value is a real measure — and the runtime is written to that contract rather than around it: a price unit type with no measure refuses to price rather than guessing Tokens. Tightening both `UsageTypeID` columns to NOT NULL is a one-statement follow-up in the release _after_ the one that ships the seed.
+
+  A clean-room bootstrap also found that `sp_updateextendedproperty` throws when the property does not already exist, so the demotion uses drop-then-add — the same fresh-install-only class as the `EntityField.Sequence` trap in `migrations/CLAUDE.md`.
+
+  **`ModelUsageUnitKind` must stay a superset of the `AIUsageType` catalog, and the catalog rows are the source.** `MJAIPromptRunEntityServer` resolves a run's `UsageTypeID` to the catalog row's `Name` and hands that string straight to `ModelUsageUnitKind`. Nothing about that is checked by the compiler — the name arrives as a plain `string` from a database row — so seeding a usage type whose name the union does not carry produces no build error, just a runtime hole on exactly the rows using the new measure. `MODEL_USAGE_UNIT_KINDS` exists so a test can assert the two agree by reading the seed file rather than restating it. `Characters` is present for that reason and has no pricing driver yet, which is not a defect: the costing path refuses to price a measure no driver claims and logs why, which is strictly better than a plausible wrong number. A compile-time assignability pin backs this up (Vitest does not typecheck by default, which is how a narrowing slipped through once).
+
+  **Providers.** Groq now requests `verbose_json` and reports the duration it was already being billed for, summed across split pieces. If any piece fails to report one, usage is left undefined rather than under-reported — a partial sum understates the bill while looking complete. `OpenAIAudioGenerator.SpeechToText` is implemented (it previously threw), with the same 25MB ceiling, the same injected `AudioSplitter`, and the same duration capture. The split-and-join loop moved onto `BaseAudioGenerator.TranscribeWithSplitting` so both providers share one implementation.
+
+  **Cost rows now ship** for Groq Whisper Large v3 ($0.111/audio-hour) and Turbo ($0.04/audio-hour), verified against Groq's published pricing. `Whisper 1` is a **new** model rather than a vendor row on Whisper Large v3: OpenAI's endpoint serves the large-v2 checkpoint, and attaching it to the v3 record would misreport which weights transcribed a given run. It carries a $0.006/minute cost row.
+
+  **Also:** the AC1 integration check flips from warning to hard assert now that every shipped unit type resolves — a future unit type added without a driver reddens the deterministic tier instead of scrolling past. The assert is scoped to unit types an **Active cost row actually references**, since those are the ones whose missing driver silently uncosts real runs; a custom unit type awaiting its driver, referenced by nothing, is reported rather than failed.
+
+  A new **AC7** check is the monitoring counterpart to the whole refusal doctrine. Everything here turns a wrong number into a `NULL`, which is right — but a null plus a `LogError` in a server log is invisible, and that is precisely how B60 survived months with six dormant ACTIVE image cost rows. AC7 asks the question nothing asked: completed runs that did measurable work and carry no cost. It grades the two populations differently — no active cost row in the run's measure is a pricing-coverage gap and is reported; an active cost row in that measure _existing_ while the run is still uncosted means the pipeline had everything it needed and produced nothing, which is asserted.
+
+  The two Explorer cost dashboards no longer carry their own copy of the divisor table. They now resolve a cost row's scale through its unit type's `DriverClass` against the exported `TOKEN_PRICE_UNIT_TYPE_DIVISORS`, and skip rows priced by a non-token unit type rather than defaulting them to the per-1M divisor — which had been dividing an hourly audio rate by a million. Both local tables were keyed by unit-type _display name_ using names (`Per Million Tokens`) that never matched the seeded ones (`Per 1M Tokens`), so every lookup missed and only the per-1M fallback made the numbers come out right; keying off the driver class removes both the miss and the fallback that hid it.
+
+  Pricing also refuses, rather than reporting $0, when a run records continuous units without a resolvable usage type to name their measure — the same "we don't know what this cost" rule the rest of the path follows.
+
+  Both transcription providers request `verbose_json` only for models that accept it. OpenAI's GPT-4o transcription models reject it outright, so they fall back to `json` and report no duration instead of failing the transcription; Groq's STT surface is Whisper-only today, so the guard there is prospective — matched on `includes('whisper')`, because `distil-whisper-large-v3-en` does support `verbose_json` and a `startsWith` test would strip its duration and leave every run through it uncosted. A reported duration of exactly `0` now leaves usage undefined rather than producing a measure with no quantity, which the pricing layer would refuse and log as a fault for genuinely silent audio.
+
+  The PostgreSQL counterpart to the migration is deferred to the release build, per `migrations/CLAUDE.md`.
+
+### Patch Changes
+
+- 23c2521: Close silent-failure gaps in Open App config writes, class registration, and update checks — and
+  fix the first real collision the new class-registration diagnostic found.
+
+  `dynamicPackages` idempotency matched the whole config file rather than the target array, so a
+  `shared` package — which must be written to both `server` and `client` — had its client insert
+  skipped by the server entry written moments earlier. The package never reached
+  `dynamicPackages.client`, so its `@RegisterClass` components were tree-shaken out of the browser
+  bundle with no error raised anywhere. The check is now scoped to the target array's body.
+
+  Upgrades were add-only, so `mj.config.cjs` converged on the union of every version ever installed
+  and a package dropped in v2 kept being bootstrapped. `PruneDynamicPackagesNotInManifest` now runs
+  on the upgrade path, after the adds; surviving entries are left byte-identical so an operator's
+  `Enabled: false` is not silently reset, keep-sets are per-array, and an entry shape that cannot be
+  parsed is a no-op rather than a guess. A renamed `startupExport` is retargeted in place — keying
+  only on package name left the old export name in the config forever, and ServerBootstrap then reads
+  `mod[StartupExport]`, gets `undefined`, skips it because it is not a function, and still logs
+  `(ran <old name>)`. The add-then-prune order is chosen for the failure case: these are two writes
+  to the same files with no rollback between them, and adding first leaves that window holding
+  (old ∪ new), so a server that restarts mid-upgrade still finds every entry it needs. Pruning first
+  would leave a subset of both versions and the app's registrations would vanish.
+
+  `@RegisterClass` passes `priority = 0`, which routes to the auto-increment branch, so a later
+  registration always wins — correct for an inheritance chain, silently wrong for two unrelated
+  classes colliding on a key. Only `priority > 0` ever warned, so in practice nothing warned.
+  `ClassFactory.Register` now warns naming every prior unrelated registration for that
+  `(base class, key)` pair, using a new `AreClassesRelated` that compares by name as well as identity
+  so a module loaded through two paths does not read as a collision. Registration behavior is
+  unchanged; the warning is diagnostic only. Measured over a realistic MJAPI load — 1,318 real
+  registrations across 697 `(base, key)` groups — it fires on exactly one pair, with no false
+  positives.
+
+  That one pair was a real bug, fixed here. `MJConversationDetailEntityServer` and
+  `MJConversationDetailEntityExtended` both registered for `BaseEntity` under
+  `'MJ: Conversation Details'` as siblings, each extending the generated entity directly. The server
+  package loads last, so it won outright and the Extended class's `Save`/`Delete` permission gate —
+  the check that only a conversation's owner may set `UserRating`/`UserFeedback`, and that a
+  non-owner without a resource grant cannot write at all — never ran. The gate is explicitly written
+  to run server-side (`ProviderType === 'Database'`), which is exactly where it was being shadowed
+  out. `MJConversationDetailEntityServer` now extends `MJConversationDetailEntityExtended`, so the
+  edit-flag logic and the permission gate compose instead of one replacing the other. The resolved
+  class is unchanged; only its base is.
+
+  `mj app check-updates` dropped the per-repo `TokenMap` that `install` and `upgrade` both use, so
+  private repos reported "up to date" forever; dropped each app's `Subpath`, so a multi-app repo
+  reported a **sibling app's** version as this app's latest; and let one throwing app kill the sweep
+  or vanish from a report that still concluded "All apps are up to date". The loop moved into a
+  testable `CheckAppsForUpdates` helper with the version lookup injected, and failures are collected
+  per app and reported.
+
+  A lookup that returns no version at all is now reported as `Unresolved` — a third outcome, distinct
+  from both an update and a failure — and the green "All apps are up to date" line is printed only
+  when every app actually produced an answer. Every app in the list is installed, so it resolved from
+  a real ref once; finding no version now means the resolver and the repository disagree. This matters
+  because `ListGitHubTags` reads a single page of the GitHub tags API: against
+  `MemberJunction/Integrations` (374 tags), the scoped `<subpath>@<semver>` tag line for every
+  installed connector sits past page 1, so all nine apps resolve to nothing. Without this, scoping the
+  lookup by `Subpath` would have traded a wrong-but-obvious answer for a confident false green.
+  Pagination itself is fixed separately in #3353, which should land with or before this.
+
+- Updated dependencies [6dbe524]
+- Updated dependencies [323df0f]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [405c035]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [653c51d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [79afbff]
+- Updated dependencies [e3a1425]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [517d18b]
+- Updated dependencies [1d3ab82]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [64915b9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [5c1d762]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [4f20e10]
+- Updated dependencies [1f66f31]
+  - @memberjunction/sql-converter@6.1.0-edge.5
+  - @memberjunction/integration-engine@6.1.0-edge.5
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/scheduling-engine@6.1.0-edge.5
+  - @memberjunction/tag-engine@6.1.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.5
+  - @memberjunction/templates@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/communication-engine@6.1.0-edge.5
+  - @memberjunction/doc-utils@6.1.0-edge.5
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.5
+  - @memberjunction/ai-vectordb@6.1.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.5
+  - @memberjunction/sql-parser@6.1.0-edge.5
+  - @memberjunction/predictive-studio-core@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+### Patch Changes
+
+- 8f199e2: Identity Claims: ship the redemption surface and close the trust gaps.
+  - New `IdentityClaimRedemptionResolver` (MJServer): `RedeemIdentityClaim` /
+    `AutoClaimPendingIdentityClaims` mutations and `GetMyPendingIdentityClaims` query, with an
+    in-memory per-user rate limit on redemption attempts.
+  - New Explorer `/claims/redeem` page (explorer-core) — the landing target of claim emails'
+    `?id=..&token=..` links, previously a dead URL.
+  - Automatic claim-on-login: `getUserPayload` now fires `AutoClaimForUser` once per issued
+    token (deduped alongside the session audit), so pending claims addressed to a user's email
+    attach at sign-in.
+  - Email-verification gate: the OIDC `email_verified` claim is read off the verified JWT onto
+    `UserPayload.emailVerified` and threaded into redemption — an IdP that explicitly asserts
+    an unverified email can no longer redeem by email match (the token path still works).
+  - `IdentityClaimType.Configuration` is now read: `RequireVerifiedEmail`, `RequireToken`, and
+    `AutoClaim` gates (typed as `IdentityClaimTypeConfiguration` on the client engine).
+  - `IdentityClaimType.IsActive` is now enforced on both create and redeem.
+  - `GetPendingClaimsForEmail` uses `EscapeSQLString` and a platform-neutral expiry literal
+    (was `GETUTCDATE()`, SQL Server-only); `RevokeClaim` checks its save result and skips the
+    driver's `OnRevoke` when the revocation did not persist.
+
+- 516f4fb: Scope `MJ: Identity Claims` reads to the requesting user, and decouple redemption from that read grant.
+
+  `IdentityClaim` shipped with CodeGen's default permission set (UI read-only; Developer/Integration full CRUD). That default is correct for most entities but too broad here: each row pairs a guest purchaser's email (`NormalizedEmail`) with the record they bought (`EntityID` / `RecordID`), so an unfiltered read grant let any authenticated UI user enumerate every guest email and its purchase linkage.
+
+  A new migration keeps `CanRead` and attaches a `ReadRLSFilterID` — the pattern core already uses for `UI: Own AI Agent Runs` / `UI: Own AI Prompt Runs`. The filter matches on `ClaimedByUserID` **or** `NormalizedEmail`, because `ClaimedByUserID` is NULL until redemption and an ID-only filter would hide every pending claim from the user entitled to redeem it. Developer and Integration keep filter-less rows and stay exempt.
+
+  `RedeemClaim` now reads the claim (and any associated magic-link invite) under the system user rather than the caller. Row filters are applied to single-record loads and not just `RunView`, so without this the filter would have silently broken the entity's own workflow #3 — redeeming when the purchase email differs from the login email, which is exactly the case the verification token exists to serve. Authorization is unchanged and still enforced in the engine: email match, or a timing-safe comparison against the stored token hash.
+
+  Note the `TokenHash` in `MetadataJSON` was not the exposure. The token is `crypto.randomBytes(32)` and is not recoverable from its SHA-256; the issue was PII enumeration.
+
+  ***
+
+  Also threads metadata providers through the identity-claim engines instead of reaching for the process-global default, removing all 8 `global-provider-ok` suppressions across the two files.
+
+  `IdentityClaimEngineServer.RedeemClaim` now **requires** an `IMetadataProvider` (breaking, deliberately). Redemption reads a claim, reads a magic-link invite, and executes a raw CAS `UPDATE` — three operations that must hit the same database. An optional provider would let a caller thread one into the entity reads while the CAS silently fell back to the global, which is the failure this signature makes impossible. `CreateClaim`, `RevokeClaim` and `GetPendingClaimsForEmail` take an optional trailing `provider?` instead, so they stay source-compatible.
+
+  The CAS helpers previously resolved schema and table names from the passed `md` but took `ExecuteSQL` from the global — identical objects in a single-provider process, but the statement would have been built for one database and run against another the moment anyone threaded a provider. Both now use a single provider.
+
+  `IdentityClaimEngine` (client) extends `BaseEngine` and so already owns a provider; its three `new Metadata()` calls are replaced with `this.ProviderToUse` per the repo's data-access rule. Two bare `new RunView()` calls — which resolve a _separate_ global RunView provider slot that the compliance scanner does not cover — now receive the engine's provider.
+
+  `IdentityClaimEngineServer` gains a settable `Provider` accessor with a `?? new Metadata()` fallback, matching `AIEngine` (the pattern `QueryEngineServer` and `ComponentMetadataEngineServer` both cite) and structurally exempt from the compliance scanner.
+
+  ***
+
+  **Breaking:** the claim lifecycle is removed from `IdentityClaimEngine` (`@memberjunction/core-entities`) and now lives only on `IdentityClaimEngineServer`.
+
+  `CreateClaim`, `RedeemClaim`, `RevokeClaim`, `GetPendingClaimsForEmail` and `AutoClaimForUser` are gone from the client+server class. It retains what is safe and useful in any host — the `IdentityClaimType` cache, type lookups, `ClassFactory` driver resolution, `NormalizeEmail`, and the `BaseIdentityClaimDriver` contract — and the server engine contains an instance of it, proxying those cached members. Same split as `AIEngineBase` / `AIEngine`.
+
+  The two copies had diverged. The client's `RedeemClaim` was the pre-hardening implementation: no email match, no token verification of any kind (it accepted a `token` and handed it to the driver unchecked), check-then-set instead of an atomic CAS, and the driver invoked before the status transition with no error handling. Those defects were fixed on the server copy only, leaving a weaker implementation of a security-critical operation exported from a package server code also imports — where `IdentityClaimEngine` and `IdentityClaimEngineServer` differ by one word.
+
+  Nothing outside the engines called the removed methods. `AutoClaimForUser` moves to the server engine and now runs each redemption through the hardened `RedeemClaim`, so the email lookup that finds pending claims is a convenience rather than the security boundary.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [698aeaf]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/sql-converter@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/doc-utils@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/tag-engine@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.4
+  - @memberjunction/templates@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/communication-engine@6.1.0-edge.4
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.4
+  - @memberjunction/scheduling-engine@6.1.0-edge.4
+  - @memberjunction/ai-vectordb@6.1.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.4
+  - @memberjunction/sql-parser@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+  - @memberjunction/predictive-studio-core@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- d4a5b4c: Content vectorization: make colocated vector stores usable, and stop ignoring an index's declared dimensions
+
+  A colocated vector provider (`SQLServerVectorDatabase`, pgvector) keeps vectors in the application's own
+  database. It has no credentials to present, and it needs the active data-provider connection handed to it
+  before use. The ContentSource pipeline honored neither, so a colocated store could be **searched** but
+  never **written** — and it failed in a way that pointed somewhere else entirely: `CreateIndex` logged
+  `"requires a host connection"` and continued, then vectorization died later on a vector-database cache
+  miss, which reads like bad metadata rather than a missing wire-up.
+
+  Four changes, in two places that both create provider instances:
+  - **`AutotagBaseEngine.createVectorDBInstance`** now instantiates first, calls `TryWireColocatedHost`, and
+    only then requires an API key — for providers that actually need one (`!SupportsColocatedQuery &&
+RequiresAPIKey`). The old order could not work: whether a provider is colocated is not knowable until it
+    exists. A non-empty sentinel is passed to the constructor because `VectorDBBase` rejects an empty key
+    outright and colocated providers do not override it, so `''` would throw for precisely the keyless case.
+  - **`MJVectorIndexEntityServer.getVectorDBInstance`** gets the same treatment. This is the site that runs
+    on `VectorIndex.Save()`, so without it the provider index is never created regardless of the above.
+  - **`AutotagBaseEngine.createEmbeddingInstance`** drops its pre-flight key check, matching the decision
+    already documented in the EntityDocument pipeline: an empty key is legitimate for local-only drivers
+    (`LocalEmbedding` runs ONNX in-process and defends itself with `super(apiKey || 'local')`), and a cloud
+    driver that genuinely needs one raises a real provider-level auth error, which is more actionable than a
+    guard here. Gating up front made local embedding models unusable from this pipeline.
+  - **`MJVectorIndexEntityServer.resolveDimensions`** now honors the index's own `Dimensions` column instead
+    of returning a hardcoded 1536. This was a latent bug with real consequences on any store that enforces
+    width: a colocated SQL Server index is a `VECTOR(n)` column, so a 384-dimension model got a
+    `VECTOR(1536)` table and every insert was rejected.
+
+  **Behaviour change worth noting before upgrading:** a `MJ: Vector Indexes` record whose `Dimensions`
+  differs from 1536 will now have its provider index created at the stated width. That is the intent — the
+  column exists to be honored, and the embedding call already honored it — but an index created earlier at
+  1536 will not match, and wants recreating.
+
+  Verified end to end against SQL Server 2025 with local embeddings: two content sources differing only in
+  whether they declare `VectorEntityName`, both vectorized through the real pipeline into a real colocated
+  index. Before these changes the pipeline could not reach that state at all.
+
+  Both entries are `minor` rather than `patch` because the bump level is evaluated per branch and this branch
+  also changes `metadata/` — see `.claude/rules/changesets.md`. The changes here are code only.
+
+- 9cd81ca: Integration apply path: stop record-map write amplification, surface pagination violations, and stop blocking the connection wizard on a schema refresh.
+
+  `MJ: Company Integration Record Maps` is the highest-volume table the sync path writes — one row per external record ever mapped, re-touched every sync — and unlike its run-log siblings it still shipped with `TrackRecordChanges = 1`, so every mapping upsert also wrote a `RecordChange` row and doubled a sync's write volume. Nothing reads that history: the mapping row is the current state, and operators audit a sync through the per-run artifact stream. Change tracking is now off for that entity; existing history rows are left in place. Separately, a connector returning an oversized batch (a pagination-contract violation) is now reported rather than absorbed silently, and `IntegrationUpdateConnection` can launch its schema refresh without waiting on it.
+
+  `MJCompanyIntegrationEntityServer` gains `SuppressActivationSchemaRefresh`, a transient opt-out that stops the activation (`IsActive` false→true) schema refresh from running inside `Save()` when the caller is going to run it itself. `IntegrationCreateConnection` sets it for `awaitSchemaRefresh: false`, which makes that flag actually non-blocking on create — previously the Save-side refresh ran first and awaited, so the mutation paid a full live introspect regardless — and moves the introspect after the connection test, so a connection rejected by that test is rolled back without having written IntegrationObject rows. Default false, so every other activation path is unchanged.
+
+  `IntegrationConnectorCreationPipeline.Run()` now honours a caller-supplied `RunID` even when it coalesces onto an already-running or just-completed run for the same CompanyIntegration. Previously the supplied ID was silently discarded, so a caller that had already handed it to a client as "the run to tail" left that client polling a run directory that was never created — `IntegrationTailRunEvents` answering "Run not found" forever, which is indistinguishable from "hasn't started yet". A coalesced call now publishes a terminal alias run under the requested ID that mirrors the served run's outcome and names it, so the ID is always tailable.
+
+### Patch Changes
+
+- 2875f6f: Stop running a live source introspection inside `CompanyIntegration.Save()`
+
+  `MJCompanyIntegrationEntityServer` no longer overrides `Save()` to fire
+  `IntegrationConnectorCreationPipeline` on an `IsActive false→true` transition.
+  That hook made an unbounded scan of the customer's source a side effect of
+  writing a row — it ran for any writer of that transition, inside the caller's
+  HTTP request, and on the create path it ran before the credential had been
+  tested.
+
+  Discovery is now something a caller asks for:
+  - `IntegrationCreateConnection` creates the row inactive and activates it only
+    after the credential test, so the scan can never run against a password that
+    is about to be rejected and rolled back.
+  - `IntegrationReactivateConnection` gains a `runSchemaRefresh` argument
+    (default `true`, matching the previous behaviour) so the refresh is visible
+    in the API and can be declined.
+  - `runSchemaRefreshPipeline` now takes the `IntegrationEngine` maintenance lock,
+    which the other pipeline call sites already held, and supplies the
+    SoftPKClassifier LLM callback the save hook used to provide.
+
+  `MJCompanyIntegrationEntityServer.RunSchemaRefreshPipeline()` is public for
+  callers that want the old behaviour explicitly.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [a788e27]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [2741d46]
+- Updated dependencies [2741d46]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/scheduling-engine@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/sql-converter@6.1.0-edge.3
+  - @memberjunction/sql-parser@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/tag-engine@6.1.0-edge.3
+  - @memberjunction/ai-vectordb@6.1.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/doc-utils@6.1.0-edge.3
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.3
+  - @memberjunction/predictive-studio-core@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes

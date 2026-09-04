@@ -1,5 +1,152 @@
 # @memberjunction/actions-bizapps-social
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 6fd0a73: Buffer: publish as another identity, pass per-service metadata, and fix the createPost assets shape.
+
+  **`CredentialID`** is now accepted by every Buffer action. When given, the calls are made with the `accessToken` from that `MJ: Credentials` row instead of the CompanyIntegration's own token — which is what publishing to an employee's personal channel, or reading the queue of the person who owns it, requires. `CompanyIntegrationID` stays required: it is what identifies which Buffer integration this is, and the organization and channel context still come from it. A `CredentialID` that was supplied but cannot be read is **fatal** (`INVALID_CREDENTIAL`), never a silent fallback to the tenant token — falling back would publish under the wrong identity with nothing for the caller to notice. The token itself never travels through action params; only its id does.
+
+  **`PlatformMetadata`** on `Create Post (Buffer)` passes Buffer's per-service extras through to the mutation — `{ "linkedin": { "annotations": [...] } }` is how a LinkedIn @mention survives the trip, and without it the post publishes as plain text with the mention spelled out. It is accepted as an object or as a JSON string, since both forms arrive in practice. It is passed through untouched rather than modelled, because its shape belongs to whichever network the channel points at and Buffer extends it independently of this package. Unparseable input **fails** rather than being dropped, for the same reason the credential failure is fatal: quietly posting without the metadata publishes something other than what the caller composed.
+
+  **Fix — the createPost assets shape.** Buffer moved createPost's input to `[AssetInput!]` (`[{ image: { url } }]`, one entry per attachment naming its kind) on 2026-05-25 and rejects the older `{ images: [...] }` object, which is what this package was sending. Any post with `ImageURLs`, `VideoURLs` or `MediaLink` was therefore being rejected by Buffer. Reads are unaffected — Buffer still _returns_ the object form — so the input shape is now its own type, `BufferAssetInput`, alongside the unchanged `BufferAssets` response type.
+
+  This is a breaking change for any caller passing a hand-built `assets` object to the protected `createBufferPost`; the action's own `ImageURLs`/`VideoURLs`/`MediaLink` params are unchanged.
+
+  27 tests cover the credential override, the metadata passthrough and the asset shape.
+
+  `minor` because this branch now ships `metadata/**` — the `MJ: Actions` / `MJ: Action Params` / `MJ: Action Result Codes` records these classes need to be invocable. Metadata becomes a migration at release via the build engineer's `mj sync push`, which is exactly what the `minor` trigger tracks. Without the metadata this would be `patch`.
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/network-utils@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/credentials@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 7857d8e: Add `@memberjunction/network-utils` and remove `axios` from the repository.
+
+  The SSRF guard added for the web/HTTP actions was Actions-specific but the concern is not, so it
+  moves into a new dependency-free, Node-only package (`node:dns` + `node:net` only) that any
+  server-side package can depend on: `AssertPublicUrl`, `SafeFetch`, `IsBlockedIPAddress`, `SSRFError`.
+
+  The same package ships `HttpClient` / `HttpRequest` — a native-`fetch` HTTP client that replaces
+  `axios` across all 11 packages that used it. Consolidating on one client removes the third-party
+  dependency and puts the SSRF guard one option flag (`ValidateUrl`) away from every outbound call
+  site, which was impossible when each package reached for `axios` directly.
+
+  Also fixes an SSRF sink the original pass missed: the `API Rate Limiter` action takes a
+  caller-controlled URL and returns the response body, and is now guarded.
+
+  Public exports use `PascalCase`, per repo convention.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/network-utils@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 07cb22e: Fix `$`-sequence corruption in `String.prototype.replace` calls carrying runtime data (#3171).
+
+  `replace(search, replacement)` treats `$$`, `$&`, `` $` ``, `$'` and `$1`–`$99` as metacharacters when `replacement` is a **string**. Every site below passed runtime data there, so a `$` in that data was silently executed rather than inserted. The `$&`/`` $` ``/`$'` forms are worse than value corruption: they splice surrounding text _into_ the value. All are fixed by passing a replacement **function**, whose return value is used literally.
+  - **`@memberjunction/installer` — corrupted secrets (highest impact).** Re-running `mj install` syncs the root `.env` into MJAPI's. A DB password containing `$&` had the _stale_ MJAPI password spliced into it; ``$` `` spliced in the preceding `.env` line. The result was a wrong secret written to disk with no error, surfacing later as "MJAPI can't connect". Only the replace branch was affected — fresh installs (append branch, string concatenation) were always correct, which is why this survived. Also fixes the `newUserSetup` block (embeds user name/email) and the `mjRepoVersion` and Explorer `environment.ts` patchers.
+  - **`@memberjunction/core` — rewritten RLS predicates.** `RowLevelSecurityFilterInfo.MarkupFilterText` substitutes user properties, magic-link scope and `{{Acting*}}` tokens into row-level-security filters. A `$` in any of them rewrote the predicate — the exact outcome the neighbouring `'`-escaping exists to prevent. This feeds `GetEffectiveRowFilterWhereClause`, used across RunView reads, Create and Update. Also fixes organic-key `Custom` normalization, which builds a SQL `WHERE` from a data value.
+  - **`@memberjunction/generic-database-provider`, `@memberjunction/postgresql-dataprovider`** — end-user search terms substituted into `UserSearchParamFormatAPI` predicates, plus view-template inner SQL and PG identifier quoting. Also `QueryCompositionEngine.renameSQLIdentifier`, which rewrites CTE identifiers in composed queries: the search side was regex-escaped but the replacement side was not, so a `$` in a deconflicted CTE name (SQL Server bracketed and PG quoted identifiers both permit one) was expanded into the executed SQL.
+  - **`@memberjunction/ai-prompts`, `@memberjunction/computer-use`, `@memberjunction/ai-vector-sync`, `@memberjunction/aiengine`, `@memberjunction/ai-agents`** — assistant prefill text (routinely contains `$$` for LaTeX or currency), computer-use goals/URLs/step summaries, embedding-document field values, and entity field values, all interpolated into prompts and templates.
+  - **`@memberjunction/metadata-sync`** — parameter values in the debug SQL log.
+  - **`@memberjunction/testing-engine`** — test input/expected/actual values into the LLM-judge prompt, and parameter values into `SQLValidatorOracle`'s generated SQL.
+  - **`@memberjunction/sql-converter`** — the configured schema name substituted into emitted PostgreSQL view SQL, in both `ViewRule` and its previously-missed twin in `InsertRule`. The schema is now escaped on the _search_ side too: a `$` in it acted as an end-anchor, so the pattern matched nothing and the conversion silently emitted no rewrite.
+  - **`@memberjunction/sql-parser`** — `restoreAliases` swaps generated aliases back to the caller's original bracketed identifiers. Two of its three branches used `split`/`join` and were already safe; the third expanded `$`-sequences, so `[a$'b]` spliced surrounding SQL into an identifier. The aliasing path fires precisely _because_ an identifier contains a non-word character, so the input that triggers aliasing is the input that corrupted the restore. Reached from the public `ToSQL()`.
+  - **`@memberjunction/sqlserver-dataprovider`** — batch execution rewrites `@name` placeholders to `@q<N>_name`; the parameter name went into the `RegExp` unescaped, so a `$` in it prevented the rewrite entirely and mssql failed with "Must declare the scalar variable". Sibling of the PostgreSQL `escapeRegExp` fix below.
+  - **`@memberjunction/react-linter`** — component data substituted into diagnostic messages.
+  - **`@memberjunction/actions-bizapps-social`, `@memberjunction/ai-cli`** — hardened a numeric-only site; documented the AICLI JSON highlighter's `$1` back-references as intentional.
+
+  Also fixes a **test-tooling safety defect** found while verifying the above on a clean database: `@memberjunction/testing-cli` loaded `.env` with `dotenv.config({ override: true })`, so a variable already set in the environment was overwritten. `DB_DATABASE=MJ_scratch mj test …` was silently discarded and the suite ran — **including mutation tests** — against whatever `.env` pointed at. That made the "one database per agent" rule unenforceable by environment variable and diverged from every other `mj` command (`migrate`, `codegen`, `sync push` all honour the environment). `override` is now dotenv's default `false`, so `.env` still fills in anything unset but an explicit value wins. Guarded by a unit test. **Note the inverse hazard when upgrading:** any environment that exports `DB_*` globally — a Docker image, a CI container, a stale `export` in a shell profile — now wins over `.env`, where `.env` used to be authoritative. If a `mj test` run suddenly targets an unexpected database, check the exported environment first; the CLI prints `config.dbDatabase: <name>` at startup.
+
+  And an adjacent defect found while testing the above: `PostgreSQLDataProvider.quoteFieldNamesInToken` interpolated a field name into a `RegExp` **without escaping regex metacharacters**, so a column named `a.b` matched (and wrongly quoted) unrelated text like `axb`, and a column containing `$` was never matched at all — which had also made the replacement-side fix on that line unreachable. Field names are now escaped before interpolation.
+
+  Also adds `.github/scripts/check-dynamic-replace.mjs`, a CI gate that flags `.replace()`/`.replaceAll()` whose replacement is neither a string literal nor a function. No existing lint rule covered this — the React `string-replace-all-occurrences` rule only ever inspects the _search_ argument. The gate is line-aware (only lines a change touches), since ~100 pre-existing sites remain and a bare identifier holding a function reference is indistinguishable from one holding a string; `--all` is available for auditing. Regression tests now push `$$`, `$&`, `` $` ``, `$'` and `$1` through each fixed path.
+
+  Also fixes a **silently inert security check** found while verifying the above. `BaseTestDriver.Provider` fell back to `new Metadata() as unknown as IMetadataProvider`. `Metadata` is a facade that proxies a hand-maintained subset of members to the global provider, not a provider itself, and the cast is the only reason the compiler accepted it. Members it does not proxy read `undefined` — `RowLevelSecurityFilters` among them. The integration suite's `discoverTokenFilter` reads exactly that property to find a `{{UserID}}`-scoped filter, so it always found none: the `rls-isolation` RLS1/RLS2 token-substitution checks skipped-as-pass **on every database**, while the bundle reported green. There were 13 filters present, 5 of them `{{UserID}}`-scoped. The fallback now returns the global provider, which is what the getter's own doc comment always promised, and both checks now execute. A new `rls-isolation` check (RLS11) additionally pushes `$$`, `$&`, `` $` ``, `$'` and `$1` through a substituted user property and executes the resulting predicate, so the RLS half of this fix has live coverage rather than unit coverage alone.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

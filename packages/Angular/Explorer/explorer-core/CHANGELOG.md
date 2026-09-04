@@ -1,5 +1,434 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 22ec804: Clickable record-link tokens in Chat messages (`type: "record"`). Agents emit `@{…}` JSON; the renderer turns it into a pill that opens the row via OpenEntityRecord, including composite primary keys. `name` is optional — omit it for an icon-only pill when surrounding prose already names the record. Loop prompt teaches the grammar and asks for world-class UX: prefer icon-only, one citation per record per section.
+
+### Patch Changes
+
+- 4273317: Accessibility: shell landmarks + skip link, focus containment, and focus-ring token safety.
+
+  Fixes eight WCAG 2.1 A/AA findings raised against the Explorer shell and shared primitives. A ninth — `mj-dropdown` having no way to be given an accessible name — was fixed independently on this line by #3860 and its follow-ups while this work was in flight, so it is not part of this changeset.
+
+  **Shell (`ng-explorer-core`)**
+  - Adds a "Skip to main content" link as the first focusable element in the shell, and marks the routed content region as the `main` landmark (`role="main"`, focusable target). **Consuming apps that added their own skip link should remove it on upgrade** — the shell's now comes first in DOM order, and two stacked skip links is worse than none.
+  - The global search input, the account/avatar button and the mobile-nav toggle now carry real accessible names. The avatar's name lives on the button, so it survives the icon-fallback path when the avatar image fails to load.
+  - The closed mobile nav drawer and the closed search popup are now `inert` and `visibility: hidden` (transitioned so the slide-out still animates). They previously kept every control inside them in the tab order while closed. When the drawer closes with focus inside it, focus returns to the toggle instead of dropping to `<body>`.
+  - The command palette already had `role="dialog"`/`aria-modal`; it now also traps Tab while open and returns focus to whatever was focused when it opened. `aria-modal` never stopped Tab on its own.
+
+  **Focus-ring tokens (`ng-shared-generic`)**
+  - New `--mj-focus-ring-color` companion to `--mj-focus-ring`. `--mj-focus-ring` is a two-part box-shadow value: `outline: 2px solid var(--mj-focus-ring)` looks correct, parses, and renders nothing. Use `--mj-focus-ring` in `box-shadow` and `--mj-focus-ring-color` in `outline`. A new `check:focus-ring` gate fails on the broken form.
+
+  **Whiteboard (`ng-whiteboard`)**
+  - The eleven bare single-character tool shortcuts (`v h p r s t m w i c e`) listened on `document` and fired anywhere on the page, failing WCAG 2.1.4. They are now scoped to focus being inside the whiteboard host, which is made click-focusable for that purpose. Scoping covers the host's whole keydown handler, so undo/redo (`Cmd/Ctrl+Z`, `+Y`), `Escape` and `Delete`/`Backspace` are focus-gated too — a board that swallows the document's `Cmd+Z` from anywhere on the page is its own bug. **Behavior change**: none of these fire while focus is elsewhere on the page. `EnableGlobalShortcuts` restores the old behavior for surfaces that accept the exposure.
+
+- 3fa1fb8: The connectivity banner no longer throws NG0100 when the socket drops mid-render
+
+  `ServerConnectivityBannerComponent` held its visibility in a plain property assigned from an
+  `IsConnected$` subscription. That observable is driven by graphql-ws, which reports "socket closed"
+  from whatever callback happens to be running — and during Explorer startup that lands _inside_ an
+  in-flight change-detection pass, after the banner's own view has already been checked. The
+  assignment then contradicts the `@if` Angular just evaluated, and the dev-mode check-no-changes pass
+  reports it:
+
+      NG0100: ExpressionChangedAfterItHasBeenCheckedError ... Previous value: '-1'. Current value: '0'.
+
+  `-1` and `0` are not the connectivity state; they are `@if`'s branch index, where `-1` means "no
+  branch rendered". So the error is precisely the banner appearing a fraction of a pass too late. It
+  fired once per socket drop or refresh during load, four times on a cold start.
+
+  The state is now a signal (`toSignal(IsConnected$)`) read as `IsConnected()` in the template.
+  Reading a signal from a template registers the view as its consumer, so a write marks that view
+  dirty and Angular re-refreshes it inside the same pass — the DOM and the expression can no longer
+  disagree, whenever the write arrives. That is a structural fix rather than a deferral: nothing is
+  pushed to a later tick, and no error is suppressed.
+
+  `toSignal` also owns the subscription through `DestroyRef`, which retires the manual `Subscription`
+  field and the `OnInit` hook; `ngOnDestroy` stays, because it still has to clear the
+  `--mj-connectivity-banner-height` custom property it publishes on `<html>`.
+
+  The DOM spec gains a host component that drops the connection from `ngAfterViewInit` — a hook that
+  runs inside the pass, after child views are refreshed — which reproduced the reported error verbatim
+  against the old code. The existing specs drop the `detectChanges(false)` + `markForCheck` nursing
+  they needed to work around the bug, and now assert through the strict check-no-changes path.
+
+- 34d9501: Regenerate the lazy-feature manifest for the archiving dashboards subpath (#3988 follow-up)
+
+  #3988 added the `./archiving-dashboards.module` subpath export to `@memberjunction/ng-dashboards` —
+  that was the fix, the module had been unreachable. Making it reachable moves its two registered
+  classes into their own lazy chunk, so `lazy-feature-config.ts` had to be regenerated and was not.
+
+  `ArchiveConfigResource` and `ArchiveRunsResource` now resolve through
+  `archiving-dashboards.module` instead of the catch-all `./module`; the total entry count is
+  unchanged at 118 because this is a relocation, not an addition. Without it the committed manifest
+  points those two at a chunk that no longer declares them, which is precisely the shape that lets
+  tree-shaking drop a registered class from a bundled app.
+
+  The PR-scoped CI path does not regenerate manifests (`npx turbo run build` skips the root
+  postbuild), so this class of staleness is caught by the post-merge full run on `next` by design.
+
+- 5f33ca8: Slack and Teams adapters: first production bring-up
+
+  Defects found running the adapters against a real MJ app — one Slack app per agent
+  (Socket Mode) plus Teams via Bot Framework.
+
+  **Startup and identity**
+  - Users are resolved via `UserCache.Instance`. `new UserCache()` returned the shared
+    singleton and then re-initialized it empty, so no messaging extension could start
+    and the whole server lost its user cache until the next refresh.
+  - Running one platform app per agent no longer causes bots to cross-talk in shared
+    channels: thread replies are answered only by the addressed bot, bot-authored
+    messages are excluded from history and thread affinity, and a new
+    `DisableDelegation` setting stops a pinned bot from handing off.
+  - A bot recognises its own replies. Slack publishes two identifiers for one bot and
+    returns the `bot_id` (with no `user`) for any message posted with a username
+    override — which every agent reply uses, since per-agent identity is the point of
+    one app per agent. Comparing only against `auth.test()`'s `user_id` therefore never
+    matched, so the thread gate above declined threads the bot was actively holding and
+    the agent lost its own turns from context.
+
+  **Delivery**
+  - Generated files and images are delivered as real attachments. Adapters may
+    implement `uploadMediaOutputs` (Slack does, and needs the `files:write` scope);
+    inlined `data:` URIs are decoded; and the run's canonical `fileOutputs` are used
+    rather than depending on the model to inline them.
+  - A non-public button URL no longer fails the entire Slack message — it degrades to
+    a link, so a localhost `ExplorerBaseURL` stops suppressing replies outright.
+  - The artifact link points at the file the agent produced rather than its internal
+    payload, and `System Only` artifacts are no longer linked. Callers relying on
+    `artifactInfo` being the payload artifact now receive the file artifact when a run
+    produced one.
+  - `ng-artifacts`: downloading a file artifact returns real bytes under its own MIME
+    type and filename, instead of a `.txt` file full of base64.
+  - `ng-explorer-core`: a conversation deep link opened cold now honours the URL rather
+    than restoring the previously-viewed conversation.
+
+  **Slack**
+  - Interactivity works in Socket Mode; previously every button and modal was inert, so
+    human-in-the-loop form flows dead-ended.
+  - Message text is capped at the real `text` limit rather than the block-payload limit,
+    which was failing long responses with `msg_too_long`.
+  - Modal placeholders are truncated to 150 characters; an over-long one failed the whole
+    `views.open` and left a button that looked dead.
+
+  **Teams**
+  - `MentionedAgentNames` is populated, so a named agent is reachable at all — previously
+    every Teams turn ran the default agent.
+  - Response forms route the answer back to the agent that asked, via `mj_agent`.
+  - Buttons are built only over `http:`/`https:` URLs. Teams silently ignores `data:`/`blob:`/`file:`
+    (so "Download document" was dead by construction whenever MJ inlined the artifact) and hands
+    unknown schemes such as `javascript:` or `ms-msdt:` to the OS URI handler, so the check is an
+    allow-list. Dropped buttons become a note pointing at the artifact link; localhost stays allowed.
+  - A response form's submitted agent name is validated against the known agents before it is used
+    to route, rather than trusted from the client-controlled submit payload.
+  - Deep links no longer assume `resourceId` is present, now that a Record can be
+    addressed by `keys`.
+
+- 34d19a9: Fix cross-tab URL corruption: a dashboard in a background tab could rewrite the URL of the tab the user was actually viewing.
+
+  `BaseResourceComponent.UpdateQueryParams` fell back to `NavigationService.UpdateActiveTabQueryParams` whenever the component had no tab id, so its query-param writes landed in whichever tab happened to be active. Code dashboards resolved through `ClassFactory` (Open App dashboards, `MCPDashboard`, `DataExplorer`) are exactly the components that have no tab id, so a background dashboard finishing an async load silently replaced the visible tab's deep link with its own params.
+  - `BaseResourceComponent.UpdateQueryParams` no longer has an active-tab fallback. A component that cannot identify its own tab drops the write and logs which component did it and what was dropped.
+  - `DashboardResource` and `BaseAdminContainer` now pass their tab id to the child dashboards they instantiate (`ParentTabId`), so those dashboards keep working — scoped to their own tab.
+  - `NavigationService.UpdateActiveTabQueryParams` is deprecated; components must use `UpdateTabQueryParams` with their own tab id.
+
+  The stamp a host puts on a child is a snapshot of where the host was when it created it, so it has to
+  move when the host does. `tab-container` re-homes a _cached_ resource component to a different tab
+  (`RebindTabId`) without recreating anything inside it, which would otherwise leave the child reading
+  and writing the tab it was born in from inside a tab it no longer belongs to — the same cross-tab
+  corruption, arriving by a slower route. `RebindTabId` now calls an `onTabIdRebound` hook, and both
+  hosts re-home their children through it (the admin container re-homes every cached section, not only
+  the visible one — a detached section is invisible, still subscribed, and exactly the case that
+  matters). The re-home clears the stale `ParentTabId` first, because `getTabId()` prefers it and a
+  rebind that layered over it would be a silent no-op.
+
+- Updated dependencies [4273317]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [d66a26a]
+- Updated dependencies [e93f221]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [23c2521]
+- Updated dependencies [dd6d1f0]
+- Updated dependencies [71ccf29]
+- Updated dependencies [a8710bf]
+- Updated dependencies [e1ebab9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [905820a]
+- Updated dependencies [34d19a9]
+  - @memberjunction/ng-shared-generic@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ng-conversations@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/ng-dashboards@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ng-ui-components@6.1.0-edge.5
+  - @memberjunction/ng-markdown@6.1.0-edge.5
+  - @memberjunction/ng-artifacts@6.1.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.5
+  - @memberjunction/ng-shared@6.1.0-edge.5
+  - @memberjunction/ng-entity-permissions@6.1.0-edge.5
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.5
+  - @memberjunction/ng-list-detail-grid@6.1.0-edge.5
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.5
+  - @memberjunction/ng-base-forms@6.1.0-edge.5
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.5
+  - @memberjunction/ng-feedback@6.1.0-edge.5
+  - @memberjunction/ng-file-storage@6.1.0-edge.5
+  - @memberjunction/ng-list-management@6.1.0-edge.5
+  - @memberjunction/ng-query-viewer@6.1.0-edge.5
+  - @memberjunction/ng-record-changes@6.1.0-edge.5
+  - @memberjunction/ng-record-tags@6.1.0-edge.5
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.5
+  - @memberjunction/ng-search@6.1.0-edge.5
+  - @memberjunction/ng-base-application@6.1.0-edge.5
+  - @memberjunction/ng-entity-form-dialog@6.1.0-edge.5
+  - @memberjunction/ng-base-types@6.1.0-edge.5
+  - @memberjunction/ng-notifications@6.1.0-edge.5
+  - @memberjunction/ng-react@6.1.0-edge.5
+  - @memberjunction/ng-record-selector@6.1.0-edge.5
+  - @memberjunction/ng-user-avatar@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/entity-communications-client@6.1.0-edge.5
+  - @memberjunction/templates-base-types@6.1.0-edge.5
+  - @memberjunction/ng-auth-services@6.1.0-edge.5
+  - @memberjunction/ng-composer@6.1.0-edge.5
+  - @memberjunction/ng-container-directives@6.1.0-edge.5
+  - @memberjunction/ng-mj-livekit-room@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+  - @memberjunction/ng-generic-dialog@6.1.0-edge.5
+  - @memberjunction/ng-export-service@6.1.0-edge.5
+  - @memberjunction/ng-word-cloud@6.1.0-edge.5
+  - @memberjunction/ng-pagination@6.1.0-edge.5
+  - @memberjunction/lists-base@6.1.0-edge.5
+  - @memberjunction/export-engine@6.1.0-edge.5
+  - @memberjunction/theme-engine@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 8f199e2: Identity Claims: ship the redemption surface and close the trust gaps.
+  - New `IdentityClaimRedemptionResolver` (MJServer): `RedeemIdentityClaim` /
+    `AutoClaimPendingIdentityClaims` mutations and `GetMyPendingIdentityClaims` query, with an
+    in-memory per-user rate limit on redemption attempts.
+  - New Explorer `/claims/redeem` page (explorer-core) — the landing target of claim emails'
+    `?id=..&token=..` links, previously a dead URL.
+  - Automatic claim-on-login: `getUserPayload` now fires `AutoClaimForUser` once per issued
+    token (deduped alongside the session audit), so pending claims addressed to a user's email
+    attach at sign-in.
+  - Email-verification gate: the OIDC `email_verified` claim is read off the verified JWT onto
+    `UserPayload.emailVerified` and threaded into redemption — an IdP that explicitly asserts
+    an unverified email can no longer redeem by email match (the token path still works).
+  - `IdentityClaimType.Configuration` is now read: `RequireVerifiedEmail`, `RequireToken`, and
+    `AutoClaim` gates (typed as `IdentityClaimTypeConfiguration` on the client engine).
+  - `IdentityClaimType.IsActive` is now enforced on both create and redeem.
+  - `GetPendingClaimsForEmail` uses `EscapeSQLString` and a platform-neutral expiry literal
+    (was `GETUTCDATE()`, SQL Server-only); `RevokeClaim` checks its save result and skips the
+    driver's `OnRevoke` when the revocation did not persist.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.4
+  - @memberjunction/ng-conversations@6.1.0-edge.4
+  - @memberjunction/ng-base-application@6.1.0-edge.4
+  - @memberjunction/ng-dashboards@6.1.0-edge.4
+  - @memberjunction/ng-entity-form-dialog@6.1.0-edge.4
+  - @memberjunction/ng-entity-permissions@6.1.0-edge.4
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.4
+  - @memberjunction/ng-list-detail-grid@6.1.0-edge.4
+  - @memberjunction/ng-shared@6.1.0-edge.4
+  - @memberjunction/ng-artifacts@6.1.0-edge.4
+  - @memberjunction/ng-base-forms@6.1.0-edge.4
+  - @memberjunction/ng-base-types@6.1.0-edge.4
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.4
+  - @memberjunction/ng-file-storage@6.1.0-edge.4
+  - @memberjunction/ng-list-management@6.1.0-edge.4
+  - @memberjunction/ng-notifications@6.1.0-edge.4
+  - @memberjunction/ng-query-viewer@6.1.0-edge.4
+  - @memberjunction/ng-react@6.1.0-edge.4
+  - @memberjunction/ng-record-changes@6.1.0-edge.4
+  - @memberjunction/ng-record-selector@6.1.0-edge.4
+  - @memberjunction/ng-record-tags@6.1.0-edge.4
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.4
+  - @memberjunction/ng-search@6.1.0-edge.4
+  - @memberjunction/ng-shared-generic@6.1.0-edge.4
+  - @memberjunction/ng-user-avatar@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/entity-communications-client@6.1.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.4
+  - @memberjunction/templates-base-types@6.1.0-edge.4
+  - @memberjunction/ng-auth-services@6.1.0-edge.4
+  - @memberjunction/ng-composer@6.1.0-edge.4
+  - @memberjunction/ng-container-directives@6.1.0-edge.4
+  - @memberjunction/ng-mj-livekit-room@6.1.0-edge.4
+  - @memberjunction/ng-feedback@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/ng-export-service@6.1.0-edge.4
+  - @memberjunction/ng-generic-dialog@6.1.0-edge.4
+  - @memberjunction/ng-markdown@6.1.0-edge.4
+  - @memberjunction/ng-ui-components@6.1.0-edge.4
+  - @memberjunction/ng-word-cloud@6.1.0-edge.4
+  - @memberjunction/ng-pagination@6.1.0-edge.4
+  - @memberjunction/lists-base@6.1.0-edge.4
+  - @memberjunction/export-engine@6.1.0-edge.4
+  - @memberjunction/theme-engine@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 68b9cf0: New-record tabs store an empty recordId while the URL uses the `new` sentinel. URL sync treated those as different records and opened another tab, which synced the same URL again.
+
+  A second compare was permanently true even after the tab matched: `encodeURIComponent` writes `%3A` for the colon in `MJ_BizApps_Orders: Order Headers`, Angular's serializer leaves `:`. Combined with `onSameUrlNavigation: 'reload'`, Person → Orders → New navigated `/new` until Chrome died. URL compare now decodes path and query first.
+
+- 84f276e: Related-entity grids prefill every join field on a new child record and persist those defaults on the new-record URL (`/record/:entity/new?NewRecordValues=...`) so the link survives refresh and deeplink.
+
+  Left-nav related grids (including slot-mounted contributions) fill leftover column height and report their row-count badge: SetSectionRowCount upserts unknown section keys, contribution hosts are display:contents so they participate in the flex column, and accordion pixel heights are not applied while the rail is showing the panel.
+
+  Section search matches contribution titles (Orders) in both accordion and left-nav, keeps the rail visible when only one group hits, and does not treat chrome-hidden panels as non-matches.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [a2e4e09]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [69f2bf2]
+- Updated dependencies [05865ea]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [ac6755c]
+- Updated dependencies [73c853b]
+- Updated dependencies [051e0ff]
+- Updated dependencies [142cf2a]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [e635378]
+- Updated dependencies [26046d8]
+- Updated dependencies [cefc302]
+- Updated dependencies [44ac084]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [6e98173]
+- Updated dependencies [0869c24]
+- Updated dependencies [aa9006b]
+- Updated dependencies [a76cf28]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [2e2879e]
+- Updated dependencies [9b6fb5b]
+- Updated dependencies [b46330e]
+- Updated dependencies [2a0262d]
+- Updated dependencies [6ef741e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [b46330e]
+- Updated dependencies [4b1257f]
+- Updated dependencies [63ea273]
+- Updated dependencies [1be0f14]
+- Updated dependencies [6cd337d]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ng-base-forms@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.3
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.3
+  - @memberjunction/ng-dashboards@6.1.0-edge.3
+  - @memberjunction/ng-base-types@6.1.0-edge.3
+  - @memberjunction/ng-file-storage@6.1.0-edge.3
+  - @memberjunction/ng-shared@6.1.0-edge.3
+  - @memberjunction/ng-notifications@6.1.0-edge.3
+  - @memberjunction/ng-auth-services@6.1.0-edge.3
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.3
+  - @memberjunction/ng-ui-components@6.1.0-edge.3
+  - @memberjunction/ng-conversations@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/ng-base-application@6.1.0-edge.3
+  - @memberjunction/ng-entity-form-dialog@6.1.0-edge.3
+  - @memberjunction/ng-entity-permissions@6.1.0-edge.3
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.3
+  - @memberjunction/ng-list-detail-grid@6.1.0-edge.3
+  - @memberjunction/ng-artifacts@6.1.0-edge.3
+  - @memberjunction/ng-composer@6.1.0-edge.3
+  - @memberjunction/ng-container-directives@6.1.0-edge.3
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.3
+  - @memberjunction/ng-list-management@6.1.0-edge.3
+  - @memberjunction/ng-mj-livekit-room@6.1.0-edge.3
+  - @memberjunction/ng-query-viewer@6.1.0-edge.3
+  - @memberjunction/ng-react@6.1.0-edge.3
+  - @memberjunction/ng-record-changes@6.1.0-edge.3
+  - @memberjunction/ng-record-selector@6.1.0-edge.3
+  - @memberjunction/ng-record-tags@6.1.0-edge.3
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.3
+  - @memberjunction/ng-search@6.1.0-edge.3
+  - @memberjunction/ng-shared-generic@6.1.0-edge.3
+  - @memberjunction/ng-user-avatar@6.1.0-edge.3
+  - @memberjunction/communication-types@6.1.0-edge.3
+  - @memberjunction/entity-communications-client@6.1.0-edge.3
+  - @memberjunction/templates-base-types@6.1.0-edge.3
+  - @memberjunction/ng-feedback@6.1.0-edge.3
+  - @memberjunction/interactive-component-types@6.1.0-edge.3
+  - @memberjunction/ng-generic-dialog@6.1.0-edge.3
+  - @memberjunction/ng-export-service@6.1.0-edge.3
+  - @memberjunction/ng-markdown@6.1.0-edge.3
+  - @memberjunction/ng-word-cloud@6.1.0-edge.3
+  - @memberjunction/ng-pagination@6.1.0-edge.3
+  - @memberjunction/lists-base@6.1.0-edge.3
+  - @memberjunction/export-engine@6.1.0-edge.3
+  - @memberjunction/theme-engine@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

@@ -1,5 +1,181 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- c42c0e8: A transaction group can send its items as ONE round trip.
+
+  `TransactionGroupBase` gains an opt-in `BatchedSubmit` flag (default false — existing callers
+  are byte-for-byte unaffected). When set, both providers execute a variable-free group's items
+  as a single multi-statement round trip instead of one round trip per item: the same statements,
+  in the same order, inside the same transaction, with per-item results still returned.
+
+  Why this matters: the sequential submit is ATOMIC but not BATCHED. Each item's generated CRUD
+  procedure call is its own wire hop, and on a measured live sync the server-side execution was
+  ~0.3ms inside a per-statement wall cost two orders of magnitude larger — so a 100-item group
+  spent essentially all of its time waiting on round trips the SQL never needed. Batching the
+  wire is the entire speed of a direct-write path with none of its costs: every statement is
+  still the generated procedure, so validation, Record Changes and save events are untouched.
+
+  Result mapping cannot assume one recordset per item — a statement that returns no rows produces
+  NO recordset, so a positional zip silently drifts and attributes row A's identity to row B.
+  Each item is therefore preceded by a sentinel SELECT of its index; recordsets between sentinel
+  k and k+1 belong to item k. Covered by tests on both providers, including the empty-middle-item
+  case that breaks positional mapping.
+
+  SQL Server renumbers per-item `?` placeholders into one global `@p` namespace (one request
+  carries one parameter namespace; two items both rendering `@p0` would overwrite each other).
+
+  PostgreSQL cannot carry `$N` parameters in multi-statement text (extended-protocol limitation),
+  so parameter values are inlined through the driver's own `escapeLiteral` — never a hand-rolled
+  escaper — and only for values with an unambiguous literal form (string, finite number, boolean,
+  null, Date; plain objects are already serialized by the parameter processor before the gate).
+  If any value falls outside that set, or the client exposes no `escapeLiteral`, the WHOLE group
+  falls back to the sequential path: correctness first, batching second.
+
+  Groups that use `Variables` have cross-item dependencies (a later item's SQL is re-rendered
+  from an earlier item's output) and always run sequentially regardless of the flag — a single
+  round trip cannot feed one statement's output into the next statement's client-side rendering.
+
+  Failure semantics are unchanged: a batch failure rolls back and throws exactly as the serial
+  path's first-error rollback does, and per-item attribution of a poison row remains the caller's
+  degradation path (re-apply individually), as before.
+
+- 905820a: Sync-scoped write-side-effect suppression. Record Changes and geocoding are per-write side effects, but the only way to relieve a high-volume writer of them was turning the entity flags off — which also turns them off for every human and API writer of the same entities, permanently. New `EntitySaveOptions.SkipRecordChanges` / `SkipGeoCoding` (and `EntityDeleteOptions.SkipRecordChanges`) scope the suppression to the individual save: providers omit the audit-row wrap and the geocode side trip for saves that carry the options, and only those. The sync engine sets them on its own writes when the connection asks via `Configuration.writeSideEffects === 'suppressed'` — fail-closed: absent or malformed configuration keeps the side effects on, and a save outside a suppressing sync run can never carry them. Materially identical to flags-off for the sync's writes; invisible to every other writer. The delete option is mirrored onto the GraphQL `DeleteOptionsInput` because the schema-sync gate requires every `EntityDeleteOptions` field to appear there, but it is **not honoured over the wire**: every wire entry point sanitizes it back to false and logs the attempt, because suppressing an audit row is a higher privilege than `entity:delete` — the only authorization a delete mutation performs. That keeps delete at exact parity with save, whose options have no GraphQL input type at all.
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/query-processor@6.1.0-edge.5
+  - @memberjunction/ai-vectordb@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [a1a8989]
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/query-processor@6.1.0-edge.4
+  - @memberjunction/ai-vectordb@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 07cb22e: Fix `$`-sequence corruption in `String.prototype.replace` calls carrying runtime data (#3171).
+
+  `replace(search, replacement)` treats `$$`, `$&`, `` $` ``, `$'` and `$1`–`$99` as metacharacters when `replacement` is a **string**. Every site below passed runtime data there, so a `$` in that data was silently executed rather than inserted. The `$&`/`` $` ``/`$'` forms are worse than value corruption: they splice surrounding text _into_ the value. All are fixed by passing a replacement **function**, whose return value is used literally.
+  - **`@memberjunction/installer` — corrupted secrets (highest impact).** Re-running `mj install` syncs the root `.env` into MJAPI's. A DB password containing `$&` had the _stale_ MJAPI password spliced into it; ``$` `` spliced in the preceding `.env` line. The result was a wrong secret written to disk with no error, surfacing later as "MJAPI can't connect". Only the replace branch was affected — fresh installs (append branch, string concatenation) were always correct, which is why this survived. Also fixes the `newUserSetup` block (embeds user name/email) and the `mjRepoVersion` and Explorer `environment.ts` patchers.
+  - **`@memberjunction/core` — rewritten RLS predicates.** `RowLevelSecurityFilterInfo.MarkupFilterText` substitutes user properties, magic-link scope and `{{Acting*}}` tokens into row-level-security filters. A `$` in any of them rewrote the predicate — the exact outcome the neighbouring `'`-escaping exists to prevent. This feeds `GetEffectiveRowFilterWhereClause`, used across RunView reads, Create and Update. Also fixes organic-key `Custom` normalization, which builds a SQL `WHERE` from a data value.
+  - **`@memberjunction/generic-database-provider`, `@memberjunction/postgresql-dataprovider`** — end-user search terms substituted into `UserSearchParamFormatAPI` predicates, plus view-template inner SQL and PG identifier quoting. Also `QueryCompositionEngine.renameSQLIdentifier`, which rewrites CTE identifiers in composed queries: the search side was regex-escaped but the replacement side was not, so a `$` in a deconflicted CTE name (SQL Server bracketed and PG quoted identifiers both permit one) was expanded into the executed SQL.
+  - **`@memberjunction/ai-prompts`, `@memberjunction/computer-use`, `@memberjunction/ai-vector-sync`, `@memberjunction/aiengine`, `@memberjunction/ai-agents`** — assistant prefill text (routinely contains `$$` for LaTeX or currency), computer-use goals/URLs/step summaries, embedding-document field values, and entity field values, all interpolated into prompts and templates.
+  - **`@memberjunction/metadata-sync`** — parameter values in the debug SQL log.
+  - **`@memberjunction/testing-engine`** — test input/expected/actual values into the LLM-judge prompt, and parameter values into `SQLValidatorOracle`'s generated SQL.
+  - **`@memberjunction/sql-converter`** — the configured schema name substituted into emitted PostgreSQL view SQL, in both `ViewRule` and its previously-missed twin in `InsertRule`. The schema is now escaped on the _search_ side too: a `$` in it acted as an end-anchor, so the pattern matched nothing and the conversion silently emitted no rewrite.
+  - **`@memberjunction/sql-parser`** — `restoreAliases` swaps generated aliases back to the caller's original bracketed identifiers. Two of its three branches used `split`/`join` and were already safe; the third expanded `$`-sequences, so `[a$'b]` spliced surrounding SQL into an identifier. The aliasing path fires precisely _because_ an identifier contains a non-word character, so the input that triggers aliasing is the input that corrupted the restore. Reached from the public `ToSQL()`.
+  - **`@memberjunction/sqlserver-dataprovider`** — batch execution rewrites `@name` placeholders to `@q<N>_name`; the parameter name went into the `RegExp` unescaped, so a `$` in it prevented the rewrite entirely and mssql failed with "Must declare the scalar variable". Sibling of the PostgreSQL `escapeRegExp` fix below.
+  - **`@memberjunction/react-linter`** — component data substituted into diagnostic messages.
+  - **`@memberjunction/actions-bizapps-social`, `@memberjunction/ai-cli`** — hardened a numeric-only site; documented the AICLI JSON highlighter's `$1` back-references as intentional.
+
+  Also fixes a **test-tooling safety defect** found while verifying the above on a clean database: `@memberjunction/testing-cli` loaded `.env` with `dotenv.config({ override: true })`, so a variable already set in the environment was overwritten. `DB_DATABASE=MJ_scratch mj test …` was silently discarded and the suite ran — **including mutation tests** — against whatever `.env` pointed at. That made the "one database per agent" rule unenforceable by environment variable and diverged from every other `mj` command (`migrate`, `codegen`, `sync push` all honour the environment). `override` is now dotenv's default `false`, so `.env` still fills in anything unset but an explicit value wins. Guarded by a unit test. **Note the inverse hazard when upgrading:** any environment that exports `DB_*` globally — a Docker image, a CI container, a stale `export` in a shell profile — now wins over `.env`, where `.env` used to be authoritative. If a `mj test` run suddenly targets an unexpected database, check the exported environment first; the CLI prints `config.dbDatabase: <name>` at startup.
+
+  And an adjacent defect found while testing the above: `PostgreSQLDataProvider.quoteFieldNamesInToken` interpolated a field name into a `RegExp` **without escaping regex metacharacters**, so a column named `a.b` matched (and wrongly quoted) unrelated text like `axb`, and a column containing `$` was never matched at all — which had also made the replacement-side fix on that line unreachable. Field names are now escaped before interpolation.
+
+  Also adds `.github/scripts/check-dynamic-replace.mjs`, a CI gate that flags `.replace()`/`.replaceAll()` whose replacement is neither a string literal nor a function. No existing lint rule covered this — the React `string-replace-all-occurrences` rule only ever inspects the _search_ argument. The gate is line-aware (only lines a change touches), since ~100 pre-existing sites remain and a bare identifier holding a function reference is indistinguishable from one holding a string; `--all` is available for auditing. Regression tests now push `$$`, `$&`, `` $` ``, `$'` and `$1` through each fixed path.
+
+  Also fixes a **silently inert security check** found while verifying the above. `BaseTestDriver.Provider` fell back to `new Metadata() as unknown as IMetadataProvider`. `Metadata` is a facade that proxies a hand-maintained subset of members to the global provider, not a provider itself, and the cast is the only reason the compiler accepted it. Members it does not proxy read `undefined` — `RowLevelSecurityFilters` among them. The integration suite's `discoverTokenFilter` reads exactly that property to find a `{{UserID}}`-scoped filter, so it always found none: the `rls-isolation` RLS1/RLS2 token-substitution checks skipped-as-pass **on every database**, while the bundle reported green. There were 13 filters present, 5 of them `{{UserID}}`-scoped. The fallback now returns the global provider, which is what the getter's own doc comment always promised, and both checks now execute. A new `rls-isolation` check (RLS11) additionally pushes `$$`, `$&`, `` $` ``, `$'` and `$1` through a substituted user property and executes the resulting predicate, so the RLS half of this fix has live coverage rather than unit coverage alone.
+
+- 1fdd5d0: Fix PostgreSQL identifier quoting for column names that collide with SQL keywords, and consolidate the two divergent tokenizers into one shared implementation.
+
+  **The defect.** PostgreSQL identifier auto-quoting used a keyword denylist matched case-INsensitively: a PascalCase word was quoted unless it appeared in a hardcoded keyword set. The set of SQL keywords and the set of MJ column names overlap, so every name in the intersection was emitted unquoted, folded to lowercase on PostgreSQL, and failed with `column "..." does not exist`. Eleven such columns ship in the baseline schema — `Name` (on 175 tables), `Values` (the field-level-encrypted column on `__mj."Credential"`), `Length`, `Precision`, `Log`, `Rank`, `Action`, `Columns`, `Language`, `Month`, and `Text`. SQL Server resolves identifiers case-insensitively, so T-SQL-first authoring never surfaced any of it; the failures only appeared on live PostgreSQL deployments. Addresses MJ #3604, #3590, #3691.
+
+  **The fix.** Keywords are now matched **case-sensitively, in their ALL-CAPS form only**. This generalizes a mechanism that already existed for exactly two words (`TYPE` and `DATA`, which were special-cased by hand for the same reason) to the whole keyword set. Dialects always emit keywords upper-case, so the keyword spelling and the column spelling are textually distinct: `TEXT` is the type, `Text` is the column. Critically, an ALL-CAPS word that is _not_ a keyword is still an identifier — `ID` and `URL` are all-caps by nature, so the rule is `!(isAllUpper && isKeyword)`, not a pure case rule. `SELECT Length, LENGTH(Name)` now correctly yields `SELECT "Length", LENGTH("Name")`.
+
+  **Structural change.** There were two copies of the tokenizer — one in `PostgreSQLCodeGenProvider.quoteSQLForExecution` (all codegen-time SQL, via `ManageMetadataBase.qsql()`) and one in `PostgreSQLDataProvider.autoQuoteIdentifiers` (every runtime raw-SQL statement, via `ExecuteSQL`) — with a comment instructing that they be kept in sync by hand. They had already diverged: 289 keywords versus 312, plus a case-sensitive tier and a dot-qualified-identifier rule present only at runtime. Both now delegate to `AutoQuotePostgreSQLIdentifiers` in `@memberjunction/sql-dialect`, which carries the union of both keyword sets. Two consequences worth noting: codegen-time SQL gains the dot-qualification rule, so `__mj.vwFoo` no longer folds to lowercase during codegen; and runtime gains the transaction-control keywords (`CONSTRAINTS`, `IMMEDIATE`, `DEFERRED`, `SAVEPOINT`, `RELEASE`) that previously existed only in the codegen copy.
+
+  **Compatibility.** A word immediately followed by `(` is treated as a function call and left unquoted, unless it is dot-qualified. Without this, mixed-case function spellings that used to work (`Coalesce(`, `IsNull(`) would have broken under case-sensitive matching; it additionally fixes ALL-CAPS functions that were simply missing from the keyword set (`JSONB_BUILD_OBJECT(` was previously quoted, and failed). The dot exception preserves quoting for MJ's own stored procedures, which are created with quoted mixed-case names.
+
+  Separately, a small tier of structural words stays case-insensitive so SQL authored **outside** this repository keeps parsing — a stored `MJ: Queries` body, a saved `UserView.WhereClause`, a GraphQL `ExtraFilter`, none of which this change can reach and fix. It is the predicate vocabulary only: `AND OR NOT IS NULL LIKE ILIKE IN BETWEEN EXISTS ASC DESC NULLS FIRST LAST`.
+
+  The reverse lookup that recognizes the _follower_ of a contextual pair declines to pair with a key that is dot-qualified or already quoted, and refuses to read backwards across a `--` comment. Both make it the true mirror of the forward lookup: without the first, `t.Order By Name` produced a different result on a second pass, violating the module's stated `f(f(x)) === f(x)`; without the second, a comment line ending in the word `order` left a real column named `By` on the next line unquoted.
+
+  A second, **contextual** tier covers the two-word clause forms without giving up column names: `Order`/`Group` are structural only before `By`, and `Left`/`Right`/`Full`/`Inner`/`Cross`/`Outer` only before `Join`/`Outer`. Both halves of a matched pair are recognized, and it chains through `Full Outer Join`. Everywhere else they are ordinary identifiers, so `SELECT Order FROM …` and `Left(Name, 3)` both still work.
+
+  **A dot-qualified word is an identifier**, checked before the structural and contextual tiers. No SQL dialect has a _structural_ keyword after a `.`, so this makes it impossible for a word added to those sets to fold a legitimate `alias.Column`.
+
+  The ALL-CAPS keyword tier is the one exception, and it is deliberately evaluated first. Several entries exist _specifically_ for their dot-qualified form — `INFORMATION_SCHEMA.COLUMNS`, `.TABLES`, `.ROUTINES` — and the catalog's real relation names are lower case, so quoting the right-hand half yields `INFORMATION_SCHEMA."COLUMNS"`, which does not resolve. CodeGen executes that exact SQL through `qsql()` on every PostgreSQL run (`manage-metadata.ts`, three call sites, two of them unconditional), so an unconditional dot rule turns a working CodeGen run into a hard failure. Because tier 1 is case-SENSITIVE it cannot swallow a real column: `Case` is not `CASE`, so `e.Case` still falls through to the dot rule and quotes. Verified against the newest PostgreSQL baseline — the only ALL-CAPS columns in the shipped schema are `ID, URL, URI, ISO2, ISO3, SQL, BCMID, ISO3166_2`, none of them keywords.
+
+  **Known limitation, deliberately not fixed.** Mixed-case clause keywords beyond the predicate vocabulary do not survive: a stored query body written `Select … From … Where …` fails on PostgreSQL. Widening the case-insensitive tier to the full clause skeleton was tried and reverted. That tier is evaluated case-insensitively, so adding `CASE`/`END`/`LIMIT`/`OFFSET` made those unquotable as column names — reintroducing, for 20 words, exactly the defect class this change eliminates. And it did not even work: `Cast(Amount As Decimal)`, `Insert Into Target (Name)` and `Select Top 10` all still failed, because mixed-case SQL needs a parser rather than a bigger denylist. The failure is a loud syntax error, not silently wrong rows, and rewriting the keywords in upper case fixes it.
+
+  A CI test derives every column name from the newest shipped PostgreSQL baseline's `CREATE TABLE __mj."…"` blocks and fails the build if one collides with the case-insensitive tier. Its scope is exactly that — core-schema columns as of the last baseline; columns added by later migrations, and non-`__mj` schemas, are not covered by it. That scope is adequate for a tier this small (no predicate-vocabulary word can be a column name in any schema) and would not have been for the reverted widening.
+
+  **Comments, template tags and literal prefixes.** The tokenizer is a parity machine, and three regions it did not recognize could invert that parity for the rest of a statement. `--` and (nesting) `/* */` comments are now skipped — an apostrophe inside a comment used to open a string-literal scan that ran to the _opening_ quote of the next real literal, after which literals and code swapped roles. Against this repository's own shipped query SQL that rewrote literal **values**: `WHERE ars."StepType" = 'Prompt'` became `= '"Prompt"'` (no rows), and the `jsonb_build_object` keys in `get-conversation-complete.pg.sql` became `'"ID"'` (JSON whose keys are `"\"ID\""`, so every consumer reading `.ID` got undefined) — all because line 10 of `calculate-ai-agent-run-cost.pg.sql` contains the word `doesn't` in a comment. Nunjucks tags (`{{ … }}`, `{% … %}`, `{# … #}`) are now skipped too, since the names inside them are query PARAMETER names matched exactly at render time and `{{ "ConversationID" | sqlString }}` never substitutes. `E'…'` / `N'…'` / `U&'…'` literal prefixes are recognized as part of the literal rather than tokenized as a word (previously `"E"'…'`), with backslash escapes honoured for the `E` form only. An unterminated `{{`/`{%` now emits its delimiters and resumes scanning rather than consuming the rest of the statement, matching what the dollar-quote branch already did for a missing close tag.
+
+  `""` inside an already-quoted identifier is now consumed explicitly as an escape. This one is **defensive, not a bug fix**: the previous code stopped at the first `"` and then immediately re-entered the same branch at the second, pushing each span verbatim, so the two partitions concatenated identically. Brute-forcing 600,000 inputs over an alphabet built from that construct produced zero differences in output. The explicit form is easier to reason about; nothing observable changed, and the "known limitation" note it replaces was describing a failure that never occurred.
+
+  A test runs the tokenizer over every shipped `metadata/queries/SQL/*.pg.sql` and asserts that string literals and template tags come back byte-identical and that the pass is idempotent, using a literal scanner written independently of the implementation. A second suite covers the quoting-policy tiers directly — dot-qualified words, both halves of each contextual pair, the words that must still quote when their partner is absent, literal prefixes, and the unterminated-delimiter cases — because those decide keyword-vs-identifier and are the only ones whose mistakes can make a real column unreachable.
+
+  **Behavior changes to be aware of.** Both `autoQuoteIdentifiers` and `quoteSQLForExecution` are public methods whose output changes: identifiers that were previously emitted bare are now quoted. Two specific cases are worth calling out. A mixed-case cast type now quotes — write `x::text` or `x::TEXT` rather than `x::Text`, since `Text` is a real column name and must quote. And `INSERT INTO Target(Cols)` with no space before the paren leaves the table name unquoted, because a bare word before `(` is indistinguishable from a call; the spaced form `INSERT INTO Target (Cols)` quotes correctly. A third case, added after review: a **column alias** that collides with a keyword now quotes, which changes the KEY a driver returns. `SELECT COUNT(*) AS Count` previously emitted `Count` bare and PostgreSQL folded the result key to `count`; it now emits `AS "Count"` and the key is `Count`. The same applies to `AS Name`, `AS Type`, `AS Rank` and `AS Value`. The new behaviour is the correct one — it matches the declared `QueryField` name — but a consumer reading the folded lowercase key will break. The only in-repo occurrence is `SQLServerCodeGenProvider.ts:1235`, which is not on this path; stored `Query.SQL` rows in consumer databases can carry such aliases.
+
+  Note also that the compatibility claim below is about **fragments**, not full statements: a stored `UserView.OrderBy` / `ExtraFilter` fragment keeps working, but a complete statement written in Title Case (`Select Name From … Where …`) does not — its keywords quote and it fails. That form previously worked. It does not occur in this repository, and the fix would be worse than the problem, so it is documented rather than changed.
+
+  Neither of the first two patterns occurs in this repository. Note the scope of that check: `autoQuoteIdentifiers` runs inside `ExecuteSQL`, so it also processes hand-written SQL originating in CONSUMER repositories (bizapps and client apps), which were not surveyed. Consumers carrying either spelling will see their output change. SQL Server output is unchanged — `SQLServerCodeGenProvider.quoteSQLForExecution` remains the identity function and shares no code with this path.
+
+  **Coverage.** 404 tests across the package (87 on the shared tokenizer directly), plus delegation suites through both providers' real entry points (the codegen tokenizer had no test coverage at all before this). A CI test extracts all 4,616 column definitions from the shipped PostgreSQL baseline and asserts each one survives quoting, so a newly added colliding column fails the build instead of shipping. Both entry points are additionally proven end-to-end against a live PostgreSQL server, including a control assertion that the same SQL unquoted still fails.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+  - @memberjunction/ai-vectordb@6.1.0-edge.3
+  - @memberjunction/query-processor@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

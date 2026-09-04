@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-engine-base",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Base Integration Engine - metadata caching for integrations, usable anywhere (client and server).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,9 +14,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2"
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

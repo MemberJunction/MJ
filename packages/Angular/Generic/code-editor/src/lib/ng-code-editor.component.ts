@@ -716,13 +716,30 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** Find the language's extension by its name. Case insensitive. */
   private _findLanguage(name: string) {
+    const wanted = name.toLowerCase();
     for (const lang of this.languages) {
       for (const alias of [lang.name, ...lang.alias]) {
-        if (name.toLowerCase() === alias.toLowerCase()) {
+        if (wanted === alias.toLowerCase()) {
           return lang;
         }
       }
     }
+
+    // Fall back to the file extensions CodeMirror lists for each language. Several names in common
+    // use are registered there rather than as an alias — 'jinja2', for instance, is one of Jinja's
+    // extensions (["j2", "jinja", "jinja2"]) while its only matchable name is "Jinja", so asking for
+    // the name everyone writes returned null and the editor silently lost syntax highlighting.
+    //
+    // Deliberately a FALLBACK and not part of the loop above: it runs only when nothing matched by
+    // name or alias, so it can turn a miss into a hit but can never change a match that already
+    // resolved. That matters because short extensions ('r', 'md', 'ts') would otherwise be able to
+    // outrank another language's real name.
+    for (const lang of this.languages) {
+      if (lang.extensions.some((ext) => wanted === ext.toLowerCase())) {
+        return lang;
+      }
+    }
+
     console.error('Language not found:', name);
     console.info('Supported language names:', this.languages.map((lang) => lang.name).join(', '));
     return null;

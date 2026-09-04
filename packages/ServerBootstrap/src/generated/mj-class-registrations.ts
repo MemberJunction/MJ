@@ -205,13 +205,14 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (405 classes)
+// @memberjunction/core-entities (409 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -281,6 +282,7 @@ import {
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
+    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -446,6 +448,8 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -662,12 +666,16 @@ import {
     MJEntityDocumentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
-// @memberjunction/ai-engine-base (4 classes)
+// @memberjunction/ai-engine-base (8 classes)
 import {
+    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
 } from '@memberjunction/ai-engine-base';
 
 // @memberjunction/ai-recommendations-rex (1 classes)
@@ -708,22 +716,40 @@ import {
     EntityActionInvocationValidate,
 } from '@memberjunction/actions';
 
-// @memberjunction/actions-apollo (2 classes)
+// @memberjunction/actions-apollo (9 classes)
 import {
+    ApolloCreateListAction,
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
+    ApolloGetListAccountsAction,
+    ApolloGetListContactsAction,
+    ApolloGetListsAction,
+    ApolloMoveListAccountsAction,
+    ApolloMoveListContactsAction,
+    ApolloSearchPeopleAction,
 } from '@memberjunction/actions-apollo';
 
-// @memberjunction/actions-bizapps-accounting (8 classes)
+// @memberjunction/actions-bizapps-accounting (19 classes)
 import {
+    CreateBusinessCentralJournalEntryAction,
+    CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
+    GetAccountBalancesAction,
+    GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
     GetBusinessCentralSalesInvoicesAction,
+    GetChartOfAccountsAction,
+    GetCustomersAction,
+    GetDimensionsAction,
+    GetGLEntriesAction,
     GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
+    GetSalesInvoicesAction,
 } from '@memberjunction/actions-bizapps-accounting';
 
 // @memberjunction/actions-bizapps-crm (4 classes)
@@ -1256,7 +1282,7 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/core-actions (145 classes)
+// @memberjunction/core-actions (147 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1361,6 +1387,7 @@ import {
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
+    ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -1385,6 +1412,7 @@ import {
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
+    TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -1446,9 +1474,12 @@ import {
 /**
  * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
+ *
+ * Split into fixed-size chunks so no single array literal grows a union large
+ * enough to trip TS2590; the exported array is their concatenation.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CLASS_REGISTRATIONS: any[] = [
+const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
     AssemblyAIRealtime,
     AzureEmbedding,
@@ -1512,6 +1543,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -1581,6 +1613,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
+    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -1647,6 +1680,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJComponentEntity,
     MJComponentEntityExtended,
     MJComponentLibraryEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
@@ -1746,6 +1783,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -1845,6 +1884,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
@@ -1928,10 +1971,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
     MJEntityDocumentEntityExtended,
+    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
     RexRecommendationsProvider,
     MJCommunicationProviderEntityExtended,
     MSGraphProvider,
@@ -1942,16 +1989,34 @@ export const CLASS_REGISTRATIONS: any[] = [
     EntityActionInvocationMultipleRecords,
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
+    ApolloCreateListAction,
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
+    ApolloGetListAccountsAction,
+    ApolloGetListContactsAction,
+    ApolloGetListsAction,
+    ApolloMoveListAccountsAction,
+    ApolloMoveListContactsAction,
+    ApolloSearchPeopleAction,
+    CreateBusinessCentralJournalEntryAction,
+    CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
+    GetAccountBalancesAction,
+    GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
     GetBusinessCentralSalesInvoicesAction,
+    GetChartOfAccountsAction,
+    GetCustomersAction,
+    GetDimensionsAction,
+    GetGLEntriesAction,
     GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
+    GetSalesInvoicesAction,
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
@@ -2023,6 +2088,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     FacebookRespondToCommentsAction,
     FacebookSchedulePostAction,
     FacebookSearchPostsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     GetAccountAnalyticsAction,
     GetCommentsAction,
     GetTrendingHashtagsAction,
@@ -2223,6 +2292,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     TaskGraphSubmitServerOperation,
     TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
@@ -2389,6 +2462,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
+    ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2413,6 +2487,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
+    TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -2421,6 +2496,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     URLMetadataExtractorAction,
     UnitConverterAction,
     UnshareListAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
@@ -2447,11 +2526,21 @@ export const CLASS_REGISTRATIONS: any[] = [
     IntegrationTestDriver,
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const CLASS_REGISTRATIONS: any[] = [
+    ...CLASS_REGISTRATIONS_0,
+    ...CLASS_REGISTRATIONS_1,
+    ...CLASS_REGISTRATIONS_2,
+    ...CLASS_REGISTRATIONS_3,
+    ...CLASS_REGISTRATIONS_4,
+    ...CLASS_REGISTRATIONS_5,
+];
+
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 996;
+export const CLASS_REGISTRATIONS_COUNT = 1024;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

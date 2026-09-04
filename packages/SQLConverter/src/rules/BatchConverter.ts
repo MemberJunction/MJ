@@ -18,7 +18,7 @@ import type {
   OutputGroups, StatementType,
 } from './types.js';
 import {
-  createConversionContext, createConversionStats, createOutputGroups,
+  createConversionContext, createConversionStats, createOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_BATCH_ERROR,
 } from './types.js';
 
 /** Batch type groupings for ordered output */
@@ -142,7 +142,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
       stats.Errors++;
       const errMsg = err instanceof Error ? err.message : String(err);
       stats.ErrorBatches.push(`Error in batch ${i + 1} (${batchType}): ${errMsg.slice(0, 100)}`);
-      groups.Other.push(`\n-- ERROR converting batch ${i + 1} (${batchType}): ${errMsg.slice(0, 100)}\n`);
+      groups.Other.push(`\n${GAP_MARKER_BATCH_ERROR} ${i + 1} (${batchType}): ${errMsg.slice(0, 100)}\n`);
       groups.Other.push(`-- Original (first 200 chars): ${batch.slice(0, 200)}\n\n`);
     }
   }
@@ -206,6 +206,12 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     fullOutput = postProcess(fullOutput);
   }
 
+  // Scan the ASSEMBLED output for gap markers before it is written. Done here rather than
+  // at each emission site so a gap from ANY rule — present or future — is counted: rules
+  // return their marker as an ordinary string, so nothing else in this pipeline can tell
+  // that the batch it just counted as `Converted` is unusable SQL (issue #3857).
+  recordOutputGaps(fullOutput, stats);
+
   // Write output
   if (config.OutputFile) {
     log(`Writing ${config.OutputFile}...`);
@@ -220,6 +226,22 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     OutputSQL: fullOutput,
     OutputFile: config.OutputFile,
   };
+}
+
+/**
+ * Record every conversion gap present in the assembled output (see CONVERSION_GAP_MARKERS).
+ *
+ * A gap is not an error: the rule that hit it returned a comment instead of throwing, so the
+ * batch was counted as converted and the file was reported clean. Counting the markers is what
+ * makes the file's unusability visible to the caller — and doing it on the finished text keeps
+ * it independent of which rule produced the gap.
+ */
+function recordOutputGaps(output: string, stats: ConversionStats): void {
+  for (const line of output.split('\n')) {
+    if (!CONVERSION_GAP_MARKERS.some(marker => line.includes(marker))) continue;
+    stats.Gaps++;
+    stats.GapBatches.push(line.trim().slice(0, 200));
+  }
 }
 
 /** Replace Flyway placeholders with target schema */
@@ -606,6 +628,7 @@ export function printReport(stats: ConversionStats, log: (msg: string) => void):
   log(`Converted:              ${stats.Converted.toLocaleString()}`);
   log(`Skipped:                ${stats.Skipped.toLocaleString()}`);
   log(`Errors:                 ${stats.Errors.toLocaleString()}`);
+  log(`Gaps (unconverted SQL): ${stats.Gaps.toLocaleString()}`);
   log('');
   log('Object counts:');
   log(`  Tables created:       ${stats.TablesCreated}`);
@@ -627,6 +650,16 @@ export function printReport(stats: ConversionStats, log: (msg: string) => void):
     }
     if (stats.ErrorBatches.length > 20) {
       log(`  ... and ${stats.ErrorBatches.length - 20} more`);
+    }
+  }
+
+  if (stats.GapBatches.length > 0) {
+    log(`\nGaps — statements the converter could not produce (${stats.GapBatches.length}):`);
+    for (const gap of stats.GapBatches.slice(0, 20)) {
+      log(`  - ${gap}`);
+    }
+    if (stats.GapBatches.length > 20) {
+      log(`  ... and ${stats.GapBatches.length - 20} more`);
     }
   }
 

@@ -54,6 +54,7 @@ import {
   SaveContext,
   RestoreContext,
   RecordChangePayload,
+  EntityDeleteOptions,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
@@ -607,15 +608,20 @@ export class SQLServerDataProvider
    * instanceName is only inserted if it is provided in the options
    */
   public get InstanceConnectionString(): string {
-    // For mssql, we need to access the pool's internal connection options
-    // Since mssql v11 doesn't expose config directly, we'll construct from what we know
+    // mssql exposes the pool's connection options as the public `config` property.
+    // Do NOT read the private `_config` member — in mssql v11+ it is a method, so
+    // every `_config?.x` access silently returned undefined and this getter
+    // degenerated to 'mssql://localhost:1433/' for every connection. Anything
+    // keyed by this string (e.g. shared Redis result caches) then collided
+    // across processes connected to entirely different databases.
     const pool = this._pool as any;
+    const config = pool.config;
     const options = {
       type: 'mssql',
-      host: pool._config?.server || 'localhost',
-      port: pool._config?.port || 1433,
-      instanceName: pool._config?.options?.instanceName ? '/' + pool._config.options.instanceName : '',
-      database: pool._config?.database || '',
+      host: config?.server || 'localhost',
+      port: config?.port || 1433,
+      instanceName: config?.options?.instanceName ? '/' + config.options.instanceName : '',
+      database: config?.database || '',
     };
     return options.type + '://' + options.host + ':' + options.port + options.instanceName + '/' + options.database;
   }
@@ -1488,7 +1494,7 @@ export class SQLServerDataProvider
    * This function generates both the full SQL (with record change metadata) and the simple stored procedure call for delete
    * @returns Object with fullSQL and simpleSQL properties
    */
-  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo): { fullSQL: string; simpleSQL: string } {
+  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
@@ -1499,7 +1505,7 @@ export class SQLServerDataProvider
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
 
-    if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
+    if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
       const oldData = entity.GetAll(true); // get all the OLD values
       const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
@@ -1562,8 +1568,8 @@ export class SQLServerDataProvider
   // WrapSaveCallWithRecordChange (see this file's "Save Grammar" section
   // above). See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
-  protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult {
-    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user);
+  protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
+    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
     return {
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,

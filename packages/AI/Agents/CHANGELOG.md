@@ -1,5 +1,333 @@
 # @memberjunction/ai-agents
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 29c3dc8: A failed upload reports the driver's real cause instead of "Storage upload failed."
+
+  A realtime recording upload surfaced to the client as `{"Success":false,"FileID":null,"ErrorMessage":"Storage upload failed."}` while the actual cause was Google's, and was actionable: _"Service Accounts do not have storage quota. Leverage shared drives instead."_ Four layers each discarded it — the Drive driver's catch reduced the SDK error to a bare `console.error` and `return false`; `FileStorageEngine.UploadFile` threw a path-only generic; `storeRealtimeRecording` logged and then returned `string | null`, so the reason it had just logged could not leave; and the resolver reported the generic. The layer people see is the fourth; the information died at the first.
+
+  **`PutObject`'s `Promise<boolean>` contract is deliberately untouched.** `FileStorageBase` documents boolean-means-success and every driver implements it, so making it throw would break every driver and caller. Every `return false` / `return true` in the driver is byte-for-byte what it was — this is only about not _erasing_ the cause on the way up.
+
+  The Drive driver gains `describeGoogleApiError`, which extracts named fields (`code`, `message`, `errors[].reason`, `errors[].message`, `response.data.error.message`) — an allowlist rather than a dump, because MJStorage ships `rawErrorLogging.guard.test.ts` forbidding drivers from logging a vendor error wholesale. The four catches that rethrow a generic now append the cause, matching the precedent already in that file at `CreatePreAuthDownloadUrl`.
+
+  **Breaking for direct callers of `storeRealtimeRecording`** (hence minor on `@memberjunction/ai-agents`): it returns `{ FileID, ErrorMessage }` rather than `string | null`. A caller that used the returned id directly now reads `.FileID`; the null check becomes a check on `FileID`, with `ErrorMessage` carrying the reason that was previously unreachable.
+
+### Patch Changes
+
+- 79483bf: A bridged realtime seat now runs its OWN agent class instead of silently falling back to plain BaseAgent (#4111)
+
+  `CreateBridgeRealtimeSession` picked the agent class with `agent.DriverClass || agentType?.DriverClass`.
+  `AIAgentType.DriverClass` names a **`BaseAgentType`** subclass — the three shipped values are
+  `LoopAgentType`, `FlowAgentType`, `RealtimeAgentType` — while the key this call needs is a
+  **`BaseAgent`** one. Separate ClassFactory registries, matched by exact key against the base class
+  name, so the fallback could never resolve: dead code that looked alive. It bit the common case,
+  because most agents declare no `DriverClass` of their own (that is what makes an agent data rather
+  than code).
+
+  With no registration and no `@RequiresSubclass` marker, `ClassFactory` returns an instance of the
+  base itself, so every such seat silently ran the plain `BaseAgent`, dropping the subclass behaviour it
+  was configured for — one generic assistant voice for every seat in a room meant to hold distinct
+  characters. Both guards below the call were unreachable: `if (!instance) throw` because an instance is
+  always produced, and `if (!driverClass) throw` because the wrong-registry lookup always produced a
+  truthy key. The only signal was a single `ClassFactory` `console.warn`, deduped per base+key and
+  capped at three per base — effectively invisible in a busy log.
+
+  The agent's own `DriverClass` is now used when it has one, resolved through `TryCreateInstance` so an
+  unregistered key raises instead of installing a base-class fallback that answers plausibly. An agent
+  with no `DriverClass` gets `new BaseAgent()` — constructed directly, deliberately not
+  `CreateInstance(BaseAgent, null)`, because a null key makes `GetAllRegistrations` skip the key filter
+  and return the highest-priority registered subclass, i.e. an arbitrary agent. The unreachable
+  `no DriverClass` throw is gone.
+
+  Dropping the agent-type fallback loses nothing: agent-type behaviour is resolved separately inside
+  `BaseAgent` via `BaseAgentType.GetAgentTypeInstance`, so a seat on the plain `BaseAgent` still gets
+  Loop/Realtime type semantics.
+
+- 8206993: `configOverridesJson` names the keys it is about to ignore.
+
+  `StartRealtimeClientSession` accepts `configOverridesJson`, gates it behind the `Realtime: Advanced Session Controls` authorization, and threads it through `PrepareClientSession` — but `normalizeConfig` reads only `merged['realtime']` and returns an object built exclusively from that section. Every other top-level key was discarded with no error, no warning and no log. Authorization-gating a field implies the payload matters, which is what made the silence expensive: a caller sending `{"realtime":{…},"caliber":{…}}` had it serialize, pass the gate, cross the wire and vanish, with its own tests correctly asserting it built the payload right. Every such session ran on default configuration.
+
+  `realtime-coagent-config.ts` is deliberately framework-free — no DB, no metadata provider, no logging imports, every function a pure transformation — so it does not learn to log. It reports the drops as data:
+
+  ```typescript
+  export type IgnoredRealtimeConfigReason =
+    | "unknown-section"
+    | "unknown-key"
+    | "wrong-type";
+  export interface IgnoredRealtimeConfigKey {
+    readonly path: string;
+    readonly reason: IgnoredRealtimeConfigReason;
+  }
+  export function FindIgnoredRealtimeConfigKeys(
+    overridesJson: string | null | undefined,
+  ): readonly IgnoredRealtimeConfigKey[];
+  export const REALTIME_CONFIG_SECTION_KEYS: readonly (keyof RealtimeConfigSection)[];
+  ```
+
+  and `assertRuntimeOverridesAuthorized` — which already logs — does the talking.
+
+  **Warns rather than rejects.** Rejection is stricter and defensible in a major; in a patch it would turn a previously-accepted payload into a hard error for callers that cannot be seen from here. The reasoning sits at the call site so the next reader knows rejection was considered.
+
+  **Reported after the authorization decision, not before.** A payload that fails the gate already throws a structured error, so reporting drops for a request that never ran would be noise. Silence only ever existed for _accepted_ payloads.
+
+- 5f33ca8: Slack and Teams adapters: first production bring-up
+
+  Defects found running the adapters against a real MJ app — one Slack app per agent
+  (Socket Mode) plus Teams via Bot Framework.
+
+  **Startup and identity**
+  - Users are resolved via `UserCache.Instance`. `new UserCache()` returned the shared
+    singleton and then re-initialized it empty, so no messaging extension could start
+    and the whole server lost its user cache until the next refresh.
+  - Running one platform app per agent no longer causes bots to cross-talk in shared
+    channels: thread replies are answered only by the addressed bot, bot-authored
+    messages are excluded from history and thread affinity, and a new
+    `DisableDelegation` setting stops a pinned bot from handing off.
+  - A bot recognises its own replies. Slack publishes two identifiers for one bot and
+    returns the `bot_id` (with no `user`) for any message posted with a username
+    override — which every agent reply uses, since per-agent identity is the point of
+    one app per agent. Comparing only against `auth.test()`'s `user_id` therefore never
+    matched, so the thread gate above declined threads the bot was actively holding and
+    the agent lost its own turns from context.
+
+  **Delivery**
+  - Generated files and images are delivered as real attachments. Adapters may
+    implement `uploadMediaOutputs` (Slack does, and needs the `files:write` scope);
+    inlined `data:` URIs are decoded; and the run's canonical `fileOutputs` are used
+    rather than depending on the model to inline them.
+  - A non-public button URL no longer fails the entire Slack message — it degrades to
+    a link, so a localhost `ExplorerBaseURL` stops suppressing replies outright.
+  - The artifact link points at the file the agent produced rather than its internal
+    payload, and `System Only` artifacts are no longer linked. Callers relying on
+    `artifactInfo` being the payload artifact now receive the file artifact when a run
+    produced one.
+  - `ng-artifacts`: downloading a file artifact returns real bytes under its own MIME
+    type and filename, instead of a `.txt` file full of base64.
+  - `ng-explorer-core`: a conversation deep link opened cold now honours the URL rather
+    than restoring the previously-viewed conversation.
+
+  **Slack**
+  - Interactivity works in Socket Mode; previously every button and modal was inert, so
+    human-in-the-loop form flows dead-ended.
+  - Message text is capped at the real `text` limit rather than the block-payload limit,
+    which was failing long responses with `msg_too_long`.
+  - Modal placeholders are truncated to 150 characters; an over-long one failed the whole
+    `views.open` and left a button that looked dead.
+
+  **Teams**
+  - `MentionedAgentNames` is populated, so a named agent is reachable at all — previously
+    every Teams turn ran the default agent.
+  - Response forms route the answer back to the agent that asked, via `mj_agent`.
+  - Buttons are built only over `http:`/`https:` URLs. Teams silently ignores `data:`/`blob:`/`file:`
+    (so "Download document" was dead by construction whenever MJ inlined the artifact) and hands
+    unknown schemes such as `javascript:` or `ms-msdt:` to the OS URI handler, so the check is an
+    allow-list. Dropped buttons become a note pointing at the artifact link; localhost stays allowed.
+  - A response form's submitted agent name is validated against the known agents before it is used
+    to route, rather than trusted from the client-controlled submit payload.
+  - Deep links no longer assume `resourceId` is present, now that a Record can be
+    addressed by `keys`.
+
+- d7feeae: Stop Explorer from showing "Unknown error" with a stuck Running timer when a Skip/sub-agent transport path fails. Pass the real error through invokeSubAgent, keep In-Progress when the agent may still be running, and persist Failed/Error on the run and conversation detail if executeAIAgent throws.
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [88d751d]
+- Updated dependencies [d7feeae]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/search-engine@6.1.0-edge.5
+  - @memberjunction/ai-reranker@6.1.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.5
+  - @memberjunction/ai-vector-sync@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/templates@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/context-crush@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-reranker@6.1.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.4
+  - @memberjunction/ai-vector-sync@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/search-engine@6.1.0-edge.4
+  - @memberjunction/templates@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/context-crush@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 834f8d7: Fix a `TypeError` that could kill an agent mid-run during context assembly, and take down scheduled-job dispatch entirely (`__mj_CreatedAt?.getTime is not a function`, `job.NextRunAt.getTime is not a function`).
+
+  Two defects, one crash:
+  - **`BaseEngine.OnExternalCacheChange` poisoned `entity_object` caches (the root cause).** When a cross-server cache-change event carried a payload, its rows — plain JSON objects, since cache payloads are serialized — were assigned straight into the engine property. For a config whose effective `ResultType` is `entity_object` (the default), that silently replaced the array's `BaseEntity` instances with plain objects, so `BaseEntity`'s coercing accessors were bypassed and a date field declared `Date` held a raw ISO string. Rows are now materialized via `TransformSimpleObjectToEntityObject` — the same conversion RunView's own cache-hit path uses — before assignment, with `'simple'` configs still passing through untouched and any failure degrading to the pre-existing full reload. Because materialization is async, the payload branch now claims a refresh generation (`beginConfigRefresh`/`isLatestConfigRefresh`, as `LoadSingleConfig` already does) so overlapping cache events cannot commit out of order. This affects **every** engine with `CacheLocal: true`.
+  - **Unguarded `Date` method calls on those fields (the crash sites).** Optional chaining does not protect them — `"…"?.getTime` is `undefined`, and calling it throws. A new `ToEpochMs(value)` helper is exported from `@memberjunction/global` (a pure date utility — it needs no entity or metadata concepts) and now backs every affected read across four engines: `AgentContextInjector.sortExamples`/`sortNotes`, `AIEngine.fallbackGetNotesFromCache`/`fallbackGetExamplesFromCache`, `ConversationEngine.sortConversations`, and the scheduling engine's `isJobDue` plus its `NextRunAt`/`EndAt` diagnostics. It also closes a latent issue in the previous form: an Invalid `Date`'s `getTime()` returns `NaN`, which `?? 0` did not catch, yielding an incoherent comparator.
+
+  Two exposures worth calling out. `AIEngine.fallbackGetNotesFromCache` is reached whenever the note vector service is uninitialized or a query embedding fails, so semantic retrieval with real input text could crash too — not just the empty-input path. And `SchedulingEngine.isJobDue` throws on the _first_ job in the dispatch loop, so a poisoned cache stopped **all** scheduled jobs from running, on every poll, until the cache reloaded.
+
+  `isJobDue` also had a silent variant of the same bug: `evalTime < job.StartAt` does not throw on a string — relational operators coerce toward numbers, an ISO string yields `NaN`, and every comparison is false — so `StartAt`/`EndAt` activation windows silently stopped being enforced and a job could fire outside its range with nothing in the logs. Those comparisons now go through `ToEpochMs` as well.
+
+  Making the cache-event path work also exposed a filtering gap (caught in review): `SchedulingEngineBase` loads `MJ: Scheduled Jobs` unfiltered and applies its Active-only invariant in memory, but only re-applied it on entity events — not after a cross-server cache event, whose payload carries every row. In a multi-instance deployment, one server's engine load could therefore hand another server's dispatch loop Disabled/Paused/Pending jobs. The engine now re-applies the filter (and notifies `JobsChanged$`) after `OnExternalCacheChange`, and `isJobDue` independently refuses non-Active jobs so dispatch can never depend on the array staying pre-filtered.
+
+- 199eb2b: Debug a Flow agent from the Agent form Run dialog. Debug starts the graph paused at Submit (`$.debug.paused` on the parent row — Pause-after-submit races the dispatcher). The harness and Runs console share a VS Code-style icon toolbar and a red-circle breakpoint toggle. The invocation-envelope sanitizer from #3783 is preserved.
+- 07cb22e: Fix `$`-sequence corruption in `String.prototype.replace` calls carrying runtime data (#3171).
+
+  `replace(search, replacement)` treats `$$`, `$&`, `` $` ``, `$'` and `$1`–`$99` as metacharacters when `replacement` is a **string**. Every site below passed runtime data there, so a `$` in that data was silently executed rather than inserted. The `$&`/`` $` ``/`$'` forms are worse than value corruption: they splice surrounding text _into_ the value. All are fixed by passing a replacement **function**, whose return value is used literally.
+  - **`@memberjunction/installer` — corrupted secrets (highest impact).** Re-running `mj install` syncs the root `.env` into MJAPI's. A DB password containing `$&` had the _stale_ MJAPI password spliced into it; ``$` `` spliced in the preceding `.env` line. The result was a wrong secret written to disk with no error, surfacing later as "MJAPI can't connect". Only the replace branch was affected — fresh installs (append branch, string concatenation) were always correct, which is why this survived. Also fixes the `newUserSetup` block (embeds user name/email) and the `mjRepoVersion` and Explorer `environment.ts` patchers.
+  - **`@memberjunction/core` — rewritten RLS predicates.** `RowLevelSecurityFilterInfo.MarkupFilterText` substitutes user properties, magic-link scope and `{{Acting*}}` tokens into row-level-security filters. A `$` in any of them rewrote the predicate — the exact outcome the neighbouring `'`-escaping exists to prevent. This feeds `GetEffectiveRowFilterWhereClause`, used across RunView reads, Create and Update. Also fixes organic-key `Custom` normalization, which builds a SQL `WHERE` from a data value.
+  - **`@memberjunction/generic-database-provider`, `@memberjunction/postgresql-dataprovider`** — end-user search terms substituted into `UserSearchParamFormatAPI` predicates, plus view-template inner SQL and PG identifier quoting. Also `QueryCompositionEngine.renameSQLIdentifier`, which rewrites CTE identifiers in composed queries: the search side was regex-escaped but the replacement side was not, so a `$` in a deconflicted CTE name (SQL Server bracketed and PG quoted identifiers both permit one) was expanded into the executed SQL.
+  - **`@memberjunction/ai-prompts`, `@memberjunction/computer-use`, `@memberjunction/ai-vector-sync`, `@memberjunction/aiengine`, `@memberjunction/ai-agents`** — assistant prefill text (routinely contains `$$` for LaTeX or currency), computer-use goals/URLs/step summaries, embedding-document field values, and entity field values, all interpolated into prompts and templates.
+  - **`@memberjunction/metadata-sync`** — parameter values in the debug SQL log.
+  - **`@memberjunction/testing-engine`** — test input/expected/actual values into the LLM-judge prompt, and parameter values into `SQLValidatorOracle`'s generated SQL.
+  - **`@memberjunction/sql-converter`** — the configured schema name substituted into emitted PostgreSQL view SQL, in both `ViewRule` and its previously-missed twin in `InsertRule`. The schema is now escaped on the _search_ side too: a `$` in it acted as an end-anchor, so the pattern matched nothing and the conversion silently emitted no rewrite.
+  - **`@memberjunction/sql-parser`** — `restoreAliases` swaps generated aliases back to the caller's original bracketed identifiers. Two of its three branches used `split`/`join` and were already safe; the third expanded `$`-sequences, so `[a$'b]` spliced surrounding SQL into an identifier. The aliasing path fires precisely _because_ an identifier contains a non-word character, so the input that triggers aliasing is the input that corrupted the restore. Reached from the public `ToSQL()`.
+  - **`@memberjunction/sqlserver-dataprovider`** — batch execution rewrites `@name` placeholders to `@q<N>_name`; the parameter name went into the `RegExp` unescaped, so a `$` in it prevented the rewrite entirely and mssql failed with "Must declare the scalar variable". Sibling of the PostgreSQL `escapeRegExp` fix below.
+  - **`@memberjunction/react-linter`** — component data substituted into diagnostic messages.
+  - **`@memberjunction/actions-bizapps-social`, `@memberjunction/ai-cli`** — hardened a numeric-only site; documented the AICLI JSON highlighter's `$1` back-references as intentional.
+
+  Also fixes a **test-tooling safety defect** found while verifying the above on a clean database: `@memberjunction/testing-cli` loaded `.env` with `dotenv.config({ override: true })`, so a variable already set in the environment was overwritten. `DB_DATABASE=MJ_scratch mj test …` was silently discarded and the suite ran — **including mutation tests** — against whatever `.env` pointed at. That made the "one database per agent" rule unenforceable by environment variable and diverged from every other `mj` command (`migrate`, `codegen`, `sync push` all honour the environment). `override` is now dotenv's default `false`, so `.env` still fills in anything unset but an explicit value wins. Guarded by a unit test. **Note the inverse hazard when upgrading:** any environment that exports `DB_*` globally — a Docker image, a CI container, a stale `export` in a shell profile — now wins over `.env`, where `.env` used to be authoritative. If a `mj test` run suddenly targets an unexpected database, check the exported environment first; the CLI prints `config.dbDatabase: <name>` at startup.
+
+  And an adjacent defect found while testing the above: `PostgreSQLDataProvider.quoteFieldNamesInToken` interpolated a field name into a `RegExp` **without escaping regex metacharacters**, so a column named `a.b` matched (and wrongly quoted) unrelated text like `axb`, and a column containing `$` was never matched at all — which had also made the replacement-side fix on that line unreachable. Field names are now escaped before interpolation.
+
+  Also adds `.github/scripts/check-dynamic-replace.mjs`, a CI gate that flags `.replace()`/`.replaceAll()` whose replacement is neither a string literal nor a function. No existing lint rule covered this — the React `string-replace-all-occurrences` rule only ever inspects the _search_ argument. The gate is line-aware (only lines a change touches), since ~100 pre-existing sites remain and a bare identifier holding a function reference is indistinguishable from one holding a string; `--all` is available for auditing. Regression tests now push `$$`, `$&`, `` $` ``, `$'` and `$1` through each fixed path.
+
+  Also fixes a **silently inert security check** found while verifying the above. `BaseTestDriver.Provider` fell back to `new Metadata() as unknown as IMetadataProvider`. `Metadata` is a facade that proxies a hand-maintained subset of members to the global provider, not a provider itself, and the cast is the only reason the compiler accepted it. Members it does not proxy read `undefined` — `RowLevelSecurityFilters` among them. The integration suite's `discoverTokenFilter` reads exactly that property to find a `{{UserID}}`-scoped filter, so it always found none: the `rls-isolation` RLS1/RLS2 token-substitution checks skipped-as-pass **on every database**, while the bundle reported green. There were 13 filters present, 5 of them `{{UserID}}`-scoped. The fallback now returns the global provider, which is what the getter's own doc comment always promised, and both checks now execute. A new `rls-isolation` check (RLS11) additionally pushes `$$`, `$&`, `` $` ``, `$'` and `$1` through a substituted user property and executes the resulting predicate, so the RLS half of this fix has live coverage rather than unit coverage alone.
+
+- 7a630ba: Three writes take an object the CALLER built and stringify it straight into a database row — an agent run's `Data` and `StartingPayload`, and a task graph's invocation envelope — and all three take it from `ExecuteAgentParams`, whose own documentation says the value may be a class instance holding "external service credentials or connection information". One of the three was guarded, after it killed agent runs at submit time with `Converting circular structure to JSON`. The other two were not.
+
+  That combination fails two ways, and the second is worse: it **throws** on anything holding a socket, a pool or a provider, and it **leaks** when serialization happens to succeed, writing whatever the object held into a row that outlives the run. The first is loud and gets fixed; the second is silent and does not.
+
+  `SanitizeForPersistence` / `StringifyForPersistence` now carry the rules in one place, and all three writes use them. JSON data survives (primitives, arrays, plain objects, `Date` as ISO, anything with `toJSON`); class instances, functions, sockets and cycles are refused whole rather than unwrapped — walking a socket's own properties would "work" and would persist its internals, which is the leak. Every drop is reported by path and logged, because a value that silently vanished is the failure one layer down: a reader hunting a field the writer discarded, or a condition reading absent-data and taking a branch nobody can explain.
+
+  Also: the flow differential suite gains its first **failure oracle**. It could not express `'edges'` semantics — the dialect where a flow routes around its own failure — because the simulator treated "which origin statuses may decide an exclusive group" as a constant where the dispatcher treats it as the graph's dialect. With that modelled, a fixture whose step fails and whose recovery path runs is now compared walker-against-compiled, and the comment states why `'block'` has no oracle by construction: the walker routes on failure, so there is nothing to compare a compiled `'block'` graph against (IT74's TX19 pins that side instead). And the all-`Optional` node's wave-1 behaviour — the consequence the spec doc calls out as surprising and nothing asserted — is now pinned, so an OR-join implemented later reads as a deliberate semantic change rather than a bug fix.
+
+  **Two behaviour changes worth knowing about, both deliberate.** A class instance is now refused _whole_ and reported by path, where `JSON.stringify` would have persisted its own enumerable properties — so an agent whose payload legitimately is a class instance will find that payload dropped rather than partially recorded, with the path named in the log. Dropping loudly is the intended posture: the alternative persists whatever the object happened to hold. And `toJSON` is no longer consulted for anything but `Date`, because deferring to a method on the object being guarded hands the decision back to the party the module does not trust — a `toJSON() { return {...this} }`, a common convenience, published its own credentials silently and with an empty `DroppedPaths`.
+
+  Also worth knowing: sanitizing **invokes getters**, once per property, so a payload holding lazily-opened resources can open one by being written down. Refusing class instances removes most of that surface, since their getters are never reached.
+
+- 6d7d3da: Task-graph engine hardening, Round 3 — the residual gaps in Round 2's own fixes, found by a three-track adversarial review of the merged engine. The pattern this round is not new seams but **incomplete closures**: six Round 2 fixes worked at their own anchor and left the layer just outside it open.
+
+  **R3-1 — an early finish could discard a step that was already running.** R2-10 moved the sibling skips after `CompleteClaimed` on the premise that "siblings are Pending and unclaimed until the skip lands". They are not: task execution is not awaited, so the deciding instance's own poll tick runs concurrently with its skip loop, and the decision existed only in that instance's memory — no claim filter anywhere could know about it. A sibling claimed mid-loop had `In Progress` reverted to `Skipped` and its claim cleared _while its agent body ran_: side effects fired, completion refused, output discarded, graph settled `Complete` with nothing recording it. The early finish now declares itself durably before mutating anything (so every instance's claim filter sees it) and every skip is a guarded single statement that refuses a task something else has taken.
+
+  **R3-2 — R2-4 gated one dialect and left the other blind.** Under `failureSemantics: 'block'` — the spec default, so every agent-emitted graph — a `Failed` origin's ordinary conditional edge that read false was dropped, its target skipped rather than blocked, and the dropped edge severed the block cascade's forward walk. `Skipped` satisfies prerequisites, so a join fed by an independent healthy route executed downstream of an unhandled failure while the parent still rolled up `Failed`. R2-3 made this _more_ reachable, not less: a failed step rarely has output, so the null-safe envelope answers positive conditions with a confident false→drop where they previously threw→held visibly. `Cancelled` is now decided once and written into the spec: it never decides an ordinary edge under either dialect.
+
+  **R3-3 — the documented `data`/`context` conditions never worked on the dispatcher.** They resolved against the origin _step's_ output rather than the invocation's parameters, so every `data.x` comparison read `undefined`, came out false, and silently took a branch the legacy walker never took — on every invocation, with the validator blessing the condition at the door. An invocation envelope is now threaded from the agent through submit, the parent's metadata, and condition evaluation. Round 1's carried-forward D2 lands as code. `stepResult.step` also now carries a status word rather than the step's name, matching what the flow engine actually exposes — the documented `stepResult.step === 'Success'` was false for every step before this.
+
+  **Also fixed:** a `Stop()` during boot no longer has its timers reinstalled by `Start()`'s own continuation (R3-4); concurrent human-step notifications no longer leave a duplicate, un-answerable inbox item — collapsing them belongs to the sweep over _waiting_ steps rather than to the raise, because a task is notified exactly once and the raise never runs again afterwards, so a duplicate that outlived its own raise was previously unreachable by the only code that could have closed it (R3-5); the data-absence classifier is inverted so it cannot rot per operator — a `ReferenceError` is a broken guard, everything else is absent data (R3-6); the determinism tiebreak is ordinal rather than locale-collated, so two hosts with different `LANG` cannot resolve the same tie differently (R3-7); a transient cost-rollup failure defers delivery instead of claiming the marker and locking a wrong total in forever (R3-8); `Cancel`'s child writes are guarded statements that cannot overwrite an outcome that landed first (R3-9); nested cancel is type-scoped and its depth cap actually engages (R3-10); and a host with the dispatcher disabled now refuses graph submissions instead of accepting work nobody will run (R3-11).
+
+  **Smaller:** `deliverContinuation` returned `undefined` after every successful delivery, costing a spurious settle pass per graph (C1, with `noImplicitReturns` now on for the package); the default dispatcher instance id gains real entropy, because host+pid collides under systemd, pm2 and containers — and a shared id defeats every ownership guard at once (C2); the run's rollup and lifecycle writes are column-scoped (C4); and the drain's heartbeat purge no longer races the registration it is purging (C5).
+
+  **Wrap-up fixes (post-round):** the claim protocol's lease now lives entirely on the database clock — `ClaimExpiresAt` is written (`DATEADD` over `SYSUTCDATETIME`) and compared in SQL time, so NTP skew between dispatcher hosts can no longer reclaim a live lease or extend a dead one. And the `TaskGraph.Submit` remote operation stops dropping `reinvokeDepth` (the runaway-loop cap now counts remote continuation hops) and gains the R3-3 `invocation` envelope so `data.*`/`context.*` conditions work for MCP-submitted flows; the operation's metadata contract carries both fields (hence this release's `minor`).
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [b6416f4]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ae2baef]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/ai-vector-sync@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/search-engine@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/ai-reranker@6.1.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+  - @memberjunction/templates@6.1.0-edge.3
+  - @memberjunction/context-crush@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes
