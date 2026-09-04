@@ -22,7 +22,6 @@ const {
     mockConfig,
     mockCacheUsers,
     mockSystemUserId,
-    mockUserByName,
     mockRefresh,
     mockGetEntityObject,
     mockRunViewFn,
@@ -57,10 +56,11 @@ const {
             },
         },
         mockCacheUsers: [] as HoistedCacheUser[],
-        // The system user's ID as the cache reports it. Deliberately matches NO fixture below, so
-        // the resolver's system rung stays inert unless a test opts into it.
-        mockSystemUserId: { value: '00000000-0000-0000-0000-0000000005y5' },
-        mockUserByName: vi.fn(),
+        // The system user's ID as the cache reports it. A well-formed UUID that matches NO fixture
+        // below, so the resolver's system rung stays inert unless a test opts into it. Well-formed
+        // matters: `UUIDsEqual` is a string compare with no shape check, so a malformed value here
+        // would read as real data while being unrepresentable in the column it stands for.
+        mockSystemUserId: { value: '00000000-0000-0000-0000-00000000d1f5' },
         mockRefresh: vi.fn(),
         mockGetEntityObject: vi.fn(),
         mockRunViewFn: vi.fn(),
@@ -81,7 +81,6 @@ vi.mock('../config.js', () => ({ configInfo: mockConfig }));
 
 vi.mock('@memberjunction/generic-database-provider', () => {
     const instance = {
-        UserByName: mockUserByName,
         get Users() {
             return mockCacheUsers;
         },
@@ -273,7 +272,7 @@ beforeEach(() => {
     entitySeq = 0;
     // defineProperty rather than assignment: one test replaces this with a throwing getter.
     Object.defineProperty(mockSystemUserId, 'value', {
-        value: '00000000-0000-0000-0000-0000000005y5',
+        value: '00000000-0000-0000-0000-00000000d1f5',
         writable: true,
         configurable: true,
     });
@@ -287,7 +286,6 @@ beforeEach(() => {
     mockApplicationsArray.length = 0;
     mockApplicationsArray.push({ ID: 'app-crm', Name: ' CRM ' }, { ID: 'app-admin', Name: 'Admin' });
 
-    mockUserByName.mockImplementation((name: string) => (name === 'system@test.com' ? CONTEXT_USER : undefined));
     mockGetEntityObject.mockImplementation(async (entityName: string, contextUser?: UserInfo) => {
         const entity = makeMockEntity(entityName);
         createdEntities.push(entity);
