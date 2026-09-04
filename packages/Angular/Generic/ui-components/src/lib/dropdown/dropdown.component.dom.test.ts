@@ -72,8 +72,9 @@ describe('MJDropdownComponent (DOM)', () => {
   });
 
   it('does not open when disabled', () => {
-    // The disabled guard reads IsDisabled, which is driven by the CVA setDisabledState()
-    // (the [Disabled] input only takes effect once a forms adapter calls it). Drive it directly.
+    // The disabled guard reads IsDisabled, which composes the [Disabled] input with the forms-driven
+    // setDisabledState(). This spec pins the forms-driven half by calling the hook directly; the
+    // @Input half is covered by the ngModel-host block below.
     const f = renderComponentFixture(MJDropdownComponent, {
       imports: [MJDropdownComponent],
       inputs: { Data: DATA, TextField: 'text', ValueField: 'value', ValuePrimitive: true },
@@ -197,8 +198,9 @@ describe('MJDropdownComponent (DOM)', () => {
   it('exposes the disabled state and drops out of the tab order', () => {
     // The SCSS suppresses the focus ring when disabled, so a still-tabbable disabled dropdown means
     // a keyboard user lands on something invisible that then silently ignores Enter.
-    // Disabled arrives through the CVA, so it is applied in `setup` — before the first change
-    // detection — exactly as a reactive form applies it on bind.
+    // Disable via the forms-driven path, applied in `setup` — before the first change detection —
+    // exactly as a reactive form applies it on bind. (The [Disabled] input is an equal source of
+    // IsDisabled; the ngModel-host block below covers that side.)
     const f = renderComponentFixture(MJDropdownComponent, {
       imports: [MJDropdownComponent],
       inputs: { Data: DATA, TextField: 'text', ValueField: 'value', ValuePrimitive: true },
@@ -224,13 +226,16 @@ describe('MJDropdownComponent (DOM)', () => {
  * Angular Forms registers the ControlValueAccessor.
  *
  * Needs a real `ngModel` host, unlike the specs above which render the component bare: the defect
- * this guards lives in the seam between the two. Angular calls `setDisabledState()` ONCE, at CVA
- * registration (`setUpControl`, default `CALL_SET_DISABLED_STATE: 'always'`), and `IsDisabled` —
- * the only gate on `Toggle()`/`Open()` — used to be assigned only there. So it froze whatever
- * `Disabled` happened to be at that instant and dropped every later change:
+ * this guards lives in the seam between the two. `IsDisabled` — the only gate on `Toggle()`/`Open()`
+ * — is derived state, and the only thing that ever assigned it was `setDisabledState()`. The
+ * forms-driven half was always live (`setUpControl` also wires `registerOnDisabledChange`, so the
+ * hook re-fires on every `control.disable()`/`enable()`); what had no recompute path at all was the
+ * `Disabled` @Input, a plain field. So the gate froze whatever `Disabled` happened to be when the
+ * hook last ran and dropped every later change to the input:
  *
- *   - `Disabled` true at registration → the control was dead FOREVER, even after it went false;
- *   - `Disabled` false at registration → the control could never be locked afterwards.
+ *   - `Disabled` true at that moment → the control was dead FOREVER, even after it went false;
+ *   - `Disabled` false at that moment → the control could never be locked afterwards;
+ *   - no forms binding at all → the hook never ran, so `[Disabled]` was completely inert.
  *
  * The first direction shipped a real user-facing failure (a picker gated on "pick a company first"
  * never came back to life once the company was picked). All five MJ form controls carried the

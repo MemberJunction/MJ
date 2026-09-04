@@ -61,10 +61,12 @@ describe('MJDatepickerComponent (DOM)', () => {
  * Angular Forms registers the ControlValueAccessor.
  *
  * Needs a real `ngModel` host (the specs above render the component bare, which never triggers
- * CVA registration): Angular calls `setDisabledState()` ONCE, at registration, and `IsDisabled`
- * used to be assigned only there — freezing whatever `Disabled` happened to be at that instant
- * and ignoring every later change. Found on `mj-dropdown` 2026-08-07; all five MJ form controls
- * carried the identical defect.
+ * CVA registration): `IsDisabled` is derived state whose only writer was `setDisabledState()`. The
+ * forms-driven half was always live (`registerOnDisabledChange` re-fires the hook on every
+ * `disable()`/`enable()`); the `Disabled` @Input was a plain field with no recompute path, so the
+ * gate froze whatever it happened to be when the hook last ran and ignored every later change —
+ * and with no forms binding at all it was completely inert. Found on `mj-dropdown` 2026-08-07;
+ * all five MJ form controls carried the identical defect.
  */
 @Component({
   standalone: true,
@@ -85,6 +87,7 @@ describe('MJDatepickerComponent — disabled state (DOM, ngModel host)', () => {
     fixture.debugElement.children[0].componentInstance as MJDatepickerComponent;
   const nativeControl = (): HTMLInputElement | HTMLButtonElement =>
     fixture.nativeElement.querySelector('input.mj-input');
+  const toggleButton = (): HTMLButtonElement => fixture.nativeElement.querySelector('.mj-datepicker-toggle');
   const lock = (value: boolean): void => {
     fixture.componentRef.setInput('Locked', value);
     fixture.detectChanges();
@@ -108,10 +111,18 @@ describe('MJDatepickerComponent — disabled state (DOM, ngModel host)', () => {
   it('LOCKS when Disabled flips to true after registration', () => {
     lock(false);
     expect(control().IsDisabled).toBe(false);
+    toggleButton().click();
+    fixture.detectChanges();
+    expect(control().IsOpen).toBe(true);
 
     lock(true);
     expect(control().IsDisabled).toBe(true);
     expect(nativeControl().disabled).toBe(true);
+    expect(control().IsOpen, 'locking an open datepicker must close its calendar').toBe(false);
+
+    toggleButton().click();
+    fixture.detectChanges();
+    expect(control().IsOpen, 'and it must not reopen while locked').toBe(false);
   });
 
   it('stays disabled while the forms-driven state holds, regardless of @Input churn', () => {
