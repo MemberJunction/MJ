@@ -36,17 +36,12 @@
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
   padding: 16px; border: 1px solid var(--mj-border-default); border-radius: 16px;
   background: var(--mj-bg-surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-/* Gated on `hover: hover` so a touch device -- where :hover sticks after a tap -- does not leave a
-   card floating, and dropped under reduced-motion since the transform is purely decorative. */
-@media (hover: hover) {
-  .dash-stat:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dash-stat { transition: none; }
-  .dash-stat:hover { transform: none; }
-}
+/* NO hover lift. A card that rises under the cursor promises it is clickable, and three of the
+   four have nowhere honest to go: Animals in care would land on 14 rows when the card says 12,
+   overdue follow-ups on all 21 rather than the 5, and vaccination compliance has no page at all.
+   Landing somewhere that contradicts the number you clicked is worse than not clicking. If the nav
+   pages ever accept a filter, make them real links -- and then the lift earns its place. */
 .dash-stat__icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 40px; height: 40px; border-radius: 12px; margin-bottom: 8px;
@@ -71,6 +66,9 @@
 .dash-cards {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: var(--shelter-dash-gap);
+  /* start, not the default stretch: otherwise every card in a row grows to the tallest one and the
+     short one (the status legend) carries a slab of dead space under its content. */
+  align-items: start;
 }
 .dash-card {
   background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);

@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "Animals By Status",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Shelter",
+      "UserQuestion": "How many animals are in each status?",
+      "Description": "One row per Animal.Status with its count -- the shelter dashboard's composition bar. Grouped on the server rather than reading every animal to the browser and tallying there.",
+      "TechnicalDescription": "Returns Status, AnimalCount. No parameters. GROUP BY on vwAnimals.Status. A status with no animals does not appear, so the dashboard maps the result onto the full Status value list to keep every segment represented. No ORDER BY (illegal inside MJ's __count CTE wrapper) -- display order comes from the component, which knows the lifecycle sequence. Schema literal __mj.",
+      "SQL": "@file:SQL/animals-by-status.sql",
+      "Status": "Approved",
+      "Reusable": true,
+      "UsesTemplate": false,
+      "QualityRank": 8,
+      "ExecutionCostRank": 1
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B9CED5B1-1044-43CB-8B7E-7EBF2DD27307"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T17:38:19.013Z",
+      "checksum": "4e04d1c1a472465dbaf7d491d2af8b69ac49bbc3b48c6be3370297286e2902f6"
+    }
+  }
+]

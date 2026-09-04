@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "Shelter Dashboard Stats",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Shelter",
+      "UserQuestion": "What are the shelter's headline numbers right now?",
+      "Description": "Every scalar the shelter dashboard shows, in one row: animals in care, how many are housed, total active capacity, overdue follow-ups, and how many animals in care have a vaccination on file. Aggregated on the server -- these are computed values, not entity records.",
+      "TechnicalDescription": "Returns ONE row: AnimalsInCare, Housed, Capacity, OverdueFollowUps, VaccinatedInCare. No parameters. Uses scalar subqueries rather than CTEs because MJ wraps a Query in 'WITH [__count] AS ( ... )' and T-SQL cannot nest a CTE inside another CTE's body; for the same wrapper there is no ORDER BY, and the schema is written literally as __mj because metadata files are not flyway-processed. 'In care' is Intake/Available/Hold -- an Adopted animal may still carry an old HousingID and would otherwise report a kennel as full.",
+      "SQL": "@file:SQL/shelter-dashboard-stats.sql",
+      "Status": "Approved",
+      "Reusable": true,
+      "UsesTemplate": false,
+      "QualityRank": 8,
+      "ExecutionCostRank": 1
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "27A5CB43-8B70-47B9-8ECE-D6EE26AEB5CA"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T17:38:34.084Z",
+      "checksum": "6f5e053087a10d1fe3185186328f925449453def9afb6f75ae3cb7d07d5432b4"
+    }
+  }
+]

@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject }
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { RunView, RunViewParams } from '@memberjunction/core';
+import { RunQuery, RunView, RunViewParams } from '@memberjunction/core';
 
 /**
  * MJ Academy — the shelter dashboard.
@@ -12,20 +12,29 @@ import { RunView, RunViewParams } from '@memberjunction/core';
  * `@RegisterClass(BaseResourceComponent, 'RealtimeRecordingsDashboard')`. There is no Dashboard
  * metadata record involved, and no BaseDashboard subclass.
  *
- * THE READ-COST RULE, borrowed from bizapps-accounting's AccountingDashboardBase: no on-demand
- * heavy aggregates. Every number here is a FILTERED COUNT -- `MaxRows: 1` plus `TotalRowCount`,
- * which asks SQL for a count and transfers one row. That is cheap enough to run on every open,
- * which is why this needs no caching layer. Two numbers cannot be had that way, and each is
- * handled explicitly rather than quietly turned into a scan:
+ * WHERE THE NUMBERS COME FROM, and why.
  *
- *  - CAPACITY is a SUM. Housing rows are few (one per kennel), so we read them and add up
- *    Capacity in the client. Honest at shelter scale; at ten thousand units it becomes a Query.
- *  - VACCINATION COMPLIANCE needs DISTINCT animals having a vaccination on file -- a join. We
- *    read the AnimalID column off vaccination care logs and de-duplicate in a Set. Same trade:
- *    fine here, and the point at which it should become a stored Query is worth naming in class.
+ * Every figure on this page is an AGGREGATE, and an aggregate belongs in SQL. So the tiles and the
+ * status bar are two stored Queries -- `Shelter Dashboard Stats` and `Animals By Status` -- run
+ * together in one batched call. The server returns one row of scalars and one row per status; the
+ * component formats them and does no arithmetic over records.
  *
- * The status breakdown bar underneath costs NOTHING extra: every segment is a count the tile strip
- * already fetched, restacked as proportions.
+ * This replaced eight RunView calls plus two client-side loops. The eight counts were not wrong --
+ * a RunView with `ResultType: 'count_only'` issues a real `SELECT COUNT(*) ... WHERE` and transfers
+ * no rows -- but two of the numbers could not be had that way at all:
+ *
+ *   - CAPACITY is a `SUM(Capacity)`. Doing it with RunView meant reading every housing row to the
+ *     browser and adding them up in JavaScript.
+ *   - VACCINATION COMPLIANCE is a `COUNT(DISTINCT AnimalID)` over a join. Same story: read every
+ *     vaccination row, de-duplicate in a Set.
+ *
+ * Those two are the tell. Once a figure needs SUM, GROUP BY or DISTINCT, computing it in the client
+ * means shipping the raw rows to do it -- which is fine at 14 animals and wrong at 14,000. Putting
+ * ALL the stats in a Query rather than only the two awkward ones keeps one rule instead of a
+ * judgement call per tile, and the dashboard reads as the aggregate view it actually is.
+ *
+ * The overdue LIST stays a RunView: those rows are real records a person might open, not an
+ * aggregate, and `MaxRows: 5` over an indexed sort column is exactly what RunView is for.
  */
 
 /** One tile. `Value` is null while loading so the tile shows a placeholder, never a wrong 0. */
@@ -39,6 +48,7 @@ interface ShelterStat {
     /** Says what the number MEANS, not just what it counts. Rendered as the tile's tooltip. */
     Tooltip: string;
     Warn?: boolean;
+    // No `GoTo`: the tiles are deliberately not links (see the CSS note on the hover lift).
 }
 
 /** One segment of the status bar. */
@@ -46,6 +56,21 @@ interface StatusSegment {
     Status: string;
     Count: number;
     Tone: 'brand' | 'info' | 'warning' | 'success' | 'neutral';
+}
+
+/** The single row returned by the `Shelter Dashboard Stats` Query. */
+interface ShelterStatsRow {
+    AnimalsInCare: number;
+    Housed: number;
+    Capacity: number;
+    OverdueFollowUps: number;
+    VaccinatedInCare: number;
+}
+
+/** One row of the `Animals By Status` Query. */
+interface StatusCountRow {
+    Status: string;
+    AnimalCount: number;
 }
 
 /** A row in the overdue-follow-ups card. */
@@ -57,9 +82,7 @@ interface OverdueRow {
     FollowUpDate: string;
 }
 
-const ANIMALS = 'MJ: Animals';
 const CARE_LOGS = 'MJ: Care Logs';
-const HOUSINGS = 'MJ: Housings';
 
 /** The whole Animal.Status value list, so the bar accounts for every animal rather than a subset. */
 const ALL_STATUSES: { Status: string; Tone: StatusSegment['Tone'] }[] = [
@@ -69,9 +92,6 @@ const ALL_STATUSES: { Status: string; Tone: StatusSegment['Tone'] }[] = [
     { Status: 'Adopted', Tone: 'info' },
     { Status: 'Transferred', Tone: 'neutral' },
 ];
-
-/** Statuses that mean the animal is physically in our care right now. */
-const IN_CARE = "Status IN ('Intake','Available','Hold')";
 
 /** How many rows the overdue card shows. Small enough to stay a cheap top-N read. */
 const LIST_ROWS = 5;
@@ -112,23 +132,34 @@ export class ShelterDashboardComponent extends BaseResourceComponent implements 
         this.LoadError = null;
         this.cdr.markForCheck();
         try {
-            // All independent reads -- run them together rather than stacking waits.
-            const [statusCounts, housed, capacity, overdueCount, vaccinated, inCare, overdueRows] =
-                await Promise.all([
-                    this.statusCounts(),
-                    this.count({ EntityName: ANIMALS, ExtraFilter: `${IN_CARE} AND HousingID IS NOT NULL` }),
-                    this.totalCapacity(),
-                    this.count({ EntityName: CARE_LOGS, ExtraFilter: this.overdueFilter() }),
-                    this.distinctVaccinatedAnimals(),
-                    this.count({ EntityName: ANIMALS, ExtraFilter: IN_CARE }),
-                    this.overdueRows(),
-                ]);
+            // Both Queries in ONE batched round-trip, plus the list read alongside them.
+            const rq = new RunQuery(this.ProviderToUse as never);
+            const [queries, overdueRows] = await Promise.all([
+                rq.RunQueries(
+                    [{ QueryName: 'Shelter Dashboard Stats' }, { QueryName: 'Animals By Status' }],
+                    this.ProviderToUse.CurrentUser,
+                ),
+                this.overdueRows(),
+            ]);
 
-            this.Segments = statusCounts;
-            this.SegmentTotal = statusCounts.reduce((sum, s) => sum + s.Count, 0);
-            this.OverdueCount = overdueCount;
+            const [statsResult, statusResult] = queries;
+            if (!statsResult?.Success) {
+                throw new Error(statsResult?.ErrorMessage ?? 'Shelter Dashboard Stats failed.');
+            }
+            if (!statusResult?.Success) {
+                throw new Error(statusResult?.ErrorMessage ?? 'Animals By Status failed.');
+            }
+
+            // One row of scalars. A Query that returns nothing is a failure to surface, not a zero
+            // to display -- a dashboard of confident zeroes is worse than an error.
+            const stats = (statsResult.Results ?? [])[0] as ShelterStatsRow | undefined;
+            if (!stats) throw new Error('Shelter Dashboard Stats returned no rows.');
+
+            this.Segments = this.mapStatusSegments((statusResult.Results ?? []) as StatusCountRow[]);
+            this.SegmentTotal = this.Segments.reduce((sum, seg) => sum + seg.Count, 0);
+            this.OverdueCount = Number(stats.OverdueFollowUps ?? 0);
             this.Overdue = overdueRows;
-            this.Stats = this.buildStats({ housed, capacity, overdueCount, vaccinated, inCare });
+            this.Stats = this.buildStats(stats);
         } catch (e) {
             this.LoadError = e instanceof Error ? e.message : String(e);
             this.Stats = [];
@@ -144,109 +175,65 @@ export class ShelterDashboardComponent extends BaseResourceComponent implements 
         }
     }
 
-    /** Count-only read: MaxRows 1 keeps the transfer to one row, TotalRowCount is the answer. */
-    private async count(params: Omit<RunViewParams, 'MaxRows' | 'ResultType' | 'Fields'>): Promise<number> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const res = await rv.RunView(
-            { ...params, Fields: ['ID'], MaxRows: 1, ResultType: 'simple' },
-            this.ProviderToUse.CurrentUser,
-        );
-        if (!res.Success) throw new Error(res.ErrorMessage ?? `count failed for ${params.EntityName}`);
-        return res.TotalRowCount ?? 0;
-    }
-
     /**
-     * Today as a date-only literal. CareLog.FollowUpDate is a DATE column, so comparing it to an
-     * instant would make "overdue" depend on the browser's clock time as well as its day.
+     * Maps the Query's rows onto the WHOLE Status value list, defaulting a missing status to zero.
+     * GROUP BY only returns statuses that have animals, and a bar missing a segment would imply the
+     * status does not exist rather than that it is currently empty.
      */
-    private todayISO(): string {
+    /**
+     * The overdue card's rows. This one stays a RunView, deliberately: these are real CareLog
+     * records a person might open, not an aggregate, and a `MaxRows: 5` top-N over an indexed sort
+     * column is exactly what RunView is for. Putting it in a Query would buy nothing and lose the
+     * entity typing.
+     */
+    private async overdueRows(): Promise<OverdueRow[]> {
+        // FollowUpDate is a DATE column, so "overdue" compares date-to-date. Building the literal
+        // from UTC midnight keeps the boundary off the browser's clock time.
         const now = new Date();
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+        const todayISO = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
             .toISOString()
             .slice(0, 10);
-    }
 
-    /** A follow-up is overdue when it was due before today and nobody has marked it complete. */
-    private overdueFilter(): string {
-        return `FollowUpDate IS NOT NULL AND FollowUpDate < '${this.todayISO()}' AND IsComplete = 0`;
-    }
-
-    /** One filtered count per Status value -- the whole value list, so the bar totals every animal. */
-    private async statusCounts(): Promise<StatusSegment[]> {
-        const counts = await Promise.all(
-            ALL_STATUSES.map((s) =>
-                this.count({ EntityName: ANIMALS, ExtraFilter: `Status='${s.Status}'` }),
-            ),
-        );
-        return ALL_STATUSES.map((s, i) => ({ Status: s.Status, Count: counts[i], Tone: s.Tone }));
-    }
-
-    /** SUM(Capacity) over active units. Read-and-add in the client -- see the class note. */
-    private async totalCapacity(): Promise<number> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const res = await rv.RunView<{ Capacity: number }>(
-            {
-                EntityName: HOUSINGS,
-                ExtraFilter: 'IsActive = 1',
-                Fields: ['Capacity'],
-                ResultType: 'simple',
-            },
-            this.ProviderToUse.CurrentUser,
-        );
-        if (!res.Success) throw new Error(res.ErrorMessage ?? 'capacity read failed');
-        return (res.Results ?? []).reduce((sum, r) => sum + (r.Capacity ?? 0), 0);
-    }
-
-    /** DISTINCT animals with a vaccination on file. De-duplicated client-side -- see the class note. */
-    private async distinctVaccinatedAnimals(): Promise<number> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const res = await rv.RunView<{ AnimalID: string }>(
-            {
-                EntityName: CARE_LOGS,
-                ExtraFilter: `CareType='Vaccination'`,
-                Fields: ['AnimalID'],
-                ResultType: 'simple',
-            },
-            this.ProviderToUse.CurrentUser,
-        );
-        if (!res.Success) throw new Error(res.ErrorMessage ?? 'vaccination read failed');
-        return new Set((res.Results ?? []).map((r) => r.AnimalID)).size;
-    }
-
-    /** The overdue card's rows: one top-N read over the same population the tile counts. */
-    private async overdueRows(): Promise<OverdueRow[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const res = await rv.RunView<OverdueRow>(
-            {
-                EntityName: CARE_LOGS,
-                ExtraFilter: this.overdueFilter(),
-                // Animal is denormalised onto the view by CodeGen -- never look the name up per row.
-                Fields: ['ID', 'Animal', 'CareType', 'Description', 'FollowUpDate'],
-                // ASC: the point of this card is the follow-up that has been waiting longest.
-                OrderBy: 'FollowUpDate ASC',
-                MaxRows: LIST_ROWS,
-                ResultType: 'simple',
-            },
-            this.ProviderToUse.CurrentUser,
-        );
-        if (!res.Success) throw new Error(res.ErrorMessage ?? 'overdue rows read failed');
+        const params: RunViewParams = {
+            EntityName: CARE_LOGS,
+            ExtraFilter:
+                `FollowUpDate IS NOT NULL AND FollowUpDate < '${todayISO}' AND IsComplete = 0`,
+            // Animal is denormalised onto the view by CodeGen -- never look the name up per row.
+            Fields: ['ID', 'Animal', 'CareType', 'Description', 'FollowUpDate'],
+            // ASC, not DESC: the point of this card is the follow-up waiting longest.
+            OrderBy: 'FollowUpDate ASC',
+            MaxRows: LIST_ROWS,
+            ResultType: 'simple',
+        };
+        const res = await rv.RunView<OverdueRow>(params, this.ProviderToUse.CurrentUser);
+        if (!res.Success) throw new Error(res.ErrorMessage ?? 'Could not read overdue follow-ups.');
         return res.Results ?? [];
     }
 
-    private buildStats(c: {
-        housed: number;
-        capacity: number;
-        overdueCount: number;
-        vaccinated: number;
-        inCare: number;
-    }): ShelterStat[] {
-        const pct = c.inCare === 0 ? 0 : Math.round((c.vaccinated / c.inCare) * 100);
+    private mapStatusSegments(rows: StatusCountRow[]): StatusSegment[] {
+        const byStatus = new Map(rows.map((r) => [String(r.Status), Number(r.AnimalCount ?? 0)]));
+        return ALL_STATUSES.map((s) => ({
+            Status: s.Status,
+            Count: byStatus.get(s.Status) ?? 0,
+            Tone: s.Tone,
+        }));
+    }
+
+    private buildStats(row: ShelterStatsRow): ShelterStat[] {
+        const inCare = Number(row.AnimalsInCare ?? 0);
+        const housed = Number(row.Housed ?? 0);
+        const capacity = Number(row.Capacity ?? 0);
+        const overdue = Number(row.OverdueFollowUps ?? 0);
+        const vaccinated = Number(row.VaccinatedInCare ?? 0);
+        const pct = inCare === 0 ? 0 : Math.round((vaccinated / inCare) * 100);
+
         return [
             {
                 Id: 'occupancy',
                 Label: 'Occupancy',
-                Display: `${c.housed} / ${c.capacity}`,
-                Detail: `${Math.max(c.capacity - c.housed, 0)} spaces open`,
+                Display: `${housed} / ${capacity}`,
+                Detail: `${Math.max(capacity - housed, 0)} spaces open`,
                 Icon: 'fa-solid fa-bed',
                 Tooltip:
                     'Animals currently assigned to a unit, against the summed capacity of every active unit.',
@@ -254,7 +241,7 @@ export class ShelterDashboardComponent extends BaseResourceComponent implements 
             {
                 Id: 'in-care',
                 Label: 'Animals in care',
-                Display: String(c.inCare),
+                Display: String(inCare),
                 Detail: 'Intake, Available or Hold',
                 Icon: 'fa-solid fa-paw',
                 Tooltip:
@@ -263,10 +250,10 @@ export class ShelterDashboardComponent extends BaseResourceComponent implements 
             {
                 Id: 'overdue',
                 Label: 'Overdue follow-ups',
-                Display: String(c.overdueCount),
+                Display: String(overdue),
                 Detail: 'due before today, not complete',
                 Icon: 'fa-solid fa-clock',
-                Warn: c.overdueCount > 0,
+                Warn: overdue > 0,
                 Tooltip:
                     'Care log entries whose follow-up date has passed and that nobody has marked complete.',
             },
@@ -274,7 +261,7 @@ export class ShelterDashboardComponent extends BaseResourceComponent implements 
                 Id: 'vaccination',
                 Label: 'Vaccination compliance',
                 Display: `${pct}%`,
-                Detail: `${c.vaccinated} of ${c.inCare} in care`,
+                Detail: `${vaccinated} of ${inCare} in care`,
                 Icon: 'fa-solid fa-shield-halved',
                 Warn: pct < 80,
                 Tooltip:
