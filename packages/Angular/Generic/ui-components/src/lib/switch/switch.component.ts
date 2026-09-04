@@ -2,7 +2,7 @@ import { Component, Input, forwardRef, HostBinding } from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 
 /**
- * mj-switch — Toggle switch. Replaces `<kendo-switch>`.
+ * mj-switch — Toggle switch.
  */
 @Component({
   selector: 'mj-switch',

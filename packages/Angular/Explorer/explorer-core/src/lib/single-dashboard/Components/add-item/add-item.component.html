@@ -1,7 +1,6 @@
-<div class="k-overlay"></div>
 <mj-window [Visible]="true" [Width]="500" [MinHeight]="300" [MinWidth]="400" [Resizable]="true" (Close)="closeDialog()"
   Title="Add Item to Dashboard">
-  <div class="k-d-flex k-flex-col resource-wrap">
+  <div class="resource-wrap">
     <label>Resource Type
       <br />
       <mj-dropdown [Data]="ResourceTypes" [TextField]="'DisplayName'" [ValueField]="'ID'"
@@ -42,7 +41,7 @@
       }
     </div>
   </div>
-  <div class="k-actions k-actions-end popup-actions customBtn">
+  <div class="popup-actions customBtn">
     <button mjButton variant="primary" (click)="addItem()">
       <span class="fa-solid fa-check"></span> Add
     </button>

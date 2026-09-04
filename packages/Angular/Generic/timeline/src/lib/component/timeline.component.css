@@ -1,6 +1,6 @@
 /**
  * MJ Timeline Component Styles
- * Kendo-inspired design with vertical alternating and horizontal layouts
+ * Vertical alternating and horizontal layouts
  */
 
 /* ============================================================================
@@ -321,7 +321,7 @@ mj-timeline {
 }
 
 /* ============================================================================
-   EVENT CARD - Clean design matching Kendo
+   EVENT CARD
    ============================================================================ */
 
 .mj-timeline__card {

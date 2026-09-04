@@ -202,7 +202,7 @@ onTestRequested(action: ActionEntity) {
 | `@memberjunction/ng-ai-test-harness` | AI test harness integration |
 | `@memberjunction/ng-container-directives` | Layout directives |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 
 ### Peer Dependencies
 

@@ -11,7 +11,7 @@ import { FilterRuleComponent } from './filter-rule/filter-rule.component';
  * FilterBuilderModule
  *
  * Provides a complete filter builder UI for creating complex
- * boolean filter expressions. Outputs Kendo-compatible
+ * boolean filter expressions. Outputs MJ's portable
  * CompositeFilterDescriptor JSON format.
  *
  * @example

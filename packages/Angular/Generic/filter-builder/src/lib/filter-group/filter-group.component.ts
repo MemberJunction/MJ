@@ -1,13 +1,15 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewEncapsulation } from '@angular/core';
 import {
-  CompositeFilterDescriptor,
-  FilterDescriptor,
   FilterFieldInfo,
-  FilterLogic,
   FilterSource,
-  IsCompositeFilter,
   CreateFilterRule
 } from '../types/filter.types';
+import {
+  CompositeFilterDescriptor,
+  FilterDescriptor,
+  FilterLogic,
+  IsCompositeFilter
+} from '@memberjunction/core';
 
 /**
  * FilterGroupComponent - A group of filter rules with AND/OR logic

@@ -12,7 +12,7 @@ interface WindowInfo {
 
 /**
  * Service for managing test harness windows for AI Agents and AI Prompts.
- * Creates Kendo Window components with custom titlebar including minimize button.
+ * Creates mj-window components with a custom titlebar including a minimize button.
  */
 @Injectable({
     providedIn: 'root'

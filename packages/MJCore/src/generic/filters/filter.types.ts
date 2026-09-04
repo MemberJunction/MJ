@@ -1,5 +1,8 @@
 /**
- * Portable filter JSON — the same Kendo-shaped tree User Views persist as FilterState.
+ * Portable filter JSON — MJ's own filter tree, the format User Views persist as FilterState.
+ * This module is the single definition of that shape; UI packages import it rather than
+ * redeclaring it.
+ *
  * When a field contains a dot, the first segment is a source key (`BillToOrganization.Type`).
  * Bare names are the legacy single-entity form (`Type`).
  *

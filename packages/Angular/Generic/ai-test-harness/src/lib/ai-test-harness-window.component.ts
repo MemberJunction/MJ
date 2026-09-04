@@ -161,7 +161,7 @@ export class AITestHarnessWindowComponent extends BaseAngularComponent implement
     }
     
     onMinimizeRequested() {
-        // Since Kendo Window doesn't support minimize functionality,
+        // Since mj-window doesn't support minimize functionality,
         // we'll close the window when navigating to view the agent run
         this.closeWindow.emit();
     }

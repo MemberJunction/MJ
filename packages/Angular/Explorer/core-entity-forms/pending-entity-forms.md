@@ -6,7 +6,7 @@ This document outlines specifications for custom forms that should be created fo
 
 ## Design Principles
 
-1. **Single-Pane Layout**: Use Kendo PanelBar for organizing sections
+1. **Single-Pane Layout**: Use `mj-accordion-panel` for organizing sections
 2. **Gradient Headers**: Subtle gradients with entity-specific icons
 3. **Card-Based Related Entities**: Modern card interface for relationships
 4. **Consistent Color Palette**: Follow established status colors

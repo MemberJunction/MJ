@@ -1,6 +1,6 @@
 # @memberjunction/ng-ui-components
 
-Reusable, **standalone** Angular UI components for MemberJunction applications — the house replacement for Kendo UI. Every component is token-driven (`--mj-*` design tokens from `_tokens.scss`), dark-mode safe by construction, and keyboard/ARIA accessible.
+Reusable, **standalone** Angular UI components for MemberJunction applications — the house UI kit. Every component is token-driven (`--mj-*` design tokens from `_tokens.scss`), dark-mode safe by construction, and keyboard/ARIA accessible.
 
 **The rule for consuming apps: check here before building.** If a control, layout region, overlay, or pattern exists in this package, use it. Hand-rolling an app-prefixed equivalent (a bespoke button, chip, empty state, dialog…) creates divergence this package exists to eliminate. If what you need doesn't exist, propose it — generic components belong here; app-domain components belong in the app's shared package.
 
@@ -229,7 +229,7 @@ Re-export of `angular-split` — use `<as-split>` / `<as-split-area>` directly:
 ```
 
 ### `mj-accordion-panel` — MJAccordionPanelComponent (+ directives)
-Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare`, `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
+Collapsible panel for grouped content. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare`, `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
 
 ```html
 <mj-accordion-panel [Expanded]="open" (ExpandedChange)="open = $event">

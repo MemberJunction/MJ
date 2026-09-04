@@ -2,7 +2,7 @@ import { Component, Input, forwardRef, HostBinding } from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 
 /**
- * mj-numeric-input — Numeric input with min/max/step. Replaces `<kendo-numerictextbox>`.
+ * mj-numeric-input — Numeric input with min/max/step.
  */
 @Component({
   selector: 'mj-numeric-input',

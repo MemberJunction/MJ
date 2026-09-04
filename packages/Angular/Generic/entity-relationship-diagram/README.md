@@ -448,7 +448,7 @@ ngAfterViewInit() {
 | `@memberjunction/core` | Core framework (for entity wrapper) |
 | `d3` | D3.js force-directed graph engine |
 | `@dagrejs/dagre` | DAG layout algorithms |
-| `@progress/kendo-angular-layout` | Layout components |
+| `@memberjunction/ng-ui-components` | Layout components |
 | `rxjs` | Reactive extensions |
 
 ### Peer Dependencies
