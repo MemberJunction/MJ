@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (409 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -1637,11 +1637,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
     MJSignatureRequestLogEntity,
-    MJSignatureRequestRecipientEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureRequestRecipientEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -1841,11 +1841,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     InstagramCreateStoryAction,
     InstagramGetAccountInsightsAction,
     InstagramGetBusinessPostsAction,
-    InstagramGetCommentsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    InstagramGetCommentsAction,
     InstagramGetPostInsightsAction,
     InstagramSchedulePostAction,
     InstagramSearchPostsAction,
@@ -2045,11 +2045,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CSVParserAction,
     CalculateExpressionAction,
     CensusDataLookupAction,
-    CheckUserPermissionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    CheckUserPermissionAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
@@ -2205,7 +2205,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 940;
+export const CLASS_REGISTRATIONS_COUNT = 941;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
