@@ -16,13 +16,14 @@ import {
   AfterViewChecked,
   ComponentRef,
   EmbeddedViewRef,
+  ViewRef,
   TemplateRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MessageItemComponent, MessageAttachment } from './message-item.component';
+import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePendingArtifactRef } from './message-item.component';
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
@@ -319,6 +320,21 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * embedded view / collapsed realtime session timeline card).
    */
   private _renderedMessages = new Map<string, RenderedMessageEntry>();
+
+  /**
+   * Per-message artifact-load counter, so a stale in-flight load cannot clobber a newer one.
+   * Keyed by the child instance and held weakly, so an entry lives exactly as long as its
+   * component — nothing to prune when a message leaves the timeline.
+   *
+   * Created on first use rather than as a field initializer. `message-list-windowing.test.ts`
+   * constructs this component off the prototype, which runs none of the initializers; a
+   * field initializer here failed nine of its cases.
+   */
+  private _artifactLoadGeneration?: WeakMap<MessageItemComponent, number>;
+
+  private get artifactLoadGeneration(): WeakMap<MessageItemComponent, number> {
+    return (this._artifactLoadGeneration ??= new WeakMap<MessageItemComponent, number>());
+  }
   private _shouldScrollToBottom = false;
   private _previousMessageCount = 0; // Track previous count to detect new messages
 
@@ -1339,11 +1355,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.messageExtraTemplate = this.messageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
-    this.applyArtifactsToInstance(instance, message.ID, ref.changeDetectorRef);
-
     instance.agentRun = this.agentRunMap.get(message.ID) || null;
     instance.ratings = this.ratingsMap.get(message.ID);
     instance.attachments = this.attachmentsMap.get(message.ID) || [];
+
+    // After the inputs above, for the same reason as the create path: this can force a
+    // synchronous child pass, which would otherwise paint the previous refresh's agent run,
+    // ratings and attachments.
+    this.applyArtifactsToInstance(instance, message.ID, ref.changeDetectorRef);
 
     // Status change requires explicit markForCheck on the OnPush dynamic child.
     if (previousMessage && previousMessage.Status !== message.Status) {
@@ -1410,8 +1429,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.messageExtraTemplate = this.messageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
-    this.applyArtifactsToInstance(instance, message.ID, componentRef.changeDetectorRef);
-
     instance.agentRun = this.agentRunMap.get(message.ID) || null;
     instance.ratings = this.ratingsMap.get(message.ID);
     instance.attachments = this.attachmentsMap.get(message.ID) || [];
@@ -1436,6 +1453,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         console.log('Artifact action:', data);
       });
     }
+
+    // LAST, deliberately. It publishes the pending-artifact list and forces the child's first
+    // change-detection pass, which runs ngOnInit/ngAfterViewInit — so agentRun, ratings,
+    // attachments and every output subscription above must already be in place. Called earlier,
+    // ngAfterViewInit saw agentRun === null and never started the run-duration timer, and the
+    // first paint showed the rating control on an already-rated message.
+    this.applyArtifactsToInstance(instance, message.ID, componentRef.changeDetectorRef);
 
     this._renderedMessages.set(key, { kind: 'component', ref: componentRef });
     // Preserve the existing back-ref pattern from the skip-chat performance design.
@@ -1469,30 +1493,91 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     childCdRef: ChangeDetectorRef
   ): void {
     const infos = this.resolveDistinctArtifacts(messageId);
-    if (infos.length === 0) {
+    // Advanced on EVERY path, the clear included: a load that settles later compares against this,
+    // and a stale response must not repaint an artifact the map has since dropped.
+    const generation = (this.artifactLoadGeneration.get(instance) ?? 0) + 1;
+    this.artifactLoadGeneration.set(instance, generation);
+
+    // Only artifacts that still need a round trip. LazyArtifactInfo.isLoaded answers exactly this,
+    // so an artifact already in hand is never announced — announcing everything and filtering
+    // downstream re-flashed a placeholder above a rendered card once a second.
+    const pending = infos.filter(info => !info.isLoaded);
+    const dirty = this.publishPendingArtifacts(instance, infos.length === 0, pending);
+
+    // zone.js 0.15: the parent's detectChanges does not reach a dynamically created child.
+    if (dirty && !this.isViewDestroyed(childCdRef)) {
+      childCdRef.detectChanges();
+    }
+    if (infos.length > 0) {
+      void this.loadArtifactsInto(instance, infos, generation, childCdRef);
+    }
+  }
+
+  /**
+   * Publishes what the message should show right now, returning whether anything changed.
+   * Clearing is the branch with something to erase, so it counts as dirty whenever the message
+   * previously had a card or a placeholder.
+   */
+  private publishPendingArtifacts(
+    instance: MessageItemComponent,
+    clear: boolean,
+    pending: readonly MessagePendingArtifactRef[]
+  ): boolean {
+    if (clear) {
+      const hadSomething = instance.hasArtifact || instance.pendingArtifacts.length > 0;
       instance.artifacts = [];
       instance.artifact = undefined;
       instance.artifactVersion = undefined;
+      instance.pendingArtifacts = [];
+      return hadSomething;
+    }
+    const changed =
+      instance.pendingArtifacts.length !== pending.length ||
+      pending.some((p, i) => instance.pendingArtifacts[i]?.artifactId !== p.artifactId);
+    instance.pendingArtifacts = pending;
+    return changed;
+  }
+
+  /**
+   * Loads the artifact and version rows, then hands them to the message — unless a newer refresh
+   * has taken over or the view is gone (scrolled out of the timeline, conversation switched), in
+   * which case the result is dropped: detectChanges on a destroyed view throws.
+   */
+  private async loadArtifactsInto(
+    instance: MessageItemComponent,
+    infos: readonly LazyArtifactInfo[],
+    generation: number,
+    childCdRef: ChangeDetectorRef
+  ): Promise<void> {
+    let refs: MessageArtifactRef[] = [];
+    try {
+      refs = await Promise.all(
+        infos.map(info =>
+          Promise.all([info.getArtifact(), info.getVersion()]).then(([artifact, version]) => ({ artifact, version }))
+        )
+      );
+    } catch (err) {
+      // Fall through with no refs: the placeholders still have to clear, or the message keeps a
+      // permanent loading row.
+      console.error('Failed to lazy-load artifacts:', err);
+    }
+    if (this.artifactLoadGeneration.get(instance) !== generation || this.isViewDestroyed(childCdRef)) {
       return;
     }
+    if (refs.length > 0) {
+      instance.artifacts = refs;
+      // Keep the legacy single inputs pointed at the first entry for back-compat.
+      instance.artifact = refs[0]?.artifact;
+      instance.artifactVersion = refs[0]?.version;
+    }
+    instance.pendingArtifacts = [];
+    childCdRef.detectChanges();
+    this.cdRef.detectChanges();
+  }
 
-    Promise.all(
-      infos.map(info =>
-        Promise.all([info.getArtifact(), info.getVersion()]).then(([artifact, version]) => ({ artifact, version }))
-      )
-    )
-      .then(refs => {
-        instance.artifacts = refs;
-        // Keep the legacy single inputs pointed at the first entry for back-compat.
-        instance.artifact = refs[0]?.artifact;
-        instance.artifactVersion = refs[0]?.version;
-        // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
-        childCdRef.detectChanges();
-        this.cdRef.detectChanges();
-      })
-      .catch(err => {
-        console.error('Failed to lazy-load artifacts:', err);
-      });
+  /** Has this child view been destroyed? `ViewRef` declares `destroyed` non-optionally. */
+  private isViewDestroyed(ref: ChangeDetectorRef): boolean {
+    return (ref as ViewRef).destroyed;
   }
 
   /**
