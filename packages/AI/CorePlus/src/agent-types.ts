@@ -420,6 +420,14 @@ export type AgentSubAgentRequest<TContext = any> = {
 }
 
 /**
+ * Why BaseAgent's `filterAvailableSkills` hook is being asked. `catalog` is the set the model is
+ * OFFERED (the auto-activatable skills rendered into the prompt); `auto-activation` is a
+ * model-initiated Skill step being validated or executed; `requested` is a user's explicit
+ * `/skill` request arriving through `ExecuteAgentParams.requestedSkillIDs`.
+ */
+export type SkillAvailabilityPurpose = 'catalog' | 'auto-activation' | 'requested';
+
+/**
  * A skill the agent's response requested be activated (by catalog name — the agent only
  * ever sees name + description in its prompt, per progressive disclosure).
  */
