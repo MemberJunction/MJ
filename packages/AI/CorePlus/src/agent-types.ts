@@ -1026,6 +1026,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
     parentRun?: MJAIAgentRunEntityExtended;
+    /**
+     * The skills active in the PARENT run when this sub-agent was invoked. Skills activate on the root
+     * agent only, so a sub-agent's own activated set is always empty; this is how the root's active
+     * skills reach the actions a sub-agent runs (`Context.ActiveSkillIDs`), e.g. a retrieval sub-agent's
+     * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
+     */
+    parentActivatedSkillIDs?: readonly string[];
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /**
