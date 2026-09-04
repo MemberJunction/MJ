@@ -205,7 +205,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (409 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -376,6 +376,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -1711,6 +1712,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -1883,11 +1885,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
-    MJSearchScopePermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
@@ -2087,11 +2089,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FacebookGetPostInsightsAction,
     FacebookRespondToCommentsAction,
     FacebookSchedulePostAction,
-    FacebookSearchPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FacebookSearchPostsAction,
     GetAccountAnalyticsAction,
     GetCommentsAction,
     GetTrendingHashtagsAction,
@@ -2291,11 +2293,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TaskGraphRetryTaskServerOperation,
     TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
-    TaskGraphStepServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
     TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
@@ -2495,11 +2497,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
-    UnshareListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    UnshareListAction,
     UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
@@ -2540,7 +2542,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1024;
+export const CLASS_REGISTRATIONS_COUNT = 1025;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
