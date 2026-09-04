@@ -4,7 +4,7 @@ import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@member
 import { MJUserView_, MJUserViewResolverBase } from '../generated/generated.js';
 import { UserResolver } from './UserResolver.js';
 import { MJUserViewEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { GetReadOnlyProvider } from '../util.js';
+import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 
 @Resolver(MJUserView_)
 export class UserViewResolver extends MJUserViewResolverBase {
@@ -52,10 +52,14 @@ export class UserViewResolver extends MJUserViewResolverBase {
     // this should normally not be a factor but we have this exposed in the GraphQL API so that
     // a dev can force the update if desired from the client. The normal path is just to update
     // filter state which in turn will be used to update the where clause in the entity sub-class.
-    const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+    // This endpoint WRITES (Save below), so it must use the read-write provider — on a read-replica
+    // deployment the read-only provider would route the save to the replica.
+    const p = GetReadWriteProvider(providers, {allowFallbackToReadOnly: true});
     const u = this.GetUserFromPayload(userPayload);
     const viewEntity = <MJUserViewEntityExtended>await p.GetEntityObject('MJ: User Views', u);
-    await viewEntity.Load(ID);
+    if (!await viewEntity.Load(ID)) {
+      throw new Error(`User View ${ID} not found or access denied`);
+    }
     await viewEntity.UpdateWhereClause(true); // force regeneration regardless of dirty state — that is the whole point of this endpoint
 
     if (await viewEntity.Save()) {

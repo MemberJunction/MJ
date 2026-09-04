@@ -1486,9 +1486,10 @@ describe('MJUserViewEntityExtended - UserCanView resource-type resolution', () =
 // Save() / UpdateWhereClause() — WhereClause regeneration on new vs. existing records
 //
 // Regression: NewRecord() pre-assigns a UUID primary key and the first write to a fresh
-// field seeds its OldValue, so on a brand-new view the ID is populated AND nothing is
-// Dirty. Newness must be detected via IsSaved, otherwise neither the Smart Filter (AI)
-// nor the Traditional Filter (FilterState) WhereClause is ever generated on create.
+// field seeds its OldValue, so on a brand-new view the ID is populated AND SmartFilterPrompt /
+// SmartFilterEnabled are not Dirty (FilterState IS dirty — NewRecord() already wrote its blank
+// seed, so the caller's write is a second write). Newness must be detected via IsSaved,
+// otherwise the Smart Filter (AI) WhereClause is never generated on create.
 // ============================================================================
 
 describe('MJUserViewEntityExtended WhereClause regeneration', () => {
@@ -1547,6 +1548,31 @@ describe('MJUserViewEntityExtended WhereClause regeneration', () => {
         expect(view.SmartFilterWhereClause).toBe('[IsActive] = 1');
         expect(view.WhereClause).toBe('[IsActive] = 1');
         expect(view.SmartFilterExplanation).toBe('explains: Only active records');
+    });
+
+    it('Save() on a NEW record does NOT erase a WhereClause the caller set directly (empty FilterState is just the NewRecord() seed)', async () => {
+        // Programmatic callers do: view.NewRecord(); view.WhereClause = '...'; await view.Save() — with no
+        // CustomWhereClause flag. Integration fixtures view-security VS1, view-execution V8 and cache-gauntlet CG7
+        // all rely on this, and the empty seed FilterState compiles to '' which must not win.
+        const view = makeSmartView({ isSaved: false, smartEnabled: false });
+        (view as unknown as Record<string, unknown>)['WhereClause'] = "[Value] = 'tag-IN'";
+        expect(await view.Save()).toBe(true);
+        expect(view.WhereClause).toBe("[Value] = 'tag-IN'");
+    });
+
+    it('Save() on a NEW record with an explicit traditional filter overrides a hand-set WhereClause', async () => {
+        const fs = JSON.stringify({ logic: 'and', filters: [{ field: 'Name', operator: 'eq', value: 'Acme' }] });
+        const view = makeSmartView({ isSaved: false, smartEnabled: false, filterState: fs });
+        (view as unknown as Record<string, unknown>)['WhereClause'] = '[IsActive] = 1';
+        expect(await view.Save()).toBe(true);
+        expect(view.WhereClause).toBe("([Name] = 'Acme')");
+    });
+
+    it('UpdateWhereClause() on an EXISTING record with a blank FilterState clears the WhereClause (user removed all filters)', async () => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: false });
+        (view as unknown as Record<string, unknown>)['WhereClause'] = "([Name] = 'Acme')";
+        await view.UpdateWhereClause();
+        expect(view.WhereClause).toBe('');
     });
 
     it('Save() on a NEW record with a traditional filter generates the WhereClause from FilterState', async () => {
