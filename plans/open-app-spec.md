@@ -667,6 +667,15 @@ For closed-source apps, configure registry auth in `.npmrc`:
 
 ## Dynamic Package Loading
 
+> **Implementation note (2026-09, [#4201](https://github.com/MemberJunction/MJ/pull/4201)).** The
+> server-side mechanism shipped as [`@memberjunction/dynamic-packages`](../packages/DynamicPackages/README.md),
+> not as a `DynamicLoader` in `@memberjunction/global` as sketched below, and it runs in **every**
+> server-side process (MJAPI via `server-bootstrap`, the `mj` CLI's heavy commands, MCP/A2A, the
+> test bootstraps) rather than MJAPI alone. Entry field names are PascalCase (`PackageName`,
+> `StartupExport`, `AppName`, `Enabled`) with optional per-process scoping (`Processes`,
+> `ExcludeProcesses`, `dynamicPackages.policy`). The client-side half is as described.
+> Current reference: [`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
+
 ### Problem
 
 Today, integrating new packages into MJAPI or MJExplorer requires manually editing `package.json`, adding static imports in source code, and regenerating class registration manifests. This is error-prone and blocks CLI automation of the install process.

@@ -692,6 +692,57 @@ export class BaseEntityResult {
     }
 
     /**
+     * Renders ONE entry of the {@link Errors} array as human-readable text.
+     *
+     * `Errors` is typed `any[]`, and two shapes land in it from different places:
+     *
+     *  - **`ValidationErrorInfo`** — carries **`Message`** (capital M), plus `Source`, `Value` and
+     *    `Type`. This is what `_InnerSave` puts there when validation refuses a save: it throws the
+     *    `ValidationResult`, and the catch block assigns `newResult.Errors = e.Errors`.
+     *  - **`Error`** (and anything error-like) — carries lowercase **`message`**.
+     *
+     * This used to read `err.message` ONLY, so every `ValidationErrorInfo` fell through to
+     * `JSON.stringify(err)`. That is not a cosmetic difference: `CompleteMessage` is the string the
+     * server hands the client on a failed save — every write-refusal throw in `ResolverBase`
+     * (`CreateRecord`/`UpdateRecord`/`DeleteRecord`) puts it in the `GraphQLError`, and
+     * `SaveEntityGraphOperation` puts it in `ErrorMessage` — so the whole point of writing a careful,
+     * field-named refusal in a subclass's `ValidateAsync()` was defeated at the last step, and the
+     * user saw
+     * `{"Source":"ParentContractID","Message":"…","Value":null,"Type":"Failure"}` in a toast.
+     *
+     * Nothing catches this at compile time because `Errors` is `any[]`; nothing catches it at runtime
+     * because `JSON.stringify` always succeeds. It is only visible by reading the message a user got.
+     *
+     * The parameter is `unknown` rather than `any` — per `.claude/rules/typescript-style.md` — because
+     * not knowing the shape is the whole reason this helper exists, and `unknown` forces the narrowing
+     * that makes each shape's handling explicit. Callers pass `any` (the `Errors` array and the `Error`
+     * property are both legacy `any`), which is assignable, so no call site changes.
+     *
+     * `Message` is preferred over `message` because a `ValidationErrorInfo` has only the former,
+     * while an `Error` has only the latter — so the order matters solely for an object carrying both,
+     * where the MJ-native field is the better answer.
+     *
+     * @param err - One entry from the `Errors` array.
+     * @returns The entry's human-readable text, falling back to JSON for a shape with neither field.
+     */
+    public static ErrorText(err: unknown): string {
+        if (err === null || err === undefined) {
+            return '';
+        }
+        if (typeof err === 'string') {
+            return err;
+        }
+        if (typeof err === 'object') {
+            const shaped = err as { Message?: unknown; message?: unknown };
+            const text = shaped.Message ?? shaped.message;
+            if (typeof text === 'string' && text.trim().length > 0) {
+                return text;
+            }
+        }
+        return JSON.stringify(err);
+    }
+
+    /**
      * Returns a complete message that includes the Message property (if present), the Error property (if present), and any Errors array items (if present).
      */
     public get CompleteMessage(): string {
@@ -702,24 +753,27 @@ export class BaseEntityResult {
             msg = this.Message;
         }   
 
-        // now check the simple Error property
+        // now check the simple Error property. Same shape problem as the Errors array below, so the
+        // same helper answers it: a string, an Error (lowercase `message`), or an MJ
+        // ValidationErrorInfo (capital `Message`) all render as their text rather than as JSON.
         if (this.Error) {
-            msg = (msg ? msg + '\n' : '')
-            if (typeof this.Error === 'string') {
-                msg += this.Error;
-            }
-            else if (this.Error.message) {
-                msg += this.Error.message;
-            }
-            else {
-                msg += JSON.stringify(this.Error);
-            }
+            msg = (msg ? msg + '\n' : '') + BaseEntityResult.ErrorText(this.Error);
         }
-        
-        // now check the Errors array
+
+        // now check the Errors array.
+        //
+        // NOT de-duplicated, deliberately. Some producers set BOTH `Message` and `Errors` and build
+        // the former out of the latter — `_InnerSave`/`_InnerDelete` do on an IS-A parent failure —
+        // so their text does appear twice here. Suppressing a repeat was tried and reverted: any
+        // containment test is lossy in ways a reader cannot detect. Three fields failing with the
+        // same sentence collapse to one line; an entry whose text is a substring of another is kept
+        // or dropped depending on ARRAY ORDER; and a distinct error vanishes when its text happens to
+        // appear inside the summary. Saying something twice is ugly. Silently reporting one problem
+        // when there were three is the failure this whole class of bug is about, so the duplication
+        // stays until a producer-side fix removes it at the source.
         if (this.Errors && this.Errors.length > 0) {
             // append
-            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => err.message || JSON.stringify(err)).join('\n');
+            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => BaseEntityResult.ErrorText(err)).join('\n');
         }
 
         return msg;

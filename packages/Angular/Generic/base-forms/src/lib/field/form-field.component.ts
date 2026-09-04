@@ -1882,10 +1882,42 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /** Format a value for display */
+  /**
+   * Whether this field holds a DATE with no time, as opposed to a timestamp.
+   *
+   * The distinction decides which timezone the value may be rendered in, and getting it wrong
+   * moves the day. A `date` column has no time and no zone: it is a calendar day, and the only
+   * correct way to show it is in the zone it was written in. A `datetime`/`datetimeoffset` names
+   * an instant, and the correct way to show THAT is the reader's local zone.
+   */
+  private get IsDateOnlyField(): boolean {
+    return (this.FieldInfo?.Type ?? '').trim().toLowerCase() === 'date';
+  }
+
   FormatValue(): string {
     const val = this.Value;
     if (val === null || val === undefined) return '';
     if (val instanceof Date) {
+      /**
+       * A DATE-ONLY VALUE IS NOT AN INSTANT, AND toLocaleString() TREATS IT AS ONE.
+       *
+       * A `date` column arrives as UTC midnight. Passing that through a LOCAL-time formatter
+       * subtracts the reader's offset and lands on the previous day for everyone west of
+       * Greenwich: a stored 2026-11-20 rendered as `11/19/2026, 7:00:00 PM` in America/New_York,
+       * and 2026-01-01 rendered as `12/31/2025` — the wrong YEAR.
+       *
+       * The edit path does not have this bug: `DateInputValue` uses `toISOString()`, which is UTC.
+       * So the two modes DISAGREED — a rep opened a record and saw 19 November, clicked Edit and
+       * saw the 20th, on the same field, with no invalid data anywhere. Read mode was simply wrong.
+       *
+       * Pinning the timezone rather than switching to `toISOString()` keeps the reader's locale
+       * format (a US reader still sees 11/20/2026, a UK reader 20/11/2026) and changes only the
+       * zone the day is computed in. A TIMESTAMP is left exactly as it was: it names an instant,
+       * and local time is the right way to show one.
+       */
+      if (this.IsDateOnlyField) {
+        return val.toLocaleDateString(undefined, { timeZone: 'UTC' });
+      }
       return val.toLocaleString();
     }
     return String(val);
