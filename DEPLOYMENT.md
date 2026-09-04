@@ -123,7 +123,7 @@ Stop anything unrelated. On a < 8 GiB Docker VM, cap every turbo build with `--c
 
 **5. If you are releasing from a FRESH CLONE, four things are missing that nothing tells you about.** Each is gitignored, so the repo looks complete and fails later, in a place that does not name the cause.
 
-- **The repo must be BUILT before Step 3.** `mj` is a workspace package; without `packages/MJCLI/dist` the CLI loads but registers no subcommands, so `npx mj migrate` fails with a bare `Error: command migrate not found` — which reads like a bad install, not a missing build. Run `pnpm install && pnpm run build` first. This effectively moves Step 7 to the front on a fresh clone; that is fine, and Step 7 re-runs cheaply from cache.
+- **The repo must be BUILT before Step 3.** `mj` is a workspace package; without `packages/MJCLI/dist` the CLI loads but registers no subcommands, so `pnpm mj migrate` fails with a bare `Error: command migrate not found` — which reads like a bad install, not a missing build. Run `pnpm install && pnpm run build` first. This effectively moves Step 7 to the front on a fresh clone; that is fine, and Step 7 re-runs cheaply from cache.
 - **`packages/MJAPI/.env` must exist**, as a symlink to the repo-root `.env` (`ln -s ../../.env .env`). Without it MJAPI dies at boot on `dbDatabase / dbUsername / dbPassword … Required`, which reads as a config-file problem rather than a missing file. Working clones have this symlink; a fresh one does not.
 - **`packages/MJExplorer/src/environments/environment.ts` must exist**, or any full build fails on `Could not resolve "../environments/environment"`. CI writes this file inline before building — copy that block out of `.github/workflows/test.yml` rather than inventing values.
 - **Step 8's converter needs Python + `sqlglot`.** `mj migrate convert` shells out to a Python interpreter and fails with `the interpreter 'python3' has no sqlglot module`. On macOS, PEP 668 blocks a system `pip install`, so make a venv and point the converter at it: `python3 -m venv <dir> && <dir>/bin/pip install 'sqlglot>=27'`, then `export MJ_SQLGLOT_PYTHON=<dir>/bin/python`.
@@ -193,7 +193,7 @@ Check if there are any pending metadata changes (new/updated records in `metadat
 
 #### If metadata has changed since the last release:
 
-1. **Verify MJ CLI is up to date — against the channel of the content you're preparing.** `npm view @memberjunction/cli dist-tags` shows all channels; `latest` is the newest *certified* build, not the newest build. Prefer the repo-local CLI (`npx mj`, wired via the root `@memberjunction/cli` dependency), which rides the workspace version. If you use a global `mj`, install it from the matching tag (`npm install -g @memberjunction/cli@edge` for Edge-era content) — a stale CLI produces stale sync/codegen output
+1. **Verify MJ CLI is up to date — against the channel of the content you're preparing.** `npm view @memberjunction/cli dist-tags` shows all channels; `latest` is the newest *certified* build, not the newest build. Prefer the repo-local CLI (`pnpm mj`, the root script that runs `node packages/MJCLI/bin/run.js`), which rides the workspace version. Do NOT use `npx mj` in this repo: the root `@memberjunction/cli` devDependency was removed to keep turbo's `hashOfInternalDependencies` empty, so there is no workspace-root `node_modules/.bin/mj` and `npx` falls through to an **unrelated** registry package of that name. If you use a global `mj`, install it from the matching tag (`npm install -g @memberjunction/cli@edge` for Edge-era content) — a stale CLI produces stale sync/codegen output
 2. **Start a fresh database** — a new empty database on your existing dev SQL Server works fine (no separate instance needed). Example, with the standard MJ logins mapped in:
    ```bash
    docker exec <your-sql-container> bash -c '
@@ -326,7 +326,7 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 
 1. **Step 3 is done** — `mj migrate` + `mj sync push --dir ./metadata` applied to the scratch database, and your `.env` points at it.
 
-   > 🚨 **Confirm which database this tier is about to mutate, on every run** — the CLI prints `config.dbDatabase: <name>` at startup. Either repoint `.env` (Step 3.3) or set `DB_DATABASE=… npx mj test …` inline; **both work, and the inline form wins.** Until v6.1 it did not: the testing CLI loaded dotenv with `override: true`, so `.env` clobbered the shell variable and the suite ran against whatever `.env` said, while `mj sync push` (whose init hook does not override) honoured the shell variable — so the shortcut appeared to work while seeding and then silently targeted a different database for the run. That asymmetry is fixed; `mj test` now matches `migrate`, `codegen` and `sync push` in letting an explicitly-set variable win. If you are on an older build, check `packages/TestingFramework/CLI/src/utils/config-loader.ts` for `override: true` before relying on the inline form.
+   > 🚨 **Confirm which database this tier is about to mutate, on every run** — the CLI prints `config.dbDatabase: <name>` at startup. Either repoint `.env` (Step 3.3) or set `DB_DATABASE=… pnpm mj test …` inline; **both work, and the inline form wins.** Until v6.1 it did not: the testing CLI loaded dotenv with `override: true`, so `.env` clobbered the shell variable and the suite ran against whatever `.env` said, while `mj sync push` (whose init hook does not override) honoured the shell variable — so the shortcut appeared to work while seeding and then silently targeted a different database for the run. That asymmetry is fixed; `mj test` now matches `migrate`, `codegen` and `sync push` in letting an explicitly-set variable win. If you are on an older build, check `packages/TestingFramework/CLI/src/utils/config-loader.ts` for `override: true` before relying on the inline form.
 2. **The repo is built — and the suite package's `dist/` is *current*.** `pnpm run build`. The suite loads compiled `dist/`, including the private, never-published `@memberjunction/integration-test-suite` package. A `dist/` that merely **exists is not enough**: if it predates the newest `src/checks/*.checks.ts`, every bundle added since compiles to nothing and the run fails with a wall of `Unknown integration check bundle '<name>'` — naming the *newest* bundles while older ones pass. Verify freshness rather than assuming:
    ```bash
    ls -t packages/TestingFramework/integration-test-suite/dist/index.js \
@@ -338,7 +338,7 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 3. **`mj.config.cjs` still carries `testing.checkModules`** (`['@memberjunction/integration-test-suite']`) — that key is how check bundles are discovered.
 4. **The integration metadata is seeded** — see 4.2. This is **not** optional any more.
 5. **MJAPI is running** against the Step-3 database, with `MJ_API_KEY` set — see 4.3.
-6. **Use the repo-local CLI**, from the repo root (`pnpm run test:integration` / `npx mj …`). A globally-installed `mj` cannot load the private suite package.
+6. **Use the repo-local CLI**, from the repo root (`pnpm run test:integration` / `pnpm mj …`). A globally-installed `mj` cannot load the private suite package.
 
 #### 4.2 Seed the integration metadata (REQUIRED)
 
@@ -347,7 +347,7 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 ```bash
 # AFTER Step 3's `mj migrate` + `mj sync push --dir ./metadata` — order matters, the IT
 # records @lookup the "Integration Test" TestType and AI models from the base metadata.
-npx mj sync push --dir ./metadata-optional/integration-test --ci
+pnpm mj sync push --dir ./metadata-optional/integration-test --ci
 ```
 
 This seeds **269 records** (242 earlier in the 6.1 cycle — the suite grows, so trust `Errors 0` over the number): the **78 IT Test records**, the 3 suite rows and their 63 + 15 memberships, the RLS principals (3 synthetic `it-*@integration.test` users + the `Integration Test: RLS Scoped Reader` role + 2 entity-permission grants), and the synthetic AI stack the live tier drives (14 `IT: *` AI Agents — 12 root-level — 14 IT AI Prompts with 42 multi-vendor model bindings + templates, `IT: Probe Skill`, `IT: Integration Test Scope`, and the IT categories). Expect `Errors 0` in the push summary; the created count tracks whatever the suite currently holds.
@@ -427,7 +427,7 @@ RUN_MUTATION_TESTS=1 pnpm run test:integration 2>&1 | tee release-deterministic.
 
 ```bash
 # 2) Live-model tier — a SEPARATE suite with its own exit code
-MJ_INTEGRATION_TEST=1 npx mj test suite "Integration Tests — Live Model" 2>&1 | tee release-live-model.log
+MJ_INTEGRATION_TEST=1 pnpm mj test suite "Integration Tests — Live Model" 2>&1 | tee release-live-model.log
 ```
 
 - **Selecting the suite *is* the opt-in.** The live-model tier is now **default-ON**: `IsTierEnabled` returns `RUN_AGENT_TESTS !== '0'`, so `=1` is a legacy no-op and `RUN_AGENT_TESTS=0` is the *opt-out* — which yields a green 15/15 that executed nothing. A green live run only counts if the log has no `tier 'live-model'` skip lines.
@@ -473,7 +473,7 @@ The exit code is driven by `failedTests`, which counts **only** status `Failed`.
 - **`model-noncompliance:` in the message** — model-behaviour variance on the live tier (the model refused the instructed action after 3 billed attempts), not a product defect and not a flake to wave through. Re-run that bundle before calling it a blocker.
 - **Anything else red** — a real product defect. Re-run the single bundle before re-running the tier:
   ```bash
-  MJ_INTEGRATION_TEST=1 npx mj test run "IT## - <name>"
+  MJ_INTEGRATION_TEST=1 pnpm mj test run "IT## - <name>"
   ```
   > 🚨 **Do NOT use single-bundle re-run to triage the live-agent bundles (IT53–IT62).** `mj test run` takes a **different transport path** than the same bundle inside the suite: `agent-loop-live` is not in the `CLIENT_BUNDLES` set (`IntegrationTestDriver.ts`), so standalone it executes the agent **in-process** with no server `contextUser`, fails 7/7, and floods the log with `[CRITICAL] … must provide the contextUser parameter`. In-suite it passes, because an earlier client bundle rebinds the process's global provider. Re-run the **whole live suite** for those. Tracked as **#3251**. Single-bundle triage remains valid for deterministic bundles.
 
@@ -1034,7 +1034,7 @@ mj sync push --dir ./metadata
 # Seed the integration metadata — REQUIRED before Step 4 (IT01-IT66 Tests, the two tier suites,
 # the RLS principals, and the IT agent/prompt/skill/search fixtures; the TestType itself lives in
 # normal metadata/) — TEST/CI databases ONLY, never production (kept out of ./metadata on purpose)
-npx mj sync push --dir ./metadata-optional/integration-test --ci
+pnpm mj sync push --dir ./metadata-optional/integration-test --ci
 
 # SQL logs appear in
 metadata/sql_logging/MetadataSync_Push_*.sql
@@ -1051,13 +1051,13 @@ metadata/sql_logging/MetadataSync_Push_*.sql
 RUN_MUTATION_TESTS=1 pnpm run test:integration
 
 # Live-model tier (15 tests) — SEPARATE suite, real LLM cost. Note the em dash.
-MJ_INTEGRATION_TEST=1 npx mj test suite "Integration Tests — Live Model"
+MJ_INTEGRATION_TEST=1 pnpm mj test suite "Integration Tests — Live Model"
 
 # Re-run one bundle during triage
-MJ_INTEGRATION_TEST=1 npx mj test run "IT## - <name>"
+MJ_INTEGRATION_TEST=1 pnpm mj test run "IT## - <name>"
 
 # Validate Test/Suite definitions without executing anything
-npx mj test validate --type "Integration Test"
+pnpm mj test validate --type "Integration Test"
 ```
 
 ### Changeset Commands
