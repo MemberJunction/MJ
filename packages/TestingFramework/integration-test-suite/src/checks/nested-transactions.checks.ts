@@ -37,7 +37,7 @@ async function committed(ctx: IntegrationCheckContext, id: string): Promise<bool
     const table = isPostgres(ctx) ? '"__mj"."vwActionCategories"' : '[__mj].[vwActionCategories]';
     const rows = await providerOf(ctx).ExecuteSQL(
         `SELECT COUNT(*) AS c FROM ${table} WHERE ID = '${id.replace(/'/g, "''")}'`,
-        null,
+        undefined,
         { connectionSource: poolSource(ctx) } as never,
     ) as Array<Record<string, unknown>>;
     const n = rows?.[0] ? Object.values(rows[0])[0] : 0;
