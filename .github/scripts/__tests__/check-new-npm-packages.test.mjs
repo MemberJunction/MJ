@@ -21,6 +21,8 @@ import {
     PUBLISH_WORKFLOW_FILE,
     PUBLISH_WORKFLOW_PATH,
     SEED_WORKFLOW_NAME,
+    SEED_DISPATCH_INPUT,
+    SEED_CONFIRM_INPUT,
     NPM_MEMBERS_URL,
     NPM_ESCALATION_HANDLE,
 } from '../check-new-npm-packages.mjs';
@@ -310,7 +312,17 @@ describe('formatGateFailure', () => {
 
     it('names the seed workflow as the proof step', () => {
         expect(message).toContain(SEED_WORKFLOW_NAME);
+        expect(message).toContain(SEED_DISPATCH_INPUT);
+        expect(message).toContain(SEED_CONFIRM_INPUT);
         expect(message).toContain('succeeds ONLY if step 4 actually worked');
+    });
+
+    it('seeds through the publish workflow, the only file the trusted publisher matches', () => {
+        // npm matches the workflow filename exactly; verifyProvenance requires publish.yml.
+        // A seed from any other workflow could satisfy neither, so the message must not
+        // send authors to one.
+        expect(SEED_WORKFLOW_NAME).toBe('Build and publish new package versions');
+        expect(message).not.toContain('seed-new-package');
     });
 
     it('no longer asks a human to paste anything', () => {
