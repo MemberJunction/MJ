@@ -17,6 +17,37 @@ export function FormChromeRailPinnedKey(entityName: string): string {
  * neither restore nor write it — they should open on the first first-class
  * group (Details) instead of the last related section from another record.
  */
+/**
+ * The rail key a contribution asked to lead on for an UNSAVED record, or null.
+ *
+ * Sits beside `ShouldPersistChromeActiveGroup` because it answers the other half of the same
+ * question: that one says a new record must not restore a stored position, this one says where it
+ * should go instead. Without it a new record opens on the lead group, which is usually a summary --
+ * and a summary of a record with no data is a page of blanks to look past.
+ *
+ * Highest `Priority` wins when several contributions on one entity declare it, matching how every
+ * other conflict between registrations is settled. Null when none does, which leaves the existing
+ * behaviour exactly as it was -- this is opt-in per form, not a change to the default.
+ *
+ * Pure so it can be tested without standing up a container: the caller supplies the registrations
+ * and the key-derivation it already uses for the rail.
+ */
+export function UnsavedLeadGroupKey<TMeta extends { entity?: string; leadsWhenUnsaved?: boolean }>(
+    entityName: string | null | undefined,
+    registrations: ReadonlyArray<{ Priority?: number; Metadata?: TMeta }>,
+    railKeyOf: (meta: TMeta) => string | null,
+): string | null {
+    if (!entityName) return null;
+    const ordered = [...registrations].sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+    for (const reg of ordered) {
+        const meta = reg.Metadata;
+        if (!meta || meta.entity !== entityName || meta.leadsWhenUnsaved !== true) continue;
+        const key = railKeyOf(meta);
+        if (key) return key;
+    }
+    return null;
+}
+
 export function ShouldPersistChromeActiveGroup(isSaved: boolean | null | undefined): boolean {
     return isSaved === true;
 }
