@@ -980,9 +980,32 @@ export class BaseAgent {
      * IDs of skills already activated during this run. Prevents re-activation from re-appending
      * the same instructions to context / re-pushing duplicate actionChanges/subAgentChanges entries
      * when the LLM references an already-active skill again.
-     * @private
+     *
+     * `protected`, not private: a subclass that gates activation with its own policy (a tenant
+     * licensing check, an entitlement model) needs to know what actually activated — to hand the
+     * active skill to a search as its principal, to stamp a UI chip, to persist a mode. Read it;
+     * mutate only through the activation paths. See also {@link ActivatedSkillIDs}.
      */
-    private _activatedSkillIDs: string[] = [];
+    protected _activatedSkillIDs: string[] = [];
+
+    /** The skills activated so far in this run (requested or self-activated), in activation order. */
+    protected get ActivatedSkillIDs(): readonly string[] {
+        return this._activatedSkillIDs;
+    }
+
+    /**
+     * The skills active for THIS RUN as a whole: what the root agent activated (carried down through
+     * `ExecuteAgentParams.parentActivatedSkillIDs`, since skills activate on the root only) plus anything
+     * this instance activated itself. Stamped as `Context.ActiveSkillIDs` on every action call and handed
+     * to every sub-agent, so a Scoped Search issued three levels down still binds to the root's skill.
+     */
+    protected activeSkillIDsForRun(params: ExecuteAgentParams): string[] {
+        const merged: string[] = [...(params.parentActivatedSkillIDs ?? [])];
+        for (const id of this._activatedSkillIDs) {
+            if (!merged.some(m => UUIDsEqual(m, id))) merged.push(id);
+        }
+        return merged;
+    }
 
     /**
      * Full observability records for every skill activated this run — one {@link AgentSkillInvocation}
@@ -992,8 +1015,10 @@ export class BaseAgent {
      * steps record the full set in effect for the turn, and Actions/Sub-Agent steps record the
      * skill(s) that granted the executed tool (see {@link getSkillAttributionForAction} /
      * {@link getSkillAttributionForSubAgent}).
+     *
+     * `protected` for the same reason as {@link _activatedSkillIDs}.
      */
-    private _skillInvocations: AgentSkillInvocation[] = [];
+    protected _skillInvocations: AgentSkillInvocation[] = [];
 
     /**
      * Whether Plan Mode is active for this run — resolved once in {@link initializeAgentRun} via
@@ -6988,6 +7013,12 @@ The context is now within limits. Please retry your request with the recovered c
             // directly onto the original context object.
             const actionContext = typeof params.context === 'object' && params.context ? params.context : {};
             (actionContext as Record<string, unknown>).AgentID = params.agent.ID;
+            // The skills active in THIS run, as a fact the action can trust. An action that takes a
+            // skill principal (Scoped Search's AISkillID) must not have to believe a parameter the model
+            // authored: with this it can default the principal to the run's active skill and refuse a
+            // named skill the run never activated. Always stamped — an empty array means "inside an
+            // agent run, with no skill active", which is a different fact from "no agent at all".
+            (actionContext as Record<string, unknown>).ActiveSkillIDs = this.activeSkillIDsForRun(params);
             if (this._resolvedStorageAccountId) {
                 (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
             }
@@ -7211,6 +7242,7 @@ The context is now within limits. Please retry your request with the recovered c
                 parentDepth: this._depth,
                 parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
+                parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
                 payload: payload, // pass the payload if provided
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
