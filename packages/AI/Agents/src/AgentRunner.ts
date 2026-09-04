@@ -594,7 +594,8 @@ export class AgentRunner {
                             agentResponseDetailId,
                             mediaForArtifacts,
                             contextUser,
-                            md
+                            md,
+                            agentResult.resolvedStorageAccountId
                         );
                     }
                     return ids;
@@ -1268,6 +1269,10 @@ export class AgentRunner {
      * @param mediaOutputs - Media outputs to persist as artifacts
      * @param contextUser - User context for DB operations
      * @param provider - Optional metadata provider for multi-provider support
+     * @param resolvedStorageAccountId - Pre-resolved storage account from the agent's resolution
+     *   chain. Optional, and optional on purpose: this is a public method, and callers that
+     *   predate storage-backed media keep working — omitting it just falls back to the first
+     *   active account inside {@link uploadBase64ToStorage}.
      *
      * @since 5.38.0
      */
@@ -1275,13 +1280,21 @@ export class AgentRunner {
         conversationDetailId: string,
         mediaOutputs: MediaOutput[],
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        resolvedStorageAccountId?: string
     ): Promise<void> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
             return;
         }
 
-        await ArtifactMetadataEngine.Instance.Config(false, contextUser);
+        // BOTH engines, as ProcessFileArtifacts does. FileStorageEngine reports zero accounts
+        // until it has loaded, so checking HasStorageAccounts without configuring it first reads
+        // an empty cache and silently routes every media artifact inline — indistinguishable from
+        // a deployment that genuinely has no storage.
+        await Promise.all([
+            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            FileStorageEngine.Instance.Config(false, contextUser),
+        ]);
         const md = provider || this._provider;
         let successCount = 0;
 
@@ -1295,28 +1308,39 @@ export class AgentRunner {
                     ? Math.ceil(media.data.length * 0.75)
                     : undefined;
 
-                await this.createArtifactWithVersion({
-                    mimeType: media.mimeType,
-                    fileName,
-                    sizeBytes: estimatedSizeBytes,
-                    conversationDetailId,
-                    contextUser,
-                    provider: md,
-                    acceptUnregisteredFiles: true,
-                    label: `media ${media.modality}`,
-                    setVersionFields: (version) => {
-                        // DecideInlineStorage applies consistent text-vs-binary storage
-                        // decisions across all artifact creation paths. For media (images,
-                        // audio, video), it wraps the base64 in a data URL; for text-y
-                        // MIMEs it decodes to UTF-8. Same helper the server hook and
-                        // ConversationAttachmentService use.
-                        if (media.data) {
-                            const stored = DecideInlineStorage(media.mimeType, media.data);
-                            version.ContentMode = stored.contentMode;
-                            version.Content = stored.content;
+                // Storage-backed when an account is configured, exactly as ProcessFileArtifacts
+                // does for file outputs.
+                const fileId = media.data
+                    ? await this.uploadToStorageIfConfigured(
+                          media.data, fileName, media.mimeType, contextUser, resolvedStorageAccountId, md, 'CreateMediaArtifacts')
+                    : undefined;
+
+                if (fileId) {
+                    await this.createFileArtifact(
+                        fileId, media.mimeType, fileName, estimatedSizeBytes, conversationDetailId, contextUser, md, true,
+                        `media ${media.modality}`);
+                } else {
+                    await this.createArtifactWithVersion({
+                        mimeType: media.mimeType,
+                        fileName,
+                        sizeBytes: estimatedSizeBytes,
+                        conversationDetailId,
+                        contextUser,
+                        provider: md,
+                        acceptUnregisteredFiles: true,
+                        label: `media ${media.modality}`,
+                        setVersionFields: (version) => {
+                            // DecideInlineStorage applies consistent text-vs-binary storage
+                            // decisions across all artifact creation paths: for media it wraps
+                            // the base64 in a data URL; for text-y MIMEs it decodes to UTF-8.
+                            if (media.data) {
+                                const stored = DecideInlineStorage(media.mimeType, media.data);
+                                version.ContentMode = stored.contentMode;
+                                version.Content = stored.content;
+                            }
                         }
-                    }
-                });
+                    });
+                }
 
                 successCount++;
             } catch (error) {
@@ -1325,6 +1349,39 @@ export class AgentRunner {
         }
 
         LogStatus(`Created ${successCount} of ${mediaOutputs.length} media artifact(s) for detail ${conversationDetailId}`);
+    }
+
+    /**
+     * Uploads bytes to MJStorage when a storage account is configured, returning the new
+     * `MJ: Files` ID — or `undefined` to tell the caller to store the bytes inline.
+     *
+     * The single home of the storage-or-inline contract for every artifact this runner creates,
+     * file outputs and media alike. Deliberately never throws: delivery must not fail because
+     * storage is unavailable, so an upload error degrades to inline with a log line.
+     *
+     * @param logPrefix - Names the calling path in the log so an operator can tell which kind of
+     *   artifact fell back, without the two paths carrying separate copies of this logic.
+     */
+    private async uploadToStorageIfConfigured(
+        base64Data: string,
+        fileName: string,
+        mimeType: string,
+        contextUser: UserInfo,
+        resolvedStorageAccountId: string | undefined,
+        provider: IMetadataProvider,
+        logPrefix: string
+    ): Promise<string | undefined> {
+        if (!FileStorageEngine.Instance.HasStorageAccounts) {
+            LogStatus(`${logPrefix}: no storage accounts configured for "${fileName}", storing inline`);
+            return undefined;
+        }
+        try {
+            return await this.uploadBase64ToStorage(
+                base64Data, fileName, mimeType, contextUser, resolvedStorageAccountId, provider);
+        } catch (storageError) {
+            LogStatus(`${logPrefix}: storage upload failed for "${fileName}", storing inline: ${(storageError as Error).message}`);
+            return undefined;
+        }
     }
 
     // ── File artifact processing ───────────────────────────────────────────────
@@ -1385,31 +1442,11 @@ export class AgentRunner {
                 return await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
             }
 
-            // Check if any storage accounts are configured
-            const hasStorage = FileStorageEngine.Instance.HasStorageAccounts;
-
-            if (!hasStorage) {
-                // No storage configured — go straight to inline artifact
-                LogStatus(`ProcessFileArtifacts: no storage accounts configured for "${fo.fileName}", creating inline artifact`);
-                return await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-            }
-
-            // Try to upload to storage
-            try {
-                const fileId = await this.uploadBase64ToStorage(
-                    fo.fileData!,
-                    fo.fileName,
-                    fo.mimeType,
-                    contextUser,
-                    resolvedStorageAccountId,
-                    provider
-                );
-                return await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-            } catch (storageError) {
-                // Upload failed — fall back to inline artifact
-                LogStatus(`ProcessFileArtifacts: storage upload failed for "${fo.fileName}", creating inline artifact: ${(storageError as Error).message}`);
-                return await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-            }
+            const fileId = await this.uploadToStorageIfConfigured(
+                fo.fileData!, fo.fileName, fo.mimeType, contextUser, resolvedStorageAccountId, provider, 'ProcessFileArtifacts');
+            return fileId
+                ? await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles)
+                : await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
         } catch (error) {
             LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
             return undefined;
@@ -1559,7 +1596,11 @@ export class AgentRunner {
         }
     }
 
-    /** Creates a file-backed artifact (version references a FileID in MJStorage). */
+    /**
+     * Creates a file-backed artifact (version references a FileID in MJStorage). `label` names the
+     * thing being stored in diagnostics ("file", "media Image") so a failure reads as specifically as
+     * the inline path's would.
+     */
     private async createFileArtifact(
         fileId: string,
         mimeType: string,
@@ -1568,11 +1609,12 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        acceptUnregisteredFiles: boolean
+        acceptUnregisteredFiles: boolean,
+        label: string = 'file'
     ): Promise<CreatedArtifactInfo> {
         return this.createArtifactWithVersion({
             mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
-            label: 'file',
+            label,
             setVersionFields: (version) => {
                 version.ContentMode = 'File';
                 version.FileID = fileId;
