@@ -234,9 +234,19 @@ export class CerebrasLLM extends BaseLLM {
 
         // Forward the cancellation token to the Cerebras SDK's RequestOptions so an abort tears down the
         // underlying HTTP socket rather than merely abandoning this promise.
-        let chatResponse: ChatCompletion;
+        /**
+         * NARROWED TO THE NON-STREAMING MEMBER OF THE UNION, DELIBERATELY.
+         *
+         * The SDK's exported `ChatCompletion` is a UNION:
+         *   ChatCompletion.ChatCompletionResponse | ChatCompletion.ChatChunkResponse | ChatCompletion.ErrorChunkResponse
+         * Only the first carries `choices`, `usage` and `model`, so declaring this as the bare union
+         * made all three reads below fail to compile (TS2339) — the errors that have kept this package
+         * from building at all. This method is `nonStreamingChatCompletion`, so the non-streaming
+         * member is correct by construction rather than by assumption.
+         */
+        let chatResponse: ChatCompletion.ChatCompletionResponse;
         try {
-            chatResponse = await this.client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken });
+            chatResponse = (await this.client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken })) as ChatCompletion.ChatCompletionResponse;
         } catch (error) {
             if (this.isCancellation(error, params.cancellationToken)) {
                 return this.buildCancelledResult(startTime);

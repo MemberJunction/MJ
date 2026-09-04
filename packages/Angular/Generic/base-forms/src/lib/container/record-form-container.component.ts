@@ -51,6 +51,7 @@ import {
   SerializeRailPinnedSetting,
   SerializeRailWidthSetting,
   ShouldPersistChromeActiveGroup,
+  UnsavedLeadGroupKey,
 } from '../chrome/form-chrome-rail-pref';
 import { ApplyClippedTitle } from '../chrome/clipped-title';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
@@ -1191,10 +1192,25 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return `mj.formChrome.${name}.${suffix}`;
   }
 
+  /** Delegates to the pure decision in `form-chrome-rail-pref`, supplying this form's registrations. */
+  private UnsavedLeadGroupKey(): string | null {
+    return UnsavedLeadGroupKey(
+      this.EffectiveEntityInfo?.Name,
+      CollectFormPanelRegistrations(),
+      contributionRailKey,
+    );
+  }
+
   private RestoreChromePrefs(): void {
     if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved)) {
       const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
       if (group) this.chrome.ActiveGroupKey = group;
+    } else {
+      // A new record has no stored position to restore, so without this it opens on the lead
+      // group -- which is usually a summary, and a summary of a record with no data is a page of
+      // blanks. A contribution can opt out of that by declaring `leadsWhenUnsaved`.
+      const lead = this.UnsavedLeadGroupKey();
+      if (lead) this.chrome.ActiveGroupKey = lead;
     }
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
