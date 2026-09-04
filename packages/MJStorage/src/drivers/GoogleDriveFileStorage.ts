@@ -34,8 +34,24 @@ interface GoogleDriveConfig extends StorageProviderConfig {
   clientSecret?: string;
   /** OAuth2 Refresh Token (never expires) */
   refreshToken?: string;
+  /**
+   * Service-account key FILE path (#3847). The constructor always accepted this from env
+   * (`STORAGE_GDRIVE_KEY_FILE`); a database `MJ: Credentials` record could not carry it because
+   * `initialize()` read only the OAuth2 fields — so attaching a credential record to a
+   * service-account deployment threw away a working client and threw.
+   */
+  keyFile?: string;
+  /** Service-account credentials JSON (object or string), mirroring `STORAGE_GDRIVE_CREDENTIALS_JSON`. */
+  credentialsJSON?: string | Record<string, unknown>;
   /** Optional root folder ID to restrict operations */
   rootFolderID?: string;
+  /**
+   * Shared Drive id (#3847). Service accounts have NO personal storage quota — Google's own 403
+   * says to use a Shared Drive — so without this, service-account auth could never upload at all.
+   * When set it also becomes the default navigation root, since a Shared Drive's id doubles as
+   * its root folder id.
+   */
+  driveId?: string;
 }
 
 /**
@@ -173,6 +189,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
   /** Optional root folder ID to restrict operations to a specific folder */
   private _rootFolderId?: string;
 
+  /** Shared Drive id (#3847) — where a service account can actually write. */
+  private _driveId?: string;
+
   /** OAuth2 credentials for configuration checking */
   private _clientID?: string;
   private _clientSecret?: string;
@@ -185,6 +204,22 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * key file or credentials provided directly in environment variables.
    * Throws an error if neither authentication method is properly configured.
    */
+  /**
+   * Builds the Drive client with `supportsAllDrives` / `includeItemsFromAllDrives` as DEFAULT
+   * request params (#3847). googleapis applies client-level params to every request, which is what
+   * makes Shared Drive support hold across all 25 call sites in this driver instead of being a
+   * per-call flag somebody forgets on the next one; endpoints that ignore a param ignore it.
+   * Without these, a service account cannot touch a Shared Drive — and Google's quota model means
+   * a Shared Drive is the only place a service account CAN write.
+   */
+  private buildDrive(auth: InstanceType<typeof google.auth.GoogleAuth> | InstanceType<typeof google.auth.JWT> | InstanceType<typeof google.auth.OAuth2>): drive_v3.Drive {
+    return google.drive({
+      version: 'v3',
+      auth,
+      params: { supportsAllDrives: true, includeItemsFromAllDrives: true },
+    });
+  }
+
   constructor() {
     super();
 
@@ -207,7 +242,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         keyFile,
         scopes: ['https://www.googleapis.com/auth/drive'],
       });
-      this._drive = google.drive({ version: 'v3', auth });
+      this._drive = this.buildDrive(auth);
     } else if (credentials) {
       // Method 2: Using credentials directly (service account)
       const creds: ServiceAccountCredentials = typeof credentials === 'string' ? JSON.parse(credentials) : credentials;
@@ -216,17 +251,19 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         key: creds.private_key,
         scopes: ['https://www.googleapis.com/auth/drive'],
       });
-      this._drive = google.drive({ version: 'v3', auth });
+      this._drive = this.buildDrive(auth);
     } else if (this._clientID && this._clientSecret && this._refreshToken) {
       // Method 3: Using OAuth2 with refresh token
       const auth = new google.auth.OAuth2(this._clientID, this._clientSecret, redirectURI);
       auth.setCredentials({ refresh_token: this._refreshToken });
-      this._drive = google.drive({ version: 'v3', auth });
+      this._drive = this.buildDrive(auth);
     }
     // If no credentials found, _drive will be undefined and initialize() must be called
 
-    // Optionally set a root folder ID to restrict operations
-    this._rootFolderId = config?.rootFolderID || env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString();
+    // Optionally set a root folder ID to restrict operations. A configured Shared Drive id is the
+    // default root — a Shared Drive's id doubles as its root folder id (#3847).
+    this._driveId = config?.driveId || env.get('STORAGE_GDRIVE_DRIVE_ID').asString();
+    this._rootFolderId = config?.rootFolderID || env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString() || this._driveId;
   }
 
   /**
@@ -306,19 +343,53 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     this._clientSecret = config.clientSecret || this._clientSecret;
     this._refreshToken = config.refreshToken || this._refreshToken;
 
-    // Update root folder ID if provided
+    // Update root folder ID / Shared Drive if provided
+    if (config.driveId) {
+      this._driveId = config.driveId;
+    }
     if (config.rootFolderID) {
       this._rootFolderId = config.rootFolderID;
+    } else if (config.driveId && !this._rootFolderId) {
+      this._rootFolderId = config.driveId;
     }
 
-    // Reinitialize the Google Drive client with new OAuth2 credentials
+    // Reinitialize the client, mirroring the constructor's THREE auth methods (#3847). Before
+    // this, only OAuth2 fields were read here, so a database credential carrying service-account
+    // material threw — and it threw even when the constructor had already built a working client
+    // from env, meaning attaching a credential record BROKE a working driver.
+    if (config.keyFile) {
+      const auth = new google.auth.GoogleAuth({
+        keyFile: config.keyFile,
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+      this._drive = this.buildDrive(auth);
+      return;
+    }
+    if (config.credentialsJSON) {
+      const creds: ServiceAccountCredentials =
+        typeof config.credentialsJSON === 'string' ? JSON.parse(config.credentialsJSON) : (config.credentialsJSON as unknown as ServiceAccountCredentials);
+      const auth = new google.auth.JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+      this._drive = this.buildDrive(auth);
+      return;
+    }
     if (this._clientID && this._clientSecret && this._refreshToken) {
       const redirectURI = 'urn:ietf:wg:oauth:2.0:oob';
       const auth = new google.auth.OAuth2(this._clientID, this._clientSecret, redirectURI);
       auth.setCredentials({ refresh_token: this._refreshToken });
-      this._drive = google.drive({ version: 'v3', auth });
-    } else {
-      throw new Error('Google Drive storage requires clientID, clientSecret, and refreshToken to be set');
+      this._drive = this.buildDrive(auth);
+      return;
+    }
+    // No usable credential in the record. If the constructor already built a client (env
+    // key-file / credentials-JSON), KEEP IT — a credential record that adds only a root folder or
+    // account name must not un-configure a working driver. Throw only when there is nothing at all.
+    if (!this._drive) {
+      throw new Error(
+        'Google Drive storage requires one of: keyFile, credentialsJSON, or clientID+clientSecret+refreshToken.'
+      );
     }
   }
 
@@ -1265,12 +1336,15 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         // File doesn't exist, will create new
       }
 
+      // googleapis requires media.body to be a STREAM — handed the raw Buffer it dies inside
+      // files.create with `part.body.pipe is not a function`, AFTER auth and folder creation
+      // succeeded, which is why every symptom read as bad storage configuration (#3847).
       if (existingFileId) {
         // Update existing file
         await this._drive.files.update({
           fileId: existingFileId,
           media: {
-            body: data,
+            body: Readable.from(data),
             mimeType: effectiveContentType,
           },
         });
@@ -1282,7 +1356,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
             parents: [parentId],
           },
           media: {
-            body: data,
+            body: Readable.from(data),
             mimeType: effectiveContentType,
           },
           fields: 'id',
