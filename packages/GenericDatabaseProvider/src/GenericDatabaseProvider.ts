@@ -5392,7 +5392,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
     }
 
-    /** After a successful outermost commit, once depth is 0. SQL Server drains deferred tasks here. */
+    /**
+     * After a successful outermost commit, once depth is 0 and the transaction lock is released.
+     * SQL Server drains deferred tasks here — those saves must be able to BeginTransaction.
+     */
     protected async AfterPhysicalCommit(): Promise<void> {
         /* no-op */
     }
@@ -5415,7 +5418,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     public async CommitTransaction(): Promise<void> {
-        return this.WithTransactionLock(() => this.commitTransactionCore());
+        let runAfter = false;
+        await this.WithTransactionLock(async () => {
+            const outermost = this._transactionDepth === 1;
+            await this.commitTransactionCore();
+            runAfter = outermost;
+        });
+        if (runAfter) {
+            await this.AfterPhysicalCommit();
+        }
     }
 
     public async RollbackTransaction(): Promise<void> {
@@ -5498,7 +5509,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 throw e;
             }
             this.clearTransactionState();
-            await this.AfterPhysicalCommit();
             return;
         }
         const savepointName = this._savepointStack[this._savepointStack.length - 1];

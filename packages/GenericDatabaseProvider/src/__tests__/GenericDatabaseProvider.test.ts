@@ -1889,4 +1889,41 @@ describe('GenericDatabaseProvider nested transactions', () => {
         expect(p.TransactionDepth).toBe(0);
         expect(p.physicalOpen).toBe(false);
     });
+
+    it('two concurrent BeginTransactions serialize to one physical begin and one savepoint', async () => {
+        const p = new RecordingProvider();
+        await Promise.all([p.BeginTransaction(), p.BeginTransaction()]);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('nested rollback issues ROLLBACK TO the savepoint and keeps the outer TX', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(true);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['ROLLBACK TRANSACTION SavePoint_1']);
+    });
+
+    it('AfterPhysicalCommit runs after the lock is released so it can begin again', async () => {
+        class AfterCommitProvider extends RecordingProvider {
+            public afterCalls = 0;
+            protected override async AfterPhysicalCommit(): Promise<void> {
+                this.afterCalls++;
+                if (this.afterCalls > 1) return;
+                await this.BeginTransaction();
+                await this.CommitTransaction();
+            }
+        }
+        const p = new AfterCommitProvider();
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(p.afterCalls).toBe(2);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
 });

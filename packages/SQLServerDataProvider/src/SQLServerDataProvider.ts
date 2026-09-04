@@ -316,12 +316,6 @@ export class SQLServerDataProvider
   // GenericDatabaseProvider; this handle is the mssql Transaction those
   // savepoints run against.
   private _transaction: sql.Transaction;
-  /**
-   * Set while an OUTERMOST `BeginPhysicalTransaction` is awaiting `sql.Transaction.begin()`. Concurrent
-   * `BeginTransaction` callers await this first so they cannot take the nested-savepoint branch
-   * before `_transaction` exists. Null whenever no begin is in flight.
-   */
-  private _beginInFlight: Promise<void> | null = null;
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _fileSystemProvider: IFileSystemProvider;
@@ -2304,39 +2298,29 @@ IF ${varName} IS NOT NULL
 
   protected override async BeginPhysicalTransaction(): Promise<void> {
     // Assign `_transaction` only after begin() resolves so concurrent ExecuteSQL
-    // never sees an un-begun handle.
+    // never sees an un-begun handle. Begin/commit/rollback themselves serialize
+    // on GenericDatabaseProvider.WithTransactionLock.
     if (this._transaction) {
       return;
     }
-    const begun = (async () => {
-      const transaction = new sql.Transaction(this._pool);
-      await transaction.begin();
-      this._transaction = transaction;
-      this._transactionState$.next(true);
-    })();
-    this._beginInFlight = begun;
-    try {
-      await begun;
-    } finally {
-      this._beginInFlight = null;
-    }
+    const transaction = new sql.Transaction(this._pool);
+    await transaction.begin();
+    this._transaction = transaction;
+    this._transactionState$.next(true);
   }
 
   protected override async RecoverPhysicalTransaction(): Promise<void> {
+    const stale = this._transaction;
     this._transaction = null;
     this._transactionState$.next(false);
-    const begun = (async () => {
-      const transaction = new sql.Transaction(this._pool);
-      await transaction.begin();
-      this._transaction = transaction;
-      this._transactionState$.next(true);
-    })();
-    this._beginInFlight = begun;
-    try {
-      await begun;
-    } finally {
-      this._beginInFlight = null;
+    if (stale) {
+      try {
+        await stale.rollback();
+      } catch {
+        /* unbegun or already-done handle */
+      }
     }
+    await this.BeginPhysicalTransaction();
   }
 
   protected override async CommitPhysicalTransaction(): Promise<void> {

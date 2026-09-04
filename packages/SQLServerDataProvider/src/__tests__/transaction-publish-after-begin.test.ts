@@ -130,6 +130,8 @@ describe('BeginTransaction publishes the transaction only after begin() resolves
     });
 
     it('serializes a concurrent begin so the nested branch never runs without a transaction', async () => {
+        // Production serializes BeginTransaction on GenericDatabaseProvider.WithTransactionLock.
+        // This host still models publish-after-begin so an observer never sees an un-begun handle.
         const host = new TransactionHost();
         await Promise.all([host.BeginTransaction(), host.BeginTransaction()]);
         expect(host.Depth).toBe(2);
