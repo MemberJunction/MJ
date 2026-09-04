@@ -19,7 +19,7 @@
         "dbImpact": "schema"
       },
       "6.1.0-edge.5": {
-        "dbImpact": "none"
+        "dbImpact": "schema"
       }
     }
   },
