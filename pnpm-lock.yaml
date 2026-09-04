@@ -241,7 +241,7 @@ importers:
         version: 3.25.76
     devDependencies:
       '@memberjunction/cli':
-        specifier: 6.1.0-edge.2
+        specifier: 6.1.0-edge.5
         version: link:../../MJCLI
       '@types/express':
         specifier: ^5.0.6
@@ -1197,7 +1197,7 @@ importers:
         version: 3.25.76
     devDependencies:
       '@memberjunction/cli':
-        specifier: 6.1.0-edge.2
+        specifier: 6.1.0-edge.5
         version: link:../../MJCLI
       '@types/express':
         specifier: ^5.0.6
@@ -11362,7 +11362,7 @@ importers:
         version: 5.9.3
     devDependencies:
       '@memberjunction/cli':
-        specifier: 6.1.0-edge.2
+        specifier: 6.1.0-edge.5
         version: link:../MJCLI
       '@types/compression':
         specifier: ^1.8.1

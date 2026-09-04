@@ -40,7 +40,7 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@memberjunction/cli": "6.1.0-edge.2",
+    "@memberjunction/cli": "6.1.0-edge.5",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.6",
     "@types/node": "24.10.11",
