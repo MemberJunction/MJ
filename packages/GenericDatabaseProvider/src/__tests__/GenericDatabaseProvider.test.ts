@@ -1867,8 +1867,11 @@ describe('GenericDatabaseProvider nested transactions', () => {
         };
         await expect(p.BeginTransaction()).rejects.toThrow(/rolled back by the server/);
         expect(p.beginCount).toBe(0);
-        expect(p.TransactionDepth).toBe(0);
+        expect(p.TransactionDepth).toBe(2);
         expect(p.physicalOpen).toBe(false);
+        await p.CommitTransaction();
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
     });
 
     it('ResetTransactionState drops a leaked handle so the next begin is outermost', async () => {
@@ -1966,7 +1969,7 @@ describe('GenericDatabaseProvider nested transactions', () => {
         expect(p.physicalOpen).toBe(true);
     });
 
-    it('nested rollback that fails the savepoint handler resets when physical is gone (A8)', async () => {
+    it('nested rollback that fails the savepoint handler keeps the outer frame doomed (A8/H5)', async () => {
         const p = new RecordingProvider();
         await p.BeginTransaction();
         await p.BeginTransaction();
@@ -1974,9 +1977,11 @@ describe('GenericDatabaseProvider nested transactions', () => {
             p.physicalOpen = false;
             throw new Error('savepoint missing');
         };
-        await expect(p.RollbackTransaction()).rejects.toThrow(/savepoint missing/);
-        expect(p.TransactionDepth).toBe(0);
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(1);
         expect(p.physicalOpen).toBe(false);
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(0);
     });
 
     it('outermost commit failure still ends at depth 0 even if rollback also fails (A10)', async () => {
@@ -2012,5 +2017,31 @@ describe('GenericDatabaseProvider nested transactions', () => {
             throw Object.assign(new Error('wrapped'), { code: 'ENOTBEGUN' });
         };
         await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.physicalOpen).toBe(false);
+        await p.CommitTransaction();
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('queued nested begin after doom cannot open a second physical TX (H5)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        let firstSave = true;
+        const orig = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async (sql?: string, params?: unknown[]) => {
+            if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION') && firstSave) {
+                firstSave = false;
+                throw Object.assign(new Error('Transaction has not begun'), { code: 'ENOTBEGUN' });
+            }
+            return orig(sql, params);
+        };
+        const results = await Promise.allSettled([p.BeginTransaction(), p.BeginTransaction()]);
+        expect(results.every((r) => r.status === 'rejected')).toBe(true);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
     });
 });

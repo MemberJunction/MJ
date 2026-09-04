@@ -378,7 +378,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     protected override async BeginPhysicalTransaction(): Promise<void> {
         if (this._transaction) {
-            return;
+            throw new Error('Transaction state corrupted: BeginPhysicalTransaction with an existing handle');
         }
         // Acquire and BEGIN on a LOCAL client, publishing only once the transaction
         // is genuinely open. A client published before BEGIN succeeds silently runs
@@ -398,12 +398,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             throw new Error('No active transaction to commit.');
         }
         const client = this._transaction;
-        try {
-            await client.query('COMMIT');
-        } catch (e) {
-            // Leave the client published so AbandonPhysicalTransaction can ROLLBACK then release.
-            throw e;
-        }
+        // On COMMIT failure leave the client published so AbandonPhysicalTransaction can ROLLBACK then release.
+        await client.query('COMMIT');
         this._transaction = null;
         client.release();
     }
@@ -426,8 +422,15 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         }
         const client = this._transaction;
         this._transaction = null;
-        try { await client.query('ROLLBACK'); } catch { /* already aborted */ }
-        try { client.release(); } catch { /* swallow — surfacing the primary error */ }
+        let rollbackErr: unknown;
+        try { await client.query('ROLLBACK'); } catch (e) { rollbackErr = e; }
+        try {
+            if (rollbackErr) {
+                client.release(rollbackErr as Error);
+            } else {
+                client.release();
+            }
+        } catch { /* swallow — surfacing the primary error */ }
     }
 
     protected override async OnBeginFailedAtDepthZero(): Promise<void> {
@@ -436,8 +439,15 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         }
         const client = this._transaction;
         this._transaction = null;
-        try { await client.query('ROLLBACK'); } catch { /* swallow — surfacing the primary error */ }
-        try { client.release(); } catch { /* swallow — surfacing the primary error */ }
+        let rollbackErr: unknown;
+        try { await client.query('ROLLBACK'); } catch (e) { rollbackErr = e; }
+        try {
+            if (rollbackErr) {
+                client.release(rollbackErr as Error);
+            } else {
+                client.release();
+            }
+        } catch { /* swallow — surfacing the primary error */ }
     }
 
     async CreateTransactionGroup(): Promise<TransactionGroupBase> {

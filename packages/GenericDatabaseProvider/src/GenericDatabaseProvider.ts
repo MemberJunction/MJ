@@ -141,9 +141,13 @@ export class DoomedTransactionError extends Error {
     public readonly code = 'DOOMED_TRANSACTION';
     constructor(
         message = 'Ambient transaction was rolled back by the server; outer work is lost',
+        options?: { cause?: unknown },
     ) {
         super(message);
         this.name = 'DoomedTransactionError';
+        if (options?.cause !== undefined) {
+            (this as Error & { cause?: unknown }).cause = options.cause;
+        }
     }
 }
 
@@ -5354,6 +5358,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private _transactionDepth = 0;
     private _savepointCounter = 0;
     private _savepointStack: string[] = [];
+    /** Physical handle is gone but outer frames still must settle. Queued nested begins must not become outermost. */
+    private _doomed = false;
 
     protected override get CurrentTransactionDepth(): number {
         return this._transactionDepth;
@@ -5445,9 +5451,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Nested savepoint rollback failed. Default abandons the physical TX so
      * depth cannot stay > 0 with a dead or swapped handle.
      */
-    protected async HandleFailedSavepointRollback(_savepointName: string, error: unknown): Promise<void> {
-        await this.abandonDoomedTransaction();
-        throw error;
+    protected async HandleFailedSavepointRollback(_savepointName: string, _error: unknown): Promise<void> {
+        await this.AbandonPhysicalTransaction();
+        this.markDoomed();
+    }
+
+    protected markDoomed(): void {
+        this._doomed = true;
     }
 
     /**
@@ -5480,6 +5490,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     private async beginTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            throw new DoomedTransactionError();
+        }
         this._transactionDepth++;
         try {
             if (this._transactionDepth === 1) {
@@ -5504,6 +5517,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (this._transactionDepth > 0) {
                 this._transactionDepth--;
             }
+            if (e instanceof DoomedTransactionError || this._doomed) {
+                throw e;
+            }
             if (this._transactionDepth === 0 || !this.HasPhysicalTransaction) {
                 this.clearTransactionState();
                 await this.OnBeginFailedAtDepthZero();
@@ -5523,8 +5539,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             await this.ExecuteSQL(sql, undefined, options);
         } catch (savepointError) {
             if (this.HasPhysicalTransaction && this.isDoomedPhysicalTransactionError(savepointError)) {
-                await this.abandonDoomedTransaction();
-                throw new DoomedTransactionError();
+                await this.AbandonPhysicalTransaction();
+                this.markDoomed();
+                throw new DoomedTransactionError(undefined, { cause: savepointError });
             }
             throw savepointError;
         }
@@ -5558,6 +5575,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     private async commitTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            this.popDoomedFrame();
+            if (this._transactionDepth === 0) {
+                throw new DoomedTransactionError();
+            }
+            return;
+        }
         if (!this.HasPhysicalTransaction) {
             throw new Error('No active transaction to commit');
         }
@@ -5592,6 +5616,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     private async rollbackTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            this.popDoomedFrame();
+            return;
+        }
         if (!this.HasPhysicalTransaction) {
             throw new Error('No active transaction to rollback');
         }
@@ -5625,15 +5653,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             this._savepointStack.pop();
             this._transactionDepth--;
         } catch (savepointError) {
-            try {
-                await this.HandleFailedSavepointRollback(savepointName, savepointError);
-            } finally {
-                if (!this.HasPhysicalTransaction) {
-                    this.clearTransactionState();
-                }
-            }
-            throw savepointError;
+            await this.HandleFailedSavepointRollback(savepointName, savepointError);
+            this.popDoomedFrame();
+            return;
         }
+    }
+
+    /**
+     * Drop one doomed frame without SQL. Depth 1 clears the flag so the next
+     * begin is a real outermost. Nested commit-while-doomed uses this too.
+     */
+    private popDoomedFrame(): void {
+        if (this._transactionDepth <= 1) {
+            this.clearTransactionState();
+            return;
+        }
+        this._savepointStack.pop();
+        this._transactionDepth--;
     }
 
     private clearSavepointState(): void {
@@ -5643,6 +5679,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     private clearTransactionState(): void {
         this._transactionDepth = 0;
+        this._doomed = false;
         this.clearSavepointState();
     }
 }

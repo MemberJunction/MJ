@@ -123,6 +123,7 @@ export class MockTransaction {
     if (this.aborted) {
       throw Object.assign(new Error('Transaction has been aborted.'), { code: 'EABORT' });
     }
+    await Promise.resolve();
     this.begun = true;
     mssqlState.Events.push({ kind: 'begin' });
   }

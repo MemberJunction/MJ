@@ -2311,7 +2311,7 @@ IF ${varName} IS NOT NULL
     // never sees an un-begun handle. Begin/commit/rollback themselves serialize
     // on GenericDatabaseProvider.WithTransactionLock.
     if (this._transaction) {
-      return;
+      throw new Error('Transaction state corrupted: BeginPhysicalTransaction with an existing handle');
     }
     const transaction = new sql.Transaction(this._pool);
     await transaction.begin();
@@ -2344,8 +2344,11 @@ IF ${varName} IS NOT NULL
     if (stale) {
       try {
         await stale.rollback();
-      } catch {
-        /* EABORT — server already ended the TX */
+      } catch (e) {
+        const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '';
+        if (code !== 'EABORT') {
+          LogError('AbandonPhysicalTransaction: rollback of doomed handle failed', undefined, e);
+        }
       }
     }
     if (deferredCount > 0) {
@@ -2378,10 +2381,9 @@ IF ${varName} IS NOT NULL
   protected override async HandleFailedSavepointRollback(savepointName: string, error: unknown): Promise<void> {
     LogError(
       `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
-      `(XACT_STATE() = -1). Abandoning the physical handle and resetting transaction state.`,
+      `(XACT_STATE() = -1). Abandoning the physical handle; frames stay until the outer settle.`,
     );
-    await this.AbandonPhysicalTransaction();
-    throw error;
+    await super.HandleFailedSavepointRollback(savepointName, error);
   }
 
   /**

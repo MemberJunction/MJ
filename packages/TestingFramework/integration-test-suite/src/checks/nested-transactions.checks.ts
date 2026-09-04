@@ -28,9 +28,20 @@ function isPostgres(ctx: IntegrationCheckContext): boolean {
     return providerOf(ctx).PlatformKey === 'postgresql';
 }
 
+function poolSource(ctx: IntegrationCheckContext): unknown {
+    const p = ctx.Provider as { DatabaseConnection?: unknown; Pool?: unknown };
+    return p.DatabaseConnection ?? p.Pool ?? undefined;
+}
+
 async function committed(ctx: IntegrationCheckContext, id: string): Promise<boolean> {
-    const row = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
-    return row.Load(id);
+    const table = isPostgres(ctx) ? '"__mj"."vwActionCategories"' : '[__mj].[vwActionCategories]';
+    const rows = await providerOf(ctx).ExecuteSQL(
+        `SELECT COUNT(*) AS c FROM ${table} WHERE ID = '${id.replace(/'/g, "''")}'`,
+        null,
+        { connectionSource: poolSource(ctx) } as never,
+    ) as Array<Record<string, unknown>>;
+    const n = rows?.[0] ? Object.values(rows[0])[0] : 0;
+    return Number(n) === 1;
 }
 
 async function newCategory(ctx: IntegrationCheckContext, label: string): Promise<MJActionCategoryEntity> {
@@ -253,11 +264,43 @@ export const NestedTransactionChecks: NamedCheck[] = [
         },
     },
     {
+        Id: 'nested-transactions.NT8b',
+        Name: 'NT8b: concurrent nested units after a doomed first unit all reject; no sibling row commits',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const p = providerOf(ctx);
+            await p.BeginTransaction();
+            const header = await newCategory(ctx, 'nt8b-header');
+            Assert(await header.Save(), 'NT8b: header');
+            fixture!.Ids.push(header.ID);
+            const unit = async (label: string) => {
+                await p.BeginTransaction();
+                const row = await newCategory(ctx, label);
+                const saved = await row.Save();
+                if (saved) fixture!.Ids.push(row.ID);
+                await p.CommitTransaction();
+                return row.ID;
+            };
+            try { await doomAmbient(ctx); } catch { /* expected */ }
+            const results = await Promise.allSettled([unit('nt8b-a'), unit('nt8b-b')]);
+            Assert(results.every((r) => r.status === 'rejected'), 'NT8b: both nested units must reject');
+            try {
+                await p.CommitTransaction();
+                Assert(false, 'NT8b: outer commit must reject');
+            } catch {
+                /* doomed */
+            }
+            try { await p.ResetTransactionState(); } catch { /* already clear */ }
+            Assert(!(await committed(ctx, header.ID)), 'NT8b: header must not persist');
+        },
+    },
+    {
         Id: 'nested-transactions.NT9',
         Name: 'NT9: SQL Server transactionState$ is false at TransactionDepth 0 after commit',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             if (isPostgres(ctx)) {
+                console.warn('NT9 skipped: transactionState$ is SQL Server-only');
                 return;
             }
             const p = providerOf(ctx) as GenericDatabaseProvider & {

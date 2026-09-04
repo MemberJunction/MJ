@@ -259,9 +259,11 @@ describe('PostgreSQLDataProvider', () => {
             }) as unknown as typeof client.query;
             await provider.BeginTransaction();
             await provider.BeginTransaction();
-            await expect(provider.RollbackTransaction()).rejects.toThrow();
-            expect(provider.TransactionDepth).toBe(0);
+            await provider.RollbackTransaction();
+            expect(provider.TransactionDepth).toBe(1);
             expect(client.released).toBe(true);
+            await provider.RollbackTransaction();
+            expect(provider.TransactionDepth).toBe(0);
         });
 
         it('failed outer COMMIT still releases the client (C6)', async () => {

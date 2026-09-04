@@ -65,12 +65,17 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
 
     it('never publishes an un-begun handle (poll each microtask)', async () => {
         const seenUnbegun: boolean[] = [];
-        const poll = setInterval(() => {
-            const h = provider.Handle();
-            if (h && !h.begun) seenUnbegun.push(true);
-        }, 0);
+        let stop = false;
+        const pump = (async () => {
+            while (!stop) {
+                const h = provider.Handle();
+                if (h && !h.begun) seenUnbegun.push(true);
+                await Promise.resolve();
+            }
+        })();
         await provider.BeginTransaction();
-        clearInterval(poll);
+        stop = true;
+        await pump;
         expect(seenUnbegun).toEqual([]);
         expect(provider.Handle()?.begun).toBe(true);
         expect(provider.isTransactionActive).toBe(true);
@@ -107,9 +112,28 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         provider.Handle()!.abortServerSide();
         await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
         expect(mssqlState.EventKinds().filter((k) => k === 'begin')).toHaveLength(1);
-        expect(provider.TransactionDepth).toBe(0);
+        expect(provider.TransactionDepth).toBe(1);
         expect(provider.Handle()).toBeNull();
-        await expect(provider.CommitTransaction()).rejects.toThrow(/No active transaction/);
+        await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(provider.TransactionDepth).toBe(0);
+    });
+
+    it('queued nested units after a server abort all reject and never commit (H5)', async () => {
+        await provider.BeginTransaction();
+        provider.Handle()!.abortServerSide();
+        const unit = async () => {
+            await provider.BeginTransaction();
+            await provider.CommitTransaction();
+        };
+        const results = await Promise.allSettled([unit(), unit()]);
+        expect(results.every((r) => r.status === 'rejected')).toBe(true);
+        expect(mssqlState.EventKinds().filter((k) => k === 'begin')).toHaveLength(1);
+        expect(mssqlState.EventKinds().filter((k) => k === 'commit')).toEqual([]);
+        await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(provider.TransactionDepth).toBe(0);
+        await provider.BeginTransaction();
+        expect(provider.Handle()?.begun).toBe(true);
+        await provider.RollbackTransaction();
     });
 
     it('does not ROLLBACK a savepoint name that was never saved on the published handle (B3)', async () => {
@@ -119,8 +143,11 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
         const rollbacks = mssqlState.Queries.filter((q) => /ROLLBACK TRANSACTION SavePoint_1/i.test(q.sql));
         expect(rollbacks).toEqual([]);
-        expect(provider.TransactionDepth).toBe(0);
+        expect(provider.TransactionDepth).toBe(2);
         expect(provider.Handle()).toBeNull();
+        await provider.RollbackTransaction();
+        await provider.RollbackTransaction();
+        expect(provider.TransactionDepth).toBe(0);
     });
 
     it('serializes two concurrent nested begins to one physical begin (H2)', async () => {
