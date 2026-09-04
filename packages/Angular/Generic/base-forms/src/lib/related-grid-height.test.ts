@@ -38,4 +38,24 @@ describe('RelatedGridHeightPx', () => {
         expect(RelatedGridHeightPx(40, RELATED_GRID_DEFAULT_MAX_PX)).toBe(RELATED_GRID_DEFAULT_MAX_PX);
         expect(RelatedGridHeightPx(1, RELATED_GRID_DEFAULT_MAX_PX)).toBe(contentHeight(1));
     });
+
+    it('adds a measured horizontal-scrollbar allowance; the default of 0 keeps the classic height', () => {
+        expect(RelatedGridHeightPx(1, null, 0)).toBe(contentHeight(1));
+        expect(RelatedGridHeightPx(1, null, 15)).toBe(contentHeight(1) + 15);
+        expect(RelatedGridHeightPx(2, undefined, 8)).toBe(contentHeight(2) + 8);
+        // The empty state can overflow horizontally too (header wider than the panel).
+        expect(RelatedGridHeightPx(0, null, 8)).toBe(contentHeight(0) + 8);
+    });
+
+    it('ignores a non-finite or negative scrollbar measurement', () => {
+        expect(RelatedGridHeightPx(1, null, Number.NaN)).toBe(contentHeight(1));
+        expect(RelatedGridHeightPx(1, null, Number.POSITIVE_INFINITY)).toBe(contentHeight(1));
+        expect(RelatedGridHeightPx(1, null, -3)).toBe(contentHeight(1));
+    });
+
+    it('keeps the maxHeight cap authoritative over the scrollbar allowance', () => {
+        expect(RelatedGridHeightPx(40, RELATED_GRID_DEFAULT_MAX_PX, 15)).toBe(RELATED_GRID_DEFAULT_MAX_PX);
+        const tightCap = contentHeight(1) + 4;
+        expect(RelatedGridHeightPx(1, tightCap, 15)).toBe(tightCap);
+    });
 });

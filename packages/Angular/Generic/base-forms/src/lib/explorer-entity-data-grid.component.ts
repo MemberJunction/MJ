@@ -139,6 +139,17 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
      * size to toolbar + header + rows instead of `height: 100%` of leftover / auto space.
      */
     private sizedHeightPx = RelatedGridHeightPx(0, this.MaxHeight);
+    /** Rows in the last load — re-applied when the scrollbar measurement changes. */
+    private sizedRowCount = 0;
+    /**
+     * Height AG Grid's horizontal scrollbar currently takes INSIDE our box (0 when the
+     * columns fit, or on platforms with overlay scrollbars). Measured from the DOM after
+     * layout, never assumed — see `measureHorizontalScrollbarPx`.
+     */
+    private scrollbarPx = 0;
+    private _hostResizeObserver?: ResizeObserver;
+    private _scrollbarMeasureFrame = 0;
+    private _destroyed = false;
 
     get ResolvedHeight(): number | 'auto' | 'fit-content' {
         return this.shouldSizeToRows() ? this.sizedHeightPx : this.Height;
@@ -177,6 +188,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
 
     ngAfterViewInit(): void {
         this.subscribeToFormRefresh();
+        this.ensureHostResizeObserver();
         if (!this.DeferLoadUntilVisible || typeof IntersectionObserver === 'undefined') {
             // Deferral off or unsupported environment — preserve eager-load behavior.
             this._hasBeenVisible = true;
@@ -200,10 +212,17 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     ngOnDestroy(): void {
+        this._destroyed = true;
         this.destroy$.next();
         this.destroy$.complete();
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
+        this._hostResizeObserver?.disconnect();
+        this._hostResizeObserver = undefined;
+        if (this._scrollbarMeasureFrame && typeof cancelAnimationFrame !== 'undefined') {
+            cancelAnimationFrame(this._scrollbarMeasureFrame);
+        }
+        this._scrollbarMeasureFrame = 0;
     }
 
     /**
@@ -289,8 +308,99 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
         if (!this.shouldSizeToRows()) {
             return;
         }
-        this.sizedHeightPx = RelatedGridHeightPx(event.loadedRowCount, this.MaxHeight);
+        this.sizedRowCount = event.loadedRowCount;
+        this.applySizedHeight();
         this.cdr.markForCheck();
+        // The related-entity panel ancestry can become detectable after ngAfterViewInit, so
+        // make sure the observer exists by the time the first sized load happens.
+        this.ensureHostResizeObserver();
+        // AG Grid decides whether it needs a horizontal scrollbar only after it lays the new
+        // rows/columns out, so the measurement has to follow the load, not accompany it.
+        this.scheduleScrollbarMeasure();
+    }
+
+    private applySizedHeight(): void {
+        this.sizedHeightPx = RelatedGridHeightPx(this.sizedRowCount, this.MaxHeight, this.scrollbarPx);
+    }
+
+    /**
+     * Horizontal overflow comes and goes with the container width, not only with data
+     * loads (a left-nav column narrows, a panel is resized), so re-measure on host resize.
+     * Idempotent: creates the observer once, the first time this grid sizes to its rows.
+     */
+    private ensureHostResizeObserver(): void {
+        if (this._hostResizeObserver || this._destroyed || !this.shouldSizeToRows() || typeof ResizeObserver === 'undefined') {
+            return;
+        }
+        this.ngZone.runOutsideAngular(() => {
+            this._hostResizeObserver = new ResizeObserver(() => this.scheduleScrollbarMeasure());
+            this._hostResizeObserver.observe(this.elementRef.nativeElement);
+        });
+    }
+
+    /**
+     * Measure two frames out: AG Grid sizes its fake scroller in its own animation
+     * frame (`FakeHScrollComp.setScrollVisible`), and ours must land after that.
+     */
+    private scheduleScrollbarMeasure(): void {
+        if (this._destroyed) {
+            return;
+        }
+        if (typeof requestAnimationFrame === 'undefined') {
+            this.applyScrollbarMeasurement();
+            return;
+        }
+        if (this._scrollbarMeasureFrame) {
+            return; // one already queued; it will read the latest layout
+        }
+        this.ngZone.runOutsideAngular(() => {
+            this._scrollbarMeasureFrame = requestAnimationFrame(() => {
+                this._scrollbarMeasureFrame = requestAnimationFrame(() => {
+                    this._scrollbarMeasureFrame = 0;
+                    this.applyScrollbarMeasurement();
+                });
+            });
+        });
+    }
+
+    private applyScrollbarMeasurement(): void {
+        if (this._destroyed || !this.shouldSizeToRows()) {
+            return;
+        }
+        const px = this.measureHorizontalScrollbarPx();
+        if (px === this.scrollbarPx) {
+            return;
+        }
+        this.scrollbarPx = px;
+        // markForCheck, not detectChanges: the height lives in a HOST binding, which the
+        // parent view refreshes, so the view (and its ancestors) must be marked dirty.
+        this.ngZone.run(() => {
+            this.applySizedHeight();
+            this.cdr.markForCheck();
+        });
+    }
+
+    /**
+     * The space AG Grid's horizontal scrollbar takes inside our box right now. AG Grid
+     * renders it as a "fake" scroller element it sizes to the platform scrollbar width
+     * when the columns overflow and collapses to 0 when they fit. Overlay scrollbars
+     * (macOS "show when scrolling") get `.ag-scrollbar-invisible`, which positions the
+     * element absolutely — it is drawn over the rows and takes no layout space, so it
+     * needs no budget.
+     */
+    private measureHorizontalScrollbarPx(): number {
+        const host = this.elementRef.nativeElement as HTMLElement | null;
+        const scroller = host?.querySelector<HTMLElement>('.ag-body-horizontal-scroll');
+        if (!scroller) {
+            return 0;
+        }
+        // Watch the scroller too: its height flips 0 <-> N when AG Grid toggles the
+        // scrollbar without the host changing size. Re-observing the same target is a no-op.
+        this._hostResizeObserver?.observe(scroller);
+        if (getComputedStyle(scroller).position === 'absolute') {
+            return 0;
+        }
+        return scroller.offsetHeight;
     }
 
     /**
