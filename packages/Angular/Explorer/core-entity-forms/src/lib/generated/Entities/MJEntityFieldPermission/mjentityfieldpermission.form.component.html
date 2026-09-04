@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Relationship Mapping Section -->
+    <!-- Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="relationshipMapping"
-        SectionName="Relationship Mapping"
-        Icon="fa fa-link"
+        SectionKey="configuration"
+        SectionName="Configuration"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -38,10 +38,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Access Permissions Section -->
+    <!-- Access Control Section -->
     <mj-collapsible-panel
-        SectionKey="accessPermissions"
-        SectionName="Access Permissions"
+        SectionKey="accessControl"
+        SectionName="Access Control"
         Icon="fa fa-lock"
         [Form]="this"
         [FormContext]="formContext">
@@ -76,7 +76,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
