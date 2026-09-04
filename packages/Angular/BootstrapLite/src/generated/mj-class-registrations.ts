@@ -32,13 +32,14 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (408 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -202,6 +203,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -644,6 +646,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -807,6 +810,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -828,12 +832,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDatasetItemEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
-    MJDuplicateRunEntity,
-    MJEmployeeCompanyIntegrationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDuplicateRunEntity,
+    MJEmployeeCompanyIntegrationEntity,
     MJEmployeeEntity,
     MJEmployeeRoleEntity,
     MJEmployeeSkillEntity,
@@ -1032,12 +1036,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJUserRecordLogEntity,
     MJUserRoleEntity,
     MJUserRoutineEntity,
-    MJUserRoutineRecipientEntity,
-    MJUserRoutineRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJUserRoutineRecipientEntity,
+    MJUserRoutineRunEntity,
     MJUserSettingEntity,
     MJUserViewCategoryEntity,
     MJUserViewEntity,
@@ -1189,7 +1193,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 538;
+export const CLASS_REGISTRATIONS_COUNT = 540;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
