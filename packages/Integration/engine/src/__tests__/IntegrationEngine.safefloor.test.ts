@@ -607,3 +607,387 @@ describe('IntegrationEngine — skip-and-continue on an offset-page fetch error 
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// §8a — mid-run watermark DURABILITY FLOOR (the watermark twin of the keyset
+// checkpoint). Before it, a watermark-based connector had no durable position
+// at all until the run ended: a SIGKILL / OOM / container recycle mid-object
+// threw away hours of applied batches, and the next run re-fetched the whole
+// window from the last completed run's watermark. The floor persists the max
+// watermark seen at the 25-batch checkpoint cadence — and is RETRACTED the
+// moment a page-skip gap appears, because a skipped page can hold records
+// BEHIND the max watermark seen (fetch order is not watermark order on every
+// source), i.e. a hole behind the floor.
+//
+// Source under test (IntegrationEngine.ts):
+//   - checkpoint block: `watermarkService.Update(entityMapID, floor, ...)` at
+//     batchCount % 25 === 0, gated !isKeysetConnector && !partitionReconcile &&
+//     !hadFetchGap
+//   - gap site: `watermarkService.RestoreValue(entityMapID, preRunWatermarkValue, ...)`
+//     when a floor was already written
+// ---------------------------------------------------------------------------
+
+/** WM for the n-th batch: strictly increasing, valid ISO timestamps. */
+const wmAt = (n: number) => `2024-06-15T10:${String(n).padStart(2, '0')}:00.000Z`;
+
+/**
+ * A 30-batch offset-paged connector, one clean record per batch, each batch advancing the
+ * watermark to wmAt(batchNumber). Non-keyset so the timestamp-watermark path runs.
+ */
+function createThirtyBatchConnector(): BaseIntegrationConnector {
+    let call = 0;
+    return {
+        TestConnection: vi.fn(),
+        DiscoverObjects: vi.fn(),
+        DiscoverFields: vi.fn(),
+        FetchChanges: vi.fn().mockImplementation(async (): Promise<FetchBatchResult> => {
+            call++;
+            return {
+                Records: [{ ExternalID: `ext-${call}`, ObjectType: 'Contact', Fields: { Name: `Contact ${call}` }, IsDeleted: false }],
+                HasMore: call < 30,
+                NextOffset: call,
+                NewWatermarkValue: wmAt(call),
+            };
+        }),
+        GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+        RateLimitPolicy: null,
+        ExtractRetryAfterMs: () => undefined,
+        PostProcessRecord: (r: ExternalRecord) => r,
+        StableOrderingKey: () => null,
+    } as unknown as BaseIntegrationConnector;
+}
+
+/**
+ * 25 clean batches (so the checkpoint floor fires once), then the page at offset 25 fails
+ * persistently (the gap); any later offset ends cleanly-empty so the run finishes fast.
+ */
+function createFloorThenGapConnector(): BaseIntegrationConnector {
+    let call = 0;
+    return {
+        TestConnection: vi.fn(),
+        DiscoverObjects: vi.fn(),
+        DiscoverFields: vi.fn(),
+        FetchChanges: vi.fn().mockImplementation(async (ctx: FetchContext): Promise<FetchBatchResult> => {
+            const offset = (ctx.CurrentOffset as number | undefined) ?? 0;
+            if (offset > 25) return { Records: [], HasMore: false };
+            if (offset === 25) throw new Error('simulated persistent page fetch failure at offset 25');
+            call++;
+            return {
+                Records: [{ ExternalID: `ext-${call}`, ObjectType: 'Contact', Fields: { Name: `Contact ${call}` }, IsDeleted: false }],
+                HasMore: true,
+                NextOffset: call === 25 ? 25 : call,
+                NewWatermarkValue: wmAt(call),
+            };
+        }),
+        GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+        RateLimitPolicy: null,
+        ExtractRetryAfterMs: () => undefined,
+        PostProcessRecord: (r: ExternalRecord) => r,
+        StableOrderingKey: () => null,
+    } as unknown as BaseIntegrationConnector;
+}
+
+describe('IntegrationEngine — mid-run watermark durability floor (§8a)', () => {
+    let orchestrator: IntegrationEngine;
+
+    beforeEach(() => {
+        orchestrator = new IntegrationEngine();
+        mockEntityInstances = new Map();
+        mockRunViewFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
+        (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
+    });
+
+    /** Shared wiring: run-config reads, a captured watermark row, all-create record path. */
+    function wireRun(connector: BaseIntegrationConnector) {
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'Test',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    CompanyIntegrationID: 'ci-1',
+                    EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins',
+                    DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts',
+                    ExternalObjectName: 'contacts',
+                } as unknown as ICompanyIntegrationEntityMap],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        // EVERY value this run persists to the watermark row, in order. UpdateProgress saves
+        // interleave (they re-save the row without changing the value), so assertions read the
+        // sequence, not a single final capture.
+        const persistedValues: Array<string | null> = [];
+        const existingWatermark = {
+            ID: 'wm-1',
+            EntityMapID: 'em-1',
+            Direction: 'Pull' as const,
+            WatermarkType: 'Timestamp' as const,
+            WatermarkValue: PRIOR_WATERMARK as string | null,
+            LastSyncAt: new Date('2024-06-15T09:00:00.000Z'),
+            RecordsSynced: 0,
+            Get: vi.fn(),
+            Save: vi.fn().mockImplementation(async function (this: { WatermarkValue: string | null }) {
+                persistedValues.push(this.WatermarkValue);
+                return true;
+            }),
+        } as unknown as ICompanyIntegrationSyncWatermark;
+
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return {
+                    Success: true,
+                    Results: [{
+                        SourceFieldName: 'Name',
+                        DestinationFieldName: 'Name',
+                        TransformPipeline: null,
+                        IsKeyField: false,
+                        Status: 'Active',
+                        Priority: 0,
+                    } as unknown as ICompanyIntegrationFieldMap],
+                };
+            }
+            if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                return { Success: true, Results: [existingWatermark] };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        return { persistedValues, existingWatermark };
+    }
+
+    it('persists the max watermark seen at the 25-batch checkpoint, then the final value at the end', async () => {
+        const connector = createThirtyBatchConnector();
+        const { persistedValues } = wireRun(connector);
+
+        const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
+        const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async () => createMockEntity({}));
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser, 'Manual', undefined, undefined, { FullSync: false });
+            expect(result.RecordsCreated).toBe(30);
+
+            // THE FLOOR: batch 25's watermark was durably written MID-RUN. Only the §8a checkpoint
+            // writes this value — the final save below writes wmAt(30) — so its presence proves a
+            // SIGKILL after batch 25 would resume from here, not from the last completed run.
+            expect(persistedValues).toContain(wmAt(25));
+            // Cadence, not per-batch: no other batch's watermark was floored.
+            for (const n of [1, 5, 24, 26, 29]) expect(persistedValues).not.toContain(wmAt(n));
+            // The run's final save still lands last, exactly as before the floor existed.
+            expect(persistedValues[persistedValues.length - 1]).toBe(wmAt(30));
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    });
+
+    it('retracts the floor to the pre-run value when a page-skip gap appears after it', async () => {
+        const connector = createFloorThenGapConnector();
+        const { persistedValues, existingWatermark } = wireRun(connector);
+
+        const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
+        const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async () => createMockEntity({}));
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser, 'Manual', undefined, undefined, { FullSync: false });
+            expect(result.RecordsCreated).toBe(25);
+
+            // The floor WAS written at batch 25 — this is the value a gap makes unsafe.
+            expect(persistedValues).toContain(wmAt(25));
+            // THE RETRACTION: the gap put the row back to the pre-run value, and nothing wrote a
+            // watermark after it (the post-loop save is gated on !hadFetchGap). A crash after the
+            // gap resumes from PRIOR_WATERMARK and re-covers the skipped window.
+            expect(persistedValues[persistedValues.length - 1]).toBe(PRIOR_WATERMARK);
+            expect((existingWatermark as unknown as { WatermarkValue: string | null }).WatermarkValue).toBe(PRIOR_WATERMARK);
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    });
+});
+
+/**
+ * A connector whose object this account cannot serve: FetchChanges raises the duck-typed
+ * OBJECT_UNAVAILABLE signal (a connector may set the code without importing the class).
+ */
+function createUnavailableObjectConnector(): { connector: BaseIntegrationConnector; fetchCalls: () => number } {
+    let fetchCallCount = 0;
+    const connector = {
+        TestConnection: vi.fn(),
+        DiscoverObjects: vi.fn(),
+        DiscoverFields: vi.fn(),
+        FetchChanges: vi.fn().mockImplementation(async (_ctx: FetchContext): Promise<FetchBatchResult> => {
+            fetchCallCount++;
+            const err = new Error("Record 'contacts' was not found") as Error & { code: string };
+            err.code = 'OBJECT_UNAVAILABLE';
+            throw err;
+        }),
+        GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+        RateLimitPolicy: null,
+        ExtractRetryAfterMs: () => undefined,
+        PostProcessRecord: (r: ExternalRecord) => r,
+        StableOrderingKey: () => null,   // non-keyset → timestamp watermark path
+    } as unknown as BaseIntegrationConnector;
+    return { connector, fetchCalls: () => fetchCallCount };
+}
+
+describe('IntegrationEngine — an object the account cannot serve leaves no trace', () => {
+    let orchestrator: IntegrationEngine;
+
+    beforeEach(() => {
+        orchestrator = new IntegrationEngine();
+        mockEntityInstances = new Map();
+        mockRunViewFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
+        (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
+    });
+
+    /** Same wiring as the floor suite: run-config reads plus a captured watermark row. */
+    function wireUnavailableRun() {
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'Test',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    CompanyIntegrationID: 'ci-1',
+                    EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins',
+                    DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts',
+                    ExternalObjectName: 'contacts',
+                } as unknown as ICompanyIntegrationEntityMap],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        const persistedValues: Array<string | null> = [];
+        const existingWatermark = {
+            ID: 'wm-1',
+            EntityMapID: 'em-1',
+            Direction: 'Pull' as const,
+            WatermarkType: 'Timestamp' as const,
+            WatermarkValue: PRIOR_WATERMARK as string | null,
+            LastSyncAt: new Date('2024-06-15T09:00:00.000Z'),
+            RecordsSynced: 0,
+            Get: vi.fn(),
+            Save: vi.fn().mockImplementation(async function (this: { WatermarkValue: string | null }) {
+                persistedValues.push(this.WatermarkValue);
+                return true;
+            }),
+        } as unknown as ICompanyIntegrationSyncWatermark;
+
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return {
+                    Success: true,
+                    Results: [{
+                        SourceFieldName: 'Name', DestinationFieldName: 'Name', TransformPipeline: null,
+                        IsKeyField: false, Status: 'Active', Priority: 0,
+                    } as unknown as ICompanyIntegrationFieldMap],
+                };
+            }
+            if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                return { Success: true, Results: [existingWatermark] };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        return { persistedValues, existingWatermark };
+    }
+
+    async function runUnavailable(fullSync: boolean) {
+        const { connector, fetchCalls } = createUnavailableObjectConnector();
+        const wired = wireUnavailableRun();
+        const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
+        const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async () => createMockEntity({}));
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser, 'Manual', undefined, undefined, { FullSync: fullSync });
+            return { result, fetchCalls, ...wired };
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    }
+
+    it('never advances the watermark past the value it had before the run', async () => {
+        // THE BUG: the unavailable branch broke out of the fetch loop leaving fetchCompletedCleanly
+        // true, so control fell into the clean-fetch branch and minted a wall-clock Timestamp for an
+        // object that returned ZERO records. When the account later enables the object, the next
+        // incremental filters `modified > <that stamp>` and permanently misses every pre-existing
+        // record — destroying the self-healing this path exists to provide.
+        const { persistedValues, existingWatermark, fetchCalls } = await runUnavailable(false);
+        // Prove the run REACHED the connector first. Without this the assertions below are vacuous
+        // ("every element of an empty array") and pass even when the run never ran — which is
+        // precisely how the duplicate-record defect survived its own test suite.
+        expect(fetchCalls()).toBe(1);
+        expect((existingWatermark as unknown as { WatermarkValue: string | null }).WatermarkValue).toBe(PRIOR_WATERMARK);
+        for (const v of persistedValues) expect(v).toBe(PRIOR_WATERMARK);
+    });
+
+    it('does not mint a watermark on a FULL sync either', async () => {
+        // The full-sync arm is the one that advances to wall-clock "now", so it is the worse half
+        // of the same defect: it would stamp the moment of the failed fetch.
+        const { persistedValues, existingWatermark, fetchCalls } = await runUnavailable(true);
+        expect(fetchCalls()).toBe(1);
+        expect((existingWatermark as unknown as { WatermarkValue: string | null }).WatermarkValue).toBe(PRIOR_WATERMARK);
+        for (const v of persistedValues) expect(v).toBe(PRIOR_WATERMARK);
+    });
+
+    it('still ends the map successfully — one warning, no retry ladder, no fetch storm', async () => {
+        // Withholding the watermark must not turn a quiet skip back into a failure. The whole point
+        // of the classification is that the map ends cleanly and asks again next run.
+        const { connector, fetchCalls } = createUnavailableObjectConnector();
+        wireUnavailableRun();
+        const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
+        const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async () => createMockEntity({}));
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser, 'Manual', undefined, undefined, { FullSync: false });
+            expect(result.RecordsErrored).toBe(0);
+            expect(result.RecordsCreated).toBe(0);
+            expect(fetchCalls()).toBe(1);   // asked once, did not climb a retry ladder
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    });
+});

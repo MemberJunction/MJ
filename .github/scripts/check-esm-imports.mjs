@@ -16,12 +16,27 @@
  * that tolerate extensionless specifiers and are never imported by native Node, so the
  * break is real for a native-ESM consumer but inert for their actual consumers. The
  * DEP_FAIL is printed so it stays visible; fixing it belongs in the owning package.
+ *
+ * USAGE
+ *   node check-esm-imports.mjs [packagesDir] [--changed-since <gitRef>]
+ *
+ * `--changed-since` narrows the sweep to packages whose OWN source changed against the ref —
+ * the PR mode. The full sweep spawns a fresh node process per package (~3s each, ~11 minutes
+ * for the ~220 type:module packages in this repo) and re-imports on every PR the ~215 packages
+ * that provably cannot have gained the break: the signature lives in a package's own emitted
+ * dist/, and an untouched source recompiles identically even when a dependency change forces a
+ * rebuild. The push/nightly backstop runs UNSCOPED and covers the residue (a build-tool or
+ * tsconfig change that shifts emit repo-wide).
+ *
+ * If the diff cannot be computed — unknown ref, shallow clone, no git — the guard widens back
+ * to the FULL sweep rather than narrowing to nothing. A guard that silently checks zero
+ * packages and prints a pass is worse than one that costs eleven minutes.
  */
 
 import { readFileSync, readdirSync, existsSync, realpathSync, statSync } from 'node:fs';
 import { join, resolve, sep, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 
 /** Per-package import timeout — a hanging top-level await must not stall CI. */
 const IMPORT_TIMEOUT_MS = 60000;
@@ -330,16 +345,15 @@ const CONCURRENCY = 8;
  * dist trees). Returns all results plus the gating subset: `failures` holds the
  * OWN_DIST_MISSING_EXT results — the only bucket that should fail CI.
  *
- * `only` is an optional Set of absolute package directories; when present, packages
- * outside it are discovered but not imported. Unscoped sweeps stay the default.
+ * `onlyDirs`, when given, restricts the sweep to those package directories (see
+ * changedPackageDirs). A null/absent set means the full sweep.
  */
-export async function sweep(rootDir, { only = null } = {}) {
-    const found = findModulePackageDirs(rootDir);
-    // `only` (absolute dirs) narrows the sweep to the packages a PR actually rebuilt from
-    // changed source. Filtering here rather than in findModulePackageDirs keeps discovery —
-    // and therefore the "no type:module packages found" misconfiguration check — unchanged;
-    // only the expensive per-package import is skipped.
-    const pkgs = only ? found.filter((p) => only.has(resolve(p.dir))) : found;
+export async function sweep(rootDir, { onlyDirs = null } = {}) {
+    let pkgs = findModulePackageDirs(rootDir);
+    if (onlyDirs) {
+        const wanted = new Set([...onlyDirs].map((d) => resolve(d)));
+        pkgs = pkgs.filter((p) => wanted.has(resolve(p.dir)));
+    }
     const results = [];
     let next = 0;
     async function worker() {
@@ -381,6 +395,71 @@ function findModulePackageDirs(dir, out = []) {
     return out;
 }
 
+/**
+ * Walk up from a repo-relative changed file to the directory of the package that owns it —
+ * the nearest ancestor containing a package.json, bounded by rootDir. Returns null when the
+ * file lives outside rootDir or under no package at all.
+ *
+ * `dirHasManifest` is injectable so the unit tests can describe a tree without touching disk.
+ */
+export function packageDirForFile(relPath, rootDir, { dirHasManifest = (d) => existsSync(join(d, 'package.json')) } = {}) {
+    const root = resolve(rootDir);
+    let dir = dirname(resolve(relPath));
+    // Only files inside rootDir can belong to a swept package.
+    if (dir !== root && !dir.startsWith(root + sep)) return null;
+    while (dir === root || dir.startsWith(root + sep)) {
+        if (dirHasManifest(dir)) return dir;
+        const parent = dirname(dir);
+        if (parent === dir) break; // filesystem root — stop
+        dir = parent;
+    }
+    return null;
+}
+
+/**
+ * Map the lines of a `git diff --name-only` output to the set of package directories that own
+ * them. Pure: takes the diff text, so it is unit-testable without a git repo.
+ */
+export function changedPackageDirs(diffOutput, rootDir, opts = {}) {
+    const dirs = new Set();
+    for (const line of String(diffOutput).split('\n')) {
+        const file = line.trim();
+        if (!file) continue;
+        const dir = packageDirForFile(file, rootDir, opts);
+        if (dir) dirs.add(dir);
+    }
+    return dirs;
+}
+
+/**
+ * Resolve the package directories touched since `baseRef`.
+ *
+ * Returns null — meaning "fall back to the FULL sweep" — when the diff cannot be computed
+ * (unknown ref, shallow clone with no merge base, git absent). That direction is deliberate:
+ * a guard that silently narrows its scope to nothing after a git error would report a
+ * confident pass over code it never imported. Failing open costs minutes; failing closed
+ * costs the guard's entire reason to exist.
+ */
+export function changedPackageDirsSince(baseRef, rootDir, { run = defaultGitDiff } = {}) {
+    let out;
+    try {
+        out = run(baseRef);
+    } catch (e) {
+        console.warn(`esm-guard: cannot diff against '${baseRef}' (${firstLine(e.message ?? e)}) — falling back to the FULL sweep.`);
+        return null;
+    }
+    return changedPackageDirs(out, rootDir);
+}
+
+/** `git diff --name-only <base>...HEAD`, renames off (name-only needs no blob contents). */
+function defaultGitDiff(baseRef) {
+    return execFileSync('git', ['diff', '--name-only', '--no-renames', `${baseRef}...HEAD`], {
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+}
+
 /** Pull the unresolvable path/specifier out of a Node ESM resolver error message. */
 function extractMissingPath(message) {
     const match = String(message).match(/(?:Cannot find (?:module|package)|Directory import) '([^']+)'/);
@@ -392,13 +471,22 @@ function firstLine(text) {
 }
 
 async function main() {
+    // `--changed-since <ref>` narrows the sweep to packages whose own source changed. Everything
+    // else is positional, so pull the flag out before reading argv[2] as the root directory.
     const argv = process.argv.slice(2);
-    // `--scope-file=<path>`: newline-separated package directories (repo-relative or absolute).
-    // The affected-PR build only compiles the packages whose source changed, so importing the
-    // whole tree spends most of its time on packages this PR could not have broken.
-    const SCOPE_FLAG = '--scope-file=';
-    const scopeFile = argv.find((a) => a.startsWith(SCOPE_FLAG))?.slice(SCOPE_FLAG.length);
-    const rootDir = resolve(argv.find((a) => !a.startsWith('--')) ?? 'packages');
+    const flagIdx = argv.findIndex((a) => a === '--changed-since' || a.startsWith('--changed-since='));
+    let changedSince = null;
+    if (flagIdx !== -1) {
+        const raw = argv[flagIdx];
+        changedSince = raw.includes('=') ? raw.slice(raw.indexOf('=') + 1) : argv[flagIdx + 1];
+        argv.splice(flagIdx, raw.includes('=') ? 1 : 2);
+        if (!changedSince) {
+            console.error('esm-guard: --changed-since needs a git ref (e.g. --changed-since origin/next)');
+            process.exit(2);
+        }
+    }
+
+    const rootDir = resolve(argv[0] ?? 'packages');
     if (!existsSync(rootDir)) {
         console.error(`esm-guard: root directory not found: ${rootDir}`);
         process.exit(2);
@@ -410,33 +498,47 @@ async function main() {
         console.error(`esm-guard: ${rootDir} is not a directory — pass a directory to sweep (e.g. "packages").`);
         process.exit(2);
     }
-    let only = null;
-    if (scopeFile !== undefined) {
-        if (!existsSync(scopeFile)) {
-            console.error(`esm-guard: scope file not found: ${scopeFile}`);
-            process.exit(2);
+    // Scoped mode (PR runs): only a package whose OWN source changed can newly ship the
+    // extensionless-specifier signature this guard hunts — the break lives in a package's own
+    // emitted dist/, and an untouched source recompiles to identical output even when a
+    // dependency change forces it to rebuild. So the full ~220-package sweep on every PR
+    // re-imports ~215 packages that provably cannot have changed. The push/nightly backstop
+    // still sweeps everything, which is what covers the residue (a build-tool or tsconfig
+    // change that alters emit repo-wide reaches the guard there, and root/global changes make
+    // the workflow request a full sweep anyway).
+    let onlyDirs = null;
+    if (changedSince) {
+        onlyDirs = changedPackageDirsSince(changedSince, rootDir);
+        if (onlyDirs) {
+            if (onlyDirs.size === 0) {
+                console.log(`esm-guard: no package sources changed since ${changedSince} — nothing to check.`);
+                return;
+            }
+            console.log(`esm-guard: scoped to ${onlyDirs.size} package(s) changed since ${changedSince}.`);
         }
-        const dirs = readFileSync(scopeFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
-        only = new Set(dirs.map((d) => resolve(d)));
     }
 
     console.log(
-        only
-            ? `esm-guard: native-ESM-importing the "type": "module" packages among ${only.size} changed package(s) under ${rootDir} ...`
+        onlyDirs
+            ? `esm-guard: native-ESM-importing the changed "type": "module" packages under ${rootDir} ...`
             : `esm-guard: native-ESM-importing every "type": "module" package under ${rootDir} ...`
     );
-    const { results, failures } = await sweep(rootDir, { only });
+    const { results, failures } = await sweep(rootDir, { onlyDirs });
 
     const counts = {};
     for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;
 
+    // Zero results in SCOPED mode is benign — the changed packages simply aren't type:module
+    // (a .scss-only or Angular-library change). Say so and pass; the hard error below is for
+    // the unscoped sweep, where finding nothing means a wrong path / misconfiguration.
+    if (results.length === 0 && onlyDirs) {
+        console.log('esm-guard: none of the changed packages are "type": "module" — nothing to check.');
+        return;
+    }
+
     // Zero "type": "module" packages found at all means a wrong path / misconfiguration
     // (running from the wrong directory) — a genuine error, fail hard.
     if (results.length === 0) {
-        if (only) {
-            console.log(`esm-guard: none of the ${only.size} changed package(s) are "type": "module" — nothing to import, nothing to verify.`);
-            return;
-        }
         console.error(`esm-guard: no "type": "module" packages found under ${rootDir} — nothing verified. Run from the repo root or pass a valid packages path.`);
         process.exit(2);
     }

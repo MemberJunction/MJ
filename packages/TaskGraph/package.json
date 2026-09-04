@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/task-graph",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Task Graph - producer-agnostic submission and durable execution of dependency-ordered task graphs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,16 +16,16 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/actions-base": "6.1.0-edge.2",
-    "@memberjunction/ai-agents": "6.1.0-edge.2",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
-    "@memberjunction/ai-prompts": "6.1.0-edge.2",
-    "@memberjunction/aiengine": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/notifications": "6.1.0-edge.2",
-    "@memberjunction/sql-dialect": "6.1.0-edge.2"
+    "@memberjunction/actions-base": "6.1.0-edge.5",
+    "@memberjunction/ai-agents": "6.1.0-edge.5",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.5",
+    "@memberjunction/ai-prompts": "6.1.0-edge.5",
+    "@memberjunction/aiengine": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/notifications": "6.1.0-edge.5",
+    "@memberjunction/sql-dialect": "6.1.0-edge.5"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

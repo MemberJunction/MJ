@@ -1,5 +1,303 @@
 # Change Log - @memberjunction/core
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 1d2ffd4: Drop `fnReportCategoryParentID_GetRootID`, an orphaned function left behind when the ReportCategory table was removed. The dangling table reference made Azure SQL's database export (bacpac) fail module validation, so affected installations could not be exported. Existence-guarded: a no-op wherever the function is already gone.
+- d66a26a: IS-A promotion: attach a NEW child to an EXISTING parent.
+
+  IS-A supported _discovery_ — a loaded parent finds its existing child — but not _promotion_: "this existing `Person` is now also an `Applicant`". `NewRecord()` unconditionally starts a fresh parent chain, so promotion INSERTed a duplicate parent and either collided on the primary key or failed the parent's NOT NULL validation as though it were brand new. A find-or-create driver hitting this creates a second person rather than adding a role to the one that exists.
+
+  New public method on `BaseEntity`:
+
+  ```typescript
+  const applicant = await md.GetEntityObject<ApplicantEntity>(
+    "Applicants",
+    contextUser,
+  );
+  applicant.NewRecord();
+  if (!(await applicant.AttachToParent(CompositeKey.FromID(personId)))) {
+    // no such parent row — the caller decides: save as a fresh chain, or stop
+  }
+  await applicant.Save(); // parent UPDATEd, child INSERTed, one transaction
+  ```
+
+  It loads the parent chain by key, and a _loaded_ parent saves as an UPDATE — which is the whole mechanism: the existing parent-first chain save updates the existing row and INSERTs only the child. Field routing, permissions, validation, `EnforceDisjointSubtype` and transaction scope are unchanged.
+
+  Two contracts worth knowing: a failed attach restores the minted key, so `InnerLoad`'s wipe cannot leave a gutted, unsaveable record and both caller options stay open; and the shared-key mirror iterates the **parent's** primary keys, since a child schema that leaves the key entirely to routing has no mirror to maintain.
+
+  Guards: throws on a non-IS-A entity, throws on an already-saved child (promotion is a decision about what a _new_ record is), returns `false` with the record untouched when no parent row exists.
+
+  `EntityInfo` also gains the IS-A role lookups that answering "what is this entity?" previously
+  required combining by hand: `IsRootType`, `IsLeafType`, `ParticipatesInIsA`, `IsARole`
+  (`None` / `Root` / `Intermediate` / `Leaf`), `RootEntityInfo`, and `DescendantEntities`. Two of these
+  close real traps — `IsChildType` alone treats an _intermediate_ type as a leaf and so mishandles the
+  middle of every chain deeper than two, and `ChildEntities` is direct children only, so a "find every
+  subtype" written against it misses everything past the first level.
+
+### Patch Changes
+
+- c42c0e8: A transaction group can send its items as ONE round trip.
+
+  `TransactionGroupBase` gains an opt-in `BatchedSubmit` flag (default false — existing callers
+  are byte-for-byte unaffected). When set, both providers execute a variable-free group's items
+  as a single multi-statement round trip instead of one round trip per item: the same statements,
+  in the same order, inside the same transaction, with per-item results still returned.
+
+  Why this matters: the sequential submit is ATOMIC but not BATCHED. Each item's generated CRUD
+  procedure call is its own wire hop, and on a measured live sync the server-side execution was
+  ~0.3ms inside a per-statement wall cost two orders of magnitude larger — so a 100-item group
+  spent essentially all of its time waiting on round trips the SQL never needed. Batching the
+  wire is the entire speed of a direct-write path with none of its costs: every statement is
+  still the generated procedure, so validation, Record Changes and save events are untouched.
+
+  Result mapping cannot assume one recordset per item — a statement that returns no rows produces
+  NO recordset, so a positional zip silently drifts and attributes row A's identity to row B.
+  Each item is therefore preceded by a sentinel SELECT of its index; recordsets between sentinel
+  k and k+1 belong to item k. Covered by tests on both providers, including the empty-middle-item
+  case that breaks positional mapping.
+
+  SQL Server renumbers per-item `?` placeholders into one global `@p` namespace (one request
+  carries one parameter namespace; two items both rendering `@p0` would overwrite each other).
+
+  PostgreSQL cannot carry `$N` parameters in multi-statement text (extended-protocol limitation),
+  so parameter values are inlined through the driver's own `escapeLiteral` — never a hand-rolled
+  escaper — and only for values with an unambiguous literal form (string, finite number, boolean,
+  null, Date; plain objects are already serialized by the parameter processor before the gate).
+  If any value falls outside that set, or the client exposes no `escapeLiteral`, the WHOLE group
+  falls back to the sequential path: correctness first, batching second.
+
+  Groups that use `Variables` have cross-item dependencies (a later item's SQL is re-rendered
+  from an earlier item's output) and always run sequentially regardless of the flag — a single
+  round trip cannot feed one statement's output into the next statement's client-side rendering.
+
+  Failure semantics are unchanged: a batch failure rolls back and throws exactly as the serial
+  path's first-error rollback does, and per-item attribution of a poison row remains the caller's
+  degradation path (re-apply individually), as before.
+
+- 5fc861f: CodeGen treats schema as the incremental unit at 2,000+ entities: per-schema emit with write-if-changed and dirty-schema regen, `'schema.table'` exclude strings, schema-parallel file generation, incremental `tsc` on core-entities and server, hydrate-by-schema catalog projections, and `schemaOutput` routing so brownfield/demo schemas do not land in published packages. BigSchemaDemo is the droppable test bed.
+- 905820a: Sync-scoped write-side-effect suppression. Record Changes and geocoding are per-write side effects, but the only way to relieve a high-volume writer of them was turning the entity flags off — which also turns them off for every human and API writer of the same entities, permanently. New `EntitySaveOptions.SkipRecordChanges` / `SkipGeoCoding` (and `EntityDeleteOptions.SkipRecordChanges`) scope the suppression to the individual save: providers omit the audit-row wrap and the geocode side trip for saves that carry the options, and only those. The sync engine sets them on its own writes when the connection asks via `Configuration.writeSideEffects === 'suppressed'` — fail-closed: absent or malformed configuration keeps the side effects on, and a save outside a suppressing sync run can never carry them. Materially identical to flags-off for the sync's writes; invisible to every other writer. The delete option is mirrored onto the GraphQL `DeleteOptionsInput` because the schema-sync gate requires every `EntityDeleteOptions` field to appear there, but it is **not honoured over the wire**: every wire entry point sanitizes it back to false and logs the attempt, because suppressing an audit row is a higher privilege than `entity:delete` — the only authorization a delete mutation performs. That keeps delete at exact parity with save, whose options have no GraphQL input type at all.
+- Updated dependencies [1940a4d]
+- Updated dependencies [23c2521]
+- Updated dependencies [4eb87c5]
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+- 53c341c: Add optional `@IncludedSchemaNames` to CodeGen metadata-heal stored procedures so Open App migrations can positively scope heals without photographing sibling apps. Cascade-delete SQL is intra-schema only unless `allowCrossSchemaCascadeDeletes` is set. Custom-view `sp_refreshview` in the migration log honors `excludeSchemas` and, when set, `includeSchemas`.
+
+### Patch Changes
+
+- e2ad3c0: `ProviderBase`'s write-invalidation fan-out now re-subscribes when the `MJGlobal` event bus is replaced. Its one-time wiring guard was a boolean, which cannot detect that `MJGlobal.Reset()` (or clearing the singleton from the global object store) has swapped `_events$` for a fresh `Subject` — leaving the fan-out attached to the discarded bus for the rest of the process, so `RunView` dedup/linger entries silently stopped being invalidated after a save, with no error. The guard now keys on the bus reference, unsubscribes the stale subscription when the bus changes, and is re-checked on every call so already-registered long-lived providers re-wire as well.
+- 8ad04e8: Fix a memory leak in `ProviderBase.ensureInflightViewInvalidation()`: it subscribed to `MJGlobal`'s process-wide event bus once per provider instance and never unsubscribed. Since MJServer mints a fresh provider on every GraphQL request (and the task-graph dispatcher mints one per task execution), this pinned one more provider object graph on the bus per request/task, forever. The subscription is now wired once per process and fans out to live provider instances via `WeakRef`, so creating more providers no longer adds more permanent subscribers.
+- a1a8989: Add `entityImportPackages` so CodeGen imports peer entity classes (embeds and related-record collections) from the npm package that owns them, instead of self-importing string `entityPackageName`. Unmapped foreign schemas fail the run.
+- Updated dependencies [4586215]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [647bd71]
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- d79fe39: Add Embedded Records: an opt-in 1:1 owner-held companion on BaseEntity so a record and the peer its FK points at (Deal.OrderID → Order) load, validate and persist as one unit — inverted save order, recursive companion serialization, CodeGen emission from EntityField.EmbeddedRecord.
+- 08829f5: Synchronize JSONType interfaces from metadata into MJCore via prebuild script, add EntityField.Configuration migration and metadata definitions, and update EntityInfo, EntityFieldInfo, and EntityRelationshipInfo properties for metadata parity.
+- 7b4abe7: Form chrome membership is a five-layer stack: CodeGen, app inclusions (Primary / More / None), the Auto ranker, install overlay (`MJ: Form Chrome Rules`), and user rail order. Policy may decorate labels and icons only.
+- 051e0ff: L3 Form Chrome Rules can now pin an admin Title on a related entity or contribution. The column is nullable and keyed by RelatedEntityID / ContributionKey, so a site-specific rail label ("Pmts") survives an OpenApp upgrade that changes the shipped DisplayName. Custom forms that hide related entities also stop inventing leftover More groups for unbaked relationships.
+- 95fc3e6: Ship generated-form chrome: a budgeted related-role ranker (not all-in-More), accordion More as a quiet overflow footer (not a fake panel), left-nav More folder, user move in/out of More via Manage Sections, Layout auto / left-nav, optional BaseFormPolicy, and Entity / Entity Relationship visualization. Metadata JSONType bags on Entity / EntityRelationship.Configuration back the ranker.
+- 048c5ce: feat(auth): metadata-driven pluggable authentication providers
+
+  Authentication providers are now discovered the MJ way — a `@RegisterClass(BaseAuthProvider, 'x')`
+  subclass plus a row in the new `MJ: Authentication Providers` entity, resolved at runtime through
+  `ClassFactory` by `DriverClass`. Adding a provider requires no core edits.
+  - **New entity** `__mj.AuthenticationProvider`, with the OIDC connection fields as columns, an
+    optional `CredentialID` for the rare provider needing server-side secrets, and login-picker
+    presentation fields. Driver configuration is split by trust boundary: `AdditionalConfiguration`
+    is server-only, `ClientConfiguration` is published to the browser.
+  - **`AuthProviderEngine`** loads the catalog at startup and registers it with `AuthProviderFactory`.
+  - **Layered resolution** — `mj.config.cjs` `authProviders[]` remains fully supported as the baseline
+    and fallback, so existing deployments are unaffected and need no changes.
+  - **`GET /auth/providers`** publishes the non-secret catalog to the pre-auth browser (rate-limited,
+    mounted ahead of the auth middleware, allow-list projection).
+  - **`<mj-login-picker>`** — a reusable, app-agnostic multi-IdP picker built on `mjButton`, rendered
+    only when 2+ client-visible providers exist. Single-provider deployments look exactly as before.
+  - `AuthProviderFactory` no longer carries a hard-wired list of built-in provider imports; the
+    package entry point and the class-registration manifests already covered registration.
+  - **Environment-variable configuration is now pluggable too.** The hard-coded block in MJServer's
+    config that enumerated Entra / Auth0 / Cognito inline is replaced by an optional
+    `configFromEnvironment` static on each provider class (`IEnvironmentConfigurableProvider`),
+    collected through the ClassFactory registry by `AuthProviderFactory.discoverFromEnvironment()`.
+    A third-party provider can now offer the same "set two variables and you're done" experience
+    with no change to MJ core. The three existing mappings are preserved byte-for-byte; **Okta**
+    (`OKTA_DOMAIN` + `OKTA_CLIENT_ID`) and **WorkOS** (`WORKOS_CLIENT_ID`) gain env-var support they
+    did not previously have.
+
+- 7300953: Query & Entity Materialization — snapshot a stored Query's result (or an entity's base view) into a physical table that IS its own read-only entity, refreshed on a schedule with an atomic wrapper-view swap. Base-view (entity) materialization is cross-engine (SQL Server + PostgreSQL); query materialization runs on SQL Server today and becomes cross-engine once the pre-existing `spCreateVirtualEntity` support proc is ported to PostgreSQL (tracked with the broader PG parity effort). The refresh SQL and read path are cross-engine on both.
+  - **New `@memberjunction/materialization`** package: the refresh engine (`MaterializationRefresher`) — full-rebuild (shadow table + atomic view swap), `DirtyGroupRecompute` and MERGE-upsert `Incremental` strategies for keyed aggregations, combined-key `SHA2_256` surrogate hashing, and the advisory `MaterializationFreshness` mixed-freshness inspector.
+  - **CodeGen** (`codegen-lib`): materializes flagged stored Queries + entity base views (cross-engine DDL, wrapper view, read-only Virtual Entity minting, migration-reuse detection); parameterization (row-filter → materialize-broad + read-time predicate); aggregation-key auto-detection; RLS-downgrade gate; and `DriftHold` flag-and-hold drift detection.
+  - **Read path**: `RunViewParams.DataSource: 'Live' | 'Materialized'` (`core`) routed by `GenericDatabaseProvider.GetEffectiveBaseView`, plumbed through the GraphQL layer (`server`, `graphql-dataprovider`).
+  - **Scheduling** (`scheduling-engine`): `MaterializationRefreshScheduledJobDriver` sweeps due materializations (skips `Disabled`/`DriftHold`).
+  - **`core-entities` / `ng-core-entity-forms`**: generated `MJ: Materialized Results` + `MJ: Materialized Result Queries` (join) entities + `Query.IsMaterialized` + forms. The MR↔Query link lives in the `MaterializedResultQuery` join table — there is no `MaterializedResult.SourceQueryID` / `Query.MaterializedResultID` FK — avoiding the circular dependency of the direct-FK design.
+
+  See `plans/query-entity-materialization.md` for the full design.
+
+- 7300953: Query Materialization — Phase 2: parameterized RowFilterBroad read-time injection. A caller can now run a materialized parameterized stored Query with `RunQueryParams.DataSource: 'Materialized'` and the provider serves it from the broad materialized table with the query's row-filter parameters injected as **bound** read-time predicates, falling back to the live query on any uncertainty (serving live is always correct).
+  - **`codegen-lib`**: the render-and-diff verifier now captures each row-filter predicate's operator + value shape (normalized to `column <op> value`, flipping `value < column`); `qualifyParameterizedQuery` builds a structured `ReadFilterSpec` and gates it to a safe operator whitelist (`=, !=, <>, <, >, <=, >=, IN, NOT IN` — `LIKE`/`IS`/`BETWEEN` stay live-only); `manage-metadata` persists the spec and enables Bucket-1 materialization. New migration adds `MaterializedResult.ReadFilterSpec` (+ the CodeGen-regenerated view/procs/EntityField).
+  - **`core`**: `RunQueryParams.DataSource: 'Live' | 'Materialized'` (mirrors `RunViewParams`).
+  - **`generic-database-provider`**: `InternalRunQuery` redirects a `DataSource:'Materialized'` read to `SELECT … FROM <materialized view> WHERE <spec predicates>` with values **bound** (never interpolated), and falls back to live on any doubt — not opted in, not fresh/Active, a parameter absent from the spec, an unsafe operator, or an execution error.
+  - **`server` / `graphql-dataprovider`**: `DataSource` threaded through the RunQuery GraphQL surface (singular, batch, cache-check, and SystemUser paths).
+
+  Proven by a differential reconstruction proof (13/13, real SQL Server) and a full provider-level `RunQuery` E2E (16/16). See `plans/query-entity-materialization-phase2.md`. Stacks on the Phase 1 materialization PR (merges after it).
+
+- b46330e: feat(codegen,core): full-stack recursive foreign key support with automated TVF suites, base view projections, and hierarchy traversal APIs
+  - **Database / TVF Suite**: CodeGen automatically emits 4 table-valued functions per recursive self-referencing foreign key on both SQL Server (T-SQL) and PostgreSQL (PL/pgSQL):
+    - `fn<Table><Field>_GetHierarchyMeta` (computes `RootID`, `Depth`, materialized `Path`, `IsLeaf`, and `ChildCount`)
+    - `fn<Table><Field>_GetDescendants` (full subtree retrieval with cycle detection)
+    - `fn<Table><Field>_GetAncestors` (materialized path-based ancestor retrieval)
+    - `fn<Table><Field>_GetRootID` (top-level root resolver)
+  - **Base View Projections**: Every base view (`vw<Entities>`) automatically joins the hierarchy metadata via lateral joins (`OUTER APPLY` in SQL Server, `LEFT JOIN LATERAL` in PostgreSQL), projecting `[Root<Field>]`, `[<Field>Depth]`, `[<Field>Path]`, `[<Field>IsLeaf]`, and `[<Field>ChildCount]`.
+  - **`BaseEntity` & Generated Subclasses**:
+    - `BaseEntity` in `@memberjunction/core` provides generic hierarchy traversal methods `GetDescendants<T>()`, `GetAncestors<T>()`, and `GetChildren<T>()` with automated `ParentID` and recursive FK resolution.
+    - CodeGen generates strongly-typed convenience methods (`entity.GetDescendants()`, `entity.GetAncestors()`, `entity.GetChildren()`) on all generated entity subclasses with self-referencing foreign keys.
+  - **Documentation**: Added comprehensive architectural documentation in [`guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`](guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md) and cross-referenced in package READMEs.
+
+- 6ecfaa0: Relationship `UI.sortKey` orders first-class related rail items after Details. Hug-height related grids use a top-aligned inline empty state. Left-nav labels cap at 200px and show the full title on hover.
+
+### Patch Changes
+
+- 834f8d7: Fix a `TypeError` that could kill an agent mid-run during context assembly, and take down scheduled-job dispatch entirely (`__mj_CreatedAt?.getTime is not a function`, `job.NextRunAt.getTime is not a function`).
+
+  Two defects, one crash:
+  - **`BaseEngine.OnExternalCacheChange` poisoned `entity_object` caches (the root cause).** When a cross-server cache-change event carried a payload, its rows — plain JSON objects, since cache payloads are serialized — were assigned straight into the engine property. For a config whose effective `ResultType` is `entity_object` (the default), that silently replaced the array's `BaseEntity` instances with plain objects, so `BaseEntity`'s coercing accessors were bypassed and a date field declared `Date` held a raw ISO string. Rows are now materialized via `TransformSimpleObjectToEntityObject` — the same conversion RunView's own cache-hit path uses — before assignment, with `'simple'` configs still passing through untouched and any failure degrading to the pre-existing full reload. Because materialization is async, the payload branch now claims a refresh generation (`beginConfigRefresh`/`isLatestConfigRefresh`, as `LoadSingleConfig` already does) so overlapping cache events cannot commit out of order. This affects **every** engine with `CacheLocal: true`.
+  - **Unguarded `Date` method calls on those fields (the crash sites).** Optional chaining does not protect them — `"…"?.getTime` is `undefined`, and calling it throws. A new `ToEpochMs(value)` helper is exported from `@memberjunction/global` (a pure date utility — it needs no entity or metadata concepts) and now backs every affected read across four engines: `AgentContextInjector.sortExamples`/`sortNotes`, `AIEngine.fallbackGetNotesFromCache`/`fallbackGetExamplesFromCache`, `ConversationEngine.sortConversations`, and the scheduling engine's `isJobDue` plus its `NextRunAt`/`EndAt` diagnostics. It also closes a latent issue in the previous form: an Invalid `Date`'s `getTime()` returns `NaN`, which `?? 0` did not catch, yielding an incoherent comparator.
+
+  Two exposures worth calling out. `AIEngine.fallbackGetNotesFromCache` is reached whenever the note vector service is uninitialized or a query embedding fails, so semantic retrieval with real input text could crash too — not just the empty-input path. And `SchedulingEngine.isJobDue` throws on the _first_ job in the dispatch loop, so a poisoned cache stopped **all** scheduled jobs from running, on every poll, until the cache reloaded.
+
+  `isJobDue` also had a silent variant of the same bug: `evalTime < job.StartAt` does not throw on a string — relational operators coerce toward numbers, an ISO string yields `NaN`, and every comparison is false — so `StartAt`/`EndAt` activation windows silently stopped being enforced and a job could fire outside its range with nothing in the logs. Those comparisons now go through `ToEpochMs` as well.
+
+  Making the cache-event path work also exposed a filtering gap (caught in review): `SchedulingEngineBase` loads `MJ: Scheduled Jobs` unfiltered and applies its Active-only invariant in memory, but only re-applied it on entity events — not after a cross-server cache event, whose payload carries every row. In a multi-instance deployment, one server's engine load could therefore hand another server's dispatch loop Disabled/Paused/Pending jobs. The engine now re-applies the filter (and notifies `JobsChanged$`) after `OnExternalCacheChange`, and `isJobDue` independently refuses non-Active jobs so dispatch can never depend on the array staying pre-filtered.
+
+- 07cb22e: Fix `$`-sequence corruption in `String.prototype.replace` calls carrying runtime data (#3171).
+
+  `replace(search, replacement)` treats `$$`, `$&`, `` $` ``, `$'` and `$1`–`$99` as metacharacters when `replacement` is a **string**. Every site below passed runtime data there, so a `$` in that data was silently executed rather than inserted. The `$&`/`` $` ``/`$'` forms are worse than value corruption: they splice surrounding text _into_ the value. All are fixed by passing a replacement **function**, whose return value is used literally.
+  - **`@memberjunction/installer` — corrupted secrets (highest impact).** Re-running `mj install` syncs the root `.env` into MJAPI's. A DB password containing `$&` had the _stale_ MJAPI password spliced into it; ``$` `` spliced in the preceding `.env` line. The result was a wrong secret written to disk with no error, surfacing later as "MJAPI can't connect". Only the replace branch was affected — fresh installs (append branch, string concatenation) were always correct, which is why this survived. Also fixes the `newUserSetup` block (embeds user name/email) and the `mjRepoVersion` and Explorer `environment.ts` patchers.
+  - **`@memberjunction/core` — rewritten RLS predicates.** `RowLevelSecurityFilterInfo.MarkupFilterText` substitutes user properties, magic-link scope and `{{Acting*}}` tokens into row-level-security filters. A `$` in any of them rewrote the predicate — the exact outcome the neighbouring `'`-escaping exists to prevent. This feeds `GetEffectiveRowFilterWhereClause`, used across RunView reads, Create and Update. Also fixes organic-key `Custom` normalization, which builds a SQL `WHERE` from a data value.
+  - **`@memberjunction/generic-database-provider`, `@memberjunction/postgresql-dataprovider`** — end-user search terms substituted into `UserSearchParamFormatAPI` predicates, plus view-template inner SQL and PG identifier quoting. Also `QueryCompositionEngine.renameSQLIdentifier`, which rewrites CTE identifiers in composed queries: the search side was regex-escaped but the replacement side was not, so a `$` in a deconflicted CTE name (SQL Server bracketed and PG quoted identifiers both permit one) was expanded into the executed SQL.
+  - **`@memberjunction/ai-prompts`, `@memberjunction/computer-use`, `@memberjunction/ai-vector-sync`, `@memberjunction/aiengine`, `@memberjunction/ai-agents`** — assistant prefill text (routinely contains `$$` for LaTeX or currency), computer-use goals/URLs/step summaries, embedding-document field values, and entity field values, all interpolated into prompts and templates.
+  - **`@memberjunction/metadata-sync`** — parameter values in the debug SQL log.
+  - **`@memberjunction/testing-engine`** — test input/expected/actual values into the LLM-judge prompt, and parameter values into `SQLValidatorOracle`'s generated SQL.
+  - **`@memberjunction/sql-converter`** — the configured schema name substituted into emitted PostgreSQL view SQL, in both `ViewRule` and its previously-missed twin in `InsertRule`. The schema is now escaped on the _search_ side too: a `$` in it acted as an end-anchor, so the pattern matched nothing and the conversion silently emitted no rewrite.
+  - **`@memberjunction/sql-parser`** — `restoreAliases` swaps generated aliases back to the caller's original bracketed identifiers. Two of its three branches used `split`/`join` and were already safe; the third expanded `$`-sequences, so `[a$'b]` spliced surrounding SQL into an identifier. The aliasing path fires precisely _because_ an identifier contains a non-word character, so the input that triggers aliasing is the input that corrupted the restore. Reached from the public `ToSQL()`.
+  - **`@memberjunction/sqlserver-dataprovider`** — batch execution rewrites `@name` placeholders to `@q<N>_name`; the parameter name went into the `RegExp` unescaped, so a `$` in it prevented the rewrite entirely and mssql failed with "Must declare the scalar variable". Sibling of the PostgreSQL `escapeRegExp` fix below.
+  - **`@memberjunction/react-linter`** — component data substituted into diagnostic messages.
+  - **`@memberjunction/actions-bizapps-social`, `@memberjunction/ai-cli`** — hardened a numeric-only site; documented the AICLI JSON highlighter's `$1` back-references as intentional.
+
+  Also fixes a **test-tooling safety defect** found while verifying the above on a clean database: `@memberjunction/testing-cli` loaded `.env` with `dotenv.config({ override: true })`, so a variable already set in the environment was overwritten. `DB_DATABASE=MJ_scratch mj test …` was silently discarded and the suite ran — **including mutation tests** — against whatever `.env` pointed at. That made the "one database per agent" rule unenforceable by environment variable and diverged from every other `mj` command (`migrate`, `codegen`, `sync push` all honour the environment). `override` is now dotenv's default `false`, so `.env` still fills in anything unset but an explicit value wins. Guarded by a unit test. **Note the inverse hazard when upgrading:** any environment that exports `DB_*` globally — a Docker image, a CI container, a stale `export` in a shell profile — now wins over `.env`, where `.env` used to be authoritative. If a `mj test` run suddenly targets an unexpected database, check the exported environment first; the CLI prints `config.dbDatabase: <name>` at startup.
+
+  And an adjacent defect found while testing the above: `PostgreSQLDataProvider.quoteFieldNamesInToken` interpolated a field name into a `RegExp` **without escaping regex metacharacters**, so a column named `a.b` matched (and wrongly quoted) unrelated text like `axb`, and a column containing `$` was never matched at all — which had also made the replacement-side fix on that line unreachable. Field names are now escaped before interpolation.
+
+  Also adds `.github/scripts/check-dynamic-replace.mjs`, a CI gate that flags `.replace()`/`.replaceAll()` whose replacement is neither a string literal nor a function. No existing lint rule covered this — the React `string-replace-all-occurrences` rule only ever inspects the _search_ argument. The gate is line-aware (only lines a change touches), since ~100 pre-existing sites remain and a bare identifier holding a function reference is indistinguishable from one holding a string; `--all` is available for auditing. Regression tests now push `$$`, `$&`, `` $` ``, `$'` and `$1` through each fixed path.
+
+  Also fixes a **silently inert security check** found while verifying the above. `BaseTestDriver.Provider` fell back to `new Metadata() as unknown as IMetadataProvider`. `Metadata` is a facade that proxies a hand-maintained subset of members to the global provider, not a provider itself, and the cast is the only reason the compiler accepted it. Members it does not proxy read `undefined` — `RowLevelSecurityFilters` among them. The integration suite's `discoverTokenFilter` reads exactly that property to find a `{{UserID}}`-scoped filter, so it always found none: the `rls-isolation` RLS1/RLS2 token-substitution checks skipped-as-pass **on every database**, while the bundle reported green. There were 13 filters present, 5 of them `{{UserID}}`-scoped. The fallback now returns the global provider, which is what the getter's own doc comment always promised, and both checks now execute. A new `rls-isolation` check (RLS11) additionally pushes `$$`, `$&`, `` $` ``, `$'` and `$1` through a substituted user property and executes the resulting predicate, so the RLS half of this fix has live coverage rather than unit coverage alone.
+
+- c581b4f: Close the #3874 adversarial review. SkipRelatedCollections persists embeds while collections stay with the caller. The graph-node recursion guard is private on BaseEntity (IsGraphNodeSave is gone from EntitySaveOptions). Result serialize adopts saved peers; a rolled-back graph reverts in-memory saved/dirty so retry works. Two same-entity embeds no longer false-cycle. Ensure, Load, NewRecord FK, CodeName emission, core-schema imports, IT85/EE5, graph-view UUID links, focal-node dblclick, and default excludeSchemas no longer dropping core form tabs.
+- 815b9bc: feat(storage,core,forms): ephemeral staged binary upload pipeline, polymorphic related collections, and file record viewer
+  - **Storage & Server**:
+    - Implement Tier 2 ephemeral staged raw binary upload pipeline (UploadTokenManager, POST /media/upload-stage, CreateUploadStageToken mutation, UploadStorageFile token consumption).
+    - Add single-use cryptographic token security, user identity ownership binding, automated TTL eviction, and memory bounds.
+    - Sanitize paths/filenames and add X-Content-Type-Options: nosniff to /media endpoints.
+  - **Core & ORM**:
+    - Add support for polymorphic IS-A subtypes in RelatedRecordCollection and dirty state preservation across relationship chains.
+    - Support IEntityConfiguration and entity hierarchy traversal.
+  - **Angular & UI**:
+    - Add 3-tier upload pipeline in RecordAttachmentsComponent with real-time wire progress.
+    - Add dedicated MJ: Files custom record viewer form component in ng-core-entity-forms.
+    - Add attachment count badges to base form container and toolbar.
+    - Add ResizeObserver lifecycle handling to Gantt chart and OpenNewEntityRecord in SharedService.
+
+- f5ec13b: Fix two integration-tier regressions that surfaced when merging the Query & Entity Materialization work into the test-coverage branch.
+
+  **`codegen-determinism.CD3` — stale generated field.** The generated `MJMaterializedResultEntity` carried a `SourceQuery` field, but the materialization migration removed the direct source-query columns in favor of a join table, so `vwMaterializedResults` (which the entity is generated from) exposes no `SourceQuery` — CD3 correctly flagged the generated schema key as having no live field. Removed the stale field from the generated ORM to match the live view. No runtime code read the property.
+
+  **`client-cache.C12` — Trust=0 client caching regressed.** The materialization work re-gated the smart-cache-check WRITE path from `param.CacheLocal` to `runViewCacheEligible`, which includes `IsServerCacheAllowedForEntity`. That term gates the SERVER cache (kept fresh by BaseEntity events), so it excludes Trust=0 / Record-Changes / caching-disabled entities. But the CLIENT cache writes each slot with a `maxUpdatedAt` stamp and DB-revalidates per request, so those entities are still safely client-cacheable when stamped — the shared gate over-tightened the client path. Added `runViewCacheEligibleForWrite`: on the trusting server it is exactly `runViewCacheEligible`; on a client it keeps the structural + materialized exclusions but drops the server Trust/event gate. The Fields-override `willCache` decision is unchanged.
+
+- 50987c4: fix(core): accept a parsed Configuration on RelatedFormRoleCandidate
+
+  `EntityRelationshipInfo.Configuration` became a lazily-parsed getter returning
+  `IEntityRelationshipConfiguration | null`, but `RelatedFormRoleCandidate.Configuration`
+  was left declared `string | null`. `resolve-form-chrome.ts` assigns one to the other, so
+  `@memberjunction/ng-base-forms` failed to compile and took the workspace build down with it:
+
+  ```
+  resolve-form-chrome.ts:706:9 - error TS2322: Type 'IEntityRelationshipConfiguration | null'
+  is not assignable to type 'string | null | undefined'.
+  ```
+
+  Widened the field to `string | IEntityRelationshipConfiguration | null` — the exact union
+  that `ReadRelationshipInclusion`, `ReadRelationshipSortKey` and `ReadRelationshipJoinFields`
+  already accept. Widening rather than swapping keeps callers that read a raw row value
+  working, while allowing the parsed object the getter now hands back.
+
+- cefc302: security: harden SQL-filter validation, the OAuth callback handler, API-key lookup, and the new-user domain gate
+
+  **SQL literal stripping (`@memberjunction/global`, `@memberjunction/core`).** Both of MJ's SQL screens — `DatabaseProviderBase.ValidateUserProvidedSQLClause` (which guards `ExtraFilter`, `OrderBy` and `UserSearchString`) and `SQLExpressionValidator` (which guards `Aggregates` and ad-hoc queries) — stripped string literals with a regex that honored **backslash escaping**. SQL Server and PostgreSQL do not treat `\` as an escape, so a payload such as `x = 'a\') ; DROP TABLE Users; --'` was swallowed whole as one "literal" and stripped away before the keyword denylist ran, while the database closed the literal at the real quote and executed the stacked statement. Both screens now share a single `StripSQLStringLiterals` helper that matches SQL-standard doubled-quote (`''`) semantics, and a regression suite in each package pins the behavior.
+
+  **OAuth callback handler (`@memberjunction/server`).** Caller-supplied `connectionId` was interpolated into a raw `ExtraFilter` without escaping; it is now validated as a UUID at the request boundary and escaped at the SQL sink. `frontendReturnUrl` was redirected to after only a URL-parse check, making the callback an open redirect from the trusted MJAPI origin; its origin is now validated against `cors.allowedOrigins` (plus the built-in redirect origins) both when the flow is initiated and when the redirect is issued.
+
+  If you run frontends other than MJExplorer against MJAPI, note that the return-URL allowlist is derived from `cors.allowedOrigins`. Deployments on the default `['*']` are unaffected — every return URL is still allowed. Deployments that have narrowed `cors.allowedOrigins` are mostly self-protecting, since a browser frontend must already be on that list to call `/oauth/initiate` at all, but three cases can now fall back to MJAPI's built-in page instead of returning to the app: a return URL on a _different_ origin than the caller, a server-to-server initiate whose return origin was never CORS-listed, and any proxy setup where the browser-visible origin differs from the configured one (matching is exact on scheme + host + port). Each rejection is logged with the offending URL.
+
+  **API-key lookup (`@memberjunction/api-keys`).** `ValidateKeyByHash` now asserts its argument is a SHA-256 hex digest before building the SQL filter, enforcing the injection-safety invariant at the sink for all present and future callers.
+
+  **⚠️ Behavior change — `userHandling.newUserAuthorizedDomains`.** The new-user domain gate previously authorized against the hostname parsed from the request's `Origin` header, which is trivially spoofable on non-browser requests: a holder of any valid IdP token could auto-provision an account under an authorized domain by forging `Origin`. It now authorizes against the **email domain of the verified identity token**.
+
+  If `newUserLimitedToAuthorizedDomains` is enabled, review `newUserAuthorizedDomains` before upgrading:
+  - Entries that are **frontend hostnames** (`app.example.com`, `localhost`) must be replaced with the **email domains** your users sign in with (`example.com`). Deployments where the two happened to coincide are unaffected.
+  - Wildcards match in full, so `*.example.com` matches `mail.example.com` but **not** `example.com` — list both if you need both.
+  - Identity providers that issue a bare username with no `email` claim can no longer auto-provision; the denial is logged explicitly. Configure the provider to emit an `email` claim, or set `newUserLimitedToAuthorizedDomains: false`.
+
+  The gate is off by default (`newUserLimitedToAuthorizedDomains: false`, `newUserAuthorizedDomains: []`), so deployments that never enabled it are unaffected.
+
+  **⚠️ Related expansion — MCP OAuth auto-provisioning.** Auto-provisioning previously also required a non-empty request `Origin` as a precondition for entering the check at all. `MCPServer`'s `resolveOAuthUser` passes no request domain, so with the domain gate enabled, MCP OAuth users could never be auto-created regardless of their email domain. Now that the spoofable precondition is gone, an MCP OAuth user whose **JWKS-verified** token carries an authorized email domain plus given/family name claims **will** be auto-provisioned, consistent with the browser path. If you run MCP with `newUserLimitedToAuthorizedDomains` enabled and were relying on that side effect to keep MJ user records from being created, add the restriction explicitly (narrow `newUserAuthorizedDomains`, or set `autoCreateNewUsers: false`).
+
+- bbb7fcc: finalizeSave hydrates from owned fields only. An IS-A child's GetAll() merges parent virtuals the child does not own (OrderHeader on Event Order Line); SetMany no longer throws Field does not exist when a clean leaf is saved after a parent-only stamp.
+- b8130f3: Hydrate an IS-A parent with only the columns it owns. Loading an Accounting Company Profile as an entity object used to SetMany the whole child view row onto MJ: Companies, which dumped a field-not-found warning for every profile column at MJAPI boot.
+- 68b9cf0: New-record tabs store an empty recordId while the URL uses the `new` sentinel. URL sync treated those as different records and opened another tab, which synced the same URL again.
+
+  A second compare was permanently true even after the tab matched: `encodeURIComponent` writes `%3A` for the colon in `MJ_BizApps_Orders: Order Headers`, Angular's serializer leaves `:`. Combined with `onSameUrlNavigation: 'reload'`, Person → Orders → New navigated `/new` until Chrome died. URL compare now decodes path and query first.
+
+- 84f276e: Related-entity grids prefill every join field on a new child record and persist those defaults on the new-record URL (`/record/:entity/new?NewRecordValues=...`) so the link survives refresh and deeplink.
+
+  Left-nav related grids (including slot-mounted contributions) fill leftover column height and report their row-count badge: SetSectionRowCount upserts unknown section keys, contribution hosts are display:contents so they participate in the flex column, and accordion pixel heights are not applied while the rail is showing the panel.
+
+  Section search matches contribution titles (Orders) in both accordion and left-nav, keeps the rail visible when only one group hits, and does not treat chrome-hidden panels as non-matches.
+
+- d0a2a55: `EntityField.Validate()` now validates value-list fields, so an `IN (…)` CHECK constraint finally has a runtime counterpart (#3969).
+
+  A field with `ValueListType = 'List'` carries an exhaustive set of legal values in `__mj.EntityFieldValue`, and MJ used it only to render a dropdown — nothing in `BaseEntity` validated against it. Because CodeGen's `ParseCheckConstraints` turns `CHECK (Status IN ('Active','Inactive'))` into a value list _instead of_ a generated `Validate()` method, that class of constraint had no runtime guard at all: an out-of-list value passed every rung of the validation ladder and was refused only by the database, as a raw CHECK violation attributed to no field. The dropdown made the form path safe; `mj sync push`, GraphQL mutations, entity subclasses setting the field in code, Actions and migration-time data loads were all unguarded.
+
+  An out-of-list value now fails `Validate()` with a field-named error naming the legal values, the way nullability and MaxLength already do. The rule lives on `EntityFieldInfo.ValueIsPermittedByValueList()`, backed by a normalized set built once per field rather than once per record, since that metadata is shared by every entity instance.
+
+  Four boundaries keep it safe: `ListOrUserEntry` is never checked (that mode exists to permit free text), an empty value list never rejects anything but is reported as broken metadata, null/undefined stays the nullability check's job so one mistake yields one error, and a value whose type cannot be compared is permitted and reported rather than guessed at. `date` columns are compared on the calendar date, accepting either the UTC or the local reading of the value, because a value read back from SQL Server arrives as UTC midnight while application code building a date produces local midnight.
+
+  The comparison is case-insensitive, trimmed and string-based. Case-insensitivity is load-bearing rather than defensive: two MJ core fields (`MJ: Entity AI Actions`.TriggerEvent and .OutputType) have a SQL default that matches their own value list by case alone, so a case-sensitive comparison would fail validation on creating either record at its database default. Stringifying is required because `EntityFieldValue.Value` is always a string in metadata while a numeric list's runtime value is a number. Trimming covers leading whitespace and stray spaces on the metadata side; trailing padding on fixed-width columns is already stripped by the field's value setter before validation sees it.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [cefc302]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [2741d46]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1bd9674]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes

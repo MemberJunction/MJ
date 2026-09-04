@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/db-auto-doc",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.5",
   "description": "AI-powered database documentation generator for SQL Server, MySQL, and PostgreSQL. Analyzes your database structure, uses AI to generate comprehensive descriptions, and saves them as metadata. Works standalone - no MemberJunction runtime required.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -72,10 +72,10 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
-    "@memberjunction/ai": "6.1.0-edge.2",
-    "@memberjunction/server-bootstrap-lite": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/ai": "6.1.0-edge.5",
+    "@memberjunction/server-bootstrap-lite": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",
     "chalk": "^5.6.2",

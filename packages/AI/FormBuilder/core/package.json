@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-form-builder",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.5",
   "description": "Form Builder agent — Designer (LLM) + Builder (deterministic code-agent) pattern for authoring runtime entity forms.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,16 +21,16 @@
   "author": "MemberJunction",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/actions": "6.1.0-edge.2",
-    "@memberjunction/ai-agents": "6.1.0-edge.2",
-    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
-    "@memberjunction/ai-engine-base": "6.1.0-edge.2",
-    "@memberjunction/ai-prompts": "6.1.0-edge.2",
-    "@memberjunction/aiengine": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/interactive-component-types": "6.1.0-edge.2"
+    "@memberjunction/actions": "6.1.0-edge.5",
+    "@memberjunction/ai-agents": "6.1.0-edge.5",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.5",
+    "@memberjunction/ai-engine-base": "6.1.0-edge.5",
+    "@memberjunction/ai-prompts": "6.1.0-edge.5",
+    "@memberjunction/aiengine": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/interactive-component-types": "6.1.0-edge.5"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

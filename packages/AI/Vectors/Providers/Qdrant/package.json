@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-vectors-qdrant",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Qdrant Implementation for AI Vector Database",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,9 +16,9 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.2",
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/ai-vectordb": "6.1.0-edge.2",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/ai-vectordb": "6.1.0-edge.5",
     "@qdrant/js-client-rest": "^1.13.0",
     "dotenv": "^17.2.4"
   },

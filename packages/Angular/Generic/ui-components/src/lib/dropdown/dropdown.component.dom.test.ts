@@ -100,4 +100,115 @@ describe('MJDropdownComponent (DOM)', () => {
     expect(overlayText('.mj-dropdown-no-data')).toBe('No data found');
     expect(overlayQueryAll('.mj-dropdown-option').length).toBe(0);
   });
+
+  // ── #3860: the accessible name ────────────────────────────────────────────────────────────────
+
+  it('names the combobox with AriaLabel — on the trigger AND the popup listbox', () => {
+    const f = render({ AriaLabel: 'Interview persona' });
+    expect(trigger(f).getAttribute('aria-label')).toBe('Interview persona');
+    open(f);
+    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-label')).toBe('Interview persona');
+  });
+
+  it('names the combobox from a visible label via AriaLabelledBy — trigger AND popup listbox', () => {
+    // The visible-label path. NOT <label for>: the trigger is a div[role=combobox], which
+    // label-for neither names nor focuses — the label carries an id and the combobox points at it.
+    const f = render({ AriaLabelledBy: 'persona-label' });
+    expect(trigger(f).getAttribute('aria-labelledby')).toBe('persona-label');
+    open(f);
+    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-labelledby')).toBe('persona-label');
+  });
+
+  it('exposes InputId so other markup can reference the trigger', () => {
+    const f = render({ InputId: 'persona-select' });
+    expect(trigger(f).getAttribute('id')).toBe('persona-select');
+  });
+
+  it('passes AriaDescribedBy through for hint and error text', () => {
+    const f = render({ AriaDescribedBy: 'persona-hint' });
+    expect(trigger(f).getAttribute('aria-describedby')).toBe('persona-hint');
+  });
+
+  it('renders NO empty name attributes when nothing is configured — absent beats empty', () => {
+    // aria-label="" is worse than no attribute: it overrides any other naming source with an
+    // explicitly empty name in the accessible-name computation.
+    const f = render({});
+    expect(trigger(f).hasAttribute('aria-label')).toBe(false);
+    expect(trigger(f).hasAttribute('aria-labelledby')).toBe(false);
+    expect(trigger(f).hasAttribute('id')).toBe(false);
+    expect(trigger(f).hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('names the filter box from the dropdown name, so it is not a second unnamed control', () => {
+    const f = render({ Filterable: true, AriaLabel: 'Interview persona' });
+    open(f);
+    expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter Interview persona');
+  });
+
+  it('names the filter box from the VISIBLE label too, via an id list', () => {
+    // The AriaLabelledBy path is the one the docs steer callers to, and it is the one where a
+    // concatenated string cannot work — this component never sees the label's text, only its id.
+    // Without the id list every filterable dropdown named this way announces "Filter options",
+    // so a form with six of them has six identical filter boxes.
+    const f = render({ Filterable: true, AriaLabelledBy: 'persona-label' });
+    open(f);
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLElement;
+    const wordId = overlayQuery('.mj-dropdown-sr-only')?.getAttribute('id');
+
+    expect(wordId).toBeTruthy();
+    expect(filter.getAttribute('aria-labelledby')).toBe(`${wordId} persona-label`);
+    // aria-label must be ABSENT, not empty: it would otherwise win over aria-labelledby.
+    expect(filter.hasAttribute('aria-label')).toBe(false);
+  });
+
+  it('does not announce "Filter Filter roles" when the name already begins with Filter', () => {
+    // This repo's house habit — `AriaLabel="Filter roles"` in explorer-settings — makes an
+    // unconditional prefix a real regression, not a hypothetical one.
+    const f = render({ Filterable: true, AriaLabel: 'Filter roles' });
+    open(f);
+    expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter roles');
+  });
+
+  it("keeps the filter's visible placeholder inside its accessible name", () => {
+    // WCAG 2.5.3: a voice-control user says what they SEE. The old placeholder said "Search..."
+    // while the accessible name said "Filter …", so "click Search" matched nothing.
+    const f = render({ Filterable: true, AriaLabel: 'Interview persona' });
+    open(f);
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    expect(filter.getAttribute('placeholder')).toBe('Filter...');
+    expect(filter.getAttribute('aria-label')).toContain('Filter');
+  });
+
+  it('points the trigger at the listbox with aria-controls while open', () => {
+    // aria-expanded without aria-controls tells a screen reader something expanded but not what.
+    const f = render();
+    expect(trigger(f).hasAttribute('aria-controls')).toBe(false);   // nothing to point at yet
+
+    open(f);
+
+    const listboxId = overlayQuery('.mj-dropdown-panel')?.getAttribute('id');
+    expect(listboxId).toBeTruthy();
+    expect(trigger(f).getAttribute('aria-controls')).toBe(listboxId);
+  });
+
+  it('exposes the disabled state and drops out of the tab order', () => {
+    // The SCSS suppresses the focus ring when disabled, so a still-tabbable disabled dropdown means
+    // a keyboard user lands on something invisible that then silently ignores Enter.
+    // Disabled arrives through the CVA, so it is applied in `setup` — before the first change
+    // detection — exactly as a reactive form applies it on bind.
+    const f = renderComponentFixture(MJDropdownComponent, {
+      imports: [MJDropdownComponent],
+      inputs: { Data: DATA, TextField: 'text', ValueField: 'value', ValuePrimitive: true },
+      setup: (c) => c.setDisabledState(true),
+    });
+
+    expect((query(f, '.mj-dropdown') as HTMLElement).getAttribute('aria-disabled')).toBe('true');
+    expect((query(f, '.mj-dropdown') as HTMLElement).getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('stays tabbable and unmarked when enabled', () => {
+    const f = render();
+    expect(trigger(f).getAttribute('tabindex')).toBe('0');
+    expect(trigger(f).hasAttribute('aria-disabled')).toBe(false);
+  });
 });

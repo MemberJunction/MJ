@@ -48,10 +48,10 @@ SELECT g.*, CASE WHEN ... END AS IsOverdue
 FROM   [orders].[vwOrderHeadersGenerated] g;
 ```
 
-**SQL Server only.** `PostgreSQLCodeGenProvider.generateBaseView` throws on a layered entity. PG
-expands `SELECT *` at creation and freezes it, has no `sp_refreshview` equivalent, and CodeGen does
-not own the outer view — so a late-added column would silently never reach it, which is the exact
-failure layering exists to prevent. On PG, use a fully custom base view instead.
+PostgreSQL: CodeGen writes the inner view the same way. The outer view is custom SQL shipped via
+pg-migrate. After inner regeneration, CodeGen restars the outer (`restarLayeredOuterView` /
+`spRebindLayeredOuterView`) so `g.*` re-expands. `CREATE OR REPLACE` of the inner view alone does
+**not** update the outer.
 
 Rules if you touch this:
 

@@ -1,5 +1,252 @@
 # Change Log - @memberjunction/global
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- 1940a4d: Recover LLM responses broken by a single unescaped character, and stop misreporting why they broke.
+
+  Models embed rich markdown in JSON string fields — mermaid diagrams, HTML mockups, code samples — and reliably escape most of it. One missed quote inside a 25KB response invalidates the whole document. Three defects meant that was unrecoverable and misdiagnosed.
+
+  **`CleanJSON` discarded the response over an interior fence.** Once the top-level parse failed for any reason, fence extraction ran unconditionally. That regex has no idea it is looking inside a string value, so a ` ```mermaid ` fence embedded in a markdown field matched, its contents were extracted, the JSON envelope was thrown away, and `CleanJSON` recursed into the fragment. A 28KB agent response with one unescaped quote at offset 23011 was reported as `Unexpected token 'm', "mermaid\ns"...`. Fence extraction now skips input already shaped like a JSON envelope — a genuinely fence-wrapped response starts with the fence and a prose-buried one starts with prose, so neither is affected. The throw also carries the untouched parse error as `cause`.
+
+  **The repair chain reasoned from the wrong error.** `attemptJSONRepair` received whatever escaped `JSON.parse(CleanJSON(rawOutput))`, which may describe one of `CleanJSON`'s intermediate transforms rather than the model's actual output. That message was handed to the AI repair prompt as `ERROR_MESSAGE`, recorded on the prompt run, and re-thrown — so a model was asked to fix an unexpected `'m'` in a mermaid fragment when the real defect was one quote at a known offset, in text it was never shown. `resolveTrueParseError` now derives the error from the raw output directly.
+
+  **Nothing could repair an unescaped quote.** JSON5's leniency covers trailing commas, comments and unquoted keys, but an unescaped `"` terminates a string in JSON5 exactly as in JSON, leaving only an LLM round-trip on the full payload. New `RepairJSONEscaping()` in `@memberjunction/global` is error-driven and deterministic: read the failure offset, walk back to the character that ended the string early, escape it, re-parse, repeat. Every pass is validated by a real parse, so it cannot pattern-match its way to a wrong answer the way a global regex rewrite would, and it gives up rather than guessing when it cannot make progress. It runs in `attemptJSONRepair` between the JSON5 and AI stages — microseconds against an LLM round-trip, and it cannot invent content. `_jsonRepairInfo` gains a `LexicalEscaping` method and records the offsets escaped, because that repair infers intent and should never be invisible.
+
+  Replayed against 16 real failing production payloads: 16/16 recovered, 180 characters escaped, 12ms total. Each repair verified escapes-only — removing the inserted backslashes reconstructs the original byte-for-byte — with a valid response shape. Against 34 already-valid payloads, 20 containing markdown fences: zero false positives. The production failure that motivated this had burned all ten agent retries, roughly four minutes and 79K completion tokens, before terminating; it now recovers in 0.61ms with the AI stage never reached.
+
+- 23c2521: Close silent-failure gaps in Open App config writes, class registration, and update checks — and
+  fix the first real collision the new class-registration diagnostic found.
+
+  `dynamicPackages` idempotency matched the whole config file rather than the target array, so a
+  `shared` package — which must be written to both `server` and `client` — had its client insert
+  skipped by the server entry written moments earlier. The package never reached
+  `dynamicPackages.client`, so its `@RegisterClass` components were tree-shaken out of the browser
+  bundle with no error raised anywhere. The check is now scoped to the target array's body.
+
+  Upgrades were add-only, so `mj.config.cjs` converged on the union of every version ever installed
+  and a package dropped in v2 kept being bootstrapped. `PruneDynamicPackagesNotInManifest` now runs
+  on the upgrade path, after the adds; surviving entries are left byte-identical so an operator's
+  `Enabled: false` is not silently reset, keep-sets are per-array, and an entry shape that cannot be
+  parsed is a no-op rather than a guess. A renamed `startupExport` is retargeted in place — keying
+  only on package name left the old export name in the config forever, and ServerBootstrap then reads
+  `mod[StartupExport]`, gets `undefined`, skips it because it is not a function, and still logs
+  `(ran <old name>)`. The add-then-prune order is chosen for the failure case: these are two writes
+  to the same files with no rollback between them, and adding first leaves that window holding
+  (old ∪ new), so a server that restarts mid-upgrade still finds every entry it needs. Pruning first
+  would leave a subset of both versions and the app's registrations would vanish.
+
+  `@RegisterClass` passes `priority = 0`, which routes to the auto-increment branch, so a later
+  registration always wins — correct for an inheritance chain, silently wrong for two unrelated
+  classes colliding on a key. Only `priority > 0` ever warned, so in practice nothing warned.
+  `ClassFactory.Register` now warns naming every prior unrelated registration for that
+  `(base class, key)` pair, using a new `AreClassesRelated` that compares by name as well as identity
+  so a module loaded through two paths does not read as a collision. Registration behavior is
+  unchanged; the warning is diagnostic only. Measured over a realistic MJAPI load — 1,318 real
+  registrations across 697 `(base, key)` groups — it fires on exactly one pair, with no false
+  positives.
+
+  That one pair was a real bug, fixed here. `MJConversationDetailEntityServer` and
+  `MJConversationDetailEntityExtended` both registered for `BaseEntity` under
+  `'MJ: Conversation Details'` as siblings, each extending the generated entity directly. The server
+  package loads last, so it won outright and the Extended class's `Save`/`Delete` permission gate —
+  the check that only a conversation's owner may set `UserRating`/`UserFeedback`, and that a
+  non-owner without a resource grant cannot write at all — never ran. The gate is explicitly written
+  to run server-side (`ProviderType === 'Database'`), which is exactly where it was being shadowed
+  out. `MJConversationDetailEntityServer` now extends `MJConversationDetailEntityExtended`, so the
+  edit-flag logic and the permission gate compose instead of one replacing the other. The resolved
+  class is unchanged; only its base is.
+
+  `mj app check-updates` dropped the per-repo `TokenMap` that `install` and `upgrade` both use, so
+  private repos reported "up to date" forever; dropped each app's `Subpath`, so a multi-app repo
+  reported a **sibling app's** version as this app's latest; and let one throwing app kill the sweep
+  or vanish from a report that still concluded "All apps are up to date". The loop moved into a
+  testable `CheckAppsForUpdates` helper with the version lookup injected, and failures are collected
+  per app and reported.
+
+  A lookup that returns no version at all is now reported as `Unresolved` — a third outcome, distinct
+  from both an update and a failure — and the green "All apps are up to date" line is printed only
+  when every app actually produced an answer. Every app in the list is installed, so it resolved from
+  a real ref once; finding no version now means the resolver and the repository disagree. This matters
+  because `ListGitHubTags` reads a single page of the GitHub tags API: against
+  `MemberJunction/Integrations` (374 tags), the scoped `<subpath>@<semver>` tag line for every
+  installed connector sits past page 1, so all nine apps resolve to nothing. Without this, scoping the
+  lookup by `Subpath` would have traded a wrong-but-obvious answer for a confident false green.
+  Pagination itself is fixed separately in #3353, which should land with or before this.
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 4586215: Two hot-path costs removed from MJGlobal with byte-identical behavior:
+  - **ClassFactory builds its resolution-failure diagnostic lazily.** The multi-KB string (a scan over every registration in the process) was built on every fallback resolution and then, on the designed probe path (`@OptionalKeyedSpecialization` — once per field of every entity), discarded unread. It is now computed only when something actually reads it — `CreateInstance`'s hard error still gets it eagerly, an emitted report formats it exactly as before, and the fallback result's `Reason` is an enumerable getter returning the identical, memoised string (spread/`JSON.stringify`/`Object.keys` unchanged). `GetAllRegistrations` also hoists its loop-invariant name/key normalization out of the per-registration filter.
+  - **`GetGlobalObjectStore` stops throwing on every server call.** In Node, bare `if (window)` on the undeclared identifier threw a `ReferenceError` per call, with the catch falling through to `global` — correct answer, pathological path, measured at several percent of a busy server's CPU. `typeof` probes (legal on undeclared identifiers) replace the try/catch ladder, and the answer — fixed at process startup by definition — is memoised. Node still gets `global`, the browser still gets `window`, an exotic sandbox still gets `null`.
+
+- a5f92d2: Add canonical `EscapeSQLString` utility to `@memberjunction/global` for safe escaping of string literals in SQL statements, clauses, and `ExtraFilter` predicates, and adopt it across core packages in place of duplicate ad-hoc implementations.
+
+  Call sites now use `EscapeSQLString` directly rather than package-local aliases. `@memberjunction/schema-engine` no longer exports `EscapeSqlString` at all — it had no callers, so it is removed outright rather than deprecated. The remaining three exported aliases — `EscapeSqlString` (`@memberjunction/open-app-engine`), `escapeSqlLiteral` (`@memberjunction/database-designer-core`) and `escapeSqlString` (`@memberjunction/version-history`) — are kept as `@deprecated` re-exports so external callers do not break, and will be removed in the next major.
+
+  `EscapeSQLString` escapes string literals only. Its documentation, and the `data-access` rule, now spell out the three cases it does not cover: `LIKE` patterns (where `%`, `_` and `[` remain live wildcards), identifier names (use SchemaEngine's `ValidateIdentifier()`), and values whose absence should be an error (`null`/`undefined` escape to `''` rather than throwing).
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 834f8d7: Fix a `TypeError` that could kill an agent mid-run during context assembly, and take down scheduled-job dispatch entirely (`__mj_CreatedAt?.getTime is not a function`, `job.NextRunAt.getTime is not a function`).
+
+  Two defects, one crash:
+  - **`BaseEngine.OnExternalCacheChange` poisoned `entity_object` caches (the root cause).** When a cross-server cache-change event carried a payload, its rows — plain JSON objects, since cache payloads are serialized — were assigned straight into the engine property. For a config whose effective `ResultType` is `entity_object` (the default), that silently replaced the array's `BaseEntity` instances with plain objects, so `BaseEntity`'s coercing accessors were bypassed and a date field declared `Date` held a raw ISO string. Rows are now materialized via `TransformSimpleObjectToEntityObject` — the same conversion RunView's own cache-hit path uses — before assignment, with `'simple'` configs still passing through untouched and any failure degrading to the pre-existing full reload. Because materialization is async, the payload branch now claims a refresh generation (`beginConfigRefresh`/`isLatestConfigRefresh`, as `LoadSingleConfig` already does) so overlapping cache events cannot commit out of order. This affects **every** engine with `CacheLocal: true`.
+  - **Unguarded `Date` method calls on those fields (the crash sites).** Optional chaining does not protect them — `"…"?.getTime` is `undefined`, and calling it throws. A new `ToEpochMs(value)` helper is exported from `@memberjunction/global` (a pure date utility — it needs no entity or metadata concepts) and now backs every affected read across four engines: `AgentContextInjector.sortExamples`/`sortNotes`, `AIEngine.fallbackGetNotesFromCache`/`fallbackGetExamplesFromCache`, `ConversationEngine.sortConversations`, and the scheduling engine's `isJobDue` plus its `NextRunAt`/`EndAt` diagnostics. It also closes a latent issue in the previous form: an Invalid `Date`'s `getTime()` returns `NaN`, which `?? 0` did not catch, yielding an incoherent comparator.
+
+  Two exposures worth calling out. `AIEngine.fallbackGetNotesFromCache` is reached whenever the note vector service is uninitialized or a query embedding fails, so semantic retrieval with real input text could crash too — not just the empty-input path. And `SchedulingEngine.isJobDue` throws on the _first_ job in the dispatch loop, so a poisoned cache stopped **all** scheduled jobs from running, on every poll, until the cache reloaded.
+
+  `isJobDue` also had a silent variant of the same bug: `evalTime < job.StartAt` does not throw on a string — relational operators coerce toward numbers, an ISO string yields `NaN`, and every comparison is false — so `StartAt`/`EndAt` activation windows silently stopped being enforced and a job could fire outside its range with nothing in the logs. Those comparisons now go through `ToEpochMs` as well.
+
+  Making the cache-event path work also exposed a filtering gap (caught in review): `SchedulingEngineBase` loads `MJ: Scheduled Jobs` unfiltered and applies its Active-only invariant in memory, but only re-applied it on entity events — not after a cross-server cache event, whose payload carries every row. In a multi-instance deployment, one server's engine load could therefore hand another server's dispatch loop Disabled/Paused/Pending jobs. The engine now re-applies the filter (and notifies `JobsChanged$`) after `OnExternalCacheChange`, and `isJobDue` independently refuses non-Active jobs so dispatch can never depend on the array staying pre-filtered.
+
+- cefc302: security: harden SQL-filter validation, the OAuth callback handler, API-key lookup, and the new-user domain gate
+
+  **SQL literal stripping (`@memberjunction/global`, `@memberjunction/core`).** Both of MJ's SQL screens — `DatabaseProviderBase.ValidateUserProvidedSQLClause` (which guards `ExtraFilter`, `OrderBy` and `UserSearchString`) and `SQLExpressionValidator` (which guards `Aggregates` and ad-hoc queries) — stripped string literals with a regex that honored **backslash escaping**. SQL Server and PostgreSQL do not treat `\` as an escape, so a payload such as `x = 'a\') ; DROP TABLE Users; --'` was swallowed whole as one "literal" and stripped away before the keyword denylist ran, while the database closed the literal at the real quote and executed the stacked statement. Both screens now share a single `StripSQLStringLiterals` helper that matches SQL-standard doubled-quote (`''`) semantics, and a regression suite in each package pins the behavior.
+
+  **OAuth callback handler (`@memberjunction/server`).** Caller-supplied `connectionId` was interpolated into a raw `ExtraFilter` without escaping; it is now validated as a UUID at the request boundary and escaped at the SQL sink. `frontendReturnUrl` was redirected to after only a URL-parse check, making the callback an open redirect from the trusted MJAPI origin; its origin is now validated against `cors.allowedOrigins` (plus the built-in redirect origins) both when the flow is initiated and when the redirect is issued.
+
+  If you run frontends other than MJExplorer against MJAPI, note that the return-URL allowlist is derived from `cors.allowedOrigins`. Deployments on the default `['*']` are unaffected — every return URL is still allowed. Deployments that have narrowed `cors.allowedOrigins` are mostly self-protecting, since a browser frontend must already be on that list to call `/oauth/initiate` at all, but three cases can now fall back to MJAPI's built-in page instead of returning to the app: a return URL on a _different_ origin than the caller, a server-to-server initiate whose return origin was never CORS-listed, and any proxy setup where the browser-visible origin differs from the configured one (matching is exact on scheme + host + port). Each rejection is logged with the offending URL.
+
+  **API-key lookup (`@memberjunction/api-keys`).** `ValidateKeyByHash` now asserts its argument is a SHA-256 hex digest before building the SQL filter, enforcing the injection-safety invariant at the sink for all present and future callers.
+
+  **⚠️ Behavior change — `userHandling.newUserAuthorizedDomains`.** The new-user domain gate previously authorized against the hostname parsed from the request's `Origin` header, which is trivially spoofable on non-browser requests: a holder of any valid IdP token could auto-provision an account under an authorized domain by forging `Origin`. It now authorizes against the **email domain of the verified identity token**.
+
+  If `newUserLimitedToAuthorizedDomains` is enabled, review `newUserAuthorizedDomains` before upgrading:
+  - Entries that are **frontend hostnames** (`app.example.com`, `localhost`) must be replaced with the **email domains** your users sign in with (`example.com`). Deployments where the two happened to coincide are unaffected.
+  - Wildcards match in full, so `*.example.com` matches `mail.example.com` but **not** `example.com` — list both if you need both.
+  - Identity providers that issue a bare username with no `email` claim can no longer auto-provision; the denial is logged explicitly. Configure the provider to emit an `email` claim, or set `newUserLimitedToAuthorizedDomains: false`.
+
+  The gate is off by default (`newUserLimitedToAuthorizedDomains: false`, `newUserAuthorizedDomains: []`), so deployments that never enabled it are unaffected.
+
+  **⚠️ Related expansion — MCP OAuth auto-provisioning.** Auto-provisioning previously also required a non-empty request `Origin` as a precondition for entering the check at all. `MCPServer`'s `resolveOAuthUser` passes no request domain, so with the domain gate enabled, MCP OAuth users could never be auto-created regardless of their email domain. Now that the spoofable precondition is gone, an MCP OAuth user whose **JWKS-verified** token carries an authorized email domain plus given/family name claims **will** be auto-provisioned, consistent with the browser path. If you run MCP with `newUserLimitedToAuthorizedDomains` enabled and were relying on that side effect to keep MJ user records from being created, add the restriction explicitly (narrow `newUserAuthorizedDomains`, or set `autoCreateNewUsers: false`).
+
+- be0bdb2: Follow-up hardening for Query & Entity Materialization (#3735). Each item below fails toward doing the
+  wrong thing rather than doing nothing, so none of them surface as an error in normal operation.
+
+  **Row-restriction gates read both fence layers.** MJ enforces row restrictions in two AND-composed
+  layers — role RLS and API-key row filters — and the mint, drift and runtime Leak-1 gates each re-derived
+  a role-only predicate inline. An entity fenced _only_ by an API-key row filter therefore read as
+  unrestricted; because the mint gives the materialized entity a NEW EntityID, the key's EntityID-keyed
+  binding stops matching it, and the principal is served a full unscoped snapshot of rows it cannot read
+  live. All gates now compose both layers, and an unproven layer counts as restricted.
+
+  **Lost provenance is now drift.** Deleting a source query cascade-deletes the `MaterializedResultQuery`
+  join row while the snapshot, the minted entity and its read grants all survive — which silently disarmed
+  both the RLS re-check and the read-grant re-narrow, leaving the unscoped snapshot serving indefinitely.
+  It now revokes read and holds.
+
+  **A zero-row external query no longer destroys the snapshot.** Columns are derived from the returned
+  rows, so an empty result built a surrogate-only shadow, dropped the canonical table and renamed that
+  shell into its place — every subsequent read failing on a missing column while the refresh reported
+  success. An empty result now refuses the rebuild and leaves the existing snapshot serving.
+
+  **The refresher snapshots the statement the read path executes.** Reads resolve SQL through
+  `GetPlatformSQL(PlatformKey)`; the refresher snapshotted the base `SQL`, so a query carrying a
+  per-platform variant was materialized from a different statement than live serves.
+
+  **`XACT_ABORT` no longer escapes onto the pooled connection.** The swap, recompute and dirty-group
+  batches each set it ON and never restored it. SET options persist for the session, so unrelated requests
+  handed the same physical connection inherited it — turning their recoverable statement-level errors into
+  full transaction aborts, far from anything to do with materialization.
+
+  **The DDL identifier guard no longer opens on its own failure.** `assertSafeObjectNames` throws on a
+  tampered `SchemaName`, but the failure path then passed that same rejected name to the best-effort shadow
+  cleanup, which interpolated it raw into `DROP TABLE`/`OBJECT_ID`. The cleanup now re-checks and declines.
+
+  **Two analyzers that produced silently wrong rows.** A `UNION`/`EXCEPT`/`INTERSECT` parses to a single
+  `select` root whose `groupby` and `columns` describe only the first branch, so a set operation yielded an
+  aggregation key covering one branch and the incremental MERGE collided both branches on the same hash.
+  And a row-filter predicate was bound to an output column by bare name, which cannot tell `o.Status` from
+  `c.Status` across a join, nor an alias from the column it rebinds.
+
+  **Missing manifest registrations.** Neither new `@RegisterClass` class was in the pre-built manifests, so
+  a bundled MJAPI tree-shook both away: the refresh driver never resolved, nothing was ever refreshed, and
+  `Status` stayed `Active` while the read paths served mint-time data forever.
+
+  **Read-routing distinguishes a failed lookup from "not materialized".** Only three roles hold `CanRead`
+  on `MJ: Materialized Results`, so a restricted user silently got live data for every materialized request
+  while an admin got the snapshot. The live fallback is correct and unchanged; the silence was the defect.
+
+  **Note on coverage.** The predicate-binding proof and the join-qualifier requirement are deliberately
+  conservative and will refuse shapes that previously qualified: a row-filter query whose predicate or
+  projection is unqualified across a join now stays live-only, and an aggregation over a join with an
+  unqualified `GROUP BY` loses its incremental key and falls back to `FullRebuild`. Both refusals are
+  logged with the specific reason. Falling back to live is always correct — but a query that silently gets
+  slower is easier to diagnose knowing this changed.
+
+- f5ec13b: Harden `SafeExpressionEvaluator` against a sandbox escape, and correct Skipped-status reporting.
+
+  **`SafeExpressionEvaluator` sandbox escape closed.** The previous defense was a textual denylist,
+  which a split-token expression walked straight through:
+  `[]["cons"+"tructor"]["cons"+"tructor"]("return process.pid")()` spells none of the banned words yet
+  climbs `[].constructor.constructor` to the `Function` constructor and reaches `process` — a
+  confirmed arbitrary-code route from any metadata-authored expression (field rules, flow/loop agent
+  conditions, task-graph conditions). Validation is now a **structural AST allowlist**: the expression
+  is parsed and every node checked before compilation, rejecting computed member access whose key is
+  not a literal (the concatenation route), `.constructor`/`__proto__`/`prototype` access, any call
+  outside the safe-method and safe-global lists, and host-global identifiers. Because the check is structural it cannot
+  be defeated by string assembly, and it also stops the denylist's over-rejection of legitimate data —
+  `name == 'constructor'` and a field named `window` are now valid again. `validateSyntax` continues to
+  parse-without-executing on top of it.
+
+  **The expression grammar NARROWED, and callers should read this list.** The old denylist enforced
+  almost nothing, so the accepted surface was in practice "whatever `new Function` compiles". The
+  structural allowlist accepts what the evaluator's contract always documented — comparisons, logical
+  ops, dotted/indexed access, the `SAFE_METHODS` list, arrow-function array callbacks, `typeof` — plus
+  optional chaining (`payload?.customer?.tier`) and the safe globals below. **Now refused**, where the
+  denylist let them through: `in` / `instanceof`, regex literals (`/x/.test(y)`), and string/array
+  methods outside `SAFE_METHODS` (`.split()`, `.replace()`, `.slice()`, `.substring()`, `.match()`,
+  `.join()`). No metadata shipped in this repo uses any of them; installations authoring their own
+  expressions (field rules, flow/loop agent conditions, task-graph conditions) should audit the columns
+  that store them before upgrading.
+
+  **Ambient globals stay callable, and the list now has ONE owner.** `SAFE_EXPRESSION_GLOBALS` in
+  `@memberjunction/global` — `Math`, `Number`, `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`,
+  `parseInt`, `parseFloat`, `isNaN`, `isFinite` — may be called as namespace methods (`Math.abs(...)`,
+  `Object.keys(...)`, `JSON.stringify(...)`, `Array.isArray(...)`, `Date.now()`) or as bare functions
+  (`Number(...)`, `parseInt(...)`, `isNaN(...)`). Receiver and method are both fixed identifiers, so
+  none of the four invariants that close the escape is weakened. `ai-core-plus`'s task-graph door now
+  imports that set instead of keeping its own copy: `1efc248ac5` shipped the decision that the door
+  must not refuse `Number(payload.count) > 3` or `Math.abs(output.delta) < 5`, and a second curated
+  list is how the two halves came apart. `RESOLVABLE_GLOBALS` is removed from
+  `@memberjunction/ai-core-plus`; import `SAFE_EXPRESSION_GLOBALS` from `@memberjunction/global`. The
+  pinning test now CALLS every entry — it previously only read each name (`Math !== undefined`), which
+  is why a screen that refused `Math.abs(x)` passed it.
+
+  **A policy refusal now HOLDS a task-graph edge instead of rerouting it.** `IsBrokenGuard` recognises
+  the evaluator's refusal message, so a stored graph carrying a construct this build no longer accepts
+  stalls visibly rather than taking a different path with no recorded cause — the dispatcher logs a
+  reason only on `hold`.
+
+  **Skipped test status wired through reporting.** `MJ: Test Suite Runs` now records `SkippedTests`
+  and `ErrorTests` (previously left NULL); the CLI single-test and suite-markdown formatters render
+  Skipped as SKIP rather than FAIL and keep skips out of the Failures section; and the exported
+  summary aggregator counts skips separately and averages over the executed set.
+
+- 1bd9674: Task-graph engine hardening, Phase 1 — four correctness fixes at the seams between the well-built layers. Every one of them failed silently as success: the run reported Complete while the wrong work happened, or the settlement was lost with no error and no stall.
+
+  **P1 — an exclusive loser could skip a task another route still reaches.** A losing edge decided its target's fate rather than its own, so a fork whose loser pointed at a step the winner also reached (directly, or through a join) skipped that step while it was still due to run — and the graph settled Complete with the work never executed. `ResolveExclusiveGroups` no longer seeds a target a kept edge also points at, and `ConfirmSkipSeeds` answers the surviving-route question the dispatcher already asks for ordinary dropped edges.
+
+  **P2 — an unevaluable guard executed the work it was guarding.** A condition that failed to evaluate returned "keep the edge", and since conditions are only evaluated once the origin is terminal, a kept edge from a `Complete` origin is a satisfied prerequisite. The spec layer, the legacy walker and the exclusive path all said the opposite. Unevaluable is now an undecided HOLD, and `IsGraphStalled` counts held tasks so a graph waiting forever stops reporting healthy.
+
+  **P3 — settlement is recoverable.** The post-settlement sequence ran after the parent's terminal write, and a terminal parent matched no sweep query — so a crash in that window left the submitting agent run `Paused` forever, with no cost rollup and no notification. A third sweep arm finds terminal-but-unsettled graphs (wide once at startup, 24h in steady state), the settle sequence is re-entrant, and `Cancel` now defers to the dispatcher instead of writing the parent terminal itself, which makes cancellation deterministic.
+
+  **P4 — the continuation marker is a real compare-and-swap.** It was read-check-write, so two dispatchers could both deliver one settlement — for `reinvoke`, two billed agent turns. It is now a single guarded UPDATE in `TaskClaimStore`, and the parent's status and start-time writes are column-scoped so a full-row save can no longer erase the marker another instance just claimed.
+
+  **A stopped dispatcher now stops writing.** `Stop()` waited on in-flight tasks but not on the timer passes, which are `void`-ed promises nothing held — so it returned mid-pass and that pass went on to settle graphs, emit lifecycle frames and claim new tasks afterwards. Three quiet consequences: a `GraphSettled` frame arriving after every subscriber had gone, a shutting-down process manufacturing the orphaned claims reconciliation exists to clean up, and statements colliding with the host's reuse of the connection. Passes are now drained (they are bookkeeping for work that already happened, so cancelling one would open the very crash window P3 rescues), and no new work is claimed after the decision to stop.
+
+  **Every dispatcher query is scoped to workflow graphs.** `MJ: Tasks` is general-purpose — conversation tasks and users' own to-dos live there too — and the sweep did not filter by task type, so it rolled up and overwrote the status of anything with children. `Submit` has always stamped the `AI Workflow` type, so the discriminator already existed on every dispatcher-owned row; it is now in all three sweep arms and inside the guarded statements that write a payload column.
+
+  **New: an edge condition that cannot be parsed is refused at authoring time.** `SafeExpressionEvaluator.validateSyntax()` compiles an expression without evaluating it, which is what lets the check be syntax-only: unknown identifiers, absent properties and undefined chains all pass, because whether `payload.x.y` resolves is a question about a run that has not happened yet. `ValidateTaskGraphSpec` applies it to dependency conditions and `While` loop conditions, reporting every failure at once and naming the step and the condition text.
+
+  ⚠️ **Migration note.** A saved workflow or flow whose condition never parsed has been failing at run time all along — silently before P2, as a held branch after it. That failure now surfaces at SAVE time instead, so editing an unrelated step in an old flow can newly report an error on a step you did not touch. The message names the step and quotes the condition so the surprise explains itself. Nothing rejects on load, and unknown identifiers are explicitly NOT an error — only expressions that cannot parse at all.
+
 ## 6.1.0-edge.2
 
 ### Minor Changes

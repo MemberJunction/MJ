@@ -1,5 +1,512 @@
 # @memberjunction/integration-test-suite
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- 1a2ce13: Pricing for models that aren't billed by the token, and OpenAI as a second Whisper provider.
+
+  **The problem.** MJ's pricing _schema_ was always general — a cost row names a price unit type, and the unit type names a `DriverClass` the ClassFactory resolves. The _execution layer_ was not: `BasePriceUnitType` took two token counts, only the three token drivers were ever registered, and `MJAIPromptRunEntityServer` refused to cost any run reporting zero tokens. So the three continuous-media unit types that already shipped — `Per Image`, `Per Minute`, `Per Hour` — resolved to nothing, and every run priced by one was silently uncosted. Six ACTIVE image cost rows were in that state. (Bug register B60.)
+
+  Speech-to-text made it concrete: Groq bills Whisper by the audio-hour, the just-landed `GroqAudioGenerator` requested `response_format: 'json'` which discards the duration entirely, and the two Whisper models shipped with no cost rows because there was no honest way to write one.
+
+  **Usage grows a second axis.** `ModelUsage` gains `unitKind` (`'Tokens' | 'Seconds' | 'Characters' | 'Images'`), `inputUnits` and `outputUnits`, plus a `ModelUsage.ForMedia(kind, input, output?)` constructor. Continuous quantities are deliberately _not_ folded into the token fields: a run reporting 90 "tokens" that means 90 minutes corrupts `TokensUsed`, every rollup above it, and every dashboard downstream. `SpeechResult` gains `usage?`, matching `ImageGenerationResult`.
+
+  Quantities are always recorded in the **base** measure, never the billing measure — audio billed per hour is still recorded in seconds, and the driver converts. That is what lets one measured duration be priced against a per-minute row from one vendor and a per-hour row from another.
+
+  **Pricing takes quantities.** `BasePriceUnitType` gains a `UnitKind` getter (defaulting to `'Tokens'`, so external subclasses need no change) and `CalculateCost(activeCost, usage)`, the preferred entry point — its default delegates to the existing cache-aware path, so every current driver behaves identically. `TimePerMinutePriceUnitType`, `TimePerHourPriceUnitType` and `PerImagePriceUnitType` register against the unit types that were already seeded, closing the driver half of B60.
+
+  Each driver also exposes `UnitsPerBillingUnit` — 1,000,000 for a per-million-token rate, 3,600 for per-hour, 1 for per-image — so a divisor exists in exactly one place per driver. `TOKEN_PRICE_UNIT_TYPE_DIVISORS` is _derived_ from the driver instances rather than restated, which makes drift between the exported table and the arithmetic that prices every run impossible instead of merely detectable. The map deliberately covers only the token drivers: a missing key is the signal for a consumer doing token-rate math to SKIP a row priced by audio duration, not to fall back to a per-token divisor.
+
+  `BasePriceUnitType` is marked `@RequiresSubclass()`. `ClassFactory.CreateInstance` has never returned `null` for an unregistered key — it falls back to `new BaseClass(...)` — so `if (!calculator)` was a dead branch that installed a hollow object whose only pricing method is `undefined`, surfacing as a `TypeError` inside cost math rather than "this driver is not registered". The new `UnitKind` default made that hollow instance _more_ convincing, since it answers `'Tokens'` and so passes the measure check before throwing. `GetPriceCalculator` now resolves via `TryCreateInstance` and reports the failure, so its documented `null` return is real.
+
+  `AIEngineBase.CalculateModelCost(modelID, vendorID, usage)` is a new costing surface for callers holding a result but no prompt run — transcription and image actions, downstream apps. It returns `null`, having logged why, when there is no active cost row in the measure the run recorded, no registered driver, or a mismatch between what the run measured and what the row prices. A null means "we don't know what this cost" and must never be read as zero.
+
+  **Cost-row selection is measure-aware.** `GetActiveModelCost` takes an optional `usageKind` and excludes rows priced in any other measure before the most-recently-started tiebreak. Without it the effective key is `(Model, Vendor, ProcessingType)`, which cannot represent a model billing in two measures — per-image output alongside per-token prompt — so which measure you got was a sort-order coin flip that was then refused downstream and reported as a pricing gap. The measure is now established _before_ a row is chosen. Omitting the argument keeps the previous behaviour, and no shipped model+vendor carries two measures today, so nothing changes for existing data.
+
+  **The measure is a first-class row, not a string.** A new `MJ: AI Usage Types` entity (`Tokens`, `Seconds`, `Characters`, `Images`) is what a run and a price unit type point at, so "what does this price buy" is answerable by a join instead of by convention. An earlier revision carried it as `AIPromptRun.UnitsKind NVARCHAR(20)` behind a CHECK constraint, which made the set of measures a property of a constraint on one column: nothing else in the schema could reference a measure, and adding one meant editing a CHECK on a table with nothing to do with pricing.
+
+  Note the usage type and the price unit type answer **different** questions and stay separate: `AIUsageType` is the BASE measure of a quantity, while `AIModelPriceUnitType` is the BILLING unit and its scale. Audio is recorded in `Seconds` and billed `Per Hour`. Collapsing them would force a new usage type per billing granularity.
+
+  **The measure lives on `AIModelPriceUnitType`, and nowhere else.** It gains `UsageTypeID` — so a cost row has exactly one place to look for its measure, reached through its `UnitTypeID`, and the FK there means whatever it finds is a real catalog row rather than a string. `AIModelCost` deliberately carries **no** usage-type column: it would be a second copy of a derivable fact, and nothing would arbitrate a cost row claiming `Seconds` while its unit type says `Tokens` — which is precisely the comparison the safety checks depend on. Single-sourcing makes that contradiction unrepresentable rather than merely unlikely.
+
+  **The divisor becomes data, which closes B60's class rather than its instance.** `AIModelPriceUnitType.UnitsPerBillingUnit` (`CHECK > 0`) holds the number that converts base measure to billed unit — 1,000,000 for per-1M-tokens, 3,600 for per-hour, 1 for per-image. That number previously existed _only_ inside a TypeScript class, and that is the root cause of B60: `Per Image` / `Per Minute` / `Per Hour` were seeded as data by one person while the driver classes were never written by another, and the seam was silent for months. A new `LinearPriceUnitType` (`DriverClass = 'Linear'`) reads both columns off its own row, so a linear billing unit — "Per 1,000 Characters" — now ships as one seeded row with no class, no registration and no build. `DriverClass` remains the escape hatch for genuinely non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments like the Groq 10-second floor). An _unregistered_ driver still refuses to price, deliberately: `DriverClass` is NOT NULL, so an unrecognised name is ambiguous between "a new linear unit" and "a non-linear driver whose code is missing", and pricing the second linearly would produce a confident wrong number.
+
+  **`AIModelPriceType` is demoted alongside.** It was a NOT NULL FK that nothing prices, filters or branches on, while `AIModelPriceUnitType` carried the real contract — three vocabularies for one concept, with the _mandatory_ one the one nothing read. Adding a usage type without demoting it would have locked that ambiguity in permanently. Not dropped (NOT NULL, 235 metadata rows, and dropping is on the Forbidden list in `PUBLISH_NO_BREAK_POLICY.md`): the field is flagged `Status = 'Deprecated'`, removed from the generated form (`IncludeInGeneratedForm = 0`, which is the step that actually ends the ambiguity rather than documenting it), and has `AutoUpdateDescription` cleared so CodeGen cannot overwrite the demotion text — all declared in `metadata/entities`, where field-level editorial decisions belong, rather than as EntityField UPDATEs in a migration. The migration keeps only the schema half: a database default of `Tokens`, so new cost rows need not name a value from the vocabulary they are being told to ignore.
+
+  **Prompt runs can record it.** `AIPromptRun` gains `InputUnitsUsed`, `OutputUnitsUsed` (both `CHECK >= 0`) and `UsageTypeID`, where NULL means token-billed — which is what every row written before the column existed IS, since the schema had no way to say anything else. That reading happens at exactly one seam (`MJAIPromptRunEntityServer.RecordedUsage`) rather than in four places, so the rest of the runtime still sees a definite measure. The save-time cost gate passes on units as well as tokens, and refuses — loudly — to price a run whose measure disagrees with its cost row's, rather than dividing seconds by a million and reporting the ~$0 that produces. No units rollup was added: units of different kinds cannot be summed, so cost remains the universal aggregate.
+
+  **The catalog rows are declarative metadata, and that is what makes the new columns nullable.** The four measures live in `metadata/ai-usage-types`, and the measure + divisor for all six shipped billing units in `metadata/ai-model-price-unit-types` — seeded and backfilled by `mj sync push`, not by INSERT and UPDATE statements in the migration, so they are reviewable data in the same form as the rest of the catalog. Metadata is pushed by the release-time consolidated `*__Metadata_Sync.sql`, which by construction carries a later timestamp than any migration a PR can author, so a NOT NULL column defaulted to the Tokens row would fail the from-scratch build on the ADD itself: SQL Server materialises the default into every existing row and the foreign key has nothing to resolve. Nullable + FK is the strongest guarantee available before the seed exists — any non-null value is a real measure — and the runtime is written to that contract rather than around it: a price unit type with no measure refuses to price rather than guessing Tokens. Tightening both `UsageTypeID` columns to NOT NULL is a one-statement follow-up in the release _after_ the one that ships the seed.
+
+  A clean-room bootstrap also found that `sp_updateextendedproperty` throws when the property does not already exist, so the demotion uses drop-then-add — the same fresh-install-only class as the `EntityField.Sequence` trap in `migrations/CLAUDE.md`.
+
+  **`ModelUsageUnitKind` must stay a superset of the `AIUsageType` catalog, and the catalog rows are the source.** `MJAIPromptRunEntityServer` resolves a run's `UsageTypeID` to the catalog row's `Name` and hands that string straight to `ModelUsageUnitKind`. Nothing about that is checked by the compiler — the name arrives as a plain `string` from a database row — so seeding a usage type whose name the union does not carry produces no build error, just a runtime hole on exactly the rows using the new measure. `MODEL_USAGE_UNIT_KINDS` exists so a test can assert the two agree by reading the seed file rather than restating it. `Characters` is present for that reason and has no pricing driver yet, which is not a defect: the costing path refuses to price a measure no driver claims and logs why, which is strictly better than a plausible wrong number. A compile-time assignability pin backs this up (Vitest does not typecheck by default, which is how a narrowing slipped through once).
+
+  **Providers.** Groq now requests `verbose_json` and reports the duration it was already being billed for, summed across split pieces. If any piece fails to report one, usage is left undefined rather than under-reported — a partial sum understates the bill while looking complete. `OpenAIAudioGenerator.SpeechToText` is implemented (it previously threw), with the same 25MB ceiling, the same injected `AudioSplitter`, and the same duration capture. The split-and-join loop moved onto `BaseAudioGenerator.TranscribeWithSplitting` so both providers share one implementation.
+
+  **Cost rows now ship** for Groq Whisper Large v3 ($0.111/audio-hour) and Turbo ($0.04/audio-hour), verified against Groq's published pricing. `Whisper 1` is a **new** model rather than a vendor row on Whisper Large v3: OpenAI's endpoint serves the large-v2 checkpoint, and attaching it to the v3 record would misreport which weights transcribed a given run. It carries a $0.006/minute cost row.
+
+  **Also:** the AC1 integration check flips from warning to hard assert now that every shipped unit type resolves — a future unit type added without a driver reddens the deterministic tier instead of scrolling past. The assert is scoped to unit types an **Active cost row actually references**, since those are the ones whose missing driver silently uncosts real runs; a custom unit type awaiting its driver, referenced by nothing, is reported rather than failed.
+
+  A new **AC7** check is the monitoring counterpart to the whole refusal doctrine. Everything here turns a wrong number into a `NULL`, which is right — but a null plus a `LogError` in a server log is invisible, and that is precisely how B60 survived months with six dormant ACTIVE image cost rows. AC7 asks the question nothing asked: completed runs that did measurable work and carry no cost. It grades the two populations differently — no active cost row in the run's measure is a pricing-coverage gap and is reported; an active cost row in that measure _existing_ while the run is still uncosted means the pipeline had everything it needed and produced nothing, which is asserted.
+
+  The two Explorer cost dashboards no longer carry their own copy of the divisor table. They now resolve a cost row's scale through its unit type's `DriverClass` against the exported `TOKEN_PRICE_UNIT_TYPE_DIVISORS`, and skip rows priced by a non-token unit type rather than defaulting them to the per-1M divisor — which had been dividing an hourly audio rate by a million. Both local tables were keyed by unit-type _display name_ using names (`Per Million Tokens`) that never matched the seeded ones (`Per 1M Tokens`), so every lookup missed and only the per-1M fallback made the numbers come out right; keying off the driver class removes both the miss and the fallback that hid it.
+
+  Pricing also refuses, rather than reporting $0, when a run records continuous units without a resolvable usage type to name their measure — the same "we don't know what this cost" rule the rest of the path follows.
+
+  Both transcription providers request `verbose_json` only for models that accept it. OpenAI's GPT-4o transcription models reject it outright, so they fall back to `json` and report no duration instead of failing the transcription; Groq's STT surface is Whisper-only today, so the guard there is prospective — matched on `includes('whisper')`, because `distil-whisper-large-v3-en` does support `verbose_json` and a `startsWith` test would strip its duration and leave every run through it uncosted. A reported duration of exactly `0` now leaves usage undefined rather than producing a measure with no quantity, which the pricing layer would refuse and log as a fault for genuinely silent audio.
+
+  The PostgreSQL counterpart to the migration is deferred to the release build, per `migrations/CLAUDE.md`.
+
+- b42c125: Two silent failures made loud: the manifest generator's unbuilt-package fallback, and UR13's race with the live routine dispatcher.
+
+  **The manifest generator no longer guesses when a lazy package hasn't been built.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the `.d.ts` each `exports` entry's `types` field names, and skips any it cannot find. On an unbuilt workspace it finds none, returns an empty map, and the package falls through to the whole-package branch of `groupClassesIntoChunks()` — which replaces its per-subpath lazy chunks with one eager chunk. The result is valid TypeScript that compiles and passes review with its code splitting quietly removed. Running `mj codegen manifest` against an unbuilt tree collapsed `ng-dashboards`' twelve per-dashboard chunks into a single import and deleted 254 lines from `lazy-feature-config.ts` without a single warning.
+
+  `resolveLazySubpathExports()` now throws instead, naming the package and the directory it searched.
+
+  The guard is deliberately narrow, because "declares subpaths that didn't resolve" is a much weaker signal than it first appears — two innocent cases produce it:
+  - Every ng-packagr output publishes `"./package.json": { "default": "./package.json" }`, an entry with no `types` field that resolution skips by design. Only entries carrying `types` are counted.
+  - A subpath whose `.d.ts` declares no classes is skipped exactly like a missing one. `BootstrapLite`'s `./mj-class-registrations` is a real example — a generated manifest of const arrays, built and present, with nothing to reach.
+
+  So the check fires only for a package that actually **contributes lazy classes**, since that is the only case where an empty map mis-groups anything. A package contributing no classes has nothing to lose to the fallback.
+
+  **UR13 no longer races the product it is testing.** The check asserted an exact global run-row count for a routine that the shipped `User Routine Dispatcher` scheduled job — `Status=Active`, per-minute cron — is equally entitled to claim. `ConcurrencyMode=Skip` cannot prevent the overlap: it serialises _scheduled_ runs against each other, while the check constructs a driver in-process against a fabricated `MJScheduledJobEntity` that is never saved, so the engine cannot see it. The scheduler polls on a timer anchored to MJAPI's boot rather than to the wall clock, so whether a sweep lands inside the bundle's ~3-second window varies run to run — which is why this failed on `next` after a slow boot with no relevant code change.
+
+  It now snapshots the run rows before the pass and asserts on the delta, which is strictly stronger than what it replaced:
+  - `Details.RoutinesRun === 1` states the no-double-run property directly against _our_ sweep, where it is deterministic, rather than inferring it from a row count anyone may write to.
+  - Every new run row must satisfy the OnChange contract, not just the one at index 1 — all of them replay the same expression, so the property has to hold for each regardless of which dispatcher produced it.
+
+  `UR11` and `UR14` share the same exposure and are left alone here; they are not currently failing, and the durable fix for them is a fixture-level decision (pausing the live dispatcher for the bundle) that belongs to the suite's owner.
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [79483bf]
+- Updated dependencies [d735407]
+- Updated dependencies [22ec804]
+- Updated dependencies [8206993]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [9fe3019]
+- Updated dependencies [047a80f]
+- Updated dependencies [887ba9c]
+- Updated dependencies
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [b42c125]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [8b78695]
+- Updated dependencies [5fc861f]
+- Updated dependencies [88d751d]
+- Updated dependencies [d7feeae]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-agents@6.1.0-edge.5
+  - @memberjunction/codegen-lib@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/open-app-engine@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/communication-sendgrid@6.1.0-edge.5
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.5
+  - @memberjunction/search-engine@6.1.0-edge.5
+  - @memberjunction/conversations-runtime@6.1.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/scheduling-engine@6.1.0-edge.5
+  - @memberjunction/metadata-sync@6.1.0-edge.5
+  - @memberjunction/ai-agent-harness@6.1.0-edge.5
+  - @memberjunction/predictive-studio@6.1.0-edge.5
+  - @memberjunction/ai-bridge-server@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/communication-ms-graph@6.1.0-edge.5
+  - @memberjunction/content-autotagging@6.1.0-edge.5
+  - @memberjunction/queue@6.1.0-edge.5
+  - @memberjunction/templates@6.1.0-edge.5
+  - @memberjunction/record-set-processor@6.1.0-edge.5
+  - @memberjunction/task-graph@6.1.0-edge.5
+  - @memberjunction/ai-bridge-base@6.1.0-edge.5
+  - @memberjunction/api-keys@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/communication-engine@6.1.0-edge.5
+  - @memberjunction/notifications@6.1.0-edge.5
+  - @memberjunction/query-processor@6.1.0-edge.5
+  - @memberjunction/templates-base-types@6.1.0-edge.5
+  - @memberjunction/testing-integration@6.1.0-edge.5
+  - @memberjunction/auth-providers@6.1.0-edge.5
+  - @memberjunction/communication-expo-push@6.1.0-edge.5
+  - @memberjunction/communication-gmail@6.1.0-edge.5
+  - @memberjunction/communication-twilio@6.1.0-edge.5
+  - @memberjunction/record-set-processor-base@6.1.0-edge.5
+  - @memberjunction/redis-provider@6.1.0-edge.5
+  - @memberjunction/predictive-studio-core@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [f5e91a7]
+- Updated dependencies [4586215]
+- Updated dependencies [8643a3d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [50860ad]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [f4fedab]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [6b971ab]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [bae672c]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/codegen-lib@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/open-app-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/content-autotagging@6.1.0-edge.4
+  - @memberjunction/metadata-sync@6.1.0-edge.4
+  - @memberjunction/ai-agent-harness@6.1.0-edge.4
+  - @memberjunction/ai-agents@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/predictive-studio@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-bridge-server@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/communication-ms-graph@6.1.0-edge.4
+  - @memberjunction/queue@6.1.0-edge.4
+  - @memberjunction/search-engine@6.1.0-edge.4
+  - @memberjunction/templates@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/record-set-processor@6.1.0-edge.4
+  - @memberjunction/task-graph@6.1.0-edge.4
+  - @memberjunction/ai-bridge-base@6.1.0-edge.4
+  - @memberjunction/api-keys@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/communication-engine@6.1.0-edge.4
+  - @memberjunction/notifications@6.1.0-edge.4
+  - @memberjunction/communication-sendgrid@6.1.0-edge.4
+  - @memberjunction/conversations-runtime@6.1.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/query-processor@6.1.0-edge.4
+  - @memberjunction/scheduling-engine@6.1.0-edge.4
+  - @memberjunction/templates-base-types@6.1.0-edge.4
+  - @memberjunction/testing-integration@6.1.0-edge.4
+  - @memberjunction/auth-providers@6.1.0-edge.4
+  - @memberjunction/communication-expo-push@6.1.0-edge.4
+  - @memberjunction/communication-gmail@6.1.0-edge.4
+  - @memberjunction/communication-twilio@6.1.0-edge.4
+  - @memberjunction/record-set-processor-base@6.1.0-edge.4
+  - @memberjunction/redis-provider@6.1.0-edge.4
+  - @memberjunction/predictive-studio-core@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- f5ec13b: Fix the queue engine's terminal-status write, and stop MJAPI's task-graph dispatcher from competing with a test harness.
+
+  **`QueueBase` could never record a task outcome.** `StartTask` discarded the boolean `Save()` return, so the terminal-status write failed silently: the row kept whatever status it held before the run while the in-memory task still reported `Complete`. Underneath it, no role held `CanUpdate` on `MJ: Queue Tasks` or `MJ: Queues`, so CodeGen had never emitted an update grant and `spUpdateQueueTask` carried no `EXECUTE` grant at all. The Developer + Integration CRUD grants are now in `metadata/entity-permissions`, matching every other engine-written entity (`MJ: Tasks`, `MJ: Scheduled Jobs`, `MJ: Action Execution Logs`), with a migration that applies the SQL grants directly — a fresh install runs `migrate` + `sync push` and no CodeGen, so metadata alone would leave the permission correct in Explorer and broken at runtime.
+
+  **`MJ_DISABLE_TASK_GRAPH_DISPATCHER` opts a server out of claiming.** A dispatcher claims from the whole `Task` table rather than from "its own" graphs, so a second dispatcher on the same database is a competitor — correct in production, and wrong for a harness that injects a stub runner and then asserts which tasks its own runner executed. Tasks MJAPI won were executed with the real agent runner and never reached the stub, which the harness read as "never ran". Immediately-eligible root tasks lose that race most often, so it presented as an intermittent failure.
+
+  Also in the integration suite: the RLS fixture now carries the clauses discovery compared (a client-transport check cannot re-derive them and was reporting a cache leak that did not exist), the auth-validation fixtures supply every shipped provider's required config fields, the cache-gauntlet anti-vacuity floors are created rather than assumed, and the task-graph checks wait for the child read-back instead of silently undercounting.
+
+- ae2baef: Content vectors: declare the entity on the content source, and let `explicit` omit the per-vector key
+
+  Minor rather than patch on both: this adds a property to the `ContentSource.Configuration` JSONType, so
+  it changes metadata rather than code alone.
+
+  `VectorSearchProvider` could attribute a match two ways: an `Entity` key in the vector's own metadata,
+  or an Entity Document targeting the index. Neither covers the ContentSource pipeline running
+  `fieldStrategy: 'explicit'`, where metadata carries only the configured fields — `ContentSourceID` is
+  present, the identity keys are not — and where the caller may not use Entity Documents at all.
+
+  That gap is not cosmetic. `SearchEngine.filterEntityResults` groups results by `EntityName` and
+  resolves each group with `EntityByName()` to evaluate CanRead and row-level security. An unresolvable
+  name yields no `EntityInfo`, the method returns before admitting the group, and **the results are
+  silently discarded** — `Residual permission filter removed N result(s)` is the only trace.
+
+  A content source can now declare what its vectors are, via `VectorEntityName` on its `Configuration`
+  JSON — the same place every other per-source vector knob already lives (`EnableVectorization`,
+  `VectorIDStrategy`, `ChunkTextStorage`, `VectorMetadata`). When a match omits `Entity`, its
+  `ContentSourceID` resolves through `KnowledgeHubMetadataEngine.GetContentSourceByID()` — an O(1) lookup
+  against an already-cached collection — to that declaration.
+
+  **The declaration is validated before it is trusted, twice.** Whatever it resolves to becomes the
+  entity whose CanRead and row-level security `filterEntityResults` evaluates, and that method never
+  checks the matched record ids belong to it. So the name must (a) resolve in metadata — an unresolvable
+  name would otherwise silently delete a source's results rather than mislabel them — and (b) be one of
+  `MJ: Content Items` / `MJ: Content Item Chunks`, or an IS-A subtype of one. Without (b) an arbitrary
+  entity name in a writable configuration blob would decide which permissions apply. The canonical name
+  from metadata is what gets used, so casing and whitespace cannot fork the grouping.
+
+  Two properties worth calling out, because they are why this sits where it does rather than being
+  inferred from somewhere else:
+  - **Per match, not per index.** One vector index can serve many content sources, so an index-wide
+    answer is wrong as soon as a second source shares the index. `ContentSourceID` travels on the vector.
+  - **Declared, not guessed** — and validated, per above. Since attribution decides _which_ entity's
+    permissions are evaluated, an inferred or unchecked name would put the wrong object's rules in front
+    of the records — worse than no attribution, which merely drops them.
+
+  Declaring it per source also lets a source name an **ISA extension** instead of the base entity it
+  inherits from. That distinction is a security one: row-level security typically lives on the
+  extension, so a hardcoded or index-wide base-entity name evaluates the wrong entity's RLS.
+
+  Resolution order is most-specific-first: the match's own `Entity` key, then its content source's
+  declaration, then the index's Entity Documents, then `'Unknown'` as before. A source that declares
+  nothing — or declares something that fails validation — is simply absent from the lookup, so its matches
+  behave exactly as they do today.
+
+  Also fixed, both pre-existing:
+  - `convertMatches` applied the resolved fallback with `??` while the "does this match need one" test is
+    falsy, so an `Entity: ''` resolved a name and then discarded it — the result was dropped with the
+    resolution already paid for.
+  - `convertMatches` had the same `??` on `RecordID`, so a producer writing `RecordID: ''` shipped an empty
+    record id instead of falling through to the vector's own id — dropped by the permission filter on an
+    `IN ('')`, or returned as a result that cannot be opened.
+
+  `extractDisplayTitle` is deliberately left reading `meta['Entity']` rather than the resolved name, with a
+  comment saying so. It looks like an oversight and is not: when the metadata carries no name fields it
+  falls through to `` `${fallbackEntity} Record` ``, and that string is the sentinel
+  `SearchEnricher.resolveRecordNames` matches to replace the title with the live name from the database.
+  Feeding the resolved entity in makes the name-field branch succeed off the embedding-time snapshot, the
+  sentinel never forms, and a renamed record shows a stale title until it is re-embedded.
+
+  Failures decline rather than guess, and each declines narrowly: a source whose `Configuration` will not
+  parse is skipped on its own (one guard per source, not one around the batch, so a single bad blob cannot
+  downgrade every match after it to a different entity's permissions), and a `KnowledgeHubMetadataEngine`
+  load that is **permission-constrained** declines explicitly instead of reading its empty collections as
+  "nothing declared" — otherwise attribution would silently depend on who was searching.
+
+  **Attribution failure is now audible.** A batch containing matches that no step could name logs the
+  count, the index, a sample of vector ids, and the three ways to fix it — once per index per batch, and
+  only when it happens. Before this, such matches were discarded by `filterEntityResults` with no log on
+  that path at all; the sole trace was the aggregate `Residual permission filter removed N result(s)`,
+  whose wording blames incomplete provider push-down. So the one signal a deployment got pointed away from
+  the cause, which is why "vectors are in the index and never surface" was undiagnosable.
+
+  **And the write side can now drop the key.** With a declaration in place, `'explicit'` genuinely omits
+  `Entity` and writes `ContentSourceID` instead — the source becomes the single place the answer lives
+  rather than a string repeated on every vector. Previously the key could not be removed by configuration
+  at all on this pipeline: it is written _before_ the `explicit` early return (the EntityDocument pipeline
+  has it the other way around), and there is no `IncludeEntity` toggle beside `IncludeEntityIcon` /
+  `IncludeUpdatedAt` / `IncludeTags` / `IncludeText`.
+
+  The declaration is validated where it is written, not only where it is read. It must resolve in
+  metadata, and it must name `MJ: Content Item Chunks` or an IS-A subtype — because omission requires
+  `'alwaysChunk'`, which makes every vector a chunk row whose id is a chunk key. A name that fails either
+  check keeps the `Entity` key and logs once per run. This fails _safe_ rather than closed, and
+  deliberately so: the reader can only refuse a bad declaration after the fact, by which point the vectors
+  carry no entity at all, so correcting the configuration would not recover them without a re-embed.
+
+  Omission is therefore gated on all four of `'explicit'`, a declaration resolving to the chunk entity,
+  `ChunkTextStorage: 'alwaysChunk'` and `VectorIDStrategy: 'recordId'`, with
+  `ContentSourceID` then written unconditionally. Each condition keeps the guarantee that every vector
+  carries either `Entity` or a key that resolves to a declared entity:
+  - **`'mixed'`** emits ContentItem-level vectors for single-chunk items and ContentItemChunk-level vectors
+    for the rest — two entities from one source, which one declaration cannot describe.
+  - **`'hash'`** leaves no recoverable record id, since `'explicit'` drops `RecordID` too and the vector's
+    own id is a digest rather than the row's. Attribution would succeed and then hand search an id that
+    resolves against no row — the same disappearance, one step later.
+  - **Other field strategies** document a populated metadata set; dropping a key their consumers are told
+    is always present would be a behavior change for them.
+
+  Anything else keeps writing `Entity` exactly as before, and existing vectors are untouched — they keep
+  resolving through their stored key (resolution step 1), so no re-index is required.
+
+  Integration coverage comes with it: `IT — content-vectorization` gains CV7 (a declaring source omits
+  `Entity`, promotes `ContentSourceID`, and its vector id is the chunk row's PK) and CV8 (three refusal
+  paths — no opt-in, an unresolvable name, and a declaration naming the item entity — each keep the key).
+
+  No schema change and no migration. It does add a property to the `ContentSource.Configuration` JSONType,
+  so `mj sync push` + `mj codegen` are needed before the typed accessor exists; until then both sides read
+  it through a locally-declared interface that is deleted at that point. Behaviour is unchanged for callers
+  whose matches carry `Entity` metadata and for any index resolving through an Entity Document.
+
+### Patch Changes
+
+- f5ec13b: Move the shared LLM conformance suite out of the runtime `@memberjunction/ai` package, and gate silent skip-growth in the integration registry (review fixes for #3542).
+
+  **Conformance suite relocated to `@memberjunction/unit-testing`.** The shared BaseLLM
+  streaming/ChatResult conformance suite and its OpenAI-compatible seam mock previously lived in
+  `@memberjunction/ai/src/test-support/` and were consumed through a deep `@memberjunction/ai/dist/test-support/*.js`
+  import — reaching past the package's public API into its build output, which resolved only because
+  `@memberjunction/ai` has no `exports` map, and which shipped test code plus an optional `vitest`
+  peer dependency inside the runtime package. Both files (and the suite's own reference regression
+  test) now live in `@memberjunction/unit-testing`, are exported from its index
+  (`RunLLMConformanceSuite`, `CreateOpenAICompatibleSeamMock`, and their types), and the eight
+  provider conformance suites import them from `@memberjunction/unit-testing`. `@memberjunction/ai`
+  no longer ships `dist/test-support/*` and no longer declares the optional `vitest` peer. No runtime
+  behavior changes; test-only wiring.
+
+  **Skip-growth is now gated, not just reported.** `check-registry.test.ts` gained a snapshot of the
+  exact set of checks that self-skip out of the deterministic lane (every `RequiresMutation` and
+  `RequiresLiveModel` check across all bundles). A change that makes a check newly self-skip — or
+  silently un-gates one — now fails the unit tests with a paste-ready diff, instead of only shrinking
+  the CI step-summary. Also corrected a stale `task-graph-execution` count (26 → 27) in the
+  all-bundle coverage-loss guard that had drifted after a `next` merge added TX27.
+
+- c581b4f: Close the #3874 adversarial review. SkipRelatedCollections persists embeds while collections stay with the caller. The graph-node recursion guard is private on BaseEntity (IsGraphNodeSave is gone from EntitySaveOptions). Result serialize adopts saved peers; a rolled-back graph reverts in-memory saved/dirty so retry works. Two same-entity embeds no longer false-cycle. Ensure, Load, NewRecord FK, CodeName emission, core-schema imports, IT85/EE5, graph-view UUID links, focal-node dblclick, and default excludeSchemas no longer dropping core form tabs.
+- 2741d46: Make the deterministic integration tier runnable against PostgreSQL, and fix the runtime and conversion defects that running it exposed.
+
+  **Why.** MJ #3257 records that the integration suite is meant to run twice per build — once per backend — and that this was never implemented. PostgreSQL therefore shipped with migration parity verified and _runtime_ parity unverified. This change makes the tier run on PostgreSQL for the first time and fixes what that surfaced: **49 of 61 deterministic bundles now pass on PostgreSQL** (measured, MJAPI live; 61/61 executed, none skipped).
+
+  **Harness (closes the #3257 blocker list).** `testing-cli` now branches on platform instead of unconditionally building an `mssql` pool: `mj-provider.ts` gains a PostgreSQL path (dynamic import, declared as an optionalDependency so SQL-Server-only consumers never resolve `pg`) with a PG-native user-cache load, `MJConfig` gains `dbPlatform`, and `getContextUser()` resolves the same user on both backends — System by name, then the well-known System ID, then the first active Owner, with `.trim()` because `Type` is space-padded in both ledgers. `mj.config.cjs` gains `dbPlatform` and a platform-aware `dbPort` default; with `DB_PLATFORM` unset both are exactly the previous SQL Server behaviour.
+
+  **Runtime dialect leaks.**
+  - `SQLDialect` gains `AffectedRowCountSQL()`. `TaskClaimStore` was emitting `SELECT @@ROWCOUNT`, which is T-SQL only — on PostgreSQL the `@@` is consumed as a parameter marker and the bare `ROWCOUNT` folds to lowercase, so _every_ guarded write failed with `column "rowcount" does not exist` (7,168 occurrences in one tier run, now zero). SQL Server keeps `@@ROWCOUNT`; PostgreSQL uses a data-modifying CTE.
+  - `MJDashboardEntityExtended` no longer denies the owner. `Validate()` is synchronous and reads `DashboardEngine`'s cache directly, so in any process using the default `task` startup mode — where engine pre-warm is deferred — an unloaded cache was indistinguishable from "you have no permission", and `mj sync push` failed on a dashboard whose `UserID` _was_ the pushing user. Ownership is now answered from the row itself, which needs no cache; a non-owner still falls through to the engine and is refused when it is cold. `Delete()`, being async, loads the engine for the non-owner case and short-circuits for the owner, so a merely _stale_ cache — a dashboard created since the last `Config()` is absent from the backing array — cannot refuse its own owner either.
+
+    Ownership is read from the **persisted** `UserID` (`GetFieldByName('UserID').OldValue`), never the in-memory one. `UserID` is a settable field on `UpdateMJDashboardInput`, and `ResolverBase.UpdateRecord` loads the row and then applies the client's values _before_ `Save()` runs `Validate()` — so an owner check written against `this.UserID` would be satisfied by a value the caller supplied in the same request. Since this class **is** the permission gate for dashboards, that would let any user who can load one send `UpdateMJDashboard(ID: <someone else's>, UserID: <self>)` and take the record. Transferring ownership is separately gated to the owner, so a user holding `CanEdit` through a share can edit but not appropriate. `MJDashboardEntityExtended.ownership.test.ts` covers both directions, including that the engine is still consulted for the attacker case.
+
+  **Conversion (T-SQL → PostgreSQL).** Five defects, each caught only by applying the output to a fresh database — the converter reported `0 errors` every time:
+  - CASE-expression keywords were quoted as identifiers inside `CHECK` bodies (`"CASE" "WHEN" …`), so the migration would not parse. The missing keyword set was derived by intersecting 2,084 `CHECK` bodies across 67 shipped migrations against the dialect keyword list: exactly `CASE`, `WHEN`, `THEN`, `ELSE`, `END`.
+  - Every `IF EXISTS (…)` batch was classified `SKIP_SQLSERVER` and silently discarded. A guarded `DROP CONSTRAINT` therefore vanished — with exit code 0 — and the paired `ADD CONSTRAINT` later in the same migration failed with "already exists". The rewrite discards the guard, so it fires **only when the guard is a catalog probe** (`sys.check_constraints` / `key_constraints` / `foreign_keys` / `default_constraints` / `objects`) — the form that exists purely because SQL Server has no `DROP CONSTRAINT IF EXISTS`. A guard on data (`IF EXISTS (SELECT 1 FROM Payment WHERE Status = 'Legacy')`) is a real condition; dropping it would make PostgreSQL drop unconditionally while SQL Server does not. Those keep falling through to the generic path, which comments out what it cannot express. This mirrors the `sys.indexes` gate the conditional-index rule already had.
+  - `CREATE SCHEMA` is folded to lowercase to match its unquoted references — `convertIdentifiers` emits the schema half of `[X].[Y]` bare, so a quoted `CREATE` and a bare reference name two different schemas. **`__mj_UDT` is exempt**, because it is the one schema with a producer outside the migration set: the Database Designer creates it, and every table in it, through `UDT_SCHEMA_NAME` — quoted and case-preserved, as do `CreateSchemaDDL`, `QuoteSchema` and the schema-builder's `QuotePostgres`. Folding it would leave the runtime writing into a schema no migration made, and would orphan every UDT entity from its table in `vwSQLTablesAndEntities`, which joins `nspname = e."SchemaName"` case-sensitively. Nothing wants the folded spelling: across `migrations-pg/` there is not one unquoted `__mj_udt` reference, and all 272 other occurrences of the name are prose or JSON string content. No reconciliation DDL is emitted for any schema — a guard at that point would land in the converted output of the migration that CREATES the schema, the one file every affected database has already applied and Flyway will never re-run, so it could only ever fire on a database that does not need it.
+  - T-SQL table variables became the invalid declaration `v_X TABLE;`; they now become `CREATE TEMP TABLE … ON COMMIT DROP`.
+  - `DELETE alias FROM … JOIN …` passed through as T-SQL; it now becomes PostgreSQL's `DELETE … USING` (the UPDATE analogue already existed).
+  - `WITH CHECK ADD CONSTRAINT` survived on non-FK constraints, and `END ELSE BEGIN` left stray tokens. A subtler one: the `DECLARE` indent capture also matched a preceding blank line, which pushed the declaration out of the `DECLARE` section and into the block body.
+
+  **Also fixed.** `spDeleteEntityWithCoreDependencies` could not be invoked on PostgreSQL — `callRoutineSQL` always emitted `SELECT * FROM fn(...)`, which PostgreSQL rejects for a `RETURNS SETOF record` routine with no OUT parameters, so entity pruning silently died and cascaded into 22 missing CRUD routines. `callRoutineSQL` gains an optional `expectsResultSet`; SQL Server ignores it. CodeGen's PostgreSQL audit-SQL folder swap was pinned to `v5` by exact match, so on v6 it wrote into the SQL Server tree. `applyLLMPrimaryKeys` validated primary-key names case-insensitively but then used the model's spelling in the `UPDATE`, matching zero rows on PostgreSQL while reporting success — it now uses the matched column's actual name.
+
+  **Repeatable metadata refresh.** `R__RefreshMetadata` on PostgreSQL now also clears orphaned `EntityField` rows, as the SQL Server file has always done. Without it a from-scratch PostgreSQL database ends up with metadata describing columns its own base views do not have, and every read of those views fails.
+
+  **Two test-authoring fixes, not product changes.** The aggregates bundle passed `MAX(__mj_UpdatedAt)` unquoted and the open-app-teardown fixture called `SYSDATETIMEOFFSET()`; both are SQL-Server-only spellings and are now dialect-quoted.
+
+  **On the `migrations-pg/v6/**`files in this PR.**`CLAUDE.md`says a feature PR ships the T-SQL migration only and that PG counterparts are regenerated by the build engineer at release time. The five files here are`mj migrate convert`output, not hand-authored, and they exist because the tier cannot run on PostgreSQL without them — that is the whole subject of the change. They need the build engineer's sign-off before merge, and should be regenerated rather than merged if the release conversion runs first. Existing`migrations-pg`output is deliberately **not** regenerated against the converter changes above: the v5 files are frozen baselines, and the`\_\_mj_UDT` exemption above means the converter's new output agrees with what they already installed.
+
+  SQL Server is unaffected: every changed path is either PostgreSQL-only or a same-output refactor. Unit tests across the touched packages pass — SQLDialect 404, SQLConverter 1139, MJCoreEntities 597, CodeGenLib 808, TaskGraph 60, testing-cli 23 — zero failures in any of them.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [5ef97ff]
+- Updated dependencies [d4a5b4c]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [407f2f7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [49f3592]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [2e2879e]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [2741d46]
+- Updated dependencies [b6416f4]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ae2baef]
+- Updated dependencies [4b1257f]
+- Updated dependencies [6cd337d]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/ai-agents@6.1.0-edge.3
+  - @memberjunction/scheduling-engine@6.1.0-edge.3
+  - @memberjunction/codegen-lib@6.1.0-edge.3
+  - @memberjunction/content-autotagging@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/task-graph@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/metadata-sync@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/api-keys@6.1.0-edge.3
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.3
+  - @memberjunction/open-app-engine@6.1.0-edge.3
+  - @memberjunction/auth-providers@6.1.0-edge.3
+  - @memberjunction/queue@6.1.0-edge.3
+  - @memberjunction/testing-integration@6.1.0-edge.3
+  - @memberjunction/search-engine@6.1.0-edge.3
+  - @memberjunction/ai-agent-harness@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/predictive-studio@6.1.0-edge.3
+  - @memberjunction/ai-bridge-base@6.1.0-edge.3
+  - @memberjunction/ai-bridge-server@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+  - @memberjunction/communication-types@6.1.0-edge.3
+  - @memberjunction/communication-engine@6.1.0-edge.3
+  - @memberjunction/notifications@6.1.0-edge.3
+  - @memberjunction/communication-ms-graph@6.1.0-edge.3
+  - @memberjunction/communication-expo-push@6.1.0-edge.3
+  - @memberjunction/communication-gmail@6.1.0-edge.3
+  - @memberjunction/communication-sendgrid@6.1.0-edge.3
+  - @memberjunction/communication-twilio@6.1.0-edge.3
+  - @memberjunction/conversations-runtime@6.1.0-edge.3
+  - @memberjunction/query-processor@6.1.0-edge.3
+  - @memberjunction/record-set-processor-base@6.1.0-edge.3
+  - @memberjunction/record-set-processor@6.1.0-edge.3
+  - @memberjunction/redis-provider@6.1.0-edge.3
+  - @memberjunction/templates-base-types@6.1.0-edge.3
+  - @memberjunction/templates@6.1.0-edge.3
+  - @memberjunction/predictive-studio-core@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

@@ -1,9 +1,8 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, MediaFile, SocialPost, SearchParams, SocialAnalytics } from '../../base/base-social.action';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, HttpGet, HttpPost } from '@memberjunction/network-utils';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
-import FormData from 'form-data';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -29,63 +28,52 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
     }
 
     /**
-     * Axios instance for making HTTP requests
+     * HTTP client for making requests
      */
-    private _axiosInstance: AxiosInstance | null = null;
+    private _httpClient: HttpClient | null = null;
 
     /**
-     * Get or create axios instance with interceptors
+     * Get or create the HTTP client. `OnRequest` / `OnResponse` / `OnRetry` replace what were
+     * axios-era interceptors: bearer-token injection, rate-limit logging, and 429 back-off + retry.
      */
-    protected get axiosInstance(): AxiosInstance {
-        if (!this._axiosInstance) {
-            this._axiosInstance = axios.create({
-                baseURL: this.apiBaseUrl,
-                timeout: 30000,
-                headers: {
+    protected get httpClient(): HttpClient {
+        if (!this._httpClient) {
+            this._httpClient = new HttpClient({
+                BaseURL: this.apiBaseUrl,
+                Timeout: 30000,
+                Headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
-                }
-            });
-
-            // Add request interceptor for auth
-            this._axiosInstance.interceptors.request.use(
-                (config) => {
+                },
+                OnRequest: (config) => {
                     const token = this.getAccessToken();
                     if (token) {
-                        config.headers.Authorization = `Bearer ${token}`;
+                        return { ...config, Headers: { ...config.Headers, Authorization: `Bearer ${token}` } };
                     }
                     return config;
                 },
-                (error) => Promise.reject(error)
-            );
-
-            // Add response interceptor for rate limit handling
-            this._axiosInstance.interceptors.response.use(
-                (response) => {
+                OnResponse: (response) => {
                     // Log rate limit info
-                    const rateLimitInfo = this.parseRateLimitHeaders(response.headers);
+                    const rateLimitInfo = this.parseRateLimitHeaders(response.Headers);
                     if (rateLimitInfo) {
                         LogStatus(`Twitter Rate Limit - Remaining: ${rateLimitInfo.remaining}/${rateLimitInfo.limit}, Reset: ${rateLimitInfo.reset}`);
                     }
-                    return response;
                 },
-                async (error: AxiosError) => {
-                    if (error.response?.status === 429) {
-                        // Rate limit exceeded
-                        const resetTime = error.response.headers['x-rate-limit-reset'];
-                        const waitTime = resetTime 
+                OnRetry: async (error) => {
+                    if (error.Status === 429) {
+                        // Rate limit exceeded — Twitter reports the reset as an epoch second
+                        const resetTime = error.Headers['x-rate-limit-reset'];
+                        const waitTime = resetTime
                             ? Math.max(0, parseInt(resetTime) - Math.floor(Date.now() / 1000))
                             : 60;
                         await this.handleRateLimit(waitTime);
-                        
-                        // Retry the request
-                        return this._axiosInstance!.request(error.config!);
+                        return true;
                     }
-                    return Promise.reject(error);
+                    return false;
                 }
-            );
+            });
         }
-        return this._axiosInstance;
+        return this._httpClient;
     }
 
     /**
@@ -103,21 +91,21 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
 
             const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
-            const response = await axios.post('https://api.twitter.com/2/oauth2/token', 
+            const response = await HttpPost<TwitterTokenResponse>('https://api.twitter.com/2/oauth2/token', 
                 new URLSearchParams({
                     grant_type: 'refresh_token',
                     refresh_token: refreshToken,
                     client_id: clientId
                 }).toString(),
                 {
-                    headers: {
+                    Headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                         'Authorization': `Basic ${basicAuth}`
                     }
                 }
             );
 
-            const { access_token, refresh_token: newRefreshToken, expires_in } = response.data;
+            const { access_token, refresh_token: newRefreshToken, expires_in } = response.Data;
 
             // Update stored tokens
             await this.updateStoredTokens(
@@ -138,12 +126,12 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
      */
     protected async getCurrentUser(): Promise<TwitterUser> {
         try {
-            const response = await this.axiosInstance.get('/users/me', {
-                params: {
+            const response = await this.httpClient.Get<TwitterApiResponse<TwitterUser>>('/users/me', {
+                Query: {
                     'user.fields': 'id,name,username,profile_image_url,description,created_at,verified'
                 }
             });
-            return response.data.data;
+            return response.Data.data;
         } catch (error) {
             LogError(`Failed to get current user: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -160,7 +148,7 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
                 : file.data;
 
             // Step 1: Initialize upload
-            const initResponse = await axios.post(
+            const initResponse = await HttpPost<TwitterMediaUploadResponse>(
                 `${this.uploadApiUrl}/media/upload.json`,
                 new URLSearchParams({
                     command: 'INIT',
@@ -169,14 +157,14 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
                     media_category: this.getMediaCategory(file.mimeType)
                 }).toString(),
                 {
-                    headers: {
+                    Headers: {
                         'Authorization': `Bearer ${this.getAccessToken()}`,
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
                 }
             );
 
-            const mediaId = initResponse.data.media_id_string;
+            const mediaId = initResponse.Data.media_id_string;
 
             // Step 2: Upload chunks (for large files, Twitter requires chunking)
             const chunkSize = 5 * 1024 * 1024; // 5MB chunks
@@ -189,18 +177,15 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
                 formData.append('command', 'APPEND');
                 formData.append('media_id', mediaId);
                 formData.append('segment_index', segmentIndex.toString());
-                formData.append('media', chunk, {
-                    filename: file.filename,
-                    contentType: file.mimeType
-                });
+                formData.append('media', new Blob([new Uint8Array(chunk)], { type: file.mimeType }), file.filename);
 
-                await axios.post(
+                await HttpPost(
                     `${this.uploadApiUrl}/media/upload.json`,
                     formData,
                     {
-                        headers: {
-                            'Authorization': `Bearer ${this.getAccessToken()}`,
-                            ...formData.getHeaders()
+                        Headers: {
+                            // No multipart headers here — fetch derives the boundary from the FormData body.
+                            'Authorization': `Bearer ${this.getAccessToken()}`
                         }
                     }
                 );
@@ -209,14 +194,14 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
             }
 
             // Step 3: Finalize upload
-            await axios.post(
+            await HttpPost(
                 `${this.uploadApiUrl}/media/upload.json`,
                 new URLSearchParams({
                     command: 'FINALIZE',
                     media_id: mediaId
                 }).toString(),
                 {
-                    headers: {
+                    Headers: {
                         'Authorization': `Bearer ${this.getAccessToken()}`,
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
@@ -242,20 +227,20 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
         const startTime = Date.now();
         
         while (Date.now() - startTime < maxWaitTime) {
-            const response = await axios.get(
+            const response = await HttpGet<TwitterMediaStatusResponse>(
                 `${this.uploadApiUrl}/media/upload.json`,
                 {
-                    params: {
+                    Query: {
                         command: 'STATUS',
                         media_id: mediaId
                     },
-                    headers: {
+                    Headers: {
                         'Authorization': `Bearer ${this.getAccessToken()}`
                     }
                 }
             );
 
-            const { processing_info } = response.data;
+            const { processing_info } = response.Data;
 
             if (!processing_info) {
                 // Processing complete
@@ -330,10 +315,10 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
      */
     protected async createTweet(tweetData: CreateTweetData): Promise<Tweet> {
         try {
-            const response = await this.axiosInstance.post('/tweets', tweetData);
-            return response.data.data;
+            const response = await this.httpClient.Post<TwitterApiResponse<Tweet>>('/tweets', tweetData);
+            return response.Data.data;
         } catch (error) {
-            this.handleTwitterError(error as AxiosError);
+            this.handleTwitterError(error as HttpError);
         }
     }
 
@@ -342,9 +327,9 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
      */
     protected async deleteTweet(tweetId: string): Promise<void> {
         try {
-            await this.axiosInstance.delete(`/tweets/${tweetId}`);
+            await this.httpClient.Delete(`/tweets/${tweetId}`);
         } catch (error) {
-            this.handleTwitterError(error as AxiosError);
+            this.handleTwitterError(error as HttpError);
         }
     }
 
@@ -361,11 +346,11 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
                 'max_results': 100
             };
 
-            const response = await this.axiosInstance.get(endpoint, {
-                params: { ...defaultParams, ...params }
+            const response = await this.httpClient.Get<TwitterApiResponse<Tweet[]>>(endpoint, {
+                Query: { ...defaultParams, ...params }
             });
 
-            return response.data.data || [];
+            return response.Data.data || [];
         } catch (error) {
             LogError(`Failed to get tweets: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -381,16 +366,16 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
         const limit = params.max_results || 100;
 
         while (true) {
-            const response = await this.axiosInstance.get(endpoint, {
-                params: {
+            const response = await this.httpClient.Get<TwitterApiResponse<Tweet[]>>(endpoint, {
+                Query: {
                     ...params,
                     max_results: limit,
                     ...(paginationToken && { pagination_token: paginationToken })
                 }
             });
 
-            if (response.data.data && Array.isArray(response.data.data)) {
-                tweets.push(...response.data.data);
+            if (response.Data.data && Array.isArray(response.Data.data)) {
+                tweets.push(...response.Data.data);
             }
 
             // Check if we've reached max results
@@ -399,7 +384,7 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
             }
 
             // Check for more pages
-            paginationToken = response.data.meta?.next_token;
+            paginationToken = response.Data.meta?.next_token;
             if (!paginationToken) {
                 break;
             }
@@ -468,9 +453,10 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
     /**
      * Handle Twitter-specific errors
      */
-    protected handleTwitterError(error: AxiosError): never {
-        if (error.response) {
-            const { status, data } = error.response;
+    protected handleTwitterError(error: HttpError): never {
+        if (error.Status) {
+            const status = error.Status;
+            const data = error.Data;
             const errorData = data as any;
 
             switch (status) {
@@ -491,7 +477,7 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
                 default:
                     throw new Error(`Twitter API Error (${status}): ${errorData.detail || errorData.message || 'Unknown error'}`);
             }
-        } else if (error.request) {
+        } else if (error.IsTimeout) {
             throw new Error('Network Error: No response from Twitter');
         } else {
             throw new Error(`Request Error: ${error.message}`);
@@ -551,6 +537,49 @@ export abstract class TwitterBaseAction extends BaseSocialMediaAction {
 /**
  * Twitter-specific interfaces
  */
+/**
+ * The Twitter/X v2 API envelope: the payload sits under `data`, with paging and result counts
+ * under `meta` and any partial failures under `errors`.
+ */
+export interface TwitterApiResponse<T> {
+    data: T;
+    meta?: {
+        next_token?: string;
+        result_count?: number;
+        newest_id?: string;
+        oldest_id?: string;
+    };
+    includes?: { users?: TwitterUser[] };
+    errors?: Array<{ title?: string; detail?: string; type?: string }>;
+}
+
+/** Response from the OAuth2 token endpoint. */
+export interface TwitterTokenResponse {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+    token_type?: string;
+    scope?: string;
+}
+
+/** Response from the v1.1 `media/upload.json` INIT command. */
+export interface TwitterMediaUploadResponse {
+    media_id_string: string;
+    media_id?: number;
+    size?: number;
+    expires_after_secs?: number;
+}
+
+/** Response from the v1.1 `media/upload.json` STATUS command. */
+export interface TwitterMediaStatusResponse {
+    processing_info?: {
+        state: 'pending' | 'in_progress' | 'failed' | 'succeeded';
+        check_after_secs?: number;
+        progress_percent?: number;
+        error?: { code?: number; name?: string; message?: string };
+    };
+}
+
 export interface TwitterUser {
     id: string;
     name: string;
@@ -589,6 +618,25 @@ export interface Tweet {
         quote_count: number;
         bookmark_count: number;
         impression_count: number;
+    };
+    /**
+     * Owner-only engagement metrics, returned when `organic_metrics` is requested in
+     * `tweet.fields` and the caller owns the tweet.
+     */
+    organic_metrics?: {
+        impression_count?: number;
+        like_count?: number;
+        reply_count?: number;
+        retweet_count?: number;
+        url_link_clicks?: number;
+        user_profile_clicks?: number;
+    };
+    /** Metrics for promoted (paid) tweets, requested the same way. */
+    promoted_metrics?: {
+        impression_count?: number;
+        like_count?: number;
+        reply_count?: number;
+        retweet_count?: number;
     };
     attachments?: {
         media_keys?: string[];

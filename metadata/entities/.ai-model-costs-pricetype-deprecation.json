@@ -1,0 +1,44 @@
+[
+  {
+    "_comments": [
+      "Demotes MJ: AI Model Costs.PriceTypeID to descriptive-only.",
+      "Three vocabularies described one concept and the MANDATORY one was the one nothing read:",
+      "PriceTypeID is NOT NULL, editable in the generated form and cached on AIEngineBase, yet no",
+      "business logic prices, filters or branches on it — AIModelPriceUnitType carries the real",
+      "contract, and now names the measure through UsageTypeID. Adding AI Usage Types without",
+      "demoting this would leave a fourth vocabulary and lock the ambiguity in permanently.",
+      "NOT dropped: the column is NOT NULL and carried by 235 metadata rows, so dropping it is on",
+      "the Forbidden list in packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md and would break every",
+      "historical EXEC spCreateAIModelCost. That policy's Deprecation section is the intended path.",
+      "IncludeInGeneratedForm = 0 is the step that actually ends the ambiguity — deprecating while",
+      "still rendering an editable dropdown beside the authoritative field documents the confusion",
+      "rather than stopping it. AutoUpdateDescription = 0 is what makes the text below survive the",
+      "next CodeGen pass, which would otherwise restore it from the column comment."
+    ],
+    "fields": {
+      "Name": "MJ: AI Model Costs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "Status": "Deprecated",
+            "IncludeInGeneratedForm": false,
+            "AutoUpdateDescription": false,
+            "Description": "DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows."
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Costs&Name=PriceTypeID"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T17:00:05.588Z",
+            "checksum": "a005a1aa13a6fb59bfacbcf1527fa6e9bcfd6a1f6dbeb0d0f3947a7a60593d47"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Model Costs"
+    }
+  }
+]

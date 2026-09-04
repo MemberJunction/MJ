@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/data-context",
   "type": "module",
-  "version": "6.1.0-edge.2",
+  "version": "6.1.0-edge.5",
   "description": "This library provides a set of objects that handle run-time loading of data contexts as well as types to be able to use across application tiers for interacting with data contexts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,9 +20,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.2",
-    "@memberjunction/core-entities": "6.1.0-edge.2",
-    "@memberjunction/core": "6.1.0-edge.2"
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5"
   },
   "repository": {
     "type": "git",
