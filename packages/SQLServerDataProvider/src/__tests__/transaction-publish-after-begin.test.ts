@@ -47,7 +47,6 @@ class FakeTransaction {
 class TransactionHost {
     public Transaction: FakeTransaction | null = null;
     public Depth = 0;
-    public SavepointsIssuedWithNoTransaction = 0;
     private beginInFlight: Promise<void> | null = null;
 
     constructor(private readonly failOnBegin = false) {}
@@ -71,8 +70,8 @@ class TransactionHost {
                     this.beginInFlight = null;
                 }
             } else {
-                // Nested savepoints require a begun transaction. If depth leaked without
-                // publishing one, begin now — matching SQLServerDataProvider.ensurePhysicalTransaction.
+                // Nested savepoints require a begun transaction (GenericDatabaseProvider
+                // beginTransactionCore). If depth leaked without publishing one, begin now.
                 if (!this.Transaction) {
                     const transaction = new FakeTransaction(this.failOnBegin);
                     await transaction.begin();
@@ -133,7 +132,6 @@ describe('BeginTransaction publishes the transaction only after begin() resolves
     it('serializes a concurrent begin so the nested branch never runs without a transaction', async () => {
         const host = new TransactionHost();
         await Promise.all([host.BeginTransaction(), host.BeginTransaction()]);
-        expect(host.SavepointsIssuedWithNoTransaction).toBe(0);
         expect(host.Depth).toBe(2);
         expect(host.Transaction?.Begun).toBe(true);
     });
@@ -144,7 +142,6 @@ describe('BeginTransaction publishes the transaction only after begin() resolves
         await host.BeginTransaction();
         expect(host.Transaction?.Begun).toBe(true);
         expect(host.Depth).toBe(2);
-        expect(host.SavepointsIssuedWithNoTransaction).toBe(0);
     });
 
     it('the method the invariant lives in still exists on the real provider', async () => {

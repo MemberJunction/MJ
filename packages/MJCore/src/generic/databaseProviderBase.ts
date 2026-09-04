@@ -177,10 +177,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Public nesting depth. Distinct from {@link IsInTransaction}, which SQL Server
-     * deliberately leaves `false` so `RunMaybeSerial` keeps fanning out. Callers that
-     * need the truth (e.g. joining a caller's transaction) read this.
-     * 0 = none, 1 = physical transaction, 2+ = savepoints.
+     * Public alias of {@link CurrentTransactionDepth} for join-TX callers
+     * (e.g. accounting CreateJournalEntries).
      */
     public get TransactionDepth(): number {
         return this.CurrentTransactionDepth;

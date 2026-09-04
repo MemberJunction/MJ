@@ -2302,27 +2302,9 @@ IF ${varName} IS NOT NULL
     return !!this._transaction;
   }
 
-  protected override async WithTransactionLock<T>(fn: () => Promise<T>): Promise<T> {
-    // Serialize against an outermost begin that is still in flight. Without this, a second caller
-    // arriving during that window takes the depth-2 savepoint branch and issues
-    // `SAVE TRANSACTION` while `this._transaction` is still null — which silently runs it on the
-    // POOL, outside the transaction it is supposed to be marking. Swallow the in-flight begin's
-    // own rejection: if it failed, the depth is back to 0 and this caller must try its own begin.
-    while (this._beginInFlight) {
-      await this._beginInFlight.catch(() => undefined);
-    }
-    return fn();
-  }
-
   protected override async BeginPhysicalTransaction(): Promise<void> {
-    // 🚨 BEGIN LOCALLY, PUBLISH AFTER. `this._transaction` is a SHARED provider field that
-    // every ExecuteSQL call with no explicit connectionSource picks up. Assigning it before
-    // `begin()` resolves publishes an UN-BEGUN transaction to the whole process, and any
-    // concurrent query in that window dies with mssql's
-    //   "Transaction has not begun. Call begin() first."
-    // Worse, if `begin()` THROWS, a leftover un-begun object poisons the provider PERMANENTLY.
-    //
-    // Found during the 6.1 release: it silently destroyed AI agent run persistence.
+    // Assign `_transaction` only after begin() resolves so concurrent ExecuteSQL
+    // never sees an un-begun handle.
     if (this._transaction) {
       return;
     }
@@ -2341,10 +2323,20 @@ IF ${varName} IS NOT NULL
   }
 
   protected override async RecoverPhysicalTransaction(): Promise<void> {
-    const transaction = new sql.Transaction(this._pool);
-    await transaction.begin();
-    this._transaction = transaction;
-    this._transactionState$.next(true);
+    this._transaction = null;
+    this._transactionState$.next(false);
+    const begun = (async () => {
+      const transaction = new sql.Transaction(this._pool);
+      await transaction.begin();
+      this._transaction = transaction;
+      this._transactionState$.next(true);
+    })();
+    this._beginInFlight = begun;
+    try {
+      await begun;
+    } finally {
+      this._beginInFlight = null;
+    }
   }
 
   protected override async CommitPhysicalTransaction(): Promise<void> {
@@ -2354,6 +2346,9 @@ IF ${varName} IS NOT NULL
     await this._transaction.commit();
     this._transaction = null;
     this._transactionState$.next(false);
+  }
+
+  protected override async AfterPhysicalCommit(): Promise<void> {
     await this.processDeferredTasks();
   }
 
@@ -2361,13 +2356,16 @@ IF ${varName} IS NOT NULL
     if (!this._transaction) {
       throw new Error('No active transaction to rollback');
     }
-    await this._transaction.rollback();
-    this._transaction = null;
-    this._transactionState$.next(false);
-    const deferredCount = this._deferredTasks.length;
-    this._deferredTasks = [];
-    if (deferredCount > 0) {
-      LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
+    try {
+      await this._transaction.rollback();
+    } finally {
+      this._transaction = null;
+      this._transactionState$.next(false);
+      const deferredCount = this._deferredTasks.length;
+      this._deferredTasks = [];
+      if (deferredCount > 0) {
+        LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
+      }
     }
   }
 

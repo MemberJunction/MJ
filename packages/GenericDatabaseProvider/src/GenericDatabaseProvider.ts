@@ -5377,9 +5377,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return `SavePoint_${n}`;
     }
 
-    /** Serialize begin/commit/rollback. PostgreSQL overrides with a mutex; SQL Server waits on in-flight begin. */
+    private _txMutex: Promise<void> = Promise.resolve();
+
+    /** Serialize begin/commit/rollback so depth/stack mutations cannot interleave. */
     protected async WithTransactionLock<T>(fn: () => Promise<T>): Promise<T> {
-        return fn();
+        const previous = this._txMutex;
+        let release!: () => void;
+        this._txMutex = new Promise<void>((resolve) => { release = resolve; });
+        try {
+            await previous;
+            return await fn();
+        } finally {
+            release();
+        }
+    }
+
+    /** After a successful outermost commit, once depth is 0. SQL Server drains deferred tasks here. */
+    protected async AfterPhysicalCommit(): Promise<void> {
+        /* no-op */
     }
 
     /** Called when a begin fails and depth is back to 0 — unpublish any leftover driver object. */
@@ -5483,6 +5498,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 throw e;
             }
             this.clearTransactionState();
+            await this.AfterPhysicalCommit();
             return;
         }
         const savepointName = this._savepointStack[this._savepointStack.length - 1];

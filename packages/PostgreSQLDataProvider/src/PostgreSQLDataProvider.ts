@@ -368,26 +368,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return this._transaction !== null;
     }
 
-    /**
-     * Mutex serializing Begin/Commit/Rollback. Prior implementations had no
-     * locking around savepoint state — under concurrent callers (e.g. `mj sync push`
-     * processing 178 records with parallel BaseEntity.Save() calls) interleaved
-     * SAVEPOINT names. The mutex turns begin/commit/rollback into a critical section.
-     */
-    private _txMutex: Promise<void> = Promise.resolve();
-
-    protected override async WithTransactionLock<T>(fn: () => Promise<T>): Promise<T> {
-        const previous = this._txMutex;
-        let release!: () => void;
-        this._txMutex = new Promise<void>((resolve) => { release = resolve; });
-        try {
-            await previous;
-            return await fn();
-        } finally {
-            release();
-        }
-    }
-
     protected override get HasPhysicalTransaction(): boolean {
         return this._transaction !== null;
     }
