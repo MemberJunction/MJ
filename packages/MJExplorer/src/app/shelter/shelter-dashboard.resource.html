@@ -1,0 +1,101 @@
+<!-- Card language follows bizapps-accounting's category dashboards, which in turn copy MJ
+     Explorer's Credentials dashboard: a tinted icon chip above a label-over-value, on a
+     16px-radius surface. Design tokens only -- no literal colours. -->
+<div class="shelter-dash">
+
+  @if (LoadError) {
+    <div class="dash-error">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span>{{ LoadError }}</span>
+    </div>
+  }
+
+  <!-- Tile strip -->
+  <div class="dash-stats">
+    @for (s of Stats; track s.Id) {
+      <div class="dash-stat" [class.dash-stat--warn]="s.Warn" [title]="s.Tooltip">
+        <span class="dash-stat__icon"><i [class]="s.Icon" aria-hidden="true"></i></span>
+        <span class="dash-stat__label">{{ s.Label }}</span>
+        <!-- A value that could not be read renders an em dash. A fabricated 0 would read as fact. -->
+        <span class="dash-stat__value">{{ s.Display === null ? '—' : s.Display }}</span>
+        <span class="dash-stat__detail">{{ s.Detail }}</span>
+      </div>
+    }
+  </div>
+
+  <div class="dash-cards">
+
+    <!-- Status breakdown. Costs no extra reads: every segment is a count the strip already fetched. -->
+    <section class="dash-card">
+      <header class="dash-card__header">
+        <span class="dash-card__icon"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span>
+        <span class="dash-card__title">Animals by status</span>
+        <span class="dash-card__count">{{ SegmentTotal }}</span>
+      </header>
+      <div class="dash-card__body">
+        @if (SegmentTotal === 0) {
+          @if (!IsLoading) {
+            <p class="dash-empty">No animals recorded yet.</p>
+          }
+        } @else {
+          <!-- aria-hidden: the bar is a redundant visual encoding of the legend below, which gives
+               a screen reader the same figures named and exact. Announcing both reads them twice. -->
+          <div class="dash-bar" aria-hidden="true">
+            @for (s of Segments; track s.Status) {
+              @if (s.Count > 0) {
+                <span [class]="'dash-bar__seg dash-tone--' + s.Tone" [style.width.%]="SegmentPercent(s)"></span>
+              }
+            }
+          </div>
+          <ul class="dash-legend">
+            @for (s of Segments; track s.Status) {
+              <li class="dash-legend__row">
+                <span [class]="'dash-legend__dot dash-tone--' + s.Tone"></span>
+                <span class="dash-legend__label">{{ s.Status }}</span>
+                <span class="dash-legend__value">{{ s.Count }}</span>
+                <span class="dash-legend__pct">{{ SegmentPercent(s) | number: '1.0-0' }}%</span>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+
+    <!-- Overdue follow-ups: the actionable card, so it sits beside the shape rather than below it. -->
+    <section class="dash-card">
+      <header class="dash-card__header">
+        <span class="dash-card__icon"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i></span>
+        <span class="dash-card__title">Overdue follow-ups</span>
+        <span class="dash-card__count">{{ OverdueCount === null ? '—' : OverdueCount }}</span>
+      </header>
+      <div class="dash-card__body">
+        @for (r of Overdue; track r.ID) {
+          <div class="dash-item dash-item--warn">
+            <span class="dash-item__icon"><i class="fa-solid fa-notes-medical" aria-hidden="true"></i></span>
+            <span class="dash-item__info">
+              <span class="dash-item__title">{{ r.Animal }}</span>
+              <span class="dash-item__meta">
+                <span class="dash-item__type">{{ r.CareType }}</span>
+                <span class="dash-item__detail">{{ r.Description }}</span>
+              </span>
+            </span>
+            <!-- FollowUpDate is a DATE column, so the 'UTC' argument is REQUIRED here: without it
+                 Angular applies the browser zone and every user west of UTC sees the day before. -->
+            <span class="dash-item__when">{{ r.FollowUpDate | date: 'mediumDate' : 'UTC' }}</span>
+          </div>
+        } @empty {
+          @if (!IsLoading) {
+            <!-- An empty queue is good news. Say so, rather than "no data". -->
+            <p class="dash-empty">Nothing overdue — every follow-up is current.</p>
+          }
+        }
+      </div>
+    </section>
+
+  </div>
+
+  @if (IsLoading) {
+    <div class="dash-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+  }
+
+</div>

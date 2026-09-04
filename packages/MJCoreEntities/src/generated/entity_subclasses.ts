@@ -10779,6 +10779,83 @@ export const MJBreedSchema = z.object({
 export type MJBreedEntityType = z.infer<typeof MJBreedSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Care Logs
+ */
+export const MJCareLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AnimalID: z.string().describe(`
+        * * Field Name: AnimalID
+        * * Display Name: Animal ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Animals (vwAnimals.ID)`),
+    CareDate: z.date().describe(`
+        * * Field Name: CareDate
+        * * Display Name: Care Date
+        * * SQL Data Type: date
+        * * Description: The date the care happened. Not defaulted, because care is often logged after the fact and back-dating an entry is normal.`),
+    CareType: z.union([z.literal('Behavioral'), z.literal('Exam'), z.literal('Grooming'), z.literal('Other'), z.literal('Surgery'), z.literal('Treatment'), z.literal('Vaccination')]).describe(`
+        * * Field Name: CareType
+        * * Display Name: Care Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Behavioral
+    *   * Exam
+    *   * Grooming
+    *   * Other
+    *   * Surgery
+    *   * Treatment
+    *   * Vaccination
+        * * Description: What kind of care this was: Vaccination, Exam, Treatment, Surgery, Grooming, Behavioral or Other. A completed Vaccination entry is what the module 6 async rule requires before an animal may be listed Available.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(500)
+        * * Description: One-line summary of what was done, shown in grids and lists.`),
+    PerformedBy: z.string().nullable().describe(`
+        * * Field Name: PerformedBy
+        * * Display Name: Performed By
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Who performed the care. Free text on purpose: staff and volunteers become entities in module 7, and until they exist a name is more honest than inventing a relationship.`),
+    IsComplete: z.boolean().describe(`
+        * * Field Name: IsComplete
+        * * Display Name: Is Complete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the care has actually been carried out. An entry can be recorded as scheduled before it happens, so this distinguishes booked from done.`),
+    FollowUpDate: z.date().nullable().describe(`
+        * * Field Name: FollowUpDate
+        * * Display Name: Follow Up Date
+        * * SQL Data Type: date
+        * * Description: When this care needs revisiting, if it does. Constrained to be on or after CareDate. Drives the overdue-follow-up dashboard tile without any additional schema.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-text clinical or behavioural detail. Kept separate from Description so grids stay readable while the full note remains available on the record.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Animal: z.string().describe(`
+        * * Field Name: Animal
+        * * Display Name: Animal
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCareLogEntityType = z.infer<typeof MJCareLogSchema>;
+
+/**
  * zod schema definition for the entity MJ: Cluster Analysis
  */
 export const MJClusterAnalysisSchema = z.object({
@@ -63776,6 +63853,230 @@ export class MJBreedEntity extends BaseEntity<MJBreedEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Care Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CareLog
+ * * Base View: vwCareLogs
+ * * @description An event log of care given to an animal: one row per thing that was done, on a date. Introduced in MJ Academy module 5 as a plain foreign-key table so the learner wires the parent-child link by hand; converted to an embedded record in module 7.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Care Logs')
+export class MJCareLogEntity extends BaseEntity<MJCareLogEntityType> {
+    /**
+    * Loads the MJ: Care Logs record from the database
+    * @param ID: string - primary key value to load the MJ: Care Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCareLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Care Logs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: The follow-up date must be on or after the care date to ensure chronological consistency.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateFollowUpDateOnOrAfterCareDate(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The follow-up date must be on or after the care date to ensure chronological consistency.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFollowUpDateOnOrAfterCareDate(result: ValidationResult) {
+    	if (this.FollowUpDate != null && this.CareDate != null) {
+    		const followUp = new Date(this.FollowUpDate).getTime();
+    		const care = new Date(this.CareDate).getTime();
+    		if (followUp < care) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FollowUpDate",
+    				"The follow-up date must be on or after the care date.",
+    				this.FollowUpDate,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AnimalID
+    * * Display Name: Animal ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Animals (vwAnimals.ID)
+    */
+    get AnimalID(): string {
+        return this.Get('AnimalID');
+    }
+    set AnimalID(value: string) {
+        this.Set('AnimalID', value);
+    }
+
+    /**
+    * * Field Name: CareDate
+    * * Display Name: Care Date
+    * * SQL Data Type: date
+    * * Description: The date the care happened. Not defaulted, because care is often logged after the fact and back-dating an entry is normal.
+    */
+    get CareDate(): Date {
+        return this.Get('CareDate');
+    }
+    set CareDate(value: Date) {
+        this.Set('CareDate', value);
+    }
+
+    /**
+    * * Field Name: CareType
+    * * Display Name: Care Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Behavioral
+    *   * Exam
+    *   * Grooming
+    *   * Other
+    *   * Surgery
+    *   * Treatment
+    *   * Vaccination
+    * * Description: What kind of care this was: Vaccination, Exam, Treatment, Surgery, Grooming, Behavioral or Other. A completed Vaccination entry is what the module 6 async rule requires before an animal may be listed Available.
+    */
+    get CareType(): 'Behavioral' | 'Exam' | 'Grooming' | 'Other' | 'Surgery' | 'Treatment' | 'Vaccination' {
+        return this.Get('CareType');
+    }
+    set CareType(value: 'Behavioral' | 'Exam' | 'Grooming' | 'Other' | 'Surgery' | 'Treatment' | 'Vaccination') {
+        this.Set('CareType', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(500)
+    * * Description: One-line summary of what was done, shown in grids and lists.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PerformedBy
+    * * Display Name: Performed By
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Who performed the care. Free text on purpose: staff and volunteers become entities in module 7, and until they exist a name is more honest than inventing a relationship.
+    */
+    get PerformedBy(): string | null {
+        return this.Get('PerformedBy');
+    }
+    set PerformedBy(value: string | null) {
+        this.Set('PerformedBy', value);
+    }
+
+    /**
+    * * Field Name: IsComplete
+    * * Display Name: Is Complete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the care has actually been carried out. An entry can be recorded as scheduled before it happens, so this distinguishes booked from done.
+    */
+    get IsComplete(): boolean {
+        return this.Get('IsComplete');
+    }
+    set IsComplete(value: boolean) {
+        this.Set('IsComplete', value);
+    }
+
+    /**
+    * * Field Name: FollowUpDate
+    * * Display Name: Follow Up Date
+    * * SQL Data Type: date
+    * * Description: When this care needs revisiting, if it does. Constrained to be on or after CareDate. Drives the overdue-follow-up dashboard tile without any additional schema.
+    */
+    get FollowUpDate(): Date | null {
+        return this.Get('FollowUpDate');
+    }
+    set FollowUpDate(value: Date | null) {
+        this.Set('FollowUpDate', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-text clinical or behavioural detail. Kept separate from Description so grids stay readable while the full note remains available on the record.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Animal
+    * * Display Name: Animal
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Animal(): string {
+        return this.Get('Animal');
     }
 }
 

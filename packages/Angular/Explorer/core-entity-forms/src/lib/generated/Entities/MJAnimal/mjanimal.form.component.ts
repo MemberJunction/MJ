@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJAnimalEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Animals') // Tell MemberJunction about this class
 @Component({
@@ -19,7 +20,8 @@ export class MJAnimalFormComponent extends BaseFormComponent {
             { sectionKey: 'shelterHistory', sectionName: 'Shelter History', isExpanded: true },
             { sectionKey: 'physicalAttributes', sectionName: 'Physical Attributes', isExpanded: true },
             { sectionKey: 'animalProfile', sectionName: 'Animal Profile', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJCareLogs', sectionName: 'Care Logs', isExpanded: false }
         ]);
     }
 }

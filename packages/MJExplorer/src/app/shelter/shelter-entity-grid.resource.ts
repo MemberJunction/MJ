@@ -99,3 +99,9 @@ export class ShelterHousingGridComponent extends ShelterEntityGridBase {
 export class ShelterBreedsGridComponent extends ShelterEntityGridBase {
     public get EntityName(): string { return 'MJ: Breeds'; }
 }
+
+@RegisterClass(BaseResourceComponent, 'ShelterCareLogsGrid')
+@Component({ standalone: false, selector: 'shelter-care-logs-grid', template: SHELTER_GRID_TEMPLATE })
+export class ShelterCareLogsGridComponent extends ShelterEntityGridBase {
+    public get EntityName(): string { return 'MJ: Care Logs'; }
+}

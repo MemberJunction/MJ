@@ -1,0 +1,58 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Animals",
+      "Configuration": {
+        "UI": {
+          "Form": {
+            "Layout": "left-nav"
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Animals"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T16:32:22.797Z",
+      "checksum": "22cad292a30e43d6b7e7830a1b5162015d94b75146036710c455743108741f1d"
+    },
+    "_comments": [
+      "Switches the Animal form from the stacked accordion to MJ's left-nav sidebar.",
+      "This single value is the ONLY thing that flips the layout: ResolveFormLayout's 'auto' mode",
+      "needs 8 first-class groups before it switches on its own, and Animal has about three."
+    ]
+  },
+  {
+    "_comments": [
+      "Puts Follow Up Date on the Care Logs grid. It is the column that tells you HOW overdue an",
+      "entry is, and the action-item grid on the Animal form is useless without it.",
+      "DefaultInView is what decides a grid's columns, so this is a metadata change rather than a",
+      "grid-level override -- and it improves the Care Log nav page for free.",
+      "Done via metadata (source of truth) rather than a migration, matching the convention in",
+      "the sibling .entity-field-*.json files."
+    ],
+    "fields": {
+      "Name": "MJ: Care Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Care Logs&Name=FollowUpDate"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T16:56:13.623Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Care Logs"
+    }
+  }
+]

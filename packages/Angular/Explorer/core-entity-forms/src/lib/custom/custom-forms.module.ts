@@ -10,6 +10,10 @@ import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
+import { ShelterHeroComponent } from "./HarborShelter/shelter-hero.component";
+import { AnimalCareOverviewPanel } from "./Animals/animal-care-overview.panel";
+import { MJAnimalFormComponentExtended } from "./Animals/animal-form.component";
+import { MJHousingFormComponentExtended } from "./Housings/housing-form.component";
 import { MJEntityFormComponentExtended } from "./Entities/entity-form.component";
 import { MJFileFormComponentExtended } from "./Files/file-form.component";
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
@@ -106,6 +110,10 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
 
 @NgModule({
     declarations: [
+        ShelterHeroComponent,
+        AnimalCareOverviewPanel,
+        MJAnimalFormComponentExtended,
+        MJHousingFormComponentExtended,
         MJEntityFormComponentExtended,
         MJEntityActionFormComponentExtended,
         MJTemplateFormComponentExtended,
@@ -217,6 +225,10 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
     ],
     exports: [
         ...HIERARCHY_FORM_PANELS,
+        ShelterHeroComponent,
+        AnimalCareOverviewPanel,
+        MJAnimalFormComponentExtended,
+        MJHousingFormComponentExtended,
         MJEntityFormComponentExtended,
         MJFileFormComponentExtended,
         MJEntityActionFormComponentExtended,

@@ -27,7 +27,8 @@ import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap-lite';
 // MJ Academy — the shelter app's one resource component (see app/shelter/). Registered with the
 // ClassFactory via @RegisterClass, and reached from Application.DefaultNavItems by DriverClass.
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
-import { ShelterAnimalsGridComponent, ShelterHousingGridComponent, ShelterBreedsGridComponent } from './shelter/shelter-entity-grid.resource';
+import { ShelterAnimalsGridComponent, ShelterHousingGridComponent, ShelterBreedsGridComponent, ShelterCareLogsGridComponent } from './shelter/shelter-entity-grid.resource';
+import { ShelterDashboardComponent } from './shelter/shelter-dashboard.resource';
 
 // Import supplemental manifest for user-defined classes — generated at prebuild with
 // `mj codegen manifest --exclude-packages @memberjunction --open-app-client-bootstrap`.
@@ -74,9 +75,11 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 @NgModule({
   declarations: [
     AppComponent,
+    ShelterDashboardComponent,    // MJ Academy — the app's landing page (isDefault nav item)
     ShelterAnimalsGridComponent,  // MJ Academy — one class per nav item, or the shell
     ShelterHousingGridComponent,  //   highlights every item sharing a DriverClass
     ShelterBreedsGridComponent,
+    ShelterCareLogsGridComponent,
   ],
   imports: [
     // MJ Academy — provides <mj-entity-viewer> for ShelterEntityGridComponent

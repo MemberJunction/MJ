@@ -1,0 +1,145 @@
+/* Hero -- our own markup, so the layout is entirely ours. Design tokens only, no literal
+   colours, so it follows the viewer's theme like every MJ surface around it. */
+.animal-hero {
+  display: flex; align-items: stretch; gap: var(--mj-space-5, 1.25rem);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)) 0%,
+      var(--mj-bg-surface) 55%
+    );
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg, 12px);
+  padding: var(--mj-space-4, 1rem);
+  margin-bottom: var(--mj-space-4, 1rem);
+}
+
+/* Fixed-ratio portrait so a landscape and a portrait photo produce the SAME hero height --
+   otherwise the whole header jumps as you page between animals. object-fit crops rather
+   than distorts; aspect-ratio does the sizing so no magic height is needed. */
+.animal-hero__portrait {
+  flex: none; width: 104px; aspect-ratio: 1; overflow: hidden;
+  border-radius: var(--mj-radius-md, 8px);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+}
+.animal-hero__portrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.animal-hero__portrait-empty {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  color: var(--mj-text-muted);
+}
+.animal-hero__portrait-empty i { font-size: 30px; opacity: 0.55; }
+
+.animal-hero__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.animal-hero__titles { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.animal-hero__name {
+  margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
+  color: var(--mj-text-primary); line-height: 1.15;
+}
+.animal-hero__sub { font-size: 12.5px; color: var(--mj-text-muted); }
+
+/* The facts sit on their own band, pushed to the bottom of the portrait's height so the hero
+   reads as one block rather than a floating title with numbers beside it. */
+.animal-hero__facts {
+  display: flex; gap: var(--mj-space-6, 1.5rem); flex-wrap: wrap;
+  margin-top: auto; padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--mj-border-default) 60%, transparent);
+}
+.animal-hero__fact { display: flex; flex-direction: column; gap: 1px; }
+.animal-hero__k {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--mj-text-muted);
+}
+.animal-hero__v { font-size: 13.5px; font-weight: 600; color: var(--mj-text-primary); }
+.animal-hero__v--num { font-variant-numeric: tabular-nums; }
+
+/* One rule maps a status tone to a colour pair, so a tone means the same thing everywhere. */
+.animal-pill {
+  display: inline-flex; align-items: center; padding: 3px 10px;
+  border-radius: var(--mj-radius-full, 9999px); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.02em; text-transform: uppercase;
+  background: var(--mj-status-neutral-bg); color: var(--mj-status-neutral-text);
+}
+.animal-pill--success { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+.animal-pill--warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+.animal-pill--info    { background: var(--mj-status-info-bg);    color: var(--mj-status-info-text); }
+.animal-pill--brand   { background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent); color: var(--mj-brand-primary); }
+
+@media (max-width: 720px) {
+  .animal-hero { flex-direction: column; }
+  .animal-hero__portrait { width: 84px; }
+  .animal-hero__facts { gap: var(--mj-space-4, 1rem); }
+}
+
+/* ── Photo control ────────────────────────────────────────────────────────────
+   Laid out to match mj-form-field's own row shape (a fixed label column, then the
+   control) so it does not read as a foreign element between the generated fields.
+   That width comes from MJ's own custom property, with the same 200px fallback the
+   component itself declares — so if MJ changes it, this follows. */
+.animal-photo {
+  display: grid;
+  grid-template-columns: var(--mj-forms-field-label-width, 200px) 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 8px 0;
+}
+.animal-photo__label {
+  font-size: 13px; font-weight: 600; color: var(--mj-text-secondary); padding-top: 2px;
+}
+/* align-items: flex-start, NOT the default `stretch`. In a column flex container `stretch`
+   sizes children on the CROSS axis — i.e. full width — which silently upscales a small image
+   to the container width and, with height:auto, turns a 1x1 pixel into a full-width slab. */
+.animal-photo__body {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0;
+}
+
+.animal-photo__img {
+  display: block; align-self: flex-start;
+  max-width: 220px; max-height: 220px; width: auto; height: auto; object-fit: contain;
+  border-radius: var(--mj-radius-md, 8px); border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+}
+.animal-photo__empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  width: 140px; height: 110px;
+  border: 1px dashed var(--mj-border-strong); border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface-card); color: var(--mj-text-muted); font-size: 11.5px;
+}
+.animal-photo__empty i { font-size: 20px; opacity: 0.7; }
+
+.animal-photo__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.animal-photo__btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: var(--mj-radius-md, 8px);
+  border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary); font-family: inherit; font-size: 12.5px; font-weight: 500;
+  cursor: pointer;
+}
+.animal-photo__btn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+.animal-photo__btn i { font-size: 11px; }
+/* The input is hidden but must stay in the tab order (display:none would remove it) AND must
+   occupy the LABEL's box.
+   The clip-rect "visually hidden" idiom is wrong here: it leaves a 1px absolutely-positioned box
+   at the container origin, so when the browser scrolls the newly-focused input into view it jumps
+   mj-record-form-container to an unrelated offset — which reads as the whole form going blank.
+   Anchoring the input to the label keeps that scroll-into-view on the control you just clicked. */
+.animal-photo__btn { position: relative; overflow: hidden; }
+.animal-photo__btn input[type="file"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0;
+  font-size: 0; /* Safari sizes the native control from font-size; 0 keeps it inside the label. */
+}
+.animal-photo__btn.is-busy { opacity: 0.6; pointer-events: none; }
+.animal-photo__btn--quiet { border-color: transparent; }
+.animal-photo__btn--quiet:hover { color: var(--mj-status-error-text); background: var(--mj-status-error-bg); }
+
+.animal-photo__note { font-size: 11px; color: var(--mj-text-muted); }
+.animal-photo__error {
+  margin: 0; font-size: 12px;
+  color: var(--mj-status-error-text); background: var(--mj-status-error-bg);
+  border: 1px solid var(--mj-status-error); border-radius: var(--mj-radius-sm, 4px);
+  padding: 5px 9px;
+}
+@media (max-width: 720px) {
+  .animal-photo { grid-template-columns: 1fr; }
+}

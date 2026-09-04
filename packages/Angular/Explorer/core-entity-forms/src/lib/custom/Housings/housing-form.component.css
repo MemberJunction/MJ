@@ -1,0 +1,44 @@
+/* Hero strip only -- same idiom as the Animal form's hero, kept as its own file so the two
+   can diverge without one silently restyling the other.
+   Design tokens throughout: no literal colours, so the strip follows the viewer's theme. */
+.housing-hero {
+  display: flex; align-items: center; gap: var(--mj-space-4, 1rem); flex-wrap: wrap;
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  padding: 12px 16px; margin-bottom: var(--mj-space-4, 1rem);
+}
+.housing-hero__id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.housing-hero__avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: var(--mj-radius-md, 8px); flex: none;
+  background: color-mix(in srgb, var(--mj-brand-primary) 13%, var(--mj-bg-surface));
+}
+.housing-hero__avatar i { color: var(--mj-brand-primary); font-size: 18px; }
+.housing-hero__names { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.housing-hero__name { font-size: 15.5px; font-weight: 700; color: var(--mj-text-primary); line-height: 1.2; }
+.housing-hero__sub { font-size: 11.5px; color: var(--mj-text-muted); }
+
+.housing-hero__facts { display: flex; gap: 20px; margin-left: auto; flex-wrap: wrap; }
+.housing-hero__fact { display: flex; flex-direction: column; gap: 1px; }
+.housing-hero__k {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--mj-text-muted);
+}
+.housing-hero__v { font-size: 13px; font-weight: 600; color: var(--mj-text-primary); }
+.housing-hero__v--num { font-variant-numeric: tabular-nums; }
+
+/* One rule maps a service state to a colour pair. */
+.housing-pill {
+  display: inline-flex; align-items: center; padding: 2px 9px;
+  border-radius: var(--mj-radius-full, 9999px); font-size: 11px; font-weight: 600;
+  background: var(--mj-status-neutral-bg); color: var(--mj-status-neutral-text);
+}
+.housing-pill--success { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+.housing-pill--warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+.housing-pill--info    { background: var(--mj-status-info-bg);    color: var(--mj-status-info-text); }
+.housing-pill--brand   { background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); }
+
+/* The facts column stops being a right-aligned rail once there is no room for it. */
+@media (max-width: 720px) {
+  .housing-hero__facts { margin-left: 0; width: 100%; gap: 14px; }
+}

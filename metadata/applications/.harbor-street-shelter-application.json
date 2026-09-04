@@ -10,12 +10,21 @@
     "DefaultSequence": 60,
     "DefaultNavItems": [
       {
+        "Label": "Dashboard",
+        "Description": "The shelter at a glance. Every tile is a filtered count -- MaxRows 1 plus TotalRowCount -- so the page is cheap enough to open on every visit. Capacity and vaccination compliance cannot be had that way and are handled explicitly; see the component.",
+        "Icon": "fa-solid fa-gauge-high",
+        "ResourceType": "Custom",
+        "DriverClass": "ShelterDashboard",
+        "isDefault": true,
+        "Status": "Active"
+      },
+      {
         "Label": "Animals",
         "Description": "Every animal in the shelter. A dynamic view -- Explorer's generic entity grid, addressed by entity name, with no saved view record behind it.",
         "Icon": "fa-solid fa-paw",
         "ResourceType": "Custom",
         "DriverClass": "ShelterAnimalsGrid",
-        "isDefault": true,
+        "isDefault": false,
         "Status": "Active"
       },
       {
@@ -33,6 +42,15 @@
         "Icon": "fa-solid fa-dog",
         "ResourceType": "Custom",
         "DriverClass": "ShelterBreedsGrid",
+        "isDefault": false,
+        "Status": "Active"
+      },
+      {
+        "Label": "Care Log",
+        "Description": "Every care entry across all animals. The same generic entity grid the other pages use -- ResourceType 'Custom' plus its OWN DriverClass, because sharing a class makes the shell highlight every item using it.",
+        "Icon": "fa-solid fa-notes-medical",
+        "ResourceType": "Custom",
+        "DriverClass": "ShelterCareLogsGrid",
         "isDefault": false,
         "Status": "Active"
       },
@@ -60,7 +78,7 @@
           "ID": "B9EFCCC3-88B3-4BEA-9D75-4AF49A13E848"
         },
         "sync": {
-          "lastModified": "2026-09-03T18:57:37.174Z",
+          "lastModified": "2026-09-03T22:53:01.422Z",
           "checksum": "93f1d615bac174205098e9d9de1195141d26a21242cf8d867702e8194461161c"
         }
       },
@@ -75,7 +93,7 @@
           "ID": "F0E9D953-95EF-4665-91EF-A28EA56C7111"
         },
         "sync": {
-          "lastModified": "2026-09-03T18:57:37.188Z",
+          "lastModified": "2026-09-03T22:53:01.433Z",
           "checksum": "cd2e84c208fc7042a94c57da41e970db03aa1c7d5aa357a9f29d006db6367d57"
         }
       },
@@ -90,8 +108,23 @@
           "ID": "0B0A8C02-D8FB-4893-BC66-A2293CC4857C"
         },
         "sync": {
-          "lastModified": "2026-09-03T18:57:37.199Z",
+          "lastModified": "2026-09-03T22:53:01.442Z",
           "checksum": "28296d84a911cb909eac06db4ddbb73820f64d0ff1026cf3050228dc381cd206"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Care Logs",
+          "Sequence": 40,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "3C7D1A6E-4B92-4F18-9A64-1D5E8C0B7A21"
+        },
+        "sync": {
+          "lastModified": "2026-09-04T16:44:37.657Z",
+          "checksum": "c80a447244d60c6604059868043e207ed6f4e78e55a0907f83d31edf4a7f6af4"
         }
       }
     ]
@@ -100,7 +133,7 @@
     "ID": "B1E4A7C2-3F5D-4A88-9C10-6D2E8F4B7A91"
   },
   "sync": {
-    "lastModified": "2026-09-03T19:37:43.222Z",
-    "checksum": "9b515b5e9019eb38bb3b29164ce0302f2657fe076c381099213410d5239c65c8"
+    "lastModified": "2026-09-04T16:44:37.628Z",
+    "checksum": "3a058e9b8bb8fa5a4925667924c526c0b3f99db1394da0548b3193a7006a260a"
   }
 }

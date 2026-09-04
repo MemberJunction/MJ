@@ -1,0 +1,138 @@
+/* The ONE place the Harbor Street hero's appearance lives. Design tokens only -- no literal
+   colours -- so it follows the viewer's theme like every MJ surface around it. */
+
+/* The gap below the hero lives on the HOST, not on .sh-hero. Whatever follows -- a generated field
+   panel, a contributed panel, a panel slot -- gets the same separation without needing to know a
+   hero is above it. Putting it on .sh-hero instead would lose the gap the moment a consumer wrapped
+   the markup, and a slot host directly after the hero contributes no margin of its own (that is
+   exactly how the hero ended up flush against the Care & Health panel). */
+:host {
+  display: block;
+  margin-bottom: var(--mj-space-4, 1rem);
+}
+
+.sh-hero {
+  display: flex; align-items: stretch; gap: var(--mj-space-5, 1.25rem);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)) 0%,
+      var(--mj-bg-surface) 55%
+    );
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg, 12px);
+  padding: var(--mj-space-4, 1rem);
+}
+
+.sh-hero__portrait {
+  flex: none; width: 104px; aspect-ratio: 1; overflow: hidden;
+  border-radius: var(--mj-radius-md, 8px);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+}
+.sh-hero__portrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sh-hero__portrait-empty {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  color: var(--mj-text-muted);
+}
+.sh-hero__portrait-empty i { font-size: 30px; opacity: 0.55; }
+
+/* The compact alternative to the portrait: a small tinted chip, sized like the avatars used
+   elsewhere in Explorer. align-self keeps it at the top rather than stretching down the hero. */
+.sh-hero__badge {
+  flex: none; align-self: flex-start;
+  width: 40px; height: 40px; border-radius: var(--mj-radius-md, 8px);
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--mj-brand-primary) 13%, var(--mj-bg-surface));
+}
+.sh-hero__badge i { font-size: 17px; color: var(--mj-brand-primary); }
+
+.sh-hero__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.sh-hero__titles { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sh-hero__title {
+  margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
+  color: var(--mj-text-primary); line-height: 1.15;
+}
+.sh-hero__subtitle { font-size: 12.5px; color: var(--mj-text-muted); }
+
+/* margin-top:auto pushes the figures to the bottom of the PORTRAIT's height, so the hero reads as
+   one block rather than a title floating beside a row of numbers. */
+.sh-hero__stats {
+  display: flex; gap: var(--mj-space-6, 1.5rem); flex-wrap: wrap;
+  margin-top: auto; padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--mj-border-default) 60%, transparent);
+}
+.sh-stat { display: flex; flex-direction: column; gap: 1px; }
+.sh-stat__label {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--mj-text-muted);
+}
+.sh-stat__value {
+  font-size: 13.5px; font-weight: 600; color: var(--mj-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.sh-stat__value--warn  { color: var(--mj-status-warning-text); }
+.sh-stat__value--error { color: var(--mj-status-error-text); }
+.sh-stat__sub { font-size: 10.5px; color: var(--mj-text-muted); }
+
+/* One rule maps a chip tone to a colour pair, so a tone means the same thing on every form. */
+.sh-chip {
+  display: inline-flex; align-items: center; padding: 3px 10px;
+  border-radius: var(--mj-radius-full, 9999px);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
+  background: var(--mj-status-neutral-bg); color: var(--mj-status-neutral-text); white-space: nowrap;
+}
+.sh-chip--ok    { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+.sh-chip--warn  { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+.sh-chip--error { background: var(--mj-status-error-bg);   color: var(--mj-status-error-text); }
+.sh-chip--info  { background: var(--mj-status-info-bg);    color: var(--mj-status-info-text); }
+.sh-chip--muted { background: var(--mj-status-neutral-bg); color: var(--mj-text-muted); }
+
+@media (max-width: 720px) {
+  .sh-hero { flex-direction: column; }
+  .sh-hero__portrait { width: 84px; }
+  .sh-hero__stats { gap: var(--mj-space-4, 1rem); }
+}
+
+/* ── Capacity gauge ───────────────────────────────────────────────────────────
+   Pips for small capacities, a proportional bar above 12. The tone lives on the wrapper so the
+   pips, the bar and the count all shift together -- one rule, not three. */
+.sh-gauge {
+  display: flex; flex-direction: column; gap: 5px;
+  margin-top: 10px; min-width: 190px;
+  --sh-gauge-fill: var(--mj-brand-primary);
+}
+.sh-gauge--warn  { --sh-gauge-fill: var(--mj-status-warning); }
+.sh-gauge--error { --sh-gauge-fill: var(--mj-status-error); }
+
+.sh-gauge__head { display: flex; align-items: baseline; gap: 8px; }
+.sh-gauge__label {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--mj-text-muted);
+}
+.sh-gauge__count {
+  margin-left: auto; font-size: 14px; font-weight: 700;
+  color: var(--mj-text-primary); font-variant-numeric: tabular-nums;
+}
+.sh-gauge--warn .sh-gauge__count  { color: var(--mj-status-warning-text); }
+.sh-gauge--error .sh-gauge__count { color: var(--mj-status-error-text); }
+
+/* Pips stretch to share the row so the gauge is the same width whatever the capacity --
+   otherwise a 2-space kennel and a 4-space cattery would draw different-length gauges. */
+.sh-gauge__pips { display: flex; gap: 4px; }
+.sh-pip {
+  flex: 1 1 0; min-width: 10px; height: 10px;
+  border-radius: 3px;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+}
+.sh-pip--filled { background: var(--sh-gauge-fill); border-color: var(--sh-gauge-fill); }
+
+.sh-gauge__bar {
+  height: 10px; border-radius: 5px; overflow: hidden;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+}
+.sh-gauge__fill { display: block; height: 100%; background: var(--sh-gauge-fill); }
+
+.sh-gauge__caption { font-size: 10.5px; color: var(--mj-text-muted); }

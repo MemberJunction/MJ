@@ -1,0 +1,54 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+  <shelter-hero
+      [Title]="record.Name"
+      [Subtitle]="LocationLine"
+      Icon="fa-solid fa-house-chimney"
+      [IconOnly]="true"
+      [Chips]="HeroChips"
+      [Gauge]="OccupancyGauge"
+      [Stats]="HeroStats"></shelter-hero>
+
+  <mj-form-panel-slot Entity="MJ: Housings" Slot="before-fields"
+      [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+  <!-- Field panels, restated exactly as CodeGen emitted them. -->
+  <mj-collapsible-panel SectionKey="housingDetails" SectionName="Housing Details" Icon="fa fa-info-circle"
+      [Form]="this" [FormContext]="formContext">
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Name" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Building" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+  </mj-collapsible-panel>
+
+  <mj-collapsible-panel SectionKey="operationalRules" SectionName="Operational Rules" Icon="fa fa-cogs"
+      [Form]="this" [FormContext]="formContext">
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Species" Type="select"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Capacity" Type="number"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="IsQuarantine" Type="checkbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="IsActive" Type="checkbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+  </mj-collapsible-panel>
+
+  <mj-collapsible-panel SectionKey="systemMetadata" SectionName="System Metadata" Icon="fa fa-cog"
+      [Form]="this" [FormContext]="formContext">
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_CreatedAt" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_UpdatedAt" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+  </mj-collapsible-panel>
+
+  <mj-form-panel-slot Entity="MJ: Housings" Slot="after-fields"
+      [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+</mj-record-form-container>
+}

@@ -23,6 +23,11 @@ export { MJTestSuiteRunFormComponentExtended } from './lib/custom/Tests/test-sui
 export { MJTestSuiteFormComponentExtended } from './lib/custom/Tests/test-suite-form.component';
 export { MJTestRunFeedbackFormComponentExtended } from './lib/custom/Tests/test-run-feedback-form.component';
 export { MJTestRubricFormComponentExtended } from './lib/custom/Tests/test-rubric-form.component';
+export { ShelterHeroComponent } from './lib/custom/HarborShelter/shelter-hero.component';
+export type { ShelterHeroChip, ShelterHeroStat } from './lib/custom/HarborShelter/shelter-hero.component';
+export { AnimalCareOverviewPanel } from './lib/custom/Animals/animal-care-overview.panel';
+export { MJAnimalFormComponentExtended } from './lib/custom/Animals/animal-form.component';
+export { MJHousingFormComponentExtended } from './lib/custom/Housings/housing-form.component';
 export { MJListFormComponentExtended } from './lib/custom/Lists/list-form.component';
 export { MJAIAgentSessionFormComponentExtended } from './lib/custom/AIAgentSessions/ai-agent-session-form.component';
 export { MJAIAgentChannelFormComponentExtended } from './lib/custom/AIAgentChannels/ai-agent-channel-form.component';

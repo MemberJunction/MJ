@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (411 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -152,6 +152,7 @@ import {
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJCareLogEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -540,13 +541,14 @@ import {
     ClusterViewType,
 } from '@memberjunction/ng-clustering';
 
-// @memberjunction/ng-core-entity-forms (46 classes)
+// @memberjunction/ng-core-entity-forms (49 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    AnimalCareOverviewPanel,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -566,9 +568,11 @@ import {
     MJAIPromptRunFormComponentExtended,
     MJActionExecutionLogFormComponentExtended,
     MJActionFormComponentExtended,
+    MJAnimalFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
     MJFileFormComponentExtended,
+    MJHousingFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
     MJTemplateFormComponentExtended,
@@ -882,6 +886,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJCareLogEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1229,6 +1234,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    AnimalCareOverviewPanel,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1248,9 +1254,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptRunFormComponentExtended,
     MJActionExecutionLogFormComponentExtended,
     MJActionFormComponentExtended,
+    MJAnimalFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
     MJFileFormComponentExtended,
+    MJHousingFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
     MJTemplateFormComponentExtended,
@@ -1411,7 +1419,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 650;
+export const CLASS_REGISTRATIONS_COUNT = 654;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

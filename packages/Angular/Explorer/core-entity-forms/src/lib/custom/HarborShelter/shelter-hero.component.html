@@ -1,0 +1,67 @@
+<div class="sh-hero">
+  <!-- The portrait leads: it is the one thing a person recognises before reading anything.
+       Fixed 1:1 with object-fit cover so a landscape and a portrait photo produce the SAME hero
+       height -- otherwise the header jumps as you page between records. -->
+  @if (IconOnly) {
+    <span class="sh-hero__badge"><i [class]="Icon" aria-hidden="true"></i></span>
+  } @else {
+    <div class="sh-hero__portrait">
+      @if (PhotoSrc) {
+        <img [src]="PhotoSrc" [alt]="Title" />
+      } @else {
+        <span class="sh-hero__portrait-empty"><i [class]="Icon" aria-hidden="true"></i></span>
+      }
+    </div>
+  }
+
+  <div class="sh-hero__main">
+    <div class="sh-hero__titles">
+      <h1 class="sh-hero__title">{{ Title }}</h1>
+      @for (chip of Chips; track chip.Text) {
+        <span [class]="'sh-chip' + (chip.Kind ? ' sh-chip--' + chip.Kind : '')">{{ chip.Text }}</span>
+      }
+    </div>
+    @if (Subtitle) {
+      <div class="sh-hero__subtitle">{{ Subtitle }}</div>
+    }
+
+    @if (Gauge) {
+      <div [class]="'sh-gauge sh-gauge--' + GaugeTone">
+        <div class="sh-gauge__head">
+          <span class="sh-gauge__label">{{ Gauge.Label }}</span>
+          <span class="sh-gauge__count">{{ Gauge.Used }} / {{ Gauge.Total }}</span>
+        </div>
+        @if (UsePips) {
+          <!-- aria-hidden: the pips are a redundant picture of the count already stated above,
+               so a screen reader would otherwise read the same figure twice. -->
+          <div class="sh-gauge__pips" aria-hidden="true">
+            @for (filled of Pips; track $index) {
+              <span class="sh-pip" [class.sh-pip--filled]="filled"></span>
+            }
+          </div>
+        } @else {
+          <div class="sh-gauge__bar" aria-hidden="true">
+            <span class="sh-gauge__fill" [style.width.%]="FillPercent"></span>
+          </div>
+        }
+        @if (Gauge.Caption) {
+          <span class="sh-gauge__caption">{{ Gauge.Caption }}</span>
+        }
+      </div>
+    }
+
+    @if (Stats.length > 0) {
+      <div class="sh-hero__stats">
+        @for (stat of Stats; track stat.Label) {
+          <div class="sh-stat">
+            <span class="sh-stat__label">{{ stat.Label }}</span>
+            <span [class]="'sh-stat__value' + (stat.Tone ? ' sh-stat__value--' + stat.Tone : '')">{{ stat.Value }}</span>
+            @if (stat.Sub) {
+              <span class="sh-stat__sub">{{ stat.Sub }}</span>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

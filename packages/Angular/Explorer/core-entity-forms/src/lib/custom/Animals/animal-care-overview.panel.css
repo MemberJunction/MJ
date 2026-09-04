@@ -1,0 +1,65 @@
+/* Space above a CONTRIBUTED panel.
+   It goes on the <mj-collapsible-panel> element, not on :host -- BaseFormPanel host-binds
+   `display: contents`, so the host generates no box at all and any margin on it is ignored.
+   And it is a TOP margin rather than a bottom margin on the hero: the hero also sits above
+   generated field panels, which already space themselves, so pushing from the hero would
+   double the gap there. The panel that needs the room asks for it.
+   `display: block` because a bare custom element is inline by default, and margins on an
+   inline box do nothing vertically. */
+mj-collapsible-panel {
+  display: block;
+  margin-top: var(--mj-space-4, 1rem);
+}
+
+/* Design tokens only. The chip classes (`sh-chip`) come from the shared hero stylesheet so a care
+   type is the same colour here as anywhere else it appears. */
+.co-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--mj-space-3, 0.75rem); margin-bottom: var(--mj-space-4, 1rem);
+}
+.co-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px); background: var(--mj-bg-surface-card);
+}
+.co-stat__label {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--mj-text-muted);
+}
+.co-stat__value {
+  font-size: 14px; font-weight: 600; color: var(--mj-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.co-stat--warn {
+  border-color: color-mix(in srgb, var(--mj-status-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+}
+.co-stat--warn .co-stat__value { color: var(--mj-status-warning-text); }
+
+/* An unmet follow-up is the only thing on a row worth flagging, so it is the only tinted part. */
+
+.co-muted { margin: 0; font-size: 12.5px; color: var(--mj-text-muted); }
+.co-error {
+  margin: 0; font-size: 12.5px;
+  color: var(--mj-status-error-text); background: var(--mj-status-error-bg);
+  border: 1px solid var(--mj-status-error); border-radius: var(--mj-radius-sm, 4px);
+  padding: 6px 10px;
+}
+
+/* The grid is given an explicit pixel height in the component (see GridHeightPx), so this wrapper
+   only supplies the gap above it. No min-height, no flex: a sized grid needs neither, and a
+   min-height taller than the grid would leave dead space under it. */
+.co-grid { margin-top: var(--mj-space-2, 0.5rem); }
+
+/* Grid heading. The warning colour lives on the icon only -- tinting the whole row would compete
+   with the amber stat card above it and with the chip beside it. */
+.co-grid-head {
+  display: flex; align-items: center; gap: var(--mj-space-2, 0.5rem); flex-wrap: wrap;
+  margin-top: var(--mj-space-4, 1rem);
+}
+.co-grid-head__title {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 600; color: var(--mj-text-primary);
+}
+.co-grid-head__title i { font-size: 12px; color: var(--mj-text-muted); }
+.co-grid-head__caption { margin-left: auto; font-size: 11px; color: var(--mj-text-muted); }

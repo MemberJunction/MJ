@@ -205,7 +205,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (411 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -325,6 +325,7 @@ import {
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJCareLogEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1630,6 +1631,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJCareLogEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -2461,7 +2463,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1001;
+export const CLASS_REGISTRATIONS_COUNT = 1002;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

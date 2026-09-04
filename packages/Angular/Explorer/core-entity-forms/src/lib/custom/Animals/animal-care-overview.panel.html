@@ -1,0 +1,78 @@
+<mj-collapsible-panel SectionKey="care-overview" SectionName="Care &amp; Health" Icon="fa fa-heart-pulse"
+    [Form]="FormComponent" [FormContext]="FormContext">
+
+  @if (LoadError) {
+    <p class="co-error" role="alert">{{ LoadError }}</p>
+  } @else if (IsLoading) {
+    <p class="co-muted"><i class="fa-solid fa-spinner fa-spin"></i> Reading care history…</p>
+  } @else if (Summary) {
+
+    <!-- The derived figures. None of these is a column on Animal or on CareLog -- each is
+         computed from the rows, which is why the generated form cannot show them. -->
+    <div class="co-stats">
+      <div class="co-stat">
+        <span class="co-stat__label">Care entries</span>
+        <span class="co-stat__value">{{ Summary.Total }}</span>
+      </div>
+      <div class="co-stat">
+        <span class="co-stat__label">Last vaccination</span>
+        <!-- 'UTC' is REQUIRED on every DATE column here: without it Angular applies the browser
+             zone and users west of UTC see the previous day (MJ #4210). -->
+        <span class="co-stat__value">
+          {{ Summary.LastVaccination ? (Summary.LastVaccination | date: 'mediumDate' : 'UTC') : 'None on file' }}
+        </span>
+      </div>
+      <div class="co-stat">
+        <span class="co-stat__label">Last exam</span>
+        <span class="co-stat__value">
+          {{ Summary.LastExam ? (Summary.LastExam | date: 'mediumDate' : 'UTC') : 'None on file' }}
+        </span>
+      </div>
+      <div class="co-stat" [class.co-stat--warn]="Summary.OverdueCount > 0">
+        <span class="co-stat__label">Overdue follow-ups</span>
+        <span class="co-stat__value">{{ Summary.OverdueCount }}</span>
+      </div>
+      <div class="co-stat" [class.co-stat--warn]="NextFollowUpIsOverdue">
+        <span class="co-stat__label">Next follow-up</span>
+        <span class="co-stat__value">
+          {{ Summary.NextFollowUp ? (Summary.NextFollowUp | date: 'mediumDate' : 'UTC') : 'Nothing scheduled' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Action items as a REAL entity grid, not hand-written rows. Using the same grid component
+         the rest of Explorer uses means sorting, search, New, Export and row-open all come for
+         free and behave identically to every other grid in the app -- and none of it is ours to
+         maintain. The filter is what makes this panel worth its position: open follow-ups only,
+         soonest first, because the complete history already has its own rail item. -->
+    <!-- The heading names what the grid actually LISTS -- open follow-ups -- not what we wish it
+         listed. Titling it "Overdue care" while deliberately including upcoming entries produced a
+         section reading "Nothing overdue" directly above a populated grid, which is a contradiction
+         to anyone reading it even though both figures were correct. The chip carries the overdue
+         count separately, and each row says its own follow-up date. -->
+    <div class="co-grid-head">
+      <span class="co-grid-head__title">
+        <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+        Care follow-ups
+      </span>
+      @if (Summary.OverdueCount > 0) {
+        <span class="sh-chip sh-chip--warn">{{ Summary.OverdueCount }} overdue</span>
+      } @else {
+        <span class="sh-chip sh-chip--ok">None overdue</span>
+      }
+      <span class="co-grid-head__caption">Still open, soonest due first</span>
+    </div>
+
+    <div class="co-grid">
+      <mj-explorer-entity-data-grid
+          [Params]="ActionItemParams"
+          [NewRecordValues]="NewCareLogValues"
+          [ShowToolbar]="true"
+          [ShowExportButton]="false"
+          [ShowRecycleBin]="false"
+          Height="fit-content"
+          (Navigate)="OnGridNavigate($event)"></mj-explorer-entity-data-grid>
+    </div>
+
+  }
+</mj-collapsible-panel>

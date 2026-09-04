@@ -1,0 +1,136 @@
+<!-- The container -- NOT <mj-form-toolbar> directly. The container owns the toolbar AND the panels
+     its buttons open (Record Changes, Add to List, Tags); a raw toolbar only emits events, so
+     those buttons would render and do nothing. All five handlers already exist on
+     BaseFormComponent (packages/Angular/CLAUDE.md). -->
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+  <!-- Hero: the shared component, fed by getters below. Same idiom as bizapps-orders' header
+       contributions, which all feed one <mjo-doc-hero>. -->
+  @if (HasIntake) {
+    <shelter-hero
+        [Title]="record.Name"
+        [Subtitle]="IdentityLine"
+        Icon="fa-solid fa-paw"
+        [PhotoSrc]="PhotoSrc"
+        [Chips]="HeroChips"
+        [Stats]="HeroStats"></shelter-hero>
+  }
+
+  <!-- Contribution slots. A Pattern-2 custom form replaces the generated template, so it must
+       emit these itself or registered panels have nowhere to mount. The container always emits
+       `after-everything`, so a panel would still appear -- just at the bottom instead of its
+       chosen position. -->
+  <mj-form-panel-slot Entity="MJ: Animals" Slot="before-fields"
+      [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+  <!-- Field panels, restated exactly as CodeGen emitted them: same SectionKey, SectionName, Icon,
+       field order and control types. The grouping itself comes from EntityField.Category, so
+       moving a field between sections is a metadata change, not an edit here. -->
+  <mj-collapsible-panel SectionKey="animalIdentity" SectionName="Animal Identity" Icon="fa fa-id-card"
+      [Form]="this" [FormContext]="formContext">
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Name" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Species" Type="select"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="BreedID" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="MicrochipNumber" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+  </mj-collapsible-panel>
+
+  <mj-collapsible-panel SectionKey="shelterHistory" SectionName="Shelter History" Icon="fa fa-history"
+      [Form]="this" [FormContext]="formContext">
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="IntakeDate" Type="datepicker"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="IntakeReason" Type="select"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Status" Type="select"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="HousingID" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+  </mj-collapsible-panel>
+
+  <mj-collapsible-panel SectionKey="physicalAttributes" SectionName="Physical Attributes" Icon="fa fa-weight"
+      [Form]="this" [FormContext]="formContext">
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Sex" Type="select"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="EstimatedBirthDate" Type="datepicker"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="WeightKg" Type="number"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+  </mj-collapsible-panel>
+
+  <mj-collapsible-panel SectionKey="animalProfile" SectionName="Animal Profile" Icon="fa fa-align-left"
+      [Form]="this" [FormContext]="formContext">
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Description" Type="textarea"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <!-- PhotoBase64 is deliberately NOT an <mj-form-field>. mj-form-field has no image or file
+         type, so the generated form could only render this column as a textarea full of base64 --
+         see the class note for why MJ's own file-upload and attachments components cannot help
+         here (both need an active File Storage provider). -->
+    <div class="animal-photo">
+      <span class="animal-photo__label">Photo</span>
+      <div class="animal-photo__body">
+        @if (PhotoSrc) {
+          <img class="animal-photo__img" [src]="PhotoSrc" alt="Photo of {{ record.Name }}" />
+        } @else {
+          <div class="animal-photo__empty">
+            <i class="fa-solid fa-camera" aria-hidden="true"></i>
+            <span>No photo</span>
+          </div>
+        }
+
+        @if (EditMode) {
+          <div class="animal-photo__actions">
+            <!-- A label wrapping a hidden input is the accessible way to restyle a file picker:
+                 the label is focusable-by-proxy and clicking it opens the dialog, with no JS. -->
+            <label class="animal-photo__btn" [class.is-busy]="PhotoBusy">
+              <i class="fa-solid fa-upload" aria-hidden="true"></i>
+              <span>{{ PhotoSrc ? 'Replace' : 'Choose image' }}</span>
+              <input type="file" accept="image/*" [disabled]="PhotoBusy"
+                     (change)="OnPhotoSelected($event)" />
+            </label>
+            @if (PhotoSrc) {
+              <button type="button" class="animal-photo__btn animal-photo__btn--quiet"
+                      [disabled]="PhotoBusy" (click)="RemovePhoto()">
+                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                <span>Remove</span>
+              </button>
+            }
+            @if (PhotoBusy) {
+              <span class="animal-photo__note"><i class="fa-solid fa-spinner fa-spin"></i> Resizing…</span>
+            } @else {
+              <span class="animal-photo__note">Resized to 1024px and re-encoded as JPEG on selection.</span>
+            }
+          </div>
+        }
+
+        @if (PhotoError) {
+          <p class="animal-photo__error" role="alert">{{ PhotoError }}</p>
+        }
+      </div>
+    </div>
+  </mj-collapsible-panel>
+
+  <mj-collapsible-panel SectionKey="systemMetadata" SectionName="System Metadata" Icon="fa fa-cog"
+      [Form]="this" [FormContext]="formContext">
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_CreatedAt" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_UpdatedAt" Type="textbox"
+        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+  </mj-collapsible-panel>
+
+  <mj-form-panel-slot Entity="MJ: Animals" Slot="after-fields"
+      [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+  <mj-form-panel-slot Entity="MJ: Animals" Slot="after-related"
+      [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+</mj-record-form-container>
+}
