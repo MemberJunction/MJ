@@ -7,7 +7,13 @@
  * source, and stdio discipline — nothing may reach stdout, because `--format=json` callers parse
  * it. Progress goes to stderr under `--verbose`; genuine load failures always go to stderr.
  */
-import { CliProcessId, LoadDynamicPackages, type DynamicPackagesLogger, type DynamicPackagesReport } from '@memberjunction/dynamic-packages';
+import {
+  CliProcessId,
+  DYNAMIC_PACKAGES_PROCESS_ENV_VAR,
+  LoadDynamicPackages,
+  type DynamicPackagesLogger,
+  type DynamicPackagesReport,
+} from '@memberjunction/dynamic-packages';
 import { getRawConfig } from '../config.js';
 
 export interface LoadDynamicPackagesForCommandOptions {
@@ -49,8 +55,14 @@ export async function loadDynamicPackagesForCommand(
   const verbose = options.verbose ?? false;
   const write = options.stderr ?? ((line: string) => process.stderr.write(`${line}\n`));
   const raw = options.raw ?? getRawConfig();
+  const processId = CliProcessId(commandId);
+  // Publish this command's identity for hosts the command imports in-process (`mj ai …` drives
+  // @memberjunction/ai-cli, `mj test …` drives @memberjunction/testing-cli). Their own provider
+  // bootstraps call the loader too; under this id they apply the same scoping and policy the
+  // prerun pass applied, instead of re-attempting entries an operator excluded from `cli`.
+  process.env[DYNAMIC_PACKAGES_PROCESS_ENV_VAR] = processId;
   const report = await LoadDynamicPackages({
-    processId: CliProcessId(commandId),
+    processId,
     tier: 'server',
     config: raw.config ?? null,
     configFilePath: raw.configFilePath,

@@ -26,6 +26,7 @@ import { ResolveDynamicPackagesMode } from './mode.js';
 import { MatchesProcess, NormalizeProcessId } from './process-id.js';
 import type {
     DiscoveredDynamicPackage,
+    DynamicPackageTier,
     DynamicPackagesLogger,
     DynamicPackagesReport,
     LoadDynamicPackagesOptions,
@@ -60,13 +61,31 @@ export const SilentDynamicPackagesLogger: DynamicPackagesLogger = {
     verbose: () => undefined,
 };
 
+/** cosmiconfig search strategies accepted by {@link DiscoverMJConfig}. */
+export type MJConfigSearchStrategy = 'none' | 'project' | 'global';
+
 /**
- * Discovers `mj.config.cjs` the way every MJ entry point does (cosmiconfig, module name `mj`,
- * global search strategy) and returns the RAW object plus its path. Hosts whose own config
- * loader Zod-strips `dynamicPackages` use this to hand the loader an unstripped view.
+ * Discovers `mj.config.cjs` with cosmiconfig (module name `mj`) and returns the RAW object plus its
+ * path. Hosts whose own config loader Zod-strips `dynamicPackages` use this to hand the loader an
+ * unstripped view.
+ *
+ * @param searchFrom - Directory to start from. Defaults to `process.cwd()`.
+ * @param options.searchStrategy - cosmiconfig's search strategy. Defaults to `'global'` (walk up
+ *   to the home directory — what MJAPI, the `mj` CLI and CodeGen do). A host whose own config
+ *   loader only looks in the working directory should pass `'none'` so the packages it loads come
+ *   from the same file its database settings came from.
+ *
+ * @example
+ * ```ts
+ * const { config, configFilePath } = DiscoverMJConfig();
+ * await LoadDynamicPackages({ processId: 'mcp', config, configFilePath });
+ * ```
  */
-export function DiscoverMJConfig(searchFrom?: string): { config: Record<string, unknown>; configFilePath?: string } {
-    const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
+export function DiscoverMJConfig(
+    searchFrom?: string,
+    options?: { searchStrategy?: MJConfigSearchStrategy }
+): { config: Record<string, unknown>; configFilePath?: string } {
+    const explorer = cosmiconfigSync('mj', { searchStrategy: options?.searchStrategy ?? 'global' });
     const result = explorer.search(searchFrom ?? process.cwd());
     return {
         config: (result?.config ?? {}) as Record<string, unknown>,
@@ -75,21 +94,76 @@ export function DiscoverMJConfig(searchFrom?: string): { config: Record<string, 
 }
 
 /** Human-readable label for a discovered entry's origin, used in log lines. */
-function describeSource(pkg: DiscoveredDynamicPackage): string {
+function describeSource(pkg: DiscoveredDynamicPackage, tier: DynamicPackageTier): string {
     switch (pkg.Source) {
         case 'generated':
             return 'generated package';
         case 'manifest':
-            return `Open App package (from mj-app.json${pkg.Entry.AppName ? ` of ${pkg.Entry.AppName}` : ''})`;
+            return `Open App ${tier} package (from mj-app.json${pkg.Entry.AppName ? ` of ${pkg.Entry.AppName}` : ''})`;
         default:
-            return 'Open App server package';
+            return `Open App ${tier} package`;
     }
 }
 
 /**
- * Loads every dynamic package that applies to `options.processId`, in discovery order:
- * host generated packages → `dynamicPackages.<tier>[]` → the local `mj-app.json` (if any).
- * Never throws for a package problem; the returned report says what happened to each entry.
+ * Loads every dynamic package that applies to `options.processId` and returns a report of what
+ * happened to each entry. This is the one call a host makes; everything else in the package is a
+ * primitive it composes.
+ *
+ * @remarks
+ * **Order of operations.** Mode is resolved first (`MJ_DYNAMIC_PACKAGES` env var → `options.mode`
+ * → `dynamicPackages.policy` → `'load'`). Candidates are then discovered generic-to-specific —
+ * the host's `codeGeneration.packages`, then `dynamicPackages.<tier>[]`, then the `mj-app.json`
+ * beside the config — and merged by package name ({@link mergeCandidates}). Under mode `'none'`
+ * every candidate is reported as skipped and nothing is imported. Otherwise each candidate is
+ * filtered (`Enabled === false`, then `Processes` / `ExcludeProcesses` via {@link MatchesProcess}),
+ * served from the per-process cache when an earlier call already loaded it (module returned,
+ * startup export **not** re-run), or imported through {@link importFromHost} with an on-disk
+ * workspace fallback for manifest entries.
+ *
+ * **Why order matters.** `@RegisterClass` resolves by load-order priority — the last registration
+ * for a key wins — so importing generic-to-specific is what makes an Open App's server subclass
+ * beat its generated one, and the app you are standing in beat an installed copy.
+ *
+ * **When to call it.** After the host's class-registration manifest has been imported (so app
+ * registrations land last) and before any database provider exists (a `StartupExport` may rely on
+ * nothing but the ClassFactory).
+ *
+ * **Failure model.** Throws only when `processId` is missing. A package that no anchor can resolve
+ * is `NotFound` (expected before `npm install`, or for an unbuilt workspace member); one that
+ * resolves but throws while loading is `Failed` with its own error, logged on the warn path and
+ * never masked by a resolution message. Boot never crashes because of an app package.
+ *
+ * @param options - Process identity, the raw config and its path, tier, discovery switches, a
+ *   programmatic mode override, and the logger. See {@link LoadDynamicPackagesOptions}.
+ * @returns The {@link DynamicPackagesReport}: `Loaded`, `Skipped` (with a reason), `NotFound`,
+ *   `Failed`, plus the resolved mode and where it came from.
+ *
+ * @example Minimal host
+ * ```ts
+ * const { config, configFilePath } = DiscoverMJConfig();
+ * const report = await LoadDynamicPackages({ processId: 'mcp', config, configFilePath });
+ * for (const failed of report.Failed) {
+ *     console.error(`app package ${failed.Entry.PackageName} failed to load`, failed.Error);
+ * }
+ * ```
+ *
+ * @example Reading a convention off a loaded module (what MJAPI does for RESOLVER_PATHS)
+ * ```ts
+ * const resolverPaths = report.Loaded.flatMap((l) => {
+ *     const paths = l.Module.RESOLVER_PATHS;
+ *     return Array.isArray(paths) ? (paths as string[]) : [];
+ * });
+ * ```
+ *
+ * @example A nested host that inherits the outer process identity
+ * ```ts
+ * await LoadDynamicPackages({
+ *     processId: EffectiveProcessId('ai-cli'), // 'cli:ai:agents:run' when run under `mj ai …`
+ *     config, configFilePath,
+ *     log: StderrDynamicPackagesLogger,      // stdout may be a JSON envelope
+ * });
+ * ```
  */
 export async function LoadDynamicPackages(options: LoadDynamicPackagesOptions): Promise<DynamicPackagesReport> {
     const processId = NormalizeProcessId(options.processId);
@@ -118,7 +192,10 @@ export async function LoadDynamicPackages(options: LoadDynamicPackagesOptions): 
         Failed: [],
     };
 
-    const candidates = collectCandidates(options, tier, config, section, log);
+    const { candidates, duplicates } = mergeCandidates(collectCandidates(options, tier, config, section, log));
+    for (const duplicate of duplicates) {
+        report.Skipped.push({ ...duplicate, Reason: 'duplicate' });
+    }
     if (candidates.length === 0) {
         return report;
     }
@@ -131,14 +208,21 @@ export async function LoadDynamicPackages(options: LoadDynamicPackagesOptions): 
         return report;
     }
 
-    const seen = new Set<string>();
     const alreadyLoaded = loadedInThisProcess();
     let announcedGenerated = false;
     let announcedApps = false;
     for (const candidate of candidates) {
         const { Entry: entry } = candidate;
-        if (seen.has(entry.PackageName)) {
-            report.Skipped.push({ ...candidate, Reason: 'duplicate' });
+        // Filters first — an entry disabled or out of scope must stay skipped even when an
+        // earlier call in this process loaded the same package (the cache is not a bypass).
+        if (entry.Enabled === false) {
+            report.Skipped.push({ ...candidate, Reason: 'disabled' });
+            log.verbose?.(`[dynamic-packages] Skipping ${entry.PackageName}: disabled`);
+            continue;
+        }
+        if (!MatchesProcess(processId, entry)) {
+            report.Skipped.push({ ...candidate, Reason: 'process-filter' });
+            log.verbose?.(`[dynamic-packages] Skipping ${entry.PackageName}: not scoped to process '${processId}'`);
             continue;
         }
         const cached = alreadyLoaded.get(entry.PackageName);
@@ -150,17 +234,6 @@ export async function LoadDynamicPackages(options: LoadDynamicPackagesOptions): 
             log.verbose?.(`[dynamic-packages] ${entry.PackageName} already loaded in this process; startup export not re-run`);
             continue;
         }
-        if (entry.Enabled === false) {
-            report.Skipped.push({ ...candidate, Reason: 'disabled' });
-            log.verbose?.(`[dynamic-packages] Skipping ${entry.PackageName}: disabled`);
-            continue;
-        }
-        if (!MatchesProcess(processId, entry)) {
-            report.Skipped.push({ ...candidate, Reason: 'process-filter' });
-            log.verbose?.(`[dynamic-packages] Skipping ${entry.PackageName}: not scoped to process '${processId}'`);
-            continue;
-        }
-        seen.add(entry.PackageName);
 
         // Section headers mirror the lines MJAPI has printed at boot for years.
         if (candidate.Source === 'generated' && !announcedGenerated) {
@@ -174,6 +247,44 @@ export async function LoadDynamicPackages(options: LoadDynamicPackagesOptions): 
         await loadOne(candidate, options, report, log);
     }
     return report;
+}
+
+/**
+ * Collapses candidates that name the same package into one, in discovery order.
+ *
+ * The `mj.config.cjs` entry is the operator's authority for a package: it carries `Enabled`
+ * (what `mj app disable` writes) and the process scoping. So when an `mj-app.json` beside the
+ * config names a package the config also names, the config entry decides whether and where it
+ * loads — but the manifest's on-disk location is kept as the resolution fallback, so a package
+ * the host cannot `require.resolve` still loads from the workspace. Every later duplicate is
+ * returned separately so the report can list it as skipped.
+ */
+export function mergeCandidates(all: DiscoveredDynamicPackage[]): {
+    candidates: DiscoveredDynamicPackage[];
+    duplicates: DiscoveredDynamicPackage[];
+} {
+    const byName = new Map<string, DiscoveredDynamicPackage>();
+    const candidates: DiscoveredDynamicPackage[] = [];
+    const duplicates: DiscoveredDynamicPackage[] = [];
+    for (const candidate of all) {
+        const name = candidate.Entry.PackageName;
+        const existing = byName.get(name);
+        if (!existing) {
+            const first = { ...candidate };
+            byName.set(name, first);
+            candidates.push(first);
+            continue;
+        }
+        if (candidate.Source === 'config' && existing.Source !== 'config') {
+            existing.Entry = candidate.Entry;
+            existing.Source = 'config';
+        }
+        if (!existing.WorkspaceHome && candidate.WorkspaceHome) {
+            existing.WorkspaceHome = candidate.WorkspaceHome;
+        }
+        duplicates.push(candidate);
+    }
+    return { candidates, duplicates };
 }
 
 /** Orders the three discovery sources. Manifest discovery failures are the operator's to see, not fatal. */
@@ -213,7 +324,7 @@ async function loadOne(
 ): Promise<void> {
     const { Entry: entry } = candidate;
     const pkgName = entry.PackageName;
-    const label = describeSource(candidate);
+    const label = describeSource(candidate, report.Tier);
     const manifestHome = candidate.WorkspaceHome;
     try {
         let mod: Record<string, unknown>;

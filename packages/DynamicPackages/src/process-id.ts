@@ -86,3 +86,29 @@ export function ResolveMostSpecific<T>(processId: string, map: Record<string, T>
     }
     return bestKey === undefined ? undefined : map[bestKey];
 }
+
+/**
+ * Environment variable through which an OUTER host tells nested hosts which process they are
+ * running inside. The `mj` CLI's prerun hook sets it to its own ID (`cli:ai:agents:run`) before
+ * the command imports `@memberjunction/ai-cli` or `@memberjunction/testing-cli`; those packages'
+ * provider bootstraps then evaluate `Processes` / `ExcludeProcesses` / `policy` under the SAME
+ * ID instead of their standalone `ai-cli` / `testing-cli` identity. Without it, an entry an
+ * operator excluded from `cli` would be loaded by the nested host a moment later.
+ */
+export const DYNAMIC_PACKAGES_PROCESS_ENV_VAR = 'MJ_DYNAMIC_PACKAGES_PROCESS';
+
+/**
+ * The process ID a host should load under: the one an enclosing host published through
+ * {@link DYNAMIC_PACKAGES_PROCESS_ENV_VAR} when there is one, else the host's own default.
+ *
+ * @example
+ * ```ts
+ * // packages/AI/AICLI — `mj-ai` standalone loads as 'ai-cli'; under `mj ai …` it inherits 'cli:ai:…'
+ * await LoadDynamicPackages({ processId: EffectiveProcessId('ai-cli'), ... });
+ * ```
+ */
+export function EffectiveProcessId(hostDefault: string): string {
+    const fromEnv = typeof process !== 'undefined' && process.env ? process.env[DYNAMIC_PACKAGES_PROCESS_ENV_VAR] : undefined;
+    const normalized = fromEnv ? NormalizeProcessId(fromEnv) : '';
+    return normalized.length > 0 ? normalized : NormalizeProcessId(hostDefault);
+}

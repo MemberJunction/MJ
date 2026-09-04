@@ -17,6 +17,13 @@ describe('describeMissingEntitySubclass', () => {
     expect(describeMissingEntitySubclass('mj_test: unregistered widgets')).toBeNull();
   });
 
+  it('phrases the consequence conditionally under dry-run and names both package sources', () => {
+    const message = describeMissingEntitySubclass('MJ_Test: DryRun Widgets', { dryRun: true });
+    expect(message).toMatch(/would be written/);
+    expect(message).toMatch(/codeGeneration\.packages\.entities/);
+    expect(message).toMatch(/dynamicPackages\.server/);
+  });
+
   it('returns null for an entity whose subclass is registered', () => {
     MJGlobal.Instance.ClassFactory.Register(BaseEntity, RegisteredTestEntity, 'MJ_Test: Registered Widgets');
     expect(describeMissingEntitySubclass('MJ_Test: Registered Widgets')).toBeNull();

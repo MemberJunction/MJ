@@ -1,8 +1,14 @@
 import { Hook } from '@oclif/core';
 import figlet from 'figlet';
 import { INTERACTIVE_ENV, ResolveOutputFormat, ShouldSuppressChrome } from '@memberjunction/cli-core';
-import { DYNAMIC_PACKAGES_MODE_ENV_VAR } from '@memberjunction/dynamic-packages';
 import { LIGHT_COMMANDS } from '../light-commands.js';
+
+/**
+ * Mirror of `DYNAMIC_PACKAGES_MODE_ENV_VAR` from @memberjunction/dynamic-packages, inlined so
+ * LIGHT commands (version, help, migrate, …) do not pay for that package — and its cosmiconfig
+ * import — at startup. `dynamic-packages.test.ts` asserts the two stay equal.
+ */
+export const DYNAMIC_PACKAGES_MODE_ENV_VAR = 'MJ_DYNAMIC_PACKAGES';
 
 /**
  * Strips a global boolean flag from argv in place and reports whether it was there.
@@ -79,7 +85,7 @@ const hook: Hook<'prerun'> = async function (options) {
   // ShouldSuppressChrome covers both machine formats and a redirected stdout: a caller
   // that piped us has already said it is a machine, and a banner in its capture buffer
   // is pure noise.
-  const verbose = argv.includes('--verbose') || argv.some((arg) => /^-[^-]+/.test(arg) && arg.includes('v'));
+  const verbose = argv.includes('--verbose') || argv.includes('-v');
 
   if (noBanner || quiet || ShouldSuppressChrome(format)) {
     // Still conditionally load bootstrap — just no decorative output. (The old `--json`

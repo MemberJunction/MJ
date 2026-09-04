@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { CliProcessId, MatchesProcess, NormalizeProcessId, ProcessIdMatches, ResolveMostSpecific } from '../process-id';
+import { afterEach } from 'vitest';
+import { CliProcessId, DYNAMIC_PACKAGES_PROCESS_ENV_VAR, EffectiveProcessId, MatchesProcess, NormalizeProcessId, ProcessIdMatches, ResolveMostSpecific } from '../process-id';
 
 describe('NormalizeProcessId', () => {
     it('lowercases, trims and collapses empty segments', () => {
@@ -80,5 +81,25 @@ describe('ResolveMostSpecific', () => {
     it('returns undefined when nothing matches', () => {
         expect(ResolveMostSpecific('mjapi', { cli: 'b' })).toBeUndefined();
         expect(ResolveMostSpecific('mjapi', undefined)).toBeUndefined();
+    });
+});
+
+describe('EffectiveProcessId', () => {
+    afterEach(() => {
+        delete process.env[DYNAMIC_PACKAGES_PROCESS_ENV_VAR];
+    });
+
+    it('uses the host default when no enclosing host published an id', () => {
+        expect(EffectiveProcessId('ai-cli')).toBe('ai-cli');
+    });
+
+    it('inherits the enclosing host id from the environment, normalized', () => {
+        process.env[DYNAMIC_PACKAGES_PROCESS_ENV_VAR] = 'CLI:ai:agents:run';
+        expect(EffectiveProcessId('ai-cli')).toBe('cli:ai:agents:run');
+    });
+
+    it('ignores a blank published id', () => {
+        process.env[DYNAMIC_PACKAGES_PROCESS_ENV_VAR] = '  ';
+        expect(EffectiveProcessId('testing-cli')).toBe('testing-cli');
     });
 });

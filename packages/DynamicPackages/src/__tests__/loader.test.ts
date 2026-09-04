@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { LoadDynamicPackages, ResetLoadedDynamicPackages, StderrDynamicPackagesLogger } from '../loader';
+import { LoadDynamicPackages, ResetLoadedDynamicPackages, StderrDynamicPackagesLogger, mergeCandidates } from '../loader';
 import { DYNAMIC_PACKAGES_MODE_ENV_VAR } from '../mode';
 import type { DynamicPackagesLogger } from '../types';
 
@@ -220,6 +220,32 @@ describe('LoadDynamicPackages', () => {
         expect((globalThis as { __dpLoads?: string[] }).__dpLoads.filter((l) => l === 'server:startup')).toHaveLength(1);
     });
 
+    it('keeps a disabled or out-of-scope entry skipped even after an earlier call loaded the package', async () => {
+        const first = await LoadDynamicPackages({
+            processId: 'mjapi',
+            config: { dynamicPackages: { server: [{ PackageName: `${scope}/noexport` }] } },
+            configFilePath: hostConfigPath,
+            log: recordingLogger(),
+        });
+        expect(first.Loaded).toHaveLength(1);
+        const second = await LoadDynamicPackages({
+            processId: 'mjapi',
+            config: { dynamicPackages: { server: [{ PackageName: `${scope}/noexport`, Enabled: false }] } },
+            configFilePath: hostConfigPath,
+            log: recordingLogger(),
+        });
+        expect(second.Loaded).toEqual([]);
+        expect(second.Skipped.map((s) => s.Reason)).toEqual(['disabled']);
+        const third = await LoadDynamicPackages({
+            processId: 'cli:codegen',
+            config: { dynamicPackages: { server: [{ PackageName: `${scope}/noexport`, Processes: ['mjapi'] }] } },
+            configFilePath: hostConfigPath,
+            log: recordingLogger(),
+        });
+        expect(third.Loaded).toEqual([]);
+        expect(third.Skipped.map((s) => s.Reason)).toEqual(['process-filter']);
+    });
+
     it('loads each package once even when named by two sources', async () => {
         const report = await LoadDynamicPackages({
             processId: 'mjapi',
@@ -280,6 +306,38 @@ describe('LoadDynamicPackages', () => {
             ]);
             expect((globalThis as { __dpLoads?: string[] }).__dpLoads).toEqual(['app:entities', 'app:server', 'app:startup']);
             expect(log.infos.some((l) => l.includes('from mj-app.json of dp-app'))).toBe(true);
+        });
+
+        it('lets a config entry disabled with `mj app disable` stay disabled when mj-app.json names the same package', async () => {
+            const report = await LoadDynamicPackages({
+                processId: 'cli:sync:push',
+                config: { dynamicPackages: { server: [{ PackageName: '@dp-app/server', AppName: 'dp-app', Enabled: false }] } },
+                configFilePath: appConfigPath,
+                log: recordingLogger(),
+            });
+            expect(report.Loaded.map((l) => l.Entry.PackageName)).toEqual(['@dp-app/entities']);
+            expect(report.Skipped.map((s) => [s.Entry.PackageName, s.Reason])).toEqual([
+                ['@dp-app/server', 'duplicate'],
+                ['@dp-app/server', 'disabled'],
+            ]);
+            expect((globalThis as { __dpLoads?: string[] }).__dpLoads).not.toContain('app:startup');
+        });
+
+        it('loads a config entry the host cannot resolve from the workspace member mj-app.json points at', async () => {
+            // The app's own package appears in the sibling mj.config.cjs (installed form) AND in
+            // mj-app.json; nothing at the repo root can require.resolve it. The config entry keeps
+            // its authority (scoping, startup export) and borrows the manifest's on-disk location.
+            const report = await LoadDynamicPackages({
+                processId: 'cli:sync:push',
+                config: { dynamicPackages: { server: [{ PackageName: '@dp-app/server', StartupExport: 'LoadDpApp', Processes: ['cli:sync'] }] } },
+                configFilePath: appConfigPath,
+                log: recordingLogger(),
+            });
+            const server = report.Loaded.find((l) => l.Entry.PackageName === '@dp-app/server');
+            expect(server?.Source).toBe('config');
+            expect(server?.RanStartupExport).toBe(true);
+            expect(report.NotFound).toEqual([]);
+            expect((globalThis as { __dpLoads?: string[] }).__dpLoads).toContain('app:startup');
         });
 
         it('can be switched off with discoverAppManifest: false', async () => {
@@ -353,6 +411,31 @@ describe('LoadDynamicPackages', () => {
             expect(out).toEqual([]);
             expect(logSpy).not.toHaveBeenCalled();
             expect(err).toEqual(['Loading Open App server packages...\n', '  Error loading X: boom\n']);
+        });
+    });
+
+    describe('mergeCandidates', () => {
+        const generated = { Source: 'generated' as const, Entry: { PackageName: '@x/a', Enabled: true } };
+        const config = { Source: 'config' as const, Entry: { PackageName: '@x/a', Enabled: false, Processes: ['cli'] } };
+        const manifest = { Source: 'manifest' as const, Entry: { PackageName: '@x/a', StartupExport: 'Load' }, WorkspaceHome: { RepoDir: '/repo', SourceDirectory: 'packages' } };
+
+        it('keeps discovery order, one candidate per package, and reports the rest as duplicates', () => {
+            const { candidates, duplicates } = mergeCandidates([generated, config, manifest]);
+            expect(candidates).toHaveLength(1);
+            expect(duplicates).toHaveLength(2);
+        });
+
+        it('lets the config entry decide Enabled/scoping while keeping the manifest location as the fallback', () => {
+            const { candidates } = mergeCandidates([generated, config, manifest]);
+            expect(candidates[0].Source).toBe('config');
+            expect(candidates[0].Entry).toEqual(config.Entry);
+            expect(candidates[0].WorkspaceHome).toEqual(manifest.WorkspaceHome);
+        });
+
+        it('does not mutate the inputs', () => {
+            mergeCandidates([generated, manifest]);
+            expect(generated.Source).toBe('generated');
+            expect((generated as { WorkspaceHome?: unknown }).WorkspaceHome).toBeUndefined();
         });
     });
 });

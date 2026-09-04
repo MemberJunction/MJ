@@ -22,7 +22,8 @@ import {
   normalizeServerExtensionConfigs,
   type ServerExtensionConfig,
 } from '@memberjunction/server-extensions-core';
-import { LoadDynamicPackages, resolvePackageJsonFromHost, type LoadedDynamicPackage } from '@memberjunction/dynamic-packages';
+import { FindWorkspacePackageDir, LoadDynamicPackages, resolvePackageJsonFromHost, type LoadedDynamicPackage } from '@memberjunction/dynamic-packages';
+import path from 'node:path';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { readFileSync } from 'node:fs';
 
@@ -146,6 +147,21 @@ function collectResolverPaths(loaded: LoadedDynamicPackage, into: string[]): num
 }
 
 /**
+ * `package.json` of a package the loader imported by path from an Open App's own repository
+ * (`mj-app.json` beside the config). No resolution anchor can see such a package — that is why
+ * the loader fell back to its on-disk location — so the host-anchored lookup above returns null
+ * for it and its `memberjunction.serverExtensions` would never mount.
+ */
+function workspacePackageJson(loaded: LoadedDynamicPackage): string | null {
+  const home = loaded.WorkspaceHome;
+  if (!home) {
+    return null;
+  }
+  const dir = FindWorkspacePackageDir(home.RepoDir, home.SourceDirectory, loaded.Entry.PackageName);
+  return dir ? path.join(dir, 'package.json') : null;
+}
+
+/**
  * Server extensions: runtime export wins; package.json is the static fallback for packages that
  * declare metadata without a named export. Isolated in its own try so a collect failure still
  * leaves the package's resolvers registered.
@@ -165,7 +181,7 @@ function collectServerExtensions(loaded: LoadedDynamicPackage, configFilePath?: 
             onInvalid: (message) => console.warn(`  ${message}`),
           });
     if (extensions.length === 0) {
-      const pkgJsonPath = resolvePackageJsonFromHost(pkgName, configFilePath);
+      const pkgJsonPath = resolvePackageJsonFromHost(pkgName, configFilePath) ?? workspacePackageJson(loaded);
       if (pkgJsonPath) {
         const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as unknown;
         extensions = extractServerExtensionsFromPackageJson(pkgJson, {

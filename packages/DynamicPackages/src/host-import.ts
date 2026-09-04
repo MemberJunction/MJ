@@ -43,22 +43,6 @@ export function isResolutionFailure(error: unknown): boolean {
 }
 
 /**
- * Imports a runtime-configured package from the HOST application's context.
- *
- * Resolution and evaluation are handled separately on the fallback path: an anchor that
- * cannot SEE the package means "try the next anchor", but once an anchor resolves it,
- * any failure from loading the module (a missing transitive dependency, a throw in its
- * top-level code) is the module's own problem and is surfaced as-is — never masked by
- * the original "cannot find package" error.
- *
- * Note on the resolver: `createRequire().resolve` runs under CommonJS conditions, so a
- * package whose exports map declares ONLY an `"import"` condition cannot be resolved by
- * the fallback (surfaced with an actionable error). On a dual CJS/ESM package it selects
- * the CJS entry, so `import()` of that file would load a second physical module instance
- * alongside any ESM copy already in the process — fine for MJ-shaped single-condition
- * packages, but keep it in mind before widening this mechanism.
- */
-/**
  * Host anchors used to resolve runtime-configured packages. The mj.config.cjs that
  * named the package is first — cwd can be a different checkout.
  */
@@ -127,6 +111,22 @@ export function resolvePackageJsonFromHost(pkgName: string, configFilePath?: str
   return null;
 }
 
+/**
+ * Imports a runtime-configured package from the HOST application's context.
+ *
+ * Resolution and evaluation are handled separately on the fallback path: an anchor that
+ * cannot SEE the package means "try the next anchor", but once an anchor resolves it,
+ * any failure from loading the module (a missing transitive dependency, a throw in its
+ * top-level code) is the module's own problem and is surfaced as-is — never masked by
+ * the original "cannot find package" error.
+ *
+ * Note on the resolver: `createRequire().resolve` runs under CommonJS conditions, so a
+ * package whose exports map declares ONLY an `"import"` condition cannot be resolved by
+ * the fallback (surfaced with an actionable error). On a dual CJS/ESM package it selects
+ * the CJS entry, so `import()` of that file would load a second physical module instance
+ * alongside any ESM copy already in the process — fine for MJ-shaped single-condition
+ * packages, but keep it in mind before widening this mechanism.
+ */
 export async function importFromHost(pkgName: string, configFilePath?: string): Promise<Record<string, unknown>> {
   try {
     return (await import(pkgName)) as Record<string, unknown>;

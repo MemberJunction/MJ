@@ -2,7 +2,7 @@ import { SetProvider, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import { loadAIConfig } from '../config';
-import { DiscoverMJConfig, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
+import { DiscoverMJConfig, EffectiveProcessId, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -42,13 +42,16 @@ export async function initializeMJProvider(): Promise<IMetadataProvider> {
     const config = await loadAIConfig();
 
     // Installed Open App server packages register their entity/action subclasses here, before the
-    // provider exists. Idempotent: when this CLI runs inside `mj`, the `mj` prerun hook has already
-    // loaded them under `cli:ai:…` and the loader skips packages already loaded in the process.
-    const raw = DiscoverMJConfig();
+    // provider exists. When this CLI runs inside `mj`, the prerun hook has already loaded them and
+    // published its process id (`cli:ai:…`), which EffectiveProcessId adopts so the same scoping
+    // and policy apply here; packages already loaded are returned from cache, their startup export
+    // not re-run. Search strategy 'none' matches loadAIConfig() above (cwd only), so the packages
+    // come from the same mj.config.cjs the database settings did.
+    const raw = DiscoverMJConfig(undefined, { searchStrategy: 'none' });
     // Stderr logger: this CLI's stdout is a JSON envelope under --format=json / --output=json,
     // and the loader's default console logger would print its progress lines ahead of it.
     await LoadDynamicPackages({
-      processId: 'ai-cli',
+      processId: EffectiveProcessId('ai-cli'),
       tier: 'server',
       config: raw.config,
       configFilePath: raw.configFilePath,

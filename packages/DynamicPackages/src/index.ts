@@ -40,7 +40,16 @@ export type {
     WorkspaceHome,
 } from './types.js';
 export { importFromHost, isResolutionFailure, resolvePackageJsonFromHost } from './host-import.js';
-export { ANY_PROCESS, CliProcessId, MatchesProcess, NormalizeProcessId, ProcessIdMatches, ResolveMostSpecific } from './process-id.js';
+export {
+    ANY_PROCESS,
+    CliProcessId,
+    DYNAMIC_PACKAGES_PROCESS_ENV_VAR,
+    EffectiveProcessId,
+    MatchesProcess,
+    NormalizeProcessId,
+    ProcessIdMatches,
+    ResolveMostSpecific,
+} from './process-id.js';
 export { DYNAMIC_PACKAGES_MODE_ENV_VAR, ResolveDynamicPackagesMode } from './mode.js';
 export type { ResolvedDynamicPackagesMode } from './mode.js';
 export {
@@ -52,10 +61,12 @@ export {
     ReadDynamicPackagesConfig,
 } from './discover.js';
 export type { AppManifestDiscovery } from './discover.js';
+export type { MJConfigSearchStrategy } from './loader.js';
 export {
     ConsoleDynamicPackagesLogger,
     DiscoverMJConfig,
     LoadDynamicPackages,
+    mergeCandidates,
     ResetLoadedDynamicPackages,
     SilentDynamicPackagesLogger,
     StderrDynamicPackagesLogger,

@@ -253,7 +253,7 @@ export async function initializeA2AServer() {
         // Load installed Open App server packages (and the host's generated packages) BEFORE the
         // provider exists, as MJAPI does, so entity operations construct the apps' real subclasses.
         // configInfo is Zod-parsed and drops `dynamicPackages`; re-discover the raw config.
-        const raw = DiscoverMJConfig();
+        const raw = DiscoverMJConfig(undefined, { searchStrategy: 'none' }); // same cwd-only search as ./config.ts
         await LoadDynamicPackages({ processId: A2A_SERVER_PROCESS_ID, tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
 
         // Initialize database connection

@@ -14,7 +14,7 @@ const warned = new Set<string>();
  * Returns a warning when no `BaseEntity` subclass is registered for `entityName` in this
  * process, or `null` when one is. Each entity is reported once; later calls return `null`.
  */
-export function describeMissingEntitySubclass(entityName: string): string | null {
+export function describeMissingEntitySubclass(entityName: string, options: { dryRun?: boolean } = {}): string | null {
   const key = entityName.trim().toLowerCase();
   if (!key || warned.has(key)) {
     return null;
@@ -24,12 +24,15 @@ export function describeMissingEntitySubclass(entityName: string): string | null
     return null;
   }
   warned.add(key);
+  const verb = options.dryRun ? 'would be written' : 'will be written';
   return (
-    `No entity subclass is registered for '${entityName}' in this process — records will be written with the ` +
-    `generic BaseEntity, so the entity's custom validation, Save() logic and lifecycle hooks will NOT run. ` +
-    `If this entity belongs to an Open App, make sure the app's server package is installed (mj app install) ` +
-    `and listed in mj.config.cjs dynamicPackages.server, and that this run was not started with ` +
-    `--no-app-packages / MJ_DYNAMIC_PACKAGES=none.`
+    `No entity subclass is registered for '${entityName}' in this process — records ${verb} with the ` +
+    `generic BaseEntity, so any custom validation, Save() logic or lifecycle hooks the entity's own class carries ` +
+    `will NOT run. The class is loaded from the host's generated entities package (mj.config.cjs ` +
+    `codeGeneration.packages.entities) or, for an Open App entity, from the app's server package ` +
+    `(mj app install → dynamicPackages.server). Check that the package is installed and built, that its entry ` +
+    `is enabled and scoped to this process, and that this run was not started with --no-app-packages / ` +
+    `MJ_DYNAMIC_PACKAGES=none. See guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md.`
   );
 }
 

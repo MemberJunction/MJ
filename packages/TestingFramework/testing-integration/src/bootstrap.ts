@@ -79,7 +79,7 @@ export async function bootstrapIntegrationServer(opts: BootstrapServerOptions = 
     // Installed Open App server packages (mj.config.cjs dynamicPackages.server[]) register their
     // entity subclasses here, AFTER the lite manifest imported above and BEFORE the provider —
     // the same ordering MJAPI uses — so checks exercise the apps' real classes, not BaseEntity.
-    const raw = DiscoverMJConfig();
+    const raw = DiscoverMJConfig(undefined, { searchStrategy: 'none' }); // same cwd-only search as LoadDbConfig()
     await LoadDynamicPackages({ processId: INTEGRATION_TESTS_PROCESS_ID, tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
 
     // FIRST-CALLER cache init — MUST precede any provider setup (load-bearing on both backends).

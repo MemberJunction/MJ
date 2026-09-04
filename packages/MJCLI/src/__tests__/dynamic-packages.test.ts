@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { DYNAMIC_PACKAGES_MODE_ENV_VAR, ResetLoadedDynamicPackages } from '@memberjunction/dynamic-packages';
+import { DYNAMIC_PACKAGES_MODE_ENV_VAR, DYNAMIC_PACKAGES_PROCESS_ENV_VAR, ResetLoadedDynamicPackages } from '@memberjunction/dynamic-packages';
 import { loadDynamicPackagesForCommand } from '../lib/dynamic-packages';
-import hook from '../hooks/prerun';
+import hook, { DYNAMIC_PACKAGES_MODE_ENV_VAR as PRERUN_MODE_ENV_VAR } from '../hooks/prerun';
 
 /**
  * The CLI's half of issue #4199: a heavy command must load the installed Open Apps' server
@@ -41,6 +41,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env[DYNAMIC_PACKAGES_MODE_ENV_VAR];
+  delete process.env[DYNAMIC_PACKAGES_PROCESS_ENV_VAR];
   delete process.env.MJ_CLI_NO_BANNER;
 });
 
@@ -63,6 +64,11 @@ describe('loadDynamicPackagesForCommand', () => {
     expect(report.Loaded.map((l) => [l.Entry.PackageName, l.RanStartupExport])).toEqual([[`${scope}/server`, true]]);
     expect(lines.some((l) => l.includes(`Loaded Open App server package: ${scope}/server (ran Load)`))).toBe(true);
     expect(lines.some((l) => l.startsWith('[dynamic-packages] cli:sync:push: loaded 1'))).toBe(true);
+  });
+
+  it('publishes the command process id for hosts the command imports in-process (mj ai …, mj test …)', async () => {
+    await loadDynamicPackagesForCommand('ai agents run', { raw: raw(), stderr: () => undefined });
+    expect(process.env[DYNAMIC_PACKAGES_PROCESS_ENV_VAR]).toBe('cli:ai:agents:run');
   });
 
   it('does NOT load that entry for a command outside its scope', async () => {
@@ -102,6 +108,10 @@ describe('loadDynamicPackagesForCommand', () => {
 });
 
 describe('prerun --no-app-packages', () => {
+  it('uses the same env var name as the loader (the hook inlines it to stay light)', () => {
+    expect(PRERUN_MODE_ENV_VAR).toBe(DYNAMIC_PACKAGES_MODE_ENV_VAR);
+  });
+
   function runHook(argv: string[], commandId: string) {
     const options = {
       argv,
