@@ -3004,7 +3004,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // truthful origin (default capture) — "back" returns the user there.
       // Contrast the chat overlay, a persistent surface whose true origin is
       // the conversation (it passes an explicit recordSource).
-      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      //
+      // `RecordID` is a compact CompositeKey segment — the bare value for a single-column primary
+      // key, "F1|v1||F2|v2" for a composite one — and the key column can have ANY name (the search
+      // lanes read it off entity metadata). Resolve it against that metadata; hardcoding
+      // `{ FieldName: 'ID' }` made Load() fail with "Primary key ID not found" for every entity
+      // whose key isn't called ID, and could never open a composite-key record at all.
+      const entityInfo = this.ProviderToUse.EntityByName(result.EntityName);
+      const pkey = CompositeKey.FromURLSegment(entityInfo, result.RecordID);
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 

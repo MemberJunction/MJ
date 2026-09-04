@@ -20,14 +20,14 @@ export class MJAISkillFormComponent extends BaseFormComponent {
             { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },
             { sectionKey: 'uICustomization', sectionName: 'UI Customization', isExpanded: true },
             { sectionKey: 'ownershipAndAudit', sectionName: 'Ownership and Audit', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAISkillSubAgents', sectionName: 'AI Skill Sub Agents', isExpanded: false },
             { sectionKey: 'mJAIAgentSkills', sectionName: 'AI Agent Skills', isExpanded: false },
             { sectionKey: 'mJAISkillActions', sectionName: 'AI Skill Actions', isExpanded: false },
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
             { sectionKey: 'mJSearchExecutionLogs', sectionName: 'Search Execution Logs', isExpanded: false },
-            { sectionKey: 'mJAISkillSearchScopes', sectionName: 'AI Skill Search Scopes', isExpanded: false }
+            { sectionKey: 'mJAISkillSearchScopes', sectionName: 'AI Skill Search Scopes', isExpanded: false },
+            { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false }
         ]);
     }
 }

@@ -442,7 +442,7 @@ acme-mj-crm/
 
 ## Building Server-Side Packages
 
-Server packages are loaded by MJAPI at startup through the `dynamicPackages.server` array in `mj.config.cjs`. When installed, the CLI adds entries like:
+Server packages are loaded through the `dynamicPackages.server` array in `mj.config.cjs` — by MJAPI at startup, and by every other MJ server-side process (the `mj` CLI's heavy commands such as `mj sync push`, the MCP and A2A servers, the integration-test bootstrap) via [`@memberjunction/dynamic-packages`](../DynamicPackages/README.md). When installed, the CLI adds entries like:
 
 ```javascript
 // mj.config.cjs (auto-managed by CLI)
@@ -461,11 +461,13 @@ module.exports = {
 };
 ```
 
-At MJAPI startup:
-1. MJAPI reads `dynamicPackages.server`
-2. For each enabled entry, it calls `import(PackageName)`
-3. It then calls the `StartupExport` function (e.g., `LoadAcmeCRM()`)
-4. This triggers all `@RegisterClass` decorators in the package
+In each of those processes, after its own class-registration manifest and before it opens a database:
+1. The loader reads `dynamicPackages.server` (plus the host's `codeGeneration.packages`, plus an `mj-app.json` beside the config when running inside an app repo)
+2. For each enabled entry scoped to the process, it imports `PackageName` from the host's resolution context
+3. It then calls the `StartupExport` function (e.g., `LoadAcmeCRM()`) — once per process
+4. This triggers all `@RegisterClass` decorators in the package, so the app's entity/action/provider subclasses win by load order
+
+Entries can be scoped per process (`Processes: ['cli:sync']`, `ExcludeProcesses: ['mjapi']`, `policy: { 'cli:codegen': 'none' }`) and skipped for one run with `MJ_DYNAMIC_PACKAGES=none` / `mj … --no-app-packages`. The full model, process IDs and troubleshooting: [Dynamic Package Loading Guide](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
 
 ### Server Package Requirements
 
@@ -1036,7 +1038,7 @@ When app A depends on app B:
 
 ### Dynamic Package Loading
 
-**Server side**: MJAPI reads `mj.config.cjs` → `dynamicPackages.server[]` and dynamically imports each package, calling its `StartupExport` function.
+**Server side**: every server-side MJ process (MJAPI, the `mj` CLI, MCP/A2A, test bootstraps) reads `mj.config.cjs` → `dynamicPackages.server[]` through `@memberjunction/dynamic-packages` and imports each enabled, in-scope package, calling its `StartupExport` function — see the [Dynamic Package Loading Guide](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
 
 **Client side**: Static imports in `open-app-bootstrap.generated.ts` are resolved by ESBuild at build time. The file is regenerated whenever apps are installed/removed/toggled.
 
