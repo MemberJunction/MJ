@@ -103,7 +103,8 @@ import {
     AgentSkillActivationRequest,
     AgentSkillInvocation,
     ExtractPromptResultText,
-    GetTaskGraphSubmitter
+    GetTaskGraphSubmitter,
+    SkillAvailabilityPurpose
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -4273,7 +4274,9 @@ export class BaseAgent {
         // never via this step. This is the same set the prompt catalog was built from, so a
         // well-behaved model can only name skills that pass; the re-check here is the enforcement
         // boundary against hallucinated or smuggled names.
-        const availableSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(params.agent, params.contextUser);
+        const availableSkills = await this.availableSkills(
+            AIEngine.Instance.GetAutoActivatableSkillsForAgent(params.agent, params.contextUser),
+            'auto-activation', params.agent, params.contextUser);
 
         const missingSkills = requested.filter(req => {
             if (!req.name || typeof req.name !== 'string') {
@@ -6650,7 +6653,8 @@ The context is now within limits. Please retry your request with the recovered c
             // and filtered by the acting user's Run permission (open-by-default) so the agent
             // is never even offered a skill the user isn't entitled to — the permission
             // boundary is enforced at the catalog, not just at activation.
-            const availableSkills = engine.GetAutoActivatableSkillsForAgent(agent, _contextUser);
+            const availableSkills = await this.availableSkills(
+                engine.GetAutoActivatableSkillsForAgent(agent, _contextUser), 'catalog', agent, _contextUser);
             const skillsCatalog = this.formatSkillsCatalog(availableSkills);
 
             const contextData: AgentContextData = {
@@ -11598,7 +11602,9 @@ The context is now within limits. Please retry your request with the recovered c
             return await this.executePromptStep(params, config, previousDecision, stepCount);
         }
 
-        const resolvedSkills = this.resolveSkillActivations(requested, params.agent, params.contextUser);
+        const resolvedSkills = await this.availableSkills(
+            this.resolveSkillActivations(requested, params.agent, params.contextUser),
+            'auto-activation', params.agent, params.contextUser);
         const newlyActivated = resolvedSkills.filter(
             skill => !this._activatedSkillIDs.some(id => UUIDsEqual(id, skill.ID))
         );
@@ -11636,6 +11642,65 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * THE ONE PLACE an application decides whether a skill is available to this user on this agent,
+     * beyond MJ's own gates. MJ resolves availability at four sites — the prompt catalog the model
+     * sees (every prompt turn), the validation of a model-initiated `Skill` step, the execution of
+     * that step, and the pre-activation of a user's explicit `/skill` request — and every one of
+     * them calls this after MJ's gates
+     * (AcceptsSkills, Status, agent grant, user Run permission, the ActivationMode double gate) and
+     * before anything activates. The default is the identity: MJ's gates are the whole policy.
+     *
+     * Override it to layer a policy MJ has no table for — a tenant licensing model, a per-organization
+     * entitlement, a feature flag — and it applies everywhere at once. Without this seam a subclass
+     * could gate the requested path (by overriding `preActivateRequestedSkills`) but not the catalog,
+     * so a self-activating agent would be OFFERED a skill the policy would then refuse.
+     *
+     * Rules for an override: return a subset of `skills` (never add — MJ's gates ran first); be fast
+     * (the catalog is built every prompt turn, so cache your policy lookups); and FAIL CLOSED — on an
+     * error return `[]`, never `skills`. BaseAgent enforces the last rule itself: if an override
+     * throws, the site treats the result as `[]` (nothing offered / nothing activates, the user's
+     * explicit request gets the usual refusal note) and logs the error — it never fails the run.
+     *
+     * @param skills   the skills MJ's gates admitted, for this purpose
+     * @param purpose  'catalog' — what the model is offered (auto-activatable set);
+     *                 'auto-activation' — a model-initiated Skill step being validated/executed;
+     *                 'requested' — a user's explicit request (requestedSkillIDs)
+     * @param agent    the agent the skills would activate on
+     * @param contextUser the acting user
+     * @protected
+     */
+    protected async filterAvailableSkills(
+        skills: MJAISkillEntity[],
+        purpose: SkillAvailabilityPurpose,
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo,
+    ): Promise<MJAISkillEntity[]> {
+        void purpose; void agent; void contextUser; // named (not `_`-prefixed) so an override reads naturally
+        return skills;
+    }
+
+    /**
+     * Every availability site goes through here, never straight to {@link filterAvailableSkills}: it
+     * is what makes the hook fail CLOSED uniformly. An override that throws yields `[]` at that site
+     * (an empty catalog, a refused activation, a refused request with its note) and one logged error,
+     * instead of a failed prompt step, a failed run, or a swallowed request depending on which site
+     * happened to be running.
+     */
+    private async availableSkills(
+        gated: MJAISkillEntity[],
+        purpose: SkillAvailabilityPurpose,
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo,
+    ): Promise<MJAISkillEntity[]> {
+        try {
+            return await this.filterAvailableSkills(gated, purpose, agent, contextUser);
+        } catch (error) {
+            this.logError(`filterAvailableSkills threw for '${purpose}' — treating every skill as unavailable: ${error instanceof Error ? error.message : String(error)}`, { agent, category: 'AgentSkills' });
+            return [];
+        }
+    }
+
+    /**
      * Pre-activates skills the caller explicitly requested via {@link ExecuteAgentParams.requestedSkillIDs}
      * (typically an end user's `/skill-name` composer mentions), at run start — so their Instructions
      * and bundled Actions/sub-agents take effect from the first turn rather than waiting for the model
@@ -11662,8 +11727,11 @@ The context is now within limits. Please retry your request with the recovered c
             return;
         }
 
-        // Guard: intersect the requested IDs with the agent-accepted ∩ user-permitted set.
-        const allowed = AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser);
+        // Guard: intersect the requested IDs with the agent-accepted ∩ user-permitted set, then with
+        // whatever policy the application layers on top (filterAvailableSkills; identity by default).
+        const allowed = await this.availableSkills(
+            AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser),
+            'requested', params.agent, params.contextUser);
         const droppedIds = requestedIds.filter(id => !allowed.some(s => UUIDsEqual(id, s.ID)));
         if (droppedIds.length > 0) {
             this.notifyDroppedSkillRequests(droppedIds, params);
@@ -11714,7 +11782,7 @@ The context is now within limits. Please retry your request with the recovered c
         );
         const reason = params.agent.AcceptsSkills === 'None'
             ? `agent '${params.agent.Name}' does not accept skills (AcceptsSkills='None')`
-            : `the skill(s) are not available to agent '${params.agent.Name}' — not Active, not assigned to it (AcceptsSkills='Limited'), or the user lacks Run permission`;
+            : `the skill(s) are not available to agent '${params.agent.Name}' — not Active, not assigned to it (AcceptsSkills='Limited'), or the user lacks Run permission, or the application's skill-availability policy refused it`;
         LogErrorEx({
             message: `Requested skill activation dropped for [${names.join(', ')}]: ${reason}`,
             severity: 'warning',
@@ -11740,7 +11808,10 @@ The context is now within limits. Please retry your request with the recovered c
      * is responsible for rejecting unknown/disallowed names before execution ever reaches this
      * point, so by the time `executeSkillStep` runs, every requested name is expected to match.
      *
-     * Override to change resolution semantics (e.g. resolve by ID instead of Name).
+     * Override to change resolution semantics (e.g. resolve by ID instead of Name). The result is
+     * then passed through the application policy ({@link filterAvailableSkills}, purpose
+     * 'auto-activation') by `executeSkillStep` — a subclass calling this directly gets the
+     * pre-policy set.
      *
      * @protected
      */

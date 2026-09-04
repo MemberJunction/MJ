@@ -50,7 +50,7 @@ on:
   pull_request:
     branches: [next]
     paths:
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
       - 'packages/**'
       - 'migrations/**'
       # All integration test/suite/type metadata AND the RLS fixtures now live under this one
