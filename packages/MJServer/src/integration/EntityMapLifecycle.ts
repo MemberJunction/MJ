@@ -219,3 +219,104 @@ export async function ResetPullWatermarks(
     }
     return reset;
 }
+
+/** One discovered source field, reduced to what the selection decision needs. */
+export interface SelectableSourceField {
+    Name: string;
+    IsPrimaryKey?: boolean;
+}
+
+/**
+ * Which discovered fields get a field map, given the user's column selection.
+ *
+ * A PRIMARY KEY field is ALWAYS mapped, selected or not. The table build already applies this rule
+ * (`buildTargetConfigs`: `|| f.IsPrimaryKey`), so the key column exists in the table either way —
+ * and without the same rule here, deselecting the key produced a table WITH its key column but no
+ * field map carrying `IsKeyField`. The sync then had no identity to match on and silently fell back
+ * to content-hash matching: nothing errored, records just stopped being recognised as the same
+ * record across syncs.
+ *
+ * Nothing enforces selecting the key in the UI, and nothing should — identity is not a preference,
+ * so the invariant belongs here rather than in a validation message.
+ *
+ * `null`/`undefined` selection means "all fields", which is not the same as an EMPTY selection —
+ * an empty array is a real (if unusual) choice, and still yields the keys.
+ */
+export function selectFieldsToMap<T extends SelectableSourceField>(
+    allFields: readonly T[],
+    selectedFieldNames: readonly string[] | null | undefined,
+): T[] {
+    if (!selectedFieldNames) return [...allFields];
+    const selected = new Set(selectedFieldNames.map(n => n.toLowerCase()));
+    return allFields.filter(f => selected.has(f.Name.toLowerCase()) || f.IsPrimaryKey === true);
+}
+
+/** One existing field map, reduced to what the reconciliation decision needs. */
+export interface ExistingFieldMapRead {
+    SourceFieldName: string | null;
+    Status: string | null;
+}
+
+/** What a refresh should do to one entity map's field maps. Names are the SOURCE field names. */
+export interface FieldMapReconcilePlan {
+    /** Source fields with no field map at all → create one, with this Status. */
+    Create: Array<{ SourceFieldName: string; Status: 'Active' | 'Inactive' }>;
+    /** Field maps whose source field is back in the resolution → re-enable. */
+    Enable: string[];
+    /** Field maps whose source field is no longer in the resolution → disable (never delete). */
+    Disable: string[];
+}
+
+/**
+ * Decides the field-map reconciliation for ONE entity map on a schema refresh.
+ *
+ * Pure so the three branches are pinned by tests rather than by a live refresh — the resolver that
+ * calls this imports schema-builder and schema-engine, which makes it unimportable in a unit test,
+ * so a decision left inline there is a decision nothing can check. Same reasoning as
+ * `decideAbsentDeactivations` in the engine.
+ *
+ * The rules:
+ *  - **New column → `Active`.** A refresh is an explicit request to bring the source's current shape
+ *    in, so a column it finds is adopted rather than queued for approval. `autoEnableNewColumns:
+ *    false` gates it for a connection that wants to review first.
+ *
+ *    This is REFRESH ONLY. A column first seen mid-SYNC is never auto-created — it is captured as a
+ *    candidate with its statistics and needs acceptance before any DDL runs (see
+ *    `CustomColumnPromoter`, `Configuration.autoPromoteCustomColumns`, default false). Refresh is a
+ *    deliberate act; a sync is not, and must not reshape the schema on its own.
+ *  - **The map bounds the column.** Nothing is Active on a map that is not enabled, flag or no flag.
+ *  - **Re-added column → `Active`, ungated.** That row is not new; it was disabled because the source
+ *    stopped reporting the column, so it returns to the state it had.
+ *  - **Vanished column → `Inactive`, never deleted.** Retiring is reversible by the branch above.
+ */
+export function decideFieldMapReconcile(
+    activeFieldNames: readonly string[],
+    existing: readonly ExistingFieldMapRead[],
+    mapEnabled: boolean,
+    autoEnableNewColumns = true,
+): FieldMapReconcilePlan {
+    const plan: FieldMapReconcilePlan = { Create: [], Enable: [], Disable: [] };
+    const existingByLower = new Map(
+        existing.map(fm => [(fm.SourceFieldName ?? '').toLowerCase(), fm] as const)
+    );
+    const activeLower = new Set(activeFieldNames.map(n => n.toLowerCase()));
+
+    for (const name of activeFieldNames) {
+        const found = existingByLower.get(name.toLowerCase());
+        if (!found) {
+            plan.Create.push({
+                SourceFieldName: name,
+                Status: mapEnabled && autoEnableNewColumns ? 'Active' : 'Inactive',
+            });
+        } else if (found.Status !== 'Active' && mapEnabled) {
+            plan.Enable.push(found.SourceFieldName ?? name);
+        }
+    }
+    for (const fm of existing) {
+        const name = fm.SourceFieldName ?? '';
+        if (fm.Status === 'Active' && !activeLower.has(name.toLowerCase())) {
+            plan.Disable.push(name);
+        }
+    }
+    return plan;
+}

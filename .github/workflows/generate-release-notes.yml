@@ -1,7 +1,22 @@
 name: Generate Release Notes
 
 on:
+  # Two paths live here. Bare dispatch / a release PR into `main` is the EDGE path,
+  # unchanged: it writes tmp/release-<version>.md and rewrites the PR body.
+  # A dispatch carrying `version` is the LTS LINE path, added because
+  # generate-release-notes could never fire for a line release — a line release is a
+  # workflow_dispatch against the line branch and never opens a PR into `main`, so
+  # 5.51.2 shipped with no releases/v5.51.2.md and nobody noticed until someone looked.
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'LTS line path: the ALREADY-PUBLISHED version to write notes for (e.g. 5.51.2). Leave EMPTY for the Edge behaviour.'
+        required: false
+        default: ''
+      line_branch:
+        description: 'LTS line path: the line branch it shipped from (e.g. lts/5). Required when version is set.'
+        required: false
+        default: ''
   pull_request:
     types: [opened]
     branches: [main]
@@ -20,8 +35,11 @@ jobs:
     # is a strong incentive to just merge the tip and hope. `release/*` is already this
     # repo's release-branch convention (release/v5.51-prep, ...) and no ordinary PR into
     # main uses it, so the destructive-overwrite risk above is unchanged.
+    # `version == ''` keeps this job off the LTS line dispatch below, which has its own
+    # job. Without it a line dispatch would ALSO start this one, which calls
+    # get_pull_request with no PR context and burns an agent run to fail.
     if: >-
-      github.event_name == 'workflow_dispatch'
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.version == '')
       || github.head_ref == 'next'
       || startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
@@ -159,3 +177,227 @@ jobs:
 
             The generated release notes following the template above should become the entire PR description, not appended to existing content.
 
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # LTS LINE PATH. Dispatched by publish.yml's LTS job once the release is live.
+  #
+  # It differs from the Edge job above in three ways that matter:
+  #   * The version is GIVEN, not derived. `npx changeset status` cannot work here —
+  #     `changeset version` already consumed the .md files into the release commit.
+  #   * The changesets are recovered from the RELEASING commit's PARENT, because that
+  #     commit is the one that deleted them. This is prepared in shell, not left to
+  #     the model: git archaeology is exactly where an agent invents things.
+  #   * It writes releases/v<version>.md — the CANONICAL notes, which is a file the
+  #     Edge job has never produced — and opens the PR itself, pre-labelled, because
+  #     notes that stop at `next` publish nothing (the docs site builds the line).
+  # ─────────────────────────────────────────────────────────────────────────────
+  line-release-notes:
+    name: Write canonical notes for a line release
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    env:
+      VERSION: ${{ github.event.inputs.version }}
+      LINE: ${{ github.event.inputs.line_branch }}
+
+    steps:
+      # `next` is the base: notes land there and reach the line by backport label.
+      - name: Checkout next
+        uses: actions/checkout@v4
+        with:
+          ref: next
+          fetch-depth: 0
+
+      - name: Fetch tags and the line branch
+        run: |
+          set -euo pipefail
+          git fetch --tags --quiet
+          git fetch origin "$LINE:refs/remotes/origin/$LINE" --quiet
+
+      # Every failure below is cheaper than an agent run, so they all happen first.
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::version '$VERSION' must be plain X.Y.Z — a line release is never a prerelease."; exit 1; }
+          [[ "$LINE" =~ ^lts/[0-9]+(\.[0-9]+)?$ ]] || {
+            echo "::error::line_branch '$LINE' must look like lts/5 or lts/6.1."; exit 1; }
+          git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null || {
+            echo "::error::tag v$VERSION does not exist. Write notes AFTER the release, not before."; exit 1; }
+
+      # Idempotent: re-dispatching a release that already has notes is a no-op, not a
+      # duplicate PR. Cheap enough to check before spending the agent.
+      - name: Skip if the notes already exist
+        id: pre
+        run: |
+          set -euo pipefail
+          if [ -f "releases/v$VERSION.md" ]; then
+            echo "::notice::releases/v$VERSION.md already exists on next — nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif gh pr list --head "docs/release-notes-$VERSION" --state open --json number --jq 'length' | grep -qv '^0$'; then
+            echo "::notice::a notes PR for $VERSION is already open — nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+
+      # Deterministic context. The agent gets facts, not a research assignment: the
+      # commit range, and the human-written changeset bodies recovered from before the
+      # release commit deleted them. Those changesets are the best material in the repo
+      # for notes — they are what a person wrote about their own change.
+      - name: Assemble release context
+        if: steps.pre.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          TAG="v$VERSION"
+          PREV=$(git describe --tags --abbrev=0 "$TAG^")
+          echo "::notice::range $PREV..$TAG on $LINE"
+
+          {
+            echo "# Release context for $VERSION (line $LINE)"
+            echo
+            echo "Previous release tag: $PREV"
+            echo
+            echo "## Commits in $PREV..$TAG (non-merge, release bookkeeping removed)"
+            git log --no-merges --format='- %s' "$PREV..$TAG" \
+              | grep -vE '^- (RELEASING:|chore: lockfile)' || true
+            echo
+            echo "## Changesets consumed by this release"
+          } > /tmp/release-context.md
+
+          REL=$(git log --format='%H %s' "$PREV..$TAG" | awk '/RELEASING:/{print $1; exit}')
+          if [ -z "$REL" ]; then
+            echo "::warning::no RELEASING commit found in $PREV..$TAG; notes will rest on commit messages alone."
+            echo "_(none recovered — the release commit could not be located)_" >> /tmp/release-context.md
+          else
+            # head -50 bounds this against a pathological range; a real release has <20.
+            git ls-tree --name-only "$REL^" .changeset/ \
+              | grep -vE '(README|config)' | head -50 > /tmp/cs.txt || true
+            if [ ! -s /tmp/cs.txt ]; then
+              echo "_(none — the release commit's parent carried no changesets)_" >> /tmp/release-context.md
+            fi
+            while read -r f; do
+              [ -n "$f" ] || continue
+              { echo; echo "### $f"; echo '```markdown'; git show "$REL^:$f"; echo '```'; } >> /tmp/release-context.md
+            done < /tmp/cs.txt
+          fi
+          echo "assembled $(wc -l < /tmp/release-context.md) lines of context"
+
+      - name: Write the notes with Gemini
+        if: steps.pre.outputs.skip == 'false'
+        uses: google-github-actions/run-gemini-cli@v0.1.22
+        env:
+          # See the Edge job above — the CLI refuses to start without this.
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: gemini-3.6-flash
+          gemini_cli_version: '0.54.4'
+
+          # Narrower than the Edge job on purpose: this agent writes ONE file. It needs
+          # no GitHub MCP server, because the branch, commit, PR and label are all shell
+          # below, where they are deterministic and reviewable.
+          settings: |
+            {
+              "tools": {
+                "core": ["run_shell_command", "read_file", "read_many_files", "list_directory", "glob", "grep_search", "write_file"]
+              }
+            }
+
+          prompt: |
+            You are a technical analyst acting as release coordinator for MemberJunction.
+
+            Write the canonical release notes for version ${{ github.event.inputs.version }},
+            a patch on the certified LTS line ${{ github.event.inputs.line_branch }}. It is
+            ALREADY PUBLISHED — you are recording what shipped, not proposing it.
+
+            ## Your material
+
+            Read `/tmp/release-context.md` first. It contains the commit range and the
+            changeset bodies recovered from before the release commit consumed them. The
+            changesets are the highest-quality source: they are what the engineer wrote
+            about their own change. Prefer them over commit subjects.
+
+            Read `releases/README.md` for the house format, and `releases/v5.51.1.md` as a
+            worked example of the expected depth and tone.
+
+            You may run read-only git commands for more detail (`git log`, `git show`,
+            `git diff --stat`). Do not modify the repository except for the one file below.
+
+            ## Write exactly one file: `releases/v${{ github.event.inputs.version }}.md`
+
+            Follow the house template: an H1 of 6-10 words summarising the release, a short
+            intro paragraph, then `## New Features` / `## Improvements` / `## Bug Fixes`.
+            OMIT any section with no content — a patch release usually has only bug fixes.
+
+            House style, taken from the existing files:
+            - Each bullet opens with a **bolded claim**, then the affected packages in
+              parentheses as backticked names, then the explanation.
+            - Explain the DEFECT and its user-visible consequence, not the code change.
+              "Scheduled jobs silently stopped honouring their activation windows" beats
+              "changed a comparison in isJobDue".
+            - Add an `## Upgrade Notes` section ONLY if a deployment could have depended on
+              the old behaviour. Most patches need none. Do not invent one.
+
+            ## Rules
+
+            - Every claim must trace to the context file or the repo. Invent nothing — if
+              the material does not tell you why something changed, describe what changed
+              and stop.
+            - No marketing language, no "we are excited to". This is a technical record.
+            - Do not mention npm dist-tags, CI, or the release process itself. Readers are
+              users of the packages.
+            - Write the file and stop. Do not commit, push, or open a pull request.
+
+      # The agent's own report is not evidence. Check the artifact.
+      - name: Verify the agent produced a usable file
+        if: steps.pre.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          F="releases/v$VERSION.md"
+          [ -f "$F" ] || { echo "::error::$F was not written."; exit 1; }
+          BYTES=$(wc -c < "$F")
+          [ "$BYTES" -ge 400 ] || { echo "::error::$F is only $BYTES bytes — too thin to publish."; exit 1; }
+          head -1 "$F" | grep -q '^# ' || { echo "::error::$F does not start with an H1 summary."; exit 1; }
+          grep -q '^## ' "$F" || { echo "::error::$F has no section headings."; exit 1; }
+          git diff --name-only --exit-code -- . ":(exclude)$F" || {
+            echo "::error::the agent modified files other than $F (listed above)."; exit 1; }
+          echo "::notice::$F looks well-formed ($BYTES bytes)"
+
+      # Pre-labelled, because the label is the entire point: the docs site builds the
+      # line branch, so notes that stop at `next` are published nowhere.
+      - name: Open the notes PR against next
+        if: steps.pre.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="docs/release-notes-$VERSION"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add "releases/v$VERSION.md"
+          git commit -m "docs(releases): add v$VERSION release notes" \
+                     -m "Generated for the $LINE line release. Needs the backport label to reach the line branch."
+          git push -u origin "$BRANCH"
+
+          # --body-file, not --body: a multi-line --body argument has to be indented to stay
+          # inside this block scalar, and an un-indented continuation line silently ends the
+          # scalar — YAML then reads the next line as a node and the workflow fails to parse.
+          cat > /tmp/pr-body.md <<BODY
+          Canonical release notes for \`$VERSION\` on \`$LINE\`, generated after publish and following \`releases/README.md\`.
+
+          **Agent-written — review the content before merging.** Every claim should trace to the changesets in the release range. The workflow verifies the file's shape, not its accuracy.
+
+          The \`backport $LINE\` label is applied on creation and is load-bearing: the docs site builds \`$LINE\`, so notes that stop at \`next\` publish nothing.
+          BODY
+
+          gh pr create --base next --head "$BRANCH" \
+            --title "docs(releases): add v$VERSION release notes" \
+            --label "backport $LINE" \
+            --body-file /tmp/pr-body.md

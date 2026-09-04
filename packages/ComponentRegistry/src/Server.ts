@@ -10,10 +10,14 @@ import {
 } from '@memberjunction/core';
 import { MJComponentEntity, MJComponentRegistryEntity } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import sql from 'mssql';
 import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
 import createMSSQLConfig from './orm.js';
 import { DataSourceInfo, ComponentRegistryServerOptions, ComponentFeedbackParams, ComponentFeedbackResponse, FeedbackHandler } from './types.js';
+
+/** Process ID this server identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
+export const COMPONENT_REGISTRY_PROCESS_ID = 'component-registry';
 
 /**
  * Base class for the Component Registry API Server.
@@ -153,6 +157,12 @@ export class ComponentRegistryAPIServer {
    * @virtual
    */
   protected async setupDatabase(): Promise<void> {
+    // Load installed Open App server packages (and the host's generated packages) BEFORE the
+    // provider exists, as MJAPI does, so component/entity work constructs the apps' real
+    // subclasses. configInfo is Zod-parsed and drops `dynamicPackages`; re-discover the raw config.
+    const raw = DiscoverMJConfig();
+    await LoadDynamicPackages({ processId: COMPONENT_REGISTRY_PROCESS_ID, tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
+
     // Create the main connection pool using the same config pattern as MJServer
     this.pool = new sql.ConnectionPool(createMSSQLConfig());
     await this.pool.connect();

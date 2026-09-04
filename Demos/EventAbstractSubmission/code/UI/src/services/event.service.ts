@@ -1,15 +1,15 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { EventEntity } from 'mj_generatedentities';
+import { EventsEventEntity } from 'mj_generatedentities';
 
 @Injectable({
   providedIn: 'root'
 })
 export class EventService {
 
-  async getEvents(): Promise<EventEntity[]> {
+  async getEvents(): Promise<EventsEventEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<EventEntity>({
+    const result = await rv.RunView<EventsEventEntity>({
       EntityName: 'Events',
       OrderBy: 'StartDate DESC',
       ResultType: 'entity_object'
@@ -18,16 +18,16 @@ export class EventService {
     return result.Success ? (result.Results || []) : [];
   }
 
-  async getEventById(id: string): Promise<EventEntity | null> {
+  async getEventById(id: string): Promise<EventsEventEntity | null> {
     const md = new Metadata();
-    const event = await md.GetEntityObject('Events') as unknown as EventEntity;
+    const event = await md.GetEntityObject('Events') as unknown as EventsEventEntity;
     const loaded = await event.Load(id);
     return loaded ? event : null;
   }
 
-  async createEvent(): Promise<EventEntity> {
+  async createEvent(): Promise<EventsEventEntity> {
     const md = new Metadata();
-    return await md.GetEntityObject('Events') as unknown as EventEntity;
+    return await md.GetEntityObject('Events') as unknown as EventsEventEntity;
   }
 
   async getEventStatistics(): Promise<{

@@ -67,6 +67,33 @@ export abstract class BaseIdentityClaimDriver {
 }
 
 /**
+ * Recognized keys of `IdentityClaimType.Configuration` (a JSON column). All keys are optional;
+ * absent keys fall back to the defaults documented per key. Unrecognized keys are preserved for
+ * driver-specific configuration but ignored by the engine.
+ */
+export interface IdentityClaimTypeConfiguration {
+    /**
+     * When true, the email-match redemption path requires the authenticated user's IdP to have
+     * positively asserted the email as verified (`EmailVerified === true`). When false/absent,
+     * email-match is refused only when the IdP explicitly asserted `EmailVerified === false`.
+     */
+    RequireVerifiedEmail?: boolean;
+    /**
+     * When true, redemption always requires the claim's verification token — an email match alone
+     * never redeems (which also excludes the type from automatic claim-on-login). Use for
+     * high-value claim types.
+     */
+    RequireToken?: boolean;
+    /**
+     * When false, the type is skipped by automatic claim-on-login (`AutoClaimForUser`); explicit
+     * redemption via link/token still works. Defaults to true.
+     */
+    AutoClaim?: boolean;
+    /** Driver-specific configuration may ride alongside the engine-recognized keys. */
+    [key: string]: unknown;
+}
+
+/**
  * Parameters for creating a new Identity Claim
  */
 export interface CreateClaimParams {
@@ -186,5 +213,24 @@ export class IdentityClaimEngine extends BaseEngine<IdentityClaimEngine> {
     public NormalizeEmail(email: string): string {
         if (!email) return '';
         return email.trim().toLowerCase();
+    }
+
+    /**
+     * Parses a claim type's `Configuration` JSON into the engine-recognized shape.
+     * Malformed or non-object JSON degrades to `{}` (the permissive defaults) rather than
+     * throwing — a bad configuration must never brick redemption outright, only tighten it
+     * when it parses.
+     */
+    public GetClaimTypeConfiguration(claimType: MJIdentityClaimTypeEntity | undefined): IdentityClaimTypeConfiguration {
+        if (!claimType?.Configuration) return {};
+        try {
+            const parsed: unknown = JSON.parse(claimType.Configuration);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed as IdentityClaimTypeConfiguration;
+            }
+        } catch {
+            // fall through to the permissive default below
+        }
+        return {};
     }
 }

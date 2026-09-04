@@ -44,6 +44,7 @@ vi.mock('../install/package-manager.js', () => ({
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
     RemoveServerDynamicPackages: vi.fn(),
+    PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),

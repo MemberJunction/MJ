@@ -20,6 +20,8 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
                 <i class="fa-solid fa-music"></i>
                 <span>{{ errorMessage }}</span>
             </div>
+        } @else if (isLoading) {
+            <mj-loading text="Loading audio..." size="small"></mj-loading>
         } @else if (audioUrl) {
             <mj-media-player
                 class="audio-preview__player"
@@ -64,6 +66,7 @@ export class AudioArtifactPreviewComponent extends BaseArtifactPreviewComponent 
 
     /** Resolved URL — data URI (inline) or pre-auth URL (file). Funneled through {@link setAudioUrl}. */
     public audioUrl = '';
+
 
     /** Non-empty hides the player and shows a compact error line. */
     public errorMessage = '';

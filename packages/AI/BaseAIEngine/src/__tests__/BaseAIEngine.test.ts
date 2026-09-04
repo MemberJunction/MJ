@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Stub all heavy external dependencies
 vi.mock('@memberjunction/global', async (importOriginal) => {
-    const actual = await importOriginal();
+    const actual = (await importOriginal()) as Record<string, unknown>;
     return {
         ...actual,
         RegisterClass: () => () => {},
@@ -125,10 +125,11 @@ vi.mock('../AIAgentPermissionHelper', () => ({
 }));
 
 import { AIEngineBase } from '../BaseAIEngine';
+import { TimePerMinutePriceUnitType, PerMillionTokensPriceUnitType, type BasePriceUnitType } from '../PriceUnitTypes';
 
 // Helper to set private fields
 function set(field: string, value: unknown): void {
-    (AIEngineBase.Instance as Record<string, unknown>)[field] = value;
+    (AIEngineBase.Instance as unknown as Record<string, unknown>)[field] = value;
 }
 
 describe('AIEngineBase', () => {
@@ -166,7 +167,7 @@ describe('AIEngineBase', () => {
                 'AgentCoAgents', 'AgentChannels',
             ];
             for (const p of props) {
-                expect((engine as Record<string, unknown>)[p]).toEqual([]);
+                expect((engine as unknown as Record<string, unknown>)[p]).toEqual([]);
             }
         });
     });
@@ -326,6 +327,152 @@ describe('AIEngineBase', () => {
                 { ModelID: 'm1', VendorID: 'v1', ProcessingType: 'Realtime', Status: 'Inactive', StartedAt: null, EndedAt: null },
             ]);
             expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1')).toBeNull();
+        });
+    });
+
+    // -----------------------------------------------
+    // CalculateModelCost — the guards, which are the whole point of the surface
+    // -----------------------------------------------
+    describe('CalculateModelCost refuses rather than reporting a wrong cost', () => {
+        // Every refusal here exists because the alternative is a PLAUSIBLE number. A cost of 0, or
+        // seconds priced at a per-million-token rate, is indistinguishable from a cheap run once it
+        // is in the database — so the surface returns null and logs, and the caller decides.
+        const PER_MINUTE = 'AAAAAAAA-0000-4000-8000-00000000000A';
+        const PER_MILLION = 'BBBBBBBB-0000-4000-8000-00000000000B';
+
+        /** The `MJ: AI Usage Types` catalog rows a cost row's UsageTypeID points at. */
+        const USAGE_TYPE_ID: Readonly<Record<string, string>> = {
+            Tokens: 'CCCCCCCC-0000-4000-8000-00000000000C',
+            Seconds: 'DDDDDDDD-0000-4000-8000-00000000000D',
+            Images: 'EEEEEEEE-0000-4000-8000-00000000000E',
+        };
+
+        function usageTypeRows() {
+            return Object.entries(USAGE_TYPE_ID).map(([Name, ID]) => ({ ID, Name }));
+        }
+
+        /**
+         * Seeds an active cost row and the driver that prices it.
+         *
+         * `GetPriceCalculator` is stubbed rather than exercised: it resolves through
+         * `MJGlobal.ClassFactory`, and this file no-ops `RegisterClass`, so nothing is registered.
+         * Stubbing it puts CalculateModelCost's OWN logic under test — the guards, the kind match
+         * and the normalization — which is what these cover; class-factory resolution is a
+         * separate concern with its own coverage.
+         *
+         * `usageKind` is declared on the PRICE UNIT TYPE, not on the cost row: the cost row carries
+         * no measure of its own, precisely so it cannot contradict its unit type. `UsageType` is the
+         * denormalized name CodeGen puts on the view for the UsageTypeID foreign key. It stays
+         * independent of the driver, so a unit type whose declared measure and driver disagree can
+         * still be constructed and refused.
+         */
+        function seed(unitTypeID: string, driver: BasePriceUnitType | null, usageKind: string = 'Tokens') {
+            set('_usageTypes', usageTypeRows());
+            set('_modelCosts', [{
+                ModelID: 'm1', VendorID: 'v1', ProcessingType: 'Realtime', Status: 'Active',
+                StartedAt: null, EndedAt: null, UnitTypeID: unitTypeID, Currency: 'USD',
+                InputPricePerUnit: 6, OutputPricePerUnit: 6,
+                CacheReadPricePerUnit: null, CacheWritePricePerUnit: null,
+            }]);
+            set('_modelPriceUnitTypes', [{
+                ID: unitTypeID,
+                DriverClass: driver?.constructor.name ?? 'Unregistered',
+                UsageTypeID: USAGE_TYPE_ID[usageKind],
+                UsageType: usageKind,
+            }]);
+            vi.spyOn(AIEngineBase.Instance, 'GetPriceCalculator').mockReturnValue(driver);
+        }
+
+        it('prices a duration run through its per-minute driver', () => {
+            seed(PER_MINUTE, new TimePerMinutePriceUnitType(), 'Seconds');
+            const result = AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
+                unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
+            } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2]);
+            // 120s = 2 minutes at 6/minute.
+            expect(result).not.toBeNull();
+            expect(result!.cost).toBeCloseTo(12, 6);
+            expect(result!.currency).toBe('USD');
+        });
+
+        it('refuses units carrying no unitKind, instead of pricing them as tokens', () => {
+            seed(PER_MILLION, new PerMillionTokensPriceUnitType());
+            expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
+                inputUnits: 120, outputUnits: 0,
+            } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
+        });
+
+        it('refuses a unitKind carrying no quantity, instead of recording Cost = 0', () => {
+            // The mirror of the case above, and the one that survived the first fix: a run naming
+            // Seconds but reporting zero seconds normalizes to {input: 0, output: 0} and persists a
+            // cost of 0 — "free" written against work that was billed.
+            seed(PER_MINUTE, new TimePerMinutePriceUnitType(), 'Seconds');
+            expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
+                unitKind: 'Seconds', inputUnits: 0, outputUnits: 0, promptTokens: 5000,
+            } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
+        });
+
+        it('refuses when the model has no cost row in the measure the run reported', () => {
+            // A per-million-token row against a duration run would divide seconds by a million.
+            // The row is now excluded at SELECTION, so the refusal names the missing price rather
+            // than a measure mismatch — the model genuinely has no Seconds pricing.
+            seed(PER_MILLION, new PerMillionTokensPriceUnitType(), 'Tokens');
+            expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
+                unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
+            } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
+        });
+
+        it('refuses a cost row whose declared measure and driver disagree', () => {
+            // Selection passes (the row says Seconds) but the driver prices tokens — a unit type
+            // misconfiguration that would divide seconds by a million. This is the belt-and-braces
+            // check behind the kind-filtered selection, and the only thing that catches it.
+            seed(PER_MILLION, new PerMillionTokensPriceUnitType(), 'Seconds');
+            expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
+                unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
+            } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
+        });
+
+        it('refuses when the unit type has no registered driver in this build', () => {
+            seed(PER_MINUTE, null, 'Seconds');   // no driver registered for this unit type in this build
+            expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
+                unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
+            } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
+        });
+
+        it('picks the cost row matching the run measure, not merely the most recent one', () => {
+            // The forward blocker behind finding #2: with two Active rows for one model+vendor —
+            // one per measure — a measure-blind selector returns whichever started last and the run
+            // is refused downstream. Which is a sort-order coin flip reported as a pricing gap.
+            const older = new Date(Date.now() - 86_400_000);
+            const newer = new Date(Date.now() - 3_600_000);
+            set('_usageTypes', usageTypeRows());
+            set('_modelPriceUnitTypes', [
+                { ID: PER_MINUTE, DriverClass: 'TimePerMinute', UsageTypeID: USAGE_TYPE_ID['Seconds'], UsageType: 'Seconds' },
+                { ID: PER_MILLION, DriverClass: 'PerMillionTokens', UsageTypeID: USAGE_TYPE_ID['Tokens'], UsageType: 'Tokens' },
+            ]);
+            const secondsRow = {
+                ModelID: 'm1', VendorID: 'v1', ProcessingType: 'Realtime', Status: 'Active',
+                StartedAt: older, EndedAt: null, UnitTypeID: PER_MINUTE, Currency: 'USD',
+                InputPricePerUnit: 6, OutputPricePerUnit: 6,
+                CacheReadPricePerUnit: null, CacheWritePricePerUnit: null,
+            };
+            const tokensRow = { ...secondsRow, StartedAt: newer, UnitTypeID: PER_MILLION };
+            set('_modelCosts', [secondsRow, tokensRow]);
+
+            // Measure-aware: each measure resolves its OWN row regardless of start order.
+            expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1', 'Realtime', 'Seconds')).toBe(secondsRow);
+            expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1', 'Realtime', 'Tokens')).toBe(tokensRow);
+            // A measure nothing prices yields null rather than the wrong row.
+            expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1', 'Realtime', 'Images')).toBeNull();
+            // Omitting the measure keeps the historical most-recently-started behaviour.
+            expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1', 'Realtime')).toBe(tokensRow);
+        });
+
+        it('refuses when the model has no active cost row at all', () => {
+            set('_modelCosts', []);
+            set('_modelPriceUnitTypes', []);
+            expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
+                unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
+            } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
         });
 
         it('should prefer the most recently started cost when multiple match', () => {

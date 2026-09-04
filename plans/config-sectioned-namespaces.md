@@ -156,7 +156,8 @@ User's mj.config.cjs
 | `dbHost`, `dbPort`, `dbDatabase`, `dbTrustServerCertificate`, `dbInstanceName`, `mjCoreSchema`, `graphqlPort` | `shared` |
 | `codeGenLogin`, `codeGenPassword`, `dbType`, `excludeSchemas`, `excludeTables`, `output`, `commands`, `customSQLScripts`, `settings`, `logging`, `advancedGeneration`, `integrityChecks`, `newEntityDefaults`, `newEntityRelationshipDefaults`, `newSchemaDefaults`, `dbSchemaJSONOutput`, `SQLOutput`, `forceRegeneration`, `additionalSchemaInfo`, `outputCode`, `verboseOutput`, `entityPackageName`, `newUserSetup` | `codeGen` |
 | `dbUsername`, `dbPassword`, `dbReadOnlyUsername`, `dbReadOnlyPassword`, `userHandling`, `databaseSettings`, `viewingSystem`, `restApiOptions`, `askSkip`, `sqlLogging`, `authProviders`, `scheduledJobs`, `telemetry`, `queryDialects`, `componentRegistries`, `apiKey`, `baseUrl`, `publicUrl`, `enableIntrospection`, `graphqlRootPath`, `websiteRunFromPackage`, `userEmailMap`, `___codeGenAPIURL`, `___codeGenAPIPort`, `___codeGenAPISubmissionDelay` | `mjServer` |
-| `migrationsLocation`, `baselineVersion`, `baselineOnMigrate`, `transactionMode`, `mjRepoUrl`, `openApps`, `dynamicPackages`, `dbEncrypt` | `cli` |
+| `migrationsLocation`, `baselineVersion`, `baselineOnMigrate`, `transactionMode`, `mjRepoUrl`, `openApps`, `dbEncrypt` | `cli` |
+| `dynamicPackages` | `shared` — read by every process (MJAPI via server-bootstrap, the CLI, MCP/A2A, test bootstraps) through `@memberjunction/dynamic-packages`, so it is not CLI-owned |
 | `mcpServerSettings` | remains top-level (already namespaced) |
 | `a2aServerSettings` | remains top-level (already namespaced) |
 | `storageProviders` | remains top-level (already namespaced) |

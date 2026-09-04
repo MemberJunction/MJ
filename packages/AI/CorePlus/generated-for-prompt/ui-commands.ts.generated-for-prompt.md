@@ -10,7 +10,8 @@ interface OpenResourceCommand {
     icon?: string;  // Optional Font Awesome icon class to display on the button.
     resourceType: ResourceType;  // Type of resource to open.
     entityName?: string;  // Entity name (required for Record type).
-    resourceId: string;  // ID of the resource to open.
+    resourceId?: string;  // ID of the resource to open.
+    keys?: Record<string, string | number>;  // Composite (or explicit) primary-key fields for Record type.
     mode?: 'view' | 'edit';  // Mode for opening the resource.
     parameters?: Record<string, any>;  // Optional parameters to pass to the resource.
 }

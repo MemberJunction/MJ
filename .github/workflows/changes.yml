@@ -271,7 +271,13 @@ jobs:
       - name: Check migration content
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
-          git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+          # Flyway migrations only. Exclude tests/ fixture SQL (e.g. migrations/v5/tests/**/*.sql):
+          # those are hand-run assertion scripts, not Flyway migrations, so `${flyway:defaultSchema}`
+          # would never be substituted and a hardcoded `__mj` is the CORRECT form for them. This
+          # mirrors the exclusion `.github/scripts/check-migration-id-determinism.sh` already makes
+          # for the same directory, so the two guards agree. Note the scan reads WHOLE files rather
+          # than added lines, so without this any PR touching a fixture inherits its entire history.
+          git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | grep -vE '(^|/)tests?/' | while read file; do
             # Strip single-quoted SQL string literals before the hard-coded-schema check so that
             # seeded data (e.g. prompt/template content that legitimately shows __mj.* SQL examples)
             # doesn't trip the guard. T-SQL escapes a quote by doubling it (''); slurp mode handles

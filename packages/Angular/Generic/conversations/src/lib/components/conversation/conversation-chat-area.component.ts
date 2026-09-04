@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -684,7 +684,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** Live draft persistence (store debounces the server write). */
   public OnDraftStateChanged(conversationId: string | null, serialized: string): void {
-    console.log(`[Drafts] chat-area: draft change for '${conversationId ?? 'new'}' (${serialized.length} chars)`);
+    // verboseOnly: fires on every keystroke, same as the store's own SetDraft log below it.
+    LogStatusEx({ message: `[Drafts] chat-area: draft change for '${conversationId ?? 'new'}' (${serialized.length} chars)`, verboseOnly: true });
     this.draftStore.SetDraft(conversationId, serialized);
   }
 
@@ -1175,6 +1176,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             return;
           }
           void this.handleCaptureDataSnapshotCommand(command);
+          return;
+        }
+        if (command.type === 'open:resource' && command.resourceType === 'Record' && command.entityName) {
+          if (conversationId && !this.isActiveConversation(conversationId)) {
+            return;
+          }
+          this.emitOpenResourceRecord(command);
         }
       });
 
@@ -3667,6 +3675,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Pass the event up to the parent component (workspace or explorer wrapper)
     this.openEntityRecord.emit(event);
+  }
+
+  /** Record `open:resource` buttons → same openEntityRecord chain as agent-run links. */
+  private emitOpenResourceRecord(command: OpenResourceCommand): void {
+    if (!command.entityName) return;
+    const entity = this.ProviderToUse.EntityByName(command.entityName);
+    if (!entity) {
+      console.warn('open:resource: unknown entity', command.entityName);
+      return;
+    }
+    const compositeKey = ConversationUtility.CompositeKeyFromOpenResource(
+      command,
+      entity.PrimaryKeys.map(pk => pk.Name)
+    );
+    if (!compositeKey) {
+      console.warn('open:resource: incomplete primary key', command.entityName, command);
+      return;
+    }
+    this.openEntityRecord.emit({ entityName: command.entityName, compositeKey });
   }
 
   onNavigationRequest(event: NavigationRequest): void {

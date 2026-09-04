@@ -1,4 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestRun extends Command {
   static description = 'Execute a single test by ID or name';
@@ -27,12 +28,7 @@ export default class TestRun extends Command {
       char: 'e',
       description: 'Environment context (dev, staging, prod)',
     }),
-    format: Flags.string({
-      char: 'f',
-      description: 'Output format',
-      options: ['console', 'json', 'markdown'],
-      default: 'console',
-    }),
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',
@@ -72,7 +68,12 @@ export default class TestRun extends Command {
       await runCommand.execute(args.testId, {
         name: flags.name,
         environment: flags.environment,
-        format: flags.format as 'console' | 'json' | 'markdown',
+        format: resolveLegacyFormat({
+          format: flags.format,
+          legacy: 'console' as const,
+          legacyDefault: 'console' as const,
+          map: TEST_FORMAT_MAP,
+        }),
         output: flags.output,
         dryRun: flags['dry-run'],
         verbose: flags.verbose,

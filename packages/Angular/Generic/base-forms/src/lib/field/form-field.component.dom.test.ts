@@ -74,6 +74,8 @@ function makeWidgetEntityInfo(): EntityInfo {
       { ID: 'F3', Name: 'Description', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F4', Name: 'Quantity', Type: 'int', AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F5', Name: 'LaunchDate', Type: 'datetime', AllowsNull: true, AllowUpdateAPI: true },
+      // A DATE-ONLY column, deliberately beside the datetime above: the two must render differently.
+      { ID: 'F9', Name: 'EffectiveDate', Type: 'date', AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F6', Name: 'IsActive', Type: 'bit', AllowsNull: true, AllowUpdateAPI: true },
       {
         ID: 'F7',
@@ -351,4 +353,63 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(query(f, '.mj-fk-dropdown')).toBeNull();
     });
   });
+});
+
+describe('date-only fields are a calendar day, not an instant', () => {
+    /**
+     * READ AND EDIT MODE DISAGREED BY A DAY, on ordinary valid data.
+     *
+     * A `date` column arrives as UTC midnight. Read mode ran it through `toLocaleString()`, a
+     * LOCAL-time formatter, which subtracts the reader's offset and lands on the previous day for
+     * everyone west of Greenwich. Edit mode used `toISOString()` and was correct. So a stored
+     * 2026-11-20 showed as 11/19/2026 on the form and 2026-11-20 in the editor, same field.
+     *
+     * These tests PIN A TIMEZONE rather than trusting the runner's. A suite that happens to run in
+     * UTC cannot observe this bug at all, which is how it survived: every assertion passes at
+     * Greenwich and fails in New York.
+     */
+    const AT = (tz: string, fn: () => void) => {
+        const original = process.env.TZ;
+        process.env.TZ = tz;
+        try {
+            fn();
+        } finally {
+            process.env.TZ = original;
+        }
+    };
+
+    it('renders the stored day, not the previous one, west of Greenwich', () => {
+        AT('America/New_York', () => {
+            const w = makeWidget({ EffectiveDate: new Date('2026-11-20T00:00:00.000Z') });
+            const f = render({ Record: w, FieldName: 'EffectiveDate', Type: 'textbox' });
+            const shown = text(f, '.mj-forms-field-value');
+            expect(shown, `a stored 2026-11-20 must not render as the 19th (got ${shown})`).toContain('20');
+            expect(shown).not.toContain('19');
+        });
+    });
+
+    it('does not roll a January date back into the previous YEAR', () => {
+        AT('America/New_York', () => {
+            const w = makeWidget({ EffectiveDate: new Date('2026-01-01T00:00:00.000Z') });
+            const f = render({ Record: w, FieldName: 'EffectiveDate', Type: 'textbox' });
+            expect(text(f, '.mj-forms-field-value')).not.toContain('2025');
+        });
+    });
+
+    it('shows no time of day — a calendar day has none', () => {
+        AT('America/New_York', () => {
+            const w = makeWidget({ EffectiveDate: new Date('2026-11-20T00:00:00.000Z') });
+            const f = render({ Record: w, FieldName: 'EffectiveDate', Type: 'textbox' });
+            expect(text(f, '.mj-forms-field-value')).not.toMatch(/\d{1,2}:\d{2}/);
+        });
+    });
+
+    it('leaves a TIMESTAMP in local time, with its time — that one really is an instant', () => {
+        AT('America/New_York', () => {
+            const w = makeWidget({ LaunchDate: new Date('2026-11-20T22:30:00.000Z') });
+            const f = render({ Record: w, FieldName: 'LaunchDate', Type: 'textbox' });
+            const shown = text(f, '.mj-forms-field-value');
+            expect(shown, 'a datetime must keep local-time rendering').toMatch(/\d{1,2}:\d{2}/);
+        });
+    });
 });

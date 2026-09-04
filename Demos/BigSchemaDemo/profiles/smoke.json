@@ -1,0 +1,14 @@
+{
+  "name": "smoke",
+  "description": "Fast local loop: 3 schemas × 12 tables (36 tables). Use this first.",
+  "schemaCount": 3,
+  "tablesPerSchema": 12,
+  "seed": {
+    "hubRows": 5,
+    "lookupRows": 4,
+    "childRows": 8,
+    "grandchildRows": 6,
+    "xrefRows": 6,
+    "bridgeRows": 4
+  }
+}

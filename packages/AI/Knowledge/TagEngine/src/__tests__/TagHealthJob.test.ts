@@ -76,6 +76,9 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
+    // Imported by PriceUnitTypes in @memberjunction/ai-engine-base. Same wholesale-mock
+    // caveat as above: unlisted means uncollectable, not merely unmocked.
+    MJAIModelPriceUnitTypeEntity: class {},
     MJTagCoOccurrenceEntity: class {},
     MJTagSuggestionEntity: class {},
     MJTagEntity: class {},

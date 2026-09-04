@@ -39,6 +39,16 @@ vi.mock('@memberjunction/actions-base', () => ({
   },
 }));
 
+const drainResponseBodyMock = vi.fn();
+
+vi.mock('@memberjunction/network-utils', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/network-utils');
+  return {
+    ...actual,
+    DrainResponseBody: (...args: unknown[]) => drainResponseBodyMock(...args),
+  };
+});
+
 import { LearnWorldsBaseAction } from '../providers/learnworlds/learnworlds-base.action';
 
 /**
@@ -96,6 +106,7 @@ describe('Rate Limit Retry Logic', () => {
     action = new TestableLearnWorldsAction();
     originalFetch = globalThis.fetch;
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    drainResponseBodyMock.mockReset();
   });
 
   afterEach(() => {
@@ -155,6 +166,26 @@ describe('Rate Limit Retry Logic', () => {
 
       expect(result.status).toBe(500);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      // Nothing was discarded in favor of a retry, so nothing to drain.
+      expect(drainResponseBodyMock).not.toHaveBeenCalled();
+    });
+
+    it('drains each discarded 429 response before retrying (memory-leak regression)', async () => {
+      const rateLimitResponse = createMockResponse(429, { error: 'rate limited' });
+      const successResponse = createMockResponse(200, { data: 'ok' });
+      globalThis.fetch = vi.fn()
+        .mockResolvedValueOnce(rateLimitResponse)
+        .mockResolvedValueOnce(successResponse);
+
+      vi.spyOn(action as unknown as { waitForRetryDelay: (ms: number) => Promise<void> }, 'waitForRetryDelay' as never)
+        .mockResolvedValue(undefined as never);
+
+      const result = await action.testSendRequestWithRetry('https://api.test.com/v2/users', { method: 'GET' });
+
+      expect(result.status).toBe(200);
+      // The discarded 429 response is drained exactly once; the final 200 is returned untouched.
+      expect(drainResponseBodyMock).toHaveBeenCalledTimes(1);
+      expect(drainResponseBodyMock).toHaveBeenCalledWith(rateLimitResponse);
     });
 
     it('should respect Retry-After header on 429 responses', async () => {

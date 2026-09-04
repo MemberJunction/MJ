@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Stub heavy deps exactly like BaseAIEngine.test.ts so the module imports cleanly.
 vi.mock('@memberjunction/global', async (importOriginal) => {
-    const actual = await importOriginal();
+    const actual = (await importOriginal()) as Record<string, unknown>;
     return { ...actual, RegisterClass: () => () => {} };
 });
 
@@ -110,7 +110,7 @@ const CONFIG_X = '11111111-0000-0000-0000-0000000000F1';
 const PROMPT_1 = '22222222-0000-0000-0000-0000000000F2';
 
 function set(field: string, value: unknown): void {
-    (AIEngineBase.Instance as Record<string, unknown>)[field] = value;
+    (AIEngineBase.Instance as unknown as Record<string, unknown>)[field] = value;
 }
 
 /** Minimal vendor-type-definition rows. */

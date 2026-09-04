@@ -209,12 +209,35 @@ the wire.
 
 ## 6. Cross-package types
 
-CodeGen resolves the peer class via `entityPackageName` (schema → npm
-package). A peer in the same generated file needs no import. Sales already
-depends on `@mj-biz-apps/orders-entities`; CodeGen emits
+CodeGen resolves the peer class from **`entityImportPackages`** (schema → npm
+package), not from string `entityPackageName`. Those knobs mean different things:
+
+- `includeSchemas` — what this CodeGen run generates
+- string `entityPackageName` — the npm package this run writes those classes into
+- Record `entityPackageName` — install-time host map (those schemas are also skipped for local generation)
+- `entityImportPackages` — where to import a peer that is **not** generated in this file
+
+A peer already in the current generated file needs no import. Core (`__mj`) always
+comes from `@memberjunction/core-entities`. A foreign schema with no map entry
+fails CodeGen rather than self-importing this emit's package (the bug that made
+Orders emit `import { mjBizAppsCommonAddressEntity } from '@mj-biz-apps/orders-entities'`).
+
+Publishers (Open Apps under development) set:
+
+```js
+entityPackageName: '@mj-biz-apps/orders-entities',
+includeSchemas: ['__mj_BizAppsOrders'],
+entityImportPackages: {
+  '__mj_BizAppsCommon': '@mj-biz-apps/common-entities',
+  '__mj_BizAppsAccounting': '@mj-biz-apps/accounting-entities',
+},
+```
+
+Hosts that already use Record `entityPackageName` do not need `entityImportPackages`
+— that map is the fallback. CodeGen emits one grouped import per package:
 
 ```ts
-import { mjBizAppsOrdersOrderHeaderEntity } from '@mj-biz-apps/orders-entities';
+import { mjBizAppsCommonAddressEntity } from '@mj-biz-apps/common-entities';
 ```
 
 Runtime is still `ClassFactory` — the browser gets `OrderHeaderEntity`, the

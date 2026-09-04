@@ -807,4 +807,143 @@ describe('slack-block-builder', () => {
         });
     });
 
+
+    describe('label-less commands', () => {
+        // `label` is required on OpenURLCommand but the value is model-authored JSON. A throw in
+        // the builder propagates out of HandleMessage, which has no try/catch — the agent runs to
+        // completion and the user sees nothing at all, not even an error.
+        it('does not throw when an open:url command has no label', () => {
+            const cmds = [{ type: 'open:url', url: 'data:application/pdf;base64,QQ==' }];
+            expect(() => buildActionButtons(cmds as never)).not.toThrow();
+        });
+
+        it('names the file anyway', () => {
+            const cmds = [{ type: 'open:url', url: 'data:application/pdf;base64,QQ==' }];
+            const blocks = buildActionButtons(cmds as never);
+            expect(JSON.stringify(blocks)).toContain('Generated file');
+        });
+    });
+
+    describe('modal placeholder limits', () => {
+        // Slack rejects the whole views.open call with invalid_arguments when a placeholder
+        // exceeds 150 characters, so the modal never opens and the button looks dead — the only
+        // clue is a server-side log line. A question label is free text and easily longer.
+        const LIMIT = 150;
+
+        function placeholdersOf(modal: Record<string, unknown>): string[] {
+            const blocks = (modal.blocks ?? []) as Record<string, unknown>[];
+            return blocks
+                .map((b) => (b.element as Record<string, unknown> | undefined)?.['placeholder'] as Record<string, unknown> | undefined)
+                .filter((p): p is Record<string, unknown> => !!p)
+                .map((p) => p['text'] as string);
+        }
+
+        // Regression: the surrogate-safe rewrite measured with UTF-16 `.length` but sliced by
+        // CODE POINT, so 24 code points of emoji became 48 units — over the limit the cap exists
+        // to enforce, reintroducing the very views.open failure it was written to prevent.
+        it('respects the limit in UTF-16 units, not code points', () => {
+            const form = {
+                title: 'Emoji form',
+                questions: [{ id: 'q1', label: '\u{1F44D}'.repeat(200), type: { type: 'unknown_kind' } }],
+            };
+            for (const p of placeholdersOf(buildFormModal(form as never))) {
+                expect(p.length).toBeLessThanOrEqual(LIMIT);
+            }
+        });
+
+        it('never leaves half a surrogate pair at the cut', () => {
+            const form = {
+                title: 'Emoji form',
+                questions: [{ id: 'q1', label: '\u{1F44D}'.repeat(200), type: { type: 'unknown_kind' } }],
+            };
+            for (const p of placeholdersOf(buildFormModal(form as never))) {
+                expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(p)).toBe(false);
+            }
+        });
+
+        it('truncates a long question label in the generated placeholder', () => {
+            const form = {
+                title: 'Long form',
+                questions: [{ id: 'q1', label: 'x'.repeat(400), type: { type: 'unknown_kind' } }],
+            };
+            const placeholders = placeholdersOf(buildFormModal(form as never));
+            expect(placeholders.length).toBeGreaterThan(0);
+            for (const text of placeholders) {
+                expect(text.length).toBeLessThanOrEqual(LIMIT);
+            }
+        });
+
+        it('truncates an explicitly supplied long placeholder', () => {
+            const form = {
+                title: 'Long form',
+                questions: [{ id: 'q1', label: 'Notes', type: { type: 'text', placeholder: 'y'.repeat(400) } }],
+            };
+            for (const text of placeholdersOf(buildFormModal(form as never))) {
+                expect(text.length).toBeLessThanOrEqual(LIMIT);
+            }
+        });
+
+        it('leaves a short placeholder untouched', () => {
+            const form = {
+                title: 'Short form',
+                questions: [{ id: 'q1', label: 'Topic', type: { type: 'unknown_kind' } }],
+            };
+            expect(placeholdersOf(buildFormModal(form as never))).toContain('Enter Topic');
+        });
+    });
+
+    describe('URL safety in block elements', () => {
+        const DATA_URI = 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,' + 'UEsDB'.repeat(2000);
+
+        it('renders a public https resource link as a real button', () => {
+            const blocks = buildActionButtons(
+                [{ type: 'open:resource', label: 'Open Report', resourceType: 'Report', resourceId: 'r-1' } as never],
+                'https://explorer.example.com'
+            );
+            expect(blocks[0].type).toBe('actions');
+            const el = (blocks[0].elements as Record<string, unknown>[])[0];
+            expect(el.url).toBe('https://explorer.example.com/resource/report/r-1');
+        });
+
+        it('degrades a localhost resource link to mrkdwn instead of failing the message', () => {
+            // Slack rejects the WHOLE message (invalid_blocks) when a button url is not public,
+            // so a localhost ExplorerBaseURL used to mean the reply never posted at all.
+            const blocks = buildActionButtons(
+                [{ type: 'open:resource', label: 'Open Report', resourceType: 'Report', resourceId: 'r-1' } as never],
+                'http://localhost:4201'
+            );
+            expect(blocks.every((b) => b.type !== 'actions')).toBe(true);
+            const text = ((blocks[0].elements as Record<string, unknown>[])[0].text as string);
+            expect(text).toContain('http://localhost:4201/resource/report/r-1');
+        });
+
+        it('never emits an unopenable data: URI, and does not dump it as text', () => {
+            const blocks = buildActionButtons(
+                [{ type: 'open:url', label: 'Download Document', url: DATA_URI } as never],
+                'https://explorer.example.com'
+            );
+            const serialized = JSON.stringify(blocks);
+            expect(serialized).not.toContain('data:application');
+            expect(serialized).not.toContain('UEsDB');
+            expect(serialized).toContain('Download Document');
+            // The whole block set stays far under Slack's message limit.
+            expect(serialized.length).toBeLessThan(500);
+        });
+
+        it('keeps an ordinary https open:url as a button', () => {
+            const blocks = buildActionButtons(
+                [{ type: 'open:url', label: 'Docs', url: 'https://example.com/docs' } as never],
+                undefined
+            );
+            expect(blocks[0].type).toBe('actions');
+        });
+
+        it('artifact card: a localhost URL becomes a link, a public one stays a button', () => {
+            const local = buildArtifactCard({ Title: 'T', URL: 'http://localhost:4201/x' } as never);
+            expect(local.every((b) => b.type !== 'actions')).toBe(true);
+            const pub = buildArtifactCard({ Title: 'T', URL: 'https://example.com/x' } as never);
+            expect(pub.some((b) => b.type === 'actions')).toBe(true);
+        });
+    });
+
 });

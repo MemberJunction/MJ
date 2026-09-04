@@ -2159,7 +2159,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 SkipEntityAIActions: options?.SkipEntityAIActions ?? false,
                 SkipEntityActions: options?.SkipEntityActions ?? false,
                 ReplayOnly: options?.ReplayOnly ?? false,
-                IsParentEntityDelete: options?.IsParentEntityDelete ?? false
+                IsParentEntityDelete: options?.IsParentEntityDelete ?? false,
+                SkipRecordChanges: options?.SkipRecordChanges ?? false
             };
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);

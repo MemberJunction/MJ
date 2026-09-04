@@ -17,10 +17,9 @@ import { ModelConfigComponent } from './model-config/model-config.component';
 import type { AudioModelConfig } from '../ai/audio-model-registry';
 
 @Component({
-  selector: 'app-audio-chat',
-  standalone: true,
-  imports: [DecimalPipe, DatePipe, RouterLink, ModelConfigComponent],
-  template: `
+    selector: 'app-audio-chat',
+    imports: [DecimalPipe, DatePipe, RouterLink, ModelConfigComponent],
+    template: `
     <!-- Model configuration screen -->
     @if (!IsReady && !IsLoading) {
       <div class="config-container">
@@ -142,7 +141,7 @@ import type { AudioModelConfig } from '../ai/audio-model-registry';
       </div>
     }
   `,
-  styles: [`
+    styles: [`
     :host {
       display: flex;
       flex-direction: column;

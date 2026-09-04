@@ -168,6 +168,29 @@ export abstract class TransactionGroupBase {
     private _pendingTransactions: TransactionItem[] = [];
     private _variables: TransactionVariable[] = [];
     private _status: 'Pending' | 'In Progress' | 'Complete' | 'Failed' = 'Pending';
+    private _batchedSubmit: boolean = false;
+
+    /**
+     * Opt-in: when true, a provider implementation MAY execute the group's items as a single
+     * multi-statement round trip to the database instead of one round trip per item — the same
+     * statements, in the same order, inside the same transaction, with per-item results still
+     * returned. Semantics are identical to the sequential submit; only the wire shape changes.
+     *
+     * Default false, so existing callers are byte-for-byte unaffected. Callers that enrol large
+     * numbers of independent items (e.g. a sync engine's write batches) set this to collapse
+     * N round trips into one. Providers that do not implement a batched path ignore the flag.
+     *
+     * Note: groups that use {@link Variables} have cross-item dependencies (a later item reads a
+     * value produced by an earlier one) and are always executed sequentially regardless of this
+     * flag — a single round trip cannot feed one statement's output into the next statement's
+     * client-side rendering.
+     */
+    public get BatchedSubmit(): boolean {
+        return this._batchedSubmit;
+    }
+    public set BatchedSubmit(value: boolean) {
+        this._batchedSubmit = value;
+    }
 
     protected get PendingTransactions(): TransactionItem[] {
         return this._pendingTransactions;

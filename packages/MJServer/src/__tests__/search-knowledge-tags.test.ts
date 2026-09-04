@@ -20,7 +20,7 @@ const { mockSearch, mockPreviewSearch, mockResolveEffectivePermission, mockLogFo
 
 // `SearchKnowledgeResolver` obtains its permission resolver through the pluggable seam —
 // `GetSearchScopePermissionResolver()` — so this mock has to provide that accessor even though
-// no test below currently reaches it: every case here passes `undefined` for scope IDs, and
+// the scope-authorization describe exercises it with real scope ids; the rest pass `undefined`, and
 // `rejectForbiddenScopes` is guarded by `if (scopeIDs && scopeIDs.length)`.
 //
 // It is here because of how this omission fails. The missing export is simply `undefined`,
@@ -63,7 +63,20 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
-    return { ...actual };
+    return {
+        ...actual,
+        // The SearchScopes listing reads SearchEngineBase (the metadata cache), not the mocked
+        // SearchEngine facade above. One fake Active scope lets the listing tests distinguish
+        // "the guard refused" (empty) from "there was nothing to list" (also empty, but vacuous).
+        SearchEngineBase: {
+            Instance: {
+                Config: async () => undefined,
+                ActiveScopes: [
+                    { ID: 'scope-a', Name: 'Scope A', Description: null, Icon: null, IsGlobal: true, OwnerUserID: null },
+                ],
+            },
+        },
+    };
 });
 
 // Mock type-graphql to avoid reflect-metadata dependency
@@ -156,6 +169,55 @@ describe('SearchKnowledgeResolver', () => {
     // unexercised. These two tests are also what make the resolver entry in the module mock
     // above load-bearing rather than decorative: remove it and both fail.
     describe('scope authorization', () => {
+        it('passes the caller tenant into the permission decision', async () => {
+            // isGrantForTenant DISCARDS a tenant-scoped grant when the caller supplies no tenant, so
+            // omitting it threw away every per-tenant row -- including a per-tenant PermissionLevel
+            // 'None', an explicit admin deny, which then evaporated for anyone holding a NULL-tenant
+            // role grant. The action was fixed for this; these two resolvers were not.
+            const resolver = createResolver();
+            mockSearch.mockResolvedValue(createMockSearchResult());
+
+            await resolver.SearchKnowledge(
+                'test', 20, undefined, undefined, ['scope-a'],
+                { PrimaryScopeRecordID: 'org-77' } as never, undefined,
+                fakeContext as never);
+
+            expect(mockResolveEffectivePermission).toHaveBeenCalledWith(
+                expect.objectContaining({ PrimaryScopeRecordID: 'org-77' }));
+        });
+
+        it('refuses an agentID that was supplied but would not load, instead of ignoring it', async () => {
+            // loadAgent returns null both for "not supplied" and "does not exist". Conflating them
+            // meant the agent rules never fired and the raw client string was handed to Search() and
+            // bound into the expansion query unjudged.
+            const resolver = createResolver();
+            mockSearch.mockResolvedValue(createMockSearchResult());
+
+            const result = await resolver.SearchKnowledge(
+                'test', 20, undefined, undefined, ['scope-a'], undefined,
+                'no-such-agent-id', fakeContext as never);
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toMatch(/could not be loaded/);
+            expect(mockSearch).not.toHaveBeenCalled();
+        });
+
+        describe('SearchScopes listing — the third resolver call site', () => {
+            it('lists scopes the resolver allows when no agent is supplied (control)', async () => {
+                const resolver = createResolver();
+                const scopes = await resolver.SearchScopes(undefined, fakeContext as never);
+                expect(scopes.map(s => s.ID)).toEqual(['scope-a']);
+            });
+
+            it('returns NO scopes for an agentID that was supplied but would not load', async () => {
+                // Same rule as the search paths: an unloadable principal must not degrade to
+                // "no agent", or the listing would SHOW scopes an agent-gated search refuses.
+                const resolver = createResolver();
+                const scopes = await resolver.SearchScopes('no-such-agent-id', fakeContext as never);
+                expect(scopes).toEqual([]);
+            });
+        });
+
         it('runs the search when every requested scope resolves to Allowed', async () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValue(createMockSearchResult());

@@ -29,13 +29,14 @@ interface LoadedExtension {
 /**
  * Discovers, initializes, and manages the lifecycle of server extensions.
  *
- * Called by MJServer's `serve()` function during startup. The loader reads the
- * `serverExtensions` array from `mj.config.cjs`, uses MJ's `ClassFactory` to
- * find registered extension classes, and calls `Initialize()` on each.
+ * Called by MJServer's `serve()` function during startup. The loader receives
+ * the merged extension list (Open App–discovered configs overlaid by host
+ * `mj.config.cjs` `serverExtensions[]`), uses MJ's `ClassFactory` to find
+ * registered extension classes, and calls `Initialize()` on each.
  *
  * ## Discovery Flow
  *
- * 1. Reads `serverExtensions[]` array from `mj.config.cjs`
+ * 1. Receives the merged `serverExtensions[]` (discovered Open App packages + host overlay)
  * 2. For each enabled entry, uses `ClassFactory.CreateInstance(BaseServerExtension, driverClass)`
  * 3. Creates an instance and calls `Initialize(app, config)`
  * 4. Tracks all loaded extensions for health checks and shutdown

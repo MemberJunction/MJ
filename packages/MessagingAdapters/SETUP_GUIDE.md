@@ -21,6 +21,7 @@ The Slack bot requires these **Bot Token OAuth Scopes** (configured under OAuth 
 |-------|-----------|---------|
 | `chat:write` | **Yes** | Post messages and replies in channels and DMs |
 | `chat:write.customize` | **Yes** | Post with per-agent username and avatar (e.g., "Sage" icon instead of generic bot icon) |
+| `files:write` | **Yes** | Upload generated files and images as real attachments. Without it Slack returns `missing_scope`, which is logged and swallowed — the reply posts and the file silently never arrives |
 | `channels:history` | **Yes** | Read thread history in public channels for multi-turn conversation context |
 | `groups:history` | **Yes** | Read thread history in private channels for multi-turn conversation context |
 | `im:history` | **Yes** | Read thread history in DMs for multi-turn conversation context |
@@ -87,6 +88,7 @@ Go to **OAuth & Permissions** and add these **Bot Token Scopes**:
 |-------|---------|
 | `chat:write` | Post messages |
 | `chat:write.customize` | Post with per-agent username and avatar |
+| `files:write` | Upload generated files and images as attachments |
 | `channels:history` | Read thread history in public channels |
 | `groups:history` | Read thread history in private channels |
 | `im:history` | Read thread history in DMs |
@@ -211,6 +213,12 @@ Socket Mode uses a WebSocket connection instead of HTTP webhooks. **No public UR
 3. Name it (e.g., "socket-mode"), add scope `connections:write`
 4. Copy the token (`xapp-...`) — this is `SLACK_APP_TOKEN`
 5. Go to **Socket Mode** and toggle it ON
+6. Go to **Interactivity & Shortcuts** and toggle **Interactivity** ON
+
+   Socket Mode does not use the Request URL on that page — leave it blank — but the toggle
+   itself still gates whether Slack delivers button clicks and modal submissions at all. With it
+   off, buttons render and do nothing, and an agent that asks a question through a form cannot be
+   answered.
 
 ### Configuration
 
@@ -452,6 +460,7 @@ module.exports = {
 | `ConnectionMode` | `'http' \| 'socket'` | `'http'` | Slack connection mode |
 | `MaxThreadMessages` | `number` | `50` | Max thread messages fetched for conversation context |
 | `ShowTypingIndicator` | `boolean` | `true` | Show typing/thinking indicator while processing |
+| `DisableDelegation` | `boolean` | `false` | Turn off delegation detection. Set it on a bot pinned to ONE agent: delegation is detected from the reply text, so an agent describing its own routing role ("I can route you to ... Betty") otherwise triggers a real handoff |
 | `StreamingUpdateIntervalMs` | `number` | `1000` | Min interval between streaming message updates (ms) |
 | `ExplorerBaseURL` | `string` | — | MJ Explorer URL for "View in Explorer" buttons |
 | `SlashCommands` | `Record<string, string>` | — | Slash command → agent name mapping (Slack only) |

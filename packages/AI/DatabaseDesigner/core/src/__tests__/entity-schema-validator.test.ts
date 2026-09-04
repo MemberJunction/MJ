@@ -74,6 +74,7 @@ vi.mock('@memberjunction/global', () => ({
     LogError: vi.fn(),
     // UUIDsEqual normalises case — mirrors the real implementation
     UUIDsEqual: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
+    EscapeSQLString: (v: string | null | undefined) => (v == null ? '' : String(v).replace(/\0/g, '').replace(/'/g, "''")),
 }));
 
 // ─── Import after mocks ──────────────────────────────────────────────────────

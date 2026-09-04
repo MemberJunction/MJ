@@ -1,5 +1,52 @@
 # @memberjunction/sql-converter
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 4eb87c5: Fix three PostgreSQL conversion defects that each surfaced only when a converted migration was **applied**, not when it was converted — the converter reported "0 gaps" for all three.
+
+  **1. `MERGE` and `MATCHED` were read as identifiers.** Every other word in a `MERGE` statement was already in the quoting keyword sets — `USING`, `ON`, `WHEN`, `THEN`, `NOT`, `INSERT`, `UPDATE`, `SET`, `VALUES`, `AS` — so a converted `MERGE` came out as `"MERGE" __mj."X" AS tgt … WHEN "MATCHED" THEN UPDATE` and PostgreSQL rejected it with `syntax error at or near ""MERGE""`. Structurally the rest of the statement already transpiled to valid PG 15+ `MERGE`; these two tokens were the only thing wrong.
+
+  **2. `INTO` is optional in T-SQL's `MERGE` and required in PostgreSQL's.** `MERGE [dbo].[T] AS tgt` transpiled token-for-token into something PostgreSQL rejects at the _target name_ rather than at `MERGE` — `syntax error at or near "__mj"`, pointing one token past the actual problem. The bare form is now rewritten to `MERGE INTO`. The rewrite is anchored to statement position so the word `MERGE` in a migration's own prose ("re-runnable: MERGE on fixed UUIDs") is not rewritten into "MERGE INTO on fixed UUIDs".
+
+  **3. BIT literals in entity-registration INSERTs on the `--split` path.** CodeGen registers a new entity by INSERTing into `Entity` / `EntityField` / `EntityPermission` — long-lived core-metadata tables that no migration re-creates, so the AST dialect never sees a `CREATE TABLE` for them, has no column types to infer, and emits a BIT literal as the integer it looks like. Applying the result failed with `column "IncludeInAPI" is of type boolean but expression is of type integer`. The rule-based (legacy) path already seeds this catalog through `createConversionContext`; the split path assembles its output from the transpiler directly and bypassed it, so **every** migration registering a new entity produced a file that failed on its first apply.
+
+  `assemblePgSQL` now applies the core-metadata boolean catalog. Ordering is load-bearing and was wrong in the first cut: the INSERT matcher keys on a `schema.Table` reference whose schema is word characters, so while the table is still `${flyway:defaultSchema}."Entity"` it matches nothing and the coercion silently no-ops. It runs **after** schema substitution, and a regression test pins that by asserting on a macro-carrying input. Rewriting is by ordinal position against known-boolean columns, so a non-boolean integer in the same tuple (`UserViewMaxRows`) and a table outside the catalog are both left alone.
+
+  Related but distinct from the `--bake-codegen` registry fix ("Seed the BIT/BOOLEAN registry from the live catalog"), which repaired the same class of failure on the bake path; this one repairs the split-assembly path, which bake cannot reach when a migration has a transpile gap.
+
+### Patch Changes
+
+- 6dbe524: ERP accounting verbs: a provider-agnostic dispatcher per verb (`CreateJournalEntry`, `GetChartOfAccounts`, `GetAccountBalances`, `GetDimensions`, `GetGLEntries`, `GetCustomers`, `GetSalesInvoices`) plus QBO/BC plugins keyed as `${verb}:${Integration.Name}`. Adds Business Central CreateJournalEntry and GetAccountBalances, dimensions for both ERPs, and shared journal-line validation. Historical vendor RegisterClass keys still resolve.
+
+  SQLConverter: CREATE TABLE CHECK `ISJSON(col) = 1` now becomes `(col) IS JSON` after identifier quoting, so PostgreSQL no longer sees `"ISJSON"(col) = 1`.
+
+- 517d18b: Resolve `${mjSchema}` when converting migrations. `${flyway:defaultSchema}` (the app's own schema) was substituted but `${mjSchema}` (MJ core) was not, so the macro survived into the emitted `.pg.sql` and into the SQL `--bake-codegen` executes against the working database — failing with `relation "${mjSchema}.Entity" does not exist` and halting the entire bake chain at the first migration that referenced core. Adds a `coreSchema` option to `convertMigration` and `IncrementalBaker`, plus a `--core-schema` CLI flag (default `__mj`). The two are deliberately separate values: an Open App names itself with `${flyway:defaultSchema}` and core with `${mjSchema}`, and for every app those differ.
+- 1d3ab82: Never write a hollow `.pg.sql`. When the dialect could not emit a single statement in a migration, the converted body was a header and a gap banner over nothing, yet the result was still returned as `converted` — so the CLI wrote it as a discoverable `.pg.sql` that satisfies filename parity, contains no T-SQL, applies to PostgreSQL without error, and does nothing. Skyway then records the migration as applied while the schema change never happens. A fully-gapped conversion is now promoted to `needs-hand-authoring`, routing it to `.needs-hand` exactly as the empty-marker path already does. A VANISHED conversion — nothing emitted, nothing reported, nothing dropped — is promoted on its own terms for the same reason, bringing this path in line with the empty-marker path that already did so. Partially-gapped conversions (the ordinary `--allow-gaps` case) and all-dropped files are unaffected.
+- Updated dependencies [ac0275b]
+- Updated dependencies [4eb87c5]
+  - @memberjunction/sqlglot-ts@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 698aeaf: A statement the converter could not parse now fails the run.
+
+  Two rules write a marker comment into their own output at the point where they knowingly could not produce SQL — `DeclareDmlBlockRule` emits `-- Could not parse: …` and `BatchConverter` emits `-- ERROR converting batch …` — and then return normally. On the legacy `migrate convert` path the batch was therefore counted as `Converted`, so a file that PostgreSQL rejects was reported as `Files: 1 (1 OK, 0 errors)` and the command exited 0. The unusable `.pg.sql` was then committed like any other.
+
+  The markers now live in one place (`CONVERSION_GAP_MARKERS`), the assembled output is scanned for exactly those strings, and matches are counted as `Gaps`. Adding a marker to that list is all a new rule needs to have its gaps reported — an emitter and the scan cannot drift apart, which is the failure mode that made this invisible in the first place.
+
+  `Gaps` is deliberately distinct from `Errors`: an error is a throw the converter CAUGHT and already counted as a failure, while a gap is output it knowingly could not produce, where the rule returned normally and nothing downstream ever learned the file was unusable. An errored batch leaves a marker too, so it is counted in both channels — the scan reports what is actually in the file.
+
+  `decideLegacyConvertExit` fails the run on gaps unless `--allow-gaps` is passed, which finally gives that flag meaning on the legacy path. It never suppresses a caught error, and when both are present the message names both.
+
+- Updated dependencies [647bd71]
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlglot-ts@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

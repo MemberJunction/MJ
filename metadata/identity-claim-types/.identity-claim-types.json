@@ -22,29 +22,5 @@
     "primaryKey": {
       "ID": "B249B88F-92D6-46D8-CA20-D22A9B701221"
     }
-  },
-  {
-    "fields": {
-      "Name": "PersonAccountLink",
-      "Description": "Associates guest purchase Person and entity records with authenticated User account.",
-      "DriverClass": "PersonAccountLinkClaimDriver",
-      "DefaultExpirationDays": 30,
-      "IsActive": false
-    },
-    "primaryKey": {
-      "ID": "C35AC990-A3E7-47E9-DB31-E33BA0812332"
-    }
-  },
-  {
-    "fields": {
-      "Name": "GuestOrder",
-      "Description": "General guest order claim for linking order records upon login or email verification.",
-      "DriverClass": "GuestOrderClaimDriver",
-      "DefaultExpirationDays": 30,
-      "IsActive": false
-    },
-    "primaryKey": {
-      "ID": "D46BD001-B4F8-48FA-EC42-F44CB1923443"
-    }
   }
 ]

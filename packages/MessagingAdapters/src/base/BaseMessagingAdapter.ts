@@ -10,9 +10,11 @@
  */
 
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { ChatMessage } from '@memberjunction/ai';
-import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { ChatMessage, parseBase64DataUrl } from '@memberjunction/ai';
+import { ExecuteAgentParams, ExecuteAgentResult, FileOutputRef, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { MJArtifactEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     MessagingAdapterSettings,
@@ -35,6 +37,23 @@ interface ConversationAgentResult {
     artifactId?: string;
     /** The MJ Conversation ID for this interaction. */
     conversationId?: string;
+}
+
+/**
+ * A binary output to deliver as a platform file: either a generated `MediaOutput` or a file the
+ * agent inlined as a `data:` URI. `fileName`, when present, wins over any derived name.
+ *
+ * Deliberately not `Pick<MediaOutput, ...>`: `MediaOutput.modality` is `MediaModality`
+ * (`'Image' | 'Audio' | 'Video'`), and a file attachment is none of those.
+ */
+export interface UploadableFile {
+    modality?: string;
+    mimeType?: string;
+    /** Base64-encoded bytes. */
+    data?: string;
+    label?: string;
+    /** Preferred name; when absent the adapter derives one from `label` and the MIME type. */
+    fileName?: string;
 }
 
 /**
@@ -80,6 +99,13 @@ interface ConversationAgentResult {
  * Falls back to the configured service account email if no MJ user matches.
  */
 export abstract class BaseMessagingAdapter {
+    /**
+     * Optional per-platform file upload. Implemented by adapters whose platform can accept file
+     * uploads (see `SlackAdapter.uploadMediaOutputs`); absent elsewhere, in which case binary
+     * output is simply not delivered as files.
+     */
+    protected uploadMediaOutputs?(message: IncomingMessage, files: readonly UploadableFile[]): Promise<void>;
+
     /** Extension settings from `mj.config.cjs`. */
     protected settings: MessagingAdapterSettings;
 
@@ -145,21 +171,42 @@ export abstract class BaseMessagingAdapter {
         // 2. Resolve the MJ user for this platform sender
         const contextUser = await this.resolveContextUser(message);
 
-        // 3. Show typing indicator
+        // 3. Fetch thread history (needed for the multi-bot gate below, agent resolution, and
+        //    conversation context). Deliberately BEFORE the typing indicator: the gate may
+        //    decline silently, and an indicator followed by silence reads as a hung bot.
+        const threadHistory = await this.safeGetThreadHistory(message);
+
+        // 4. Multi-bot thread gate. A thread reply needs no mention to reach a bot, so on a
+        //    platform that broadcasts channel messages to every installed app (Slack), ONE
+        //    reply reached every bot and each answered — N replies to one message once more
+        //    than one agent had its own app. A bot may answer an un-mentioned thread reply
+        //    only when it is already party to that thread (it posted in it).
+        if (message.ThreadID && threadHistory.length > 0 && !this.respondsToUnaddressedThreadReplies()) {
+            const botUserId = this.getBotUserId();
+            const addressed = message.IsBotMention === true
+                || (!!botUserId && typeof message.Text === 'string' && message.Text.includes(botUserId));
+            const inThread = threadHistory.some((m) => this.isSelf(m.SenderID));
+            if (!addressed && !inThread) {
+                LogStatus(
+                    `${this.PlatformName}: not answering thread ${message.ThreadID} — this bot was not ` +
+                    `addressed and has not posted in it (multi-bot thread gate)`
+                );
+                return;
+            }
+        }
+
+        // 5. Show typing indicator
         if (this.settings.ShowTypingIndicator !== false) {
             await this.safeShowTypingIndicator(message);
         }
 
-        // 4. Fetch thread history (needed for both agent resolution and conversation context)
-        const threadHistory = await this.safeGetThreadHistory(message);
-
-        // 5. Determine which agent to use (uses thread history for agent affinity)
+        // 6. Determine which agent to use (uses thread history for agent affinity)
         const { agent, multiAgentNote } = await this.resolveAgent(message, contextUser, threadHistory);
 
-        // 6. Build conversation messages from thread history
+        // 7. Build conversation messages from thread history
         const conversationMessages = this.buildConversationMessages(threadHistory, message);
 
-        // 7. Run the agent with streaming
+        // 8. Run the agent with streaming
         await this.executeAgentAndRespond(message, agent, contextUser, conversationMessages, multiAgentNote);
     }
 
@@ -256,6 +303,77 @@ export abstract class BaseMessagingAdapter {
      * Get the bot's own user ID on this platform (to identify bot messages in thread history).
      */
     protected abstract getBotUserId(): string;
+
+    /**
+     * Is this artifact meant for the user, rather than internal system state?
+     *
+     * Fails OPEN: an unreadable artifact keeps its link, since losing a working link on a
+     * transient read failure is worse than the rare case of surfacing an internal one.
+     */
+    protected async isUserVisibleArtifact(artifactId: string, contextUser: UserInfo): Promise<boolean> {
+        try {
+            const res = await new RunView().RunView<{ Visibility?: MJArtifactEntity['Visibility'] }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID = '${EscapeSQLString(artifactId)}'`,
+                    Fields: ['ID', 'Visibility'],
+                    ResultType: 'simple',
+                    MaxRows: 1,
+                },
+                contextUser
+            );
+            const visibility = res.Success ? res.Results?.[0]?.Visibility : undefined;
+            if (visibility === 'System Only') {
+                LogStatus(`Not linking artifact ${artifactId}: it is marked System Only`);
+                return false;
+            }
+            return true;
+        } catch (error) {
+            LogError(`Could not read artifact ${artifactId} visibility; linking it anyway:`, undefined, error);
+            return true;
+        }
+    }
+
+    /**
+     * Was this message posted by THIS bot?
+     *
+     * Not a bare `=== getBotUserId()`. A platform may publish more than one identifier for the
+     * same bot and return a different one depending on how the message was posted — on Slack a
+     * post carrying a `username`/`icon_url` override comes back with a `bot_id` and NO `user`,
+     * and this adapter sets that override on every agent reply so the agent answers under its own
+     * name. Platforms with that split override this; the default is a single-identifier compare.
+     */
+    protected isSelf(senderId: string | null | undefined): boolean {
+        const botUserId = this.getBotUserId();
+        return !!senderId && !!botUserId && senderId === botUserId;
+    }
+
+    /**
+     * Was this history message written by ANY bot (not just this one)?
+     *
+     * Thread affinity and conversation context must both ignore other bots' messages: an agent's
+     * reply names itself in prose, which the mention matcher would read as a user request, and as
+     * a 'user' turn it feeds one agent's self-description into another's context.
+     *
+     * The default is `false` because the marker is platform-specific — see `SlackAdapter`, which
+     * reads the Events API's `bot_id`/`bot_profile`/`bot_message` fields.
+     */
+    protected isBotAuthored(_message: IncomingMessage): boolean {
+        return false;
+    }
+
+    /**
+     * May this bot answer a thread reply that did not address it?
+     *
+     * `false` (the default) enables the multi-bot thread gate in {@link HandleMessage}: with one
+     * app per agent, an un-mentioned thread reply would otherwise be answered by every bot in the
+     * channel. Platforms that route a message only to its addressee — Teams, where a channel
+     * message reaches a bot solely via an @mention — should return `true`, as the gate is both
+     * unnecessary and would suppress legitimate replies there.
+     */
+    protected respondsToUnaddressedThreadReplies(): boolean {
+        return false;
+    }
 
     /**
      * Strip the bot @mention from the message text so the agent sees clean input.
@@ -456,7 +574,13 @@ export abstract class BaseMessagingAdapter {
         }
 
         if (email) {
-            const userCache = new UserCache();
+            // UserCache.Instance, never `new UserCache()`: UserCache extends BaseSingleton, whose
+            // constructor RETURNS the existing shared instance — and then the subclass field
+            // initializer (`_users = []`) runs against that returned instance. So `new` both
+            // EMPTIES the process-wide user cache and reads back an empty list: the lookup below
+            // could never succeed, and the whole server lost its user cache until the next
+            // auto-refresh tick.
+            const userCache = UserCache.Instance;
             const mjUser = userCache.Users.find(
                 (u: UserInfo) => u.Email?.toLowerCase() === email!.toLowerCase()
             );
@@ -537,12 +661,13 @@ export abstract class BaseMessagingAdapter {
     private resolveThreadAgent(threadHistory: IncomingMessage[]): MJAIAgentEntityExtended | null {
         if (threadHistory.length === 0) return null;
 
-        const botUserId = this.getBotUserId();
-
         // Walk through thread messages (oldest first) looking for user messages with agent mentions
         for (const msg of threadHistory) {
-            // Skip bot messages
-            if (msg.SenderID === botUserId) continue;
+            // Skip bot messages — this bot's own, AND any other bot's. Another agent's reply
+            // names that agent in its own prose ("I'm Sage, ..."), which the mention matcher
+            // below reads as a user asking for it, letting one bot steal a thread that belongs
+            // to another. Only humans establish thread affinity.
+            if (this.isSelf(msg.SenderID) || this.isBotAuthored(msg)) continue;
 
             // Check for agent mentions in this message
             const mentions = msg.MentionedAgentNames ?? this.matchAgentMentions(msg.Text);
@@ -715,7 +840,17 @@ export abstract class BaseMessagingAdapter {
                 conversationName: `${this.PlatformName}: ${userMessageText.substring(0, 80)}`,
             });
 
-            const artifactId = conversationResult.artifactInfo?.artifactId;
+            // Only link an artifact the user is meant to see. MJ marks an artifact
+            // `Visibility = 'System Only'` when the agent's ArtifactCreationMode says so — the
+            // Explorer UI hides those, but the link we post does not, so a run whose payload was
+            // internal state (a loop agent's scratch payload) offered "view the artifact" and
+            // opened raw JSON. Checked on the artifact itself rather than the agent's mode,
+            // because a System-Only agent can still produce a user-facing FILE artifact.
+            const candidateArtifactId = conversationResult.artifactInfo?.artifactId;
+            const artifactId = candidateArtifactId
+                && (await this.isUserVisibleArtifact(candidateArtifactId, contextUser))
+                ? candidateArtifactId
+                : undefined;
 
             return {
                 result: conversationResult.agentResult,
@@ -763,7 +898,12 @@ export abstract class BaseMessagingAdapter {
         return this.cachedEnvironmentID;
     }
 
-    private detectDelegation(result: ExecuteAgentResult): string | null {
+    protected detectDelegation(result: ExecuteAgentResult): string | null {
+        // A bot pinned to one agent must not be delegated away from it. Checked before any
+        // strategy runs, because Strategy 3 below reads the reply TEXT — so an orchestrator
+        // agent describing its own routing role would hand the conversation to whichever agent
+        // it happened to name, under this bot's identity and with no attribution.
+        if (this.settings.DisableDelegation) return null;
         if (!result.success) return null;
 
         // Strategy 1: Check in-memory payload.invokeAgent (primary, matches MJ Explorer)
@@ -975,6 +1115,97 @@ export abstract class BaseMessagingAdapter {
         } else {
             await this.sendFinalMessage(message, formatted);
         }
+
+        // Deliver binary output as real platform files, AFTER the text reply is posted.
+        //
+        // Two sources, neither of which the message renderers can show:
+        //   - `mediaOutputs` — generated images arrive as base64, and the block/card builders can
+        //     only render media that already has a public https URL, so they were silently dropped.
+        //   - inlined file data URIs on actionable commands — MJ's document actions embed a whole
+        //     generated file as `data:<mime>;base64,...` when no file storage account is
+        //     configured. Unusable as a link (see isOpenableURI), but the bytes are right there.
+        //
+        // Failures are logged and swallowed: the text reply has already posted, and an upload
+        // problem must not turn a delivered answer into an error.
+        if (this.uploadMediaOutputs) {
+            // De-duplicated by payload, in preference order. A document action puts the file in
+            // `fileOutputs` AND the model often repeats the same base64 back as an `open:url`
+            // command, so an un-deduped union uploads the identical file twice — and both copies
+            // count against the platform's per-reply file cap.
+            const attachments: UploadableFile[] = [];
+            const seen = new Set<string>();
+            for (const file of [
+                ...(result.mediaOutputs ?? []),
+                ...this.collectFileOutputAttachments(result),
+                ...this.collectInlineFileAttachments(result),
+            ]) {
+                if (file.data && seen.has(file.data)) continue;
+                if (file.data) seen.add(file.data);
+                attachments.push(file);
+            }
+            if (attachments.length > 0) {
+                try {
+                    await this.uploadMediaOutputs(message, attachments);
+                } catch (error) {
+                    LogError('Failed to upload agent output files (the text reply already posted):', undefined, error);
+                }
+            }
+        }
+    }
+
+    /**
+     * Collect the files an agent produced, from the run's own `fileOutputs`.
+     *
+     * This is the canonical source — `fileOutputs` is what MJ turns into file artifacts — and it
+     * carries the real filename and MIME type rather than leaving them to be guessed. Entries
+     * already saved to storage (`fileId`, no `fileData`) are skipped: those have a durable
+     * location, and re-uploading their bytes to chat is not this method's job.
+     *
+     * Preferred over {@link collectInlineFileAttachments}, which depends on the model choosing to
+     * emit a `data:` URI — it does so only sometimes, so relying on it meant a generated document
+     * reached chat on one run and not the next.
+     */
+    protected collectFileOutputAttachments(result: ExecuteAgentResult): UploadableFile[] {
+        return (result.fileOutputs ?? [])
+            .filter((o: FileOutputRef): o is FileOutputRef & { fileData: string } => !!o.fileData)
+            .map((o) => ({
+                modality: 'file',
+                mimeType: o.mimeType,
+                data: o.fileData,
+                fileName: o.fileName,
+                label: o.fileName,
+            }));
+    }
+
+    /**
+     * Harvest files that an agent inlined as `data:` URIs on its actionable commands.
+     *
+     * MJ's document actions fall back to embedding the generated file itself when no file storage
+     * account is configured. That URI cannot be opened from a chat client, so the file is decoded
+     * here and handed to the platform's uploader as an ordinary attachment.
+     */
+    protected collectInlineFileAttachments(result: ExecuteAgentResult): UploadableFile[] {
+        const files: UploadableFile[] = [];
+
+        for (const cmd of result.actionableCommands ?? []) {
+            if (cmd.type !== 'open:url') continue;
+            // The scheme is lower-cased first: the guard that DROPS these buttons is
+            // case-insensitive, so an upper-case `DATA:` URI would otherwise be suppressed as a
+            // link and never collected as a file — the note would promise an attachment that
+            // never arrives.
+            const parsed = parseBase64DataUrl(cmd.url.trim().replace(/^data:/i, 'data:'));
+            if (!parsed) continue;
+            files.push({
+                modality: 'file',
+                mimeType: parsed.mediaType,
+                data: parsed.data,
+                label: cmd.label,
+                // No fileName: `OpenURLCommand` does not declare one, nothing in the repo emits
+                // one, and the model-facing command contract never mentions the field — so the
+                // adapter derives the name from the label and the MIME type instead.
+            });
+        }
+        return files;
     }
 
     /**
@@ -1095,11 +1326,14 @@ export abstract class BaseMessagingAdapter {
         history: IncomingMessage[],
         currentMessage: IncomingMessage
     ): ChatMessage[] {
-        const botUserId = this.getBotUserId();
         const messages: ChatMessage[] = [];
 
         for (const msg of history) {
-            const role = msg.SenderID === botUserId ? 'assistant' : 'user';
+            // Another bot's message is neither this agent's own turn nor anything the user said.
+            // Left as a 'user' turn it fed a different agent's self-description into this
+            // agent's context, and the model imitated it.
+            if (!this.isSelf(msg.SenderID) && this.isBotAuthored(msg)) continue;
+            const role = this.isSelf(msg.SenderID) ? 'assistant' : 'user';
             const content = role === 'user' ? this.stripBotMention(msg.Text) : msg.Text;
             if (content.trim()) {
                 messages.push({ role, content });
@@ -1162,7 +1396,10 @@ export abstract class BaseMessagingAdapter {
      * @throws Error if the configured email cannot be found.
      */
     private async loadFallbackContextUser(): Promise<void> {
-        const userCache = new UserCache();
+        // UserCache.Instance, never `new UserCache()` — see resolveContextUser for why `new`
+        // wipes the shared cache. Here it made Initialize fail with "Fallback context user not
+        // found" for EVERY configured email, on every deployment.
+        const userCache = UserCache.Instance;
         const user = userCache.Users.find(
             (u: UserInfo) => u.Email?.toLowerCase() === this.settings.ContextUserEmail.toLowerCase()
         );

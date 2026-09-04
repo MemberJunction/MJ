@@ -96,13 +96,14 @@ Default cadence is **Saturday 2 AM UTC** (configured in `metadata/scheduled-jobs
 
 ### Configuration
 
-External API keys used by certain actions (Perplexity, Google Custom Search, Gamma) are loaded from `mj.config.cjs` or environment variables via the `config.ts` module:
+External API keys used by certain actions (Perplexity, Google Custom Search, Gamma, Tavily) are loaded from `mj.config.cjs` or environment variables via the `config.ts` module:
 
 ```javascript
 // mj.config.cjs
 module.exports = {
   perplexityApiKey: 'pk-...',          // or PERPLEXITY_API_KEY env var
   gammaApiKey: 'sk-gamma-...',         // or GAMMA_API_KEY env var
+  tavilyApiKey: 'tvly-...',            // or TAVILY_API_KEY env var
   google: {
     customSearch: {
       apiKey: 'AIza...',               // or GOOGLE_CUSTOM_SEARCH_API_KEY
@@ -310,6 +311,8 @@ Search the web, extract page content, and validate URLs.
 | `__URLMetadataExtractor` | `URLMetadataExtractorAction` | Extract OpenGraph/meta tags from a URL |
 | `Perplexity Search` | `PerplexitySearchAction` | AI-powered search via Perplexity API |
 | `Google Custom Search` | `GoogleCustomSearchAction` | Search via Google Custom Search API |
+| `Tavily Search` | `TavilySearchAction` | Web search built for AI consumption — cleaned page content and an optional synthesised answer |
+| `Read RSS Feed` | `ReadRSSFeedAction` | Read one or more RSS/Atom feeds, filtered by age and keywords |
 
 ### Workflow Control (5 actions)
 

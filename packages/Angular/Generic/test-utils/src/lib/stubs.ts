@@ -86,8 +86,14 @@ export class StubEmptyStateComponent {
  * Angular throws NG01203).
  *
  * Mirrors the real inputs (`Data`, `TextField`, `ValueField`, `Filterable`,
- * `ValuePrimitive`, `Disabled`, `Placeholder`, `DefaultItem`) and outputs
- * (`ValueChange`, `FilterChange`). The template renders an empty
+ * `ValuePrimitive`, `Disabled`, `Placeholder`, `DefaultItem`, plus the accessible-name
+ * passthroughs `AriaLabel`, `AriaLabelledBy`, `InputId`, `AriaDescribedBy`) and outputs
+ * (`ValueChange`, `FilterChange`).
+ *
+ * Keeping that mirror TRUE is the point, not tidiness: the DOM test environment sets
+ * `errorOnUnknownProperties`, so a consumer spec whose template binds `[AriaLabel]` on a stubbed
+ * dropdown throws NG0303 — and a static `AriaLabel="…"` attribute is worse, landing silently as a
+ * vacuous pass. The template renders an empty
  * `<select class="mj-dropdown">`; specs that want to push a value through the form can
  * set the select's value and dispatch `change`, or call the stub's CVA hooks directly.
  * The last written value is exposed as `value` for assertions.
@@ -107,6 +113,10 @@ export class StubDropdownComponent implements ControlValueAccessor {
   @Input() Disabled = false;
   @Input() Placeholder = 'Select...';
   @Input() DefaultItem: Record<string, unknown> | string | null = null;
+  @Input() AriaLabel = '';
+  @Input() AriaLabelledBy = '';
+  @Input() InputId = '';
+  @Input() AriaDescribedBy = '';
   @Output() FilterChange = new EventEmitter<string>();
   @Output() ValueChange = new EventEmitter<string>();
 

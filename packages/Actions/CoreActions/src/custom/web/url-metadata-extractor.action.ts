@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { SafeFetch, SSRFError } from "@memberjunction/network-utils";
+import { SafeFetch, SSRFError, DrainResponseBody } from "@memberjunction/network-utils";
 
 /**
  * Action that extracts comprehensive metadata from web pages including OpenGraph, Twitter Cards,
@@ -109,6 +109,7 @@ export class URLMetadataExtractorAction extends BaseAction {
                 });
 
                 if (response.status < 200 || response.status >= 400) {
+                    await DrainResponseBody(response);
                     return {
                         Success: false,
                         Message: `HTTP Error ${response.status}: ${response.statusText} for URL: ${url}`,
@@ -118,6 +119,7 @@ export class URLMetadataExtractorAction extends BaseAction {
 
                 const contentType = response.headers.get('content-type') || '';
                 if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
+                    await DrainResponseBody(response);
                     return {
                         Success: false,
                         Message: `URL does not return HTML content: ${contentType}`,

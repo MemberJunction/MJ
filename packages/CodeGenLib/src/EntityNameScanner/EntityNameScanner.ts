@@ -451,6 +451,24 @@ function getMethodName(expression: ts.Expression): string | null {
 }
 
 /**
+ * Decorator identifiers that register a class with the MJGlobal class factory —
+ * the classic positional `RegisterClass` and the options-bag `RegisterClassEx`.
+ */
+const REGISTER_DECORATORS = new Set(['RegisterClass', 'RegisterClassEx']);
+
+/**
+ * True when `node` is the options-bag object literal of a
+ * `@RegisterClassEx(BaseClass, { ... })` decorator.
+ */
+function isRegisterDecoratorOptionsObject(node: ts.Node | undefined): boolean {
+    if (!node || !ts.isObjectLiteralExpression(node)) return false;
+    const call = node.parent;
+    if (!call || !ts.isCallExpression(call)) return false;
+    if (!call.parent || !ts.isDecorator(call.parent)) return false;
+    return ts.isIdentifier(call.expression) && REGISTER_DECORATORS.has(call.expression.text);
+}
+
+/**
  * Determines if a string literal node is in a relevant AST context
  * (i.e., an argument to a known method, an EntityName property assignment,
  * or a comparison against a known entity-name property).
@@ -487,10 +505,23 @@ function classifyParentContext(node: ts.Node): EntityNamePatternKind | null {
         }
     }
 
-    // Case 3: Argument to @RegisterClass decorator
+    // Case 3: Positional argument to a @RegisterClass / @RegisterClassEx decorator
     if (ts.isCallExpression(parent) && parent.parent && ts.isDecorator(parent.parent)) {
         const callee = parent.expression;
-        if (ts.isIdentifier(callee) && callee.text === 'RegisterClass') {
+        if (ts.isIdentifier(callee) && REGISTER_DECORATORS.has(callee.text)) {
+            return 'RegisterClass';
+        }
+    }
+
+    // Case 3b: `key` property of a @RegisterClassEx options bag —
+    // @RegisterClassEx(BaseEntity, { key: 'OldName' }). The literal's parent is
+    // a property assignment, not the decorator call, so Case 3 cannot see it.
+    // Scoped to a register decorator's options object so a bare `key:` property
+    // elsewhere is not treated as an entity name.
+    if (ts.isPropertyAssignment(parent)) {
+        const propName = parent.name;
+        const isKeyProp = (ts.isIdentifier(propName) || ts.isStringLiteral(propName)) && propName.text === 'key';
+        if (isKeyProp && isRegisterDecoratorOptionsObject(parent.parent)) {
             return 'RegisterClass';
         }
     }

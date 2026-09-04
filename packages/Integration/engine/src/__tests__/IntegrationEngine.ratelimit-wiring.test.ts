@@ -299,12 +299,24 @@ describe('IntegrationEngine — rate-limit / AIMD wiring (connector policy → l
             expect(result.RecordsCreated).toBe(0);
 
             // GLUE PROOF 1: the engine fed the 429 into the limiter via reportRateOutcome → ReportThrottle.
+            //
+            // EXACTLY ONCE, though this fetch was rejected on every retry attempt. Three rejections
+            // inside one retry burst are one congestion event, and the multiplicative decrease is
+            // per event — decreasing per attempt compounds (×0.5 three times is an eighth), so a
+            // single throttled fetch would drive the rate down as a function of the retry budget
+            // rather than of the source's actual capacity. Proven by the effective-rate assertion
+            // below: 8 → 4, one halving, not 8 → 1.
             expect(throttleSpy).toHaveBeenCalledTimes(1);
             // keyed by CompanyIntegrationID (per-credential bucket), with the connector-parsed Retry-After.
             expect(throttleSpy).toHaveBeenCalledWith('ci-1', 1234);
 
             // GLUE PROOF 2: the engine consulted the connector's ExtractRetryAfterMs to get that value.
-            expect(connector.ExtractRetryAfterMs).toHaveBeenCalledTimes(1);
+            //
+            // Called per ATTEMPT, not once per fetch: the retry delay is now taken from the 429's own
+            // Retry-After instead of blind exponential backoff, and each response may state a
+            // different one — so re-asking is the point, and pinning an exact count here would pin
+            // the retry budget instead of the behaviour.
+            expect(connector.ExtractRetryAfterMs).toHaveBeenCalled();
             expect(connector.ExtractRetryAfterMs).toHaveBeenCalledWith(expect.any(Error));
 
             // GLUE PROOF 3: the limiter the engine drove was built from the CONNECTOR'S policy (8 t/s),

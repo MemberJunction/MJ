@@ -44,6 +44,50 @@ export interface UserStorageDriverOptions {
 }
 
 /**
+ * Resolves the storage driver registered for a provider's `ServerDriverKey` and instantiates it.
+ *
+ * This is the ONE place a `ServerDriverKey` becomes a driver object. It exists because the failure
+ * mode it replaces was so expensive: `ClassFactory.CreateInstance` does not return `null` for an
+ * unregistered key — it falls back to the anchor base class — so an unresolvable key used to yield
+ * a `FileStorageBase` whose every method is `undefined`. Nothing complained until some distant
+ * subsystem called one, producing `driver.GetObject is not a function` with no mention of storage
+ * configuration, the provider, or the key. `TryCreateInstance` reports resolution EXPLICITLY, so a
+ * configuration problem is reported here, as a configuration problem, naming the key.
+ *
+ * @param providerEntity The provider whose `ServerDriverKey` names the driver class.
+ * @returns A newly constructed, UNINITIALIZED driver — callers must still `initialize()` it.
+ * @throws Error naming the provider, the unresolved `ServerDriverKey`, the keys that ARE
+ *         registered, and how to fix it.
+ */
+export function resolveStorageDriver(providerEntity: MJFileStorageProviderEntity): FileStorageBase {
+  const driverKey = providerEntity.ServerDriverKey;
+  const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<FileStorageBase>(FileStorageBase, driverKey);
+  if (resolution.Resolved && resolution.Instance) {
+    return resolution.Instance;
+  }
+
+  // The registered-key list is the highest-value part of the diagnostic: a typo'd key and a driver
+  // whose module was never imported look identical until you see what the factory actually knows.
+  const registeredKeys = Array.from(
+    new Set(
+      MJGlobal.Instance.ClassFactory.GetAllRegistrations(FileStorageBase)
+        .map((r) => r.Key)
+        .filter((k): k is string => k != null),
+    ),
+  ).sort();
+  const knownText = registeredKeys.length > 0 ? registeredKeys.map((k) => `'${k}'`).join(', ') : '(none)';
+
+  throw new Error(
+    `MJStorage: no file storage driver is registered for ServerDriverKey '${driverKey ?? '(null)'}' ` +
+      `(provider "${providerEntity.Name}", ID ${providerEntity.ID}). ` +
+      `Registered driver keys: ${knownText}. ` +
+      `Fix by either (a) importing the package that declares the driver so its @RegisterClass decorator runs ` +
+      `in THIS process — a driver whose module is never imported is never registered — or ` +
+      `(b) correcting 'MJ: File Storage Providers'.ServerDriverKey to one of the registered keys above.`,
+  );
+}
+
+/**
  * @deprecated This function is being replaced by the enterprise file storage model.
  * Use FileStorageAccount with Credential Engine instead.
  *
@@ -58,8 +102,8 @@ export interface UserStorageDriverOptions {
 export async function initializeDriverWithUserCredentials(options: UserStorageDriverOptions): Promise<FileStorageBase> {
   const { providerEntity } = options;
 
-  // Create the driver instance
-  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+  // Create the driver instance (throws, naming the key, when the ServerDriverKey resolves to nothing)
+  const driver = resolveStorageDriver(providerEntity);
 
   // Check if this provider requires OAuth authentication
   if (providerEntity.RequiresOAuth) {
@@ -137,12 +181,9 @@ export interface AccountStorageDriverOptions {
 export async function initializeDriverWithAccountCredentials(options: AccountStorageDriverOptions): Promise<FileStorageBase> {
   const { accountEntity, providerEntity, contextUser } = options;
 
-  // Create the driver instance using the provider's driver key
-  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
-
-  if (!driver) {
-    throw new Error(`Failed to create storage driver for provider "${providerEntity.Name}" ` + `with driver key "${providerEntity.ServerDriverKey}"`);
-  }
+  // Create the driver instance using the provider's driver key. Resolution failure throws here,
+  // naming the key — it is NEVER allowed to yield a hollow base instance that fails later.
+  const driver = resolveStorageDriver(providerEntity);
 
   // Build the base config with account information (required in enterprise model)
   const baseConfig: StorageProviderConfig = {
@@ -267,7 +308,7 @@ async function initializeDriver(providerEntity: MJFileStorageProviderEntity, use
   }
 
   // No user context - use admin/legacy initialization
-  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+  const driver = resolveStorageDriver(providerEntity);
 
   // Check if this provider requires OAuth but no user context was provided
   if (providerEntity.RequiresOAuth) {

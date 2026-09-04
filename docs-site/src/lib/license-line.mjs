@@ -1,4 +1,4 @@
-import { documentedMajor } from './documented-line.mjs';
+import { documentedMajor, documentedLineId } from './documented-line.mjs';
 
 /**
  * The license the release line THIS BUILD documents ships under.
@@ -38,8 +38,12 @@ export const sourceModel = isBusl ? 'Source Available' : 'Open Source';
  *
  * A pre-BUSL line must not link at the default branch: that file now carries
  * the BUSL, so the link would hand an ISC user the wrong license. Those lines
- * are maintained on their own lts/N branch, which still carries the ISC text.
+ * are maintained on their own lts/<id> branch, which still carries the ISC text.
+ *
+ * The branch is built from `documentedLineId`, NOT `documentedMajor`: a line's
+ * branch is named for the whole line (lts/5, lts/6.1), so a dotted line read as
+ * a major would link at lts/6 — a branch that does not exist.
  */
 export const licenseUrl = isBusl
   ? 'https://github.com/MemberJunction/MJ/blob/main/LICENSE'
-  : `https://github.com/MemberJunction/MJ/blob/lts/${documentedMajor}/LICENSE`;
+  : `https://github.com/MemberJunction/MJ/blob/lts/${documentedLineId}/LICENSE`;

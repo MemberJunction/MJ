@@ -1,5 +1,108 @@
 # Change Log - @memberjunction/core
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 1d2ffd4: Drop `fnReportCategoryParentID_GetRootID`, an orphaned function left behind when the ReportCategory table was removed. The dangling table reference made Azure SQL's database export (bacpac) fail module validation, so affected installations could not be exported. Existence-guarded: a no-op wherever the function is already gone.
+- d66a26a: IS-A promotion: attach a NEW child to an EXISTING parent.
+
+  IS-A supported _discovery_ — a loaded parent finds its existing child — but not _promotion_: "this existing `Person` is now also an `Applicant`". `NewRecord()` unconditionally starts a fresh parent chain, so promotion INSERTed a duplicate parent and either collided on the primary key or failed the parent's NOT NULL validation as though it were brand new. A find-or-create driver hitting this creates a second person rather than adding a role to the one that exists.
+
+  New public method on `BaseEntity`:
+
+  ```typescript
+  const applicant = await md.GetEntityObject<ApplicantEntity>(
+    "Applicants",
+    contextUser,
+  );
+  applicant.NewRecord();
+  if (!(await applicant.AttachToParent(CompositeKey.FromID(personId)))) {
+    // no such parent row — the caller decides: save as a fresh chain, or stop
+  }
+  await applicant.Save(); // parent UPDATEd, child INSERTed, one transaction
+  ```
+
+  It loads the parent chain by key, and a _loaded_ parent saves as an UPDATE — which is the whole mechanism: the existing parent-first chain save updates the existing row and INSERTs only the child. Field routing, permissions, validation, `EnforceDisjointSubtype` and transaction scope are unchanged.
+
+  Two contracts worth knowing: a failed attach restores the minted key, so `InnerLoad`'s wipe cannot leave a gutted, unsaveable record and both caller options stay open; and the shared-key mirror iterates the **parent's** primary keys, since a child schema that leaves the key entirely to routing has no mirror to maintain.
+
+  Guards: throws on a non-IS-A entity, throws on an already-saved child (promotion is a decision about what a _new_ record is), returns `false` with the record untouched when no parent row exists.
+
+  `EntityInfo` also gains the IS-A role lookups that answering "what is this entity?" previously
+  required combining by hand: `IsRootType`, `IsLeafType`, `ParticipatesInIsA`, `IsARole`
+  (`None` / `Root` / `Intermediate` / `Leaf`), `RootEntityInfo`, and `DescendantEntities`. Two of these
+  close real traps — `IsChildType` alone treats an _intermediate_ type as a leaf and so mishandles the
+  middle of every chain deeper than two, and `ChildEntities` is direct children only, so a "find every
+  subtype" written against it misses everything past the first level.
+
+### Patch Changes
+
+- c42c0e8: A transaction group can send its items as ONE round trip.
+
+  `TransactionGroupBase` gains an opt-in `BatchedSubmit` flag (default false — existing callers
+  are byte-for-byte unaffected). When set, both providers execute a variable-free group's items
+  as a single multi-statement round trip instead of one round trip per item: the same statements,
+  in the same order, inside the same transaction, with per-item results still returned.
+
+  Why this matters: the sequential submit is ATOMIC but not BATCHED. Each item's generated CRUD
+  procedure call is its own wire hop, and on a measured live sync the server-side execution was
+  ~0.3ms inside a per-statement wall cost two orders of magnitude larger — so a 100-item group
+  spent essentially all of its time waiting on round trips the SQL never needed. Batching the
+  wire is the entire speed of a direct-write path with none of its costs: every statement is
+  still the generated procedure, so validation, Record Changes and save events are untouched.
+
+  Result mapping cannot assume one recordset per item — a statement that returns no rows produces
+  NO recordset, so a positional zip silently drifts and attributes row A's identity to row B.
+  Each item is therefore preceded by a sentinel SELECT of its index; recordsets between sentinel
+  k and k+1 belong to item k. Covered by tests on both providers, including the empty-middle-item
+  case that breaks positional mapping.
+
+  SQL Server renumbers per-item `?` placeholders into one global `@p` namespace (one request
+  carries one parameter namespace; two items both rendering `@p0` would overwrite each other).
+
+  PostgreSQL cannot carry `$N` parameters in multi-statement text (extended-protocol limitation),
+  so parameter values are inlined through the driver's own `escapeLiteral` — never a hand-rolled
+  escaper — and only for values with an unambiguous literal form (string, finite number, boolean,
+  null, Date; plain objects are already serialized by the parameter processor before the gate).
+  If any value falls outside that set, or the client exposes no `escapeLiteral`, the WHOLE group
+  falls back to the sequential path: correctness first, batching second.
+
+  Groups that use `Variables` have cross-item dependencies (a later item's SQL is re-rendered
+  from an earlier item's output) and always run sequentially regardless of the flag — a single
+  round trip cannot feed one statement's output into the next statement's client-side rendering.
+
+  Failure semantics are unchanged: a batch failure rolls back and throws exactly as the serial
+  path's first-error rollback does, and per-item attribution of a poison row remains the caller's
+  degradation path (re-apply individually), as before.
+
+- 5fc861f: CodeGen treats schema as the incremental unit at 2,000+ entities: per-schema emit with write-if-changed and dirty-schema regen, `'schema.table'` exclude strings, schema-parallel file generation, incremental `tsc` on core-entities and server, hydrate-by-schema catalog projections, and `schemaOutput` routing so brownfield/demo schemas do not land in published packages. BigSchemaDemo is the droppable test bed.
+- 905820a: Sync-scoped write-side-effect suppression. Record Changes and geocoding are per-write side effects, but the only way to relieve a high-volume writer of them was turning the entity flags off — which also turns them off for every human and API writer of the same entities, permanently. New `EntitySaveOptions.SkipRecordChanges` / `SkipGeoCoding` (and `EntityDeleteOptions.SkipRecordChanges`) scope the suppression to the individual save: providers omit the audit-row wrap and the geocode side trip for saves that carry the options, and only those. The sync engine sets them on its own writes when the connection asks via `Configuration.writeSideEffects === 'suppressed'` — fail-closed: absent or malformed configuration keeps the side effects on, and a save outside a suppressing sync run can never carry them. Materially identical to flags-off for the sync's writes; invisible to every other writer. The delete option is mirrored onto the GraphQL `DeleteOptionsInput` because the schema-sync gate requires every `EntityDeleteOptions` field to appear there, but it is **not honoured over the wire**: every wire entry point sanitizes it back to false and logs the attempt, because suppressing an audit row is a higher privilege than `entity:delete` — the only authorization a delete mutation performs. That keeps delete at exact parity with save, whose options have no GraphQL input type at all.
+- Updated dependencies [1940a4d]
+- Updated dependencies [23c2521]
+- Updated dependencies [4eb87c5]
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+- 53c341c: Add optional `@IncludedSchemaNames` to CodeGen metadata-heal stored procedures so Open App migrations can positively scope heals without photographing sibling apps. Cascade-delete SQL is intra-schema only unless `allowCrossSchemaCascadeDeletes` is set. Custom-view `sp_refreshview` in the migration log honors `excludeSchemas` and, when set, `includeSchemas`.
+
+### Patch Changes
+
+- e2ad3c0: `ProviderBase`'s write-invalidation fan-out now re-subscribes when the `MJGlobal` event bus is replaced. Its one-time wiring guard was a boolean, which cannot detect that `MJGlobal.Reset()` (or clearing the singleton from the global object store) has swapped `_events$` for a fresh `Subject` — leaving the fan-out attached to the discarded bus for the rest of the process, so `RunView` dedup/linger entries silently stopped being invalidated after a save, with no error. The guard now keys on the bus reference, unsubscribes the stale subscription when the bus changes, and is re-checked on every call so already-registered long-lived providers re-wire as well.
+- 8ad04e8: Fix a memory leak in `ProviderBase.ensureInflightViewInvalidation()`: it subscribed to `MJGlobal`'s process-wide event bus once per provider instance and never unsubscribed. Since MJServer mints a fresh provider on every GraphQL request (and the task-graph dispatcher mints one per task execution), this pinned one more provider object graph on the bus per request/task, forever. The subscription is now wired once per process and fans out to live provider instances via `WeakRef`, so creating more providers no longer adds more permanent subscribers.
+- a1a8989: Add `entityImportPackages` so CodeGen imports peer entity classes (embeds and related-record collections) from the npm package that owns them, instead of self-importing string `entityPackageName`. Unmapped foreign schemas fail the run.
+- Updated dependencies [4586215]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [647bd71]
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

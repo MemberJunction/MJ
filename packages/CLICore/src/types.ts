@@ -64,11 +64,57 @@ export interface PluginUsage {
   runtime: RuntimeHint;
 }
 
+/**
+ * Version of the {@link MJCLIResult} wire contract. Bump on any breaking change to
+ * the envelope so an agent that cached a shape can detect the drift instead of
+ * silently mis-parsing. Stamped onto every serialized result by `SerializeResult`.
+ */
+export const MJ_CLI_RESULT_VERSION = '1';
+
+/**
+ * Stable, machine-readable error codes. An agent branches on these; the human-facing
+ * `message` is free to be reworded without breaking anyone.
+ *
+ * Add cases here rather than inventing ad-hoc strings at a call site — the whole
+ * point is that the set is enumerable and greppable.
+ */
+export const MJCLIErrorCodes = {
+  /** A needed value was missing and the run wasn't allowed to prompt for it. */
+  NonInteractive: 'E_NON_INTERACTIVE',
+  /** No `mj.config.cjs` (or equivalent) found. */
+  NoConfig: 'E_NO_CONFIG',
+  /** A flag/argument combination the command can't act on. */
+  InvalidArguments: 'E_INVALID_ARGS',
+  /** A referenced entity, directory, or record doesn't exist. */
+  NotFound: 'E_NOT_FOUND',
+  /** Input failed the command's own validation pass. */
+  ValidationFailed: 'E_VALIDATION_FAILED',
+  /** Database connect/query failure. */
+  DatabaseError: 'E_DATABASE',
+  /** Anything not yet categorized. Prefer a specific code. */
+  Unknown: 'E_UNKNOWN',
+} as const;
+
+/** Union of the values in {@link MJCLIErrorCodes}. */
+export type MJCLIErrorCode = (typeof MJCLIErrorCodes)[keyof typeof MJCLIErrorCodes];
+
 /** A single failure, collected (not interleaved) so an agent can read them as a list. */
 export interface MJCLIResultError {
   /** Entity name, file path, phase — whatever is relevant. */
   context?: string;
   message: string;
+  /**
+   * Stable code from {@link MJCLIErrorCodes}. Optional only so existing call sites
+   * keep compiling — new code should always set it, because without one an agent
+   * has nothing to branch on but a regex over `message`.
+   */
+  code?: MJCLIErrorCode;
+  /**
+   * Concrete remediation the caller can act on unaided — name the flag, the file,
+   * the command to run. "Invalid configuration" is not a suggestion;
+   * "Run `mj sync init` in this directory first." is.
+   */
+  suggestion?: string;
 }
 
 /**
@@ -77,6 +123,11 @@ export interface MJCLIResultError {
  * {@link MJCLIResult.errors} with full detail (not just a count).
  */
 export interface MJCLIResult {
+  /**
+   * {@link MJ_CLI_RESULT_VERSION}. Optional on construction — `SerializeResult`
+   * stamps it — so it is always present on the wire and never a burden at a call site.
+   */
+  version?: string;
   success: boolean;
   /** 'sync:push', 'codegen', 'migrate', etc. */
   command: string;
@@ -96,6 +147,12 @@ export interface IMJCLIRuntimeHost {
   readonly Format: OutputFormat;
   /** Whether `--verbose` was set. */
   readonly Verbose: boolean;
+  /**
+   * Whether this run may prompt — true at a real terminal, false when piped, spawned,
+   * or running in CI, unless `--interactive` / `--no-interactive` overrides it. Plugins
+   * read this to choose between asking and failing fast with the flag to pass.
+   */
+  readonly Interactive: boolean;
 
   // ── Progress ──────────────────────────────────────────────────────────────
   StartStep(label: string): void;

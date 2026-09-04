@@ -48,6 +48,7 @@ vi.mock('@memberjunction/database-designer-core', () => ({
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (_target: unknown) => _target,
     LogError: vi.fn(),
+    EscapeSQLString: (v: string | null | undefined) => (v == null ? '' : String(v).replace(/\0/g, '').replace(/'/g, "''")),
 }));
 
 vi.mock('@memberjunction/actions', () => ({

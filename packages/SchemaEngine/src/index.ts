@@ -27,7 +27,7 @@ export type {
 // ─── Core Classes ────────────────────────────────────────────────────
 export { SchemaEngine } from './SchemaEngine.js';
 export { SchemaValidator } from './SchemaValidator.js';
-export { DDLGenerator, GetDialect, ValidateIdentifier, EscapeSqlString, resolveSqlType } from './DDLGenerator.js';
+export { DDLGenerator, GetDialect, ValidateIdentifier, resolveSqlType } from './DDLGenerator.js';
 
 /** @deprecated Use GetDialect() instead. */
 export { GetDialect as GetPlatformProvider } from './DDLGenerator.js';

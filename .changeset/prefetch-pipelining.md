@@ -1,0 +1,5 @@
+---
+'@memberjunction/integration-engine': patch
+---
+
+Pipelined page prefetch for cursor-paged connectors. The fetch loop was strictly serial — fetch page, process page, fetch next — even though the next cursor is known the moment a page arrives. The next page now starts downloading while the current one is mapped and written, hiding the shorter leg under the longer (~20-30% cycle reduction measured at a ~6s fetch / ~1-2s process split). Cursor mode only; offset/page modes interact with gap-skip resume and stay serial. The prefetch runs through the same governed envelope as a loop-top fetch (rate limiter, adaptive fetch gate, timeout, transient-only retry, once-per-episode throttle reporting), it is built from the fully advanced position (NextPage/NextOffset/NextCursor/NextAfterKeyValue — a stale AfterKeyValue would make a keyset connector re-run the previous seek and stop at exactly two server pages), and a drifted cursor discards it rather than consuming the wrong page. Kill switch: MJ_INTEGRATION_PREFETCH=off.

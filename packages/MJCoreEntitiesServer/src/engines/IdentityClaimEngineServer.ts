@@ -11,7 +11,7 @@
  */
 
 import * as crypto from 'crypto';
-import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     IdentityClaimEngine,
@@ -20,6 +20,7 @@ import {
     ClaimRedeemContext,
     ClaimResult,
     CreateClaimParams,
+    IdentityClaimTypeConfiguration,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJMagicLinkInviteEntity
@@ -42,6 +43,24 @@ export interface CreateClaimServerParams extends CreateClaimParams {
     TemplateData?: Record<string, unknown>;
     /** Optional Magic Link base URL for verification links */
     ClaimBaseURL?: string;
+}
+
+/**
+ * Options that qualify a redemption attempt with facts only the transport layer knows.
+ */
+export interface RedeemClaimOptions {
+    /**
+     * Whether the authenticated user's identity provider asserted their email as verified
+     * (the OIDC `email_verified` claim). Three-state by design:
+     * - `true` — the IdP vouched for the email; email-match redemption is allowed.
+     * - `false` — the IdP explicitly said the email is UNVERIFIED; the email-match path is
+     *   refused (a token still redeems). Without this, any IdP that lets users register an
+     *   arbitrary unverified email turns email-match redemption into account takeover.
+     * - `undefined` — the transport doesn't know (IdP omits the claim, or an internal caller);
+     *   email-match stays allowed unless the claim type's Configuration sets
+     *   `RequireVerifiedEmail`, which demands a positive `true`.
+     */
+    EmailVerified?: boolean;
 }
 
 /**
@@ -138,6 +157,11 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         return this.Base.NormalizeEmail(email);
     }
 
+    /** Parses a claim type's Configuration JSON into the engine-recognized shape */
+    public GetClaimTypeConfiguration(claimType: MJIdentityClaimTypeEntity | undefined): IdentityClaimTypeConfiguration {
+        return this.Base.GetClaimTypeConfiguration(claimType);
+    }
+
     private escapeHtml(str: string): string {
         return str
             .replace(/&/g, '&amp;')
@@ -166,6 +190,9 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
 
         if (!claimType) {
             throw new Error(`IdentityClaimType not found for ${params.ClaimTypeName ?? params.ClaimTypeID}`);
+        }
+        if (!claimType.IsActive) {
+            throw new Error(`IdentityClaimType '${claimType.Name}' is inactive and cannot issue new claims`);
         }
 
         const md = provider ?? this.Provider;
@@ -328,10 +355,13 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         // `new RunView()` resolves the SEPARATE global RunView provider slot, which the
         // multi-provider compliance scanner does not even cover.
         const rv = new RunView((provider ?? this.Provider) as unknown as IRunViewProvider);
-        const escaped = normalizedEmail.replace(/'/g, "''");
+        const escaped = EscapeSQLString(normalizedEmail);
+        // An ISO-8601 literal compares correctly on both SQL Server (DATETIMEOFFSET) and
+        // PostgreSQL — GETUTCDATE() would break the PG path the CAS statements already handle.
+        const nowUtc = new Date().toISOString();
         const result = await rv.RunView<MJIdentityClaimEntity>({
             EntityName: 'MJ: Identity Claims',
-            ExtraFilter: `NormalizedEmail = '${escaped}' AND Status = 'Pending' AND ExpiresAt > GETUTCDATE()`,
+            ExtraFilter: `NormalizedEmail = '${escaped}' AND Status = 'Pending' AND ExpiresAt > '${nowUtc}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
@@ -343,8 +373,12 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
 
     /**
      * Redeems a claim for an authenticated user, running the driver's OnClaim implementation.
+     *
+     * Authorization is email match OR verified token. The email-match path is additionally
+     * gated by {@link RedeemClaimOptions.EmailVerified} and the claim type's
+     * `Configuration` (`RequireVerifiedEmail` / `RequireToken`) — see {@link RedeemClaimOptions}.
      */
-    public async RedeemClaim(claimID: string, contextUser: UserInfo, provider: IMetadataProvider, token?: string): Promise<ClaimResult> {
+    public async RedeemClaim(claimID: string, contextUser: UserInfo, provider: IMetadataProvider, token?: string, options?: RedeemClaimOptions): Promise<ClaimResult> {
         if (!claimID) {
             return { Success: false, ErrorMessage: 'ClaimID is required' };
         }
@@ -394,8 +428,30 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             return { Success: false, ErrorMessage: 'Claim has expired' };
         }
 
-        // 3.1 & 3.2 Security verification: Email match OR verified bearer token required
-        const userEmailMatch = Boolean(contextUser.Email && this.NormalizeEmail(contextUser.Email) === claim.NormalizedEmail);
+        // Claim type is resolved BEFORE the authorization gate so IsActive and the type's
+        // Configuration (RequireToken / RequireVerifiedEmail) can participate in it.
+        const claimType = this.GetClaimTypeByID(claim.ClaimTypeID);
+        if (!claimType) {
+            return { Success: false, ErrorMessage: `Claim type ${claim.ClaimTypeID} not found` };
+        }
+        if (!claimType.IsActive) {
+            return { Success: false, ErrorMessage: `Claim type '${claimType.Name}' is inactive; this claim cannot be redeemed` };
+        }
+        const typeConfig = this.GetClaimTypeConfiguration(claimType);
+
+        // 3.1 & 3.2 Security verification: Email match OR verified bearer token required.
+        // Email-match is refused when the IdP explicitly asserted the email as unverified,
+        // or when the claim type demands positive verification / a token.
+        let userEmailMatch = Boolean(contextUser.Email && this.NormalizeEmail(contextUser.Email) === claim.NormalizedEmail);
+        if (userEmailMatch) {
+            if (typeConfig.RequireToken === true) {
+                userEmailMatch = false; // this type never redeems on email match alone
+            } else if (options?.EmailVerified === false) {
+                userEmailMatch = false; // IdP said the email is unverified — do not trust the match
+            } else if (typeConfig.RequireVerifiedEmail === true && options?.EmailVerified !== true) {
+                userEmailMatch = false; // this type demands a positive IdP assertion
+            }
+        }
         let tokenValid = false;
 
         if (token) {
@@ -438,13 +494,8 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         if (!userEmailMatch && !tokenValid) {
             return {
                 Success: false,
-                ErrorMessage: 'Authenticated user email does not match the claim recipient, and no valid verification token was provided'
+                ErrorMessage: 'This claim requires either a matching verified email on the signed-in account or the verification token from the claim email'
             };
-        }
-
-        const claimType = this.GetClaimTypeByID(claim.ClaimTypeID);
-        if (!claimType) {
-            return { Success: false, ErrorMessage: `Claim type ${claim.ClaimTypeID} not found` };
         }
 
         const driver = this.GetDriverInstance(claimType);
@@ -497,12 +548,19 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
      * passes the full gate (email match or verified token, atomic CAS, driver exception handling).
      * The email filter used to find the claims is a lookup convenience, not the security boundary.
      */
-    public async AutoClaimForUser(user: UserInfo, provider: IMetadataProvider): Promise<ClaimResult[]> {
+    public async AutoClaimForUser(user: UserInfo, provider: IMetadataProvider, options?: RedeemClaimOptions): Promise<ClaimResult[]> {
         if (!user || !user.Email) return [];
         const claims = await this.GetPendingClaimsForEmail(user.Email, user, provider);
         const results: ClaimResult[] = [];
         for (const claim of claims) {
-            results.push(await this.RedeemClaim(claim.ID, user, provider));
+            // Skip types that opted out of auto-claim or that never redeem on email match alone
+            // (RequireToken) — auto-claim has no token to present, so attempting them is noise.
+            const claimType = this.GetClaimTypeByID(claim.ClaimTypeID);
+            const typeConfig = this.GetClaimTypeConfiguration(claimType);
+            if (typeConfig.AutoClaim === false || typeConfig.RequireToken === true) {
+                continue;
+            }
+            results.push(await this.RedeemClaim(claim.ID, user, provider, undefined, options));
         }
         return results;
     }
@@ -586,7 +644,11 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         if (!loaded || claim.Status === 'Revoked') return;
 
         claim.Status = 'Revoked';
-        await claim.Save();
+        const saved = await claim.Save();
+        if (!saved) {
+            LogError(`[IdentityClaimEngineServer] RevokeClaim failed to save claim ${claimID}: ${claim.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return; // do not run the driver's OnRevoke against a claim that is still live
+        }
 
         const claimType = this.GetClaimTypeByID(claim.ClaimTypeID);
         if (claimType) {

@@ -31,6 +31,7 @@ import type { PartialInstallConfig } from '../models/InstallConfig.js';
 import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
+import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
 
 // ---------------------------------------------------------------------------
 // Timeout constants
@@ -49,8 +50,19 @@ const EXPLORER_PROCESS_TIMEOUT = 270_000;
 // Readiness patterns (from MJServer/src/index.ts and Angular CLI output)
 // ---------------------------------------------------------------------------
 
-/** Stdout patterns indicating MJAPI is ready. */
-const API_READY_PATTERNS: RegExp[] = [/Server ready at/i];
+/**
+ * Stdout patterns indicating MJAPI is ready.
+ *
+ * The current server prints `🚀 Ready  <url>` (minimal log level) or a summary
+ * block ending in `   Ready     <url>` — both match the first pattern. The
+ * legacy `Server ready at` marker is kept because this installer can install
+ * older tags whose MJServer still prints it. (The 5.51.0 certification recorded
+ * a false "MJAPI failed to start" caused by matching only the legacy marker.)
+ */
+const API_READY_PATTERNS: RegExp[] = [
+  /\bReady\s+https?:\/\//,
+  /Server ready at/i,
+];
 
 /** Stdout patterns indicating Explorer dev server is ready. */
 const EXPLORER_READY_PATTERNS: RegExp[] = [
@@ -86,6 +98,8 @@ export interface SmokeTestContext {
   Dir: string;
   /** Current install config (used for API/Explorer port numbers). */
   Config: PartialInstallConfig;
+  /** Package manager whose `run` starts the services (`'pnpm'` default, `'npm'` override). */
+  PackageManager: PackageManagerType;
   /** Event emitter for progress, warn, and log events. */
   Emitter: InstallerEventEmitter;
 }
@@ -265,6 +279,7 @@ export class SmokeTestPhase {
    */
   async Run(context: SmokeTestContext): Promise<SmokeTestResult> {
     const { Config: config, Emitter: emitter } = context;
+    const pm = new PackageManagerCommands(context.PackageManager);
 
     // Pre-check: verify generated entities exist
     await this.preCheck(context.Dir, emitter);
@@ -281,15 +296,17 @@ export class SmokeTestPhase {
       Message: 'Starting MJAPI and Explorer in parallel...',
     });
 
+    const startApi = pm.RunScript('start:api');
+    const startExplorer = pm.RunScript('start:explorer');
     const [apiResult, explorerResult] = await Promise.all([
       this.verifyService(
-        context.Dir, 'npm', ['run', 'start:api'],
+        context.Dir, startApi.Cmd, startApi.Args,
         apiUrl, 'MJAPI',
         API_READINESS_TIMEOUT, API_PROCESS_TIMEOUT,
         API_READY_PATTERNS, emitter
       ),
       this.verifyService(
-        context.Dir, 'npm', ['run', 'start:explorer'],
+        context.Dir, startExplorer.Cmd, startExplorer.Args,
         explorerUrl, 'Explorer',
         EXPLORER_READINESS_TIMEOUT, EXPLORER_PROCESS_TIMEOUT,
         EXPLORER_READY_PATTERNS, emitter
@@ -329,21 +346,31 @@ export class SmokeTestPhase {
   // ---------------------------------------------------------------------------
 
   private async preCheck(dir: string, emitter: InstallerEventEmitter): Promise<void> {
-    const genEntitiesPath = path.join(dir, 'node_modules', 'mj_generatedentities');
-    const exists = await this.fileSystem.DirectoryExists(genEntitiesPath);
+    // The root node_modules symlink is an npm-workspaces artifact; pnpm only
+    // links a workspace package into the root node_modules when the root
+    // manifest depends on it. Accept any of the layouts that prove the
+    // generated entities exist.
+    const candidates = [
+      path.join(dir, 'node_modules', 'mj_generatedentities'),   // npm workspaces symlink
+      path.join(dir, 'packages', 'GeneratedEntities'),          // distribution / monorepo package dir
+      path.join(dir, 'GeneratedEntities'),                      // legacy ZIP layout
+    ];
+
+    let exists = false;
+    for (const candidate of candidates) {
+      if (await this.fileSystem.DirectoryExists(candidate)) {
+        exists = true;
+        break;
+      }
+    }
 
     if (!exists) {
-      const altPath = path.join(dir, 'GeneratedEntities');
-      const altExists = await this.fileSystem.DirectoryExists(altPath);
-
-      if (!altExists) {
-        throw new InstallerError(
-          'smoke_test',
-          'MISSING_GENERATED_ENTITIES',
-          'mj_generatedentities not found. MJAPI cannot start without generated entities.',
-          'Run "mj codegen" to generate entity artifacts, then re-run the installer.'
-        );
-      }
+      throw new InstallerError(
+        'smoke_test',
+        'MISSING_GENERATED_ENTITIES',
+        'mj_generatedentities not found. MJAPI cannot start without generated entities.',
+        'Run "mj codegen" to generate entity artifacts, then re-run the installer.'
+      );
     }
 
     emitter.Emit('step:progress', {

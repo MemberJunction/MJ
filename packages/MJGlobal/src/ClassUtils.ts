@@ -187,6 +187,37 @@ export function GetFullClassHierarchy(ClassRef: any): ClassInfo[] {
 }
 
 /**
+ * Checks whether two classes are in the same inheritance chain, comparing by class NAME rather
+ * than by object identity.
+ *
+ * Name comparison is deliberate and matches `ClassFactory.GetAllRegistrations`: a module can be
+ * loaded more than once (bundler code-splitting, multiple resolution paths), which yields two
+ * distinct constructor objects for what is logically the same class. Identity comparison reads
+ * that duplicate as an unrelated class, and reads a genuine subclass whose ancestor came from the
+ * other copy of the module as unrelated too.
+ *
+ * @param ClassA First class constructor
+ * @param ClassB Second class constructor
+ * @returns True when the two are the same class, or one inherits from the other at any level
+ */
+export function AreClassesRelated(ClassA: any, ClassB: any): boolean {
+    if (!ClassA || !ClassB || typeof ClassA !== 'function' || typeof ClassB !== 'function') {
+        return false;
+    }
+
+    const nameA = GetClassName(ClassA);
+    const nameB = GetClassName(ClassB);
+    if (nameA === nameB) {
+        return true;
+    }
+
+    const inheritsByName = (descendant: any, ancestorName: string): boolean =>
+        GetClassInheritance(descendant).some((c) => c.name === ancestorName);
+
+    return inheritsByName(ClassA, nameB) || inheritsByName(ClassB, nameA);
+}
+
+/**
  * Checks if a value is a class constructor (not an instance)
  * @param value The value to check
  * @returns True if the value is a class constructor

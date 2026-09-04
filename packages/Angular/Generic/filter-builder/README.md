@@ -53,6 +53,35 @@ export class YourModule {}
 </mj-filter-builder>
 ```
 
+### Several entities (prices, Open Apps)
+
+Pass `sources` and the builder **always** writes `SourceKey.FieldName`. One source still prefixes. Several sources: two-pane field picker (source list | fields). Bare names in existing JSON still load.
+
+```html
+<mj-filter-builder
+  [sources]="[
+    { key: 'Order', label: 'Order', fields: orderFields },
+    { key: 'BillToOrganization', label: 'Bill-to organization', fields: orgFields }
+  ]"
+  [filter]="filter"
+  [showSummary]="true"
+  (filterChange)="onChange($event)">
+</mj-filter-builder>
+```
+
+JSON: `{ "field": "BillToOrganization.Type", "operator": "eq", "value": "Member" }`.
+
+Evaluate and summarize **without Angular**:
+
+```ts
+import { CompositeFilter } from '@memberjunction/core';
+const cf = CompositeFilter.FromDescriptor(filter);
+cf.Evaluate({ BillToOrganization: org, Order: header });
+cf.SummaryText({ SourceLabels: { BillToOrganization: 'Bill-to organization' } });
+```
+
+See [Filter Builder & Evaluation](../../../../../guides/FILTER_BUILDER_AND_EVALUATION.md).
+
 ### Defining Fields
 
 ```typescript
@@ -117,9 +146,9 @@ filterFields: FilterFieldInfo[] = [
 
 ## Utility Functions
 
-- `createEmptyFilter()` -- Creates a new empty `CompositeFilterDescriptor`
-- `createFilterRule(field, type)` -- Creates a new filter rule with defaults
-- `isCompositeFilter(filter)` -- Type guard for composite filters
-- `isSimpleFilter(filter)` -- Type guard for simple filter descriptors
-- `getOperatorsForType(type)` -- Returns available operators for a field type
-- `operatorRequiresValue(operator)` -- Checks if an operator needs a value input
+- `CreateEmptyFilter()` -- Creates a new empty `CompositeFilterDescriptor`
+- `CreateFilterRule(field, type)` -- Creates a new filter rule with defaults
+- `IsCompositeFilter(filter)` -- Type guard for composite filters
+- `IsSimpleFilter(filter)` -- Type guard for simple filter descriptors
+- `GetOperatorsForType(type)` -- Returns available operators for a field type
+- `OperatorRequiresValue(operator)` -- Checks if an operator needs a value input

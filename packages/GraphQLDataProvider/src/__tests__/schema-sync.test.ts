@@ -58,7 +58,8 @@ const CLIENT_CONTRACTS: Record<string, {
             'SkipEntityAIActions',
             'SkipEntityActions',
             'ReplayOnly',
-            'IsParentEntityDelete'
+            'IsParentEntityDelete',
+            'SkipRecordChanges'
         ]
     },
     RestoreContextInput: {

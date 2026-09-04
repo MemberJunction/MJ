@@ -25,10 +25,11 @@ export {
   FilterFieldInfo,
   FilterValueOption,
   FilterBuilderConfig,
-  isCompositeFilter,
-  isSimpleFilter,
-  createEmptyFilter,
-  createFilterRule
+  FilterSource,
+  IsCompositeFilter,
+  IsSimpleFilter,
+  CreateEmptyFilter,
+  CreateFilterRule
 } from './lib/types/filter.types';
 
 // Operators
@@ -39,7 +40,7 @@ export {
   BOOLEAN_OPERATORS,
   DATE_OPERATORS,
   LOOKUP_OPERATORS,
-  getOperatorsForType,
-  getOperatorInfo,
-  operatorRequiresValue
+  GetOperatorsForType,
+  GetOperatorInfo,
+  OperatorRequiresValue
 } from './lib/types/operators';

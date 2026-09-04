@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { SafeFetch, SSRFError } from "@memberjunction/network-utils";
+import { SafeFetch, SSRFError, DrainResponseBody } from "@memberjunction/network-utils";
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
 import pdfParse from 'pdf-parse';
@@ -134,6 +134,7 @@ export class WebPageContentAction extends BaseAction {
             });
 
             if (!response.ok) {
+                await DrainResponseBody(response);
                 return {
                     Success: false,
                     Message: `Failed to fetch URL: ${response.status} ${response.statusText}`,
@@ -749,6 +750,9 @@ export class WebPageContentAction extends BaseAction {
 
                 // Retry on specific status codes that might be transient
                 if (attempt < maxRetries && this.shouldRetry(response.status)) {
+                    // Discarding this response in favor of a retry — drain its body so the
+                    // connection isn't held open until GC finalizes an unconsumed stream.
+                    await DrainResponseBody(response);
                     await this.delay(this.getRetryDelay(attempt));
                     continue;
                 }

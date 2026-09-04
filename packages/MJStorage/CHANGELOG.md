@@ -1,5 +1,67 @@
 # Change Log - @memberjunction/storage
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- 9cbe17f: Fix a resource leak introduced by the axios→native-`fetch` migration: several call sites (SharePoint/Box/Dropbox drivers, GraphQL Query, URL Metadata Extractor, Web Page Content, the generic file-URL loader, LearnWorlds, SendGrid Inbound Parse delete) discarded a `fetch`/`SafeFetch` response on an error or retry-discard branch without ever reading or cancelling its body, pinning the underlying connection out of Node's keep-alive pool until GC finalized it. Added `DrainResponseBody` to `@memberjunction/network-utils` and wired it into every affected branch, plus closed the same latent gap in `HttpRequest`'s own `ResponseType: 'stream'` + non-2xx path.
+- 28cd302: Storage driver resolution now fails fast and specifically instead of handing back an unusable base instance.
+
+  `ClassFactory.CreateInstance` does not return `null` for an unregistered key — it falls back to the anchor base class. Because `FileStorageBase` declares every real operation `abstract` (and `abstract` is erased at runtime), an `MJ: File Storage Providers` row whose `ServerDriverKey` resolved to nothing produced a `FileStorageBase` whose methods were all `undefined`. The misconfiguration stayed invisible until some distant subsystem called one, surfacing minutes later as `source.driver.GetObject is not a function` — a message that names neither storage, nor the provider, nor the key.
+  - `FileStorageBase` is now marked `@RequiresSubclass()`, so an unresolved driver key is a hard, named error at the point of resolution rather than a hollow object that fails later somewhere else. This covers every resolution site, including those outside MJStorage.
+  - New exported `resolveStorageDriver(providerEntity)` is the single place a `ServerDriverKey` becomes a driver. It uses `TryCreateInstance` and, on failure, throws naming the unresolved `ServerDriverKey`, the provider's name and ID, the driver keys that _are_ registered, and the two things that actually fix it (import the package declaring the driver so its `@RegisterClass` runs in this process, or correct `ServerDriverKey`). All three `initializeDriver*` paths route through it.
+  - `GET /media/:fileId` no longer answers an unlogged 404 when a file's bytes cannot be located. Each of the three distinct causes — no `MJ: Files` row, no `ProviderKey`, no `MJ: File Storage Accounts` row for the provider — is now logged with its cause. The response stays a bare 404 so the pre-auth route still describes nothing to an unauthenticated caller.
+
+- 29c3dc8: A failed upload reports the driver's real cause instead of "Storage upload failed."
+
+  A realtime recording upload surfaced to the client as `{"Success":false,"FileID":null,"ErrorMessage":"Storage upload failed."}` while the actual cause was Google's, and was actionable: _"Service Accounts do not have storage quota. Leverage shared drives instead."_ Four layers each discarded it — the Drive driver's catch reduced the SDK error to a bare `console.error` and `return false`; `FileStorageEngine.UploadFile` threw a path-only generic; `storeRealtimeRecording` logged and then returned `string | null`, so the reason it had just logged could not leave; and the resolver reported the generic. The layer people see is the fourth; the information died at the first.
+
+  **`PutObject`'s `Promise<boolean>` contract is deliberately untouched.** `FileStorageBase` documents boolean-means-success and every driver implements it, so making it throw would break every driver and caller. Every `return false` / `return true` in the driver is byte-for-byte what it was — this is only about not _erasing_ the cause on the way up.
+
+  The Drive driver gains `describeGoogleApiError`, which extracts named fields (`code`, `message`, `errors[].reason`, `errors[].message`, `response.data.error.message`) — an allowlist rather than a dump, because MJStorage ships `rawErrorLogging.guard.test.ts` forbidding drivers from logging a vendor error wholesale. The four catches that rethrow a generic now append the cause, matching the precedent already in that file at `CreatePreAuthDownloadUrl`.
+
+  **Breaking for direct callers of `storeRealtimeRecording`** (hence minor on `@memberjunction/ai-agents`): it returns `{ FileID, ErrorMessage }` rather than `string | null`. A caller that used the returned id directly now reads `.FileID`; the null check becomes a check on `FileID`, with `ErrorMessage` carrying the reason that was previously unreachable.
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/network-utils@6.1.0-edge.5
+  - @memberjunction/credentials@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/credentials@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

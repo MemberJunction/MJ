@@ -4,7 +4,7 @@ export type {
   OutputGroups, StatementType,
 } from './types.js';
 export {
-  createConversionContext, createConversionStats, createOutputGroups,
+  createConversionContext, createConversionStats, createOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_UNPARSED, GAP_MARKER_BATCH_ERROR,
 } from './types.js';
 
 // Statement classifier

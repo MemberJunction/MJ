@@ -1232,6 +1232,18 @@ export class NavigationService implements OnDestroy {
    * This updates the tab's configuration and triggers a URL sync via the shell's
    * workspace configuration subscription.
    *
+   * 🚨 NEVER CALL THIS FROM A RESOURCE COMPONENT OR DASHBOARD. "The active tab" is whatever the
+   * user is looking at right now, which is not necessarily the tab the caller lives in. A component
+   * whose async work completes while it sits in a BACKGROUND tab will rewrite — and destroy — the
+   * deep link of the tab the user is actually viewing. Components use
+   * {@link BaseResourceComponent.UpdateQueryParams}, which routes to {@link UpdateTabQueryParams}
+   * with their own tab id and refuses to write when they have none.
+   *
+   * This remains only for shell-level navigation code that is, by construction, acting on behalf of
+   * the user's current tab (nothing in this repo does today).
+   *
+   * @deprecated Prefer {@link UpdateTabQueryParams} with an explicit tab id.
+   *
    * Use this instead of directly calling router.navigate() to ensure proper
    * URL management that respects app-scoped routes.
    *

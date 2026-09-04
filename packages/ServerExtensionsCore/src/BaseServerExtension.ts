@@ -17,7 +17,7 @@ import { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } fro
  *
  * ## Lifecycle
  *
- * 1. MJServer reads `serverExtensions[]` from `mj.config.cjs`
+ * 1. MJServer loads the merged `serverExtensions[]` (Open App packages + host overlay)
  * 2. For each enabled entry, looks up `@RegisterClass(BaseServerExtension, driverClass)`
  * 3. Creates instance via `ClassFactory.CreateInstance()`
  * 4. Calls `Initialize(app, config)` — extension registers routes

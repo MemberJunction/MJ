@@ -1,0 +1,3 @@
+# Only smoke SQL is committed. standard/ and large/ are generated on demand.
+standard/
+large/

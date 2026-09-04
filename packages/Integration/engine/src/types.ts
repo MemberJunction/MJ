@@ -35,6 +35,7 @@ export type SyncErrorCode =
     | 'WRITE_VERIFICATION_ERROR'
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
+    | 'OBJECT_UNAVAILABLE'
     | 'UNKNOWN_ERROR';
 
 /** Severity level of a sync error */
@@ -45,10 +46,73 @@ export function IsRetryableError(code: SyncErrorCode): boolean {
     return code === 'NETWORK_TIMEOUT' || code === 'RATE_LIMIT_EXCEEDED' || code === 'DATABASE_ERROR';
 }
 
+/**
+ * Flatten an error to the text this classifier can actually read: its own message plus every
+ * `cause` in the chain, plus any `code` property found along the way.
+ *
+ * WHY: `fetch` (undici) reports EVERY transport failure as the bare message `fetch failed` and
+ * puts the real reason — `ECONNRESET`, `ENOTFOUND`, `EAI_AGAIN`, `UND_ERR_SOCKET`, "socket hang
+ * up" — in `error.cause`. Classifying on the top-level message alone therefore saw a string that
+ * matched no pattern, fell through to UNKNOWN_ERROR/Critical, and was NOT retryable: a routine
+ * blip ended the object's fetch loop and the sync stopped early, reporting success on a partial
+ * pull. Measured on a long-running production sync, this fired every 30-60 minutes.
+ */
+function ErrorTextChain(error: unknown): string {
+    const parts: string[] = [];
+    let current: unknown = error;
+    for (let depth = 0; current != null && depth < 5; depth++) {
+        if (typeof current === 'string') {
+            parts.push(current);
+            break;
+        }
+        if (current instanceof Error) {
+            parts.push(current.message);
+        } else if (typeof current === 'object') {
+            const asRecord = current as Record<string, unknown>;
+            if (typeof asRecord['message'] === 'string') parts.push(asRecord['message']);
+        } else {
+            parts.push(String(current));
+            break;
+        }
+        const code = (current as Record<string, unknown>)['code'];
+        if (typeof code === 'string') parts.push(code);
+        const errno = (current as Record<string, unknown>)['errno'];
+        if (typeof errno === 'string') parts.push(errno);
+        current = (current as Record<string, unknown>)['cause'];
+    }
+    return parts.join(' | ');
+}
+
+/**
+ * Transport-level failures that are transient by nature: the request never reached a decision,
+ * so retrying is correct. Kept as an explicit list rather than a loose substring so it cannot
+ * quietly swallow deterministic errors (the mistake the DATABASE_ERROR branch below already
+ * had to be narrowed for).
+ */
+const TRANSIENT_NETWORK_SIGNALS = [
+    'fetch failed',      // undici's blanket message — the real cause is in `cause`
+    'socket hang up',
+    'econnreset',
+    'enotfound',         // DNS blip; the vendor host resolves again moments later
+    'eai_again',         // transient DNS failure, explicitly retryable per getaddrinfo
+    'epipe',
+    'ehostunreach',
+    'enetunreach',
+    'etimedout',
+    'und_err_',          // undici's own error family (socket, connect timeout, headers timeout)
+    'terminated',        // undici body/stream termination mid-response
+];
+
 /** Classify an error from its message/type into a structured code and severity */
 export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: ErrorSeverity } {
     const message = error instanceof Error ? error.message : String(error);
-    const lower = message.toLowerCase();
+    const lower = ErrorTextChain(error).toLowerCase() || message.toLowerCase();
+
+    // Checked FIRST: a transport failure carries no verdict from the server, so it must never be
+    // shadowed by a keyword that happens to appear in a nested cause chain.
+    if (TRANSIENT_NETWORK_SIGNALS.some(signal => lower.includes(signal))) {
+        return { Code: 'NETWORK_TIMEOUT', Severity: 'Warning' };
+    }
 
     if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('econnreset')) {
         return { Code: 'NETWORK_TIMEOUT', Severity: 'Warning' };
@@ -440,6 +504,30 @@ export interface SourceObjectInfo {
      * when the source does not expose a documented watermark.
      */
     IncrementalWatermarkField?: string;
+    /**
+     * Whether `Fields` is the object's COMPLETE column list for this account.
+     *
+     * Sources fall into three shapes and only the source knows which it is:
+     *   - it describes no columns at all (declared metadata is the whole truth),
+     *   - it returns only the account's CUSTOM columns (additive — the standard columns
+     *     still exist, the source simply did not restate them),
+     *   - it returns the full mapping (a column absent here is genuinely gone).
+     *
+     * Only the third shape may deactivate columns. This was previously INFERRED from
+     * "the field list came back non-empty", which cannot tell the second shape from the
+     * third — so a custom-only source looked authoritative and its standard columns were
+     * candidates for deactivation.
+     *
+     * Undefined means the object has not said, and the CONNECTOR's claim
+     * (`DiscoveryIsAuthoritative`, surfaced as `SourceSchemaInfo.IsAuthoritative`) is inherited:
+     * a connector affirming it returns the complete gamut is affirming it for the fields the same
+     * describe call returned. Since that claim defaults to false and a scoped introspection forces
+     * it false, an undeclared object under a non-affirming connector is still never deactivated.
+     *
+     * So set this `false` explicitly on an object whose describe is custom-only while the rest of
+     * the connector's discovery is complete — that is the one case the inherited claim gets wrong.
+     */
+    FieldsAreAuthoritative?: boolean;
 }
 
 /** One field/column in a source object discovered during introspection. */
@@ -502,6 +590,26 @@ export interface SourceFieldInfo {
     IsForeignKey?: boolean;
     /** If FK, which source object it references (null if not a FK). */
     ForeignKeyTarget: string | null;
+    /**
+     * How the sync engine should treat this field.
+     *
+     * - undefined / 'Sync' — normal behaviour (map, hash, persist).
+     * - 'Exclude' — the field is stripped from every fetched record BEFORE field
+     *   mapping. It reaches neither the mapped row, nor the CustomOverflow column,
+     *   nor the content-hash basis, so it stops influencing change detection.
+     *
+     * For payload a connector knows to be worthless or redundant at the field level:
+     * vendor UI state riding along on every record (Totara `preferences` — file-picker
+     * recents on 100% of rows), cosmetic configuration (`courseformatoptions`), or an
+     * embedded collection that re-derives an object already synced in its own right
+     * (`enrolledcourses` re-deriving Enrolled_Users). Exclusion — not field-map
+     * deactivation, which merely REROUTES the value into CustomOverflow, from which
+     * the custom-column promoter can resurrect it.
+     *
+     * Persisted into IntegrationObjectField.Configuration (JSON) by schema sync, so
+     * no migration is needed and existing installs pick it up on their next sync.
+     */
+    SyncDirective?: 'Sync' | 'Exclude';
 }
 
 /** One foreign key relationship in a source object. */

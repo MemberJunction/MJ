@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
+import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -191,9 +192,14 @@ const multiTenancySchema = z.object({
 });
 
 const telemetrySchema = z.object({
-  enabled: zodBooleanWithTransforms().default(
-    process.env.MJ_TELEMETRY_ENABLED !== 'false' // Enabled by default unless explicitly disabled
-  ),
+  // NOTE: MJ_TELEMETRY_ENABLED is read in DEFAULT_SERVER_CONFIG, not here.
+  //
+  // A Zod `.default()` only fires when the key is ABSENT from the parsed object, and
+  // DEFAULT_SERVER_CONFIG — the base of the config merge — always supplies `telemetry.enabled`.
+  // The key is therefore never absent, so a `.default(process.env...)` here could never take
+  // effect. Owning it in one place keeps the env var working and stops this line from claiming
+  // a behaviour it does not have.
+  enabled: zodBooleanWithTransforms().default(true),
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
@@ -710,9 +716,15 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentRuns: 3
   },
 
-  // Telemetry defaults
+  // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.
+  //
+  // The env read lives HERE rather than in telemetrySchema for the same reason as
+  // loggingSettings.graphql.logVariables below: this object is the merge BASE, so any key it
+  // supplies is always present by the time Zod parses, and a schema-level `.default()` can never
+  // fire. An unset (or empty) variable leaves telemetry enabled; anything parseBooleanEnv reads as
+  // false ('false', '0', 'no', 'off') disables it.
   telemetry: {
-    enabled: true,
+    enabled: TelemetryEnabledDefault(process.env.MJ_TELEMETRY_ENABLED),
     level: 'standard'
   },
 

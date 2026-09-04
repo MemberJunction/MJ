@@ -168,4 +168,74 @@ describe('ProviderBase write-invalidation event-bus subscription scaling', () =>
         // so all three re-executed instead of replaying a stale lingered result.
         expect(refetchCount).toBe(3);
     });
+
+    /**
+     * The process-wide subscription is guarded by the identity of the bus it attached to, NOT by a
+     * one-shot boolean. `MJGlobal.Reset()` replaces `_eventsSubject` — and therefore the `_events$`
+     * observable `GetEventListener()` hands back — with a brand-new Subject; `resetMJSingletons()`
+     * has the same effect by deleting the singleton out of the global object store. Under a boolean
+     * latch the fan-out stays attached to the orphaned Subject for the rest of the process, and the
+     * failure is silent: no error, just linger entries that quietly stop being invalidated.
+     */
+    it('re-wires to a replaced event bus — a provider minted after MJGlobal.Reset() still gets invalidated', async () => {
+        const user = makeUser();
+
+        // Wire the fan-out against the CURRENT bus.
+        await makeAndTouchProvider(user);
+
+        // Swap the bus out from under it.
+        MJGlobal.Instance.Reset();
+
+        const provider = await makeAndTouchProvider(user);
+
+        let refetchCount = 0;
+        vi.spyOn(provider as never, 'InternalRunViews').mockImplementation((async () => {
+            refetchCount++;
+            return [makeRunViewResult([{ ID: '1', Name: 'A' }])];
+        }) as never);
+        await provider.RunViews([{ EntityName: 'Customers', ResultType: 'simple' }], user);
+        refetchCount = 0;
+
+        // Raised on the NEW bus. With a boolean latch the fan-out is still listening to the
+        // discarded Subject, so this never reaches the provider and the lingered entry survives.
+        raiseEntityEvent('save', 'Customers');
+
+        await provider.RunViews([{ EntityName: 'Customers', ResultType: 'simple' }], user);
+
+        expect(refetchCount).toBe(1);
+    });
+
+    /**
+     * Companion to the test above, covering the OTHER half of the fix: the static bus check runs on
+     * every call, above the per-instance `_lingerInvalidationWired` guard. Without that hoist, only
+     * a brand-new provider can re-wire — so short-lived server providers self-heal on the next
+     * request, but a long-lived one (Explorer's client provider, MJServer's system provider) stays
+     * bound to the dead Subject indefinitely.
+     */
+    it('re-wires an ALREADY-registered provider — the static check runs on every call, not just the first', async () => {
+        const user = makeUser();
+
+        // Registers BEFORE the swap, so its `_lingerInvalidationWired` flag is already true.
+        const provider = await makeAndTouchProvider(user);
+
+        MJGlobal.Instance.Reset();
+
+        let refetchCount = 0;
+        vi.spyOn(provider as never, 'InternalRunViews').mockImplementation((async () => {
+            refetchCount++;
+            return [makeRunViewResult([{ ID: '1', Name: 'A' }])];
+        }) as never);
+
+        // A DIFFERENT dedup key, so this is a fresh execution rather than a linger hit —
+        // ensureInflightViewInvalidation() is only reached on the fresh-execution path in
+        // RunViewsUncoalesced, which is where the re-check has to happen.
+        await provider.RunViews([{ EntityName: 'Customers', ResultType: 'simple', ExtraFilter: 'Name IS NOT NULL' }], user);
+        refetchCount = 0;
+
+        raiseEntityEvent('save', 'Customers');
+
+        await provider.RunViews([{ EntityName: 'Customers', ResultType: 'simple', ExtraFilter: 'Name IS NOT NULL' }], user);
+
+        expect(refetchCount).toBe(1);
+    });
 });

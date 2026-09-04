@@ -43,6 +43,7 @@
  */
 
 import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJConversationEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
@@ -239,7 +240,7 @@ async function findConversationByEgressID(egressID: string, contextUser: UserInf
   const found = await rv.RunView<{ ID: string }>(
     {
       EntityName: CONVERSATION_ENTITY,
-      ExtraFilter: `EgressID='${escapeSql(egressID)}' AND Type='${escapeSql(MEETING_ROOM_CONVERSATION_TYPE)}' AND (IsArchived IS NULL OR IsArchived=0)`,
+      ExtraFilter: `EgressID='${EscapeSQLString(egressID)}' AND Type='${EscapeSQLString(MEETING_ROOM_CONVERSATION_TYPE)}' AND (IsArchived IS NULL OR IsArchived=0)`,
       Fields: ['ID'],
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: 1,
@@ -259,7 +260,7 @@ async function findConversationByRoomName(roomName: string, contextUser: UserInf
   const found = await rv.RunView<{ ID: string }>(
     {
       EntityName: CONVERSATION_ENTITY,
-      ExtraFilter: `ExternalID='${escapeSql(roomName)}' AND Type='${escapeSql(MEETING_ROOM_CONVERSATION_TYPE)}' AND (IsArchived IS NULL OR IsArchived=0)`,
+      ExtraFilter: `ExternalID='${EscapeSQLString(roomName)}' AND Type='${EscapeSQLString(MEETING_ROOM_CONVERSATION_TYPE)}' AND (IsArchived IS NULL OR IsArchived=0)`,
       Fields: ['ID'],
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: 1,
@@ -424,9 +425,4 @@ async function stampConversationRecording(
 function resolveStorageAccountForProvider(providerID: string): string | null {
   const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
   return accounts.length > 0 ? accounts[0].ID : null;
-}
-
-/** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
-function escapeSql(value: string): string {
-  return value.replace(/'/g, "''");
 }

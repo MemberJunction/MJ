@@ -7,7 +7,7 @@
 /* Single field - inline pill */
 .form-response-pill.single-field {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   vertical-align: middle;
   gap: 6px;
   padding: 4px 12px;
@@ -19,12 +19,18 @@
   font-weight: 600;
   box-shadow: var(--mj-shadow-md);
   cursor: default;
-  white-space: nowrap;
+  /* A chosen option can be a full sentence — wrap it instead of running past the message. */
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .form-response-pill.single-field i {
   font-size: 11px;
   opacity: 0.95;
+  flex: 0 0 auto;
+  margin-top: 3px;
 }
 
 /* Multi-field - card layout */
@@ -32,7 +38,10 @@
   display: inline-block;
   max-width: min(800px, 100%);
   width: auto;
-  min-width: 400px;
+  /* min-width beats max-width, so an unconditional 400px overflows any container
+     narrower than that — and the media queries below key off the viewport, not the
+     message column, so a narrow chat panel on a wide screen never reaches them. */
+  min-width: min(400px, 100%);
   margin: 8px 0;
   vertical-align: top;
 }
@@ -117,7 +126,7 @@
 /* Responsive adjustments */
 @media (max-width: 600px) {
   .form-response-pill.multi-field {
-    min-width: 300px;
+    min-width: min(300px, 100%);
   }
 }
 

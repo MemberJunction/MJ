@@ -66,6 +66,23 @@ export interface MessageArtifactRef {
 }
 
 /**
+ * An artifact known to be attached to a message whose entity rows are still loading.
+ *
+ * These fields all come off `LazyArtifactInfo`, which the conversation query populates
+ * synchronously — only the artifact and version ENTITIES are lazy, because a version's `Content`
+ * can be arbitrarily large. Carrying the display data rather than a bare count means the
+ * placeholder can name what is arriving and match its final styling.
+ */
+export interface MessagePendingArtifactRef {
+  artifactId: string;
+  artifactName: string;
+  visibility: string;
+}
+
+/** Shared empty result so the placeholder getter allocates nothing once loading has finished. */
+const NO_PENDING_ARTIFACTS: readonly MessagePendingArtifactRef[] = Object.freeze([]);
+
+/**
  * Component for displaying a single message in a conversation
  * Follows the dynamic rendering pattern from skip-chat for optimal performance
  * This component is created dynamically via ViewContainerRef.createComponent()
@@ -98,6 +115,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
+
+  /**
+   * Artifacts attached to this message whose entity rows have not arrived yet.
+   *
+   * The parent knows these synchronously — the message-to-artifact map is already in memory —
+   * while loading each artifact and version row is not. Without them the message rendered as
+   * finished with nothing where the image belonged, then the card appeared unannounced seconds
+   * later, which reads as "generation failed" rather than "still loading".
+   *
+   * Set alongside, not instead of, {@link artifacts}: on a message that already shows a report and
+   * is still loading an image, both render at once. Entries whose artifact has since loaded are
+   * filtered out by {@link pendingArtifactPlaceholders}.
+   */
+  @Input() public pendingArtifacts: readonly MessagePendingArtifactRef[] = [];
 
   /**
    * Optional additive per-message slot template (forwarded from chat-area's
@@ -309,10 +340,44 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * stuck or forever-spinning conversations without any code changes.
    */
   public onMessageBubbleClick(event: MouseEvent): void {
+    const recordBadge = (event.target as HTMLElement | null)?.closest?.('.mention-badge.record') as HTMLElement | null;
+    if (recordBadge) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openRecordLinkBadge(recordBadge);
+      return;
+    }
     if (!event.shiftKey || !this.isAIMessage) return;
     event.preventDefault();
     event.stopPropagation();
     this.diagnosticRequested.emit(this.message.ID);
+  }
+
+  private openRecordLinkBadge(el: HTMLElement): void {
+    const entityName = el.getAttribute('data-record-entity');
+    const keysJson = el.getAttribute('data-record-keys');
+    if (!entityName) return;
+    let content: { type: 'record'; name: string; entityName: string; keys?: Record<string, string | number> };
+    try {
+      const keys = keysJson ? JSON.parse(keysJson) as Record<string, string | number> : {};
+      content = { type: 'record', name: el.textContent?.trim() || entityName, entityName, keys };
+    } catch {
+      return;
+    }
+    const entity = this.ProviderToUse.EntityByName(entityName);
+    if (!entity) {
+      console.warn('Record link: unknown entity', entityName);
+      return;
+    }
+    const compositeKey = ConversationUtility.CompositeKeyFromRecordLink(
+      content,
+      entity.PrimaryKeys.map(pk => pk.Name)
+    );
+    if (!compositeKey) {
+      console.warn('Record link: incomplete primary key', entityName, keysJson);
+      return;
+    }
+    this.openEntityRecord.emit({ entityName, compositeKey });
   }
 
   /**
@@ -577,7 +642,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   private renderMentionHTML(content: any, agents: any[], users: any[]): string {
-    let name = content.name;
+    let name = typeof content.name === 'string' ? content.name : '';
     let iconClass = '';
     let logoURL = '';
     let configPresetName = '';
@@ -625,24 +690,36 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       if (skill?.Color) {
         inlineStyle = ` style="background: ${this.escapeHtml(skill.Color)}; border-color: rgba(255, 255, 255, 0.35);"`;
       }
+    } else if (content.type === 'record') {
+      name = (content.name ?? '').trim();
+      iconClass = this.normalizeIconClass('fa-solid fa-up-right-from-square');
     }
 
-    const escapedName = this.escapeHtml(name);
+    const iconOnly = content.type === 'record' && !name;
+    const escapedName = name ? this.escapeHtml(name) : '';
     const typeClass =
-      content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' ? content.type : 'user';
+      (content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' || content.type === 'record' ? content.type : 'user')
+      + (iconOnly ? ' icon-only' : '');
 
     // Build preset indicator HTML if present
     const presetIndicator = configPresetName
       ? `<span class="preset-indicator">${this.escapeHtml(configPresetName)}</span>`
       : '';
 
+    const recordOpenLabel = content.type === 'record'
+      ? (name ? `Open ${name}` : `Open ${content.entityName || 'record'}`)
+      : '';
+    const recordAttrs = content.type === 'record' && content.entityName
+      ? ` role="link" title="${this.escapeHtml(recordOpenLabel)}" aria-label="${this.escapeHtml(recordOpenLabel)}" data-record-entity="${this.escapeHtml(content.entityName)}" data-record-keys="${this.escapeHtml(JSON.stringify(ConversationUtility.RecordLinkKeyMap(content)))}"`
+      : '';
+
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${escapedName}${presetIndicator}</span>`;
     }
   }
 
@@ -854,6 +931,36 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get hasArtifact(): boolean {
     return this.displayArtifacts.length > 0;
+  }
+
+  /**
+   * Label for a pending artifact. Says what is happening as well as to what — a bare artifact name
+   * beside a spinner reads as a title, not as progress, which is the confusion this whole change
+   * exists to remove. Matches the media previews' "Loading image..." phrasing.
+   */
+  public pendingLabel(pending: MessagePendingArtifactRef): string {
+    return pending.artifactName ? `Loading ${pending.artifactName}...` : 'Loading attachment...';
+  }
+
+  /**
+   * The pending artifacts that still have no card of their own, filtered per artifact rather than
+   * suppressed wholesale: a message can hold a loaded report and an in-flight image at once, and
+   * gating on `displayArtifacts.length` would leave that image's window silent.
+   */
+  public get pendingArtifactPlaceholders(): readonly MessagePendingArtifactRef[] {
+    // Shared constant in the steady state, which the parent now keeps us in most of the time by
+    // only publishing artifacts that are genuinely still loading. The component is CheckAlways and
+    // runs a per-second refresh while an agent run is active, so allocating here would cost for
+    // the life of every message.
+    if (this.pendingArtifacts.length === 0) {
+      return NO_PENDING_ARTIFACTS;
+    }
+    // UUIDsEqual, not string equality: these two IDs come from different sources — one from the
+    // conversation query, one off a loaded entity — and SQL Server returns upper-case UUIDs where
+    // PostgreSQL returns lower-case. A case-sensitive match left a placeholder sitting above the
+    // very card it was waiting for. See guides/UUID_COMPARISON_GUIDE.md.
+    const loaded = this.displayArtifacts;
+    return this.pendingArtifacts.filter(p => !loaded.some(a => UUIDsEqual(a.artifact.ID, p.artifactId)));
   }
 
   /**

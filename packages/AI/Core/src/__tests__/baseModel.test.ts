@@ -200,3 +200,40 @@ describe('BaseModel', () => {
         expect(model.getApiKey()).toBe('secret-key');
     });
 });
+
+describe('ModelUsage.ForMedia', () => {
+    it('carries the quantity in the media fields and leaves the token fields at zero', () => {
+        const usage = ModelUsage.ForMedia('Seconds', 128.5);
+
+        expect(usage.unitKind).toBe('Seconds');
+        expect(usage.inputUnits).toBe(128.5);
+        expect(usage.outputUnits).toBe(0);
+        // Folding minutes into the token fields would make TokensUsed read as 128 tokens and
+        // corrupt every token rollup and dashboard downstream.
+        expect(usage.promptTokens).toBe(0);
+        expect(usage.completionTokens).toBe(0);
+        expect(usage.totalTokens).toBe(0);
+    });
+
+    it('accepts an output quantity for models that produce media', () => {
+        const usage = ModelUsage.ForMedia('Seconds', 0, 45);
+
+        expect(usage.inputUnits).toBe(0);
+        expect(usage.outputUnits).toBe(45);
+    });
+
+    it('counts generated images', () => {
+        const usage = ModelUsage.ForMedia('Images', 0, 3);
+
+        expect(usage.unitKind).toBe('Images');
+        expect(usage.outputUnits).toBe(3);
+    });
+
+    it('leaves unitKind undefined on token usage, which consumers read as Tokens', () => {
+        const usage = new ModelUsage(100, 50);
+
+        expect(usage.unitKind).toBeUndefined();
+        expect(usage.inputUnits).toBeUndefined();
+        expect(usage.outputUnits).toBeUndefined();
+    });
+});

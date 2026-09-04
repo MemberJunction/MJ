@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/version-history",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "Server-side version history engine providing label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore for MemberJunction record changes",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,9 +18,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3"
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5"
   },
   "repository": {
     "type": "git",

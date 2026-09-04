@@ -1,6 +1,7 @@
 import { Args, Command, Flags } from '@oclif/core';
 import { RemoveApp } from '@memberjunction/open-app-engine';
 import { confirm } from '@inquirer/prompts';
+import { resolveOrPrompt, withNonInteractiveHandling } from '../../lib/interactive-guard.js';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
@@ -43,10 +44,20 @@ export default class AppRemove extends Command {
     const spinner = ora();
 
     if (!flags.yes) {
-      const confirmed = await confirm({
-        message: `Are you sure you want to remove '${args.name}'?${flags['keep-data'] ? ' (data will be kept)' : ' This will DROP the app schema and all data.'}`,
-        default: false,
-      });
+      // Destructive: this drops a schema. A headless run must say --yes explicitly
+      // rather than have consent inferred for it.
+      const confirmed = await withNonInteractiveHandling(this, () =>
+        resolveOrPrompt<boolean>({
+          flagValue: undefined,
+          what: `Confirmation to remove '${args.name}'`,
+          suggestion: 'Pass --yes to confirm removal.',
+          prompt: () =>
+            confirm({
+              message: `Are you sure you want to remove '${args.name}'?${flags['keep-data'] ? ' (data will be kept)' : ' This will DROP the app schema and all data.'}`,
+              default: false,
+            }),
+        })
+      );
 
       if (!confirmed) {
         this.log(chalk.yellow('Removal cancelled.'));

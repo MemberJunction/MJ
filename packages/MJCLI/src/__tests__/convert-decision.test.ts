@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { decideConvertWrite, buildConversionFailureArtifact } from '../commands/migrate/convert.js';
+import { decideConvertWrite, buildConversionFailureArtifact, decideLegacyConvertExit } from '../commands/migrate/convert.js';
+import { CONVERSION_GAP_MARKERS } from '@memberjunction/sql-converter';
 
 /**
  * The exact shape `decideConvertWrite` consumes — derived from its own parameter type so the
@@ -64,6 +65,51 @@ describe('decideConvertWrite (issue #3252 Phase 4)', () => {
     expect(d.writeAsNeedsHand).toBe(true); // the hand-authored gaps still need a human
     expect(d.isGap).toBe(true); // still surfaced in the gap report
     expect(d.haltBake).toBe(false); // but the bake batch continues — mode 'baked' == DB advanced
+  });
+});
+
+describe('decideLegacyConvertExit (issue #3857)', () => {
+  const exit = (over: Partial<Parameters<typeof decideLegacyConvertExit>[0]>) =>
+    decideLegacyConvertExit({ errorCount: 0, gapCount: 0, gapFileCount: 0, allowGaps: false, ...over });
+
+  it('a clean run passes', () => {
+    expect(exit({})).toEqual({ fail: false, message: null });
+  });
+
+  it('gaps without --allow-gaps FAIL the run (the #3857 regression)', () => {
+    // Before the fix this exact state — a "-- Could not parse" marker in the written output,
+    // zero caught errors — printed `1 OK, 0 errors` and exited 0.
+    const d = exit({ gapCount: 1, gapFileCount: 1 });
+    expect(d.fail).toBe(true);
+    expect(d.message).toContain('1 conversion gap(s) in 1 file(s)');
+    expect(d.message).toContain('--allow-gaps'); // the message says what to do about it
+    expect(d.message).toContain(CONVERSION_GAP_MARKERS[0]); // …and what a gap looks like
+  });
+
+  it('gaps WITH --allow-gaps pass — the flag finally means something on the legacy path', () => {
+    expect(exit({ gapCount: 3, gapFileCount: 2, allowGaps: true })).toEqual({ fail: false, message: null });
+  });
+
+  it('errors fail regardless of --allow-gaps', () => {
+    const d = exit({ errorCount: 2, allowGaps: true });
+    expect(d.fail).toBe(true);
+    expect(d.message).toContain('errors in 2 file(s)');
+    // --allow-gaps accepts gaps, never caught conversion errors, so no gap advice is offered.
+    expect(d.message).not.toContain('--allow-gaps');
+  });
+
+  it('errors and gaps together are both named in one message', () => {
+    const d = exit({ errorCount: 1, gapCount: 4, gapFileCount: 2 });
+    expect(d.fail).toBe(true);
+    expect(d.message).toContain('errors in 1 file(s)');
+    expect(d.message).toContain('4 conversion gap(s) in 2 file(s)');
+  });
+
+  it('--allow-gaps does not suppress a concurrent error', () => {
+    const d = exit({ errorCount: 1, gapCount: 4, gapFileCount: 2, allowGaps: true });
+    expect(d.fail).toBe(true);
+    expect(d.message).toContain('errors in 1 file(s)');
+    expect(d.message).not.toContain('conversion gap(s)'); // accepted, so not a stated reason
   });
 });
 

@@ -15,6 +15,7 @@ import {
   FileSearchOptions,
   UnsupportedOperationError,
 } from '../generic/FileStorageBase';
+import { ClassRequiresSubclass, MJGlobal } from '@memberjunction/global';
 
 /**
  * Concrete implementation of FileStorageBase for testing purposes.
@@ -348,6 +349,29 @@ describe('Unified Initialize Pattern', () => {
 
       expect(driver.AccountId).toBe('override-account');
       expect(driver.AccountName).toBe('Override Account');
+    });
+  });
+
+  describe('@RequiresSubclass contract', () => {
+    // FileStorageBase's operations are all abstract, and `abstract` is erased at runtime — so
+    // without this marker the ClassFactory hands an unresolvable ServerDriverKey a hollow base
+    // instance, and the misconfiguration only surfaces later as `GetObject is not a function`.
+    it('marks FileStorageBase as unusable standalone', () => {
+      expect(ClassRequiresSubclass(FileStorageBase)).toBe(true);
+    });
+
+    it('does not mark concrete subclasses (they are perfectly instantiable)', () => {
+      expect(ClassRequiresSubclass(TestableFileStorageDriver)).toBe(false);
+    });
+
+    it('makes an unregistered driver key a hard failure instead of a hollow instance', () => {
+      expect(() =>
+        MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, 'No Such Driver Key'),
+      ).toThrow(/FileStorageBase/);
+
+      const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<FileStorageBase>(FileStorageBase, 'No Such Driver Key');
+      expect(result.Resolved).toBe(false);
+      expect(result.Instance).toBeNull();
     });
   });
 });

@@ -3,10 +3,9 @@ import { FormsModule } from '@angular/forms';
 import { AUDIO_MODEL_REGISTRY, type AudioModelConfig, type AudioModelDefinition } from '../../ai/audio-model-registry';
 
 @Component({
-  selector: 'app-model-config',
-  standalone: true,
-  imports: [FormsModule],
-  template: `
+    selector: 'app-model-config',
+    imports: [FormsModule],
+    template: `
     <div class="model-config-panel">
       <h2>Configure Voice Chat Pipeline</h2>
       <p class="description">Select models for each stage of the voice chat pipeline</p>
@@ -89,7 +88,7 @@ import { AUDIO_MODEL_REGISTRY, type AudioModelConfig, type AudioModelDefinition 
       </div>
     </div>
   `,
-  styles: [`
+    styles: [`
     .model-config-panel {
       max-width: 700px;
       margin: 40px auto;

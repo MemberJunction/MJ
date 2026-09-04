@@ -3,6 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
+import { buildVersionDownload } from './artifact-version-download.js';
 
 @Component({
   standalone: false,
@@ -187,11 +188,12 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
   onDownloadVersion(version: MJArtifactVersionEntity): void {
     try {
       const content = version.Content || '';
-      const blob = new Blob([content], { type: 'text/plain' });
+      const download = buildVersionDownload(content, version.FileName, this.artifact.Name, version.VersionNumber, version.MimeType);
+      const blob = new Blob([download.data], { type: download.mimeType });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${this.artifact.Name}_v${version.VersionNumber}.txt`;
+      link.download = download.fileName;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {

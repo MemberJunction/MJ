@@ -68,6 +68,19 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
      * scroll position, etc. — and avoids expensive re-init.
      */
     protected cache = new Map<string, ComponentRef<unknown>>();
+
+    /**
+     * A cache reattach moves this container to another tab without recreating the section components
+     * inside it, so every cached child's tab stamp has to move with it — not just the visible one.
+     * A detached section is exactly the case this matters for: it is invisible, it still holds a
+     * subscription, and left on its birth tab it would read and write that tab's params from inside
+     * a tab it no longer belongs to.
+     */
+    protected override onTabIdRebound(tabId: string): void {
+        for (const ref of this.cache.values()) {
+            this.rehomeChildToTab(ref.instance as BaseResourceComponent | undefined, tabId);
+        }
+    }
     protected currentSectionId: string | null = null;
 
     protected readonly cdr = inject(ChangeDetectorRef);
@@ -233,6 +246,12 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
         }
         const ref = this.contentHost.createComponent(reg.SubClass as Type<BaseDashboard>);
         const instance = ref.instance as BaseDashboard;
+        // Scope the embedded dashboard's query-param reads/writes to THIS container's tab. The
+        // sibling `createResourceRef` path inherits the tab id through `instance.Data`; a dashboard
+        // gets no ResourceData, so hand it the tab id explicitly. Without it the dashboard has no
+        // tab identity and its URL updates are dropped (previously: applied to whichever tab the
+        // user was viewing, which need not be this one).
+        instance.ParentTabId = this.getTabId();
         // BaseDashboard catches a failing initDashboard()/loadData(), emits Error and still signals
         // load-complete — so without this subscription an embedded dashboard's load failure would
         // render as a blank content pane with a console-only error. Surface it in LoadError, which

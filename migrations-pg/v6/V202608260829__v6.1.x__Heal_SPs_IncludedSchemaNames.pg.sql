@@ -1,0 +1,33 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
+-- ============================================================================
+
+-- Extensions
+
+-- PG-EMPTY-BY-DESIGN: on PostgreSQL these five routines are CodeGen output, not migration content.
+--
+-- The SQL Server migration heals five metadata-support procedures so they honour
+-- IncludedSchemaNames (and cascade within a schema): spUpdateExistingEntitiesFromSchema,
+-- spUpdateExistingEntityFieldsFromSchema, spDeleteUnneededEntityFields,
+-- spSetDefaultColumnWidthWhereNeeded and spUpdateSchemaInfoFromDatabase. On SQL Server those
+-- procedures are shipped as migration content, so healing them means rewriting them in a migration.
+--
+-- PostgreSQL does not get them that way. All five are EMITTED BY CODEGEN, from
+-- packages/CodeGenLib/src/Database/providers/postgresql/metadataSupportObjects.ts, with
+-- PostgreSQL-specific bodies (PL/pgSQL, information_schema/pg_catalog lookups, quoted-identifier
+-- handling) that share no text with the T-SQL originals. The SAME pull request that added this
+-- migration (#4069) also added IncludedSchemaNames to that generator — eleven times — so the
+-- PostgreSQL side of this change is delivered by regenerating the support objects, exactly as it
+-- is for every other CodeGen-owned routine.
+--
+-- Transpiling the T-SQL bodies here would therefore not be a port; it would OVERWRITE five
+-- generated PL/pgSQL routines with T-SQL-shaped ones. The converter attempted it and produced a
+-- file that does not parse (`syntax error at or near "SELECT"`, at the first statement) — which is
+-- the honest outcome, since there is no meaningful transpilation of these particular bodies.
+--
+-- Nothing is lost by leaving this empty. These procedures are consumed by CodeGen itself while it
+-- reconciles metadata against the database; they are not on any application runtime path, so a
+-- PostgreSQL deployment that has not yet re-run `mj codegen` is not degraded — it simply has the
+-- previous generation of the same routines, as it does for every generated object between codegen
+-- runs. The next `mj codegen` against a PostgreSQL database emits the healed versions.

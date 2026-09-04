@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,9 +39,9 @@ describe('InstallConfigDefaults', () => {
     expect(InstallConfigDefaults.AuthProvider).toBe('none');
   });
 
-  it('should have exactly 7 keys', () => {
+  it('should have exactly 8 keys', () => {
     const keys = Object.keys(InstallConfigDefaults);
-    expect(keys).toHaveLength(7);
+    expect(keys).toHaveLength(8);
     expect(keys).toEqual(
       expect.arrayContaining([
         'DatabaseHost',
@@ -51,6 +51,7 @@ describe('InstallConfigDefaults', () => {
         'ExplorerPort',
         'AuthProvider',
         'InstallMode',
+        'PackageManager',
       ])
     );
   });
@@ -591,5 +592,63 @@ describe('mergeConfigs', () => {
 
     const result = mergeConfigs(base, overlay);
     expect(result.AuthProviderValues).toEqual({ Domain: 'auth0.com' });
+  });
+});
+
+/* ------------------------------------------------------------------- */
+/*  PackageManager field                                               */
+/* ------------------------------------------------------------------- */
+
+describe('PackageManager config field', () => {
+  it('defaults to pnpm', () => {
+    expect(InstallConfigDefaults.PackageManager).toBe('pnpm');
+  });
+
+  describe('via environment variable', () => {
+    let saved: string | undefined;
+
+    beforeEach(() => {
+      saved = process.env.MJ_INSTALL_PACKAGE_MANAGER;
+      delete process.env.MJ_INSTALL_PACKAGE_MANAGER;
+    });
+
+    afterEach(() => {
+      if (saved !== undefined) {
+        process.env.MJ_INSTALL_PACKAGE_MANAGER = saved;
+      } else {
+        delete process.env.MJ_INSTALL_PACKAGE_MANAGER;
+      }
+    });
+
+    it('reads MJ_INSTALL_PACKAGE_MANAGER', () => {
+      process.env.MJ_INSTALL_PACKAGE_MANAGER = 'npm';
+      const config = resolveFromEnvironment();
+      expect(config.PackageManager).toBe('npm');
+    });
+
+    it('omits the field when the env var is unset', () => {
+      const config = resolveFromEnvironment();
+      expect(config.PackageManager).toBeUndefined();
+    });
+  });
+
+  describe('via config file', () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-config-pm-test-'));
+    });
+
+    afterEach(async () => {
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    });
+
+    it('accepts the canonical PackageManager key', async () => {
+      const filePath = path.join(tempDir, 'config.json');
+      await fs.writeFile(filePath, JSON.stringify({ PackageManager: 'npm', DatabaseHost: 'x' }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.PackageManager).toBe('npm');
+    });
   });
 });

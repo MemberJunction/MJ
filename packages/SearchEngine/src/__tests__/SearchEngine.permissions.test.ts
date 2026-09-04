@@ -86,6 +86,7 @@ function makeResult(
 interface MockEntity {
     Name: string;
     FirstPrimaryKey: { Name: string };
+    PrimaryKeys: Array<{ Name: string }>;
     GetUserPermisions: (u: UserInfo) => { CanRead: boolean } | null;
     UserExemptFromRowLevelSecurity: (u: UserInfo, _t: number) => boolean;
     GetEffectiveRowFilterWhereClause: (u: UserInfo, _t: number, _prefix: string) => string;
@@ -96,11 +97,14 @@ function makeEntity(opts: {
     CanRead: boolean;
     Exempt: boolean;
     RlsClause: string;
-    PrimaryKeyName?: string;
+    /** Primary key column name(s); defaults to a single `ID`. Pass several for a composite key. */
+    PrimaryKeyNames?: string[];
 }): MockEntity {
+    const keys = (opts.PrimaryKeyNames ?? ['ID']).map((Name) => ({ Name }));
     return {
         Name: opts.Name,
-        FirstPrimaryKey: { Name: opts.PrimaryKeyName ?? 'ID' },
+        FirstPrimaryKey: keys[0],
+        PrimaryKeys: keys,
         GetUserPermisions: () => ({ CanRead: opts.CanRead }),
         UserExemptFromRowLevelSecurity: () => opts.Exempt,
         GetEffectiveRowFilterWhereClause: () => opts.RlsClause,
@@ -277,6 +281,76 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
 
             expect(out).toHaveLength(1);
             expect(out[0].RecordID).toBe('aaa');
+        });
+
+        it('verifies an entity whose single primary key is not named ID against that column', async () => {
+            mockEntityByName.mockReturnValue(makeEntity({
+                Name: 'Individuals', CanRead: true, Exempt: false, RlsClause: '', PrimaryKeyNames: ['individual_id'],
+            }) as unknown as EntityInfo);
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ individual_id: 'ind-1' }] });
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('ind-1', 'Individuals', 'entity-record', 'vector')], user
+            );
+
+            expect(out).toHaveLength(1);
+            const params = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string; Fields: string[] };
+            expect(params.ExtraFilter).toBe("individual_id IN ('ind-1')");
+            expect(params.Fields).toEqual(['individual_id']);
+        });
+
+        it('verifies a composite-key result with one (F1=.. AND F2=..) term per record instead of IN() on the first column', async () => {
+            // Before: `OrderID IN ('OrderID|o1||LineNo|3')` could never match, and because this
+            // check fails closed every composite-key result was dropped as unauthorized.
+            mockEntityByName.mockReturnValue(makeEntity({
+                Name: 'Order Lines', CanRead: true, Exempt: false, RlsClause: '', PrimaryKeyNames: ['OrderID', 'LineNo'],
+            }) as unknown as EntityInfo);
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ OrderID: 'o1', LineNo: 3 }] });
+
+            const out = await engine.TestFilterByPermissions(
+                [
+                    makeResult('OrderID|o1||LineNo|3', 'Order Lines', 'entity-record', 'vector'),
+                    makeResult('OrderID|o2||LineNo|9', 'Order Lines', 'entity-record', 'vector'), // not returned → dropped
+                ],
+                user
+            );
+
+            expect(out).toHaveLength(1);
+            expect(out[0].RecordID).toBe('OrderID|o1||LineNo|3');
+            const params = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string; Fields: string[] };
+            expect(params.ExtraFilter).toBe("(OrderID='o1' AND LineNo='3') OR (OrderID='o2' AND LineNo='9')");
+            expect(params.Fields).toEqual(['OrderID', 'LineNo']);
+        });
+
+        it('matches a composite-key result regardless of segment field-name casing or UUID casing', async () => {
+            mockEntityByName.mockReturnValue(makeEntity({
+                Name: 'Order Lines', CanRead: true, Exempt: false, RlsClause: '', PrimaryKeyNames: ['OrderID', 'LineNo'],
+            }) as unknown as EntityInfo);
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ OrderID: 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890', LineNo: 3 }],
+            });
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('orderid|a1b2c3d4-e5f6-7890-abcd-ef1234567890||lineno|3', 'Order Lines', 'entity-record', 'vector')],
+                user
+            );
+
+            expect(out).toHaveLength(1);
+        });
+
+        it('ANDs the composite membership with the row filter when one applies', async () => {
+            mockEntityByName.mockReturnValue(makeEntity({
+                Name: 'Order Lines', CanRead: true, Exempt: false, RlsClause: "Region='West'", PrimaryKeyNames: ['OrderID', 'LineNo'],
+            }) as unknown as EntityInfo);
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            await engine.TestFilterByPermissions(
+                [makeResult('OrderID|o1||LineNo|3', 'Order Lines', 'entity-record', 'entity')], user
+            );
+
+            const params = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
+            expect(params.ExtraFilter).toBe("((OrderID='o1' AND LineNo='3')) AND (Region='West')");
         });
 
         it('does NOT verify entity-lane results — the hot path costs nothing extra', async () => {

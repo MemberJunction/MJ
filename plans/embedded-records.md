@@ -56,7 +56,7 @@ The word **child** remains reserved for IS-A. Collections are **related records*
 8. **`Load` of the owner waits for the tree.** After `await deal.Load()`, every provisioned embedded is a fully `Load()`'d record (fields, IS-A chain, immediate companions, nested embeddeds). Explicit related-record collections on the embedded (`Order.Lines`) stay explicit unless `LoadNested: 'related'`.
 9. **`LoadFromData` / `RunView` never fetches embeddeds.** Same N+1 rule as collections.
 10. **Recursive companion serialization.** An embedded order ships its own `Companions` (Lines, Charges, …) so a browser `deal.Save()` does not drop the order graph.
-11. **CodeGen emits the declaration.** Cross-package types resolve via existing `entityPackageName` schema → npm package map. Same-file symbols need no import.
+11. **CodeGen emits the declaration.** Cross-package types resolve via `entityImportPackages` (schema → npm). String `entityPackageName` is this emit's package, not the import map. Same-file symbols need no import. Unmapped foreign schemas fail CodeGen rather than self-importing.
 12. **No production core entity is opted in.** MJ core has no honest "this FK is a peer document that is part of my save." Integration tests register a **test-only subclass**, the same way `entity-graph` declares `Details` on `MJ: Lists`.
 13. **Construct cost is opt-in.** Only entities with a non-null `EmbeddedRecord` blob construct the related instance at `GetEntityObject` time.
 

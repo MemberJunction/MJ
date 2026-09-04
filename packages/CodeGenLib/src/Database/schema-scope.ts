@@ -1,3 +1,5 @@
+import { snapshotAuthoredExcludeSchemas } from './heal-schema-params';
+
 /**
  * Schema-scope resolution helpers for CodeGen.
  *
@@ -70,6 +72,9 @@ export interface SchemaScopeConfig {
  * @returns the schema names that were newly appended (empty when the scope is unused or already applied)
  */
 export function applyIncludeSchemaScope(allSchemas: string[], config: SchemaScopeConfig): string[] {
+  // Capture authored excludes before this run mutates excludeSchemas. Heal EXEC
+  // statements must serialize that original list, not the sibling snapshot.
+  snapshotAuthoredExcludeSchemas(config.excludeSchemas);
   if (!config.includeSchemas || config.includeSchemas.length === 0) {
     return []; // classic exclude-only behavior, unchanged
   }

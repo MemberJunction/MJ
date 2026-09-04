@@ -53,6 +53,19 @@ vi.mock('@memberjunction/skyway-sqlserver', () => ({
     },
 }));
 
+// After a successful Migrate(), RunAppMigrations heals the app's metadata for any schema that
+// isn't the core schema. That step opens a real database connection, so without this mock it
+// throws here and RunAppMigrations converts the throw into `Success: false` — which reads as a
+// transaction-mode failure even though the mode was forwarded correctly.
+//
+// Only the execute half is stubbed. `isOpenAppSchema` stays real so the test still exercises the
+// branch decision (`app_schema` !== `__mj`, so the refresh path IS taken) rather than sidestepping
+// it — the mock removes the database, not the code path.
+vi.mock('../install/open-app-metadata-refresh.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../install/open-app-metadata-refresh.js')>()),
+    executeOpenAppMetadataRefresh: vi.fn(async (): Promise<void> => undefined),
+}));
+
 import { BuildSkywayConfig, RunAppMigrations, type SkywayDatabaseConfig } from '../install/migration-runner.js';
 
 const dbConfig: SkywayDatabaseConfig = {

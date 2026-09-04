@@ -39,6 +39,7 @@ vi.mock('@memberjunction/ng-shared', () => ({
         NotifyLoadComplete = vi.fn();
         ngOnInit = vi.fn();
         ngOnDestroy = vi.fn();
+        getTabId = vi.fn(() => 'admin-tab-1');
     },
     BaseDashboard: class {},
 }));
@@ -82,6 +83,7 @@ describe('BaseAdminContainerComponent embedded-dashboard error surfacing', () =>
 
         const dashboardInstance = {
             Error: new MockEventEmitter<Error>(),
+            ParentTabId: null as string | null,
             Config: null as unknown,
             Refresh: vi.fn(),
         };
@@ -99,6 +101,9 @@ describe('BaseAdminContainerComponent embedded-dashboard error surfacing', () =>
 
         expect(ref).not.toBeNull();
         expect(container.LoadError).toBeNull();
+        // The embedded dashboard has no ResourceData of its own, so the container is its only
+        // source of tab identity — without it, its query-param writes have nowhere safe to go.
+        expect(dashboardInstance.ParentTabId).toBe('admin-tab-1');
 
         // The embedded dashboard's guarded load failed — BaseDashboard emits Error and still
         // releases the loading screen, so this is the only signal the container gets.

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/communication-engine",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Core Communication Framework Library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,13 +21,13 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.3",
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/templates": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/communication-types": "6.1.0-edge.3",
-    "@memberjunction/lists": "6.1.0-edge.3",
-    "@memberjunction/lists-base": "6.1.0-edge.3",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/templates": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/communication-types": "6.1.0-edge.5",
+    "@memberjunction/lists": "6.1.0-edge.5",
+    "@memberjunction/lists-base": "6.1.0-edge.5",
     "rxjs": "^7.8.2"
   },
   "repository": {

@@ -82,6 +82,12 @@ export const PostgreSQLQuotingKeywords: ReadonlySet<string> = new Set([
     // CONSTRAINTS / IMMEDIATE / DEFERRED in the keyword set, the tokenizer
     // double-quotes them as identifiers and PG rejects the resulting SQL.
     'CONSTRAINTS', 'IMMEDIATE', 'DEFERRED', 'SAVEPOINT', 'RELEASE',
+    // MERGE (PostgreSQL 15+) and its MATCHED sub-keyword. Every other word in a MERGE statement was
+    // already covered — USING, ON, WHEN, THEN, NOT, INSERT, UPDATE, SET, VALUES — so a converted
+    // MERGE came out as `"MERGE" __mj."X" AS tgt … WHEN "MATCHED" THEN UPDATE`, which PostgreSQL
+    // rejects with `syntax error at or near ""MERGE""`. Structurally the rest of the statement was
+    // already valid PG; only these two were being read as identifiers.
+    'MERGE', 'MATCHED',
     // SQL Server types (still appear in raw SQL fragments at runtime)
     'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
     'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',

@@ -68,12 +68,59 @@ import { readdirSync, statSync } from 'node:fs';
 import { join, resolve, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-/** Generated artifacts CodeGen keeps in lockstep, relative to the repo root. */
+/**
+ * Generated artifacts CodeGen keeps in lockstep, relative to the repo root.
+ *
+ * `entry` is the path CodeGen always writes. `splitDir` is where `fileEmit.perSchema` puts
+ * the per-schema files that `entry` then re-exports as a barrel; an artifact without one is
+ * never split. Both live on the same descriptor so a reader is handed the artifact itself
+ * rather than a name to look it up by.
+ */
 export const ARTIFACTS = {
-    subclasses: 'packages/MJCoreEntities/src/generated/entity_subclasses.ts',
-    server: 'packages/MJServer/src/generated/generated.ts',
-    forms: 'packages/Angular/Explorer/core-entity-forms/src/lib/generated/generated-forms.module.ts',
+    subclasses: {
+        entry: 'packages/MJCoreEntities/src/generated/entity_subclasses.ts',
+        splitDir: 'packages/MJCoreEntities/src/generated/entities',
+    },
+    server: {
+        entry: 'packages/MJServer/src/generated/generated.ts',
+        splitDir: 'packages/MJServer/src/generated/graphql-schemas',
+    },
+    forms: {
+        entry: 'packages/Angular/Explorer/core-entity-forms/src/lib/generated/generated-forms.module.ts',
+    },
 };
+
+/**
+ * The full generated source for one artifact: the per-schema files when CodeGen split them,
+ * the single file otherwise.
+ *
+ * Reading whichever shape is present — rather than parsing the barrel's re-exports — is
+ * deliberate. The guard then stays correct with `fileEmit.perSchema` set either way, so
+ * flipping that flag can never again turn a working guard into an exit-2 "output shape
+ * changed". Concatenating is enough because every extractor below is a regex sweep over
+ * text, so the union across files falls out for free.
+ */
+export function readArtifactSource(rootDir, artifact) {
+    const entry = readFileSync(resolve(rootDir, artifact.entry), 'utf8');
+    if (!artifact.splitDir) return entry;
+
+    // Decide on the entry file's CONTENT, not on whether the split directory exists. Turning
+    // `perSchema` off rewrites the entry file but leaves the old per-schema directory on disk,
+    // so "directory exists" would silently read a stale roster and report no drift against a
+    // monolith that had drifted — a false negative in the exact scenario this reader exists to
+    // survive. A barrel holds no roster of its own; anything else IS the roster.
+    const dirName = basename(artifact.splitDir);
+    if (!entry.includes(`export * from './${dirName}/`)) return entry;
+
+    const splitDir = resolve(rootDir, artifact.splitDir);
+    const files = existsSync(splitDir) ? readdirSync(splitDir).filter((f) => f.endsWith('.ts')).sort() : [];
+    if (files.length === 0) {
+        throw new MisconfiguredError(
+            `${artifact.entry} re-exports ${artifact.splitDir}/ but no generated files are there — the emit is incomplete.`
+        );
+    }
+    return files.map((f) => readFileSync(join(splitDir, f), 'utf8')).join('\n');
+}
 
 /**
  * Core-schema tables that exist without a generated entity, and always will.
@@ -248,16 +295,17 @@ export function extractSubclassEntities(source) {
 
 /**
  * The entity classes MJServer's generated resolvers import from `@memberjunction/core-entities`.
- * CodeGen emits this as a single import statement listing every entity it generated a
- * resolver for, so the import list IS the roster. Either quote style is accepted so a
+ * CodeGen emits one such import statement per generated file, listing every entity that file
+ * has a resolver for, so the union of those lists IS the roster — one statement when the emit
+ * is a single file, one per schema when it is split. Either quote style is accepted so a
  * Prettier or lint rewrap cannot turn this into an exit-2 "output shape changed".
  */
 export function extractServerEntities(source) {
-    const match = source.match(/import \{([^}]+)\} from ['"]@memberjunction\/core-entities['"];/);
-    if (!match) return null;
+    const matches = [...source.matchAll(/import \{([^}]+)\} from ['"]@memberjunction\/core-entities['"];/g)];
+    if (matches.length === 0) return null;
     return new Set(
-        match[1]
-            .split(',')
+        matches
+            .flatMap((m) => m[1].split(','))
             .map((s) => s.trim())
             .filter((s) => s.endsWith('Entity'))
     );
@@ -374,22 +422,22 @@ export class MisconfiguredError extends Error {}
 export function evaluate(rootDir) {
     const read = (rel) => readFileSync(resolve(rootDir, rel), 'utf8');
 
-    for (const [name, rel] of Object.entries(ARTIFACTS)) {
-        if (!existsSync(resolve(rootDir, rel))) {
+    for (const [name, artifact] of Object.entries(ARTIFACTS)) {
+        if (!existsSync(resolve(rootDir, artifact.entry))) {
             throw new MisconfiguredError(
-                `cannot find the ${name} artifact at ${rel} — run from the repo root.`
+                `cannot find the ${name} artifact at ${artifact.entry} — run from the repo root.`
             );
         }
     }
 
-    const subclassSource = read(ARTIFACTS.subclasses);
+    const subclassSource = readArtifactSource(rootDir, ARTIFACTS.subclasses);
     const entities = extractSubclassEntities(subclassSource);
-    const serverEntities = extractServerEntities(read(ARTIFACTS.server));
-    const formEntities = extractFormEntities(read(ARTIFACTS.forms));
+    const serverEntities = extractServerEntities(readArtifactSource(rootDir, ARTIFACTS.server));
+    const formEntities = extractFormEntities(readArtifactSource(rootDir, ARTIFACTS.forms));
 
     if (serverEntities === null) {
         throw new MisconfiguredError(
-            `could not find the core-entities import in ${ARTIFACTS.server} — CodeGen's output shape changed and this guard needs updating.`
+            `could not find the core-entities import in ${ARTIFACTS.server.entry} or ${ARTIFACTS.server.splitDir}/ — CodeGen's output shape changed and this guard needs updating.`
         );
     }
 

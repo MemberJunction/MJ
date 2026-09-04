@@ -597,7 +597,8 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 SkipEntityAIActions: false,
                 SkipEntityActions: false,
                 ReplayOnly: false,
-                IsParentEntityDelete: false
+                IsParentEntityDelete: false,
+                SkipRecordChanges: false
             };
             
             // Use inherited DeleteRecord method from ResolverBase

@@ -12,6 +12,7 @@ import {
     buildMetadataFooter,
     buildErrorCard,
     buildResponseFormElements,
+    buildUnopenableResourceNotes,
 } from '../teams/teams-card-builder.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -418,7 +419,97 @@ describe('teams-card-builder', () => {
         });
     });
 
+    describe('unopenable file URIs', () => {
+        const dataUri = 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBBQ=';
+
+        // Regression: Teams rendered Action.OpenUrl over a data: URI, so "Download document"
+        // appeared and did nothing when clicked. MJ inlines file artifacts as data: URIs whenever
+        // no file storage account is configured.
+        it('should not render a button for a data: URI', () => {
+            const cmds = [{ type: 'open:url', label: 'Download document', url: dataUri }];
+            expect(buildActionButtons(cmds as never)).toEqual([]);
+        });
+
+        it('should still render a button for an http(s) URL', () => {
+            const cmds = [{ type: 'open:url', label: 'Download document', url: 'https://example.com/a.docx' }];
+            const actions = buildActionButtons(cmds as never);
+            expect(actions).toHaveLength(1);
+            expect(actions[0]['url']).toBe('https://example.com/a.docx');
+        });
+
+        // Security: Teams desktop hands an unrecognised scheme to the OS URI handler, so the
+        // guard is an allow-list rather than a deny-list naming the inert schemes. A deny-list
+        // that listed only data:/blob:/file: let every one of these through as a real button.
+        it.each([
+            ['javascript:', 'javascript:alert(1)'],
+            ['vbscript:', 'vbscript:msgbox(1)'],
+            ['an OS handler scheme', 'ms-msdt:/id PCWDiagnostic'],
+            ['file:', 'file:///etc/passwd'],
+        ])('should not render a button for %s', (_label, url) => {
+            const cmds = [{ type: 'open:url', label: 'Click me', url }];
+            expect(buildActionButtons(cmds as never)).toEqual([]);
+        });
+
+        // Teams opens localhost fine (that is how the dev Explorer link works), so unlike Slack
+        // it must NOT be screened out.
+        it('should keep localhost buttons that Slack would reject', () => {
+            const cmds = [{ type: 'open:url', label: 'Open', url: 'http://localhost:4201/x' }];
+            expect(buildActionButtons(cmds as never)).toHaveLength(1);
+        });
+
+        it('should name the dropped file in a body note', () => {
+            const cmds = [{ type: 'open:url', label: 'Download document', url: dataUri }];
+            const notes = buildUnopenableResourceNotes(cmds as never);
+            expect(notes).toHaveLength(1);
+            expect(notes[0]['text']).toContain('Download document');
+            expect(notes[0]['text']).toContain('View in MJ Explorer');
+        });
+
+        it('should produce no notes when every URL is openable', () => {
+            const cmds = [{ type: 'open:url', label: 'Open', url: 'https://example.com/a' }];
+            expect(buildUnopenableResourceNotes(cmds as never)).toEqual([]);
+        });
+    });
+
     describe('buildResponseFormElements', () => {
+        // Regression: the submit payload carried only { action } and Teams has no thread history,
+        // so a form answer resolved to the DEFAULT agent — "@Query Builder ..." was answered by
+        // Betty after the user filled in the form.
+        it('should stamp the asking agent into the submit payload', () => {
+            const form = {
+                submitLabel: 'Send',
+                questions: [{ id: 'q1', label: 'Which org?', type: { type: 'text' as const } }],
+            };
+            const els = buildResponseFormElements(form as never, 'Query Builder');
+            const actionSet = els.find(e => e['type'] === 'ActionSet') as Record<string, unknown>;
+            const action = (actionSet['actions'] as Record<string, unknown>[])[0];
+
+            expect(action['data']).toEqual({ action: 'mj:form_submit', mj_agent: 'Query Builder' });
+        });
+
+        it('should omit mj_agent when no agent name is supplied', () => {
+            const form = {
+                questions: [{ id: 'q1', label: 'Which org?', type: { type: 'text' as const } }],
+            };
+            const els = buildResponseFormElements(form as never);
+            const actionSet = els.find(e => e['type'] === 'ActionSet') as Record<string, unknown>;
+            const action = (actionSet['actions'] as Record<string, unknown>[])[0];
+
+            expect(action['data']).toEqual({ action: 'mj:form_submit' });
+        });
+
+        // mj_agent must not be mistaken for an answer — extractFormFields keys off `mj_form_`.
+        it('should not name the agent key with the form-field prefix', () => {
+            const form = {
+                questions: [{ id: 'q1', label: 'Which org?', type: { type: 'text' as const } }],
+            };
+            const els = buildResponseFormElements(form as never, 'Query Builder');
+            const actionSet = els.find(e => e['type'] === 'ActionSet') as Record<string, unknown>;
+            const data = (actionSet['actions'] as Record<string, unknown>[])[0]['data'] as Record<string, unknown>;
+
+            expect(Object.keys(data).some(k => k.startsWith('mj_form_'))).toBe(false);
+        });
+
         it('should render form title and description', () => {
             const form = {
                 title: 'Campaign Settings',

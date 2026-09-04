@@ -9,8 +9,8 @@ import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-dat
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
-import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
-import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap } from './integration/EntityMapLifecycle.js';
+import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -58,7 +58,7 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
-import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, SetVerboseLogging } from '@memberjunction/core';
+import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -81,7 +81,8 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/server-extensions-core';
+import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount } from '@memberjunction/server-extensions-core';
+import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
@@ -145,6 +146,7 @@ export * from './resolvers/RunClusterAnalysisResolver.js';
 export * from './resolvers/GenerateSeedTaxonomyResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/IntegrationProgressResolver.js';
+export * from './resolvers/IdentityClaimRedemptionResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
@@ -219,6 +221,13 @@ import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
+  /**
+   * Server-extension configs discovered from installed Open App server packages
+   * (`dynamicPackages.server[]`). Merged with host `mj.config.cjs` `serverExtensions[]`
+   * at load time — host `DriverClass` wins. Omit (or pass `[]`) for host-only loading,
+   * which is the historical `serve()` behavior.
+   */
+  serverExtensions?: ServerExtensionConfig[];
 };
 
 const localPath = (p: string) => {
@@ -1275,7 +1284,28 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // These must be registered before the unified auth middleware so webhook
   // requests aren't rejected for lacking an MJ bearer token.
   const extensionLoader = new ServerExtensionLoader();
-  const extensionConfigs = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
+  // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
+  // (and remains the only source for host-only extensions such as Slack/Teams).
+  // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
+  // so a new pre-auth app.use(...) in serve() must also be added to
+  // coreReservedServerExtensionRoots() — otherwise an Open App can claim it.
+  const extensionConfigs = prepareServerExtensionConfigs(
+    mergeServerExtensionConfigs(
+      options?.serverExtensions ?? [],
+      (configInfo.serverExtensions ?? []) as ServerExtensionConfig[],
+    ),
+    {
+      onInvalid: (message) => LogError(message),
+      onOverlap: (message) => LogStatus(message),
+      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
+    },
+  );
+  // These routes mount BEFORE createUnifiedAuthMiddleware. Name every one so an
+  // operator who installed an Open App for its entities can see the pre-auth HTTP
+  // surface and suppress it with host serverExtensions[].Enabled = false.
+  for (const cfg of extensionConfigs) {
+    LogStatus(`Server extension ${describeServerExtensionMount(cfg)}`);
+  }
   if (extensionConfigs.length > 0) {
     await extensionLoader.LoadExtensions(app, extensionConfigs);
   }
@@ -1594,6 +1624,49 @@ const RSU_PENDING_WORK_STALE_MINUTES = 30;
  * starts sync, and marks each row Completed only AFTER its work actually succeeded —
  * so a crash mid-processing leaves the row Pending and re-processable on the next boot.
  */
+/**
+ * Complete a custom-column promotion whose DDL landed before the restart.
+ *
+ * Promotion registers this rather than finishing inline, because the restart is what loads the
+ * regenerated entity classes — so the IntegrationObjectField rows, the field maps and the
+ * overflow→column spread all belong on this side of it, where the columns are real typed
+ * properties rather than dynamic .Get/.Set.
+ *
+ * The work itself lives on the promoter, so promotion logic stays in one class.
+ */
+async function ProcessPromoteColumnsPendingWork(
+  // Typed structurally rather than by name: schema-engine is only reachable here through a dynamic
+  // import (it is a workspace package, not published), so a static type import is not available.
+  // Deriving the payload from CompletePromotion's own signature keeps the two in step regardless.
+  item: { PromotedColumns?: Parameters<IntegrationCustomColumnPromoter['CompletePromotion']>[0] },
+  pendingWorkID: string,
+  rsm: {
+    CompletePendingWork(id: string, user: unknown): Promise<unknown>;
+    FailPendingWork(id: string, message: string, user: unknown): Promise<unknown>;
+  },
+  systemUser: ConstructorParameters<typeof IntegrationCustomColumnPromoter>[0],
+): Promise<void> {
+  const promoted = item.PromotedColumns ?? [];
+  if (promoted.length === 0) {
+    // Nothing to do, but the row must not linger and be retried forever.
+    await rsm.CompletePendingWork(pendingWorkID, systemUser);
+    console.warn('[RSU] promote-columns pending work carried no PromotedColumns — nothing to complete.');
+    return;
+  }
+  try {
+    const promoter = new IntegrationCustomColumnPromoter(systemUser);
+    const columns = await promoter.CompletePromotion(promoted);
+    // Completed only after the work actually succeeded: a crash before this leaves the row
+    // visible and re-processable, which is the whole point of the durable queue.
+    await rsm.CompletePendingWork(pendingWorkID, systemUser);
+    console.log(`[RSU] promote-columns: completed ${columns.length} column(s) across ${promoted.length} entity(ies).`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await rsm.FailPendingWork(pendingWorkID, `promote-columns completion failed: ${msg}`, systemUser);
+    console.error(`[RSU] promote-columns completion failed: ${msg}`);
+  }
+}
+
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
@@ -1618,10 +1691,26 @@ async function processRSUPendingWork(): Promise<void> {
   for (const pending of pendingItems) {
     const pendingWorkID = pending.ID;
     const item = pending.Work;
+    // Declared outside the try so the catch can narrow a retry to what is still outstanding: what
+    // actually got mapped this attempt. Each retry is then strictly smaller, and one poison object
+    // cannot keep re-running its healthy siblings.
+    const mappedObjectNames = new Set<string>();
     try {
       const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
 
       await Metadata.Provider.Refresh(); // global-provider-ok: server startup recovery — one-shot global cache refresh
+
+      // Custom-column promotion registers its follow-up here rather than finishing inline, because
+      // the restart is what loads the regenerated entity classes. Everything downstream of the
+      // ADD COLUMN — the IntegrationObjectField rows, the field maps, the overflow spread — runs
+      // now, with typed access to the columns that did not exist in the previous process.
+      //
+      // Absent WorkType means apply-objects: every row written before that field existed is one,
+      // and the branch below must keep treating it that way.
+      if (item.WorkType === 'promote-columns') {
+        await ProcessPromoteColumnsPendingWork(item, pendingWorkID, rsm, systemUser);
+        continue;
+      }
 
       // Resolve connector
       const rv = new RunView();
@@ -1728,15 +1817,16 @@ async function processRSUPendingWork(): Promise<void> {
         }
 
         if (isNewMap) createdEntityMapIDs.push(entityMapID);
+        mappedObjectNames.add(objName);
 
         // Create field maps — filter by SourceObjectFields (null = all)
         try {
           const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
 
           const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
-          const fieldsToMap = selectedFields
-            ? (sourceObj?.Fields ?? []).filter(f => selectedFields.some(sf => sf.toLowerCase() === f.Name.toLowerCase()))
-            : (sourceObj?.Fields ?? []);
+          // Always maps the PRIMARY KEY, selected or not — see selectFieldsToMap for why identity
+          // cannot be left to the selection.
+          const fieldsToMap = selectFieldsToMap(sourceObj?.Fields ?? [], selectedFields);
 
           // Load existing field maps to avoid duplicates
           const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({
@@ -1881,8 +1971,20 @@ async function processRSUPendingWork(): Promise<void> {
       await rsm.CompletePendingWork(pendingWorkID, systemUser);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${message}`);
-      await rsm.FailPendingWork(pendingWorkID, message, systemUser);
+      const attempt = (item.Attempts ?? 0) + 1;
+      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID} (attempt ${attempt}): ${message}`);
+      // RSU is a long chain — migrations, CodeGen, commit, compile, restart — and a failure partway
+      // through is often transient (a restart landing mid-consumption, one bad provider call).
+      // Failing terminally on the first error means the objects this item would have mapped are
+      // silently never mapped, and the only recovery is someone noticing and re-applying by hand.
+      const remaining = (item.SourceObjectNames ?? []).filter(n => !mappedObjectNames.has(n));
+      const requeued = await rsm.RetryPendingWork(pendingWorkID, item, remaining, systemUser);
+      if (!requeued) {
+        // Budget spent, or nothing left to retry. This message is the operator's only signal, so
+        // it names what was left undone rather than just the error.
+        const undone = remaining.length > 0 ? ` Objects never mapped: ${remaining.slice(0, 20).join(', ')}${remaining.length > 20 ? ` (+${remaining.length - 20} more)` : ''}.` : '';
+        await rsm.FailPendingWork(pendingWorkID, `${message}${undone} Re-apply this connector to finish it.`, systemUser);
+      }
     }
   }
 

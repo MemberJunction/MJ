@@ -1,45 +1,97 @@
 import { Hook } from '@oclif/core';
 import figlet from 'figlet';
+import { INTERACTIVE_ENV, ResolveOutputFormat, ShouldSuppressChrome } from '@memberjunction/cli-core';
 import { LIGHT_COMMANDS } from '../light-commands.js';
+
+/**
+ * Mirror of `DYNAMIC_PACKAGES_MODE_ENV_VAR` from @memberjunction/dynamic-packages, inlined so
+ * LIGHT commands (version, help, migrate, …) do not pay for that package — and its cosmiconfig
+ * import — at startup. `dynamic-packages.test.ts` asserts the two stay equal.
+ */
+export const DYNAMIC_PACKAGES_MODE_ENV_VAR = 'MJ_DYNAMIC_PACKAGES';
+
+/**
+ * Strips a global boolean flag from argv in place and reports whether it was there.
+ *
+ * Global chrome flags have to work on ANY command, including the ~80 that are still
+ * plain oclif `Command`s and don't declare them — oclif's strict parser would reject
+ * an undeclared flag with "Nonexistent flag". So the hook consumes them here and
+ * signals downstream through the environment instead.
+ */
+function takeGlobalFlag(argv: string[], flag: string): boolean {
+  let found = false;
+  for (let i = argv.length - 1; i >= 0; i--) {
+    if (argv[i] === flag) {
+      argv.splice(i, 1);
+      found = true;
+    }
+  }
+  return found;
+}
+
+/** Reads `--format=x` or `--format x` out of raw argv, before any command has parsed it. */
+function readFormatArg(argv: string[]): string | undefined {
+  const eq = argv.find((a) => a.startsWith('--format='));
+  if (eq) return eq.slice('--format='.length);
+  const i = argv.indexOf('--format');
+  return i >= 0 ? argv[i + 1] : undefined;
+}
 
 const hook: Hook<'prerun'> = async function (options) {
   const argv = options.argv ?? [];
 
-  // Machine-readable output must keep stdout clean — suppress the banner AND the
-  // userAgent line entirely for `--format=json|md` and `--no-banner` (plan §1a/D4).
-  const formatArg = ((): string | undefined => {
-    const eq = argv.find((a) => a.startsWith('--format='));
-    if (eq) return eq.slice('--format='.length);
-    const i = argv.indexOf('--format');
-    return i >= 0 ? argv[i + 1] : undefined;
-  })();
-  const machineFormat = formatArg === 'json' || formatArg === 'md';
-  const noBanner = argv.includes('--no-banner');
+  // `--interactive` / `--no-interactive` override the terminal detection that decides
+  // whether a command may prompt. Like `--no-banner` they must work on every command,
+  // including the ~80 that don't declare them, so they are consumed here and forwarded
+  // via env to both BaseCLIPlugin and the unmigrated commands' interactive guards.
+  // BOTH are stripped unconditionally before either is acted on: short-circuiting the
+  // second strip would leave the losing flag in argv, where oclif's strict parser
+  // rejects it as a nonexistent flag on any command that doesn't declare it.
+  const forceOff = takeGlobalFlag(argv, '--no-interactive');
+  const forceOn = takeGlobalFlag(argv, '--interactive');
+  // Passing both resolves to off — the safe answer when the caller contradicts itself.
+  if (forceOff) process.env[INTERACTIVE_ENV] = '0';
+  else if (forceOn) process.env[INTERACTIVE_ENV] = '1';
 
-  // `--no-banner` is global chrome — every command renders the banner, so suppressing
-  // it must work on ANY command, including those not yet migrated to BaseCLIPlugin
-  // (which don't declare the flag and would otherwise fail oclif's strict parser with
-  // "Nonexistent flag"). Signal suppression to MJCLIRuntimeHost via env (so migrated
-  // commands still gate their runtime advisory) and strip the flag from argv in place
-  // so the per-command parser never sees an undeclared flag.
+  const noBanner = takeGlobalFlag(argv, '--no-banner');
   if (noBanner) {
     process.env.MJ_CLI_NO_BANNER = '1';
-    for (let i = argv.length - 1; i >= 0; i--) {
-      if (argv[i] === '--no-banner') argv.splice(i, 1);
-    }
   }
 
-  // Skip banners if --quiet flag is present (or appears to be present)
-  if (machineFormat || noBanner || argv.some((arg) => arg === '--quiet' || (/^-[^-]+/.test(arg) && arg.includes('q')))) {
-    // Still conditionally load bootstrap below — just no decorative output.
-    return await maybeLoadBootstrap(options);
+  // `--no-app-packages` skips loading the installed Open Apps' server packages (and the host's
+  // generated packages) for this one invocation, so e.g. `mj sync push` writes with the generic
+  // BaseEntity — no custom Save() logic, no lifecycle hooks. It rides the same env var the
+  // loader honours everywhere (`MJ_DYNAMIC_PACKAGES=none`), so scripts can set either.
+  if (takeGlobalFlag(argv, '--no-app-packages')) {
+    process.env[DYNAMIC_PACKAGES_MODE_ENV_VAR] = 'none';
   }
 
-  // Skip banners entirely when --json is requested — the contract for --json
-  // is that stdout is parseable JSON, and any banner above it breaks
-  // `mj … --json | jq`. This early-return also skips the userAgent line below.
-  if (options.argv?.some((arg) => arg === '--json')) {
-    return;
+  // Decide chrome with the SAME resolver the commands themselves use, rather than
+  // re-deriving the format from argv here. The two views drifting is not hypothetical:
+  // while this hook only looked for `--format` in argv, `MJ_CLI_FORMAT=json mj codegen`
+  // at a terminal printed a figlet banner and *then* a JSON envelope — the env var the
+  // command honours was invisible to the banner decision, and the pipe check that would
+  // otherwise have saved us does not fire on a TTY. Routing both through
+  // ResolveOutputFormat makes that class of mismatch unrepresentable, and picks up the
+  // format aliases (`markdown`, `console`, …) for free.
+  const { format } = ResolveOutputFormat({
+    formatFlag: readFormatArg(argv),
+    // oclif's own `--json` boolean, declared by install:claude / update:claude.
+    jsonFlag: argv.includes('--json'),
+  });
+
+  const quiet = argv.some((arg) => arg === '--quiet' || (/^-[^-]+/.test(arg) && arg.includes('q')));
+
+  // ShouldSuppressChrome covers both machine formats and a redirected stdout: a caller
+  // that piped us has already said it is a machine, and a banner in its capture buffer
+  // is pure noise.
+  const verbose = argv.includes('--verbose') || argv.includes('-v');
+
+  if (noBanner || quiet || ShouldSuppressChrome(format)) {
+    // Still conditionally load bootstrap — just no decorative output. (The old `--json`
+    // branch returned *without* loading it, which would have silently skipped class
+    // registration for any heavy command that later grew a `--json` flag.)
+    return await maybeLoadBootstrap(options, verbose);
   }
 
   // Suppress the large figlet banner for hot-path, frequently-run commands (e.g. `mj sync *`)
@@ -69,18 +121,30 @@ const hook: Hook<'prerun'> = async function (options) {
     options.context.log(options.config.userAgent + '\n');
   }
 
-  await maybeLoadBootstrap(options);
+  await maybeLoadBootstrap(options, verbose);
 };
 
 /**
  * Conditionally load MJ bootstrap for heavy commands. Light commands (version,
  * help, bump, migrate, clean, install, dbdoc/*, usage/*) skip the ~1,400 class
  * registrations for instant startup.
+ *
+ * Heavy commands then load the installed Open Apps' server packages (and the host's generated
+ * packages) through @memberjunction/dynamic-packages — AFTER the manifest, so an app's
+ * @RegisterClass wins via load-order priority, and BEFORE the command opens a database
+ * provider, the same ordering MJAPI uses. This is what makes `mj sync push`, `mj app …`,
+ * `mj test` and every other command construct an app's real entity subclasses instead of
+ * falling back to BaseEntity (issue #4199). The process ID is `cli:<command id>`, so entries
+ * can be scoped to `cli`, `cli:sync`, or one command.
  */
-async function maybeLoadBootstrap(options: { Command: { id?: string } }): Promise<void> {
+async function maybeLoadBootstrap(options: { Command: { id?: string } }, verbose = false): Promise<void> {
   const commandId = options.Command.id ?? '';
   if (!LIGHT_COMMANDS.has(commandId)) {
+    // Both modules are dynamic-imported so light commands keep their instant startup (the
+    // config module's cosmiconfig search runs at import time).
     await import('@memberjunction/server-bootstrap-lite/mj-class-registrations');
+    const { loadDynamicPackagesForCommand } = await import('../lib/dynamic-packages.js');
+    await loadDynamicPackagesForCommand(commandId, { verbose });
   }
 }
 

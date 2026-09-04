@@ -6,12 +6,11 @@
  * whether to modify it, or for display in the Database Designer UI.
  */
 
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RunView, Metadata } from '@memberjunction/core';
 
-import { escapeSqlLiteral } from '@memberjunction/database-designer-core';
 
 import { BaseDatabaseDesignerAction } from './base-database-designer.action.js';
 
@@ -140,7 +139,7 @@ export class DescribeEntityAction extends BaseDatabaseDesignerAction {
             IsRequired: boolean;
         }>({
             EntityName: 'MJ: Entity Fields',
-            ExtraFilter: `EntityID = '${escapeSqlLiteral(entityID)}'`,
+            ExtraFilter: `EntityID = '${EscapeSQLString(entityID)}'`,
             Fields: ['Name', 'Type', 'AllowsNull', 'MaxLength', 'Description', 'IsRequired'],
             OrderBy: 'Sequence ASC',
             ResultType: 'simple',

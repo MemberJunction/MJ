@@ -16,6 +16,14 @@ jobs:
     name: adopted standards
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout PR
         uses: actions/checkout@v4

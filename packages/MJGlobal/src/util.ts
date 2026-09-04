@@ -15,35 +15,39 @@ export interface GlobalObjectStore {
      * because it is possible that a given class might have copies of its code in multiple paths in a deployed application. This approach ensures that no matter how many code copies might exist, there is only one instance of the object in question by using the Global Object Store.
  * @returns
  */
+let __globalObjectStore: GlobalObjectStore | null | undefined = undefined;
+
 export function GetGlobalObjectStore(): GlobalObjectStore | null {
-    try    {
-        // we might be running in a browser, in that case, we use the window object for our global stuff
-        if (window)
-            return window as unknown as GlobalObjectStore;
-        else {
-            // if we get here, we don't have a window object, so try the global object (node environment)
-            // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-            if (global)
-                return global as unknown as GlobalObjectStore;
-            else
-                return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-        }
+    /**
+     * Memoised, and probed with `typeof`.
+     *
+     * The previous shape was `if (window)` inside a try/catch. In Node, `window` is an
+     * UNDECLARED identifier, so that line THROWS a ReferenceError on every single call and the
+     * catch falls through to `global` — correct answer, pathological path. This function sits
+     * under ClassFactory and BaseEngine hot paths, and building + unwinding that exception was
+     * measured at several percent of a busy server process. `typeof window` is the one probe
+     * that is legal on an undeclared identifier, and the environment does not change after
+     * startup, so the answer is computed once.
+     *
+     * The `&& window` is not redundant with the `typeof` guard: it keeps the one input where the
+     * two differ. `typeof null === 'object'`, so a DECLARED-but-null `window` — which SSR shims
+     * in the wild do produce — would pass a bare `typeof` check and get memoised as the store,
+     * where `if (window)` had correctly fallen through to `global`. Nothing in this repo does
+     * that today; the guard is here because MJ is embedded by callers whose environment we do
+     * not control, and because memoising the wrong answer is unrecoverable for the process.
+     */
+    if (__globalObjectStore !== undefined) return __globalObjectStore;
+    if (typeof window !== 'undefined' && window) {
+        __globalObjectStore = window as unknown as GlobalObjectStore;
+    } else if (typeof global !== 'undefined') {
+        __globalObjectStore = global as unknown as GlobalObjectStore;
+    } else {
+        // neither browser nor node (e.g. an exotic test sandbox) — callers already handle null
+        __globalObjectStore = null;
     }
-    catch (e) {
-        try {
-            // if we get here, we don't have a window object, so try the global object (node environment)
-            if (global)
-                return global as unknown as GlobalObjectStore;
-            else
-                return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-        }
-        catch (e) {
-            // if we get here, we don't have a global object either, so we're not running in a browser or node, so we're probably running in a unit test
-            // in that case, we don't have a provider saved, return null, we need to be either in node or a browser
-            return null;
-        }
-    }
+    return __globalObjectStore;
 }
+
 
 /**
  * This utility function will copy all scalar and array properties from an object to a new object and return the new object.
@@ -361,8 +365,24 @@ export function CleanJSON(inputString: string | null): string | null {
     // optionally followed by js or javascript (case-insensitive), then captures until the closing ```
     const markdownRegex = /(?:```|\\`\\`\\`)(?:json|JSON)?\s*([\s\S]*?)(?:```|\\`\\`\\`)/gi;
 
+    // Fence extraction is for responses that WRAP their JSON in a fence, or bury it in prose.
+    // It must not run on something that is already shaped like a JSON envelope: a fence found
+    // inside such a string belongs to a string VALUE, not to the response, and extracting it
+    // throws the whole document away.
+    //
+    // This was not hypothetical. An agent response embedded a mermaid diagram in a markdown
+    // string field and left one quote in the diagram unescaped. The top-level parse failed on
+    // that quote, control reached here, the regex matched the ```mermaid fence inside the string
+    // value, and CleanJSON returned the diagram's contents — discarding a 28KB response and
+    // reporting "Unexpected token 'm'". The real defect (one quote, at a known offset) never
+    // surfaced, so neither the JSON5 stage nor the AI repair stage that followed had any chance.
+    //
+    // A genuinely fence-wrapped response starts with the fence, and a prose-buried one starts
+    // with prose, so neither is affected by this guard.
+    const looksLikeJSONEnvelope = processedString.startsWith('{') || processedString.startsWith('[');
+
     // Check if the input contains Markdown code fences for JavaScript
-    const matches = Array.from(processedString.matchAll(markdownRegex));
+    const matches = looksLikeJSONEnvelope ? [] : Array.from(processedString.matchAll(markdownRegex));
 
     if (matches.length > 0) {
         // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
@@ -399,15 +419,229 @@ export function CleanJSON(inputString: string | null): string | null {
         } catch (error) {
             // that was our last attempt and it failed so we need
             // to throw an exception here with the orignal exception
-            throw new Error(`Failed to find a path to CleanJSON\n\n${originalException?.message}`);
-        }     
+            //
+            // `cause` carries the untouched top-level parse error. The message is a summary that
+            // has been mangled by every transform above it; callers that need to act on the actual
+            // syntax error (a repair pass needing the failure offset, for instance) must not have
+            // to scrape it back out of this string.
+            throw new Error(`Failed to find a path to CleanJSON\n\n${originalException?.message}`, {
+                cause: originalException ?? undefined
+            });
+        }
+    }
+}
+
+/**
+ * Outcome of a {@link RepairJSONEscaping} attempt.
+ */
+export interface JSONEscapingRepairResult {
+    /** True only when the input parsed after repair. */
+    repaired: boolean;
+    /** The repaired JSON text, present only when `repaired` is true. */
+    text?: string;
+    /** The parsed value, present only when `repaired` is true. */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    value?: any;
+    /** Zero-based offsets that were escaped, in the order they were fixed. */
+    repairedOffsets: number[];
+    /** Why the repair stopped, when `repaired` is false. */
+    reason?: string;
+}
+
+/** Upper bound on repair passes. Each pass fixes exactly one character. */
+const MAX_JSON_ESCAPING_REPAIRS = 40;
+
+/**
+ * Deterministically repairs the single most common way an LLM breaks otherwise-valid JSON:
+ * a double quote or raw control character left unescaped inside a string value.
+ *
+ * ## Why this exists
+ *
+ * Models embed rich markdown in string fields — mermaid diagrams, HTML mockups, code samples —
+ * and reliably escape most of it. A single missed quote inside a 25KB response invalidates the
+ * whole document. Nothing else in the repair chain recovers that: JSON5's leniency covers trailing
+ * commas, comments and unquoted keys, but an unescaped `"` terminates a string in JSON5 exactly as
+ * it does in JSON. The remaining fallback is an LLM round-trip on the full payload, which is slow,
+ * costly, and itself unreliable at that size.
+ *
+ * ## How it works
+ *
+ * Purely error-driven, one character per pass:
+ *
+ * 1. `JSON.parse` the text and read the failure offset from the thrown error.
+ * 2. Scan backwards from that offset for the character that ended the string early.
+ * 3. Escape that one character.
+ * 4. Re-parse. Repeat until it parses or a stopping condition trips.
+ *
+ * Every pass is validated by a real parse, so this never "pattern matches" its way to a wrong
+ * answer the way a global regex rewrite would. It converges in one pass per offending character
+ * (about two per quoted mermaid label) and gives up rather than guessing when it cannot make
+ * progress.
+ *
+ * ## Safety
+ *
+ * This can, in principle, produce valid-but-wrong JSON: escaping a quote that legitimately ended a
+ * string would merge two pieces of structure. Three properties keep that in check — it only runs
+ * after a parse has already failed (so a correct document is never touched), it only ever *adds*
+ * escapes and never deletes or reorders content, and it reports every offset it changed so callers
+ * can log, audit, or schema-check the result before trusting it. Callers holding an expected shape
+ * should validate against it; a wrong guess almost always fails shape validation.
+ *
+ * @param inputString - Raw model output, expected to be a JSON envelope
+ * @param maxRepairs - Maximum characters to escape before giving up
+ * @returns The repair outcome; `repaired` is false when the input could not be recovered
+ *
+ * @example
+ * // A mermaid relationship label whose quotes were not escaped
+ * RepairJSONEscaping('{"doc":"```mermaid\\nerDiagram\\n  A ||--o{ B : "has items"\\n```"}')
+ * // => { repaired: true, repairedOffsets: [...], value: { doc: '...' } }
+ */
+export function RepairJSONEscaping(
+    inputString: string | null,
+    maxRepairs: number = MAX_JSON_ESCAPING_REPAIRS
+): JSONEscapingRepairResult {
+    if (!inputString) {
+        return { repaired: false, repairedOffsets: [], reason: 'Input was empty.' };
+    }
+
+    let text = inputString;
+    const repairedOffsets: number[] = [];
+
+    for (let pass = 0; pass <= maxRepairs; pass++) {
+        try {
+            const value = JSON.parse(text);
+            return { repaired: pass > 0, text, value, repairedOffsets };
+        } catch (error: unknown) {
+            if (pass === maxRepairs) {
+                return {
+                    repaired: false,
+                    repairedOffsets,
+                    reason: `Still unparseable after ${maxRepairs} repairs.`
+                };
+            }
+
+            const message = error instanceof Error ? error.message : String(error);
+            const offset = extractJSONErrorOffset(message);
+            if (offset === null) {
+                return { repaired: false, repairedOffsets, reason: `No failure offset in: ${message}` };
+            }
+
+            const target = findUnescapedStringTerminator(text, offset);
+            if (target === null) {
+                return {
+                    repaired: false,
+                    repairedOffsets,
+                    reason: `No repairable character near offset ${offset}: ${message}`
+                };
+            }
+
+            text = text.slice(0, target) + escapeJSONStringChar(text[target]) + text.slice(target + 1);
+            repairedOffsets.push(target);
+        }
+    }
+
+    return { repaired: false, repairedOffsets, reason: 'Repair loop exhausted.' };
+}
+
+/**
+ * Reads the character offset out of a `JSON.parse` error message.
+ *
+ * Engines word these differently ("...at position 23011", "...at position 23011 (line 21 column
+ * 512)"), so this matches the offset itself rather than any one phrasing.
+ *
+ * @param errorMessage - Message thrown by JSON.parse
+ * @returns The offset, or null when the message carries none
+ */
+function extractJSONErrorOffset(errorMessage: string): number | null {
+    const match = /position (\d+)/i.exec(errorMessage);
+    if (!match) {
+        return null;
+    }
+    const offset = Number.parseInt(match[1], 10);
+    return Number.isFinite(offset) ? offset : null;
+}
+
+/**
+ * Given the offset where parsing failed, finds the character that ended a string value early.
+ *
+ * The parser reports where it found something unexpected, which is at or just after the character
+ * that actually broke the document. Scanning backwards from there finds the closing quote the model
+ * should have escaped — or a raw control character, which is illegal inside a JSON string and is
+ * reported at its own offset.
+ *
+ * @param text - The JSON text being repaired
+ * @param errorOffset - Offset reported by JSON.parse
+ * @returns Offset of the character to escape, or null when nothing nearby is repairable
+ */
+function findUnescapedStringTerminator(text: string, errorOffset: number): number | null {
+    // A raw control character is illegal inside a string and is flagged where it sits.
+    const atOffset = text[errorOffset];
+    if (atOffset !== undefined && isJSONControlCharacter(atOffset)) {
+        return errorOffset;
+    }
+
+    // Otherwise walk back to the quote that closed the string ahead of time. The scan is bounded:
+    // the culprit is adjacent to the failure by construction, and an unbounded walk could reach
+    // back into unrelated, correctly-formed structure.
+    const lowestOffset = Math.max(0, errorOffset - 64);
+    for (let i = Math.min(errorOffset, text.length - 1); i >= lowestOffset; i--) {
+        const char = text[i];
+        if (isJSONControlCharacter(char)) {
+            return i;
+        }
+        if (char === '"' && !isEscaped(text, i)) {
+            return i;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * True when the character must be escaped to appear inside a JSON string literal.
+ *
+ * @param char - Character to test
+ */
+function isJSONControlCharacter(char: string): boolean {
+    return char < ' ';
+}
+
+/**
+ * True when the character at `index` is escaped, accounting for runs of backslashes — in `\\"` the
+ * quote is NOT escaped, because the two backslashes escape each other.
+ *
+ * @param text - The text being inspected
+ * @param index - Index of the character in question
+ */
+function isEscaped(text: string, index: number): boolean {
+    let backslashes = 0;
+    for (let i = index - 1; i >= 0 && text[i] === '\\'; i--) {
+        backslashes++;
+    }
+    return backslashes % 2 === 1;
+}
+
+/**
+ * Escapes one character for inclusion in a JSON string literal.
+ *
+ * @param char - Character to escape
+ */
+function escapeJSONStringChar(char: string): string {
+    switch (char) {
+        case '"': return '\\"';
+        case '\n': return '\\n';
+        case '\r': return '\\r';
+        case '\t': return '\\t';
+        case '\b': return '\\b';
+        case '\f': return '\\f';
+        default: return '\\u' + char.charCodeAt(0).toString(16).padStart(4, '0');
     }
 }
 
 /**
  * This function takes in a string that may contain JavaScript code in a markdown code block and returns the JavaScript code without the code block.
- * @param javaScriptCode 
- * @returns 
+ * @param javaScriptCode
+ * @returns
  */
 export function CleanJavaScript(javaScriptCode: string): string {
     // Regular expression to match JavaScript code blocks within Markdown fences
@@ -1394,6 +1628,39 @@ export function EscapeHTML(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/**
+ * Safely escapes a string literal for use inside single-quoted SQL statements, clauses, or `ExtraFilter` predicates.
+ *
+ * Replaces each single quote with doubled single quotes (`''`) per ANSI SQL standard — the escaping
+ * mechanism supported by both SQL Server and PostgreSQL — and removes null bytes (`\0`), which cannot
+ * appear in any legitimate value and invite parser-level surprises when left in a predicate.
+ *
+ * **This escapes string literals and nothing else.** Three cases it does NOT cover:
+ *
+ * - **`LIKE` patterns** — `%`, `_` and `[` remain live wildcards after quote doubling, so a user
+ *   searching for `%` still matches every row. A LIKE value must additionally escape those
+ *   metacharacters and pair the clause with `ESCAPE '\'`. See `escapeLikeValue()` in
+ *   `@memberjunction/core` (`generic/runQuerySQLFilterImplementations.ts`) or
+ *   `GenericDatabaseProvider.escapeLikeTerm()`.
+ * - **Identifier names** (table/column/schema) — those require bracket or double-quote quoting, and
+ *   are handled by SchemaEngine's `ValidateIdentifier()`.
+ * - **Values that must not be missing** — `null`/`undefined` map to `''`, so a predicate built from a
+ *   missing value silently becomes `Field = ''` rather than throwing. Validate before interpolating
+ *   when absence is a bug.
+ *
+ * @param value - The raw string value to escape. If null or undefined, returns empty string.
+ * @returns Safely escaped string value (without surrounding quotes).
+ *
+ * @example
+ * ```typescript
+ * const filter = `Email = '${EscapeSQLString(userEmail)}'`;
+ * ```
+ */
+export function EscapeSQLString(value: string | null | undefined): string {
+  if (value == null) return '';
+  return String(value).replace(/\0/g, '').replace(/'/g, "''");
 }
 
 /**

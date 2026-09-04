@@ -21,6 +21,7 @@ import type {
 } from '../BaseIntegrationConnector.js';
 import type { ExternalRecord, SyncProgress } from '../types.js';
 import { IntegrationEngine } from '../IntegrationEngine.js';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 // Note: IntegrationEngine is a singleton but tests instantiate it directly for isolation
 
 // ---- Mocks ----
@@ -1714,6 +1715,83 @@ describe('IntegrationEngine', () => {
                 expect(progressUpdates[1].EntityMapIndex).toBe(1);
             } finally {
                 ConnectorFactory.Resolve = resolveOrig;
+            }
+        });
+    });
+    describe('Catalog freshness', () => {
+        it('re-reads the IntegrationObject catalog before the run reads any of it', async () => {
+            const connector = createMockConnector({ Records: createMockRecords(1), HasMore: false });
+
+            const companyIntegration = createMockCompanyIntegration();
+            const integration = {
+                ID: 'int-1',
+                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                Name: 'Test',
+                ClassName: 'TestConnector',
+            } as unknown as MJIntegrationEntity;
+
+            mockRunViewsFn.mockResolvedValueOnce([
+                { Success: true, Results: [companyIntegration] },
+                {
+                    Success: true,
+                    Results: [{
+                        Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                        CompanyIntegrationID: 'ci-1',
+                        EntityID: 'entity-1',
+                        ConflictResolution: 'SourceWins',
+                        DeleteBehavior: 'SoftDelete',
+                        Entity: 'Contacts',
+                        ExternalObjectName: 'contacts',
+                    }],
+                },
+                { Success: true, Results: [integration] },
+                { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+            ]);
+
+            mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+                const entityName = params['EntityName'] as string;
+                if (entityName === 'MJ: Company Integration Field Maps') {
+                    return {
+                        Success: true,
+                        Results: [{
+                            SourceFieldName: 'Name',
+                            DestinationFieldName: 'Name',
+                            TransformPipeline: null,
+                            IsKeyField: false,
+                            Status: 'Active',
+                            Priority: 0,
+                        }],
+                    };
+                }
+                return { Success: true, Results: [] };
+            });
+
+            const { ConnectorFactory } = await import('../ConnectorFactory.js');
+            const resolveOrig = ConnectorFactory.Resolve;
+            ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+            const order: string[] = [];
+            const refreshSpy = vi
+                .spyOn(IntegrationEngineBase.Instance, 'RefreshCatalog')
+                .mockImplementation(async () => { order.push('refresh'); });
+            const fetchOrig = connector.FetchChanges.bind(connector);
+            connector.FetchChanges = vi.fn(async (...args: Parameters<typeof fetchOrig>) => {
+                order.push('fetch');
+                return fetchOrig(...args);
+            }) as typeof connector.FetchChanges;
+
+            try {
+                const result = await orchestrator.RunSync('ci-1', contextUser);
+
+                expect(result.Success).toBe(true);
+                // Called once per run, and BEFORE anything resolves objects/fields out of the
+                // catalog — a catalog edit made by another process must be visible to this run.
+                expect(refreshSpy).toHaveBeenCalledTimes(1);
+                expect(refreshSpy).toHaveBeenCalledWith(contextUser);
+                expect(order).toEqual(['refresh', 'fetch']);
+            } finally {
+                ConnectorFactory.Resolve = resolveOrig;
+                refreshSpy.mockRestore();
             }
         });
     });

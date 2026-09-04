@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.memberjunction.org/mj-app/v1.json",
+  "manifestVersion": 1,
+  "name": "mj-fixture-app",
+  "displayName": "Fixture Open App (test only)",
+  "description": "A minimal Open App repository used by the mj CLI's unit tests to prove that dynamically loaded packages register their entity subclasses in the ClassFactory. Not published, not installable.",
+  "version": "0.0.1",
+  "license": "BUSL-1.1",
+  "publisher": { "name": "MemberJunction" },
+  "mjVersionRange": ">=6.0.0 <7.0.0",
+  "packages": {
+    "server": [
+      { "name": "@mj-fixture/app-server", "role": "bootstrap", "startupExport": "LoadFixtureAppServer" }
+    ],
+    "shared": [
+      { "name": "@mj-fixture/app-entities", "role": "library" }
+    ]
+  },
+  "code": { "visibility": "public", "sourceDirectory": "packages" }
+}

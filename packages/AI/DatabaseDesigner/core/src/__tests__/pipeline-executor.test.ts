@@ -86,6 +86,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 vi.mock('@memberjunction/global', () => ({
     LogError: vi.fn(),
+    EscapeSQLString: (v: string | null | undefined) => (v == null ? '' : String(v).replace(/\0/g, '').replace(/'/g, "''")),
 }));
 
 // ─── Import after mocks ──────────────────────────────────────────────────────

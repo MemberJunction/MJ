@@ -82,6 +82,20 @@ export class AiComposerComponent {
   private readonly recordMentionProvider = new RecordMentionProvider();
   private readonly skillCommandProvider = new SkillCommandProvider();
 
+  /**
+   * The agent the message is expected to go to, when the host knows it (`mj-message-input` binds an
+   * explicit `@agent` chip in the draft, else its resolved continuity/pinned/default agent). Narrows
+   * the '/' skill picker to the skills that agent accepts (`AcceptsSkills` + `MJ: AI Agent Skills`
+   * grants). Null = unknown, no narrowing — the server's RequestedSkills guard is the backstop.
+   */
+  @Input()
+  set TargetAgentId(value: string | null) {
+    this.skillCommandProvider.TargetAgentId = value ?? null;
+  }
+  get TargetAgentId(): string | null {
+    return this.skillCommandProvider.TargetAgentId;
+  }
+
   constructor() {
     this.rebuildTriggerProviders();
   }
