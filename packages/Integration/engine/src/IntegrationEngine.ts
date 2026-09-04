@@ -47,6 +47,7 @@ import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
+import { EmptyBatchWatchdog } from './EmptyBatchWatchdog.js';
 import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
@@ -2717,7 +2718,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let watermarkFloorSaved: string | null = null; // §8a durability floor last persisted mid-run (null = none)
         let fetchGapCount = 0;            // CONSECUTIVE skipped pages (reset on any clean fetch)
         const MAX_FETCH_GAPS = 25;        // give up + hold the watermark if this many pages fail in a row (API down)
-        let consecutiveEmptyBatches = 0;  // P3-D: detect a connector that pages empty-but-HasMore forever
+        const emptyBatchWatchdog = new EmptyBatchWatchdog();  // P3-D: detect a STUCK empty-but-HasMore pager
         let oversizeBatchWarned = false;  // pagination rule: warn ONCE per object that the connector ignored BatchSize
         const MAX_BATCHES_PER_MAP = 5000;
         const EMPTY_BATCH_WARN_THRESHOLD = 5; // warn once after this many empty-but-HasMore batches in a row
@@ -3172,20 +3173,21 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             // P3-D: a connector returning empty pages with HasMore=true would otherwise spin silently
             // to MAX_BATCHES_PER_MAP. Surface a structured warning once the empty streak crosses the
-            // threshold so the connector bug is visible, not buried.
-            if (batch.Records.length === 0 && batch.HasMore === true) {
-                consecutiveEmptyBatches++;
-                if (consecutiveEmptyBatches === EMPTY_BATCH_WARN_THRESHOLD) {
+            // threshold so the connector bug is visible, not buried. The watchdog only counts
+            // empties at an UNMOVING position — empty pages whose cursor advanced are ordinary
+            // pagination over sparse data (see EmptyBatchWatchdog).
+            {
+                const stuckStreak = emptyBatchWatchdog.Observe(batch.Records.length, batch.HasMore === true,
+                    [currentWatermark, currentAfterKey, currentPage, currentOffset, currentCursor]);
+                if (stuckStreak === EMPTY_BATCH_WARN_THRESHOLD) {
                     logger?.warning(
                         entityMap.ExternalObjectName ?? entityMap.ID,
                         'CONSECUTIVE_EMPTY_BATCHES',
-                        `'${entityMap.ExternalObjectName}' returned ${EMPTY_BATCH_WARN_THRESHOLD} empty batches in a row while still reporting HasMore=true ` +
-                        `(batch ${batchCount}/${MAX_BATCHES_PER_MAP}). Likely a connector pagination bug (cursor not advancing / HasMore stuck true).`,
-                        { batchCount, consecutiveEmptyBatches },
+                        `'${entityMap.ExternalObjectName}' returned ${EMPTY_BATCH_WARN_THRESHOLD} empty batches in a row at an UNMOVING position while still reporting HasMore=true ` +
+                        `(batch ${batchCount}/${MAX_BATCHES_PER_MAP}). The cursor is not advancing — connector pagination bug.`,
+                        { batchCount, consecutiveEmptyBatches: stuckStreak },
                     );
                 }
-            } else {
-                consecutiveEmptyBatches = 0;
             }
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
