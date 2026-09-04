@@ -313,6 +313,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /** Handles the composer's value stream: keeps messageText in sync + emits draft state. */
   public OnComposerValueChanged(value: string): void {
+    this.refreshMentionedAgentId();
     this.messageText = value;
     this.DraftStateChanged.emit(this.GetSerializedDraft());
   }
@@ -566,9 +567,19 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * `TargetAgentId`; null = unknown, no narrowing.
    */
   public get pickerTargetAgentId(): string | null {
+    return this.mentionedAgentId ?? this.resolveCurrentAgentId();
+  }
+
+  /**
+   * The first `@agent` chip in the draft, refreshed when the composer's value changes (chips only
+   * change with the value) — so the template-bound {@link pickerTargetAgentId} does not walk the
+   * editor DOM on every change-detection cycle.
+   */
+  private mentionedAgentId: string | null = null;
+
+  private refreshMentionedAgentId(): void {
     const chips = this.inputBox?.getMentionChipsData() || [];
-    const mentioned = chips.find(chip => chip.type === 'agent');
-    return mentioned?.id ?? this.resolveCurrentAgentId();
+    this.mentionedAgentId = chips.find(chip => chip.type === 'agent')?.id ?? null;
   }
 
   /** True when the mic button should be enabled (have an agent + not disabled). */
