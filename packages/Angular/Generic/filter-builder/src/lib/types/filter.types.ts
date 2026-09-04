@@ -75,6 +75,10 @@ export function IsSimpleFilter(
   return 'field' in filter && 'operator' in filter;
 }
 
+/** camelCase aliases — #4185 renamed the public helpers to PascalCase. */
+export const isCompositeFilter = IsCompositeFilter;
+export const isSimpleFilter = IsSimpleFilter;
+
 /**
  * Field types supported by the filter builder
  */
@@ -187,6 +191,9 @@ export function CreateEmptyFilter(): CompositeFilterDescriptor {
   return { logic: 'and', filters: [] };
 }
 
+/** camelCase alias — #4185 renamed the public helpers to PascalCase. */
+export const createEmptyFilter = CreateEmptyFilter;
+
 /**
  * Create a new filter rule with default values
  * @param field The field name to filter on
@@ -199,6 +206,9 @@ export function CreateFilterRule(field: string, type: FilterFieldType = 'string'
     value: GetDefaultValue(type)
   };
 }
+
+/** camelCase alias — #4185 renamed the public helpers to PascalCase. */
+export const createFilterRule = CreateFilterRule;
 
 /**
  * Get the default operator for a field type

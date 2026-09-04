@@ -118,3 +118,8 @@ export function OperatorRequiresValue(operator: FilterOperator): boolean {
   const nullOperators: FilterOperator[] = ['isnull', 'isnotnull', 'isempty', 'isnotempty'];
   return !nullOperators.includes(operator);
 }
+
+/** camelCase aliases — #4185 renamed the public helpers to PascalCase. */
+export const getOperatorsForType = GetOperatorsForType;
+export const getOperatorInfo = GetOperatorInfo;
+export const operatorRequiresValue = OperatorRequiresValue;

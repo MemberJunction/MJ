@@ -29,7 +29,11 @@ export {
   IsCompositeFilter,
   IsSimpleFilter,
   CreateEmptyFilter,
-  CreateFilterRule
+  CreateFilterRule,
+  isCompositeFilter,
+  isSimpleFilter,
+  createEmptyFilter,
+  createFilterRule
 } from './lib/types/filter.types';
 
 // Operators
@@ -42,5 +46,8 @@ export {
   LOOKUP_OPERATORS,
   GetOperatorsForType,
   GetOperatorInfo,
-  OperatorRequiresValue
+  OperatorRequiresValue,
+  getOperatorsForType,
+  getOperatorInfo,
+  operatorRequiresValue
 } from './lib/types/operators';

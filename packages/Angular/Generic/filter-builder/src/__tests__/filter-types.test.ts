@@ -3,6 +3,7 @@ import {
   IsCompositeFilter,
   IsSimpleFilter,
   CreateEmptyFilter,
+  createEmptyFilter,
   CreateFilterRule,
   GetDefaultOperator,
   GetDefaultValue,
@@ -67,6 +68,11 @@ describe('CreateEmptyFilter', () => {
     const filter = CreateEmptyFilter();
     expect(filter.logic).toBe('and');
     expect(filter.filters).toEqual([]);
+  });
+
+  it('keeps the camelCase alias as the same function', () => {
+    expect(createEmptyFilter).toBe(CreateEmptyFilter);
+    expect(createEmptyFilter().filters).toEqual([]);
   });
 
   it('should create independent instances', () => {
