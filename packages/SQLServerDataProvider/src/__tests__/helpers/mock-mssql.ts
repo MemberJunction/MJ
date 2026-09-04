@@ -111,21 +111,50 @@ export class MockConnectionPool {
 
 export class MockTransaction {
   public readonly parent: MockConnectionPool;
+  public begun = false;
+  public aborted = false;
+  public readonly savepoints = new Set<string>();
 
   constructor(parent: MockConnectionPool) {
     this.parent = parent;
   }
 
   public async begin(): Promise<void> {
+    if (this.aborted) {
+      throw Object.assign(new Error('Transaction has been aborted.'), { code: 'EABORT' });
+    }
+    this.begun = true;
     mssqlState.Events.push({ kind: 'begin' });
   }
 
   public async commit(): Promise<void> {
+    if (this.aborted) {
+      throw Object.assign(new Error('Transaction has been aborted.'), { code: 'EABORT' });
+    }
+    if (!this.begun) {
+      throw Object.assign(new Error('Transaction has not begun. Call begin() first.'), { code: 'ENOTBEGUN' });
+    }
     mssqlState.Events.push({ kind: 'commit' });
+    this.begun = false;
   }
 
   public async rollback(): Promise<void> {
+    if (this.aborted) {
+      throw Object.assign(new Error('Transaction has been aborted.'), { code: 'EABORT' });
+    }
+    if (!this.begun) {
+      throw Object.assign(new Error('Transaction has not begun. Call begin() first.'), { code: 'ENOTBEGUN' });
+    }
     mssqlState.Events.push({ kind: 'rollback' });
+    this.begun = false;
+    this.savepoints.clear();
+  }
+
+  /** Server-side abort (trigger THROW, deadlock, XACT_ABORT). Next statement is ENOTBEGUN; commit/rollback are EABORT. */
+  public abortServerSide(): void {
+    this.aborted = true;
+    this.begun = false;
+    this.savepoints.clear();
   }
 }
 
@@ -143,6 +172,23 @@ export class MockRequest {
   }
 
   public async query(sqlText: string): Promise<MockQueryResult> {
+    const tx = this.parent instanceof MockTransaction ? this.parent : null;
+    if (tx) {
+      if (tx.aborted || !tx.begun) {
+        throw Object.assign(new Error('Transaction has not begun. Call begin() first.'), { code: 'ENOTBEGUN' });
+      }
+      const save = /^\s*SAVE TRANSACTION (\S+)/i.exec(sqlText);
+      if (save) {
+        tx.savepoints.add(save[1]);
+      }
+      const rb = /^\s*ROLLBACK TRANSACTION (\S+)/i.exec(sqlText);
+      if (rb && !tx.savepoints.has(rb[1])) {
+        throw Object.assign(
+          new Error(`Cannot roll back SAVE TRANSACTION ${rb[1]}. No savepoint of that name exists. (Msg 6401)`),
+          { code: 'EREQUEST' },
+        );
+      }
+    }
     mssqlState.Events.push({ kind: 'query', sql: sqlText });
     mssqlState.Queries.push({
       sql: sqlText,

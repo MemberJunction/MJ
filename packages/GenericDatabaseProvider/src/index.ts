@@ -1,4 +1,4 @@
-export { GenericDatabaseProvider, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export { GenericDatabaseProvider, DoomedTransactionError, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
 export type {
     SaveCoercedValue,
     SaveCallBinding,

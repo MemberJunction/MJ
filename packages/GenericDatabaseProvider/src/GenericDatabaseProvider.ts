@@ -131,6 +131,22 @@ const GEO_EXTENDED_TYPES = new Set([
     'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
 ]);
 
+/**
+ * Thrown when a nested savepoint fails because the ambient physical transaction
+ * was already rolled back by the server (mssql ENOTBEGUN/EABORT, pg 25P01).
+ * Opening a second physical TX would commit inner work after the outer writes
+ * were gone. Callers must fail the outer unit — `Save()` returns false.
+ */
+export class DoomedTransactionError extends Error {
+    public readonly code = 'DOOMED_TRANSACTION';
+    constructor(
+        message = 'Ambient transaction was rolled back by the server; outer work is lost',
+    ) {
+        super(message);
+        this.name = 'DoomedTransactionError';
+    }
+}
+
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // Composition engine is now owned by RenderPipeline
 
@@ -5353,24 +5369,44 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return this.SavepointStack;
     }
 
-    /** True when the driver has a begun physical transaction object. */
-    protected get HasPhysicalTransaction(): boolean {
-        return false;
-    }
+    /**
+     * True when the driver has a begun physical transaction object.
+     * Must be truthful: a published-but-unbegun handle is a poison state.
+     */
+    protected abstract get HasPhysicalTransaction(): boolean;
 
-    /** Outermost BEGIN. Subclasses publish the driver object only after it has begun. */
-    protected async BeginPhysicalTransaction(): Promise<void> {
-        throw new Error(`${this.constructor.name} must implement BeginPhysicalTransaction`);
-    }
+    /**
+     * Outermost BEGIN. Publish the driver object only after it has begun.
+     * Must not call public Begin/Commit/Rollback (the mutex is not reentrant).
+     */
+    protected abstract BeginPhysicalTransaction(): Promise<void>;
 
-    /** Outermost COMMIT. Subclasses release the driver object. */
-    protected async CommitPhysicalTransaction(): Promise<void> {
-        throw new Error(`${this.constructor.name} must implement CommitPhysicalTransaction`);
-    }
+    /**
+     * Outermost COMMIT. Release the driver object in `finally` even if commit rejects.
+     * Must not call public Begin/Commit/Rollback.
+     */
+    protected abstract CommitPhysicalTransaction(): Promise<void>;
 
-    /** Outermost ROLLBACK. Subclasses release the driver object. */
-    protected async RollbackPhysicalTransaction(): Promise<void> {
-        throw new Error(`${this.constructor.name} must implement RollbackPhysicalTransaction`);
+    /**
+     * Outermost ROLLBACK. Release the driver object in `finally` even if rollback rejects.
+     * Must not call public Begin/Commit/Rollback.
+     */
+    protected abstract RollbackPhysicalTransaction(): Promise<void>;
+
+    /**
+     * Drop a dead physical handle without going through public RollbackTransaction.
+     * Default is RollbackPhysicalTransaction if one is open. Subclasses override
+     * to unpublish even when the driver rollback itself rejects (EABORT).
+     */
+    protected async AbandonPhysicalTransaction(): Promise<void> {
+        if (!this.HasPhysicalTransaction) {
+            return;
+        }
+        try {
+            await this.RollbackPhysicalTransaction();
+        } catch (e) {
+            LogError('AbandonPhysicalTransaction: rollback of doomed handle failed', undefined, e);
+        }
     }
 
     protected SavepointName(n: number): string {
@@ -5419,7 +5455,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * already at depth 0. Does not go through {@link RollbackTransaction}
      * (that would re-enter the mutex).
      */
-    public override async ResetTransactionState(): Promise<void> {
+    public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
     }
 
@@ -5488,39 +5524,35 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         } catch (savepointError) {
             if (this.HasPhysicalTransaction && this.isDoomedPhysicalTransactionError(savepointError)) {
                 await this.abandonDoomedTransaction();
-                throw new Error('Ambient transaction was rolled back by the server; outer work is lost');
+                throw new DoomedTransactionError();
             }
             throw savepointError;
         }
     }
 
     /**
-     * mssql `ENOTBEGUN`/`EABORT` on a *published* handle means the server already
-     * rolled the TX back. Starting a new physical TX here would commit inner
-     * work and drop the outer writes.
+     * Driver codes for a server-aborted ambient TX. Walk `cause` because some
+     * wrappers nest the original error. Do not match English message text.
      */
     private isDoomedPhysicalTransactionError(error: unknown): boolean {
-        const code =
-            error && typeof error === 'object' && 'code' in error
-                ? String((error as { code: unknown }).code)
-                : '';
-        if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01') {
-            return true;
+        let current: unknown = error;
+        for (let i = 0; i < 5 && current; i++) {
+            if (current && typeof current === 'object' && 'code' in current) {
+                const code = String((current as { code: unknown }).code);
+                if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01') {
+                    return true;
+                }
+            }
+            current =
+                current && typeof current === 'object' && 'cause' in current
+                    ? (current as { cause: unknown }).cause
+                    : undefined;
         }
-        const msg = error instanceof Error ? error.message : String(error);
-        return /has not begun|not been begun|has been aborted|SAVEPOINT can only be used in transaction blocks/i.test(
-            msg,
-        );
+        return false;
     }
 
     private async abandonDoomedTransaction(): Promise<void> {
-        try {
-            if (this.HasPhysicalTransaction) {
-                await this.RollbackPhysicalTransaction();
-            }
-        } catch {
-            /* handle already aborted */
-        }
+        await this.AbandonPhysicalTransaction();
         this.clearTransactionState();
         await this.OnBeginFailedAtDepthZero();
     }
@@ -5536,11 +5568,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             try {
                 await this.CommitPhysicalTransaction();
             } catch (e) {
-                try {
-                    await this.RollbackPhysicalTransaction();
-                } catch {
-                    /* rollback after failed commit is best-effort */
-                }
+                await this.AbandonPhysicalTransaction();
                 this.clearTransactionState();
                 LogError(e);
                 throw e;

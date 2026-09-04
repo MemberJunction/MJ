@@ -2335,6 +2335,24 @@ IF ${varName} IS NOT NULL
     await this.processDeferredTasks();
   }
 
+  protected override async AbandonPhysicalTransaction(): Promise<void> {
+    const stale = this._transaction;
+    this._transaction = null;
+    this._transactionState$.next(false);
+    const deferredCount = this._deferredTasks.length;
+    this._deferredTasks = [];
+    if (stale) {
+      try {
+        await stale.rollback();
+      } catch {
+        /* EABORT — server already ended the TX */
+      }
+    }
+    if (deferredCount > 0) {
+      LogStatus(`Cleared ${deferredCount} deferred tasks after abandoning a doomed transaction`);
+    }
+  }
+
   protected override async RollbackPhysicalTransaction(): Promise<void> {
     if (!this._transaction) {
       throw new Error('No active transaction to rollback');
@@ -2358,28 +2376,11 @@ IF ${varName} IS NOT NULL
   }
 
   protected override async HandleFailedSavepointRollback(savepointName: string, error: unknown): Promise<void> {
-    // SQL Server dooms the ENTIRE transaction (XACT_STATE() = -1) on deadlock-victim,
-    // batch-aborting and XACT_ABORT errors. In that state `ROLLBACK TRANSACTION <savepoint>`
-    // is illegal (Msg 3931). The only recovery is a FULL rollback plus a complete state reset.
     LogError(
       `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
-      `(XACT_STATE() = -1). Performing a full rollback and resetting transaction state.`
+      `(XACT_STATE() = -1). Abandoning the physical handle and resetting transaction state.`,
     );
-    try {
-      if (this._transaction) {
-        await this._transaction.rollback();
-      }
-    } catch (fullRollbackError) {
-      LogError('Full rollback after savepoint rollback failure also failed:', undefined, fullRollbackError);
-    } finally {
-      this._transaction = null;
-      this._transactionState$.next(false);
-      const deferredCount = this._deferredTasks.length;
-      this._deferredTasks = [];
-      if (deferredCount > 0) {
-        LogStatus(`Cleared ${deferredCount} deferred tasks after doomed-transaction recovery`);
-      }
-    }
+    await this.AbandonPhysicalTransaction();
     throw error;
   }
 

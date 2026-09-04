@@ -69,6 +69,31 @@ DatabaseProviderBase (@memberjunction/core — no heavy deps, abstract)
 | `BuildParameterPlaceholder()` | Virtual: PG-style $1/$2 by default; SQL Server overrides to @p0/@p1 |
 | `getColumnsForDatasetItem()` | Validates and quotes column names for dataset item queries |
 
+## Transactions
+
+Depth 1 is a physical `BEGIN`. Depth 2+ is a dialect savepoint on that same transaction (`SAVE TRANSACTION` on SQL Server, `SAVEPOINT mj_sp_n` on PostgreSQL). Nested `BeginTransaction` with no physical TX is **corruption**, not recovery — the provider throws and resets rather than opening a second physical TX that would commit inner work after the outer writes were aborted.
+
+**Implementer contract** (SQL Server and PostgreSQL already satisfy this):
+
+- `HasPhysicalTransaction`, `BeginPhysicalTransaction`, `CommitPhysicalTransaction`, `RollbackPhysicalTransaction` are abstract and mandatory.
+- `HasPhysicalTransaction` must be truthful.
+- `BeginPhysicalTransaction` must publish the driver object **after** the driver begin resolves.
+- Those hooks must **not** call public `BeginTransaction` / `CommitTransaction` / `RollbackTransaction` — the mutex is not reentrant.
+- `AbandonPhysicalTransaction` unpublishes even when driver rollback rejects (`EABORT`).
+- `AfterPhysicalCommit` (SQL Server deferred AI tasks) runs **after** depth is 0 and **outside** the mutex.
+
+**Failure semantics.** A server abort of the ambient TX (mssql `ENOTBEGUN`/`EABORT`, pg `25P01`) is not recoverable. Nested begin throws `DoomedTransactionError`; the outer `Commit` fails; `Save()` returns false. Call `ResetTransactionState()` after a server abort — do not poke private fields.
+
+**`TransactionDepth` vs `IsInTransaction` vs SQL Server `isTransactionActive`:**
+
+| Accessor | Meaning |
+|---|---|
+| `TransactionDepth` | Nesting depth. 0 = no TX. Public on `DatabaseProviderBase`. Accounting join-TX reads this (camelCase `transactionDepth` alias for one release). |
+| `IsInTransaction` | SQL Server **leaves this false** so `RunMaybeSerial` can fan out. PostgreSQL returns whether a client is held. Do not use this to decide whether to join. |
+| `isTransactionActive` (SQL Server) | `_transactionState$` — true while a begun handle is published. |
+
+Concurrent nested scopes on one provider instance are unsupported. MJServer uses per-request providers.
+
 ## Usage
 
 Platform-specific providers should extend `GenericDatabaseProvider` instead of `DatabaseProviderBase`:

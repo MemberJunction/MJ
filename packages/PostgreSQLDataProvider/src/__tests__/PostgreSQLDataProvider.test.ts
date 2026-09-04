@@ -229,6 +229,55 @@ describe('PostgreSQLDataProvider', () => {
             await provider.BeginTransaction();      // should be mj_sp_1 again, not mj_sp_2
             expect(client2.queries.at(-1)).toBe('SAVEPOINT mj_sp_1');
         });
+
+        it('IsInTransaction tracks TransactionDepth through begin/begin/commit/commit (C10)', async () => {
+            installFakeClient(provider);
+            expect(provider.IsInTransaction).toBe(false);
+            expect(provider.TransactionDepth).toBe(0);
+            await provider.BeginTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(1);
+            await provider.BeginTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(2);
+            await provider.CommitTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(1);
+            await provider.CommitTransaction();
+            expect(provider.IsInTransaction).toBe(false);
+            expect(provider.TransactionDepth).toBe(0);
+        });
+
+        it('failed nested ROLLBACK TO abandons the client and resets depth (B3/C8)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('ROLLBACK TO')) {
+                    throw Object.assign(new Error('savepoint "mj_sp_1" does not exist'), { code: '3B001' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await expect(provider.RollbackTransaction()).rejects.toThrow();
+            expect(provider.TransactionDepth).toBe(0);
+            expect(client.released).toBe(true);
+        });
+
+        it('failed outer COMMIT still releases the client (C6)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql === 'COMMIT') {
+                    throw new Error('commit failed');
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await expect(provider.CommitTransaction()).rejects.toThrow(/commit failed/);
+            expect(provider.TransactionDepth).toBe(0);
+            expect(client.released).toBe(true);
+        });
     });
 
     describe('GetCurrentUser', () => {

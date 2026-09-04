@@ -177,8 +177,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Public alias of {@link CurrentTransactionDepth} for join-TX callers
-     * (e.g. accounting CreateJournalEntries).
+     * Public nesting depth. 0 = no ambient TX. Join-TX callers (accounting
+     * CreateJournalEntries) must read this, not `IsInTransaction` (SQL Server
+     * leaves that false). Deprecated camelCase `transactionDepth` alias ships
+     * for one release.
      */
     public get TransactionDepth(): number {
         return this.CurrentTransactionDepth;

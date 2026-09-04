@@ -472,7 +472,8 @@ jobs:
             "IT38 - Template Engine Rendering" \
             "IT39 - Actions Pipeline" \
             "IT48 - ClassFactory Resolution Contracts" \
-            "IT20 - Lists Keyset Pagination"; do
+            "IT20 - Lists Keyset Pagination" \
+            "IT87 - Nested Transactions (ambient savepoints)"; do
             echo "=== $TEST (PostgreSQL) ==="
             npx mj test run --name "$TEST"
           done

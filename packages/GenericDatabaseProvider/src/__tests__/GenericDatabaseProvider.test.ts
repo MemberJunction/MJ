@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProvider, DoomedTransactionError } from '../GenericDatabaseProvider';
 import { SqlLoggingSessionImpl } from '../SqlLogger';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 
@@ -1938,5 +1938,79 @@ describe('GenericDatabaseProvider nested transactions', () => {
         expect(p.afterCalls).toBe(2);
         expect(p.TransactionDepth).toBe(0);
         expect(p.physicalOpen).toBe(false);
+    });
+
+    it('begin failing at depth 1 restores depth 0 so the next begin is outermost (A1)', async () => {
+        class FailingBegin extends RecordingProvider {
+            public onBeginFailed = 0;
+            public failNext = true;
+            protected override async BeginPhysicalTransaction(): Promise<void> {
+                if (this.failNext) {
+                    this.failNext = false;
+                    throw new Error('pool exhausted');
+                }
+                this.beginCount++;
+                this.physicalOpen = true;
+            }
+            protected override async OnBeginFailedAtDepthZero(): Promise<void> {
+                this.onBeginFailed++;
+                this.physicalOpen = false;
+            }
+        }
+        const p = new FailingBegin();
+        await expect(p.BeginTransaction()).rejects.toThrow(/pool exhausted/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.onBeginFailed).toBe(1);
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(true);
+    });
+
+    it('nested rollback that fails the savepoint handler resets when physical is gone (A8)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.ExecuteSQL = async () => {
+            p.physicalOpen = false;
+            throw new Error('savepoint missing');
+        };
+        await expect(p.RollbackTransaction()).rejects.toThrow(/savepoint missing/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('outermost commit failure still ends at depth 0 even if rollback also fails (A10)', async () => {
+        class FailBoth extends RecordingProvider {
+            protected override async CommitPhysicalTransaction(): Promise<void> {
+                throw new Error('commit rejected');
+            }
+            protected override async RollbackPhysicalTransaction(): Promise<void> {
+                this.physicalOpen = false;
+                throw new Error('rollback rejected');
+            }
+        }
+        const p = new FailBoth();
+        await p.BeginTransaction();
+        await expect(p.CommitTransaction()).rejects.toThrow(/commit rejected/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('three concurrent BeginTransactions serialize to one physical begin and two savepoints (A12)', async () => {
+        const p = new RecordingProvider();
+        await Promise.all([p.BeginTransaction(), p.BeginTransaction(), p.BeginTransaction()]);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(3);
+        expect(p.SavepointStack).toEqual(['SavePoint_1', 'SavePoint_2']);
+    });
+
+    it('DoomedTransactionError is thrown when ENOTBEGUN hits a published handle', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('wrapped'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
     });
 });

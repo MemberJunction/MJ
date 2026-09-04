@@ -417,6 +417,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         }
     }
 
+    protected override async AbandonPhysicalTransaction(): Promise<void> {
+        if (!this._transaction) {
+            return;
+        }
+        const client = this._transaction;
+        this._transaction = null;
+        try { await client.query('ROLLBACK'); } catch { /* already aborted */ }
+        try { client.release(); } catch { /* swallow — surfacing the primary error */ }
+    }
+
     protected override async OnBeginFailedAtDepthZero(): Promise<void> {
         if (!this._transaction) {
             return;

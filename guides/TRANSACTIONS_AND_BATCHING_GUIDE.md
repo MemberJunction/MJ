@@ -54,14 +54,17 @@ already unwound its own scope. `RunInEntityTransaction()` wraps that for you and
 ### Join semantics — the important part
 
 The provider arbitrates. If a transaction is **already in flight**, `BeginEntityTransaction()` joins
-it (a `SAVE TRANSACTION` savepoint) rather than starting a second physical transaction; only the
-outermost commit commits for real. **Participants never ask whether someone else already opened a
-transaction.**
+it (a dialect savepoint — SQL Server `SAVE TRANSACTION`, PostgreSQL `SAVEPOINT`) rather than starting
+a second physical transaction; only the outermost commit commits for real. **Participants never ask
+whether someone else already opened a transaction.** Inspect `TransactionDepth` (public on
+`DatabaseProviderBase`), not `IsInTransaction` — SQL Server deliberately leaves `IsInTransaction`
+false so `RunMaybeSerial` can fan out. After a server abort, call `ResetTransactionState()` rather
+than poking private fields.
 
 That is not a nicety, it is a correctness requirement. Before 6.2 MemberJunction had two transaction
 mechanisms that were blind to each other:
 
-- `DatabaseProviderBase.BeginTransaction()` — depth-counted, re-entrant, savepoint-aware.
+- `GenericDatabaseProvider.BeginTransaction()` — depth-counted, re-entrant, dialect savepoints. A server abort of the ambient TX is not recoverable (`DoomedTransactionError`); the outer `Commit` fails and `Save()` returns false. Concurrent nested scopes on one provider instance are unsupported.
 - `BeginISATransaction()` — four lines that opened a brand-new `sql.Transaction` on the pool with no
   depth awareness at all.
 

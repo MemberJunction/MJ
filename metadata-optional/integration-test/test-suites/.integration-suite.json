@@ -691,6 +691,14 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT87 - Nested Transactions (ambient savepoints)",
+            "Sequence": 47,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT84 - Agent Note Cache Types (entity_object invariant)",
             "Sequence": 48,
             "Status": "Active"
