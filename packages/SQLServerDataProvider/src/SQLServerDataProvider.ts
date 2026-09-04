@@ -398,15 +398,15 @@ export class SQLServerDataProvider
   /**
    * Checks if we're currently in a transaction (at any depth)
    */
-  public get inTransaction(): boolean {
-    return this.transactionDepth > 0;
+  public get InTransaction(): boolean {
+    return this.TransactionDepth > 0;
   }
   
   /**
    * Checks if we're currently in a nested transaction (depth > 1)
    */
-  public get inNestedTransaction(): boolean {
-    return this.transactionDepth > 1;
+  public get InNestedTransaction(): boolean {
+    return this.TransactionDepth > 1;
   }
   
   /**

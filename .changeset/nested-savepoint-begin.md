@@ -1,4 +1,5 @@
 ---
+"@memberjunction/core": patch
 "@memberjunction/sql-dialect": patch
 "@memberjunction/generic-database-provider": patch
 "@memberjunction/sqlserver-dataprovider": patch

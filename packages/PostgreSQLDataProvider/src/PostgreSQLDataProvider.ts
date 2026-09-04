@@ -369,14 +369,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
-     * Current transaction nesting depth.
-     * 0 = no active transaction; 1 = outermost real BEGIN; 2+ = nested via SAVEPOINTs.
-     */
-    public get TransactionDepth(): number {
-        return this.transactionDepth;
-    }
-
-    /**
      * Mutex serializing Begin/Commit/Rollback. Prior implementations had no
      * locking around savepoint state — under concurrent callers (e.g. `mj sync push`
      * processing 178 records with parallel BaseEntity.Save() calls) interleaved

@@ -1831,7 +1831,7 @@ describe('GenericDatabaseProvider nested transactions', () => {
         const p = new RecordingProvider();
         await p.BeginTransaction();
         expect(p.beginCount).toBe(1);
-        expect(p.transactionDepth).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
         expect(p.executeSQLCalls).toEqual([]);
     });
 
@@ -1840,18 +1840,18 @@ describe('GenericDatabaseProvider nested transactions', () => {
         await p.BeginTransaction();
         await p.BeginTransaction();
         expect(p.beginCount).toBe(1);
-        expect(p.transactionDepth).toBe(2);
+        expect(p.TransactionDepth).toBe(2);
         expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
     });
 
     it('nested begin with leaked depth and no physical TX begins one first', async () => {
         const p = new RecordingProvider();
         await p.BeginTransaction();
-        expect(p.transactionDepth).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
         p.physicalOpen = false;
         await p.BeginTransaction();
         expect(p.beginCount).toBe(2);
-        expect(p.transactionDepth).toBe(2);
+        expect(p.TransactionDepth).toBe(2);
         expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
     });
 
@@ -1873,7 +1873,7 @@ describe('GenericDatabaseProvider nested transactions', () => {
         await p.BeginTransaction();
         expect(p.beginCount).toBe(1);
         expect(attempts).toBe(2);
-        expect(p.transactionDepth).toBe(3);
+        expect(p.TransactionDepth).toBe(3);
     });
 
     it('nested commit is a no-op SQL on SQL Server (no RELEASE) and decrements depth', async () => {
@@ -1882,11 +1882,11 @@ describe('GenericDatabaseProvider nested transactions', () => {
         await p.BeginTransaction();
         p.resetExecuteSQLState();
         await p.CommitTransaction();
-        expect(p.transactionDepth).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
         expect(p.executeSQLCalls).toEqual([]);
         expect(p.physicalOpen).toBe(true);
         await p.CommitTransaction();
-        expect(p.transactionDepth).toBe(0);
+        expect(p.TransactionDepth).toBe(0);
         expect(p.physicalOpen).toBe(false);
     });
 });

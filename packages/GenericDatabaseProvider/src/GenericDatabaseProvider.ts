@@ -5339,21 +5339,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private _savepointCounter = 0;
     private _savepointStack: string[] = [];
 
-    /**
-     * Nesting depth: 0 = none, 1 = physical transaction, 2+ = savepoints.
-     * SQL Server leaves {@link IsInTransaction} false on purpose; callers that
-     * need the truth (order confirm joining a booking TX) use this.
-     */
-    public get transactionDepth(): number {
-        return this._transactionDepth;
-    }
-
     protected override get CurrentTransactionDepth(): number {
         return this._transactionDepth;
     }
 
     /** Copy of the savepoint stack, outermost first. */
-    public get savepointStack(): string[] {
+    public get SavepointStack(): string[] {
         return [...this._savepointStack];
     }
 
