@@ -16,9 +16,9 @@
     }
   },
   "scripts": {
-    "prebuild": "if [ -d dist ]; then mj codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist || echo 'Warning: mj codegen manifest not available, using existing manifest'; else touch .needs-manifest-rebuild; fi",
+    "prebuild": "if [ -d dist ]; then node ../../../packages/MJCLI/bin/run.js codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist || echo 'Warning: workspace CLI not built yet (build @memberjunction/cli first), using existing manifest'; else touch .needs-manifest-rebuild; fi",
     "build": "tsc && tsc-alias -f",
-    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (mj codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist && tsc && tsc-alias -f || echo 'Warning: mj codegen manifest not available, manifest will be generated on next build'); fi",
+    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (node ../../../packages/MJCLI/bin/run.js codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist && tsc && tsc-alias -f || echo 'Warning: workspace CLI not built yet (build @memberjunction/cli first), manifest will be generated on next build'); fi",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
     "test": "vitest run",
