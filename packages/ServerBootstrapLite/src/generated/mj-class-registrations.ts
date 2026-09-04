@@ -188,13 +188,14 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (408 classes)
+// @memberjunction/core-entities (409 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -1285,6 +1286,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -1430,11 +1432,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentItemEntity,
     MJContentItemTagEntity,
     MJContentProcessRunDetailEntity,
-    MJContentProcessRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentProcessRunEntity,
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
     MJContentSourceParamEntity,
@@ -1634,11 +1636,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestEntity,
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
-    MJSkillEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
@@ -1838,11 +1840,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     InstagramGetAccountInsightsAction,
     InstagramGetBusinessPostsAction,
     InstagramGetCommentsAction,
-    InstagramGetPostInsightsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    InstagramGetPostInsightsAction,
     InstagramSchedulePostAction,
     InstagramSearchPostsAction,
     LinkedInCreateArticleAction,
@@ -2042,11 +2044,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ColorConverterAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
     CopyObjectAction,
@@ -2201,7 +2203,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 939;
+export const CLASS_REGISTRATIONS_COUNT = 940;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
