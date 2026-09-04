@@ -619,3 +619,46 @@ describe('EntityInfo denied-field precompute', () => {
         expect(entity.GetDeniedReadFields(buildUser([HR_ROLE_ID])).size).toBe(0);
     });
 });
+
+describe('EntityInfo single-field permission predicates', () => {
+    // The bulk GetDenied*Fields sets answer "which fields", these answer "this one field" — the
+    // shape display code needs when it is about to read a value and Get() would throw.
+
+    it('IsFieldReadableByUser mirrors GetDeniedReadFields', () => {
+        const entity = buildEntity([permission({ RoleID: HR_ROLE_ID, Read: ALLOW, Update: ALLOW, Create: ALLOW })]);
+        expect(entity.IsFieldReadableByUser('Salary', buildUser([HR_ROLE_ID]))).toBe(true);
+        expect(entity.IsFieldReadableByUser('Salary', buildUser([INTERN_ROLE_ID]))).toBe(false);
+    });
+
+    it('IsFieldUpdatableByUser and IsFieldCreatableByUser answer their own verbs', () => {
+        const entity = buildEntity([permission({ RoleID: HR_ROLE_ID, Read: ALLOW, Update: NONE, Create: ALLOW })]);
+        const hr = buildUser([HR_ROLE_ID]);
+        expect(entity.IsFieldReadableByUser('Salary', hr)).toBe(true);
+        expect(entity.IsFieldUpdatableByUser('Salary', hr)).toBe(false);
+        expect(entity.IsFieldCreatableByUser('Salary', hr)).toBe(true);
+    });
+
+    it('matches field names case-insensitively and tolerates surrounding whitespace', () => {
+        const entity = buildEntity([permission({ RoleID: HR_ROLE_ID, Read: ALLOW, Update: ALLOW, Create: ALLOW })]);
+        const intern = buildUser([INTERN_ROLE_ID]);
+        expect(entity.IsFieldReadableByUser('  sAlArY ', intern)).toBe(false);
+    });
+
+    it('FAILS OPEN on a missing user, a missing field name, or field security switched off', () => {
+        const entity = buildEntity([permission({ RoleID: HR_ROLE_ID, Read: ALLOW, Update: ALLOW, Create: ALLOW })]);
+        expect(entity.IsFieldReadableByUser('Salary', null)).toBe(true);
+        expect(entity.IsFieldReadableByUser(null, buildUser([INTERN_ROLE_ID]))).toBe(true);
+        expect(entity.IsFieldUpdatableByUser('Salary', null)).toBe(true);
+        expect(entity.IsFieldCreatableByUser('Salary', null)).toBe(true);
+
+        const off = buildEntity([], 'Employees', /* enableFieldLevelSecurity */ false);
+        expect(off.IsFieldReadableByUser('Salary', buildUser([INTERN_ROLE_ID]))).toBe(true);
+    });
+
+    it('reports an unrestrictable field as readable even with no rows', () => {
+        // Primary keys are forced open inside GetUserFieldPermissions, which is what lets display
+        // code fall back to the PK when a name field is denied.
+        const entity = buildEntity([]);
+        expect(entity.IsFieldReadableByUser('ID', buildUser([INTERN_ROLE_ID]))).toBe(true);
+    });
+});

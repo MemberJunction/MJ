@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { Subject, of } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { Subject } from 'rxjs';
 import { renderComponentFixture, query, text, hasClass } from '@memberjunction/ng-test-utils';
@@ -27,6 +28,26 @@ function formStub(expanded: boolean) {
   };
 }
 
+/**
+ * Duck-typed stand-in for the @ContentChildren QueryList of mj-form-field children. The panel
+ * only ever reads `length`, `forEach`, `toArray()`, `changes` and each child's `Navigate` /
+ * `DisplayName` / `IsFieldReadableByUser`, so this is the whole contract — projecting real
+ * form-field components would drag their entire dependency graph in for a visibility assertion.
+ */
+function fieldChildren(readable: boolean[]) {
+  const items = readable.map((r, i) => ({
+    DisplayName: `Field ${i}`,
+    IsFieldReadableByUser: r,
+    Navigate: of(),
+  }));
+  return {
+    length: items.length,
+    toArray: () => items,
+    forEach: (fn: (item: unknown) => void) => items.forEach(fn),
+    changes: new Subject(),
+  };
+}
+
 function render(inputs: Record<string, unknown>) {
   return renderComponentFixture(MjCollapsiblePanelComponent, {
     declarations: [MjCollapsiblePanelComponent],
@@ -34,6 +55,34 @@ function render(inputs: Record<string, unknown>) {
     inputs,
   });
 }
+
+describe('MjCollapsiblePanelComponent — field-level security', () => {
+  /** Render, attach the projected-field stub, then run the content-init pass that reads it. */
+  function renderWithFields(readable: boolean[]) {
+    const f = render({ SectionName: 'Compensation', SectionKey: 'comp', Form: formStub(true) });
+    (f.componentInstance as unknown as { FieldComponents: unknown }).FieldComponents = fieldChildren(readable);
+    f.componentInstance.ngAfterContentInit();
+    f.detectChanges();
+    return f;
+  }
+
+  it('hides a section whose every field is denied — an empty card reads as a broken screen', () => {
+    const f = renderWithFields([false, false]);
+    expect(f.componentInstance.IsVisible).toBe(false);
+  });
+
+  it('keeps a section with at least one readable field', () => {
+    const f = renderWithFields([false, true]);
+    expect(f.componentInstance.IsVisible).toBe(true);
+  });
+
+  it('keeps a section that projects NO fields at all', () => {
+    // Related-entity grids, IS-A cards and slot-injected panels legitimately have no
+    // mj-form-field children. "No fields" and "no readable fields" are different states.
+    const f = renderWithFields([]);
+    expect(f.componentInstance.IsVisible).toBe(true);
+  });
+});
 
 describe('MjCollapsiblePanelComponent (DOM)', () => {
   it('renders the section name (DisplayName) and the data-section-key attribute', () => {
