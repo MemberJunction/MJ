@@ -120,4 +120,31 @@ describe('AgentRunner — media artifact storage routing', () => {
 
         expect(storageEngineConfigured).toBe(true);
     });
+
+    // The File branch delegates to createFileArtifact, whose default label is 'file'. Media must keep
+    // its own label so a failed media artifact still reads "Cannot create artifact for media Image …",
+    // not "for file …" — the diagnostics were that specific before the storage branch existed.
+    it('keeps the media label through the File branch, so diagnostics stay specific', async () => {
+        hasStorageAccounts = true;
+        const captured: Array<{ label?: string; setVersionFields?: (v: Record<string, unknown>) => void }> = [];
+        const probe = runner as unknown as {
+            CreateMediaArtifacts(id: string, media: unknown[], user: UserInfo, provider?: unknown, accountId?: string): Promise<void>;
+            createArtifactWithVersion: (opts: { label?: string; setVersionFields?: (v: Record<string, unknown>) => void }) => Promise<void>;
+            getMimeTypeExtension: (m: string) => string;
+        };
+        probe.createArtifactWithVersion = async (opts) => { captured.push(opts); };
+        probe.getMimeTypeExtension = () => 'png';
+        await probe.CreateMediaArtifacts(
+            'detail-1',
+            [{ modality: 'Image', mimeType: 'image/png', data: 'QUJD', label: 'img' }],
+            {} as UserInfo
+        );
+        expect(uploadCalls).toHaveLength(1); // it took the File branch
+        expect(captured).toHaveLength(1);
+        expect(captured[0].label).toBe('media Image');
+        const version: Record<string, unknown> = {};
+        captured[0].setVersionFields?.(version);
+        expect(version.ContentMode).toBe('File');
+        expect(version.FileID).toBe('file-id-1');
+    });
 });

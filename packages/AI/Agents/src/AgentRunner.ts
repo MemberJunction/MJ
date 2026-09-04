@@ -1317,7 +1317,8 @@ export class AgentRunner {
 
                 if (fileId) {
                     await this.createFileArtifact(
-                        fileId, media.mimeType, fileName, estimatedSizeBytes, conversationDetailId, contextUser, md, true);
+                        fileId, media.mimeType, fileName, estimatedSizeBytes, conversationDetailId, contextUser, md, true,
+                        `media ${media.modality}`);
                 } else {
                     await this.createArtifactWithVersion({
                         mimeType: media.mimeType,
@@ -1595,7 +1596,11 @@ export class AgentRunner {
         }
     }
 
-    /** Creates a file-backed artifact (version references a FileID in MJStorage). */
+    /**
+     * Creates a file-backed artifact (version references a FileID in MJStorage). `label` names the
+     * thing being stored in diagnostics ("file", "media Image") so a failure reads as specifically as
+     * the inline path's would.
+     */
     private async createFileArtifact(
         fileId: string,
         mimeType: string,
@@ -1604,11 +1609,12 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        acceptUnregisteredFiles: boolean
+        acceptUnregisteredFiles: boolean,
+        label: string = 'file'
     ): Promise<CreatedArtifactInfo> {
         return this.createArtifactWithVersion({
             mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
-            label: 'file',
+            label,
             setVersionFields: (version) => {
                 version.ContentMode = 'File';
                 version.FileID = fileId;
