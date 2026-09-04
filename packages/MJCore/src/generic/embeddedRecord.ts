@@ -436,7 +436,9 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
     private keyFromForeignKey(fk: unknown): CompositeKey {
         const pks = this.instance!.EntityInfo.PrimaryKeys;
         if (pks.length === 1) {
-            return CompositeKey.FromID(fk);
+            // The embedded entity's single key column can have any name — `FromID` would build an
+            // `ID` key and Load() would reject it for any entity whose key is called something else.
+            return CompositeKey.FromKeyValuePair(pks[0].Name, fk);
         }
         return new CompositeKey(pks.map(pk => new KeyValuePair(pk.Name, fk)));
     }
