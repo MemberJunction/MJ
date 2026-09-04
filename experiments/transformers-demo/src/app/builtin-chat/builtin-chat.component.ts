@@ -39,10 +39,9 @@ interface ProbeSummary {
  * client-side pre-processor / request-router idea.
  */
 @Component({
-  selector: 'app-builtin-chat',
-  standalone: true,
-  imports: [DecimalPipe, FormsModule, RouterLink],
-  template: `
+    selector: 'app-builtin-chat',
+    imports: [DecimalPipe, FormsModule, RouterLink],
+    template: `
     <div class="layout">
       <div class="main">
     @if (!IsSupported) {
@@ -54,7 +53,7 @@ interface ProbeSummary {
         <ol class="setup">
           <li>Use <strong>Chrome Canary 153+</strong> (Early Preview Program, Gemma 4 dev trial).</li>
           <li>Enable <code>chrome://flags/#gemma4-for-built-in-ai</code> and relaunch.</li>
-          <li>Reload this page and click <em>Connect</em> — the first connect downloads the model (~2.5 GB).</li>
+          <li>Reload this page and click <em>Connect</em> — the first connect downloads the model (~2.4 GB).</li>
         </ol>
         <a routerLink="/home" class="back-link">← Home</a>
       </div>
@@ -67,7 +66,7 @@ interface ProbeSummary {
             <div class="progress-fill" [style.width.%]="LoadProgress"></div>
           </div>
           <p class="loading-hint">
-            Chrome downloads the model once per profile (~2.5 GB for Gemma 4 2B).<br>
+            Chrome downloads the model once per profile (~2.4 GB for Gemma 4 2B).<br>
             Later sessions attach in well under a second.
           </p>
         </div>
@@ -217,7 +216,7 @@ interface ProbeSummary {
           Availability: <span class="pill" [attr.data-state]="Availability">{{ Availability }}</span>
         </p>
         @if (Availability === 'downloadable') {
-          <p class="loading-hint">Connecting will download the model (~2.5 GB) — Chrome requires a click for that.</p>
+          <p class="loading-hint">Connecting will download the model (~2.4 GB) — Chrome requires a click for that.</p>
         }
         @if (Availability === 'unavailable') {
           <p class="loading-hint">
@@ -229,7 +228,7 @@ interface ProbeSummary {
         @if (ErrorMessage) { <p class="error">{{ ErrorMessage }}</p> }
         <p class="loading-hint">
           The activity panel on the right shows each Prompt API call and its timing.
-          @if (!ShowActivity) { <a href="javascript:void 0" (click)="ShowActivity = true">Show it</a> }
+          @if (!ShowActivity) { <button type="button" class="ghost-btn small" (click)="ShowActivity = true">Show it</button> }
         </p>
         <a routerLink="/home" class="back-link">← Home</a>
       </div>
@@ -274,7 +273,7 @@ interface ProbeSummary {
       }
     </div>
   `,
-  styles: [`
+    styles: [`
     :host { display: flex; flex-direction: column; height: 100vh; font-family: system-ui, sans-serif; }
     .layout { display: flex; height: 100vh; }
     .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -387,7 +386,7 @@ interface ProbeSummary {
     .back-link { display: inline-block; margin-top: 24px; color: #3b82f6; text-decoration: none; }
     .error { color: #ef4444; margin-top: 16px; }
     .error.inline { margin: 0 20px 8px; font-size: 13px; }
-  `],
+  `]
 })
 export class BuiltInChatComponent implements OnInit {
   @ViewChild('messagesContainer') MessagesContainer!: ElementRef;

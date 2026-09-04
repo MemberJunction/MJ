@@ -2,10 +2,9 @@ import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 @Component({
-  selector: 'app-home',
-  standalone: true,
-  imports: [RouterLink],
-  template: `
+    selector: 'app-home',
+    imports: [RouterLink],
+    template: `
     <div class="home-container">
       <header class="home-header">
         <h1>In-Browser AI Demo</h1>
@@ -55,12 +54,12 @@ import { RouterLink } from '@angular/router';
         <p class="tech-stack">
           Built with <a href="https://huggingface.co/docs/transformers.js" target="_blank">Transformers.js</a>
           + <a href="https://developer.chrome.com/docs/ai/prompt-api" target="_blank">Chrome Prompt API</a>
-          + <a href="https://angular.dev" target="_blank">Angular 18</a>
+          + <a href="https://angular.dev" target="_blank">Angular 21</a>
         </p>
       </footer>
     </div>
   `,
-  styles: [`
+    styles: [`
     :host {
       display: flex;
       flex-direction: column;
