@@ -2782,6 +2782,67 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Whether this user may READ the named field — the single-field question, answered the same
+     * way {@link GetDeniedReadFields} answers it in bulk.
+     *
+     * Exists for **display code that is about to read a value it did not choose**: a form
+     * toolbar rendering the entity's Name field, an FK control rendering the joined display
+     * column, an IS-A card walking a sibling record's fields. `BaseEntity.Get()` throws for a
+     * denied field, so those call sites have to ask before they read or they take out the whole
+     * screen instead of hiding one value.
+     *
+     * This is a PREDICATE, deliberately — not a value accessor that quietly returns nothing.
+     * The caller still decides what to render in place of the value, which is the part that
+     * differs per surface and should not be hidden inside a getter.
+     *
+     * **Fails open** on a missing user, a missing field name, or an entity with field security
+     * switched off — matching `BaseEntity`'s own gate and `MjFormFieldComponent`. The server is
+     * the real boundary; a UI that blanked out fields because no user had resolved yet would be
+     * worse than one that shows them.
+     *
+     * PERFORMANCE: this delegates to {@link GetDeniedReadFields}, which walks every field on the
+     * entity. Fine for the handful of chrome reads it exists for; do NOT call it per row in a
+     * grid loop — compute the denied set once and test against it.
+     *
+     * @param fieldName the field about to be read
+     * @param user the acting user
+     */
+    public IsFieldReadableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
+        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+            return true;
+        }
+        return !this.GetDeniedReadFields(user).has(fieldName.trim().toLowerCase());
+    }
+
+    /**
+     * Whether this user may UPDATE the named field. Companion to
+     * {@link IsFieldReadableByUser}, for UI that needs to render a control read-only rather than
+     * let a user type into something the server will reject on save. Fails open on the same
+     * three conditions.
+     */
+    public IsFieldUpdatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
+        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+            return true;
+        }
+        return !this.GetDeniedUpdateFields(user).has(fieldName.trim().toLowerCase());
+    }
+
+    /**
+     * Whether this user may supply a value for the named field when CREATING a record.
+     * Companion to {@link IsFieldReadableByUser}. Fails open on the same three conditions.
+     *
+     * Note the server does not REJECT a create-denied value — it drops it and takes the column
+     * default. So a UI that leaves such a field editable on a new record silently discards what
+     * the user typed, which is the case this exists to prevent.
+     */
+    public IsFieldCreatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
+        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+            return true;
+        }
+        return !this.GetDeniedCreateFields(user).has(fieldName.trim().toLowerCase());
+    }
+
+    /**
      * The set of field names this user may NOT UPDATE on this entity. Same per-request
      * precompute contract as {@link GetDeniedReadFields}.
      *

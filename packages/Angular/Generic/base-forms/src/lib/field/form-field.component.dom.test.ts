@@ -452,13 +452,18 @@ describe('MjFormFieldComponent — field-level security', () => {
         { ID: 'F1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, AllowUpdateAPI: false },
         { ID: 'F2', Name: 'Name', DisplayName: 'Widget Name', Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true, EntityFieldPermissions: openTo('F2', [HR_ROLE_ID, INTERN_ROLE_ID]) },
         { ID: 'F3', Name: 'Description', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: openTo('F3', [HR_ROLE_ID]) },
+        // Readable by the intern but NOT updatable or creatable — the see-but-not-touch case.
+        { ID: 'F4', Name: 'Notes', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: [
+            ...openTo('F4', [HR_ROLE_ID]),
+            { ID: 'F4-ro', EntityFieldID: 'F4', RoleID: INTERN_ROLE_ID, ReadAccess: 'Allow', UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+        ] },
       ],
     });
   }
 
   function makeSecuredWidget(user: unknown): BaseEntity {
     const entity = new TestWidgetEntity(makeSecuredEntityInfo());
-    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Description: 'secret' }, true, true);
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Description: 'secret', Notes: 'jotting' }, true, true);
     // The ENTITY resolves its own acting user for BaseEntity.Get()'s gate. Set it explicitly so
     // the component's provider and the entity agree — otherwise the component would allow a
     // render that the entity then refuses, which is exactly the crash being guarded against.
@@ -525,5 +530,53 @@ describe('MjFormFieldComponent — field-level security', () => {
     // denied field must not be able to take out the form it sits in.
     const f = renderAs('Description', [INTERN_ROLE_ID]);
     expect(() => f.detectChanges()).not.toThrow();
+  });
+
+  // ---- write gate: readable but not writable ----
+
+  it('marks a readable-but-not-updatable field read-only on a SAVED record', () => {
+    // Without this the user types into a control the server will reject on save, and the error
+    // names a field they had every reason to think was editable.
+    const f = renderAs('Notes', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+    expect(f.componentInstance.IsFieldReadOnly).toBe(true);
+  });
+
+  it('leaves the field writable for a role that may update it', () => {
+    const f = renderAs('Notes', [HR_ROLE_ID]);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldReadOnly).toBe(false);
+  });
+
+  it('uses the CREATE verb on an unsaved record, not the update verb', () => {
+    // Create denial does not raise a server error — the value is silently dropped and the column
+    // takes its default. The read-only control is the only signal the user gets.
+    const user = userWithRoles([INTERN_ROLE_ID]);
+    const entity = new TestWidgetEntity(makeSecuredEntityInfo());
+    entity.ContextCurrentUser = user as never;
+    entity.NewRecord();
+    const f = render({ Record: entity, FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: user } });
+    expect(f.componentInstance.Record.IsSaved).toBe(false);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+  });
+
+  it('re-evaluates the write gate when a new record becomes saved', () => {
+    // IsSaved flips WITHOUT ngOnChanges firing — the Record input is the same object. A plain
+    // memo would answer with the create-time verb for the rest of the form's life.
+    const user = userWithRoles([HR_ROLE_ID]);
+    const entity = new TestWidgetEntity(makeSecuredEntityInfo());
+    entity.ContextCurrentUser = user as never;
+    entity.NewRecord();
+    const f = render({ Record: entity, FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: user } });
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Notes: 'jotting' }, true, true);
+    expect(f.componentInstance.Record.IsSaved).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
+
+  it('FAILS OPEN on the write gate when no user has resolved', () => {
+    const f = render({ Record: makeSecuredWidget(null), FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: null } });
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
   });
 });

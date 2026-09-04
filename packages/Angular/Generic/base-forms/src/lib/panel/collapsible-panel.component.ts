@@ -512,12 +512,39 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     }, 500);
   }
 
+  /**
+   * True when this panel projects form fields and field-level security denies the user EVERY one
+   * of them.
+   *
+   * Deliberately false when the panel projects no `mj-form-field` at all — related-entity grids,
+   * IS-A cards and slot-injected panels all legitimately have none, and hiding those would remove
+   * sections field security has nothing to say about. "No fields" and "no readable fields" are
+   * different states and only the second one should hide the section.
+   */
+  private get AllProjectedFieldsDenied(): boolean {
+    const fields = this.FieldComponents;
+    if (!fields || fields.length === 0) {
+      return false;
+    }
+    return fields.toArray().every(f => !f.IsFieldReadableByUser);
+  }
+
   private UpdateVisibilityAndHighlighting(): void {
     // Hard hide takes precedence over search state. Driven by an explicit
     // `Hidden` input OR the form config's section-visibility rules carried on
     // FormContext (which also reach slot-injected BaseFormPanels, since every
     // panel receives FormContext).
     if (this._hidden || IsFormSectionHidden(this.FormContext, this.SectionKey, this.Variant) || this.isHiddenByChrome()) {
+      this.IsVisible = false;
+      this.DisplayName = EscapeHTML(this.SectionName);
+      this.cdr.markForCheck();
+      return;
+    }
+
+    // A section whose every field is denied by field-level security renders as a heading over
+    // nothing — the fields hide themselves individually, leaving an empty card that reads like a
+    // broken screen rather than a permissions boundary. Hide the section instead.
+    if (this.AllProjectedFieldsDenied) {
       this.IsVisible = false;
       this.DisplayName = EscapeHTML(this.SectionName);
       this.cdr.markForCheck();
