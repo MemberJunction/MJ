@@ -84,7 +84,7 @@ export function describeCommand(descriptor: RichTextCommandDescriptor, isMac: bo
     if (!descriptor.Shortcut) {
         return descriptor.Label;
     }
-    const shortcut = descriptor.Shortcut.replace('Mod', isMac ? '⌘' : 'Ctrl');
+    const shortcut = descriptor.Shortcut.replace('Mod', () => (isMac ? '⌘' : 'Ctrl'));
     return `${descriptor.Label} (${shortcut})`;
 }
 
@@ -93,7 +93,7 @@ export function ariaKeyShortcuts(descriptor: RichTextCommandDescriptor, isMac: b
     if (!descriptor.Shortcut) {
         return null;
     }
-    return descriptor.Shortcut.replace('Mod', isMac ? 'Meta' : 'Control');
+    return descriptor.Shortcut.replace('Mod', () => (isMac ? 'Meta' : 'Control'));
 }
 
 /**

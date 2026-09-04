@@ -90,10 +90,11 @@ function renderLine(line: string, addLinks: boolean): string {
 
 /** Leading, trailing, and doubled spaces collapse in HTML; make them non-breaking. */
 function preserveSpaces(text: string): string {
+    // Function replacements: a string in the replacement slot would have `$` sequences expanded.
     return text
-        .replace(/^ /, NON_BREAKING_SPACE)
-        .replace(/ $/, NON_BREAKING_SPACE)
-        .replace(/ {2}/g, ` ${NON_BREAKING_SPACE}`);
+        .replace(/^ /, () => NON_BREAKING_SPACE)
+        .replace(/ $/, () => NON_BREAKING_SPACE)
+        .replace(/ {2}/g, () => ` ${NON_BREAKING_SPACE}`);
 }
 
 export function escapeHtml(text: string): string {

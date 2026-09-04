@@ -23,7 +23,7 @@ export async function openEditor(page: Page, html: string, config: RichTextEdito
             // which pins the position exactly (a character count would be ambiguous at the seam
             // between two text nodes). It is removed once the caret is placed.
             const MARK = '\uE000';
-            engine.SetHTML(html.replace('|', MARK));
+            engine.SetHTML(html.replace('|', () => MARK));
             engine.Focus();
             if (!html.includes('|')) {
                 return;
