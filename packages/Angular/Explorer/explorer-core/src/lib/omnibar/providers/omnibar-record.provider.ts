@@ -74,7 +74,12 @@ export class OmnibarRecordProvider extends OmnibarProvider {
     ): Promise<Map<string, string>> {
         const resolved = new Map<string, string>();
         try {
-            const inputs = targets.map((t) => ({ EntityName: t.entityName, CompositeKey: CompositeKey.FromID(t.recordId) }));
+            // Recents span arbitrary entities whose key column can have any name; `FromID` assumed
+            // `ID` and left those records showing a raw id instead of a name.
+            const inputs = targets.map((t) => ({
+                EntityName: t.entityName,
+                CompositeKey: CompositeKey.FromURLSegment(md.EntityByName(t.entityName), t.recordId),
+            }));
             const results = await md.GetEntityRecordNames(inputs, user);
             for (const r of results ?? []) {
                 if (r.Success && r.RecordName) {

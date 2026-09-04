@@ -1,7 +1,7 @@
 /**
  * Host-anchored dynamic import for runtime-configured packages.
  *
- * A bare `import(pkgName)` resolves from THIS package (server-bootstrap), which cannot
+ * A bare `import(pkgName)` resolves from THIS package (dynamic-packages), which cannot
  * declare packages whose names are only known at runtime — mj.config.cjs supplies them.
  * npm's hoisted node_modules let that bare import resolve by accident; pnpm's strict
  * per-package layout does not, because the packages are declared by (and linked into) the
@@ -31,8 +31,8 @@ import path from 'node:path';
  * or the pnpm fallback silently stops working under ts-node hosts.
  *
  * Keep in sync with `IsModuleResolutionFailure` in @memberjunction/open-app-engine's
- * `src/install/migration-runner.ts` — same heuristic, duplicated because the two
- * packages cannot depend on each other and cross-package re-exports are disallowed.
+ * `src/install/migration-runner.ts` — same heuristic, duplicated because the engine
+ * cannot depend on this package and cross-package re-exports are disallowed.
  */
 export function isResolutionFailure(error: unknown): boolean {
   const { code, message } = (error as { code?: string; message?: string }) ?? {};
@@ -42,22 +42,6 @@ export function isResolutionFailure(error: unknown): boolean {
   return code === undefined && typeof message === 'string' && /^Cannot find (package|module) /.test(message);
 }
 
-/**
- * Imports a runtime-configured package from the HOST application's context.
- *
- * Resolution and evaluation are handled separately on the fallback path: an anchor that
- * cannot SEE the package means "try the next anchor", but once an anchor resolves it,
- * any failure from loading the module (a missing transitive dependency, a throw in its
- * top-level code) is the module's own problem and is surfaced as-is — never masked by
- * the original "cannot find package" error.
- *
- * Note on the resolver: `createRequire().resolve` runs under CommonJS conditions, so a
- * package whose exports map declares ONLY an `"import"` condition cannot be resolved by
- * the fallback (surfaced with an actionable error). On a dual CJS/ESM package it selects
- * the CJS entry, so `import()` of that file would load a second physical module instance
- * alongside any ESM copy already in the process — fine for MJ-shaped single-condition
- * packages, but keep it in mind before widening this mechanism.
- */
 /**
  * Host anchors used to resolve runtime-configured packages. The mj.config.cjs that
  * named the package is first — cwd can be a different checkout.
@@ -127,6 +111,22 @@ export function resolvePackageJsonFromHost(pkgName: string, configFilePath?: str
   return null;
 }
 
+/**
+ * Imports a runtime-configured package from the HOST application's context.
+ *
+ * Resolution and evaluation are handled separately on the fallback path: an anchor that
+ * cannot SEE the package means "try the next anchor", but once an anchor resolves it,
+ * any failure from loading the module (a missing transitive dependency, a throw in its
+ * top-level code) is the module's own problem and is surfaced as-is — never masked by
+ * the original "cannot find package" error.
+ *
+ * Note on the resolver: `createRequire().resolve` runs under CommonJS conditions, so a
+ * package whose exports map declares ONLY an `"import"` condition cannot be resolved by
+ * the fallback (surfaced with an actionable error). On a dual CJS/ESM package it selects
+ * the CJS entry, so `import()` of that file would load a second physical module instance
+ * alongside any ESM copy already in the process — fine for MJ-shaped single-condition
+ * packages, but keep it in mind before widening this mechanism.
+ */
 export async function importFromHost(pkgName: string, configFilePath?: string): Promise<Record<string, unknown>> {
   try {
     return (await import(pkgName)) as Record<string, unknown>;

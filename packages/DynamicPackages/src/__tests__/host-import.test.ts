@@ -35,8 +35,8 @@ describe('isResolutionFailure', () => {
 
 describe('importFromHost', () => {
     // A fake HOST directory whose node_modules carries packages that this package
-    // (server-bootstrap) cannot resolve — mirroring MJAPI holding the Open App server
-    // packages that server-bootstrap must load. The mj.config.cjs path inside it is the
+    // (dynamic-packages) cannot resolve — mirroring MJAPI holding the Open App server
+    // packages that the loader must load on the host's behalf. The mj.config.cjs path inside it is the
     // anchor handed to importFromHost.
     let hostDir: string;
     let hostConfigPath: string;

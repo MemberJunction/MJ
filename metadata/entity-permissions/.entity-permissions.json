@@ -554,5 +554,18 @@
       "lastModified": "2026-08-20T22:30:53.611Z",
       "checksum": "fda68614f8fd529a3e30dc30b23a210aa1376d798dd5601fe4af02082b9fd017"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Skills",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "CFDBE38F-1222-40B4-82EC-F3EA49F785C8"
+    }
   }
 ]
