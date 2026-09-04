@@ -5361,6 +5361,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // 2x margin defended by nothing is not a guard. Same reasoning as baseEngine's own
                 // IgnoreMaxRows use, and this file documents the identical trap on the push side.
                 IgnoreMaxRows: true,
+                // Every prefetch carries THIS batch's keys, so its cache fingerprint is unique and
+                // the cached result can never be hit again — with a result cache active, each batch
+                // deposits one dead entry and a long first sync grows the process by O(records
+                // processed). Measured in production: a full-history drain (~500k records) exhausted
+                // a default node heap and took the host down. The match lookups in this same file
+                // already bypass for correctness; the prefetch must bypass for survival.
+                BypassCache: true,
             }, contextUser);
             if (!res.Success) return undefined;
             const Hashes = new Map<string, string>();

@@ -179,4 +179,15 @@ describe('the prefetch is unbounded — its result is what absence proofs are ju
         await host.PrefetchContentHashes([created('x')], {});
         expect(lastRunViewParams.current?.['IgnoreMaxRows']).toBe(true);
     });
+
+    it('passes BypassCache so per-batch results never accumulate in a result cache', async () => {
+        // Every prefetch queries THIS batch's keys, so its cache fingerprint is unique and a
+        // cached result can never be hit again. With a result cache active, each batch deposits
+        // one dead entry — memory grows O(records processed) for the life of the process, and a
+        // full-history first sync (~500k records, measured) exhausts a default node heap. The
+        // match lookups already bypass for correctness; the prefetch bypasses for survival.
+        const host = makeHost([]);
+        await host.PrefetchContentHashes([created('x')], {});
+        expect(lastRunViewParams.current?.['BypassCache']).toBe(true);
+    });
 });
