@@ -6,11 +6,12 @@
  *
  * Robustness contract, identical to the loader this replaces in @memberjunction/server-bootstrap:
  * no-op when nothing is configured, per-package try/catch, a package that cannot be resolved is
- * reported as not-found (expected before `npm install` / for an unbuilt workspace member), a
+ * reported as not-found (expected before `npm install`, and for a workspace member found on disk
+ * whose entry file has not been built yet), a
  * package that resolves but throws surfaces its own error on the warn path, and boot never
  * crashes because of an app package.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cosmiconfigSync } from 'cosmiconfig';
@@ -35,6 +36,20 @@ import type {
 export const ConsoleDynamicPackagesLogger: DynamicPackagesLogger = {
     info: (message) => console.log(message),
     warn: (message, error) => (error === undefined ? console.warn(message) : console.warn(message, error)),
+    verbose: () => undefined,
+};
+
+/**
+ * A logger that keeps stdout clean: progress and warnings go to stderr, verbose detail is dropped.
+ * For CLI hosts whose stdout is a machine-readable envelope (`--format=json`, `--output=json`) —
+ * the default console logger would print "Loading Open App server packages..." ahead of the JSON.
+ */
+export const StderrDynamicPackagesLogger: DynamicPackagesLogger = {
+    info: (message) => process.stderr.write(`${message}\n`),
+    warn: (message, error) => {
+        const detail = error === undefined ? '' : ` ${error instanceof Error ? error.message : String(error)}`;
+        process.stderr.write(`${message}${detail}\n`);
+    },
     verbose: () => undefined,
 };
 
@@ -213,7 +228,16 @@ async function loadOne(
             if (!onDisk) {
                 throw error;
             }
-            mod = await importPackageDir(onDisk);
+            const entryFile = resolvePackageEntryFile(onDisk);
+            if (!existsSync(entryFile)) {
+                // The workspace member exists but has not been built (no dist yet) — the expected
+                // state before the app's own build, not an error. Report it as not-found, with the
+                // file the build is expected to produce, and never on the warn path.
+                report.NotFound.push(candidate);
+                log.info(`  ${label} ${pkgName} found at ${onDisk} but not built (missing ${path.relative(onDisk, entryFile)}) — build it first`);
+                return;
+            }
+            mod = await importPackageDir(entryFile);
         }
 
         const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
@@ -281,17 +305,24 @@ function isOwnResolutionFailure(error: unknown, pkgName: string): boolean {
 }
 
 /**
- * Imports a package by its directory, honouring a string/"."/conditional `exports` map, else `main`.
- * (Dynamic import is justified here as runtime plugin discovery: the path comes from a manifest
- * on disk, not from code.)
+ * Resolves a package directory's entry file, honouring a string/"."/conditional `exports` map,
+ * else `main`, else `index.js`. Pure path work — whether the file exists is the caller's question.
  */
-async function importPackageDir(dir: string): Promise<Record<string, unknown>> {
+function resolvePackageEntryFile(dir: string): string {
     const pkgJson = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')) as {
         main?: unknown;
         exports?: unknown;
     };
     const entry = resolveExportsEntry(pkgJson.exports) ?? (typeof pkgJson.main === 'string' ? pkgJson.main : 'index.js');
-    return (await import(pathToFileURL(path.resolve(dir, entry)).href)) as Record<string, unknown>;
+    return path.resolve(dir, entry);
+}
+
+/**
+ * Imports a package by its resolved entry file. (Dynamic import is justified here as runtime
+ * plugin discovery: the path comes from a manifest on disk, not from code.)
+ */
+async function importPackageDir(entryFile: string): Promise<Record<string, unknown>> {
+    return (await import(pathToFileURL(entryFile).href)) as Record<string, unknown>;
 }
 
 function resolveExportsEntry(exportsField: unknown): string | null {

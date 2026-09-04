@@ -53,13 +53,19 @@ dynamicPackages: {
     { PackageName: '@mj-biz-apps/orders-server', StartupExport: 'LoadBizAppsOrdersServer', AppName: 'mj-bizapps-orders', Enabled: true },
     // only when the CLI runs any `mj sync` command
     { PackageName: '@acme/demo-seed-server', StartupExport: 'LoadDemoSeed', Processes: ['cli:sync'] },
-    // everywhere except migrations
-    { PackageName: '@acme/audit-server', StartupExport: 'LoadAudit', ExcludeProcesses: ['cli:migrate'] },
+    // everywhere except CodeGen
+    { PackageName: '@acme/audit-server', StartupExport: 'LoadAudit', ExcludeProcesses: ['cli:codegen'] },
   ],
   // optional per-process on/off switch; the most specific key wins
-  policy: { 'cli:migrate': 'none' },
+  policy: { 'cli:codegen': 'none' },
 }
 ```
+
+Scoping only applies to processes that run the loader. The `mj` CLI's *light* commands — `mj migrate`
+(and `migrate create` / `migrate convert`), `mj install`, `mj clean`, `mj bundle`, `mj doctor`,
+`mj version`, `help` and the `usage` pages — skip the class-registration manifest for instant
+startup and never load app packages, so a `Processes: ['cli:migrate']` entry or a `cli:migrate`
+policy key has no effect: migrations never run app entity subclasses in any mode.
 
 ### Turning it off for one run
 
@@ -67,9 +73,11 @@ dynamicPackages: {
 The `mj` CLI exposes it as the global `--no-app-packages` flag. Precedence, highest first:
 env var → programmatic `mode` option → `dynamicPackages.policy` → `'load'`.
 
-Note that this only affects *app* packages. MJ core's own server subclasses still register through
-the host's manifest, so a "raw" run is raw for app entities only — which is why the CLI flag is not
-called `--raw`.
+Mode `none` skips every dynamic package: the installed Open App packages *and* the host's own
+`codeGeneration.packages` (generated entities/actions/resolvers), so a host that relies on the latter
+loses its custom entity subclasses too for that run. MJ core's own server subclasses still register
+through the host's manifest, so a "raw" run is raw for app and host entities only — which is why the
+CLI flag is not called `--raw`.
 
 ### Running inside an Open App repository
 

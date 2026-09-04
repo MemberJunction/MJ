@@ -52,4 +52,11 @@ export {
     ReadDynamicPackagesConfig,
 } from './discover.js';
 export type { AppManifestDiscovery } from './discover.js';
-export { ConsoleDynamicPackagesLogger, DiscoverMJConfig, LoadDynamicPackages, ResetLoadedDynamicPackages, SilentDynamicPackagesLogger } from './loader.js';
+export {
+    ConsoleDynamicPackagesLogger,
+    DiscoverMJConfig,
+    LoadDynamicPackages,
+    ResetLoadedDynamicPackages,
+    SilentDynamicPackagesLogger,
+    StderrDynamicPackagesLogger,
+} from './loader.js';

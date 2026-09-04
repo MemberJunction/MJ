@@ -58,7 +58,7 @@ export interface DynamicPackagesConfig {
     server?: DynamicPackageEntry[];
     client?: DynamicPackageEntry[];
     /**
-     * Per-process on/off policy keyed by process ID or prefix, e.g. `{ 'cli:migrate': 'none' }`.
+     * Per-process on/off policy keyed by process ID or prefix, e.g. `{ 'cli:codegen': 'none' }`.
      * The most specific matching key wins. Overridden by the `MJ_DYNAMIC_PACKAGES` env var and
      * by a programmatic `mode` option.
      */

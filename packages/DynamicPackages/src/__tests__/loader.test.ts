@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { LoadDynamicPackages, ResetLoadedDynamicPackages } from '../loader';
+import { LoadDynamicPackages, ResetLoadedDynamicPackages, StderrDynamicPackagesLogger } from '../loader';
 import { DYNAMIC_PACKAGES_MODE_ENV_VAR } from '../mode';
 import type { DynamicPackagesLogger } from '../types';
 
@@ -300,6 +300,26 @@ describe('LoadDynamicPackages', () => {
             }
         });
 
+        it('reports a workspace member found on disk but not yet built as NotFound, never on the warn path', async () => {
+            // The state of every Open App repo before its first build: package.json is there, dist is not.
+            const unbuiltDir = mkdtempSync(path.join(tmpdir(), 'dp-apprepo4-'));
+            try {
+                writeFileSync(path.join(unbuiltDir, 'mj-app.json'), JSON.stringify({ name: 'unbuilt', packages: { server: [{ name: '@dp-unbuilt/server', startupExport: 'Load' }] } }));
+                const pkgDir = path.join(unbuiltDir, 'packages', 'Server');
+                mkdirSync(pkgDir, { recursive: true });
+                writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@dp-unbuilt/server', version: '1.0.0', type: 'module', main: 'dist/index.js' }));
+                const log = recordingLogger();
+                const report = await LoadDynamicPackages({ processId: 'cli:sync:push', config: {}, appManifestDir: unbuiltDir, log });
+                expect(report.NotFound.map((n) => n.Entry.PackageName)).toEqual(['@dp-unbuilt/server']);
+                expect(report.Failed).toEqual([]);
+                expect(report.Loaded).toEqual([]);
+                expect(log.warns).toEqual([]);
+                expect(log.infos.some((l) => l.includes('@dp-unbuilt/server') && l.includes('not built') && l.includes('dist/index.js'))).toBe(true);
+            } finally {
+                rmSync(unbuiltDir, { recursive: true, force: true });
+            }
+        });
+
         it('warns (does not throw) when the manifest is unreadable', async () => {
             const brokenDir = mkdtempSync(path.join(tmpdir(), 'dp-apprepo3-'));
             try {
@@ -311,6 +331,28 @@ describe('LoadDynamicPackages', () => {
             } finally {
                 rmSync(brokenDir, { recursive: true, force: true });
             }
+        });
+    });
+
+    describe('StderrDynamicPackagesLogger', () => {
+        it('writes progress and warnings to stderr and nothing to stdout', () => {
+            const out: string[] = [];
+            const err: string[] = [];
+            const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => { out.push(String(chunk)); return true; });
+            const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => { err.push(String(chunk)); return true; });
+            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+            try {
+                StderrDynamicPackagesLogger.info('Loading Open App server packages...');
+                StderrDynamicPackagesLogger.warn('  Error loading X:', new Error('boom'));
+                StderrDynamicPackagesLogger.verbose?.('detail');
+            } finally {
+                stdoutSpy.mockRestore();
+                stderrSpy.mockRestore();
+                logSpy.mockRestore();
+            }
+            expect(out).toEqual([]);
+            expect(logSpy).not.toHaveBeenCalled();
+            expect(err).toEqual(['Loading Open App server packages...\n', '  Error loading X: boom\n']);
         });
     });
 });

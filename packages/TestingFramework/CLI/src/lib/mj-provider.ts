@@ -8,7 +8,7 @@ import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';
 import { loadMJConfig, type MJConfig } from '../utils/config-loader';
-import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
+import { DiscoverMJConfig, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
 
 // Load environment variables from .env file.
 // `override` is deliberately FALSE so an explicitly-set variable wins over `.env`
@@ -46,7 +46,15 @@ export async function initializeMJProvider(): Promise<void> {
     // provider exists. Idempotent: when this CLI runs inside `mj`, the `mj` prerun hook has already
     // loaded them under `cli:test:…` and the loader skips packages already loaded in the process.
     const raw = DiscoverMJConfig();
-    await LoadDynamicPackages({ processId: 'testing-cli', tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
+    // Stderr logger: this CLI's stdout is a JSON envelope under --format=json / --output=json,
+    // and the loader's default console logger would print its progress lines ahead of it.
+    await LoadDynamicPackages({
+      processId: 'testing-cli',
+      tier: 'server',
+      config: raw.config,
+      configFilePath: raw.configFilePath,
+      log: StderrDynamicPackagesLogger,
+    });
 
     // Debug: Check what's in process.env and config
     console.log(`process.env.DB_DATABASE: ${process.env.DB_DATABASE}`);
