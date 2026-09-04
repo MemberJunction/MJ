@@ -397,12 +397,15 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         if (!this._transaction) {
             throw new Error('No active transaction to commit.');
         }
+        const client = this._transaction;
         try {
-            await this._transaction.query('COMMIT');
-        } finally {
-            this._transaction.release();
-            this._transaction = null;
+            await client.query('COMMIT');
+        } catch (e) {
+            // Leave the client published so AbandonPhysicalTransaction can ROLLBACK then release.
+            throw e;
         }
+        this._transaction = null;
+        client.release();
     }
 
     protected override async RollbackPhysicalTransaction(): Promise<void> {

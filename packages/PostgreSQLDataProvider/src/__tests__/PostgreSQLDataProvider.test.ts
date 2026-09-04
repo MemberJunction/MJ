@@ -277,6 +277,7 @@ describe('PostgreSQLDataProvider', () => {
             await expect(provider.CommitTransaction()).rejects.toThrow(/commit failed/);
             expect(provider.TransactionDepth).toBe(0);
             expect(client.released).toBe(true);
+            expect(client.queries).toContain('ROLLBACK');
         });
     });
 

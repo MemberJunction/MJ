@@ -28,38 +28,9 @@ function isPostgres(ctx: IntegrationCheckContext): boolean {
     return providerOf(ctx).PlatformKey === 'postgresql';
 }
 
-function poolSource(ctx: IntegrationCheckContext): unknown {
-    const p = ctx.Provider as { DatabaseConnection?: unknown; Pool?: unknown };
-    return p.DatabaseConnection ?? p.Pool ?? undefined;
-}
-
-async function exec(
-    ctx: IntegrationCheckContext,
-    sql: string,
-    onPool = false,
-): Promise<unknown> {
-    const opts = onPool && poolSource(ctx) ? { connectionSource: poolSource(ctx) } : undefined;
-    return providerOf(ctx).ExecuteSQL(sql, null, opts as never);
-}
-
-async function scalar(ctx: IntegrationCheckContext, sql: string, onPool = false): Promise<unknown> {
-    const r = await exec(ctx, sql, onPool) as {
-        recordset?: Array<Record<string, unknown>>;
-        rows?: Array<Record<string, unknown>>;
-    };
-    const row = r?.recordset?.[0] ?? r?.rows?.[0];
-    if (!row) return undefined;
-    return Object.values(row)[0];
-}
-
 async function committed(ctx: IntegrationCheckContext, id: string): Promise<boolean> {
-    const table = isPostgres(ctx) ? '"__mj"."vwActionCategories"' : '[__mj].[vwActionCategories]';
-    const n = await scalar(
-        ctx,
-        `SELECT COUNT(*) AS c FROM ${table} WHERE ID = '${id}'`,
-        true,
-    );
-    return Number(n) === 1;
+    const row = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+    return row.Load(id);
 }
 
 async function newCategory(ctx: IntegrationCheckContext, label: string): Promise<MJActionCategoryEntity> {
