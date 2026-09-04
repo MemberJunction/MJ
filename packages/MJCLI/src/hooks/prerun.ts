@@ -4,6 +4,13 @@ import { INTERACTIVE_ENV, ResolveOutputFormat, ShouldSuppressChrome } from '@mem
 import { LIGHT_COMMANDS } from '../light-commands.js';
 
 /**
+ * Mirror of `DYNAMIC_PACKAGES_MODE_ENV_VAR` from @memberjunction/dynamic-packages, inlined so
+ * LIGHT commands (version, help, migrate, …) do not pay for that package — and its cosmiconfig
+ * import — at startup. `dynamic-packages.test.ts` asserts the two stay equal.
+ */
+export const DYNAMIC_PACKAGES_MODE_ENV_VAR = 'MJ_DYNAMIC_PACKAGES';
+
+/**
  * Strips a global boolean flag from argv in place and reports whether it was there.
  *
  * Global chrome flags have to work on ANY command, including the ~80 that are still
@@ -51,6 +58,14 @@ const hook: Hook<'prerun'> = async function (options) {
     process.env.MJ_CLI_NO_BANNER = '1';
   }
 
+  // `--no-app-packages` skips loading the installed Open Apps' server packages (and the host's
+  // generated packages) for this one invocation, so e.g. `mj sync push` writes with the generic
+  // BaseEntity — no custom Save() logic, no lifecycle hooks. It rides the same env var the
+  // loader honours everywhere (`MJ_DYNAMIC_PACKAGES=none`), so scripts can set either.
+  if (takeGlobalFlag(argv, '--no-app-packages')) {
+    process.env[DYNAMIC_PACKAGES_MODE_ENV_VAR] = 'none';
+  }
+
   // Decide chrome with the SAME resolver the commands themselves use, rather than
   // re-deriving the format from argv here. The two views drifting is not hypothetical:
   // while this hook only looked for `--format` in argv, `MJ_CLI_FORMAT=json mj codegen`
@@ -70,11 +85,13 @@ const hook: Hook<'prerun'> = async function (options) {
   // ShouldSuppressChrome covers both machine formats and a redirected stdout: a caller
   // that piped us has already said it is a machine, and a banner in its capture buffer
   // is pure noise.
+  const verbose = argv.includes('--verbose') || argv.includes('-v');
+
   if (noBanner || quiet || ShouldSuppressChrome(format)) {
     // Still conditionally load bootstrap — just no decorative output. (The old `--json`
     // branch returned *without* loading it, which would have silently skipped class
     // registration for any heavy command that later grew a `--json` flag.)
-    return await maybeLoadBootstrap(options);
+    return await maybeLoadBootstrap(options, verbose);
   }
 
   // Suppress the large figlet banner for hot-path, frequently-run commands (e.g. `mj sync *`)
@@ -104,18 +121,30 @@ const hook: Hook<'prerun'> = async function (options) {
     options.context.log(options.config.userAgent + '\n');
   }
 
-  await maybeLoadBootstrap(options);
+  await maybeLoadBootstrap(options, verbose);
 };
 
 /**
  * Conditionally load MJ bootstrap for heavy commands. Light commands (version,
  * help, bump, migrate, clean, install, dbdoc/*, usage/*) skip the ~1,400 class
  * registrations for instant startup.
+ *
+ * Heavy commands then load the installed Open Apps' server packages (and the host's generated
+ * packages) through @memberjunction/dynamic-packages — AFTER the manifest, so an app's
+ * @RegisterClass wins via load-order priority, and BEFORE the command opens a database
+ * provider, the same ordering MJAPI uses. This is what makes `mj sync push`, `mj app …`,
+ * `mj test` and every other command construct an app's real entity subclasses instead of
+ * falling back to BaseEntity (issue #4199). The process ID is `cli:<command id>`, so entries
+ * can be scoped to `cli`, `cli:sync`, or one command.
  */
-async function maybeLoadBootstrap(options: { Command: { id?: string } }): Promise<void> {
+async function maybeLoadBootstrap(options: { Command: { id?: string } }, verbose = false): Promise<void> {
   const commandId = options.Command.id ?? '';
   if (!LIGHT_COMMANDS.has(commandId)) {
+    // Both modules are dynamic-imported so light commands keep their instant startup (the
+    // config module's cosmiconfig search runs at import time).
     await import('@memberjunction/server-bootstrap-lite/mj-class-registrations');
+    const { loadDynamicPackagesForCommand } = await import('../lib/dynamic-packages.js');
+    await loadDynamicPackagesForCommand(commandId, { verbose });
   }
 }
 

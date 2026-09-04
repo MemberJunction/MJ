@@ -2,6 +2,11 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    // The loader that imports Open App packages now lives in @memberjunction/dynamic-packages.
+    // Inline it so its dynamic `import()` runs through vitest's module graph and the test file's
+    // `vi.mock('@test/openapp-server', …)` fakes resolve — externalized, Node would resolve them
+    // natively and report every fake as "not found".
+    server: { deps: { inline: ['@memberjunction/dynamic-packages'] } },
     globals: true,
     environment: 'node',
     include: ['src/__tests__/**/*.test.ts'],

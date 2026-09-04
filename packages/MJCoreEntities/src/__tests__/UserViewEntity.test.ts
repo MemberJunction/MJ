@@ -61,6 +61,12 @@ vi.mock('@memberjunction/core', () => {
             Success = true;
             Errors: unknown[] = [];
         },
+        ParseFilterField: (field: string) => {
+            const raw = (field ?? '').trim();
+            const dot = raw.indexOf('.');
+            if (dot <= 0 || dot === raw.length - 1) return { Source: null, Name: raw };
+            return { Source: raw.slice(0, dot), Name: raw.slice(dot + 1) };
+        },
     };
 });
 
