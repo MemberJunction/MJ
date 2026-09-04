@@ -142,7 +142,27 @@ export function rangeDoesEndAtBlockBoundary(range: Range, root: Node): boolean {
         return !hasContentAfter(container, range, root);
     }
 
-    const nodeAtCursor: Node | null = container.childNodes[offset] ?? null;
+    // These predicates expect a range whose boundaries have been moved down the tree, so a
+    // caret between two text nodes is addressed inside one of them and never as a child
+    // index; the child-index branch below only has to cover leaves and elements.
+    let nodeAtCursor: Node | null = container.childNodes[offset] ?? null;
+    if (nodeAtCursor && !root.contains(nodeAtCursor)) {
+        nodeAtCursor = null;
+    }
+    if (!nodeAtCursor) {
+        // Nothing after the position: walk on from the node before it. Starting the walk at
+        // the container itself would descend into its children from the top and report the
+        // block's own leading content as "after" the caret.
+        const before = offset > 0 ? (container.childNodes[offset - 1] ?? null) : null;
+        if (before && isTextNode(before) && before.length > 0) {
+            return false;
+        }
+        nodeAtCursor = before;
+    } else if (isLeaf(nodeAtCursor) || (isTextNode(nodeAtCursor) && hasVisibleTextAfter(nodeAtCursor.data, 0))) {
+        // The walk below yields only nodes *after* its starting point, so the node the
+        // caret points at has to be judged here.
+        return false;
+    }
     return !hasContentAfter(nodeAtCursor ?? container, range, root);
 }
 

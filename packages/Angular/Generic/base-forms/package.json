@@ -52,6 +52,7 @@
     "@memberjunction/ng-react": "6.1.0-edge.5",
     "@memberjunction/ng-record-changes": "6.1.0-edge.5",
     "@memberjunction/ng-record-tags": "6.1.0-edge.5",
+    "@memberjunction/ng-rich-text-editor": "6.1.0-edge.5",
     "@memberjunction/ng-shared-generic": "6.1.0-edge.5",
     "@memberjunction/ng-ui-components": "6.1.0-edge.5",
     "rxjs": "^7.8.2",

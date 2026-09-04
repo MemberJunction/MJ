@@ -1,5 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { RichTextContentChangeEvent } from '@memberjunction/ng-rich-text-editor';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
@@ -15,6 +17,15 @@ import { LinkedFieldOptionsStore } from './linked-field-options';
  * - `plain`: standard text rendering (default)
  */
 export type FieldRichTextMode = 'markdown' | 'html' | 'code' | 'plain';
+
+/** How an HTML field is edited: a WYSIWYG surface, or the raw markup in a code editor. */
+export type HtmlEditorMode = 'visual' | 'source';
+
+/**
+ * Markup a WYSIWYG editor cannot hold whole. A visual editor edits a body fragment; loading a
+ * full document into one drops `<html>`, `<head>`, `<!DOCTYPE>` and any `<style>` on save.
+ */
+const FULL_DOCUMENT_PATTERN = /<!doctype|<html[\s>]|<head[\s>]|<body[\s>]/i;
 
 /**
  * One extra (non-name, non-PK) column rendered in an FK suggestion row.
@@ -1881,6 +1892,41 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.Value = value;
   }
 
+  /** Backing snapshot for {@link HtmlEditorMode}; null until first computed for the session. */
+  private _htmlEditorMode: HtmlEditorMode | null = null;
+
+  /** The Visual / Source options for `<mj-view-toggle>`. */
+  readonly HtmlEditorModeOptions: ViewToggleOption[] = [
+    { key: 'visual', icon: 'fa-solid fa-eye', label: 'Visual', title: 'Edit visually' },
+    { key: 'source', icon: 'fa-solid fa-code', label: 'Source', title: 'Edit the HTML source' },
+  ];
+
+  /**
+   * Visual or Source for an HTML field, snapshotted when edit mode is entered like
+   * {@link EditRichTextMode}. Defaults to Visual, except when the value is a whole document —
+   * a WYSIWYG editor would silently discard its head — where Source is the only safe default.
+   * The user can switch either way with the toggle above the editor.
+   */
+  get HtmlEditorMode(): HtmlEditorMode {
+    if (this._htmlEditorMode === null) {
+      this._htmlEditorMode = FULL_DOCUMENT_PATTERN.test(this.FormatValue()) ? 'source' : 'visual';
+    }
+    return this._htmlEditorMode;
+  }
+
+  SetHtmlEditorMode(mode: string): void {
+    if (mode !== 'visual' && mode !== 'source') return;
+    if (this._htmlEditorMode === mode) return;
+    this._htmlEditorMode = mode;
+    this.cdr.markForCheck();
+  }
+
+  /** Handle content changes from the WYSIWYG editor. Programmatic writes are not edits. */
+  OnRichTextChange(event: RichTextContentChangeEvent): void {
+    if (!event.IsUserChange) return;
+    this.Value = event.Html;
+  }
+
   /** Format a value for display */
   /**
    * Whether this field holds a DATE with no time, as opposed to a timestamp.
@@ -1958,6 +2004,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this._detectCacheValue = null;
         this._detectCacheResult = 'plain';
         this._editRichTextMode = null;
+        this._htmlEditorMode = null;
       }
       // Reset validation state when exiting edit mode
       if (changes['EditMode'] && !this.EditMode) {
@@ -1967,6 +2014,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       // Re-snapshot the edit-mode rendering decision whenever edit mode toggles
       if (changes['EditMode']) {
         this._editRichTextMode = null;
+        this._htmlEditorMode = null;
       }
       this.cdr.markForCheck();
     }

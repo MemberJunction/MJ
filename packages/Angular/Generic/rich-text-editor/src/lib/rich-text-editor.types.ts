@@ -133,6 +133,12 @@ export interface RichTextEditorConfig {
     Blacklist?: readonly string[];
 
     /**
+     * Rewrite the HTML about to be placed on the clipboard by cut or copy. Receives the
+     * serialized selection (with its inline/block context) and returns what to write.
+     */
+    WillCutCopy?: (html: string) => string;
+
+    /**
      * Sink for exceptions thrown inside engine event handlers. Handler errors are caught
      * and routed here rather than escaping into the host's event loop; defaults to
      * `console.error`.
@@ -177,6 +183,34 @@ export interface RichTextWillPasteEvent {
  */
 export interface RichTextPasteImageEvent {
     File: File;
+}
+
+// ---------------------------------------------------------------------------
+// Component event args (Before*/After* contract — see guides/UI_LAYERING_GUIDE.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * Base for the component's cancelable events. A listener sets `Cancel = true` to halt the
+ * action; the matching `After*` event then does not fire.
+ */
+export class RichTextCancelableEventArgs {
+    public Cancel = false;
+    public CancelReason?: string;
+}
+
+/**
+ * Fired by `<mj-rich-text-editor>` BEFORE pasted content is inserted, after sanitization.
+ * `Fragment` may be mutated in place; set `Cancel` to drop the paste.
+ */
+export class BeforePasteEventArgs extends RichTextCancelableEventArgs {
+    constructor(public readonly Fragment: DocumentFragment) {
+        super();
+    }
+}
+
+/** Fired AFTER a paste was inserted. NOT fired when the Before event was canceled. */
+export class AfterPasteEventArgs {
+    constructor(public readonly Html: string) {}
 }
 
 /**

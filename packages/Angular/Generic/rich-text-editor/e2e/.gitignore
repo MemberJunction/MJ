@@ -1,0 +1,3 @@
+.harness/
+test-results/
+playwright-report/
