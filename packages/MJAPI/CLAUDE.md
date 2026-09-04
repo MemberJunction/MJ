@@ -87,6 +87,17 @@ module.exports = {
 
 ---
 
+## Open App packages (`dynamicPackages` / `MJ_DYNAMIC_PACKAGES`)
+
+At boot, after the class-registration manifest, MJAPI imports the host's generated packages
+(`codeGeneration.packages`) and every installed Open App's server package (`dynamicPackages.server[]`,
+written by `mj app install`) through `@memberjunction/dynamic-packages`, runs each `StartupExport`,
+and globs the packages' `RESOLVER_PATHS` into the GraphQL schema. MJAPI's process ID is `mjapi`; an
+entry can be scoped away from it with `ExcludeProcesses: ['mjapi']`. `MJ_DYNAMIC_PACKAGES=none` boots
+without any of them (core classes still load). The same loader runs in the `mj` CLI, MCP/A2A and the
+test bootstraps — full model, scoping and troubleshooting:
+[`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
+
 ## MJAPI Public URL Configuration
 
 When MJAPI needs to communicate with remote services (like Skip API), it sends a callback URL so

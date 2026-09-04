@@ -18,6 +18,7 @@ import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-depende
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
+import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
@@ -257,6 +258,12 @@ export class PushService {
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
     this.changeDetails = [];
+    // Warnings the engine raises while resolving lookups belong in this push's result envelope,
+    // not on the console — same channel as the warnings this service raises itself.
+    this.syncEngine.WarningSink = (message) => {
+      this.warnings.push(message);
+      callbacks?.onWarn?.(`⚠️  ${message}`);
+    };
 
     // Respect the global MJ_VERBOSE env/flag in addition to the per-command --verbose
     // flag, so a single dial (MJ_VERBOSE=1) controls diagnostic verbosity across every
@@ -673,6 +680,14 @@ export class PushService {
     let deferred = 0;
     let errors = 0;
     
+    // Issue #4199: a push against an entity whose subclass is not loaded in this process
+    // "succeeds" with a generic BaseEntity and silently skips the entity's custom logic. Say so.
+    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''), { dryRun: options.dryRun });
+    if (subclassWarning) {
+      this.warnings.push(subclassWarning);
+      callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
+    }
+
     // Find all JSON files in the directory
     const pattern = entityConfig.filePattern || '*.json';
     const files = await fastGlob(pattern, {

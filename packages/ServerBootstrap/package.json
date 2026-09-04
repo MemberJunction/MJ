@@ -108,6 +108,7 @@
     "@memberjunction/database-designer-actions": "6.1.0-edge.5",
     "@memberjunction/database-designer-core": "6.1.0-edge.5",
     "@memberjunction/doc-utils": "6.1.0-edge.5",
+    "@memberjunction/dynamic-packages": "6.1.0-edge.5",
     "@memberjunction/encryption": "6.1.0-edge.5",
     "@memberjunction/entity-communications-base": "6.1.0-edge.5",
     "@memberjunction/esignature": "6.1.0-edge.5",
