@@ -989,6 +989,19 @@ export abstract class BaseEntity<T = unknown> {
     private _pendingDelete$: Observable<boolean> | null = null;
 
     /**
+     * True while a delete plan that already validated this record is executing.
+     *
+     * A plan validates every node BEFORE the first row is deleted (companion children hold the
+     * foreign keys, so they go first, and a refusal found later can cost data on a provider with no
+     * local transaction). This flag is what keeps the per-record gate in `_InnerDelete` from running
+     * the same rules a second time — which would double whatever query an application's
+     * `ValidateDeleteAsync` performs.
+     *
+     * @see deleteGraph
+     */
+    private _deleteValidated: boolean = false;
+
+    /**
      * Lazy `Map<fieldName, EntityField>` cache for O(1) `GetFieldByName()` lookups. Populated
      * on first call and cleared on `init()` so re-initialized entities rebuild fresh. Replaces
      * the previous O(N) `_Fields.find()` scan that dominated `SetMany`/setter/serialization paths.
@@ -2122,7 +2135,7 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Runs a multi-record delete as one unit of work.
+     * Validates a multi-record delete, then runs it as one unit of work.
      *
      * Unlike the save path there is no remote counterpart: a delete graph carries no state that
      * needs rebuilding server-side, so on a client provider the nodes execute in order over
@@ -2130,13 +2143,86 @@ export abstract class BaseEntity<T = unknown> {
      * committed. Callers needing an atomic multi-record delete from the browser should expose a
      * dedicated remote operation, which is also what MJ's own cascade-delete tooling does.
      *
+     * **Validation happens here, over the whole plan, before the first row goes** — the mirror image
+     * of `saveGraph`, which needs no such pass because its root node runs FIRST and validates the
+     * graph on the way through. A delete plan is the other way round: children are contributed
+     * first, because the foreign keys point at the row about to disappear. Validating each node when
+     * its turn came would therefore mean a refusal raised by the ROOT had already deleted every
+     * child — and per the paragraph above there may be no transaction to undo that. The refusal
+     * would cost exactly the data it existed to protect.
+     *
+     * Each node's permissions are checked before its rules, matching the order `_InnerDelete` uses
+     * for a single record, and the nodes are flagged so that gate does not re-run rules that may
+     * each carry a query.
+     *
      * @param plan - The planned unit of work, children first.
      * @param options - Delete options forwarded to every node.
-     * @returns True when the whole graph completed.
+     * @returns True when the whole graph completed; false when validation refused it or it failed.
      */
     private async deleteGraph(plan: EntitySavePlan, options?: EntityDeleteOptions): Promise<boolean> {
-        this.RaiseEvent('graph_save_started', { NodeCount: plan.NodeCount, Operation: 'Delete' });
-        return this.executeGraphLocal(plan, undefined, options, 'delete');
+        const startedAt = new Date();
+        const _options: EntityDeleteOptions = options ? options : new EntityDeleteOptions();
+        // Distinct entities only: a plan can legitimately name the same record twice (a child both
+        // present and pending-removal), and its rules should not run twice for that.
+        const nodes = [...new Set(plan.Nodes.filter(n => n.Operation === 'Delete').map(n => n.Entity))];
+
+        const combined = new ValidationResult();
+        combined.Success = true;
+        // The node being checked when something throws, so the catch can attribute the failure to
+        // THAT node rather than to the root — a plan mixes entity types, and "Products refused" is a
+        // different message from "Order Lines refused".
+        let current: BaseEntity | undefined;
+        try {
+            for (const node of nodes) {
+                current = node;
+                // Permissions before rules, per node — the same ORDER the single-record path uses, and
+                // for the same reason: a user without delete rights is told so before any rule runs,
+                // and never sees a validation message about a record they may not be allowed to
+                // inspect. Hoisting it here also means a permission failure on the LAST child no longer
+                // leaves the earlier ones deleted on a provider with no transaction.
+                //
+                // `CheckPermissions(_, true)` throws rather than returning false — with `true` the
+                // return value is never meaningful, which is why it is discarded here as it is at the
+                // other call sites. The catch below turns the throw into the `false` the Delete()
+                // contract promises, reported through the same result entry a refusal uses, so the
+                // permission text reaches the caller as an `Errors` entry (and `Message`) stamped with
+                // the failing node's entity name. The spec pins this: a child the user may not delete
+                // refuses the plan before any rule or row.
+                node.CheckPermissions(EntityPermissionType.Delete, true);
+                const nodeResult = await node.runDeleteValidation(_options);
+                combined.Success = combined.Success && nodeResult.Success;
+                nodeResult.Errors.forEach(error => combined.Errors.push(error));
+            }
+        }
+        catch (e) {
+            // An application's rule is arbitrary code — a RunView that fails, a null dereference — and
+            // `Delete()` reports failure by RETURNING false. An escaping rejection here would break that
+            // contract for exactly this path, the same hazard `executeGraphLocal` documents for its
+            // transaction begin. Nothing has been deleted yet, so there is nothing to roll back.
+            const detail = e instanceof Error ? e.message : String(e);
+            const source = current?.EntityInfo?.Name ?? this.EntityInfo?.Name ?? 'Delete';
+            LogError(`BaseEntity.deleteGraph: delete of ${this.EntityInfo?.Name} refused at ${source}: ${detail}`);
+            combined.Success = false;
+            combined.Errors.push(new ValidationErrorInfo(source, detail, null));
+        }
+        if (!combined.Success) {
+            // Returning before `graph_save_started`: nothing started, and a completion event with no
+            // beginning would be worse than silence. The refusal lands on the result history, exactly
+            // where the single-record path leaves it.
+            this.registerDeleteValidationFailure(combined, startedAt);
+            return false;
+        }
+
+        nodes.forEach(node => node._deleteValidated = true);
+        try {
+            this.RaiseEvent('graph_save_started', { NodeCount: plan.NodeCount, Operation: 'Delete' });
+            return await this.executeGraphLocal(plan, undefined, _options, 'delete');
+        }
+        finally {
+            // Cleared unconditionally: a retried delete after a failed graph must validate again, and an
+            // entity left flagged would silently skip its own rules forever.
+            nodes.forEach(node => node._deleteValidated = false);
+        }
     }
 
     /**
@@ -3675,11 +3761,10 @@ export abstract class BaseEntity<T = unknown> {
                         // confirm an order with no lines" guard and an entire per-line validation
                         // loop — was dead on every save in production, and it is the same reasoning
                         // that already exempts companions below.
-                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined
-                            ? _options.SkipAsyncValidation
-                            : IsMemberOverridden(this, 'DefaultSkipAsyncValidation', BaseEntity)
-                                ? this.DefaultSkipAsyncValidation
-                                : !IsMemberOverridden(this, 'ValidateAsync', BaseEntity);
+                        const skipAsyncValidation = this.shouldSkipAsyncValidation(
+                            _options.SkipAsyncValidation,
+                            'ValidateAsync',
+                        );
 
                         // If not skipping async validation, run it - even if sync validation failed
                         // This ensures all validation errors (sync and async) are collected
@@ -4384,22 +4469,69 @@ export abstract class BaseEntity<T = unknown> {
      * Default value for whether async validation should be skipped.
      *
      * @remarks
+     * **This is one policy for the whole entity, covering BOTH seams** — {@link ValidateAsync} on
+     * the save path and {@link ValidateDeleteAsync} on the delete path. An entity states its
+     * async-validation policy once, not once per verb; the shared decision lives in
+     * `shouldSkipAsyncValidation`.
+     *
      * Override this to state a policy explicitly; an explicit override always wins over the
-     * inference described below. When the options object passed to `Save()` includes
+     * inference described below. When the options object passed to `Save()` or `Delete()` includes
      * `SkipAsyncValidation`, that value takes precedence over both.
      *
-     * **If no subclass overrides this getter**, the answer is inferred instead: async validation
-     * runs when a subclass has overridden {@link ValidateAsync}, and is skipped when none has.
-     * Reading the literal `true` below as "async validation is off unless you find this getter"
-     * made every hand-written `ValidateAsync` a silent no-op — see the note on that method.
+     * **If no subclass overrides this getter**, the answer is inferred instead, per seam: async
+     * validation runs when a subclass has overridden the corresponding async validator, and is
+     * skipped when none has. Reading the literal `true` below as "async validation is off unless you
+     * find this getter" made every hand-written `ValidateAsync` a silent no-op — see the note on
+     * that method.
+     *
+     * One consequence to know before overriding this to `true`: doing so opts out of async
+     * validation on **both** paths, including a `ValidateDeleteAsync` written later by someone who
+     * never saw this getter. That is the same trap the inference above exists to close, and the
+     * reason the name is a candidate for renaming to something that says "policy", not "switch".
      *
      * @see {@link Save}
+     * @see {@link Delete}
      * @see {@link ValidateAsync}
+     * @see {@link ValidateDeleteAsync}
      *
      * @protected
      */
     public get DefaultSkipAsyncValidation(): boolean {
         return true; // By default, skip async validation unless explicitly enabled
+    }
+
+    /**
+     * Decides whether the ASYNC half of a validation seam runs. Shared by `Save()` and `Delete()`,
+     * so an entity states its async-validation policy **once** rather than once per verb.
+     *
+     * Precedence, and this ordering is the whole design:
+     *   1. An explicit flag in the call's options wins outright.
+     *   2. An explicit {@link DefaultSkipAsyncValidation} override wins next — EITHER value. A `true`
+     *      returned by an override is a CHOICE; a `true` inherited from the base is the absence of
+     *      one, and the two must not behave alike.
+     *   3. Only when nobody stated a policy is it inferred: run it if, and only if, a subclass wrote
+     *      the async method. Overriding the method IS the request to run it.
+     *
+     * Step 3 is what fixed a silent no-op. The default is `true` and the base async validators just
+     * return success, so skipping costs a subclass that did not override one precisely nothing; the
+     * flag's only reachable effect was therefore to disable the async rules of subclasses that had
+     * WRITTEN async rules and never learned a second, separate getter had to be overridden too.
+     *
+     * @param explicitOption - `SkipAsyncValidation` from the save or delete options, if the caller set it.
+     * @param asyncMemberName - Which async validator this decision is about.
+     * @returns True when the async half should be skipped.
+     */
+    private shouldSkipAsyncValidation(
+        explicitOption: boolean | undefined,
+        asyncMemberName: 'ValidateAsync' | 'ValidateDeleteAsync',
+    ): boolean {
+        if (explicitOption !== undefined) {
+            return explicitOption;
+        }
+        if (IsMemberOverridden(this, 'DefaultSkipAsyncValidation', BaseEntity)) {
+            return this.DefaultSkipAsyncValidation;
+        }
+        return !IsMemberOverridden(this, asyncMemberName, BaseEntity);
     }
     
     /**
@@ -4431,6 +4563,170 @@ export abstract class BaseEntity<T = unknown> {
         const result = new ValidationResult();
         result.Success = true;
         return result;
+    }
+
+    /**
+     * Delete-side counterpart of {@link Validate}. Override this to refuse a delete **with a
+     * reason**.
+     *
+     * Called by `Delete()` before any provider work, exactly as `Validate()` is called by `Save()`:
+     * a result whose `Success` is false aborts the delete, and its `Errors` are recorded on the
+     * entity's `LatestResult` so the caller — a form, an agent, a Remote Operation — can show the
+     * user *why*. `ValidationErrorInfo.Source` names the field or relationship that blocks it, which
+     * is how MJ's forms mark the offending field, and `ValidationErrorType.Warning` entries are
+     * advice rather than a refusal (only `Success` governs).
+     *
+     * This exists because the alternative was overriding `Delete()` itself, checking by hand, and
+     * returning `false` — which throws the explanation away (a `boolean` has nowhere to put "this
+     * template is referenced by 5 signed contracts"), covers only callers that reach that
+     * subclass's method, and gives no guarantee about ordering relative to permissions, events or
+     * the companion delete graph. Applications had reimplemented that pattern once per entity, each
+     * slightly differently.
+     *
+     * Ordering guarantees, so a rule written here is not surprised:
+     * - **Permissions are checked first.** A user without delete rights gets a permission error, not
+     *   a validation message.
+     * - **Nothing has been written or raised yet.** `delete_started` has not fired and no row —
+     *   including the companion children a delete plan would remove first — has been touched.
+     * - **Every node of a companion delete plan is validated before the first row goes.** Children
+     *   hold the foreign keys and are deleted first, so a refusal discovered at the root's own turn
+     *   would already have removed them; on a client provider (no local transaction) that is
+     *   permanent. See {@link Delete}.
+     *
+     * The base implementation returns success. `EntityDeleteOptions.ReplayOnly` bypasses it, exactly
+     * as it bypasses `Validate()` on the save side.
+     *
+     * @example
+     * ```typescript
+     * public override ValidateDelete(): ValidationResult {
+     *     const result = super.ValidateDelete();
+     *     if (this.Status === 'Posted') {
+     *         result.Success = false;
+     *         result.Errors.push(new ValidationErrorInfo('Status',
+     *             'A posted journal entry cannot be deleted. Reverse it instead.', this.Status));
+     *     }
+     *     return result;
+     * }
+     * ```
+     *
+     * @returns The validation result. `Success: false` refuses the delete.
+     * @see {@link ValidateDeleteAsync} for checks that need a query.
+     */
+    public ValidateDelete(): ValidationResult {
+        // Default implementation just returns success. Subclasses override to refuse a delete.
+        const result = new ValidationResult();
+        result.Success = true;
+        return result;
+    }
+
+    /**
+     * Asynchronous half of the delete-validation seam — for the refusals that need a query, which
+     * is most of them ("referenced by N signed contracts" is a count, not a field check).
+     *
+     * **Overriding this method is what turns it on** — there is no second flag to find, unless the
+     * entity deliberately states one. The decision is the SAME policy the save seam uses
+     * ({@link DefaultSkipAsyncValidation}, resolved by `shouldSkipAsyncValidation`): an explicit
+     * option wins, then an explicit override of that getter — either value — and only when nobody
+     * stated a policy is it inferred from whether this method was overridden. So an entity that
+     * deliberately opts out of async validation opts out on both paths, and an entity that says
+     * nothing gets the rules it actually wrote. To suppress the async half for one call, pass
+     * `SkipAsyncValidation: true` in the delete options; that flag never suppresses the synchronous
+     * {@link ValidateDelete}.
+     *
+     * Runs after `ValidateDelete()`, and **both** run: errors from the two halves are combined so
+     * the user sees everything blocking the delete in one pass rather than one reason at a time.
+     *
+     * @example
+     * ```typescript
+     * public override async ValidateDeleteAsync(): Promise<ValidationResult> {
+     *     const result = await super.ValidateDeleteAsync();
+     *     const rv = new RunView();
+     *     const used = await rv.RunView({ EntityName: 'Contracts',
+     *         ExtraFilter: `TemplateID='${this.ID}'`, ResultType: 'count_only' }, this.ContextCurrentUser);
+     *     if (used.TotalRowCount > 0) {
+     *         result.Success = false;
+     *         result.Errors.push(new ValidationErrorInfo('ID',
+     *             `This template is referenced by ${used.TotalRowCount} contract(s).`, this.ID));
+     *     }
+     *     return result;
+     * }
+     * ```
+     *
+     * @returns A promise for the validation result. `Success: false` refuses the delete.
+     * @see {@link ValidateDelete}
+     */
+    public async ValidateDeleteAsync(): Promise<ValidationResult> {
+        // Default implementation just returns success
+        // Subclasses should override this to perform actual async delete validation
+        const result = new ValidationResult();
+        result.Success = true;
+        return result;
+    }
+
+    /**
+     * Runs both halves of the delete-validation seam for this record and combines the outcome.
+     *
+     * @param options - The delete options in force; `ReplayOnly` bypasses validation entirely and
+     *                  `SkipAsyncValidation` governs the async half only.
+     * @returns The combined result. Errors from both halves are present.
+     */
+    private async runDeleteValidation(options: EntityDeleteOptions): Promise<ValidationResult> {
+        const result = new ValidationResult();
+        if (options.ReplayOnly) {
+            result.Success = true; // bypassing validation, same as _InnerSave does for a replay
+            return result;
+        }
+
+        const syncResult = this.ValidateDelete();
+        result.Success = syncResult.Success;
+        syncResult.Errors.forEach(error => result.Errors.push(error));
+
+        // Only the ASYNC half is optional, and it is decided by the SAME policy the save seam uses —
+        // one shared getter, one shared helper, so an entity states its async-validation policy once
+        // rather than once per verb. See shouldSkipAsyncValidation.
+        const skipAsync = this.shouldSkipAsyncValidation(options.SkipAsyncValidation, 'ValidateDeleteAsync');
+
+        if (!skipAsync) {
+            // Run even when the sync half already failed, so the caller gets every reason at once.
+            const asyncResult = await this.ValidateDeleteAsync();
+            result.Success = result.Success && asyncResult.Success;
+            asyncResult.Errors.forEach(error => result.Errors.push(error));
+        }
+
+        return result;
+    }
+
+    /**
+     * Records a refused delete on this entity's result history.
+     *
+     * The whole point of the seam is that the reason survives, so both `Errors` (field-named, for a
+     * form) and `Message` (joined prose) are populated. `Message` is not redundant: at the time of
+     * writing well over a hundred call sites in this repo — most of them in Explorer — still read the
+     * bare `LatestResult.Message` (the unfinished tail of #1431), and every one of them would print
+     * "Unknown error" if only `Errors` were set. The save path leaves `Message` null on a validation
+     * failure only because it throws the `ValidationResult` into a catch block that reads `e.message`.
+     *
+     * The cost is known and accepted: `CompleteMessage` renders `Message` and then every `Errors`
+     * entry, deliberately without de-duplication (see the note in `BaseEntityResult.CompleteMessage`,
+     * #3973 — any containment test loses real errors), so on the GraphQL path a refusal's text
+     * appears twice. That is the contract working. If #1431 is ever finished, dropping `Message`
+     * here is the tidier fix, and it is the only place to make.
+     *
+     * @param valResult - The failing validation result.
+     * @param startedAt - When the delete attempt began.
+     */
+    private registerDeleteValidationFailure(valResult: ValidationResult, startedAt: Date): void {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'delete';
+        result.Message =
+            valResult.Errors.map(e => e?.Message).filter(Boolean).join('; ') ||
+            `Delete of ${this.EntityInfo?.Name} was refused by validation`;
+        result.Errors = valResult.Errors;
+        result.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+        result.StartedAt = startedAt;
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
     }
 
     /**
@@ -4539,6 +4835,29 @@ export abstract class BaseEntity<T = unknown> {
 
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
 
+                // Delete-side counterpart of the Validate()/ValidateAsync() gate in _InnerSave, and
+                // placed to match it: AFTER permissions (a user without delete rights gets a
+                // permission error, not a validation message) and BEFORE any provider work or the
+                // delete_started event — nothing "started", so nothing should be announced.
+                //
+                // Skipped when a delete plan already validated this record: the plan validates every
+                // node up front, because companion children are deleted BEFORE the root and a
+                // refusal discovered on the root's own turn would have already removed them. See
+                // Delete().
+                if (!this._deleteValidated) {
+                    const valResult = await this.runDeleteValidation(_options);
+                    if (!valResult.Success) {
+                        // Settle the scope opened above, then report the refusal the way the seam
+                        // exists to report it: field-named errors the caller can put in front of a
+                        // user, not a bare `false`.
+                        await this.rollbackEntityTransactionScope();
+                        if (currentResultCount === this.ResultHistory.length) {
+                            this.registerDeleteValidationFailure(valResult, newResult.StartedAt);
+                        }
+                        return false;
+                    }
+                }
+
                 // Raise delete_started event before the actual delete operation begins
                 this.RaiseEvent('delete_started', null);
 
@@ -4565,6 +4884,12 @@ export abstract class BaseEntity<T = unknown> {
                             parentDeleteOptions.SkipEntityAIActions = _options.SkipEntityAIActions;
                             parentDeleteOptions.SkipEntityActions = _options.SkipEntityActions;
                             parentDeleteOptions.ReplayOnly = _options.ReplayOnly;
+                            // Carried for the same reason _InnerSave carries it to parentSaveOptions: the
+                            // caller opted out of async validation for THIS delete, and the parent chain is
+                            // part of that one delete. Dropping it here ran the parent's async rules against
+                            // an explicit opt-out — silently, since nothing reports which link of the chain
+                            // paid for the query.
+                            parentDeleteOptions.SkipAsyncValidation = _options.SkipAsyncValidation;
                             parentDeleteOptions.IsParentEntityDelete = true;
 
                             const parentResult = await this._parentEntity.Delete(parentDeleteOptions);
