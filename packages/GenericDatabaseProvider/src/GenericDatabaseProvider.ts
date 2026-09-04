@@ -5330,10 +5330,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     // ─── Nested transactions ─────────────────────────────────────────
     //
-    // Depth 1 = physical BEGIN on the driver. Depth 2+ = a dialect savepoint
-    // on that same transaction. Nested begin with no physical TX begins one
-    // first — otherwise SAVE TRANSACTION / SAVEPOINT runs outside a
-    // transaction (mssql: "Call begin() first.").
+    // Depth 1 = physical BEGIN. Depth 2+ = a dialect savepoint on that same
+    // transaction. Nested begin with no physical TX is corruption, not a
+    // chance to start a second physical TX (that commits inner work after the
+    // outer transaction was already aborted).
 
     private _transactionDepth = 0;
     private _savepointCounter = 0;
@@ -5346,6 +5346,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /** Copy of the savepoint stack, outermost first. */
     public get SavepointStack(): string[] {
         return [...this._savepointStack];
+    }
+
+    /** @deprecated Use {@link SavepointStack}. */
+    public get savepointStack(): string[] {
+        return this.SavepointStack;
     }
 
     /** True when the driver has a begun physical transaction object. */
@@ -5366,11 +5371,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /** Outermost ROLLBACK. Subclasses release the driver object. */
     protected async RollbackPhysicalTransaction(): Promise<void> {
         throw new Error(`${this.constructor.name} must implement RollbackPhysicalTransaction`);
-    }
-
-    /** Replace a published-but-unbegun driver object, then begin. Default is BeginPhysicalTransaction. */
-    protected async RecoverPhysicalTransaction(): Promise<void> {
-        await this.BeginPhysicalTransaction();
     }
 
     protected SavepointName(n: number): string {
@@ -5406,11 +5406,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * SQL Server dooms the whole TX on some errors so savepoint rollback throws.
-     * Default rethrows; SQL Server overrides to full-rollback and reset.
+     * Nested savepoint rollback failed. Default abandons the physical TX so
+     * depth cannot stay > 0 with a dead or swapped handle.
      */
     protected async HandleFailedSavepointRollback(_savepointName: string, error: unknown): Promise<void> {
+        await this.abandonDoomedTransaction();
         throw error;
+    }
+
+    /**
+     * Drop a dead physical handle and reset depth/stack. Safe to call when
+     * already at depth 0. Does not go through {@link RollbackTransaction}
+     * (that would re-enter the mutex).
+     */
+    public override async ResetTransactionState(): Promise<void> {
+        await this.WithTransactionLock(() => this.abandonDoomedTransaction());
     }
 
     public async BeginTransaction(): Promise<void> {
@@ -5438,24 +5448,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         try {
             if (this._transactionDepth === 1) {
                 await this.BeginPhysicalTransaction();
-            } else {
-                if (!this.HasPhysicalTransaction) {
-                    await this.BeginPhysicalTransaction();
-                }
-                const savepointName = this.SavepointName(++this._savepointCounter);
-                this._savepointStack.push(savepointName);
-                try {
-                    await this.createSavepoint(savepointName);
-                } catch (savepointError) {
-                    this._savepointStack.pop();
-                    this._savepointCounter--;
-                    throw savepointError;
-                }
+                return;
+            }
+            if (!this.HasPhysicalTransaction) {
+                throw new Error(
+                    `Transaction state corrupted: nested BeginTransaction at depth ${this._transactionDepth} with no physical transaction`,
+                );
+            }
+            const savepointName = this.SavepointName(++this._savepointCounter);
+            this._savepointStack.push(savepointName);
+            try {
+                await this.createSavepoint(savepointName);
+            } catch (savepointError) {
+                this._savepointStack.pop();
+                this._savepointCounter--;
+                throw savepointError;
             }
         } catch (e) {
-            this._transactionDepth--;
-            if (this._transactionDepth === 0) {
-                this.clearSavepointState();
+            if (this._transactionDepth > 0) {
+                this._transactionDepth--;
+            }
+            if (this._transactionDepth === 0 || !this.HasPhysicalTransaction) {
+                this.clearTransactionState();
                 await this.OnBeginFailedAtDepthZero();
             }
             LogError(e);
@@ -5472,20 +5486,43 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         try {
             await this.ExecuteSQL(sql, undefined, options);
         } catch (savepointError) {
-            if (!this.isUnbegunPhysicalTransactionError(savepointError)) {
-                throw savepointError;
+            if (this.HasPhysicalTransaction && this.isDoomedPhysicalTransactionError(savepointError)) {
+                await this.abandonDoomedTransaction();
+                throw new Error('Ambient transaction was rolled back by the server; outer work is lost');
             }
-            await this.RecoverPhysicalTransaction();
-            await this.ExecuteSQL(sql, undefined, {
-                ...options,
-                description: `${options.description} (retry after begin)`,
-            });
+            throw savepointError;
         }
     }
 
-    private isUnbegunPhysicalTransactionError(error: unknown): boolean {
+    /**
+     * mssql `ENOTBEGUN`/`EABORT` on a *published* handle means the server already
+     * rolled the TX back. Starting a new physical TX here would commit inner
+     * work and drop the outer writes.
+     */
+    private isDoomedPhysicalTransactionError(error: unknown): boolean {
+        const code =
+            error && typeof error === 'object' && 'code' in error
+                ? String((error as { code: unknown }).code)
+                : '';
+        if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01') {
+            return true;
+        }
         const msg = error instanceof Error ? error.message : String(error);
-        return /has not begun|not been begun|SAVEPOINT can only be used in transaction blocks/i.test(msg);
+        return /has not begun|not been begun|has been aborted|SAVEPOINT can only be used in transaction blocks/i.test(
+            msg,
+        );
+    }
+
+    private async abandonDoomedTransaction(): Promise<void> {
+        try {
+            if (this.HasPhysicalTransaction) {
+                await this.RollbackPhysicalTransaction();
+            }
+        } catch {
+            /* handle already aborted */
+        }
+        this.clearTransactionState();
+        await this.OnBeginFailedAtDepthZero();
     }
 
     private async commitTransactionCore(): Promise<void> {

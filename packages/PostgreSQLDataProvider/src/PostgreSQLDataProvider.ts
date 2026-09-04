@@ -427,15 +427,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         try { client.release(); } catch { /* swallow — surfacing the primary error */ }
     }
 
-    protected override async RecoverPhysicalTransaction(): Promise<void> {
-        if (this._transaction) {
-            const stale = this._transaction;
-            this._transaction = null;
-            try { stale.release(); } catch { /* replace the handle */ }
-        }
-        await this.BeginPhysicalTransaction();
-    }
-
     async CreateTransactionGroup(): Promise<TransactionGroupBase> {
         return new PostgreSQLTransactionGroup();
     }

@@ -184,6 +184,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         return this.CurrentTransactionDepth;
     }
 
+    /** @deprecated Use {@link TransactionDepth}. */
+    public get transactionDepth(): number {
+        return this.TransactionDepth;
+    }
+
+    /**
+     * Drop a dead physical handle and reset depth. No-op on providers that
+     * do not track nested transactions. Use after a server-side abort when
+     * {@link RollbackTransaction} itself rejects.
+     */
+    public async ResetTransactionState(): Promise<void> {
+        /* no-op */
+    }
+
     /**
      * Database providers execute multi-record units of work atomically, in-process.
      *

@@ -402,6 +402,16 @@ export class SQLServerDataProvider
   public get InNestedTransaction(): boolean {
     return this.TransactionDepth > 1;
   }
+
+  /** @deprecated Use {@link InTransaction}. */
+  public get inTransaction(): boolean {
+    return this.InTransaction;
+  }
+
+  /** @deprecated Use {@link InNestedTransaction}. */
+  public get inNestedTransaction(): boolean {
+    return this.InNestedTransaction;
+  }
   
   /**
    * Gets whether a transaction is currently active
@@ -2309,27 +2319,16 @@ IF ${varName} IS NOT NULL
     this._transactionState$.next(true);
   }
 
-  protected override async RecoverPhysicalTransaction(): Promise<void> {
-    const stale = this._transaction;
-    this._transaction = null;
-    this._transactionState$.next(false);
-    if (stale) {
-      try {
-        await stale.rollback();
-      } catch {
-        /* unbegun or already-done handle */
-      }
-    }
-    await this.BeginPhysicalTransaction();
-  }
-
   protected override async CommitPhysicalTransaction(): Promise<void> {
     if (!this._transaction) {
       throw new Error('No active transaction to commit');
     }
-    await this._transaction.commit();
-    this._transaction = null;
-    this._transactionState$.next(false);
+    try {
+      await this._transaction.commit();
+    } finally {
+      this._transaction = null;
+      this._transactionState$.next(false);
+    }
   }
 
   protected override async AfterPhysicalCommit(): Promise<void> {

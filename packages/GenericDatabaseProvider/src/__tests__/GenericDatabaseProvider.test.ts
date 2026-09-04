@@ -1844,36 +1844,49 @@ describe('GenericDatabaseProvider nested transactions', () => {
         expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
     });
 
-    it('nested begin with leaked depth and no physical TX begins one first', async () => {
+    it('nested begin with leaked depth and no physical TX is corruption, not a new TX', async () => {
         const p = new RecordingProvider();
         await p.BeginTransaction();
         expect(p.TransactionDepth).toBe(1);
         p.physicalOpen = false;
-        await p.BeginTransaction();
-        expect(p.beginCount).toBe(2);
-        expect(p.TransactionDepth).toBe(2);
-        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+        await expect(p.BeginTransaction()).rejects.toThrow(/Transaction state corrupted/);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+        expect(p.executeSQLCalls).toEqual([]);
     });
 
-    it('retries the savepoint after a has-not-begun error by recovering the physical TX', async () => {
+    it('ENOTBEGUN on a published handle is a doomed TX, not a recovery-begin', async () => {
         const p = new RecordingProvider();
         await p.BeginTransaction();
         await p.BeginTransaction();
         p.resetExecuteSQLState();
-        const orig = p.ExecuteSQL.bind(p);
-        let attempts = 0;
-        p.ExecuteSQL = async (sql?: string, params?: unknown[]) => {
-            attempts++;
-            if (attempts === 1) {
-                throw new Error('Transaction has not begun. Call begin() first.');
-            }
-            return orig(sql, params);
-        };
         p.beginCount = 0;
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('Transaction has not begun. Call begin() first.'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toThrow(/rolled back by the server/);
+        expect(p.beginCount).toBe(0);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('ResetTransactionState drops a leaked handle so the next begin is outermost', async () => {
+        const p = new RecordingProvider();
         await p.BeginTransaction();
-        expect(p.beginCount).toBe(1);
-        expect(attempts).toBe(2);
-        expect(p.TransactionDepth).toBe(3);
+        p.physicalOpen = false;
+        await p.ResetTransactionState();
+        expect(p.TransactionDepth).toBe(0);
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.beginCount).toBe(2);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('exposes deprecated camelCase savepointStack alias for one release', () => {
+        const p = new RecordingProvider();
+        expect(p.savepointStack).toEqual(p.SavepointStack);
+        expect(p.TransactionDepth).toBe(0);
     });
 
     it('nested commit is a no-op SQL on SQL Server (no RELEASE) and decrements depth', async () => {
