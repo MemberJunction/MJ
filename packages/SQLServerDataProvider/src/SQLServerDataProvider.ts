@@ -2369,15 +2369,20 @@ IF ${varName} IS NOT NULL
           this._beginInFlight = null;
         }
       } else {
-        // Nested transaction - create a savepoint
+        // Nested transaction - create a savepoint. Depth can be > 0 while `_transaction`
+        // is still null (a prior outermost begin leaked, or a concurrent caller raced
+        // past `_beginInFlight`). SAVE TRANSACTION through mssql's Request(transaction)
+        // then throws "Transaction has not begun. Call begin() first."
+        await this.ensurePhysicalTransaction();
         const savepointName = `SavePoint_${++this._savepointCounter}`;
         this._savepointStack.push(savepointName);
-        
-        // Create savepoint for nested transaction
-        await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
-          description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
-          ignoreLogging: true
-        });
+        try {
+          await this.createSavepoint(savepointName);
+        } catch (savepointError) {
+          this._savepointStack.pop();
+          this._savepointCounter--;
+          throw savepointError;
+        }
       }
     } catch (e) {
       this._transactionDepth--; // Restore depth on error
@@ -2391,6 +2396,45 @@ IF ${varName} IS NOT NULL
       }
       LogError(e);
       throw e; // force caller to handle
+    }
+  }
+
+  /**
+   * Guarantee `this._transaction` is a begun mssql Transaction. Nested savepoints
+   * (`SAVE TRANSACTION`) go through `Request(transaction)` and throw
+   * "Transaction has not begun. Call begin() first." when the field is null or
+   * still holds an un-begun leftover.
+   */
+  private async ensurePhysicalTransaction(): Promise<void> {
+    if (this._transaction) {
+      return;
+    }
+    const transaction = new sql.Transaction(this._pool);
+    await transaction.begin();
+    this._transaction = transaction;
+    this._transactionState$.next(true);
+  }
+
+  private async createSavepoint(savepointName: string): Promise<void> {
+    try {
+      await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
+        description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
+        ignoreLogging: true
+      });
+    } catch (savepointError) {
+      const msg = savepointError instanceof Error ? savepointError.message : String(savepointError);
+      if (!/has not begun/i.test(msg)) {
+        throw savepointError;
+      }
+      // Non-null `_transaction` that mssql has not begun — replace and retry once.
+      const transaction = new sql.Transaction(this._pool);
+      await transaction.begin();
+      this._transaction = transaction;
+      this._transactionState$.next(true);
+      await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
+        description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth} (retry after begin)`,
+        ignoreLogging: true
+      });
     }
   }
 

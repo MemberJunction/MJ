@@ -71,10 +71,12 @@ class TransactionHost {
                     this.beginInFlight = null;
                 }
             } else {
-                // The nested branch issues SAVE TRANSACTION through the shared field. If it fires
-                // while the field is null, the savepoint silently lands on the pool instead.
+                // Nested savepoints require a begun transaction. If depth leaked without
+                // publishing one, begin now — matching SQLServerDataProvider.ensurePhysicalTransaction.
                 if (!this.Transaction) {
-                    this.SavepointsIssuedWithNoTransaction++;
+                    const transaction = new FakeTransaction(this.failOnBegin);
+                    await transaction.begin();
+                    this.Transaction = transaction;
                 }
             }
         } catch (e) {
@@ -134,6 +136,15 @@ describe('BeginTransaction publishes the transaction only after begin() resolves
         expect(host.SavepointsIssuedWithNoTransaction).toBe(0);
         expect(host.Depth).toBe(2);
         expect(host.Transaction?.Begun).toBe(true);
+    });
+
+    it('nested begin with leaked depth and a null transaction begins a new one', async () => {
+        const host = new TransactionHost();
+        host.Depth = 1;
+        await host.BeginTransaction();
+        expect(host.Transaction?.Begun).toBe(true);
+        expect(host.Depth).toBe(2);
+        expect(host.SavepointsIssuedWithNoTransaction).toBe(0);
     });
 
     it('the method the invariant lives in still exists on the real provider', async () => {
