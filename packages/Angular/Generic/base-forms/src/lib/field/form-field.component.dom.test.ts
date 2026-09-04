@@ -411,6 +411,8 @@ describe('date-only fields are a calendar day, not an instant', () => {
             const shown = text(f, '.mj-forms-field-value');
             expect(shown, 'a datetime must keep local-time rendering').toMatch(/\d{1,2}:\d{2}/);
         });
+});
+
 describe('an unreadable stored date is announced, not hidden (bc-aidp-next-golive#185)', () => {
     /**
      * THE FAILURE THIS PREVENTS IS DATA LOSS, not an ugly form.
@@ -502,4 +504,5 @@ describe('an unreadable stored date is announced, not hidden (bc-aidp-next-goliv
         expect(query(f, WARNING)).toBeNull();
         expect(text(f, '.mj-forms-field-value')).toContain('Invalid Date');
     });
+});
 });
