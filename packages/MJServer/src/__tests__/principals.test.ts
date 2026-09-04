@@ -114,6 +114,44 @@ describe('resolvePrincipalFrom', () => {
         });
     });
 
+    describe('duplicate matches resolve deterministically', () => {
+        // `User.Name` carries NO unique constraint. MJ's own rows do not collide — `NewUserBase`
+        // sets `Name = email` and `UQ_User_Email` makes Email unique, so MJ-created Names are
+        // unique BY CONSEQUENCE, not by rule — but a hand-created or externally-synced row can
+        // collide, and then `find()` returns whichever the cache happens to hold first. That is
+        // the same cache-order dependence the Owner rung is sorted to remove, so every rung
+        // resolves ties the same way: lowest ID.
+        const LOW: ResolvablePrincipal = { ID: '11111111-0000-0000-0000-000000000001', Name: 'shared.name', Email: 'low@acme.com', Type: 'User', IsActive: true };
+        const HIGH: ResolvablePrincipal = { ID: 'FFFFFFFF-0000-0000-0000-00000000000F', Name: 'shared.name', Email: 'high@acme.com', Type: 'User', IsActive: true };
+
+        it('picks the lowest-ID user when two users share the configured Name', () => {
+            const result = resolvePrincipalFrom('shared.name', [HIGH, LOW, SYSTEM], SYSTEM_USER_ID);
+
+            expect(result.user).toBe(LOW);
+            expect(result.reason).toBe('name');
+        });
+
+        it('resolves a duplicated Name identically however the cache is ordered', () => {
+            const forward = resolvePrincipalFrom('shared.name', [HIGH, LOW, SYSTEM], SYSTEM_USER_ID);
+            const reversed = resolvePrincipalFrom('shared.name', [SYSTEM, LOW, HIGH], SYSTEM_USER_ID);
+
+            expect(reversed.user).toBe(forward.user);
+        });
+
+        it('applies the same tiebreak to the Email rung', () => {
+            // `UQ_User_Email` should make this unreachable from the database, but `UserCache` is
+            // also written through `SetUsers` and mutated in place by `Users.push`, so the rung
+            // must not depend on the constraint holding in memory.
+            const lowEmail: ResolvablePrincipal = { ...LOW, Name: 'a.person', Email: 'shared@acme.com' };
+            const highEmail: ResolvablePrincipal = { ...HIGH, Name: 'b.person', Email: 'shared@acme.com' };
+
+            const result = resolvePrincipalFrom('shared@acme.com', [highEmail, lowEmail, SYSTEM], SYSTEM_USER_ID);
+
+            expect(result.user).toBe(lowEmail);
+            expect(result.reason).toBe('email');
+        });
+    });
+
     describe('fallbacks', () => {
         it('falls back to the System user rather than an arbitrary Owner when the candidate is unresolvable', () => {
             const result = resolvePrincipalFrom('nobody@nowhere.example', STOCK_HOST, SYSTEM_USER_ID);
@@ -166,6 +204,25 @@ describe('resolvePrincipalFrom', () => {
             const result = resolvePrincipalFrom('nobody@nowhere.example', [inactiveOwner, HOST_ADMIN], SYSTEM_USER_ID);
 
             expect(result.user).toBe(HOST_ADMIN);
+        });
+
+        it('does not fall back to a DEACTIVATED system user', () => {
+            // The Owner rung requires IsActive; the system rung must too, or the guarantee is
+            // "we never act as a disabled user, except as the one user we reach first".
+            const inactiveSystem: ResolvablePrincipal = { ...SYSTEM, IsActive: false };
+
+            const result = resolvePrincipalFrom('nobody@nowhere.example', [inactiveSystem, HOST_ADMIN], SYSTEM_USER_ID);
+
+            expect(result.user).toBe(HOST_ADMIN);
+            expect(result.reason).toBe('owner');
+        });
+
+        it('returns no principal when the system user is deactivated and no active Owner remains', () => {
+            const inactiveSystem: ResolvablePrincipal = { ...SYSTEM, IsActive: false };
+
+            const result = resolvePrincipalFrom('nobody@nowhere.example', [inactiveSystem, ANONYMOUS], SYSTEM_USER_ID);
+
+            expect(result.user).toBeNull();
         });
 
         it('returns no principal at all when the cache is empty', () => {

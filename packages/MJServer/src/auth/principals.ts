@@ -43,6 +43,32 @@ function normalize(value: string | null | undefined): string {
 }
 
 /**
+ * The match with the lowest ID, or undefined when there are none.
+ *
+ * EVERY rung resolves ties through this rather than taking the first match. `UserCache.Users`
+ * comes from an `ORDER BY`-less `SELECT * FROM vwUsers` and is mutated in place at runtime
+ * (`Users.push`), so its order differs across boots AND within a process — which is exactly how
+ * `CreatedByUserID` became noise. A rung that resolves by array order is that same defect, one
+ * rung further down.
+ *
+ * `Name` is the rung this actually protects: it carries no unique constraint. MJ's own rows do
+ * not collide (`NewUserBase` sets `Name = email`, and `UQ_User_Email` makes Email unique, so
+ * MJ-created Names are unique by consequence), but a hand-created or externally-synced row can.
+ *
+ * Plain `<` on the normalized strings rather than `localeCompare`: ordering by code point cannot
+ * shift with the process locale or the runtime's ICU build, and this ordering decides attribution.
+ */
+function lowestById<T extends ResolvablePrincipal>(matches: readonly T[]): T | undefined {
+    let lowest: T | undefined;
+    for (const match of matches) {
+        if (!lowest || normalize(match.ID) < normalize(lowest.ID)) {
+            lowest = match;
+        }
+    }
+    return lowest;
+}
+
+/**
  * Resolves the principal a configured candidate names, falling back deterministically.
  *
  * The ladder, in order:
@@ -51,11 +77,14 @@ function normalize(value: string | null | undefined): string {
  *               than a semantic one.
  *  2. `Email` — the identity column everywhere else in MJServer, and the only one the schema
  *               makes unique (`UQ_User_Email`). This is the rung that resolves MJ's own default.
- *  3. System  — by ID, so it survives the system user being renamed.
+ *  3. System  — by ID, so it survives the system user being renamed. ACTIVE only.
  *  4. Owner   — lowest ID among ACTIVE owners. A last resort, but still deterministic: the
  *               previous "first Owner in cache order" made `CreatedByUserID` depend on the order
  *               `SELECT * FROM vwUsers` happened to return, which is unstable across boots and
  *               within a process.
+ *
+ * Every rung breaks ties by lowest ID ({@link lowestById}), never by array position, and no rung
+ * returns an inactive user.
  *
  * Pure, and reports rather than logs, so the caller owns log volume and phrasing.
  *
@@ -78,11 +107,11 @@ export function resolvePrincipalFrom<T extends ResolvablePrincipal>(
     const wanted = normalize(candidate);
 
     if (wanted) {
-        const byName = users.find((u) => normalize(u.Name) === wanted);
+        const byName = lowestById(users.filter((u) => normalize(u.Name) === wanted));
         if (byName) {
             return { user: byName, reason: 'name' };
         }
-        const byEmail = users.find((u) => normalize(u.Email) === wanted);
+        const byEmail = lowestById(users.filter((u) => normalize(u.Email) === wanted));
         if (byEmail) {
             return { user: byEmail, reason: 'email' };
         }
@@ -105,15 +134,15 @@ function resolveFallback<T extends ResolvablePrincipal>(
     users: readonly T[],
     systemUserId: string,
 ): PrincipalResolution<T> {
-    const system = users.find((u) => UUIDsEqual(u.ID, systemUserId));
+    // `IsActive` here for the same reason as on the Owner rung below. Without it the guarantee
+    // reads "we never act as a disabled user, except as the one user we reach first" — and this
+    // change makes the system user the SHIPPED DEFAULT, so it is the rung most hosts land on.
+    const system = users.find((u) => UUIDsEqual(u.ID, systemUserId) && u.IsActive === true);
     if (system) {
         return { user: system, reason: 'system' };
     }
 
-    // Sorted rather than "first match" so the choice cannot change with cache order.
-    const owner = users
-        .filter((u) => u.IsActive === true && normalize(u.Type) === 'owner')
-        .sort((a, b) => normalize(a.ID).localeCompare(normalize(b.ID)))[0];
+    const owner = lowestById(users.filter((u) => u.IsActive === true && normalize(u.Type) === 'owner'));
 
     return owner ? { user: owner, reason: 'owner' } : { user: null, reason: 'none' };
 }
