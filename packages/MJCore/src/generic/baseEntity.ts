@@ -2168,14 +2168,26 @@ export abstract class BaseEntity<T = unknown> {
 
         const combined = new ValidationResult();
         combined.Success = true;
+        // The node being checked when something throws, so the catch can attribute the failure to
+        // THAT node rather than to the root — a plan mixes entity types, and "Products refused" is a
+        // different message from "Order Lines refused".
+        let current: BaseEntity | undefined;
         try {
             for (const node of nodes) {
-                // Permissions before rules, per node — the same order the single-record path uses, and
-                // for the same reason: a user without delete rights should get a permission error, not a
-                // validation message about a record they may not be allowed to inspect. Hoisting it here
-                // also means a permission failure on the LAST child no longer leaves the earlier ones
-                // deleted on a provider with no transaction. `CheckPermissions(_, true)` throws; the
-                // catch below turns that into the `false` the Delete() contract promises.
+                current = node;
+                // Permissions before rules, per node — the same ORDER the single-record path uses, and
+                // for the same reason: a user without delete rights is told so before any rule runs,
+                // and never sees a validation message about a record they may not be allowed to
+                // inspect. Hoisting it here also means a permission failure on the LAST child no longer
+                // leaves the earlier ones deleted on a provider with no transaction.
+                //
+                // `CheckPermissions(_, true)` throws rather than returning false — with `true` the
+                // return value is never meaningful, which is why it is discarded here as it is at the
+                // other call sites. The catch below turns the throw into the `false` the Delete()
+                // contract promises, reported through the same result entry a refusal uses, so the
+                // permission text reaches the caller as an `Errors` entry (and `Message`) stamped with
+                // the failing node's entity name. The spec pins this: a child the user may not delete
+                // refuses the plan before any rule or row.
                 node.CheckPermissions(EntityPermissionType.Delete, true);
                 const nodeResult = await node.runDeleteValidation(_options);
                 combined.Success = combined.Success && nodeResult.Success;
@@ -2188,9 +2200,10 @@ export abstract class BaseEntity<T = unknown> {
             // contract for exactly this path, the same hazard `executeGraphLocal` documents for its
             // transaction begin. Nothing has been deleted yet, so there is nothing to roll back.
             const detail = e instanceof Error ? e.message : String(e);
-            LogError(`BaseEntity.deleteGraph: delete validation failed for ${this.EntityInfo?.Name}: ${detail}`);
+            const source = current?.EntityInfo?.Name ?? this.EntityInfo?.Name ?? 'Delete';
+            LogError(`BaseEntity.deleteGraph: delete of ${this.EntityInfo?.Name} refused at ${source}: ${detail}`);
             combined.Success = false;
-            combined.Errors.push(new ValidationErrorInfo(this.EntityInfo?.Name ?? 'Delete', detail, null));
+            combined.Errors.push(new ValidationErrorInfo(source, detail, null));
         }
         if (!combined.Success) {
             // Returning before `graph_save_started`: nothing started, and a completion event with no
@@ -4687,9 +4700,17 @@ export abstract class BaseEntity<T = unknown> {
      * Records a refused delete on this entity's result history.
      *
      * The whole point of the seam is that the reason survives, so both `Errors` (field-named, for a
-     * form) and `Message` (for a caller that only logs) are populated. Note the save path leaves
-     * `Message` null on a validation failure because it throws the `ValidationResult` into a catch
-     * block that reads `e.message`; nothing here needs to repeat that.
+     * form) and `Message` (joined prose) are populated. `Message` is not redundant: at the time of
+     * writing well over a hundred call sites in this repo — most of them in Explorer — still read the
+     * bare `LatestResult.Message` (the unfinished tail of #1431), and every one of them would print
+     * "Unknown error" if only `Errors` were set. The save path leaves `Message` null on a validation
+     * failure only because it throws the `ValidationResult` into a catch block that reads `e.message`.
+     *
+     * The cost is known and accepted: `CompleteMessage` renders `Message` and then every `Errors`
+     * entry, deliberately without de-duplication (see the note in `BaseEntityResult.CompleteMessage`,
+     * #3973 — any containment test loses real errors), so on the GraphQL path a refusal's text
+     * appears twice. That is the contract working. If #1431 is ever finished, dropping `Message`
+     * here is the tidier fix, and it is the only place to make.
      *
      * @param valResult - The failing validation result.
      * @param startedAt - When the delete attempt began.

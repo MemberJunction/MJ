@@ -180,10 +180,18 @@ class OptedOutWithSyncRuleEntity extends RefusingEntity {
     }
 }
 
-/** Refuses at the permission layer, the way `CheckPermissions(_, true)` really does — by throwing. */
+/**
+ * Refuses at the permission layer, the way the real `CheckPermissions` does: THROWS when asked to
+ * (`throwError: true`), returns `false` otherwise. Honouring the argument matters — a fixture that
+ * threw unconditionally could not tell `CheckPermissions(_, true)` from `CheckPermissions(_, false)`
+ * with a discarded return, which is exactly the regression the permission cases exist to catch.
+ */
 class UnauthorizedEntity extends RefusingEntity {
-    public override CheckPermissions(): boolean {
-        throw new Error('User does not have permission to delete Standalone Items');
+    public override CheckPermissions(_type: unknown, throwError?: boolean): boolean {
+        if (throwError) {
+            throw new Error('User does not have permission to delete Standalone Items');
+        }
+        return false;
     }
 }
 
@@ -228,6 +236,19 @@ class RefusingCompositeEntity extends CompositeEntity {
         result.Success = false;
         result.Errors.push(new ValidationErrorInfo('Status', 'A posted order cannot be deleted.', null));
         return result;
+    }
+}
+
+/**
+ * A child the user may not delete. Its rule counts, so the spec can prove permissions were checked
+ * BEFORE any rule ran on it. Reached only through a plan.
+ */
+class UnauthorizedChildEntity extends RefusingChildEntity {
+    public override CheckPermissions(_type: unknown, throwError?: boolean): boolean {
+        if (throwError) {
+            throw new Error('User does not have permission to delete Products');
+        }
+        return false; // see UnauthorizedEntity: the argument must be honoured for the flip to be visible
     }
 }
 
@@ -535,9 +556,9 @@ describe('the IS-A parent chain', () => {
 
 describe('the companion delete graph', () => {
     /** A parent with `count` owned children attached, so the delete plan has more than one node. */
-    async function makeParentWithChildren(count: number, cls = CompositeEntity) {
+    async function makeParentWithChildren(count: number, cls = CompositeEntity, info?: EntityInfo) {
         const provider = makeProvider();
-        const parent = new cls(productEntityInfo, provider as unknown as IEntityDataProvider);
+        const parent = new cls(info ?? productEntityInfo, provider as unknown as IEntityDataProvider);
         parent.NewRecord();
         parent.Set('Name', 'parent');
         for (let i = 0; i < count; i++) {
@@ -580,6 +601,25 @@ describe('the companion delete graph', () => {
         expect(deleteLog, 'no row was deleted, including the siblings').toEqual([]);
         expect(syncRuns, 'both children were asked').toBe(2);
         expect(parent.LatestResult?.Errors[0].Source).toBe('Line');
+    });
+
+    it('refuses the plan when the user may not delete a CHILD — before any rule, before any row', async () => {
+        // The pre-flight checks each node's permissions before its rules, in that order. This is the
+        // one call in the pre-flight whose only observable effect is a throw (`CheckPermissions(_,
+        // true)`): flip that `true` to `false` and it becomes a discarded boolean that permits
+        // everything, and nothing else in this file would notice. So it gets its own case.
+        //
+        // The root is a Standalone Item and the children are Products, so the two entity names differ
+        // and the attribution assertion can tell "the child refused" from "the root refused".
+        childEntityClass = UnauthorizedChildEntity;
+        const parent = await makeParentWithChildren(2, CompositeEntity, standaloneEntityInfo);
+
+        expect(await parent.Delete()).toBe(false);
+        expect(deleteLog, 'no row was deleted').toEqual([]);
+        expect(syncRuns, 'no rule ran on a node the user may not delete').toBe(0);
+        expect(parent.LatestResult?.Message).toContain('does not have permission');
+        expect(parent.LatestResult?.Errors[0].Source, 'attributed to the node that failed, not the root')
+            .toBe('Products');
     });
 
     it('reports failure rather than rejecting when a rule throws mid-plan', async () => {
