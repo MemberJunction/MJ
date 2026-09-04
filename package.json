@@ -106,6 +106,8 @@
     "check:claude-md": "node .github/scripts/check-claude-md.mjs",
     "check:codegen-tail": "node .github/scripts/check-codegen-tail.mjs",
     "check:codegen-tail:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-codegen-tail",
+    "check:browser-manifest": "node .github/scripts/check-browser-manifest-leakage.mjs",
+    "check:browser-manifest:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-browser-manifest-leakage",
     "check:ui-layers": "node packages/MJCLI/bin/run.js standards check --check ui-layers",
     "change": "changeset",
     "version": "changeset version",
