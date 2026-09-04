@@ -170,6 +170,28 @@ A user can activate a skill for a message by typing **`/skill-name`** in the con
 
 `preActivateRequestedSkills` runs once at run start (**root agent only**), and activates each requested skill **only if it survives the guard**: it must be in `GetSkillsForAgent(agent, contextUser)` — i.e. the agent accepts it **and** the user may run it. Anything else is silently dropped, so a client can never smuggle in a skill the user or agent isn't entitled to. Surviving skills are activated through the same `recordSkillActivationStep` / `enableSkillCapabilities` / `buildSkillActivationMessage` machinery as a model-initiated `Skill` step, so their Instructions + bundled tools take effect from turn 1. Plan Mode is unaffected — pre-activation widens the tool surface, but the plan-approval gate still blocks *executing* those tools until approved.
 
+### 1.6b Skills and Scoped Search — the principal comes from the run
+
+`Scoped Search` takes an optional `AISkillID` input: the skill on whose behalf the search runs. The
+skill is a **principal** — its `SearchScopeAccess` / `MJ: AI Skill Search Scopes` can deny or widen a
+scope, and `ScopeDimensionResolver` binds it as `Principals.SkillID` into a dimension's expansion
+query (the mechanism behind "invoking this skill changes the content"). Inside a Loop agent that
+input is written by the model, so it cannot be the authority on which skill is active.
+
+`BaseAgent.ExecuteSingleAction` therefore stamps **`Context.ActiveSkillIDs`** — the skills the run has
+activated so far — onto every action call. `Scoped Search` reads it:
+
+| inside a run | outcome |
+|---|---|
+| no `AISkillID` named, exactly one skill active | that skill is the principal |
+| no `AISkillID` named, several active | no principal (verbose log) — the caller must say which |
+| `AISkillID` named and active in the run | accepted (the loaded skill's id is threaded) |
+| `AISkillID` named but NOT active in the run | `INVALID_PARAM` — the model may not widen its own reach |
+
+Outside a run (no `ActiveSkillIDs` on the context) the explicit input is the only source, unchanged.
+An app that gates activation with its own policy reads the same state through the protected
+`ActivatedSkillIDs` getter on `BaseAgent` rather than re-deriving it.
+
 ### 1.7 SKILL.md — portable import/export
 
 A skill can be exported to / imported from a portable **SKILL.md** file, so skills move across MJ instances:
@@ -278,7 +300,7 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 | Skill permission runtime helper | `packages/AI/BaseAIEngine/src/AISkillPermissionHelper.ts` (open-by-default, cached) |
 | Skill permission unified provider | `packages/MJCoreEntities/src/custom/PermissionProviders/AISkillPermissionProvider.ts` (+ `index.ts` `LoadPermissionProviders`) |
 | Grantee-exclusivity validator | `packages/MJCoreEntitiesServer/src/custom/MJAISkillPermissionEntityServer.server.ts` |
-| Skill step + Plan Mode runtime + pre-activation | `packages/AI/Agents/src/base-agent.ts` (`executeSkillStep` family, `preActivateRequestedSkills`, `resolvePlanModeGate`, `executePlanStep`) |
+| Skill step + Plan Mode runtime + pre-activation | `packages/AI/Agents/src/base-agent.ts` (`executeSkillStep` family, `preActivateRequestedSkills`, `resolvePlanModeGate`, `executePlanStep`); `ExecuteSingleAction` stamps `Context.ActiveSkillIDs` |
 | Skill/Plan next-step parsing | `packages/AI/Agents/src/agent-types/loop-agent-type.ts`, `loop-agent-response-type.ts` |
 | Step-type union + params | `packages/AI/CorePlus/src/agent-types.ts` (`BaseAgentNextStep`, `AgentSkillActivationRequest`, `ExecuteAgentParams.planMode` / `.requestedSkillIDs`) |
 | `/skill` composer UX | `packages/Angular/Generic/conversations/src/lib/services/mention-autocomplete.service.ts`, `components/mention/mention-editor.component.ts`, `components/message/message-input.component.ts` |
