@@ -2391,6 +2391,12 @@ export class EntityInfo extends BaseInfo {
     /**
      * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
+     *
+     * This is a single-column convenience for the places MJ is single-column *by design* — foreign-key
+     * targets, keyset `ORDER BY`, IS-A shared keys, and the bare-value shorthand `CompositeKey.LoadFromURLSegment`
+     * accepts. Do not use it to *construct* a load key for an arbitrary entity: that silently drops every
+     * column but the first on a composite key. Build keys with `CompositeKey.FromURLSegment(entityInfo, recordId)`
+     * or `CompositeKey.FromEntityRecord(entityInfo, row)`, which honor all of `PrimaryKeys`.
      */
     get FirstPrimaryKey(): EntityFieldInfo {
         if (this._firstPrimaryKeyCache === undefined) {
