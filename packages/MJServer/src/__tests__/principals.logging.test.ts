@@ -121,3 +121,40 @@ describe('ResolveConfiguredPrincipal', () => {
         expect(mockLogError).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('the misconfiguration report stays bounded WITHOUT regressing to per-request logging', () => {
+    it('publishes its bound, so this test cannot silently pass against a different one', async () => {
+        const { MAX_REPORTED_MISCONFIGURATIONS } = await loadSubject();
+
+        expect(typeof MAX_REPORTED_MISCONFIGURATIONS).toBe('number');
+        expect(MAX_REPORTED_MISCONFIGURATIONS).toBeGreaterThan(0);
+    });
+
+    it('still says a NEW misconfiguration exactly once after the bound is reached', async () => {
+        // The bound exists so a caller passing a per-request candidate cannot grow the tracker
+        // forever. But whatever it does at the limit must not be "log every time" — that is
+        // precisely the per-request error line issue #4209 was filed about, reintroduced for the
+        // one caller the bound was added for.
+        const { ResolveConfiguredPrincipal, MAX_REPORTED_MISCONFIGURATIONS } = await loadSubject();
+        expect(typeof MAX_REPORTED_MISCONFIGURATIONS).toBe('number'); // else the loop below is a no-op and this passes for free
+        for (let i = 0; i < MAX_REPORTED_MISCONFIGURATIONS + 5; i++) {
+            ResolveConfiguredPrincipal(`filler-${i}@nowhere.example`, 'MagicLink');
+        }
+        mockLogError.mockClear();
+
+        ResolveConfiguredPrincipal('late@nowhere.example', 'MagicLink');
+        ResolveConfiguredPrincipal('late@nowhere.example', 'MagicLink');
+        ResolveConfiguredPrincipal('late@nowhere.example', 'MagicLink');
+
+        expect(mockLogError).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not grow without bound', async () => {
+        const { ResolveConfiguredPrincipal, ReportedMisconfigurationCount, MAX_REPORTED_MISCONFIGURATIONS } = await loadSubject();
+        for (let i = 0; i < MAX_REPORTED_MISCONFIGURATIONS * 3; i++) {
+            ResolveConfiguredPrincipal(`filler-${i}@nowhere.example`, 'MagicLink');
+        }
+
+        expect(ReportedMisconfigurationCount()).toBeLessThanOrEqual(MAX_REPORTED_MISCONFIGURATIONS);
+    });
+});

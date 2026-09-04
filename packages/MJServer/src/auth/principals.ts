@@ -1,5 +1,5 @@
 import { LogError, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
@@ -148,22 +148,34 @@ function resolveFallback<T extends ResolvablePrincipal>(
 }
 
 /**
+ * How many distinct `purpose :: candidate` problems the tracker below remembers at once.
+ *
+ * Candidates come from static config today, so the real cardinality is the number of settings
+ * (three) and this is never approached. It is published so the bound is testable rather than
+ * discovered.
+ */
+export const MAX_REPORTED_MISCONFIGURATIONS = 64;
+
+/**
  * Misconfigurations already reported, keyed by purpose + candidate.
  *
  * A misconfigured setting is a static, boot-time fact, but the code that trips over it runs per
  * request — which is how issue #4209 turned one wrong config value into an error-level line on
  * every magic-link redeem. Saying it once per distinct problem keeps the diagnostic without
  * burying real errors underneath it.
+ *
+ * An LRU rather than a `Set` + cap, because the two differ exactly where it matters. A capped
+ * `Set` stops admitting once it is full, so every candidate seen after that logs on EVERY call —
+ * which is #4209's per-request error line, reintroduced for precisely the dynamic caller the cap
+ * was added to defend against. The LRU bounds memory the same way but keeps de-duplicating: the
+ * worst case is one repeated line after a cold key ages out, not a permanent flood.
  */
-const reportedMisconfigurations = new Set<string>();
+const reportedMisconfigurations = new MJLruCache<string, true>({ maxSize: MAX_REPORTED_MISCONFIGURATIONS });
 
-/**
- * Guard against unbounded growth if a caller ever passes a per-request candidate. Candidates come
- * from static config today, so the real cardinality is the number of settings (three); the cap
- * exists so a future dynamic caller degrades to logging every time rather than growing a set
- * forever. It never silently swallows — at the cap we log MORE, not less.
- */
-const MAX_REPORTED_MISCONFIGURATIONS = 64;
+/** Entries the tracker currently holds. Exists so the bound above can be asserted, not inferred. */
+export function ReportedMisconfigurationCount(): number {
+    return reportedMisconfigurations.Size;
+}
 
 /**
  * Resolves the principal named by a config setting, reading the process-wide user cache.
@@ -181,10 +193,10 @@ export function ResolveConfiguredPrincipal(candidate: string | undefined, purpos
 
     if (resolution.warning) {
         const key = `${purpose} :: ${candidate ?? ''}`;
-        if (!reportedMisconfigurations.has(key)) {
-            if (reportedMisconfigurations.size < MAX_REPORTED_MISCONFIGURATIONS) {
-                reportedMisconfigurations.add(key);
-            }
+        // `Get` rather than `Has`: it refreshes recency, so a setting that keeps being hit stays
+        // suppressed and it is the settings nobody asks about any more that age out first.
+        if (reportedMisconfigurations.Get(key) === undefined) {
+            reportedMisconfigurations.Set(key, true);
             LogError(`[${purpose}] ${resolution.warning}`);
         }
     }
