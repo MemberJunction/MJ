@@ -22,6 +22,7 @@ import {
     PUBLISH_WORKFLOW_PATH,
     SEED_WORKFLOW_NAME,
     SEED_DISPATCH_INPUT,
+    SEED_CONFIRM_INPUT,
     NPM_MEMBERS_URL,
     NPM_ESCALATION_HANDLE,
 } from '../check-new-npm-packages.mjs';
@@ -312,6 +313,7 @@ describe('formatGateFailure', () => {
     it('names the seed workflow as the proof step', () => {
         expect(message).toContain(SEED_WORKFLOW_NAME);
         expect(message).toContain(SEED_DISPATCH_INPUT);
+        expect(message).toContain(SEED_CONFIRM_INPUT);
         expect(message).toContain('succeeds ONLY if step 4 actually worked');
     });
 

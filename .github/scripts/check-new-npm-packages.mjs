@@ -75,6 +75,8 @@ export const PUBLISH_WORKFLOW_FILE = 'publish.yml';
 export const SEED_WORKFLOW_NAME = 'Build and publish new package versions';
 /** The workflow_dispatch input on publish.yml that selects the seed path. */
 export const SEED_DISPATCH_INPUT = 'seed_package';
+/** The matching double-entry input; must repeat the package name exactly. */
+export const SEED_CONFIRM_INPUT = 'confirm_seed_package';
 
 /** The repository provenance must name, as `owner/repo`. */
 export const GITHUB_REPO = 'MemberJunction/MJ';
@@ -315,9 +317,11 @@ ${trustStep}
    run without further prompts.
 
 5. Seed the package over OIDC. In the Actions tab, run the "${SEED_WORKFLOW_NAME}"
-   workflow (from the default ref) with ${SEED_DISPATCH_INPUT} AND confirm_branch both set
-   to the package name. It publishes a seed version using the trusted publisher, so it
-   succeeds ONLY if step 4 actually worked. Nothing else in that workflow runs.
+   workflow (Run workflow, default ref). Fill in exactly two fields, both with the package
+   name: ${SEED_DISPATCH_INPUT} and ${SEED_CONFIRM_INPUT}. Leave every other field alone.
+   It publishes a seed version using the trusted publisher, so it
+   succeeds ONLY if step 4 actually worked. Nothing else in that workflow runs — no build,
+   no release.
 
 6. Re-run this check. It reads the public provenance attestation the seed left behind
    and confirms it names ${GITHUB_REPO} / ${PUBLISH_WORKFLOW_PATH}.
@@ -339,7 +343,8 @@ cannot run steps 1 to 4. That is expected — hand it off:
      ${NPM_ESCALATION_HANDLE} — new package npm setup needed before merge:
 ${names.map((name) => `       ${name}`).join('\n')}
      Repo ${GITHUB_REPO}, workflow ${PUBLISH_WORKFLOW_FILE}, allow-publish, no environment.
-     Then run the "${SEED_WORKFLOW_NAME}" workflow for each, with ${SEED_DISPATCH_INPUT} set.
+     Then run the "${SEED_WORKFLOW_NAME}" workflow for each, with ${SEED_DISPATCH_INPUT}
+     and ${SEED_CONFIRM_INPUT} both set to the package name.
 
 2. If nobody responds within one working day, escalate to any MemberJunction npm org
    owner or admin. The current list is visible to org members via:

@@ -78,7 +78,7 @@ Check each package to ensure OIDC is properly configured:
 The PR gate (`check-new-npm-packages.mjs`) does not trust a screenshot of the npm settings page. It reads the public provenance attestation of a version that was actually published through the trusted publisher. Produce one:
 
 1. In the Actions tab, open **Build and publish new package versions** and click **Run workflow** on the default ref.
-2. Set `seed_package` to the package name (e.g. `@memberjunction/new-thing`) and type the **same name** into `confirm_branch`. Leave `line_branch` empty.
+2. Fill in exactly two fields, both with the package name (e.g. `@memberjunction/new-thing`): `seed_package` and `confirm_seed_package`. Leave every other field at its default — in particular `line_branch` and `confirm_branch` stay empty; those belong to releases.
 3. Run it. Only the `seed-package` job runs; no release is built and no changeset is consumed. It publishes `0.0.1-seed.1` under the `seed` dist-tag (never `latest`) and verifies the attestation names `publish.yml`.
 
 This must run through `publish.yml` itself: npm matches the trusted publisher on the exact workflow filename, so a seed from any other workflow file is refused at the OIDC token exchange (npm reports it as a 404 on PUT), and the gate would reject its attestation anyway.

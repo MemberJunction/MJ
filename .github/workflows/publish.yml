@@ -22,7 +22,7 @@ name: Build and publish new package versions
 #   2. dispatch, ref main, confirm_branch=main, no line    -> Edge
 #   3. dispatch, line_branch=lts/N, confirm_branch=lts/N   -> that line
 #   4. dispatch, seed_package=@memberjunction/x,
-#      confirm_branch=@memberjunction/x                    -> seed that one package (no release)
+#      confirm_seed_package=@memberjunction/x              -> seed that one package (no release)
 #
 # Invocation 4 publishes nothing but a two-file placeholder prerelease for a NEW
 # package, over OIDC with provenance. It lives in THIS workflow on purpose: npm's
@@ -82,13 +82,17 @@ on:
           - schema
       # Seed path (invocation 4). Publishes ONLY a placeholder prerelease of one new
       # package so the PR gate can read its provenance. Confirm by typing the same
-      # package name into confirm_branch. Nothing else in this workflow runs.
+      # package name into confirm_seed_package. Nothing else in this workflow runs.
       seed_package:
-        description: 'Seed path: a NEW package to seed over OIDC, e.g. @memberjunction/new-thing. Leave EMPTY for a release.'
+        description: 'SEED PATH ONLY — leave empty for any release. The NEW package to seed over OIDC, e.g. @memberjunction/new-thing. Publishes a placeholder prerelease; builds and releases nothing.'
+        required: false
+        default: ''
+      confirm_seed_package:
+        description: 'SEED PATH ONLY — type the same package name again to confirm. Must match seed_package exactly.'
         required: false
         default: ''
       seed_version:
-        description: 'Seed path: prerelease version for the seed (must not collide with a real release).'
+        description: 'SEED PATH ONLY — prerelease version for the seed. Must contain a hyphen so it can never win the latest tag.'
         required: false
         default: '0.0.1-seed.1'
 
@@ -117,22 +121,28 @@ jobs:
       LINE: ${{ github.event.inputs.line_branch }}
       CONFIRM: ${{ github.event.inputs.confirm_branch }}
       SEED: ${{ github.event.inputs.seed_package }}
+      SEED_CONFIRM: ${{ github.event.inputs.confirm_seed_package }}
       REF: ${{ github.ref_name }}
     steps:
       - name: A dispatch must be a confirmed Edge publish, a confirmed line release, or a confirmed seed
         run: |
           set -euo pipefail
 
-          # Invocation 4 — seed one new package. Double-entry: confirm_branch must repeat
-          # the package name. No line, no release; the seed-package job is the only one
-          # that runs.
-          if [ -n "$SEED" ]; then
-            if [ -n "$LINE" ]; then
-              echo "::error::seed_package and line_branch were both given. A seed dispatch publishes nothing but the seed; leave line_branch empty. Nothing was published."
+          # Invocation 4 — seed one new package. Double-entry on its OWN field:
+          # confirm_seed_package must repeat the package name. The release fields must be
+          # empty, so a seed can never be mistaken for a release or vice versa. The
+          # seed-package job is the only one that runs.
+          if [ -n "$SEED" ] || [ -n "$SEED_CONFIRM" ]; then
+            if [ -n "$LINE" ] || [ -n "$CONFIRM" ]; then
+              echo "::error::A seed dispatch must leave line_branch and confirm_branch empty (got line_branch='$LINE', confirm_branch='$CONFIRM'). A seed publishes nothing but the placeholder. Nothing was published."
               exit 1
             fi
-            if [ "$CONFIRM" != "$SEED" ]; then
-              echo "::error::To seed '$SEED', type the same package name into confirm_branch (got '$CONFIRM'). Nothing was published."
+            if [ -z "$SEED" ]; then
+              echo "::error::confirm_seed_package was given but seed_package is empty. Fill in seed_package with the package name and repeat it in confirm_seed_package. Nothing was published."
+              exit 1
+            fi
+            if [ "$SEED_CONFIRM" != "$SEED" ]; then
+              echo "::error::To seed '$SEED', type the same package name into confirm_seed_package (got '$SEED_CONFIRM'). Nothing was published."
               exit 1
             fi
             case "$SEED" in
@@ -165,7 +175,7 @@ jobs:
             exit 0
           fi
 
-          echo "::error::This dispatch matches no valid invocation (line_branch='$LINE', confirm_branch='$CONFIRM', seed_package='$SEED', ref='$REF') and NOTHING was published. The four ways to run this workflow are: (1) push to main -> Edge release; (2) dispatch from main with confirm_branch=main and line_branch empty -> manual Edge release; (3) dispatch with line_branch=lts/N and confirm_branch=lts/N -> that line's release; (4) dispatch with seed_package=@memberjunction/x and confirm_branch=@memberjunction/x -> seed that new package, no release. An empty dispatch is refused on purpose: it would publish whatever changesets happen to be sitting on the ref."
+          echo "::error::This dispatch matches no valid invocation (line_branch='$LINE', confirm_branch='$CONFIRM', seed_package='$SEED', ref='$REF') and NOTHING was published. The four ways to run this workflow are: (1) push to main -> Edge release; (2) dispatch from main with confirm_branch=main and line_branch empty -> manual Edge release; (3) dispatch with line_branch=lts/N and confirm_branch=lts/N -> that line's release; (4) dispatch with seed_package=@memberjunction/x and confirm_seed_package=@memberjunction/x, everything else empty -> seed that new package, no release. An empty dispatch is refused on purpose: it would publish whatever changesets happen to be sitting on the ref."
           exit 1
 
   # Seed path (invocation 4). Publishes a two-file placeholder prerelease of ONE new
