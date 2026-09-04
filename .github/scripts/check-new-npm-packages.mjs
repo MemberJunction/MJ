@@ -33,9 +33,13 @@
  *          repository: 'https://github.com/MemberJunction/MJ' }
  *
  * A package can only carry that attestation if it was published *through* the trusted
- * publisher. So `seed-new-package.yml` publishes a seed version over OIDC — which succeeds
- * only when `npm trust github` has been run — and this gate verifies the resulting
- * attestation. Full verification, no secrets, nothing for a human to attest to.
+ * publisher. So `publish.yml`, dispatched with `seed_package`, publishes a seed version over
+ * OIDC — which succeeds only when `npm trust github` has been run — and this gate verifies
+ * the resulting attestation. Full verification, no secrets, nothing for a human to attest to.
+ *
+ * The seed MUST be published by publish.yml itself: npm's trusted publishing matches the
+ * exact workflow filename, so a seed from any other workflow file is refused at the token
+ * exchange — and this gate would reject its attestation anyway (see verifyProvenance).
  *
  * WHAT IT CHECKS: only packages *new in this PR* — publishable `@memberjunction/*` names
  * present at head but absent from the merge base. That keeps it to a couple of requests
@@ -67,7 +71,10 @@ export const PUBLISH_WORKFLOW_PATH = '.github/workflows/publish.yml';
 export const PUBLISH_WORKFLOW_FILE = 'publish.yml';
 
 /** The workflow that seeds a new package over OIDC. */
-export const SEED_WORKFLOW_NAME = 'Seed new package';
+/** The workflow that seeds a new package: publish.yml itself, dispatched with `seed_package`. */
+export const SEED_WORKFLOW_NAME = 'Build and publish new package versions';
+/** The workflow_dispatch input on publish.yml that selects the seed path. */
+export const SEED_DISPATCH_INPUT = 'seed_package';
 
 /** The repository provenance must name, as `owner/repo`. */
 export const GITHUB_REPO = 'MemberJunction/MJ';
@@ -308,8 +315,9 @@ ${trustStep}
    run without further prompts.
 
 5. Seed the package over OIDC. In the Actions tab, run the "${SEED_WORKFLOW_NAME}"
-   workflow with the package name. It publishes a seed version using the trusted
-   publisher, so it succeeds ONLY if step 4 actually worked.
+   workflow (from the default ref) with ${SEED_DISPATCH_INPUT} AND confirm_branch both set
+   to the package name. It publishes a seed version using the trusted publisher, so it
+   succeeds ONLY if step 4 actually worked. Nothing else in that workflow runs.
 
 6. Re-run this check. It reads the public provenance attestation the seed left behind
    and confirms it names ${GITHUB_REPO} / ${PUBLISH_WORKFLOW_PATH}.
@@ -331,7 +339,7 @@ cannot run steps 1 to 4. That is expected — hand it off:
      ${NPM_ESCALATION_HANDLE} — new package npm setup needed before merge:
 ${names.map((name) => `       ${name}`).join('\n')}
      Repo ${GITHUB_REPO}, workflow ${PUBLISH_WORKFLOW_FILE}, allow-publish, no environment.
-     Then run the "${SEED_WORKFLOW_NAME}" workflow for each.
+     Then run the "${SEED_WORKFLOW_NAME}" workflow for each, with ${SEED_DISPATCH_INPUT} set.
 
 2. If nobody responds within one working day, escalate to any MemberJunction npm org
    owner or admin. The current list is visible to org members via:

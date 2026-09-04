@@ -73,7 +73,19 @@ Check each package to ensure OIDC is properly configured:
    - ✅ Repository: `MJ`
    - ✅ Workflow: `publish.yml`
 
-### Step 5: Trigger Build Workflow
+### Step 5: Seed the Package Over OIDC (Proves Step 3 Worked)
+
+The PR gate (`check-new-npm-packages.mjs`) does not trust a screenshot of the npm settings page. It reads the public provenance attestation of a version that was actually published through the trusted publisher. Produce one:
+
+1. In the Actions tab, open **Build and publish new package versions** and click **Run workflow** on the default ref.
+2. Set `seed_package` to the package name (e.g. `@memberjunction/new-thing`) and type the **same name** into `confirm_branch`. Leave `line_branch` empty.
+3. Run it. Only the `seed-package` job runs; no release is built and no changeset is consumed. It publishes `0.0.1-seed.1` under the `seed` dist-tag (never `latest`) and verifies the attestation names `publish.yml`.
+
+This must run through `publish.yml` itself: npm matches the trusted publisher on the exact workflow filename, so a seed from any other workflow file is refused at the OIDC token exchange (npm reports it as a 404 on PUT), and the gate would reject its attestation anyway.
+
+Re-run the PR's checks afterwards; the "Check new packages exist on npm" gate turns green.
+
+### Step 6: Trigger Build Workflow
 
 Push to main branch or manually trigger the `publish.yml` workflow. The GitHub Action will:
 
@@ -82,7 +94,7 @@ Push to main branch or manually trigger the `publish.yml` workflow. The GitHub A
 3. Publish to npm using OIDC (no manual npm token needed)
 4. Merge main into next branch
 
-### Step 6: Verify Publication
+### Step 7: Verify Publication
 
 After the workflow completes, verify all new packages were published:
 

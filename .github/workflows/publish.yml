@@ -21,6 +21,15 @@ name: Build and publish new package versions
 #   1. push to main                                        -> Edge
 #   2. dispatch, ref main, confirm_branch=main, no line    -> Edge
 #   3. dispatch, line_branch=lts/N, confirm_branch=lts/N   -> that line
+#   4. dispatch, seed_package=@memberjunction/x,
+#      confirm_branch=@memberjunction/x                    -> seed that one package (no release)
+#
+# Invocation 4 publishes nothing but a two-file placeholder prerelease for a NEW
+# package, over OIDC with provenance. It lives in THIS workflow on purpose: npm's
+# trusted publishing matches the exact workflow filename, and the PR gate
+# (check-new-npm-packages.mjs) requires the attestation to name publish.yml. A
+# seed published from any other workflow file can satisfy neither — the trust is
+# refused, and even if it weren't, the gate would reject the attestation.
 #
 # Invocation 2 exists because a bare dispatch with empty inputs used to run the
 # real Edge publish: `changeset version` consumes whatever changesets are sitting
@@ -71,6 +80,17 @@ on:
           - metadata
           - repair
           - schema
+      # Seed path (invocation 4). Publishes ONLY a placeholder prerelease of one new
+      # package so the PR gate can read its provenance. Confirm by typing the same
+      # package name into confirm_branch. Nothing else in this workflow runs.
+      seed_package:
+        description: 'Seed path: a NEW package to seed over OIDC, e.g. @memberjunction/new-thing. Leave EMPTY for a release.'
+        required: false
+        default: ''
+      seed_version:
+        description: 'Seed path: prerelease version for the seed (must not collide with a real release).'
+        required: false
+        default: '0.0.1-seed.1'
 
 
 permissions:
@@ -96,11 +116,32 @@ jobs:
     env:
       LINE: ${{ github.event.inputs.line_branch }}
       CONFIRM: ${{ github.event.inputs.confirm_branch }}
+      SEED: ${{ github.event.inputs.seed_package }}
       REF: ${{ github.ref_name }}
     steps:
-      - name: A dispatch must be a confirmed Edge publish or a confirmed line release
+      - name: A dispatch must be a confirmed Edge publish, a confirmed line release, or a confirmed seed
         run: |
           set -euo pipefail
+
+          # Invocation 4 — seed one new package. Double-entry: confirm_branch must repeat
+          # the package name. No line, no release; the seed-package job is the only one
+          # that runs.
+          if [ -n "$SEED" ]; then
+            if [ -n "$LINE" ]; then
+              echo "::error::seed_package and line_branch were both given. A seed dispatch publishes nothing but the seed; leave line_branch empty. Nothing was published."
+              exit 1
+            fi
+            if [ "$CONFIRM" != "$SEED" ]; then
+              echo "::error::To seed '$SEED', type the same package name into confirm_branch (got '$CONFIRM'). Nothing was published."
+              exit 1
+            fi
+            case "$SEED" in
+              @memberjunction/*) ;;
+              *) echo "::error::'$SEED' is not in the @memberjunction scope. Nothing was published."; exit 1 ;;
+            esac
+            echo "::notice::Confirmed seed of $SEED — the release jobs are skipped."
+            exit 0
+          fi
 
           # Invocation 2 — manual Edge publish. Only from main: every step of
           # that path is main-gated, and the changesets it consumes are main's.
@@ -124,8 +165,134 @@ jobs:
             exit 0
           fi
 
-          echo "::error::This dispatch matches no valid invocation (line_branch='$LINE', confirm_branch='$CONFIRM', ref='$REF') and NOTHING was published. The three ways to publish are: (1) push to main -> Edge release; (2) dispatch from main with confirm_branch=main and line_branch empty -> manual Edge release; (3) dispatch with line_branch=lts/N and confirm_branch=lts/N -> that line's release. An empty dispatch is refused on purpose: it would publish whatever changesets happen to be sitting on the ref."
+          echo "::error::This dispatch matches no valid invocation (line_branch='$LINE', confirm_branch='$CONFIRM', seed_package='$SEED', ref='$REF') and NOTHING was published. The four ways to run this workflow are: (1) push to main -> Edge release; (2) dispatch from main with confirm_branch=main and line_branch empty -> manual Edge release; (3) dispatch with line_branch=lts/N and confirm_branch=lts/N -> that line's release; (4) dispatch with seed_package=@memberjunction/x and confirm_branch=@memberjunction/x -> seed that new package, no release. An empty dispatch is refused on purpose: it would publish whatever changesets happen to be sitting on the ref."
           exit 1
+
+  # Seed path (invocation 4). Publishes a two-file placeholder prerelease of ONE new
+  # package through the trusted publisher, so a public provenance attestation naming
+  # this repository and this workflow file exists for check-new-npm-packages.mjs to
+  # read. Nothing is built and no changeset is consumed; every release job above and
+  # below carries `seed_package == ''` in its `if:` so this dispatch reaches nothing else.
+  #
+  # WHY HERE AND NOT IN ITS OWN WORKFLOW: npm trusted publishing matches the exact
+  # workflow filename. `npm trust github … --file publish.yml` therefore authorizes a
+  # publish from this file only; a seed from a separate seed workflow is refused at the
+  # OIDC token exchange (npm reports it as a 404 on PUT). And the gate requires the
+  # attestation's workflow path to be publish.yml, so only a seed from here can pass it.
+  seed-package:
+    name: Seed ${{ github.event.inputs.seed_package }} over OIDC
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.seed_package != '' }}
+    needs: [dispatch-guard]
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # mints the OIDC token npm exchanges for publish rights
+    env:
+      PACKAGE: ${{ github.event.inputs.seed_package }}
+      VERSION: ${{ github.event.inputs.seed_version }}
+    steps:
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+      # Trusted publishing needs npm >= 11.5.1; pin well above it so the runner's bundled
+      # npm version can drift without silently changing behaviour here.
+      - name: Pin npm
+        run: |
+          npm install -g npm@^11.15.0
+          npm --version
+      - name: Validate the seed version
+        run: |
+          set -euo pipefail
+          # A seed must be a prerelease. A plain x.y.z could win the `latest` tag and point
+          # consumers at an empty placeholder.
+          case "$VERSION" in
+            *-*) ;;
+            *) echo "::error::'$VERSION' is not a prerelease. Use something like 0.0.1-seed.1. Nothing was published."; exit 1 ;;
+          esac
+      # If the package does not exist, `npm trust github` cannot have been run against it
+      # either — npm refuses to configure trust for a nonexistent package. Say so plainly
+      # rather than letting the publish fail with a less obvious error.
+      - name: Require the package to already exist
+        run: |
+          set -euo pipefail
+          encoded="${PACKAGE/\//%2f}"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/$encoded")
+          echo "registry returned HTTP $code for $PACKAGE"
+          if [ "$code" = "404" ]; then
+            echo "::error::$PACKAGE does not exist on npm yet. Run 'npx setup-npm-trusted-publish $PACKAGE' first, then 'npm trust github $PACKAGE --file publish.yml --repo ${{ github.repository }} --allow-publish -y', then re-run this dispatch."
+            exit 1
+          fi
+          if [ "$code" != "200" ]; then
+            echo "::error::Unexpected HTTP $code from the registry. Check https://status.npmjs.org/ and re-run."
+            exit 1
+          fi
+      # Published from a scratch directory, not the repo: the seed is a marker, not code.
+      # `repository` must name this repo or npm refuses to attach provenance.
+      - name: Build the seed package
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/seed && cd /tmp/seed
+          cat > package.json <<EOF
+          {
+            "name": "$PACKAGE",
+            "version": "$VERSION",
+            "description": "Trusted-publishing seed. Proves OIDC is configured; contains no code.",
+            "license": "ISC",
+            "repository": {
+              "type": "git",
+              "url": "git+https://github.com/${{ github.repository }}.git"
+            }
+          }
+          EOF
+          cat > README.md <<EOF
+          # $PACKAGE
+          Seed release published over OIDC to prove trusted publishing is configured for
+          this package. It contains no code and is tagged \`seed\`, never \`latest\`.
+          Real releases are published by .github/workflows/publish.yml.
+          EOF
+          cat package.json
+      # The load-bearing step. Succeeds only if a trusted publisher naming this repository
+      # and publish.yml is already attached to the package. No NPM_TOKEN is set, on purpose.
+      - name: Publish seed over OIDC
+        working-directory: /tmp/seed
+        env:
+          NPM_TOKEN: ''
+        run: |
+          set -euo pipefail
+          npm publish --provenance --access public --tag seed 2>&1 | tee /tmp/seed-publish.log
+      # Read back what the publish deposited, so the operator sees the same evidence the
+      # gate will, without waiting for a PR run.
+      - name: Verify the attestation is public and names this workflow
+        run: |
+          set -euo pipefail
+          encoded="${PACKAGE/\//%2f}"
+          url="https://registry.npmjs.org/-/npm/v1/attestations/$encoded@$VERSION"
+          code=$(curl -s -o /tmp/att.json -w '%{http_code}' "$url")
+          echo "attestation endpoint returned HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Published, but no public attestation at $url. The gate will still block. Confirm 'npm trust list $PACKAGE' names publish.yml."
+            exit 1
+          fi
+          node -e '
+            const d = require("/tmp/att.json");
+            let ok = false;
+            for (const a of d.attestations ?? []) {
+              const p = a?.bundle?.dsseEnvelope?.payload;
+              if (!p) continue;
+              const s = JSON.parse(Buffer.from(p, "base64").toString());
+              const w = s?.predicate?.buildDefinition?.externalParameters?.workflow;
+              if (w) { console.log("workflow path :", w.path); console.log("workflow repo :", w.repository); ok ||= w.path === ".github/workflows/publish.yml"; }
+            }
+            if (!ok) { console.error("::error::No attestation names .github/workflows/publish.yml — the gate would reject this seed."); process.exit(1); }
+          '
+          {
+            echo "## Seeded ${PACKAGE}@${VERSION}"
+            echo ''
+            echo 'Published over OIDC with provenance naming publish.yml. The new-package gate will now pass for this package.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # Edge path. Unconditional on `push` — that trigger is the Edge release and its
   # behavior is untouched. On a dispatch it additionally requires the invocation-2
@@ -135,7 +302,7 @@ jobs:
   test-migrations:
     # The LTS job validates migration filenames on the line branch's own tree;
     # this job would test `next`, which says nothing about it.
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.seed_package == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -182,7 +349,7 @@ jobs:
     name: Validate release commit (full unit suite)
     # Edge path only — it tests THIS ref (main). A line release's content is
     # validated by the line branch's own CI on the backport PRs.
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.seed_package == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     uses: ./.github/workflows/release-test.yml
     # A reusable workflow receives NO secrets unless the caller passes them — `secrets:` is not
     # inherited by default. Without this, release-test.yml's unit-tests job saw an empty
@@ -196,7 +363,7 @@ jobs:
     # Edge path only. Redundant with `needs` (both gates carry the same `if`),
     # and deliberately so: this is the job that reaches npm, and it must never
     # depend on a skip cascade for that.
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.seed_package == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     # Hard preconditions: without `needs`, publish raced its own quality gates —
     # packages published to npm even when the fresh-DB migration apply failed, and
     # no test of any kind ran against the release commit. Publish requires both green.
@@ -587,7 +754,7 @@ jobs:
     # shape are checked in the job's first step, so a mismatched attempt at a
     # line release fails red instead of silently skipping. Nothing can publish
     # from here without that step passing.
-    if: ${{ github.event.inputs.line_branch != '' }}
+    if: ${{ github.event.inputs.line_branch != '' && github.event.inputs.seed_package == '' }}
     # 120, not publish-lts.yml's 45, for the reason spelled out on the edge job:
     # a timeout mid-`changeset publish` is DESTRUCTIVE, not a clean retry — it
     # splits the fixed-version group across two versions on npm. A line publish
