@@ -35,7 +35,12 @@
 .dash-stat {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
   padding: 16px; border: 1px solid var(--mj-border-default); border-radius: 16px;
-  background: var(--mj-bg-surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background: var(--mj-bg-surface);
+  /* The token, not a literal. The value we had was copied from Explorer's Credentials
+     dashboard, which hardcodes it -- and a fixed rgba(0,0,0,0.05) is invisible on a dark
+     surface, so the tiles lost their lift in the theme this app is usually viewed in.
+     --mj-shadow-sm carries a dark-mode value (0.30 alpha) for exactly that reason. */
+  box-shadow: var(--mj-shadow-sm);
 }
 /* NO hover lift. A card that rises under the cursor promises it is clickable, and three of the
    four have nowhere honest to go: Animals in care would land on 14 rows when the card says 12,

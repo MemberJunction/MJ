@@ -1,0 +1,52 @@
+<!-- The canonical MJ shell shape: a full-width header ABOVE the rail, then a row of rail + content.
+     mj-page-layout is overflow:hidden and the body owns the scrolling, which is what keeps the
+     header fixed while the page below it moves. -->
+<mj-page-layout>
+  <!-- The header names the CATEGORY, not the sub-page: the sub-page name is already the rail's
+       active item a few inches away, so repeating it would waste the one line of orientation. -->
+  <mj-page-header [Title]="CategoryTitle" [Icon]="CategoryIcon"></mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false" Direction="row">
+    <mj-left-nav
+        [Sections]="RailSections"
+        [ActiveId]="ActivePageId"
+        [MobileTitle]="CategoryTitle"
+        (ItemClicked)="OnRailItemClicked($event)"></mj-left-nav>
+
+    <mj-left-nav-content>
+      @if (ActivePage) {
+        @switch (ActivePage.kind) {
+          @case ('entity') {
+            <!-- The same generic grid every other shelter page uses. Keyed on the page id so
+                 Angular destroys and recreates it when the rail changes -- without the key the
+                 viewer would keep the previous entity's grid state and columns. -->
+            <mj-entity-viewer
+                [EntityName]="ActivePage.entityName!"
+                (CreateRecordRequested)="onCreateNewRecord(ActivePage.entityName!)"
+                (RecordOpened)="onRecordOpened($any($event))"
+                (OpenRelatedRecordRequested)="onOpenRelatedRecord($event)"
+                (DataLoaded)="NotifyLoadComplete()"
+                style="display:block; width:100%; height:100%;"></mj-entity-viewer>
+          }
+          @case ('query') {
+            @if (QueryIds[ActivePage.queryName!]) {
+              <mj-query-viewer
+                  [QueryId]="QueryIds[ActivePage.queryName!]"
+                  style="display:block; width:100%; height:100%;"></mj-query-viewer>
+            } @else {
+              <!-- Resolving, or the query is missing. Say which rather than showing a blank pane. -->
+              <p class="shelter-cat__note">Loading “{{ ActivePage.queryName }}”…</p>
+            }
+          }
+          @case ('pending') {
+            <div class="shelter-cat__pending">
+              <i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i>
+              <h2>{{ ActivePage.label }}</h2>
+              <p>{{ ActivePage.pendingNote }}</p>
+            </div>
+          }
+        }
+      }
+    </mj-left-nav-content>
+  </mj-page-body>
+</mj-page-layout>

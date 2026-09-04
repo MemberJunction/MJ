@@ -11698,6 +11698,9 @@ importers:
       '@memberjunction/ng-link-directives':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Explorer/link-directives
+      '@memberjunction/ng-query-viewer':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/query-viewer
       '@memberjunction/ng-record-changes':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/record-changes

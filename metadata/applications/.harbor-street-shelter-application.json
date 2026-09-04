@@ -11,7 +11,7 @@
     "DefaultNavItems": [
       {
         "Label": "Dashboard",
-        "Description": "The shelter at a glance. Every tile is a filtered count -- MaxRows 1 plus TotalRowCount -- so the page is cheap enough to open on every visit. Capacity and vaccination compliance cannot be had that way and are handled explicitly; see the component.",
+        "Description": "The shelter at a glance. Every tile is a stored Query -- aggregates belong in SQL -- so the page is one batched call rather than eight round-trips.",
         "Icon": "fa-solid fa-gauge-high",
         "ResourceType": "Custom",
         "DriverClass": "ShelterDashboard",
@@ -20,46 +20,28 @@
       },
       {
         "Label": "Animals",
-        "Description": "Every animal in the shelter. A dynamic view -- Explorer's generic entity grid, addressed by entity name, with no saved view record behind it.",
+        "Description": "Animals, breeds and the care log. A CATEGORY: its own component owns a side rail and swaps sub-pages, because MJ's nav metadata is flat and cannot express a second level.",
         "Icon": "fa-solid fa-paw",
         "ResourceType": "Custom",
-        "DriverClass": "ShelterAnimalsGrid",
+        "DriverClass": "ShelterAnimalsCategory",
         "isDefault": false,
         "Status": "Active"
       },
       {
         "Label": "Housing",
-        "Description": "Housing units and their capacity. Records you can open and edit.",
+        "Description": "Housing units and live occupancy. The occupancy sub-page is a Query -- computed rows, not records.",
         "Icon": "fa-solid fa-house-chimney",
         "ResourceType": "Custom",
-        "DriverClass": "ShelterHousingGrid",
+        "DriverClass": "ShelterHousingCategory",
         "isDefault": false,
         "Status": "Active"
       },
       {
-        "Label": "Breeds",
-        "Description": "Reference data: the breeds the shelter recognises.",
-        "Icon": "fa-solid fa-dog",
+        "Label": "Adoption",
+        "Description": "Adopters and adoptions. Present so the top bar keeps its final shape; its sub-pages arrive with module 7's relationship entities.",
+        "Icon": "fa-solid fa-heart",
         "ResourceType": "Custom",
-        "DriverClass": "ShelterBreedsGrid",
-        "isDefault": false,
-        "Status": "Active"
-      },
-      {
-        "Label": "Care Log",
-        "Description": "Every care entry across all animals. The same generic entity grid the other pages use -- ResourceType 'Custom' plus its OWN DriverClass, because sharing a class makes the shell highlight every item using it.",
-        "Icon": "fa-solid fa-notes-medical",
-        "ResourceType": "Custom",
-        "DriverClass": "ShelterCareLogsGrid",
-        "isDefault": false,
-        "Status": "Active"
-      },
-      {
-        "Label": "Occupancy",
-        "Description": "How full each unit is, computed live. These rows are not records -- this is RunQuery.",
-        "Icon": "fa-solid fa-chart-simple",
-        "ResourceType": "Queries",
-        "RecordID": "@lookup:MJ: Queries.Name=Housing Occupancy",
+        "DriverClass": "ShelterAdoptionCategory",
         "isDefault": false,
         "Status": "Active"
       }
@@ -133,7 +115,7 @@
     "ID": "B1E4A7C2-3F5D-4A88-9C10-6D2E8F4B7A91"
   },
   "sync": {
-    "lastModified": "2026-09-04T16:44:37.628Z",
-    "checksum": "3a058e9b8bb8fa5a4925667924c526c0b3f99db1394da0548b3193a7006a260a"
+    "lastModified": "2026-09-04T21:26:39.825Z",
+    "checksum": "0f447bdd5c301d9d23a9dae60ed5119c56ebd863d789e69b90d8690ce00bc9a7"
   }
 }

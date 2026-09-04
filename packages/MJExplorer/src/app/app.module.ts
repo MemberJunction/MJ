@@ -29,6 +29,21 @@ import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap-lite';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { ShelterAnimalsGridComponent, ShelterHousingGridComponent, ShelterBreedsGridComponent, ShelterCareLogsGridComponent } from './shelter/shelter-entity-grid.resource';
 import { ShelterDashboardComponent } from './shelter/shelter-dashboard.resource';
+import {
+  ShelterAnimalsCategoryComponent,
+  ShelterHousingCategoryComponent,
+  ShelterAdoptionCategoryComponent,
+} from './shelter/shelter-categories.resource';
+// The rail and page chrome are standalone components, so they are imported directly rather than
+// through a module. mj-query-viewer renders a stored Query's results (Occupancy).
+import {
+  MJLeftNavComponent,
+  MJLeftNavContentComponent,
+  MJPageLayoutComponent,
+  MJPageHeaderComponent,
+  MJPageBodyComponent,
+} from '@memberjunction/ng-ui-components';
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 
 // Import supplemental manifest for user-defined classes — generated at prebuild with
 // `mj codegen manifest --exclude-packages @memberjunction --open-app-client-bootstrap`.
@@ -76,6 +91,9 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
   declarations: [
     AppComponent,
     ShelterDashboardComponent,    // MJ Academy — the app's landing page (isDefault nav item)
+    ShelterAnimalsCategoryComponent,   // MJ Academy — top-bar categories, each owning a side rail
+    ShelterHousingCategoryComponent,
+    ShelterAdoptionCategoryComponent,
     ShelterAnimalsGridComponent,  // MJ Academy — one class per nav item, or the shell
     ShelterHousingGridComponent,  //   highlights every item sharing a DriverClass
     ShelterBreedsGridComponent,
@@ -87,6 +105,13 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 
     // Angular Core Modules
     BrowserModule,
+    // MJ Academy — the shell pieces the category rails are built from
+    MJLeftNavComponent,
+    MJLeftNavContentComponent,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent,
+    QueryViewerModule,
     BrowserAnimationsModule,
     FormsModule,
     ReactiveFormsModule,
