@@ -21,8 +21,7 @@ export class MJMagicLinkInviteFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMagicLinkInviteAllowedPaths', sectionName: 'Magic Link Invite Allowed Paths', isExpanded: false },
             { sectionKey: 'mJMagicLinkInviteApplications', sectionName: 'Magic Link Invite Applications', isExpanded: false },
             { sectionKey: 'mJMagicLinkInviteRoles', sectionName: 'Magic Link Invite Roles', isExpanded: false },
-            { sectionKey: 'mJMagicLinkRedemptions', sectionName: 'Magic Link Redemptions', isExpanded: false },
-            { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false }
+            { sectionKey: 'mJMagicLinkRedemptions', sectionName: 'Magic Link Redemptions', isExpanded: false }
         ]);
     }
 }

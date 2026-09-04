@@ -124,8 +124,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false },
-            { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false }
+            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
         ]);
     }
 }

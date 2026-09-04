@@ -46,6 +46,34 @@ export interface AISkillImportMarkdownOutput {
     warnings: string[];
 }
 
+/** Input for `Authorization.Check`. */
+export interface AuthorizationCheckInput {
+    /**
+     * Authorization names to evaluate (e.g. `Orders.Price.OverrideList`).
+     * Matching is case-insensitive. Empty array returns an empty Results list.
+     */
+    Names: string[];
+}
+
+/** One row of `Authorization.Check` output. */
+export interface AuthorizationCheckResultRow {
+    /** The name as requested. */
+    Name: string;
+    /** True when the user has this authorization or an ancestor grant. */
+    Allowed: boolean;
+    /** True when no `MJ: Authorizations` row matches this name. Fail-closed: Allowed is then false. */
+    Unknown: boolean;
+    /** True when Allowed because of an ancestor grant, not a direct role on this row. */
+    ViaAncestor: boolean;
+    /** The authorization Name that actually matched (leaf or ancestor). Null when not allowed. */
+    MatchedAuthorizationName: string | null;
+}
+
+/** Output of `Authorization.Check`. */
+export interface AuthorizationCheckOutput {
+    Results: AuthorizationCheckResultRow[];
+}
+
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -842,6 +870,22 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
 }
 
 // ============================================================
+// Authorization.Check — Check Authorization
+// ============================================================
+/**
+ * Check Authorization
+ * Ask whether the calling user can execute one or more named MJ: Authorizations, including ancestor grants. Unknown names fail closed (Allowed=false, Unknown=true). When a row has UseAuditLog, a MJ: Audit Logs record is written. Implemented by AuthorizationCheckOperation in @memberjunction/core-entities.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Authorization.Check'. This generated base provides the typed contract only (client-safe).
+ */
+export class AuthorizationCheckOperation extends BaseRemotableOperation<AuthorizationCheckInput, AuthorizationCheckOutput> {
+    public readonly OperationKey = "Authorization.Check";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "authorization:check";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // PredictiveStudio.ControlExperimentSession — Control Experiment Session
 // ============================================================
 /**
@@ -1301,50 +1345,6 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly OperationKey = "Workflow.Validate";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
-    public readonly RequiresSystemUser = false;
-}
-
-/** Input for `Authorization.Check`. */
-export interface AuthorizationCheckInput {
-    /**
-     * Authorization names to evaluate (e.g. `Orders.Price.OverrideList`).
-     * Matching is case-insensitive. Empty array returns an empty Results list.
-     */
-    Names: string[];
-}
-
-/** One row of `Authorization.Check` output. */
-export interface AuthorizationCheckResultRow {
-    /** The name as requested. */
-    Name: string;
-    /** True when the user has this authorization or an ancestor grant. */
-    Allowed: boolean;
-    /** True when no `MJ: Authorizations` row matches this name. Fail-closed: Allowed is then false. */
-    Unknown: boolean;
-    /** True when Allowed because of an ancestor grant, not a direct role on this row. */
-    ViaAncestor: boolean;
-    /** The authorization Name that actually matched (leaf or ancestor). Null when not allowed. */
-    MatchedAuthorizationName: string | null;
-}
-
-/** Output of `Authorization.Check`. */
-export interface AuthorizationCheckOutput {
-    Results: AuthorizationCheckResultRow[];
-}
-
-// ============================================================
-// Authorization.Check — Check Authorization
-// ============================================================
-/**
- * Check Authorization
- * Ask whether the calling user can execute one or more named MJ: Authorizations, including ancestor grants. Unknown names fail closed (Allowed=false, Unknown=true). When a row has UseAuditLog, a MJ: Audit Logs record is written. Implemented by AuthorizationCheckOperation in @memberjunction/core-entities.
- * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
- * under 'Authorization.Check'. This generated base provides the typed contract only (client-safe).
- */
-export class AuthorizationCheckOperation extends BaseRemotableOperation<AuthorizationCheckInput, AuthorizationCheckOutput> {
-    public readonly OperationKey = "Authorization.Check";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiredScope = "authorization:check";
     public readonly RequiresSystemUser = false;
 }
 

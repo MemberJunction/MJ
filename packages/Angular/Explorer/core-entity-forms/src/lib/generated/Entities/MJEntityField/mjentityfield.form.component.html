@@ -298,7 +298,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CodeType"
-            Type="select"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -746,9 +746,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Field Permissions','EntityFieldID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Field Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Field Permissions','EntityFieldID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityFieldPermissions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityFieldPermissions', $event.totalRowCount)"
                 >
