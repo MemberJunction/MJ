@@ -320,7 +320,10 @@ export class UserViewResource extends BaseResourceComponent {
      */
     public onOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
         if (nav?.entityName && nav.recordKey != null) {
-            this.navigationService.OpenEntityRecord(nav.entityName, CompositeKey.FromID(String(nav.recordKey)));
+            // The related entity is arbitrary, so its key column can have any name — resolve the key
+            // against its metadata rather than hardcoding `ID` via FromID.
+            const entityInfo = this.metadata.EntityByName(nav.entityName);
+            this.navigationService.OpenEntityRecord(nav.entityName, CompositeKey.FromURLSegment(entityInfo, String(nav.recordKey)));
         }
     }
 
