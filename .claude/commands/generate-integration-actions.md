@@ -37,7 +37,7 @@ Output goes to `metadata/actions/integrations-auto-generated/.<connector>-action
    - For HubSpot migration: also run `node scripts/migrate-hubspot-actions.mjs` to preserve database primary keys and add delete markers for old params/result codes
    - New actions (no `primaryKey`) will be created as new DB records on `mj sync push`
    - Actions with `primaryKey` will update existing DB records
-   - Push with: `npx mj sync push --dir=metadata --include="actions"`
+   - Push with: `pnpm mj sync push --dir=metadata --include="actions"`
 
 ## Adding a New Connector
 

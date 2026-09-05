@@ -1,0 +1,84 @@
+# .github/codeql/codeql-config-rest.yml
+#
+# JOB B — everything the security-critical job does not cover. 3,680 JavaScript/
+# TypeScript files after filtering, verified against MemberJunction/MJ@next on
+# 5 September 2026. Predominantly the Angular Explorer packages.
+#
+# Runs weekly and on demand only, on the security-extended suite. A full scan on that
+# suite measured 10m38s on a hosted runner on 5 September 2026 (226 results; the default
+# suite measured 15m33s and 172). See codeql.yml for the full table.
+#
+# The exclusion list below is the shared baseline from codeql-config.yml, plus the six
+# package paths the security-critical job owns. Keep the baseline section identical
+# across the three files; see the notes in codeql-config.yml for why each pattern is
+# present or absent.
+
+name: "MemberJunction CodeQL — remaining packages"
+
+paths-ignore:
+  # --- already covered by the security-critical job, excluded here to avoid
+  # --- analysing the same file twice and to keep this job inside the time budget
+  - 'packages/MJServer/**'
+  - 'packages/AuthProviders/**'
+  - 'packages/AI/**'
+  - 'packages/Actions/**'
+  - 'packages/MJGlobal/**'
+  - 'packages/React/runtime/**'
+
+  # --- build and distribution output ------------------------------------------------
+  - '**/dist/**'                 # 28 files
+  - '**/*.min.js'
+  - '**/*.bundle.js'
+  - '**/*.map'
+
+  # --- dependencies -----------------------------------------------------------------
+  # Matches nothing today: node_modules is not committed. Kept as a guard in case it
+  # ever is. This is the one pattern where a guard beats a tidy config.
+  - '**/node_modules/**'
+
+  # --- generated artifacts ----------------------------------------------------------
+  # 787 files, of which 406 are JavaScript/TypeScript. 767 of them sit in ONE directory:
+  #   packages/Angular/Explorer/core-entity-forms/src/lib/generated   (403 .ts, 383 .html)
+  # These are Angular entity form components generated from MemberJunction metadata.
+  # BC-POL-012 §8.3 treats such artifacts as regenerated rather than authored.
+  #
+  # The residual risk of excluding them is lower than it first appears: they are UI form
+  # scaffolds, not data access, so the "a generator template emits an unparameterized
+  # query into 787 files" scenario does not apply to this particular set. The generated
+  # code that does touch data access — the GraphQL schema under MJServer — is excluded
+  # from Job A for the same time-budget reason, and that trade is recorded in
+  # codeql-config.yml under "THE COVERAGE QUESTION".
+  #
+  # Record this exclusion in BC-POL-012 Annex A and exception EX-2026-002 rather than
+  # only here.
+  - '**/generated/**'
+  - '**/GeneratedEntities/**'
+  - '**/*.generated.ts'
+
+  # --- tests and fixtures -----------------------------------------------------------
+  # 2,524 JavaScript/TypeScript files match these patterns — 31% of the JS/TS surface
+  # and the single largest lever. Test-only issues are not reported.
+  #
+  # **/test/** (singular) is deliberately absent: packages/MJCLI/src/commands/test/ is
+  # the shipping implementation of the `mj test` command, 17 authored files, and it is
+  # this job's territory. See codeql-config.yml.
+  - '**/__tests__/**'
+  - '**/__mocks__/**'
+  - '**/*.test.ts'
+  - '**/*.test.js'
+  - '**/*.spec.ts'
+  - '**/*.spec.js'
+  - '**/tests/**'
+  - '**/fixtures/**'
+  - '**/__fixtures__/**'
+
+  # --- coverage, docs and samples ---------------------------------------------------
+  - '**/coverage/**'
+  - '**/docs/**'
+  - '**/*.md'
+
+# NOT COVERED BY ANY JOB IN THIS WORKFLOW, STATED SO IT IS NOT MISTAKEN FOR COVERAGE:
+#   migrations/  —  690 .sql files and 4 .md. CodeQL has no SQL analysis, so schema
+#   migrations are outside the reach of code scanning entirely. Review of migrations
+#   remains a human control under BC-POL-012 §10, and the automated migration check
+#   enforced as a required status check is a correctness gate, not a security scan.

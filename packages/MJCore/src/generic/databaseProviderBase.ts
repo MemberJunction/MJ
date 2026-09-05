@@ -177,6 +177,30 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * Public nesting depth. 0 = no ambient TX. Join-TX callers (accounting
+     * CreateJournalEntries) must read this, not `IsInTransaction` (SQL Server
+     * leaves that false). Deprecated camelCase `transactionDepth` alias ships
+     * for one release.
+     */
+    public get TransactionDepth(): number {
+        return this.CurrentTransactionDepth;
+    }
+
+    /** @deprecated Use {@link TransactionDepth}. */
+    public get transactionDepth(): number {
+        return this.TransactionDepth;
+    }
+
+    /**
+     * Drop a dead physical handle and reset depth. No-op on providers that
+     * do not track nested transactions. Use after a server-side abort when
+     * {@link RollbackTransaction} itself rejects.
+     */
+    public async ResetTransactionState(): Promise<void> {
+        /* no-op */
+    }
+
+    /**
      * Database providers execute multi-record units of work atomically, in-process.
      *
      * @see ProviderBase.SupportsEntityTransactions for why the base default is `false`.
@@ -2342,4 +2366,9 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers to emit logging of a simpler SQL statement that doesn't have extra functionality that isn't important for migrations or other logging purposes. */
   simpleSQLFallback?: string;
+  /**
+   * Explicit driver handle (pool, client, or transaction). When set, the statement
+   * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
+   */
+  connectionSource?: object;
 }

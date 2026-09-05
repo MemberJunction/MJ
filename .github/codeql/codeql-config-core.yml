@@ -1,0 +1,62 @@
+# .github/codeql/codeql-config-core.yml
+#
+# JOB A — the security-critical packages. 1,572 JavaScript/TypeScript files after
+# filtering, verified against MemberJunction/MJ@next on 5 September 2026.
+#
+# This job exists so the code where a finding matters most is scanned on the extended
+# query suite on every pull request and every merge to next, rather than waiting for a
+# weekly run of the whole repository. A full scan of next measured 7m31s on a hosted
+# runner on 5 September 2026 (133 results); see codeql.yml for the full table.
+#
+# Generated code is excluded here as it is everywhere else in this workflow. Only six
+# generated JavaScript/TypeScript files sit inside these packages, but one of them —
+# packages/MJServer/src/generated/graphql-schemas/__mj.ts — is 88,876 lines, roughly a
+# fifth of everything this job would otherwise read, and it is regenerated from
+# metadata on every CodeGen run. The coverage trade this makes is recorded in
+# codeql-config.yml under "THE COVERAGE QUESTION".
+#
+# The exclusion list below is the shared baseline from codeql-config.yml. Keep the
+# three files identical in that section; see the notes there for why each pattern is
+# present or absent.
+
+name: "MemberJunction CodeQL — security-critical packages"
+
+paths:
+  - 'packages/MJServer/**'
+  - 'packages/AuthProviders/**'
+  - 'packages/AI/**'
+  - 'packages/Actions/**'
+  - 'packages/MJGlobal/**'
+  - 'packages/React/runtime/**'
+
+paths-ignore:
+  # --- build and distribution output ------------------------------------------------
+  - '**/dist/**'
+  - '**/*.min.js'
+  - '**/*.bundle.js'
+  - '**/*.map'
+
+  # --- dependencies -----------------------------------------------------------------
+  - '**/node_modules/**'
+
+  # --- generated artifacts ----------------------------------------------------------
+  - '**/generated/**'
+  - '**/GeneratedEntities/**'
+  - '**/*.generated.ts'
+
+  # --- tests and fixtures -----------------------------------------------------------
+  # **/test/** (singular) is deliberately absent — see codeql-config.yml.
+  - '**/__tests__/**'
+  - '**/__mocks__/**'
+  - '**/*.test.ts'
+  - '**/*.test.js'
+  - '**/*.spec.ts'
+  - '**/*.spec.js'
+  - '**/tests/**'
+  - '**/fixtures/**'
+  - '**/__fixtures__/**'
+
+  # --- coverage, docs and samples ---------------------------------------------------
+  - '**/coverage/**'
+  - '**/docs/**'
+  - '**/*.md'

@@ -10,6 +10,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 import { ArtifactViewerTab, NavigationRequest } from './base-artifact-viewer.component';
 import { ArtifactIconService } from '../services/artifact-icon.service';
+import { ArtifactFileService } from '../services/artifact-file.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
 @Component({
@@ -70,6 +71,17 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   public activeTab: string = 'display'; // Changed to string to support dynamic tabs
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
+  /**
+   * The no-plugin fallback. An artifact type with no viewer plugin (CSV today) used to render an empty
+   * pane: the display tab only knew the extracted markdown/HTML attributes, and a file-backed version
+   * has no inline Content to show. Now such an artifact gets a file card with a Download action, and
+   * text-like content (text/*, JSON, CSV) is fetched and shown as plain text — capped, so a large file
+   * is downloaded rather than rendered.
+   */
+  public fallbackText: string | null = null;
+  public fallbackTextTruncated = false;
+  public fallbackBusy = false;
+  private static readonly FALLBACK_TEXT_MAX_CHARS = 200_000;
   public versionAttributes: MJArtifactVersionAttributeEntity[] = [];
   private artifactTypeDriverClass: string | null = null;
   /** Populated from ArtifactType.ContentCategory. Used to suppress the JSON tab for
@@ -213,7 +225,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     private cdr: ChangeDetectorRef,
     private notificationService: MJNotificationService,
     private sanitizer: DomSanitizer,
-    private artifactIconService: ArtifactIconService
+    private artifactIconService: ArtifactIconService,
+    private artifactFileService: ArtifactFileService
   ) {
     super();
     this.recentAccessService = new RecentAccessService();
@@ -303,6 +316,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.jsonContent = '';
     this.displayMarkdown = null;
     this.displayHtml = null;
+    this.fallbackText = null;
+    this.fallbackTextTruncated = false;
     this.artifactCollections = [];
     this.currentVersionCollections = [];
     this.primaryCollection = null;
@@ -527,6 +542,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         // Set active tab to the first available tab
         this.setActiveTabToFirstAvailable();
       }
+      await this.prepareNoPluginFallback(isCurrentLoad);
     } catch (err) {
       if (!isCurrentLoad()) {
         return;
@@ -564,6 +580,107 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     const pluginHasContent = this.pluginViewer?.pluginInstance?.hasDisplayContent ?? false;
 
     return pluginHasContent || !!this.displayMarkdown || !!this.displayHtml;
+  }
+
+  /** True when the display tab has nothing better than the file card to show. */
+  get showFileFallback(): boolean {
+    return !this.hasPlugin && !!this.artifactVersion && !this.displayMarkdown && !this.displayHtml;
+  }
+
+  /** The file name shown on the fallback card. */
+  get fallbackFileName(): string {
+    return this.artifactVersion?.FileName || this.artifact?.Name || 'file';
+  }
+
+  /** Human file size for the fallback card, when the version knows it. */
+  get fallbackSize(): string | null {
+    const content = this.artifactVersion?.Content;
+    if (this.artifactVersion?.ContentMode === 'Text' && content?.startsWith('data:')) {
+      const b64 = content.slice(content.indexOf(',') + 1);
+      return this.formatBytes(Math.floor((b64.length * 3) / 4));
+    }
+    return null;
+  }
+
+  /** Text-like MIME types are shown inline on the fallback card; everything else is download-only. */
+  private isTextLike(mime: string | null | undefined): boolean {
+    const m = (mime ?? '').toLowerCase();
+    return m.startsWith('text/') || m === 'application/json' || m === 'application/xml' || m === 'application/csv';
+  }
+
+  /**
+   * Fetch text-like content for the no-plugin fallback. File-backed: MJ's pre-authenticated URL;
+   * inline: the data URL. Silent on failure — the Download action still works.
+   */
+  private async prepareNoPluginFallback(isCurrentLoad: () => boolean): Promise<void> {
+    this.fallbackText = null;
+    this.fallbackTextTruncated = false;
+    const version = this.artifactVersion;
+    if (!this.showFileFallback || !version || !this.isTextLike(version.MimeType)) return;
+    try {
+      let text: string | null = null;
+      if (version.ContentMode === 'File') {
+        const url = await this.artifactFileService.getDownloadUrl(version.ID);
+        const res = await fetch(url);
+        if (res.ok) text = await res.text();
+      } else if (version.Content?.startsWith('data:')) {
+        text = new TextDecoder().decode(this.artifactFileService.dataUrlToArrayBuffer(version.Content));
+      } else if (typeof version.Content === 'string') {
+        text = version.Content;
+      }
+      if (!isCurrentLoad() || text == null) return;
+      if (text.length > ArtifactViewerPanelComponent.FALLBACK_TEXT_MAX_CHARS) {
+        text = text.slice(0, ArtifactViewerPanelComponent.FALLBACK_TEXT_MAX_CHARS);
+        this.fallbackTextTruncated = true;
+      }
+      this.fallbackText = text;
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(`Artifact viewer: could not load text for the no-plugin fallback: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** Download the artifact's file: file-backed via MJ's URL (fetched to a blob so the browser saves it), inline via the data URL. */
+  public async downloadArtifactFile(): Promise<void> {
+    const version = this.artifactVersion;
+    if (!version || this.fallbackBusy) return;
+    this.fallbackBusy = true;
+    try {
+      let objectUrl: string | null = null;
+      if (version.ContentMode === 'File') {
+        const url = await this.artifactFileService.getDownloadUrl(version.ID);
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          objectUrl = URL.createObjectURL(await res.blob());
+        } catch {
+          window.open(url, '_blank', 'noopener'); // storage refused the cross-origin fetch — let the browser handle it
+          return;
+        }
+      } else if (version.Content?.startsWith('data:')) {
+        objectUrl = this.artifactFileService.dataUrlToObjectUrl(version.Content, version.MimeType || 'application/octet-stream');
+      } else if (typeof version.Content === 'string') {
+        objectUrl = URL.createObjectURL(new Blob([version.Content], { type: version.MimeType || 'text/plain' }));
+      }
+      if (!objectUrl) return;
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = this.fallbackFileName;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl as string), 60_000);
+    } finally {
+      this.fallbackBusy = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private formatBytes(n: number): string {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   get hasPlugin(): boolean {
