@@ -1,0 +1,121 @@
+# .github/codeql/codeql-config.yml
+#
+# Used by the actions and python analyses. The two JavaScript/TypeScript analyses have
+# their own configs (codeql-config-core.yml and codeql-config-rest.yml) because they
+# split the language between them; the exclusions below are the shared baseline, kept
+# identical across all three files so that the three tell one story.
+#
+# Path filters apply to languages CodeQL analyses without a build — which is all three
+# used here (actions, python, javascript-typescript). They are the main free lever
+# against the JavaScript/TypeScript timeout.
+#
+# The principle: exclude code nobody wrote and code that never ships. Do not exclude
+# anything an engineer authored that reaches a customer.
+#
+# VERIFIED against MemberJunction/MJ@next on 5 September 2026 by verify-paths.sh:
+# 19,900 files in the tree, 8,183 of them JavaScript/TypeScript. Every pattern below
+# matched something real, except node_modules — see the note against it.
+
+name: "MemberJunction CodeQL config"
+
+paths-ignore:
+  # --- build and distribution output: generated from source, not source -------------
+  - '**/dist/**'                     # 28 files
+  - '**/*.min.js'
+  - '**/*.bundle.js'
+  - '**/*.map'
+
+  # REMOVED after verification, because they matched nothing in this repository and
+  # a pattern matching nothing tells the next reader something untrue:
+  #   **/build/**          0 matches
+  #   **/out/**            0 matches
+  #   **/lib/**/*.js       0 matches — this was the risky one. It was in the draft to
+  #                        catch compiled output sitting beside TypeScript sources.
+  #                        MJ has no such layout, so the pattern carried only the risk
+  #                        of silently excluding authored JavaScript, and no benefit.
+
+  # --- dependencies -----------------------------------------------------------------
+  # Kept deliberately despite matching 0 files today. node_modules is not committed,
+  # and this line exists so that it stays excluded if it ever is committed by accident.
+  # This is the one pattern where a guard is worth more than a tidy config.
+  - '**/node_modules/**'
+
+  # --- deterministically generated artifacts ----------------------------------------
+  # Confirmed against the repository. BC-POL-012 §8.3 treats these as regenerated from
+  # metadata rather than authored, which is what makes excluding them defensible.
+  # 787 files match, 406 of them JavaScript/TypeScript; 767 sit in one directory,
+  # packages/Angular/Explorer/core-entity-forms/src/lib/generated.
+  - '**/generated/**'                      # 787 files
+  - '**/GeneratedEntities/**'               # 7 files
+  - '**/*.generated.ts'                     # 2 files
+  #
+  # THREE PATTERNS FROM THE DRAFT WERE REMOVED AFTER LOOKING AT WHAT THEY ACTUALLY MATCH:
+  #
+  #   **/GeneratedActions/**   REMOVED — over-broad, and exactly the mistake this check
+  #                            exists to catch. packages/GeneratedActions/ is a real
+  #                            package with a README, a package.json and authored source.
+  #                            Only packages/GeneratedActions/src/generated/ is output,
+  #                            and **/generated/** already covers it. Excluding the whole
+  #                            package because its name contains "Generated" would have
+  #                            dropped authored, shipping code from the scan.
+  #
+  #   **/generated-for-prompt/**        REMOVED — all 6 files are .md, already excluded.
+  #   **/integrations-auto-generated/** REMOVED — all 7 files are .json under metadata/,
+  #                                     not analysed by any language here.
+  #
+  #   **/generated_entities/**          REMOVED — 0 matches. The repository uses
+  #                                     GeneratedEntities, not the snake_case spelling.
+  #
+  #   MJGeneratedCode / MJGeneratedCodeCategory: no pattern needed. They looked like
+  #   entity names worth protecting, but they are directories INSIDE
+  #   packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/, so
+  #   **/generated/** already covers them, correctly.
+  #
+  # THE COVERAGE QUESTION THIS SECTION RAISES, RECORDED RATHER THAN BURIED.
+  # Generated code ships to customers. Excluding it means a flaw in a code generator's
+  # template — one that emits, say, an unparameterised query into every generated file —
+  # is invisible to this scan. The generator itself is authored TypeScript and is
+  # scanned, but scanning the generator does not prove its output is safe.
+  # The position taken: generated output is excluded from every analysis in this
+  # workflow, including the security-critical one, because the purpose of the setup is
+  # to fit inside the Actions time budget and generated code is the largest block of
+  # code nobody wrote. This is a known limitation of scanning coverage and belongs in
+  # BC-POL-012 Annex A and in exception EX-2026-002, not only in a comment here.
+
+  # --- tests and fixtures -----------------------------------------------------------
+  # 2,524 JavaScript/TypeScript files match these patterns — 31% of the JS/TS surface
+  # and the single largest lever. Test-only issues are not reported. That is the trade.
+  #
+  # **/test/** (singular) is deliberately NOT in this list. The only directory of that
+  # name holding JavaScript/TypeScript is packages/MJCLI/src/commands/test/ — the 17
+  # authored files that implement the `mj test` command, which ships. Every directory
+  # named tests/ (plural) holds test code, so that pattern stays.
+  - '**/__tests__/**'
+  - '**/__mocks__/**'
+  - '**/*.test.ts'
+  - '**/*.test.js'
+  - '**/*.spec.ts'
+  - '**/*.spec.js'
+  - '**/tests/**'
+  - '**/fixtures/**'
+  - '**/__fixtures__/**'
+
+  # --- coverage, docs and samples ---------------------------------------------------
+  - '**/coverage/**'
+  - '**/docs/**'
+  - '**/*.md'
+
+# Deliberately NOT excluded, because they are authored code that reaches customers.
+# File counts are all file types, verified 5 September 2026:
+#   packages/MJServer/**            291    — the API surface
+#   packages/AuthProviders/**        24    — identity
+#   packages/AI/**                 1803    — prompt and agent pipeline; the largest package
+#   packages/Actions/**             650    — including the code execution sandbox
+#   packages/React/runtime/**        49    — model-authored component execution
+#   packages/MJGlobal/**             73    — SQL expression validation
+#
+# NOT COVERED BY ANY ANALYSIS IN THIS WORKFLOW, STATED SO IT IS NOT MISTAKEN FOR COVERAGE:
+#   migrations/  —  690 .sql files and 4 .md. CodeQL has no SQL analysis, so schema
+#   migrations are outside the reach of code scanning entirely. Review of migrations
+#   remains a human control under BC-POL-012 §10, and the automated migration check
+#   enforced as a required status check is a correctness gate, not a security scan.

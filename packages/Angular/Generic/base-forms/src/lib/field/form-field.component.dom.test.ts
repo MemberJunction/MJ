@@ -411,5 +411,98 @@ describe('date-only fields are a calendar day, not an instant', () => {
             const shown = text(f, '.mj-forms-field-value');
             expect(shown, 'a datetime must keep local-time rendering').toMatch(/\d{1,2}:\d{2}/);
         });
+});
+
+describe('an unreadable stored date is announced, not hidden (bc-aidp-next-golive#185)', () => {
+    /**
+     * THE FAILURE THIS PREVENTS IS DATA LOSS, not an ugly form.
+     *
+     * `DateInputValue` returns '' for a value it cannot render, and `<input type="date">` shows ''
+     * as an empty box - the same box it shows for a field that was never set. So the field reads as
+     * "no date", and the next save writes that emptiness over whatever was actually stored. The
+     * element cannot display the bad value itself; there is no string that makes it show
+     * `not-a-date`. Saying so beside the control is the only option available.
+     */
+    const WARNING = '.mj-forms-field-validation--warning';
+
+    it('warns when the stored value cannot be shown in the date editor', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('not a date') }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        const input = query(f, 'input[type="date"]') as HTMLInputElement | null;
+        expect(input!.value, 'precondition: the editor is blank').toBe('');
+        expect(query(f, WARNING), 'a blank box with no explanation is the defect').not.toBeNull();
     });
+
+    it('does NOT warn for a field that is simply empty', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: null }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect(query(f, 'input[type="date"]')).not.toBeNull();
+        expect(query(f, WARNING), 'empty means empty and must not be decorated as a fault').toBeNull();
+    });
+
+    it('does NOT warn for a perfectly good date', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('2026-11-20T00:00:00.000Z') }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        const input = query(f, 'input[type="date"]') as HTMLInputElement | null;
+        expect(input!.value).toBe('2026-11-20');
+        expect(query(f, WARNING)).toBeNull();
+    });
+
+    /**
+     * WHICH INGRESS SHAPES ACTUALLY REACH HERE UNREADABLE — measured, not assumed.
+     *
+     * A value LOADED FROM THE DATABASE never triggers this: the API sends dates as epoch
+     * milliseconds (measured on a live server: ExpectedCloseDate came over as 1790726400000), and a
+     * number always parses. So this warning cannot fire by opening a record, and these tests exist
+     * to record what CAN reach it — client-side assignment from an import, an integration or an
+     * Action, where `BaseEntity.Set` takes whatever it is handed.
+     *
+     * The UK/EU case is the one worth caring about: `20/11/2026` is the ordinary way most of the
+     * world writes a date, and it is exactly what a CSV out of a European system contains.
+     */
+    it('a UK / EU formatted string reaches here unreadable and is announced', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: '20/11/2026' }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect((query(f, 'input[type="date"]') as HTMLInputElement).value).toBe('');
+        expect(query(f, WARNING), 'a European date must not read as "no date"').not.toBeNull();
+    });
+
+    it('a dd-MM-yyyy string is announced too', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: '20-11-2026' }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect(query(f, WARNING)).not.toBeNull();
+    });
+
+    it('a whitespace-only value is announced rather than passing as empty', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: '   ' }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect(query(f, WARNING)).not.toBeNull();
+    });
+
+    it('the epoch-millisecond wire format is NOT announced — that is the normal load path', () => {
+        // 1790726400000 is a real value taken off the running API for a `date` column holding
+        // 2026-09-30. If this ever warns, the warning has started firing on ordinary data.
+        const f = render({ Record: makeWidget({ LaunchDate: 1790726400000 }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect((query(f, 'input[type="date"]') as HTMLInputElement).value).toBe('2026-09-30');
+        expect(query(f, WARNING)).toBeNull();
+    });
+
+    /**
+     * NOT CAUGHT, AND THIS TEST SAYS SO RATHER THAN PRETENDING OTHERWISE.
+     *
+     * An Excel date serial (46346 = 20 Nov 2026 in Excel's epoch) is read as 46346 MILLISECONDS and
+     * renders 1970-01-01. It parses, so nothing here can tell it from a real date — the field shows
+     * a confident, wrong day and no warning. Same shape as `2026-02-31` rolling to 3 March.
+     *
+     * Both need the value refused at INGRESS, in the entity's type coercion, before anything is
+     * asked to display it. Recorded here so the limit of this warning is written down next to it.
+     */
+    it('does NOT catch a value that parses to the wrong date — a known limit', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: 46346 }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect((query(f, 'input[type="date"]') as HTMLInputElement).value).toBe('1970-01-01');
+        expect(query(f, WARNING), 'documents the gap: a parseable-but-wrong value is invisible here').toBeNull();
+    });
+
+    it('stays out of READ mode, which already surfaces the value itself', () => {
+        // FormatValue() renders 'Invalid Date' / the raw text, so read mode needs no warning and
+        // adding one there would be noise on a surface that is already honest.
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('not a date') }), FieldName: 'LaunchDate', Type: 'datepicker' });
+        expect(query(f, WARNING)).toBeNull();
+        expect(text(f, '.mj-forms-field-value')).toContain('Invalid Date');
+    });
+});
 });
