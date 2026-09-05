@@ -268,7 +268,7 @@ export class MJDialogContainerComponent {
 }
 
 /**
- * MJDialogService — Programmatic dialog opening. Replaces Kendo `DialogService`.
+ * MJDialogService — Programmatic dialog opening.
  *
  * @example
  * ```typescript
@@ -300,7 +300,7 @@ export class MJDialogService {
   /**
    * Open a dialog programmatically.
    *
-   * Kendo-compatible API: accepts `content` as string or Component class,
+   * Accepts `content` as a string or a Component class,
    * returns a ref with `.Content.instance` and `.Result` observable.
    */
   Open(settings: MJDialogSettings): MJDialogRef {
@@ -373,7 +373,7 @@ export class MJDialogService {
   }
 
   /**
-   * Kendo-compatible alias — lowercase `open` for easier migration.
+   * Lowercase `open` alias.
    */
   open(settings: MJDialogSettings): MJDialogRef {
     return this.Open(settings);

@@ -8,7 +8,7 @@ Related: [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) (`Authorization.Check`)
 
 ## 1. One JSON, two runtimes
 
-Staff build filters in **`mj-filter-builder`** (`@memberjunction/ng-filter-builder`). The portable payload is a Kendo **`CompositeFilterDescriptor`**:
+Staff build filters in **`mj-filter-builder`** (`@memberjunction/ng-filter-builder`). The portable payload is MJ's own **`CompositeFilterDescriptor`** (defined in `@memberjunction/core`):
 
 ```json
 {

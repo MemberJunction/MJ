@@ -114,8 +114,8 @@ Organize credentials into categories:
 | `@memberjunction/core-entities` | Entity type definitions |
 | `@memberjunction/global` | Global utilities |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
-| `@progress/kendo-angular-dialog` | Dialog/modal support |
-| `@progress/kendo-angular-buttons` | Button components |
+| `@memberjunction/ng-ui-components` | Dialog/modal support |
+| `@memberjunction/ng-ui-components` | Button components |
 
 ### Peer Dependencies
 

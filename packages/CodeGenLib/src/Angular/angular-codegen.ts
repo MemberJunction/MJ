@@ -1250,7 +1250,7 @@ ${componentCodeWithIndent}
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
     <!-- TODO: Evaluate restoring resizable splitter between top/bottom areas.
-         Previously used kendo-splitter (fixed 300px top), then as-split (percentage-based).
+         Previously a fixed 300px top pane, then as-split (percentage-based).
          as-split caused empty space on forms with few top-area fields (40% of nothing = blank).
          Using plain divs for now until a better sizing strategy is determined.
          See: angular-split (as-split) or CSS resize for future options. -->

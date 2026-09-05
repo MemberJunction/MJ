@@ -70,7 +70,7 @@ npm install @memberjunction/ng-shared
 | `@memberjunction/ng-base-application` | WorkspaceStateManager, ApplicationManager, TabService |
 | `@memberjunction/ng-base-types` | BaseAngularComponent |
 | `@memberjunction/ng-notifications` | MJNotificationService |
-| `@progress/kendo-angular-notification` | Kendo NotificationService |
+| `@memberjunction/ng-ui-components` | NotificationService |
 | `rxjs` | Observables, BehaviorSubject |
 
 ## Usage

@@ -20,7 +20,6 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 /**
  * mj-dropdown — Dropdown select component using CDK Overlay.
  *
- * Replaces `<kendo-dropdownlist>`.
  *
  * Every dropdown needs an ACCESSIBLE NAME, or it announces as "combobox, collapsed" with no hint of
  * what it selects (WCAG 2.1 4.1.2). Use {@link AriaLabelledBy} when a visible label already exists —

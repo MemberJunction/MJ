@@ -8,9 +8,9 @@ The `SimpleRecordListComponent` is designed for settings pages and administrativ
 
 ```mermaid
 graph TD
-    SRL["SimpleRecordListComponent\n(<mj-simple-record-list>)"] --> KG["Record Grid\n(Kendo Grid)"]
+    SRL["SimpleRecordListComponent\n(<mj-simple-record-list>)"] --> KG["Record Grid\n(Data Grid)"]
     SRL --> EFD["EntityFormDialogComponent\n(Edit/New)"]
-    SRL --> DEL["Delete Confirmation\n(Kendo Dialog)"]
+    SRL --> DEL["Delete Confirmation\n(MJ Dialog)"]
     SRL --> CA["Custom Action Button"]
 
     KG --> EDIT["Edit Button"]
@@ -54,8 +54,8 @@ npm install @memberjunction/ng-simple-record-list
 | `@memberjunction/core` | Metadata, BaseEntity, RunView |
 | `@memberjunction/ng-entity-form-dialog` | Record editing dialog |
 | `@memberjunction/ng-notifications` | Notification service |
-| `@progress/kendo-angular-grid` | Grid display |
-| `@progress/kendo-angular-dialog` | Confirmation dialogs |
+| `@memberjunction/ng-ui-components` | Grid display |
+| `@memberjunction/ng-ui-components` | Confirmation dialogs |
 
 ## Usage
 

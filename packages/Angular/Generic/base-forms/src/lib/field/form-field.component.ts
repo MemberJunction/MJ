@@ -151,13 +151,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * The control type to render in edit mode.
    * Determines which input component is used.
    *
-   * Also accepts deprecated Kendo-style type names for backward compatibility:
+   * Also accepts these deprecated legacy type names for backward compatibility:
    * - `'dropdownlist'` → `'select'`
    * - `'numerictextbox'` → `'number'`
    */
   @Input()
   set Type(value: 'textbox' | 'textarea' | 'number' | 'datepicker' | 'checkbox' | 'select' | 'autocomplete' | 'code' | 'dropdownlist' | 'numerictextbox') {
-    // Normalize deprecated Kendo type names to modern equivalents
+    // Normalize deprecated legacy type names to modern equivalents
     switch (value) {
       case 'dropdownlist':  this._type = 'select'; break;
       case 'numerictextbox': this._type = 'number'; break;

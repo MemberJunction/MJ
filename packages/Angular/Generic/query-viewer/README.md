@@ -10,7 +10,7 @@ npm install @memberjunction/ng-query-viewer
 
 ## Overview
 
-The Query Viewer provides a complete query execution experience: a parameter input form, an AG Grid results display, entity linking for clickable record IDs, and automatic state persistence to User Settings. It replaces the older Kendo-based Query Grid with a more feature-rich implementation.
+The Query Viewer provides a complete query execution experience: a parameter input form, an AG Grid results display, entity linking for clickable record IDs, and automatic state persistence to User Settings. It replaces the older Query Grid with a more feature-rich implementation.
 
 ```mermaid
 flowchart TD

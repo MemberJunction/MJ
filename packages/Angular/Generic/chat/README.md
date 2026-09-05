@@ -185,9 +185,9 @@ Key CSS classes for customization:
 | `@memberjunction/ng-container-directives` | Container directives |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
 | `@memberjunction/ng-markdown` | Markdown rendering |
-| `@progress/kendo-angular-indicators` | Loading spinner |
-| `@progress/kendo-angular-buttons` | Button components |
-| `@progress/kendo-angular-dialog` | Dialog for confirmations |
+| `@memberjunction/ng-ui-components` | Loading spinner |
+| `@memberjunction/ng-ui-components` | Button components |
+| `@memberjunction/ng-ui-components` | Dialog for confirmations |
 
 ### Peer Dependencies
 

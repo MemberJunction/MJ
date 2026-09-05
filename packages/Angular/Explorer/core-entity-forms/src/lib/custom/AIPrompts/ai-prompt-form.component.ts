@@ -1447,7 +1447,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
             // Force Angular to re-evaluate all bindings
             this.cdr.detectChanges();
             
-            // Additional force update for Kendo dropdowns
+            // Additional force update for dropdowns
             setTimeout(() => {
                 this.cdr.detectChanges();
             }, 0);
@@ -1475,7 +1475,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
             // Force Angular to re-evaluate all bindings
             this.cdr.detectChanges();
             
-            // Additional force update for Kendo dropdowns
+            // Additional force update for dropdowns
             setTimeout(() => {
                 this.cdr.detectChanges();
             }, 0);
@@ -1543,7 +1543,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
             // Force Angular to re-evaluate all bindings
             this.cdr.detectChanges();
             
-            // Additional force update for Kendo dropdowns
+            // Additional force update for dropdowns
             setTimeout(() => {
                 this.cdr.detectChanges();
             }, 0);

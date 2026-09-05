@@ -14,12 +14,12 @@ A reusable Angular dialog component that displays a MemberJunction entity form f
 
 ## Overview
 
-The `EntityFormDialogComponent` wraps MemberJunction's dynamic form system inside a Kendo UI dialog window. It dynamically loads the registered form component for the given entity (including custom form overrides) and provides configurable Save/Cancel buttons with automatic record handling.
+The `EntityFormDialogComponent` wraps MemberJunction's dynamic form system inside an MJ dialog window. It dynamically loads the registered form component for the given entity (including custom form overrides) and provides configurable Save/Cancel buttons with automatic record handling.
 
 ```mermaid
 graph TD
     PARENT["Parent Component"] --> EFD["EntityFormDialogComponent"]
-    EFD --> KD["Kendo Dialog Window"]
+    EFD --> KD["MJ Dialog"]
     EFD --> CD["ContainerDirective\n(Dynamic Loading)"]
     CD --> BFC["BaseFormComponent\n(or subclass)"]
     BFC --> BFSC["BaseFormSectionComponent"]
@@ -56,8 +56,8 @@ npm install @memberjunction/ng-entity-form-dialog
 | `@memberjunction/ng-base-forms` | BaseFormComponent, BaseFormSectionComponent |
 | `@memberjunction/ng-container-directives` | Dynamic component loading |
 | `@memberjunction/ng-shared` | SharedService |
-| `@progress/kendo-angular-dialog` | Kendo UI dialog window |
-| `@progress/kendo-angular-buttons` | Dialog action buttons |
+| `@memberjunction/ng-ui-components` | dialog window |
+| `@memberjunction/ng-ui-components` | Dialog action buttons |
 
 ## Usage
 

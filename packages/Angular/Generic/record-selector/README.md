@@ -10,7 +10,7 @@ npm install @memberjunction/ng-record-selector
 
 ## Overview
 
-The Record Selector renders two side-by-side Kendo ListBox panels: one for available records and one for selected records. Users can transfer records between lists using toolbar buttons or drag-and-drop. It supports loading data from any MemberJunction entity and emits events when selections change.
+The Record Selector renders two side-by-side dual list panels: one for available records and one for selected records. Users can transfer records between lists using toolbar buttons or drag-and-drop. It supports loading data from any MemberJunction entity and emits events when selections change.
 
 ```mermaid
 flowchart LR
@@ -93,7 +93,7 @@ export class YourModule {}
 | `AvailableRecords` | `BaseEntity[]` | `[]` | Full set of available records |
 | `SelectedRecords` | `BaseEntity[]` | `[]` | Records already selected |
 | `UnselectedRecords` | `BaseEntity[]` | `[]` | Records explicitly unselected |
-| `ToolbarSettings` | `ToolbarSettings` | default | Kendo ListBox toolbar configuration |
+| `ToolbarSettings` | `ToolbarSettings` | default | dual list toolbar configuration |
 
 ### Outputs
 
@@ -104,8 +104,8 @@ export class YourModule {}
 ## Dependencies
 
 - [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, BaseEntity
-- `@progress/kendo-angular-listbox` -- Dual listbox rendering
-- `@progress/kendo-angular-buttons` -- Toolbar buttons
+- `@memberjunction/ng-ui-components` -- Dual listbox rendering
+- `@memberjunction/ng-ui-components` -- Toolbar buttons
 
 ## Related Packages
 

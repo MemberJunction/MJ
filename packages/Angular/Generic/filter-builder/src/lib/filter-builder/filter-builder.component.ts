@@ -1,15 +1,17 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import {
-  CompositeFilterDescriptor,
-  FilterDescriptor,
   FilterFieldInfo,
   FilterBuilderConfig,
   FilterSource,
-  CreateEmptyFilter,
-  IsCompositeFilter
+  CreateEmptyFilter
 } from '../types/filter.types';
-import { CompositeFilter } from '@memberjunction/core';
+import {
+  CompositeFilter,
+  CompositeFilterDescriptor,
+  FilterDescriptor,
+  IsCompositeFilter
+} from '@memberjunction/core';
 
 /**
  * Default configuration for the filter builder
@@ -26,7 +28,7 @@ const DEFAULT_CONFIG: FilterBuilderConfig = {
  * FilterBuilderComponent - Main filter builder component
  *
  * Provides a complete UI for building complex filter expressions
- * with AND/OR logic and nested groups. Outputs Kendo-compatible
+ * with AND/OR logic and nested groups. Outputs MJ's portable
  * CompositeFilterDescriptor JSON format.
  *
  * @example
@@ -59,7 +61,7 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   @Input() sources: FilterSource[] | null = null;
 
   /**
-   * Current filter state (Kendo-compatible CompositeFilterDescriptor)
+   * Current filter state (`CompositeFilterDescriptor` from `@memberjunction/core`)
    */
   @Input() filter: CompositeFilterDescriptor | null = null;
 
