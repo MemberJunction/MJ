@@ -678,6 +678,32 @@ export async function CheckFls20_AccessorGateThrows(ctx: IntegrationCheckContext
         'the accessor gate must use exactly the ambiguous wording');
 }
 
+/**
+ * FLS21 — the COST of permission-change propagation, measured. Every write to a metadata member
+ * entity (an Entity Field Permission row included) schedules one debounced full metadata refresh
+ * on the server — a complete MJ_Metadata reload from SQL plus the in-memory graph rebuild. This
+ * check times two back-to-back hard refreshes (the exact operation the event-driven mechanism
+ * runs) so the duration is recorded on every CI run and a regression shows up as a trend, not a
+ * surprise. N writes inside one 500ms debounce window still cost ONE of these (the burst
+ * coalescing is unit-tested in providerBase.metadataMemberRefresh.test.ts); only writes spaced
+ * wider than the window pay it again. Deliberately NO wall-clock assertion beyond a generous
+ * sanity ceiling — machine speed varies and this check exists for visibility, not gating.
+ */
+export async function CheckFls21_RefreshCostVisibility(ctx: IntegrationCheckContext): Promise<void> {
+    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS21')) return;
+
+    const t1 = performance.now();
+    Assert(await ctx.Provider.Refresh(), 'the first hard metadata refresh must succeed');
+    const first = performance.now() - t1;
+
+    const t2 = performance.now();
+    Assert(await ctx.Provider.Refresh(), 'the second hard metadata refresh must succeed');
+    const second = performance.now() - t2;
+
+    console.log(`      → full metadata refresh (the per-debounced-burst cost of a permission change): ${first.toFixed(0)}ms, then ${second.toFixed(0)}ms`);
+    Assert(second < 60_000, `a full metadata refresh took ${second.toFixed(0)}ms — over the 60s sanity ceiling, something is structurally wrong`);
+}
+
 /** The 'fls-enforcement' bundle (server transport). Order is load-bearing: FLS3 applies the tightenings. */
 export const FlsEnforcementChecks: NamedCheck[] = [
     { Id: 'fls-enforcement.FLS1', Name: 'FLS1: enabling field security via the real entity path succeeds; the snapshot covers (restrictable fields × read-holding roles) and never targets PKs or __mj_ columns', Fn: CheckFls1_EnableSnapshotShape },
@@ -699,7 +725,8 @@ export const FlsEnforcementChecks: NamedCheck[] = [
     { Id: 'fls-enforcement.FLS17', Name: 'FLS17: round-trip safety — a restricted user\'s save of an unrelated field leaves denied columns\' stored values intact', Fn: CheckFls17_RoundTripSafety },
     { Id: 'fls-enforcement.FLS18', Name: 'FLS18: create suppression — a supplied create-denied value is dropped and the column takes its default; the insert succeeds', Fn: CheckFls18_CreateSuppression },
     { Id: 'fls-enforcement.FLS19', Name: 'FLS19: a permission row targeting a primary key is rejected at save time', Fn: CheckFls19_UnrestrictableTargetRejected },
-    { Id: 'fls-enforcement.FLS20', Name: 'FLS20: the typed-accessor gate throws the ambiguous message on a read-denied field', Fn: CheckFls20_AccessorGateThrows }
+    { Id: 'fls-enforcement.FLS20', Name: 'FLS20: the typed-accessor gate throws the ambiguous message on a read-denied field', Fn: CheckFls20_AccessorGateThrows },
+    { Id: 'fls-enforcement.FLS21', Name: 'FLS21: full-metadata-refresh cost is measured and recorded (the per-debounced-burst price of a permission change)', Fn: CheckFls21_RefreshCostVisibility }
 ];
 
 for (const check of FlsEnforcementChecks) {
