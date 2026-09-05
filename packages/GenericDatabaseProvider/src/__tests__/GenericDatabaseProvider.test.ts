@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProvider, DoomedTransactionError } from '../GenericDatabaseProvider';
 import { SqlLoggingSessionImpl } from '../SqlLogger';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 
@@ -67,9 +67,19 @@ class TestGenericProvider extends GenericDatabaseProvider {
         return `LIMIT ${maxRows} OFFSET ${startRow}`;
     }
 
-    async BeginTransaction(): Promise<void> {}
-    async CommitTransaction(): Promise<void> {}
-    async RollbackTransaction(): Promise<void> {}
+    protected override get HasPhysicalTransaction(): boolean {
+        return this.physicalOpen;
+    }
+    protected physicalOpen = false;
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = true;
+    }
+    protected override async CommitPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = false;
+    }
+    protected override async RollbackPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = false;
+    }
 
     // Expose protected virtual methods for testing
     public testBuildTopClause(maxRows: number): string { return this.BuildTopClause(maxRows); }
@@ -146,7 +156,10 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public executeSQLResults: Array<Record<string, unknown>[]> = [];
     private executeSQLCallIndex = 0;
 
-    override async ExecuteSQL<T>(sql?: string, params?: unknown[]): Promise<Array<T>> {
+    override async ExecuteSQL<T>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> {
+        if (!options?.connectionSource) {
+            this.AssertAmbientTransactionUsable();
+        }
         this.executeSQLCalls.push({ sql: sql ?? '', params });
         const result = this.executeSQLResults[this.executeSQLCallIndex] ?? [];
         this.executeSQLCallIndex++;
@@ -1804,5 +1817,254 @@ ORDER BY Cnt DESC`,
         expect(result.ErrorMessage).toBeTruthy();
         // RenderedSQL is undefined because the rendering step itself failed
         expect(result.RenderedSQL).toBeUndefined();
+    });
+});
+
+class RecordingProvider extends TestGenericProvider {
+    public beginCount = 0;
+
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        this.beginCount++;
+        this.physicalOpen = true;
+    }
+}
+
+describe('GenericDatabaseProvider nested transactions', () => {
+    it('outermost begin starts a physical transaction and issues no savepoint SQL', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('nested begin with a live physical TX issues a dialect savepoint', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('nested begin with leaked depth and no physical TX is corruption, not a new TX', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        p.physicalOpen = false;
+        await expect(p.BeginTransaction()).rejects.toThrow(/Transaction state corrupted/);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('ENOTBEGUN on a published handle is a doomed TX, not a recovery-begin', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        p.beginCount = 0;
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('Transaction has not begun. Call begin() first.'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toThrow(/rolled back by the server/);
+        expect(p.beginCount).toBe(0);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.physicalOpen).toBe(false);
+        await p.CommitTransaction();
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('ResetTransactionState drops a leaked handle so the next begin is outermost', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        p.physicalOpen = false;
+        await p.ResetTransactionState();
+        expect(p.TransactionDepth).toBe(0);
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.beginCount).toBe(2);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('exposes deprecated camelCase savepointStack alias for one release', () => {
+        const p = new RecordingProvider();
+        expect(p.savepointStack).toEqual(p.SavepointStack);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('nested commit is a no-op SQL on SQL Server (no RELEASE) and decrements depth', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        await p.CommitTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.executeSQLCalls).toEqual([]);
+        expect(p.physicalOpen).toBe(true);
+        await p.CommitTransaction();
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('two concurrent BeginTransactions serialize to one physical begin and one savepoint', async () => {
+        const p = new RecordingProvider();
+        await Promise.all([p.BeginTransaction(), p.BeginTransaction()]);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('nested rollback issues ROLLBACK TO the savepoint and keeps the outer TX', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(true);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['ROLLBACK TRANSACTION SavePoint_1']);
+    });
+
+    it('AfterPhysicalCommit runs after the lock is released so it can begin again', async () => {
+        class AfterCommitProvider extends RecordingProvider {
+            public afterCalls = 0;
+            protected override async AfterPhysicalCommit(): Promise<void> {
+                this.afterCalls++;
+                if (this.afterCalls > 1) return;
+                await this.BeginTransaction();
+                await this.CommitTransaction();
+            }
+        }
+        const p = new AfterCommitProvider();
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(p.afterCalls).toBe(2);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('begin failing at depth 1 restores depth 0 so the next begin is outermost (A1)', async () => {
+        class FailingBegin extends RecordingProvider {
+            public onBeginFailed = 0;
+            public failNext = true;
+            protected override async BeginPhysicalTransaction(): Promise<void> {
+                if (this.failNext) {
+                    this.failNext = false;
+                    throw new Error('pool exhausted');
+                }
+                this.beginCount++;
+                this.physicalOpen = true;
+            }
+            protected override async OnBeginFailedAtDepthZero(): Promise<void> {
+                this.onBeginFailed++;
+                this.physicalOpen = false;
+            }
+        }
+        const p = new FailingBegin();
+        await expect(p.BeginTransaction()).rejects.toThrow(/pool exhausted/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.onBeginFailed).toBe(1);
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(true);
+    });
+
+    it('nested rollback that fails the savepoint handler keeps the outer frame doomed (A8/H5)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.ExecuteSQL = async () => {
+            p.physicalOpen = false;
+            throw new Error('savepoint missing');
+        };
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(false);
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('outermost commit failure still ends at depth 0 even if rollback also fails (A10)', async () => {
+        class FailBoth extends RecordingProvider {
+            protected override async CommitPhysicalTransaction(): Promise<void> {
+                throw new Error('commit rejected');
+            }
+            protected override async RollbackPhysicalTransaction(): Promise<void> {
+                this.physicalOpen = false;
+                throw new Error('rollback rejected');
+            }
+        }
+        const p = new FailBoth();
+        await p.BeginTransaction();
+        await expect(p.CommitTransaction()).rejects.toThrow(/commit rejected/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('three concurrent BeginTransactions serialize to one physical begin and two savepoints (A12)', async () => {
+        const p = new RecordingProvider();
+        await Promise.all([p.BeginTransaction(), p.BeginTransaction(), p.BeginTransaction()]);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(3);
+        expect(p.SavepointStack).toEqual(['SavePoint_1', 'SavePoint_2']);
+    });
+
+    it('DoomedTransactionError is thrown when ENOTBEGUN hits a published handle', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('wrapped'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.physicalOpen).toBe(false);
+        await p.CommitTransaction();
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('queued nested begin after doom cannot open a second physical TX (H5)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        let firstSave = true;
+        const orig = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async (sql?: string, params?: unknown[]) => {
+            if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION') && firstSave) {
+                firstSave = false;
+                throw Object.assign(new Error('Transaction has not begun'), { code: 'ENOTBEGUN' });
+            }
+            return orig(sql, params);
+        };
+        const results = await Promise.allSettled([p.BeginTransaction(), p.BeginTransaction()]);
+        expect(results.every((r) => r.status === 'rejected')).toBe(true);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('ExecuteSQL without connectionSource throws while doomed (H6)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        let firstSave = true;
+        const orig = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async (sql?: string, params?: unknown[], options?: { connectionSource?: unknown }) => {
+            if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION') && firstSave) {
+                firstSave = false;
+                throw Object.assign(new Error('Transaction has not begun'), { code: 'ENOTBEGUN' });
+            }
+            return orig(sql, params, options);
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        p.resetExecuteSQLState();
+        await expect(p.ExecuteSQL('UPDATE Orders SET Status=Confirmed')).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.executeSQLCalls.map((c) => c.sql)).not.toContain('UPDATE Orders SET Status=Confirmed');
+        await p.ExecuteSQL('SELECT 1', undefined, { connectionSource: {} });
+        expect(p.executeSQLCalls.map((c) => c.sql)).toContain('SELECT 1');
     });
 });

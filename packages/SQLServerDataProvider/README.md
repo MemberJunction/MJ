@@ -497,7 +497,7 @@ The provider supports two transaction mechanisms:
 
 **Transaction Groups** (`SQLServerTransactionGroup`) -- bundle multiple entity save/delete operations and execute them within a single SQL Server transaction. If any operation fails, the entire group is rolled back. Transaction groups also support inter-entity variable references, allowing a newly created entity's ID to be passed to dependent entities in the same batch.
 
-**Instance-Level Transactions** -- each `SQLServerDataProvider` instance maintains its own transaction state. When a transaction is active, all SQL queries from that instance are serialized through an RxJS queue (`concatMap`) and executed against the same `sql.Transaction` object. Non-transactional queries bypass the queue for maximum parallelism. Nested transactions use SQL Server savepoints.
+**Instance-Level Transactions** -- the depth machine lives on `GenericDatabaseProvider`. Depth 1 is a physical `sql.Transaction.begin()` (published only after begin resolves). Depth 2+ is `SAVE TRANSACTION`. When a transaction is active, queries without an explicit `connectionSource` are serialized through an RxJS `concatMap` queue onto that handle. Non-transactional queries bypass the queue. A server abort is not recoverable (`DoomedTransactionError`); `ResetTransactionState()` is the public recovery path. `InTransaction` is depth > 0, `InNestedTransaction` is depth > 1, `isTransactionActive` is the published-handle bit (`_transactionState$`). `IsInTransaction` stays false so `RunMaybeSerial` can fan out.
 
 ## UserCache
 
@@ -712,7 +712,7 @@ const result = await meeting.Save();
 ### Key Methods
 
 - `BeginEntityTransaction()` *(inherited from `DatabaseProviderBase`)*: returns a settle-once `EntityTransactionScope`. Starts a physical transaction, or joins one already in flight. **This is the primitive to use** — for IS-A chains, composite entity graphs and hand-written cascades alike.
-- `BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()`: the underlying depth-counted ambient transaction (savepoints at depth ≥ 2, serialization against an in-flight outermost begin). `BeginEntityTransaction()` is a thin wrapper over these; prefer the wrapper so the settle-once contract is enforced for you.
+- `BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()`: inherited from `GenericDatabaseProvider` (savepoints at depth ≥ 2, promise mutex). `BeginEntityTransaction()` is a thin wrapper over these; prefer the wrapper so the settle-once contract is enforced for you. `ResetTransactionState()` drops a dead handle after a server abort.
 - `BeginISATransaction()` / `CommitISATransaction()` / `RollbackISATransaction()`: **removed in 6.2**. See the warning above.
 
 > **Concurrency**: the ambient transaction is a field on the *provider instance*, not a global.
