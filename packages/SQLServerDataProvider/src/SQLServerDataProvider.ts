@@ -1120,14 +1120,24 @@ export class SQLServerDataProvider
   /** Per transaction-group counts so the same PK twice in one batch gets `_hash_2`. */
   private _saveCallSuffixCounts = new WeakMap<object, Map<string, number>>();
 
-  protected allocateSaveCallSuffix(entity: BaseEntity): string {
-    const pkValues = entity.PrimaryKey?.KeyValuePairs?.map((p) => p.Value) ?? [];
-    const hash = SQLServerDataProvider.SaveCallVariableHash(
-      entity.EntityInfo.SchemaName,
-      entity.EntityInfo.BaseTable,
-      pkValues,
-    );
-    const group = entity.TransactionGroup;
+  /**
+   * Variable suffix for DECLARE/SET locals in a save call.
+   *
+   * Naming contract: `_<8 lowercase hex>` from
+   * `sha1(\`${schema}.${table}|${pk values joined by |}\`)`, plus an optional
+   * `_<n>` with n ≥ 2 when that hash repeats inside one `TransactionGroup`
+   * (`_abc12345`, `_abc12345_2`, …). Downstream parsers key on this shape.
+   * MetadataSync captures without a transaction group, so `_n` does not appear
+   * in cheese migrations; WP4 of loom #12 must still widen
+   * `check-sync-id-parity.mjs` to accept `_<n>`.
+   */
+  protected allocateSaveCallSuffixForPk(
+    group: object | null | undefined,
+    schemaName: string,
+    baseTable: string,
+    pkValues: unknown[],
+  ): string {
+    const hash = SQLServerDataProvider.SaveCallVariableHash(schemaName, baseTable, pkValues);
     if (!group) {
       return `_${hash}`;
     }
@@ -1139,6 +1149,16 @@ export class SQLServerDataProvider
     const n = (counts.get(hash) ?? 0) + 1;
     counts.set(hash, n);
     return n === 1 ? `_${hash}` : `_${hash}_${n}`;
+  }
+
+  protected allocateSaveCallSuffix(entity: BaseEntity): string {
+    const pkValues = entity.PrimaryKey?.KeyValuePairs?.map((p) => p.Value) ?? [];
+    return this.allocateSaveCallSuffixForPk(
+      entity.TransactionGroup,
+      entity.EntityInfo.SchemaName,
+      entity.EntityInfo.BaseTable,
+      pkValues,
+    );
   }
 
   /**

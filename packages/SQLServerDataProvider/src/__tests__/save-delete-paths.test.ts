@@ -80,6 +80,15 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
   public AllocateSaveCallSuffix(entity: BaseEntity): string {
     return this.allocateSaveCallSuffix(entity);
   }
+
+  public AllocateSaveCallSuffixForPk(
+    group: object | null,
+    schemaName: string,
+    baseTable: string,
+    pkValues: unknown[],
+  ): string {
+    return this.allocateSaveCallSuffixForPk(group, schemaName, baseTable, pkValues);
+  }
 }
 
 function makeProvider(): SaveDeleteTestProvider {
@@ -388,17 +397,23 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     expect(sfxB).toBe(`${sfxA}_2`);
   });
 
-  it('120_000 unique PKs in one batch produce 120_000 distinct declarations after disambiguation', () => {
-    const counts = new Map<string, number>();
-    const suffixes = new Set<string>();
+  it('120_000 unique PKs in one transaction group: distinct suffixes, two real sha1[:8] collisions', async () => {
+    const { SQLServerTransactionGroup } = await import('../SQLServerTransactionGroup');
+    const group = new SQLServerTransactionGroup();
+    const provider = makeProvider();
+    const suffixes: string[] = [];
     for (let i = 0; i < 120_000; i++) {
-      const hash = SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', [`id-${i}`]);
-      const n = (counts.get(hash) ?? 0) + 1;
-      counts.set(hash, n);
-      const sfx = n === 1 ? `_${hash}` : `_${hash}_${n}`;
-      expect(suffixes.has(sfx)).toBe(false);
-      suffixes.add(sfx);
+      suffixes.push(provider.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [`id-${i}`]));
     }
-    expect(suffixes.size).toBe(120_000);
+    expect(new Set(suffixes).size).toBe(120_000);
+    const bare = suffixes.filter((s) => /^_[0-9a-f]{8}$/.test(s));
+    const second = suffixes.filter((s) => /^_[0-9a-f]{8}_2$/.test(s));
+    expect(bare).toHaveLength(119_998);
+    expect(second).toHaveLength(2);
+    expect(new Set(second.map((s) => s.slice(0, 9)))).toEqual(new Set(['_031e1622', '_37ccdac1']));
+    expect(SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['id-42236'])).toBe('031e1622');
+    expect(SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['id-64356'])).toBe('031e1622');
+    expect(SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['id-101514'])).toBe('37ccdac1');
+    expect(SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['id-104669'])).toBe('37ccdac1');
   });
 });
