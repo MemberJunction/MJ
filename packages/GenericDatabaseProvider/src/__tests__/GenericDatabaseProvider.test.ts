@@ -2079,29 +2079,66 @@ describe('GenericDatabaseProvider nested transactions', () => {
 });
 
 describe('GenericDatabaseProvider save-call variable suffix (loom #12 WP3)', () => {
-    it('hashes schema.table|pk deterministically', () => {
+    const HEX12 = /^_[0-9a-f]{12}$/;
+
+    it('hashes schema.table|pk deterministically to 12 lowercase hex', () => {
+        expect(GenericDatabaseProvider.SaveCallVariableHashLength).toBe(12);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001'])).toBe('6679d1fd77d5');
         expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001'])).toBe(
             GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
         );
         expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['a'])).not.toBe(
             GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['b']),
         );
-        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-42236'])).toBe('031e1622');
-        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-64356'])).toBe('031e1622');
-        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-101514'])).toBe('37ccdac1');
-        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-104669'])).toBe('37ccdac1');
+        // These pairs collided on the first 8 hex (031e1622 / 37ccdac1); 12 hex tells them apart.
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-42236'])).toBe('031e16225f91');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-64356'])).toBe('031e16223663');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-101514'])).toBe('37ccdac16ab3');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-104669'])).toBe('37ccdac1057e');
     });
 
-    it('same PK twice in one group → _hash then _hash_2', () => {
+    it('normalizes key values before hashing: UUID case, Date, null/undefined', () => {
+        const lower = GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', ['a1000000-0000-0000-0000-000000000001']);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', ['A1000000-0000-0000-0000-000000000001'])).toBe(lower);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', [' A1000000-0000-0000-0000-000000000001 '])).toBe(lower);
+        expect(lower).toBe('774f612ccbb5');
+        // A non-UUID string keeps its case: it is the record's actual key text.
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['ABC'])).not.toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['abc']),
+        );
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', [new Date('2026-01-01T00:00:00Z')])).toBe('892c6aa6d2c3');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', [new Date('2026-01-01T00:00:00Z')])).toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', ['2026-01-01T00:00:00.000Z']),
+        );
+        const empty = GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [null]);
+        expect(empty).toBe('b7d71d1c9508');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [undefined])).toBe(empty);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [])).toBe(empty);
+    });
+
+    it('same PK twice in one group → _hash then _hash_2; no ordinal outside a group', () => {
         const p = new TestGenericProvider();
         const group = {};
         const a = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', ['w-0001']);
         const b = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', ['w-0001']);
-        expect(a).toMatch(/^_[0-9a-f]{8}$/);
+        expect(a).toMatch(HEX12);
         expect(b).toBe(`${a}_2`);
+        expect(p.AllocateSaveCallSuffixForPk(null, 'dbo', 'Widget', ['w-0001'])).toBe(a);
+        expect(p.AllocateSaveCallSuffixForPk(null, 'dbo', 'Widget', ['w-0001'])).toBe(a);
     });
 
-    it('120_000 unique PKs in one group: distinct suffixes, two real sha1[:8] collisions', () => {
+    it('PK-less inserts in one group share the per-table hash and are told apart by the ordinal', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const first = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [null]);
+        expect(first).toBe('_b7d71d1c9508');
+        expect(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [undefined])).toBe('_b7d71d1c9508_2');
+        expect(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [])).toBe('_b7d71d1c9508_3');
+        // A different group starts counting again.
+        expect(p.AllocateSaveCallSuffixForPk({}, 'dbo', 'Widget', [null])).toBe('_b7d71d1c9508');
+    });
+
+    it('120_000 unique PKs in one group: 120_000 distinct bare suffixes, no sha1[:12] collisions', () => {
         const p = new TestGenericProvider();
         const group = {};
         const suffixes: string[] = [];
@@ -2109,10 +2146,6 @@ describe('GenericDatabaseProvider save-call variable suffix (loom #12 WP3)', () 
             suffixes.push(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [`id-${i}`]));
         }
         expect(new Set(suffixes).size).toBe(120_000);
-        const bare = suffixes.filter((s) => /^_[0-9a-f]{8}$/.test(s));
-        const second = suffixes.filter((s) => /^_[0-9a-f]{8}_2$/.test(s));
-        expect(bare).toHaveLength(119_998);
-        expect(second).toHaveLength(2);
-        expect(new Set(second.map((s) => s.slice(0, 9)))).toEqual(new Set(['_031e1622', '_37ccdac1']));
+        expect(suffixes.every((s) => HEX12.test(s))).toBe(true);
     });
 });
