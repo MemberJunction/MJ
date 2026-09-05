@@ -1,13 +1,29 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
+
 import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { CompositeKeyInputType, KeyValuePairOutputType } from './KeyInputOutputTypes.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+
+/**
+ * Rethrows a field-level-security denial so its deliberately ambiguous wording reaches the
+ * client as a GraphQL error. The surrounding catch blocks rightly swallow arbitrary resolver
+ * errors (their messages can carry SQL text or internal state) and return null — but this one
+ * message was DESIGNED to be shown to the caller (see FieldSecurityDenialMessage), and
+ * swallowing it degrades a deliberate security rejection into a generic
+ * "Cannot return null for non-nullable field" transport error. Matched by name, not
+ * instanceof, so a bundler duplicating the class cannot break the recognition.
+ */
+function rethrowFieldSecurityDenial(err: unknown): void {
+  if (err instanceof Error && err.name === FieldSecurityError.ErrorName) {
+    throw err;
+  }
+}
 
 /********************************************************************************
  * The PURPOSE of this resolver is to provide a generic way to run a view and return the results.
@@ -769,6 +785,7 @@ export class RunViewResolver extends ResolverBase {
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
+      rethrowFieldSecurityDenial(err);
       console.log(err);
       return null;
     }
@@ -801,6 +818,7 @@ export class RunViewResolver extends ResolverBase {
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
+      rethrowFieldSecurityDenial(err);
       console.log(err);
       return null;
     }
@@ -831,6 +849,7 @@ export class RunViewResolver extends ResolverBase {
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
     } catch (err) {
+      rethrowFieldSecurityDenial(err);
       console.log(err);
       return null;
     }
@@ -872,6 +891,7 @@ export class RunViewResolver extends ResolverBase {
 
       return results;
     } catch (err) {
+      rethrowFieldSecurityDenial(err);
       LogError(err);
       return null;
     }
@@ -1067,6 +1087,7 @@ export class RunViewResolver extends ResolverBase {
 
       return results;
     } catch (err) {
+      rethrowFieldSecurityDenial(err);
       LogError(err);
       return null;
     }

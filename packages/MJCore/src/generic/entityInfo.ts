@@ -549,6 +549,28 @@ export function FieldSecurityDenialMessage(fieldName: string, entityName: string
 }
 
 /**
+ * The error thrown when field-level security refuses a request — a caller-authored predicate
+ * naming an unreadable field, or a typed accessor touching one.
+ *
+ * A DISTINCT class because its message is the one security rejection that is deliberately safe
+ * to show a caller: {@link FieldSecurityDenialMessage} was designed for exactly that surface and
+ * discloses nothing (see its doc). Transport layers that rightly swallow arbitrary resolver
+ * errors (whose messages can carry SQL text or internal state) recognize this one and let it
+ * through, so the ambiguous wording reaches the wire instead of degenerating into a generic
+ * transport error.
+ *
+ * Recognize it by `name === FieldSecurityError.ErrorName` rather than `instanceof` where
+ * bundling might duplicate the class.
+ */
+export class FieldSecurityError extends Error {
+    public static readonly ErrorName = 'FieldSecurityError';
+    constructor(fieldName: string, entityName: string) {
+        super(FieldSecurityDenialMessage(fieldName, entityName));
+        this.name = FieldSecurityError.ErrorName;
+    }
+}
+
+/**
  * Field-level (column-level) security settings. Maps an entity FIELD to a role, carrying three
  * independent trinary verbs — Read, Update and Create. One row per (field, role).
  *
