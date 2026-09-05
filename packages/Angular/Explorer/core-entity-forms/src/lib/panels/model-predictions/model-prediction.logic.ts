@@ -15,7 +15,7 @@
 export type PredictionBand = 'low' | 'mid' | 'high';
 
 /** Generic problem types a trained model can have. */
-export type ModelProblemType = 'classification' | 'regression';
+export type ModelProblemType = 'classification' | 'regression' | 'sequence';
 
 /** One normalized feature-importance driver for display. */
 export interface PredictionDriver {
@@ -50,8 +50,13 @@ export function toNumber(value: unknown): number | null {
 /**
  * Decide how to render a value given the model's problem type and the value.
  *  - regression + numeric → 'numeric'
- *  - classification + value in [0,1] → 'probability' (a confidence/score we can gauge)
- *  - everything else (a class label, a missing value) → 'class'
+ *  - classification or sequence + value in [0,1] → 'probability' (a confidence/score we can gauge)
+ *  - everything else (a class label, a discovered state, a missing value) → 'class'
+ *
+ * A `sequence` model reports the POSTERIOR probability of the state it assigned — bounded 0–1 and
+ * gaugeable, exactly like a classification confidence — so it renders the same way. Its predicted
+ * value is a discovered state index rather than a business label, which lands on 'class' by the
+ * same rule a class label does.
  */
 export function valueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
     const isRegression = problemType === 'regression';

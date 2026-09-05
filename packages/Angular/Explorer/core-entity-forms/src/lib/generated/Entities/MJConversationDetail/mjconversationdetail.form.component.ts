@@ -21,6 +21,7 @@ export class MJConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'relatedEntities', sectionName: 'Related Entities', isExpanded: true },
             { sectionKey: 'interactiveElements', sectionName: 'Interactive Elements', isExpanded: true },
             { sectionKey: 'mediaAndTiming', sectionName: 'Media and Timing', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'Conversation Detail Artifacts', isExpanded: false },
             { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },

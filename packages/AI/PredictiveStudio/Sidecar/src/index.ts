@@ -10,4 +10,6 @@
  * and are re-exported by consumers from there — not from this package.
  */
 export { MLSidecar, SidecarError } from './ml-sidecar.js';
+export { ManagedPythonSidecar } from './managed-python-sidecar.js';
+export type { ManagedPythonSidecarConfig } from './managed-python-sidecar.js';
 export type { MLSidecarOptions, SidecarHealthResponse } from './ml-sidecar.js';

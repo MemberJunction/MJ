@@ -85,7 +85,8 @@ export interface SelectedPredictionSummary {
 /** Component-supplied snapshot for the Predictions door. */
 export interface PredictionsAgentContextInput {
   /** catalog (the home grid) ↔ workspace (a selected prediction). */
-  View: 'catalog' | 'workspace';
+  /** `ask` is the answer-shaped view — the agent should know the user arrived with a question. */
+  View: 'catalog' | 'workspace' | 'ask';
   /** Total published predictions in the catalog. */
   PredictionCount: number;
   /** How many clear the trust gate (openable). */

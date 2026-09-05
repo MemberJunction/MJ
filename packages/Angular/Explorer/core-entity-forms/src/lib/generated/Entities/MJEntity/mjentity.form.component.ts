@@ -101,6 +101,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMaterializedResultsGeneratedEntityID', sectionName: 'Materialized Results (Generated Entity ID)', isExpanded: false },
             { sectionKey: 'mJFormChromeRulesEntityID', sectionName: 'Form Chrome Rules (Parent Entity)', isExpanded: false },
             { sectionKey: 'mJFormChromeRulesRelatedEntityID', sectionName: 'Form Chrome Rules (Related Entity)', isExpanded: false },
+            { sectionKey: 'mJMLComponentBindings', sectionName: 'ML Component Bindings', isExpanded: false },
             { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false }
         ]);
     }

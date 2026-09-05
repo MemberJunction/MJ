@@ -393,5 +393,401 @@
     "primaryKey": {
       "ID": "FA18B77E-D8A5-5F3F-AA0A-47A8ED1B1FE4"
     }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Model",
+      "PropertyKey": "StatisticalGate",
+      "Operation": "Add",
+      "Value": "{\"Kind\": \"class-balance\", \"MinMinorityFraction\": 0.02}",
+      "Sequence": 0,
+      "ItemKey": "class-balance",
+      "Rationale": "True of every model family: a minority class below a couple of percent makes accuracy meaningless and any family judged on it look excellent while being useless. Evaluates only when the problem is classification; a regression candidate reports Unevaluated rather than a false pass."
+    },
+    "primaryKey": {
+      "ID": "08367A53-211A-425B-99C0-F199D0625E8E"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.430Z",
+      "checksum": "d201f6950822f4ff69b3303b61cb6405f759ab2da006823dcf4046e8ddac2c8e"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble",
+      "PropertyKey": "StatisticalGate",
+      "Operation": "Add",
+      "Value": "{\"Kind\": \"high-cardinality\", \"MaxDistinct\": 100}",
+      "Sequence": 0,
+      "ItemKey": "max-cardinality",
+      "Rationale": "Every tree member splits on categories one at a time, so a very high-cardinality column produces splits that memorize rather than generalize. Linear and neural members one-hot instead, which fails differently, so this belongs here and not on Model."
+    },
+    "primaryKey": {
+      "ID": "A0783675-C8E2-4F53-BB4B-97BD28BD08C5"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.448Z",
+      "checksum": "28422ded0504aa9d47b4cf32f77521443db179ae57c0e93d2c9ceee21b6090d0"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "PropertyKey": "StatisticalGate",
+      "Operation": "Add",
+      "Value": "{\"Kind\": \"requires-direction-per-input\"}",
+      "Sequence": 0,
+      "ItemKey": "requires-direction-per-input",
+      "Rationale": "A rubric combines normalized inputs by hand-set weights, so every input must declare which direction is better. Without that the weighted sum is arithmetic with no meaning — and unlike a fitted family, nothing downstream will discover the direction for it."
+    },
+    "primaryKey": {
+      "ID": "C344E627-1456-4987-BB85-0E3CFE8F7AAD"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.527Z",
+      "checksum": "554196e15258c6fb4bb44984fc56739004ef6c2ab7102caf2f959b9fe5b36bff"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"minmax\", \"population_relative\": true}",
+      "Sequence": 0,
+      "ItemKey": "minmax",
+      "Rationale": "A rubric's weights are only comparable across inputs that share a scale, and min-max is the population-relative normalization that produces one."
+    },
+    "primaryKey": {
+      "ID": "EAD3BFD1-EB76-4611-8374-9F4737ED8E35"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.542Z",
+      "checksum": "7caa30836a12b729de552e0a8ecbf8835beb68de6a326e3260ac557cd48339eb"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"percentile\", \"population_relative\": true}",
+      "Sequence": 0,
+      "ItemKey": "percentile",
+      "Rationale": "Percentile ranking is the normalization to reach for when an input is skewed enough that min-max would let one outlier dominate the whole score."
+    },
+    "primaryKey": {
+      "ID": "2A0B33ED-CD62-4CE1-82A5-35945333C2F1"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.554Z",
+      "checksum": "ac5e5ed415bdb4fd743c7a8944cf7d9ae0b420db781e3b4394b6eab13ae96679"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"zscore\", \"population_relative\": true, \"clamped\": true}",
+      "Sequence": 0,
+      "ItemKey": "zscore",
+      "Rationale": "Clamped z-scoring keeps a roughly normal input on the same 0-1 footing as the others without letting a tail run away with the weight."
+    },
+    "primaryKey": {
+      "ID": "C2CAB89C-A64B-435A-9CFB-717CA421BEE7"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.565Z",
+      "checksum": "8eeea10b39e7338b75a65a21e4051aee64ba2beff8fafed252970be35253cbdc"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"weight_mode\", \"kind\": \"enum\", \"values\": [\"given\", \"search\"]}",
+      "Sequence": 0,
+      "ItemKey": "weight_mode",
+      "Rationale": "The rubric is the one family that is first-class whether or not it is trained: `given` takes an operator's weights as authored, `search` fits non-negative weights. Both are legitimate models."
+    },
+    "primaryKey": {
+      "ID": "7FD01D15-D530-4719-A55F-C4084465E956"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.580Z",
+      "checksum": "f661077e11ce6ad41a374efafbd61ce96b2597506c4aeb8ee02eefbfc5b31b67"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"scale_min/scale_max\", \"kind\": \"range\", \"default\": [0, 100]}",
+      "Sequence": 0,
+      "ItemKey": "output_range",
+      "Rationale": "A rubric's output is a score a human reads, so the range it lands in is a real choice rather than an implementation detail."
+    },
+    "primaryKey": {
+      "ID": "E0852930-A2D4-42A0-A976-ED21F7EA3C61"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.594Z",
+      "checksum": "b2aa096c7b6cd8a283bf3237f4e3e8844ecb680ffb4d5535c25d4e40b8c87b01"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "PropertyKey": "MissingDataPolicy",
+      "Operation": "Add",
+      "Value": "\"Zero\"",
+      "Sequence": 0,
+      "ItemKey": null,
+      "Rationale": "A rubric has to decide what a missing input contributes, and the choice is visible in the score: Zero scores it as absent, where NeutralMidpoint would score it as unknown and Exclude would renormalize the remaining weights. Fitted families let the imputer make this decision quietly; a glass-box rubric must state it."
+    },
+    "primaryKey": {
+      "ID": "45172EBA-8D8B-4517-9718-AC1B911B8C1A"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.606Z",
+      "checksum": "cb356fa569b9915958e261b6121046a17cda207cfda39eef5e74f4ee5a4a7051"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"hidden_layer_sizes\", \"kind\": \"architecture\"}",
+      "Sequence": 0,
+      "ItemKey": "hidden_layer_sizes",
+      "Rationale": "Every neural member has a hidden-layer shape, and it is the parameter that most changes what the model can represent."
+    },
+    "primaryKey": {
+      "ID": "96CF02F8-36D2-4DA7-9E6E-11BDFFF5F904"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.480Z",
+      "checksum": "be8eb9f589a47a4ecd14d1174abf002a2bc31f6be638372ed0445bcff8a7ffbf"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"alpha\", \"kind\": \"l2-strength\"}",
+      "Sequence": 0,
+      "ItemKey": "alpha",
+      "Rationale": "Neural members overfit small tabular data readily, so weight decay is the knob a search must be able to turn."
+    },
+    "primaryKey": {
+      "ID": "3F07797F-EFC9-4141-B910-6A3779A2174E"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.491Z",
+      "checksum": "8fae7491f49f8791214a038d2a55721c6df91b736f6de75cdcc814b9632883b1"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Neural",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"onehot\"}",
+      "Sequence": 0,
+      "ItemKey": "onehot",
+      "Rationale": "Neural members take a numeric matrix, so any category has to be encoded before it can be an input at all."
+    },
+    "primaryKey": {
+      "ID": "F4920514-6567-4457-921F-B2403E4CF73C"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.623Z",
+      "checksum": "d3d5caee540b335ee2ef9ca8d8bfb142dbd417ebdb1a404d57fd8be078f1f844"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Linear",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"onehot\"}",
+      "Sequence": 0,
+      "ItemKey": "onehot",
+      "Rationale": "Same reason as the neural family: a linear model cannot consume a category directly."
+    },
+    "primaryKey": {
+      "ID": "685EB292-450F-409C-A921-98FEAAE29DFA"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.638Z",
+      "checksum": "15ab27692aefba9c0b16853096f549eaad23dbf6515be5bbcd5489d7867a4a79"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"max_features\", \"kind\": \"fraction\"}",
+      "Sequence": 0,
+      "ItemKey": "max_features",
+      "Rationale": "Every tree ensemble decorrelates its members by sampling features; how much is a real tuning choice."
+    },
+    "primaryKey": {
+      "ID": "66AD66FF-0AE8-4812-BD0A-34C22D1F42C3"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.653Z",
+      "checksum": "0f327a90fec2d5afd85b5c4e009826d780bf91e5629b473f603e01f408ffaf8c"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Tree Ensemble",
+      "PropertyKey": "PreprocessingBank",
+      "Operation": "Add",
+      "Value": "{\"op\": \"bin\"}",
+      "Sequence": 0,
+      "ItemKey": "bin",
+      "Rationale": "Binning a continuous input is optional for trees rather than required — they split on their own — but it is in the bank because it makes a split point legible to a human reading the model."
+    },
+    "primaryKey": {
+      "ID": "3F9725FD-0653-4ADE-80D6-90AAFE8F0ED3"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.665Z",
+      "checksum": "d3d5edacf68d65ffaa3b79505bcd5278eb0a17a618ffd14ac77c3a5d840a4835"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Bagging Wrapper",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"n_estimators\", \"kind\": \"count\", \"default\": 10}",
+      "Sequence": 0,
+      "ItemKey": "n_estimators",
+      "Rationale": "How many copies of the filled base component to average. This is the bagging wrapper's own knob, not the base component's."
+    },
+    "primaryKey": {
+      "ID": "4A08E162-0B88-4328-B1D3-2048C0B47B79"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.750Z",
+      "checksum": "d251c2d7ab46fa352d302e725cbff7139c2813746d0fcc8ba24351fe4feb5d91"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Stacking Wrapper",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"passthrough\", \"kind\": \"boolean\", \"default\": false}",
+      "Sequence": 0,
+      "ItemKey": "passthrough",
+      "Rationale": "Whether the meta-learner also sees the original inputs alongside the base components' predictions — the choice between a pure blend and a blend that can still use the raw evidence."
+    },
+    "primaryKey": {
+      "ID": "4FBEBC51-B986-48AF-8243-8CF8FA43A31C"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.767Z",
+      "checksum": "23c28937c40bb30a2c81d8d43289ade9ffa4974853fd84c2d01da1049d7e3a5a"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Stacking Wrapper",
+      "PropertyKey": "HyperparameterBank",
+      "Operation": "Add",
+      "Value": "{\"name\": \"cv\", \"kind\": \"count\", \"default\": 5}",
+      "Sequence": 0,
+      "ItemKey": "cv",
+      "Rationale": "The folds used to build the meta-features. Too few and the meta-learner trains on predictions the base components effectively memorized."
+    },
+    "primaryKey": {
+      "ID": "E2333198-115C-431E-8061-A88B518CC701"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.783Z",
+      "checksum": "330a19b0950b512e84866d0affede23a2d071634234dd9ae0c1d6759918f3523"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Structure",
+      "PropertyKey": "GuidanceRationale",
+      "Operation": "Add",
+      "Value": "{\"note\": \"A structure inherits its explanation from what fills it. A bagged glass-box rubric is still explainable; a stack over three black boxes is not, however good its score. Choose the structure for what it lets you say, not only for what it scores.\"}",
+      "Sequence": 0,
+      "ItemKey": "explainability-cost",
+      "Rationale": "True of every structure: composing multiplies capability and divides interpretability, and that trade is the decision being made when a structure is chosen at all."
+    },
+    "primaryKey": {
+      "ID": "6FA15D1B-5B02-4151-BD3F-9C50ACD8E0B2"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.694Z",
+      "checksum": "58a3ac4c9e9c451ac44a11a33c9a6bcf6da0d2e84eb2a5b817f635005421d557"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Sequence",
+      "PropertyKey": "Explainability",
+      "Operation": "Add",
+      "Value": "\"state-sequence\"",
+      "Sequence": 0,
+      "ItemKey": null,
+      "Rationale": "A sequence family explains a record as a path through hidden states over time, not as a weighted sum of columns. It is a genuinely different kind of explanation and a reader should be told which one they are getting."
+    },
+    "primaryKey": {
+      "ID": "CED351E6-8A04-46A7-98DD-3AC054C7056E"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.706Z",
+      "checksum": "d0b9aa4bb9bf659bf57baaa90f94dd368012454be00ea467dadb15054bcbc28f"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Encoding",
+      "PropertyKey": "GuidanceRationale",
+      "Operation": "Add",
+      "Value": "{\"note\": \"An encoder's vocabulary is learned from the training rows alone. Fitting it on everything lets a category that only appears in the holdout influence the encoding, which flatters the final score.\"}",
+      "Sequence": 0,
+      "ItemKey": "fit-on-train-only",
+      "Rationale": "True of every encoder below: the leakage risk is in the fit, not in the transform."
+    },
+    "primaryKey": {
+      "ID": "43BDFD93-121B-4750-AD40-5B82196CF65D"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T03:37:32.798Z",
+      "checksum": "3c393500ce801298b68e4b8652d7da3c607aee98cbd42beceff144c5777c98cf"
+    }
+  },
+  {
+    "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Structure",
+      "PropertyKey": "GuidanceRationale",
+      "Operation": "Add",
+      "ItemKey": "when-composing-earns-it",
+      "Value": "{\"note\": \"Compose when the filled components have NON-OVERLAPPING capability \\u2014 when each sees something the others genuinely cannot. Measured on this platform: a tree ensemble already spans both smooth trends and threshold interactions, so stacking a linear model onto one adds a view it never needed. On a target built from a smooth trend plus a pure XOR, holdout AUC was 0.534 linear, 0.883 forest, 0.8835 stacked \\u2014 the families diverged as far as they can and the stack still tied the better one. Overlapping families cost explainability and buy nothing. What DOES earn a structure: a component that already learned a sub-problem and can be frozen into a slot, families reading genuinely different shapes of data, or variance reduction over a single high-variance estimator.\", \"evidence\": \"packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_composition_earns_it.py\"}",
+      "Sequence": 1,
+      "Rationale": "True of every structure: a structure's value comes from what its fillers see DIFFERENTLY, so the test for reaching for one is capability overlap rather than expected accuracy. Placed on the Structure root because it holds for bagging and stacking alike."
+    },
+    "primaryKey": {
+      "ID": "C6009C71-EDB2-4A15-AE1A-961FF45F4DE6"
+    },
+    "sync": {
+      "lastModified": "2026-09-05T21:59:44.049Z",
+      "checksum": "a65abbf72fbd47eaafe528f3033efd26df5abb38d9463aa9108afcc00c198efb"
+    }
   }
 ]

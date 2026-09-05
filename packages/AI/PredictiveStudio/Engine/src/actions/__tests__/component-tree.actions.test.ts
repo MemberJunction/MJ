@@ -1,15 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJMLComponentTypeEntity } from '@memberjunction/core-entities';
 import type { ResolvedComponentProfile } from '@memberjunction/predictive-studio-core';
 
 import {
   PredictiveStudioBrowseComponentTreeAction,
+  PredictiveStudioComputeSignalAction,
   PredictiveStudioFindReusableComponentsAction,
+  PredictiveStudioListSignalsAction,
   PredictiveStudioValidateComponentGraphAction,
 } from '../component-tree.actions';
 import type { MLComponentEngine } from '../../components/ml-component-engine';
 import type { ReuseFinder } from '../../stories/reuse-finder';
+import type { SignalCatalog, SignalCatalogRequest } from '../../components/signal-catalog';
+import type { SignalComputer, ComputeSignalRequest } from '../../components/signal-compute';
 
 /**
  * The three component-tree actions are the agent-facing surface over the typed component model.
@@ -248,5 +253,193 @@ describe('Validate Component Graph', () => {
     const result = await new TestableValidate().run(params([{ Name: 'Architecture', Type: 'Input', Value: { Decision: 'compose' } }]));
     expect(result.Success).toBe(false);
     expect(result.Message).toContain('malformed');
+  });
+});
+
+/**
+ * `List Signals` is where a caller gets the id `Compute Signal` needs, so the boundary that matters
+ * is the same one as the reuse search: a search must be embedded with the stories' own model, and a
+ * caller that supplies neither text nor a vector gets the catalogue rather than an error.
+ */
+class TestableListSignals extends PredictiveStudioListSignalsAction {
+  public LastRequest: SignalCatalogRequest | null = null;
+  protected override async loadEngine(): Promise<MLComponentEngine> {
+    return fakeEngine();
+  }
+  protected override async embedQuery(): Promise<number[] | null> {
+    return this.EmbedFails ? null : [0.5, 0.5];
+  }
+  public EmbedFails = false;
+  protected override createCatalog(): SignalCatalog {
+    return {
+      list: async (request: SignalCatalogRequest) => {
+        this.LastRequest = request;
+        return {
+          Signals: [
+            { ID: 's1', Name: 'Days Since Last Activity', TypeName: 'As-Of Recency', Story: 'How long ago.', Rebindable: true, PromotionState: 'Approved', IsTrained: true },
+            { ID: 's2', Name: 'Bio Embedding', TypeName: 'Embedding', Story: null, Rebindable: false, PromotionState: 'Draft', IsTrained: false },
+          ],
+          Warnings: [],
+        };
+      },
+    } as unknown as SignalCatalog;
+  }
+  public run(p: RunActionParams): Promise<ActionResultSimple> {
+    return this.Run(p);
+  }
+}
+
+describe('PredictiveStudioListSignalsAction', () => {
+  it('lists the catalogue unranked when no query is supplied', async () => {
+    const action = new TestableListSignals();
+    const p = params([]);
+    const result = await action.run(p);
+
+    expect(result.Success).toBe(true);
+    expect(action.LastRequest?.SearchVector).toBeUndefined();
+    expect((out(p, 'Signals') as unknown[]).length).toBe(2);
+    // The count of rebindable measures is in the message because it is what a caller acts on.
+    expect(result.Message).toContain('1 of which can be pointed at another population');
+  });
+
+  it('embeds QueryText server-side so the vector matches the one the stories were written with', async () => {
+    const action = new TestableListSignals();
+    await action.run(params([{ Name: 'QueryText', Type: 'Input', Value: 'how recently someone engaged' }]));
+
+    expect(action.LastRequest?.SearchVector).toEqual([0.5, 0.5]);
+  });
+
+  it('refuses rather than silently returning an unranked catalogue when the query cannot be embedded', async () => {
+    const action = new TestableListSignals();
+    action.EmbedFails = true;
+    const result = await action.run(params([{ Name: 'QueryText', Type: 'Input', Value: 'engagement' }]));
+
+    // Returning the whole catalogue here would look like a search that found everything.
+    expect(result.Success).toBe(false);
+    expect(result.Message).toContain('cannot be ranked by meaning');
+  });
+
+  it('passes a caller-supplied vector through untouched', async () => {
+    const action = new TestableListSignals();
+    await action.run(params([{ Name: 'QueryVector', Type: 'Input', Value: [0.1, 0.9] }]));
+
+    expect(action.LastRequest?.SearchVector).toEqual([0.1, 0.9]);
+  });
+
+  it('forwards the narrowing options a caller sets', async () => {
+    const action = new TestableListSignals();
+    await action.run(
+      params([
+        { Name: 'RebindableOnly', Type: 'Input', Value: true },
+        { Name: 'MaxRows', Type: 'Input', Value: 25 },
+        { Name: 'PromotionStates', Type: 'Input', Value: ['Approved', 'InReview'] },
+      ]),
+    );
+
+    expect(action.LastRequest).toMatchObject({
+      RebindableOnly: true,
+      MaxRows: 25,
+      PromotionStates: ['Approved', 'InReview'],
+    });
+  });
+});
+
+/**
+ * `Compute Signal`'s boundary, and one regression in particular.
+ *
+ * `RunActionParams.Provider` is optional and is NOT set on the ordinary action-engine path — only a
+ * caller doing its own multi-provider routing supplies one. Passing it through unresolved made the
+ * action fail with *"A provider is required to compute a signal"* for every real invocation while
+ * passing every test that handed one in. The fallback is what these pin.
+ */
+class TestableCompute extends PredictiveStudioComputeSignalAction {
+  public LastRequest: ComputeSignalRequest | null = null;
+  public LastProvider: unknown = 'not-called';
+  protected override async loadEngine(): Promise<MLComponentEngine> {
+    return fakeEngine();
+  }
+  protected override providerFor(): IMetadataProvider {
+    // Stands in for the global provider the real implementation falls back to.
+    return { EntityByName: () => undefined } as unknown as IMetadataProvider;
+  }
+  protected override createComputer(): SignalComputer {
+    return {
+      compute: async (request: ComputeSignalRequest, _user: unknown, provider: unknown) => {
+        this.LastRequest = request;
+        this.LastProvider = provider;
+        return {
+          Success: true,
+          OutputColumn: 'acts_90d',
+          Values: [{ RecordID: 'M1', Value: 4 }],
+          ResolvedAs: { Kind: 'as-of', OutputColumn: 'acts_90d', DatedSource: { EntityName: 'Activities', ForeignKeyField: 'MemberID', DateField: 'ActivityDate', Features: [] } },
+          ErrorMessage: null,
+        };
+      },
+    } as unknown as SignalComputer;
+  }
+  public run(p: RunActionParams): Promise<ActionResultSimple> {
+    return this.Run(p);
+  }
+}
+
+describe('PredictiveStudioComputeSignalAction', () => {
+  const base: ActionParam[] = [
+    { Name: 'SignalID', Type: 'Input', Value: 's1' },
+    { Name: 'TargetEntity', Type: 'Input', Value: 'Members' },
+  ];
+
+  it('resolves a provider even when the action engine supplied none', async () => {
+    const action = new TestableCompute();
+    // params() deliberately builds RunActionParams WITHOUT a Provider — the ordinary path.
+    const result = await action.run(params([...base]));
+
+    expect(result.Success).toBe(true);
+    expect(action.LastProvider).not.toBeUndefined();
+  });
+
+  it('sends only the binding fields a caller actually overrode', async () => {
+    const action = new TestableCompute();
+    await action.run(
+      params([
+        ...base,
+        { Name: 'SourceEntity', Type: 'Input', Value: 'Donations' },
+        { Name: 'DateField', Type: 'Input', Value: 'GiftDate' },
+      ]),
+    );
+
+    // An object of undefineds would override the signal's stored binding with nothing.
+    expect(action.LastRequest?.Binding).toEqual({
+      SourceEntity: 'Donations',
+      ForeignKeyField: undefined,
+      DateField: 'GiftDate',
+      ValueField: undefined,
+      Column: undefined,
+    });
+  });
+
+  it('sends no binding at all when nothing was overridden', async () => {
+    const action = new TestableCompute();
+    await action.run(params([...base]));
+
+    expect(action.LastRequest?.Binding).toBeUndefined();
+  });
+
+  it('refuses before touching the computer when the required params are missing', async () => {
+    const action = new TestableCompute();
+    const result = await action.run(params([{ Name: 'SignalID', Type: 'Input', Value: 's1' }]));
+
+    expect(result.Success).toBe(false);
+    expect(action.LastRequest).toBeNull();
+    expect(result.Message).toContain('SignalID and TargetEntity are both required');
+  });
+
+  it('reports the outputs a caller reads back', async () => {
+    const p = params([...base]);
+    await new TestableCompute().run(p);
+
+    expect(out(p, 'OutputColumn')).toBe('acts_90d');
+    expect(out(p, 'Values')).toEqual([{ RecordID: 'M1', Value: 4 }]);
+    // Provenance: what it ACTUALLY measured, so a caller need not assume the default binding held.
+    expect(out(p, 'ResolvedAs')).toMatchObject({ Kind: 'as-of' });
   });
 });

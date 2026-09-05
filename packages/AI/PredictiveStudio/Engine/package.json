@@ -33,7 +33,9 @@
     "@memberjunction/predictive-studio-sidecar": "6.1.0-edge.4",
     "@memberjunction/record-set-processor": "6.1.0-edge.4",
     "@memberjunction/record-set-processor-base": "6.1.0-edge.4",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "@memberjunction/predictive-studio-forecast-sidecar": "6.1.0-edge.4",
+    "@memberjunction/aiengine": "6.1.0-edge.4"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

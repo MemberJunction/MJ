@@ -42,6 +42,7 @@
     "styles"
   ],
   "dependencies": {
+    "@memberjunction/actions-base": "6.1.0-edge.4",
     "@memberjunction/ai-vectors-memory": "6.1.0-edge.4",
     "@memberjunction/core": "6.1.0-edge.4",
     "@memberjunction/core-entities": "6.1.0-edge.4",

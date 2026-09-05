@@ -21,6 +21,7 @@ import {
   type LeakageGuard,
   type ValidationStrategy,
   type ProblemType,
+  type ComponentGraphNode,
 } from '@memberjunction/predictive-studio-core';
 import type { DatedSourceSpec, FeatureAssemblyParams } from '../feature-assembly';
 
@@ -52,6 +53,16 @@ export interface PipelineConfig {
    * today, so plan-built pipelines start empty.
    */
   datedSources?: DatedSourceSpec[];
+  /**
+   * The composition to train, when the architecture is a `compose` decision.
+   *
+   * Carrying this is not optional decoration. The architecture gate declares `compose` EXECUTABLE,
+   * so without it the builder trains a bare single-algorithm model while every downstream
+   * record — the plan, the leaderboard, the model row — says a composed one was built. Nothing
+   * afterwards can tell the difference, which is why {@link modelingPlanToPipelineConfig} refuses
+   * rather than degrades when a compose decision carries no graph.
+   */
+  componentGraph?: ComponentGraphNode | null;
   /** Leakage protection (deny-list + dominance threshold). */
   leakageGuard: LeakageGuard;
   /** Validation strategy. */
@@ -72,7 +83,32 @@ export interface PipelineConfig {
 function chooseExperiment(spec: ModelingPlanSpec): ModelingPlanSpec['ProposedExperiments'][number] | null {
   const experiments = spec.ProposedExperiments ?? [];
   if (experiments.length === 0) return null;
-  return [...experiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))[0];
+  const byPriority = [...experiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
+
+  // A `reify` decision says the candidates ARE variations of one generalized parent — that claim is
+  // the entire content of the decision. Building the highest-priority experiment regardless would
+  // train something the decision never named while the plan records "these are all variations of
+  // <parent>", so the choice is narrowed to the candidates the Architect actually reified.
+  const architecture = spec.Architecture;
+  if (architecture?.Decision === 'reify') {
+    const named = new Set(
+      (architecture.Candidates ?? [])
+        .map((c) => c.ComponentTypeRef?.trim().toLowerCase())
+        .filter((n): n is string => !!n),
+    );
+    const underParent = byPriority.filter((e) => named.has(e.AlgorithmName?.trim().toLowerCase() ?? ''));
+    if (underParent.length > 0) {
+      return underParent[0];
+    }
+    // Refuse rather than fall back: the plan would otherwise record a reify under a parent while
+    // training a family the decision never considered.
+    throw new Error(
+      `The architecture reifies under '${architecture.ReifiedUnderComponentTypeRef}' across ` +
+        `[${[...named].join(', ')}], but no ProposedExperiment names any of them. Building would train a ` +
+        `family the decision never considered.`,
+    );
+  }
+  return byPriority[0];
 }
 
 /** Build the FeatureStep DAG from the selected candidate features (select raw cols; one-hot categoricals). */
@@ -131,6 +167,40 @@ function deriveName(goal: string, experimentLabel?: string): string {
 }
 
 /**
+ * The composition this pipeline should train, or null when it is an ordinary single-family model.
+ *
+ * An experiment may carry its own graph (the combination search proposes them per candidate);
+ * otherwise a `compose` architecture supplies one for the whole plan.
+ *
+ * **Refuses rather than degrades.** A `compose` decision with no graph anywhere is a plan that says
+ * "build a custom structure" and describes none — training the fallback algorithm would produce a
+ * model, metrics and a leaderboard entry that all quietly disagree with the decision that authorized
+ * them. The architecture gate has already declared the decision executable by this point, so this is
+ * the last place the contradiction can be caught.
+ */
+function resolveComponentGraph(
+  spec: ModelingPlanSpec,
+  experiment: ModelingPlanSpec['ProposedExperiments'][number],
+): ComponentGraphNode | null {
+  const fromExperiment = experiment.ComponentGraph ?? null;
+  if (fromExperiment) {
+    return fromExperiment;
+  }
+  const architecture = spec.Architecture;
+  if (architecture?.Decision !== 'compose') {
+    return null;
+  }
+  if (!architecture.ComposedGraph) {
+    throw new Error(
+      "The architecture decision is 'compose' but carries no ComposedGraph, and the chosen experiment supplies none. " +
+        'Building this would train a single ' +
+        `'${experiment.AlgorithmName}' estimator while the plan records a composed model.`,
+    );
+  }
+  return architecture.ComposedGraph;
+}
+
+/**
  * Deterministically translate an approved {@link ModelingPlanSpec} into the concrete pipeline
  * configuration the builder will persist. Throws on a spec that can't yield a trainable pipeline
  * (no target entity, no target variable, or no proposed algorithm) — the builder surfaces these as a
@@ -168,6 +238,7 @@ export function modelingPlanToPipelineConfig(
     sourceBindings: buildSourceBindings(spec),
     featureSteps: buildFeatureSteps(spec, experiment.FeatureSet ?? []),
     asOf: target.AsOfStrategy ?? { Mode: 'none' },
+    componentGraph: resolveComponentGraph(spec, experiment),
     leakageGuard: buildLeakageGuard(spec),
     validation: buildValidation(spec),
     hyperparameters: experiment.Hyperparameters ?? {},

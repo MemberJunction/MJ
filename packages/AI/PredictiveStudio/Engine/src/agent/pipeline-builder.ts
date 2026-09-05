@@ -12,7 +12,7 @@
  * "build a new prediction" path is verifiable without the full LLM loop.
  */
 
-import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
 import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
 
@@ -55,6 +55,43 @@ export interface BuildPredictionResult {
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;
+  /**
+   * What this single-model build did with a decision that asked for something larger.
+   *
+   * `defer` and `reify` both mean *race these and compare* — which a single-model builder cannot do.
+   * It builds the leading candidate, which is a reasonable thing to do and a different thing from
+   * what the plan records. Left unsaid, the model reads as the decision's outcome when it is only
+   * its first step; this is where that difference is stated. Null when the decision and the build
+   * are the same shape.
+   */
+  decisionNote: string | null;
+}
+
+/**
+ * State what a single-model build did with a race-shaped decision, or null when there is nothing to
+ * say.
+ *
+ * The builder trains ONE model. `defer` and `reify` both mean "race several and compare" — running
+ * that is the experiment session's job. Building the leading candidate is the right thing for this
+ * path to do; presenting it as the decision's outcome is not, so the difference is named.
+ */
+export function describeDecisionShape(spec: ModelingPlanSpec): string | null {
+  const architecture = spec.Architecture;
+  const candidates = (architecture?.Candidates ?? []).map((c) => c.ComponentTypeRef).filter(Boolean);
+  if (architecture?.Decision === 'defer') {
+    return (
+      `The architecture deferred across ${candidates.length} candidate(s) [${candidates.join(', ')}] — it asked for a ` +
+      `race, and this built only the leading one. Run an experiment session to compare them.`
+    );
+  }
+  if (architecture?.Decision === 'reify') {
+    return (
+      `The architecture reified [${candidates.join(', ')}] under '${architecture.ReifiedUnderComponentTypeRef}' — it ` +
+      `asked for a search across that family, and this built only the leading variation. Run an experiment session ` +
+      `to search it.`
+    );
+  }
+  return null;
 }
 
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
@@ -78,6 +115,7 @@ export class PredictiveStudioPipelineBuilder {
           leakageFlagged: false,
           heldReason: null,
           errorMessage: gate.Reasons.join(' '),
+          decisionNote: null,
         };
       }
 
@@ -89,6 +127,10 @@ export class PredictiveStudioPipelineBuilder {
       const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
 
       const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish, user, provider);
+      const decisionNote = describeDecisionShape(spec);
+      if (decisionNote) {
+        LogStatus(`PredictiveStudioPipelineBuilder: ${decisionNote}`);
+      }
       return {
         success: true,
         pipelineId: pipeline.ID,
@@ -98,11 +140,12 @@ export class PredictiveStudioPipelineBuilder {
         leakageFlagged,
         heldReason,
         errorMessage: null,
+        decisionNote,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilder.build failed: ${errorMessage}`);
-      return { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
+      return { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage, decisionNote: null };
     }
   }
 

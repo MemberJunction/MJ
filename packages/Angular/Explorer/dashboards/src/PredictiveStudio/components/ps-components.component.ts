@@ -14,6 +14,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { emptyReuseMessage, toReuseMatches, type ReuseMatchVM } from '../component-reuse.view-models';
 import {
   buildComponentTree,
   buildProfileVM,
@@ -110,6 +111,71 @@ interface InstanceVM {
 
         <!-- ── the inspector ────────────────────────────────────────── -->
         <div class="inspector">
+          <div class="ps-card reuse" data-testid="ps-components-reuse">
+            <div class="ps-card-head">
+              <h3>Find a part by meaning</h3>
+              @if (selectedSlotName) {
+                <span class="ps-badge gray" data-testid="ps-components-reuse-slot">fits {{ selectedSlotName }}</span>
+              }
+            </div>
+            <div class="ps-card-body">
+              <div class="ps-muted ps-small reuse-intro">
+                Describe what you need in plain English. Every published component wrote its own story,
+                and the story is what is searched — not the column name, the table, or the class.
+              </div>
+              <div class="reuse-search">
+                <input
+                  class="reuse-input"
+                  type="text"
+                  data-testid="ps-components-reuse-input"
+                  placeholder="e.g. tells a real zero apart from missing data"
+                  [value]="reuseQuery"
+                  (input)="onReuseQueryInput($event)"
+                  (keydown.enter)="runReuseSearch()" />
+                <button
+                  mjButton
+                  variant="primary"
+                  size="sm"
+                  data-testid="ps-components-reuse-run"
+                  (click)="runReuseSearch()"
+                  [disabled]="reuseSearching || !reuseQuery.trim()">
+                  <i class="fa-solid fa-magnifying-glass-chart"></i> {{ reuseSearching ? 'Searching…' : 'Search' }}
+                </button>
+              </div>
+              @if (reuseExamples.length > 0 && reuseMatches.length === 0 && !reuseSearching && !reuseMessage) {
+                <div class="reuse-examples" data-testid="ps-components-reuse-examples">
+                  @for (example of reuseExamples; track example) {
+                    <button class="chip" data-testid="ps-components-reuse-example" (click)="useExample(example)">{{ example }}</button>
+                  }
+                </div>
+              }
+              @if (reuseMessage) {
+                <div class="ps-muted ps-small" data-testid="ps-components-reuse-message">{{ reuseMessage }}</div>
+              }
+              @for (match of reuseMatches; track match.id) {
+                <div class="reuse-match" data-testid="ps-components-reuse-match">
+                  <div class="item-main">
+                    <span class="item-key">{{ match.name }}</span>
+                    <span class="tag">{{ match.typeName }}</span>
+                    @if (match.promotionState) {
+                      <span class="tag" [class.approved]="match.promotionState === 'Approved'">{{ match.promotionState }}</span>
+                    }
+                    @if (match.similarity !== null) {
+                      <span class="ps-muted ps-small match-score" data-testid="ps-components-reuse-score">{{ match.matchPercent }}% match</span>
+                    }
+                  </div>
+                  <div class="match-bar" aria-hidden="true"><span [style.width.%]="match.matchPercent"></span></div>
+                  @if (match.story) {
+                    <div class="ps-muted ps-small story-line" data-testid="ps-components-reuse-story">{{ match.story }}</div>
+                  }
+                  @if (match.fromModel) {
+                    <div class="ps-muted ps-small" data-testid="ps-components-reuse-from">from {{ match.fromModel }}</div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+
           @if (!profile) {
             <div class="ps-card">
               <div class="ps-card-body ps-muted ps-small" data-testid="ps-components-no-selection">
@@ -229,11 +295,80 @@ export class PSComponentsComponent implements OnInit {
   public instances: InstanceVM[] = [];
   public loadingInstances = false;
 
+  // ── Reuse-by-meaning search ──────────────────────────────────────────────────────────
+  /** The plain-English query. Embedded SERVER-side, so the browser never picks an embedding model. */
+  public reuseQuery = '';
+  public reuseMatches: ReuseMatchVM[] = [];
+  public reuseSearching = false;
+  /** Empty-state or failure line; null when there is nothing to say. */
+  public reuseMessage: string | null = null;
+  /** Prompts that show what KIND of question works — meaning, not naming. */
+  public readonly reuseExamples: readonly string[] = [
+    'tells a real zero apart from missing data',
+    'how recently someone engaged before a decision',
+    'where this is heading over the next few months',
+  ];
+
   private expanded = new Set<string>();
   private findingsByNode = new Map<string, TreeLintFinding[]>();
   // Zoneless CD: an async load completes outside any template event handler, so the view has to be
   // told. Without this the refreshed instance list would render only on the next unrelated tick.
   private cdr = inject(ChangeDetectorRef);
+
+
+  /** The slot a match would fill when a slot-bearing type is selected — shown as context. */
+  public get selectedSlotName(): string | null {
+    return this.profile?.slots?.[0]?.name ?? null;
+  }
+
+  /** Two-way binding by hand: the input is a plain element, not a forms control. */
+  public onReuseQueryInput(event: Event): void {
+    this.reuseQuery = (event.target as HTMLInputElement).value;
+  }
+
+  /** Fill the box from an example and run it, so one click shows the whole idea. */
+  public useExample(example: string): void {
+    this.reuseQuery = example;
+    void this.runReuseSearch();
+  }
+
+  /**
+   * Search the component catalogue by MEANING.
+   *
+   * `QueryText` goes to the server and is embedded there with the same model that wrote every
+   * `StoryVector`. The browser deliberately never embeds: a client that picked its own model would
+   * produce distances against a different vector space, and the results would look plausible while
+   * meaning nothing.
+   *
+   * `TrainedOnly` is false because an INPUT component holds no fitted state — it is reused by its
+   * definition (its entity, field, join path and window), not by a frozen artifact. Leaving the
+   * default on would filter out exactly the parts this panel exists to surface.
+   */
+  public async runReuseSearch(): Promise<void> {
+    const query = this.reuseQuery.trim();
+    if (!query || this.reuseSearching) {
+      return;
+    }
+    this.reuseSearching = true;
+    this.reuseMessage = null;
+    this.reuseMatches = [];
+    this.cdr.markForCheck();
+    try {
+      const result = await this.engine.FindReusableComponents(
+        { QueryText: query, TopK: 6, TrainedOnly: false, PromotionStates: ['Draft', 'Approved'] },
+        this.provider,
+      );
+      this.reuseMatches = toReuseMatches(result.Matches);
+      this.reuseMessage = this.reuseMatches.length > 0 ? null : emptyReuseMessage(result.CandidatesConsidered);
+    } catch (err) {
+      this.reuseMatches = [];
+      this.reuseMessage = `Search failed: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      this.reuseSearching = false;
+      // Zoneless CD: this completes outside any template event handler.
+      this.cdr.markForCheck();
+    }
+  }
 
   /** @inheritdoc */
   public ngOnInit(): void {

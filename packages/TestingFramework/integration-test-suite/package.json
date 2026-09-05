@@ -3,7 +3,7 @@
   "license": "BUSL-1.1",
   "version": "6.1.0-edge.4",
   "private": true,
-  "description": "MemberJunction's OWN integration-test content — every check bundle, the special rigs, and their heavy dependencies. Deliberately private/non-published: the shippable framework (registry, contracts, driver, bootstraps) lives in @memberjunction/testing-integration; this package is the repo-local test content loaded into `mj test` at runtime.",
+  "description": "MemberJunction's OWN integration-test content \u2014 every check bundle, the special rigs, and their heavy dependencies. Deliberately private/non-published: the shippable framework (registry, contracts, driver, bootstraps) lives in @memberjunction/testing-integration; this package is the repo-local test content loaded into `mj test` at runtime.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -62,7 +62,8 @@
     "@memberjunction/testing-integration": "6.1.0-edge.4",
     "dotenv": "17.2.4",
     "ioredis": "^5.6.1",
-    "mssql": "^12.2.0"
+    "mssql": "^12.2.0",
+    "@memberjunction/predictive-studio-forecast-sidecar": "6.1.0-edge.4"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

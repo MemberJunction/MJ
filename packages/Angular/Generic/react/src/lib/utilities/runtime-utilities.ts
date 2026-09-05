@@ -28,6 +28,9 @@ import {
   SimpleMLModelInfo,
   SimpleMLListModelsFilter,
   SimpleMLScoreResult,
+  SimpleMLSignalInfo,
+  SimpleMLSignalBinding,
+  SimpleMLComputeSignalResult,
   SimpleRunQuery,
   SimpleRunView,
   SimpleExecutePromptParams,
@@ -35,7 +38,8 @@ import {
   SimpleEmbedTextParams,
   SimpleEmbedTextResult
 } from '@memberjunction/interactive-component-types';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLActionClient } from '@memberjunction/graphql-dataprovider';
+import { ActionEngineBase, type ActionParam, type ActionResult } from '@memberjunction/actions-base';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import {
   MJMLModelEntity,
@@ -189,7 +193,23 @@ export class RuntimeUtilities {
         modelId: string,
         records: Array<Record<string, unknown> | string>,
         options?: { primaryKeyField?: string; contextUser?: UserInfo }
-      ): Promise<SimpleMLScoreResult> => this.scoreMLRecords(graphQLProvider, modelId, records, options)
+      ): Promise<SimpleMLScoreResult> => this.scoreMLRecords(graphQLProvider, modelId, records, options),
+
+      listSignals: (
+        filter?: { search?: string; rebindableOnly?: boolean; maxRows?: number }
+      ): Promise<SimpleMLSignalInfo[]> => this.listMLSignals(graphQLProvider, filter),
+
+      computeSignal: (
+        signalId: string,
+        targetEntity: string,
+        options?: {
+          filter?: string;
+          maxRows?: number;
+          asOfColumn?: string;
+          binding?: SimpleMLSignalBinding;
+        }
+      ): Promise<SimpleMLComputeSignalResult> =>
+        this.computeMLSignal(graphQLProvider, signalId, targetEntity, options)
     };
   }
 
@@ -302,6 +322,162 @@ export class RuntimeUtilities {
       LogError(error);
       return { scoredCount: 0, failedCount: keys.length, skippedCount: 0, predictions: [] };
     }
+  }
+
+  /**
+   * Lists the signal catalogue by running the `List Signals` action server-side.
+   *
+   * Deliberately not a RunView: whether a measure is *rebindable* is a property of the component
+   * type's driver, and the type tree is not in the browser. A client-side guess would eventually
+   * offer a population picker beside a measure that cannot be pointed anywhere. Meaning-search is
+   * server-side for the same reason the reuse search is — the query has to be embedded with the
+   * model that wrote the stories, and the story vectors never reach the browser.
+   *
+   * Resilient — logs and returns `[]` on any failure, so a component degrades to "no signals".
+   */
+  private async listMLSignals(
+    provider: GraphQLDataProvider,
+    filter?: { search?: string; rebindableOnly?: boolean; maxRows?: number }
+  ): Promise<SimpleMLSignalInfo[]> {
+    const params: ActionParam[] = [];
+    // Only send what the caller set — an explicit undefined would override the action's own defaults.
+    const optional: Array<[string, unknown]> = [
+      ['QueryText', filter?.search],
+      ['RebindableOnly', filter?.rebindableOnly],
+      ['MaxRows', filter?.maxRows]
+    ];
+    for (const [name, value] of optional) {
+      if (value !== undefined) {
+        params.push({ Name: name, Value: value, Type: 'Input' });
+      }
+    }
+
+    const result = await this.runMLAction(provider, 'List Signals', params);
+    if (!result) {
+      return [];
+    }
+    const signals = this.actionOutput(result, 'Signals');
+    if (!Array.isArray(signals)) {
+      return [];
+    }
+    return signals.map((raw) => {
+      const s = raw as Record<string, unknown>;
+      return {
+        id: String(s['ID'] ?? ''),
+        name: String(s['Name'] ?? ''),
+        type: String(s['TypeName'] ?? ''),
+        story: typeof s['Story'] === 'string' ? s['Story'] : null,
+        rebindable: s['Rebindable'] === true
+      };
+    });
+  }
+
+  /**
+   * Computes one signal over a population by running the `Compute Signal` action.
+   *
+   * The whole point of routing through the server is that this uses the same feature-assembly path
+   * training used — including the as-of cut and the missing-data rules — so the number a component
+   * renders and the number a model trained on come from one definition rather than two that quietly
+   * disagree.
+   *
+   * A refusal (a substituted field that does not exist, a measure that cannot be rebound) comes back
+   * as `success: false` with the message naming what was wrong, rather than as a column of nulls
+   * that looks like a real answer.
+   */
+  private async computeMLSignal(
+    provider: GraphQLDataProvider,
+    signalId: string,
+    targetEntity: string,
+    options?: {
+      filter?: string;
+      maxRows?: number;
+      asOfColumn?: string;
+      binding?: SimpleMLSignalBinding;
+    }
+  ): Promise<SimpleMLComputeSignalResult> {
+    const failed = (message: string): SimpleMLComputeSignalResult => ({
+      success: false,
+      outputColumn: '',
+      values: [],
+      errorMessage: message
+    });
+
+    const params: ActionParam[] = [
+      { Name: 'SignalID', Value: signalId, Type: 'Input' },
+      { Name: 'TargetEntity', Value: targetEntity, Type: 'Input' }
+    ];
+    const optional: Array<[string, unknown]> = [
+      ['Filter', options?.filter],
+      ['MaxRows', options?.maxRows],
+      ['AsOfColumn', options?.asOfColumn],
+      // Binding substitutions travel as flat params — omitted ones keep the signal's stored default.
+      ['SourceEntity', options?.binding?.sourceEntity],
+      ['ForeignKeyField', options?.binding?.foreignKeyField],
+      ['DateField', options?.binding?.dateField],
+      ['ValueField', options?.binding?.valueField],
+      ['Column', options?.binding?.column]
+    ];
+    for (const [name, value] of optional) {
+      if (value !== undefined) {
+        params.push({ Name: name, Value: value, Type: 'Input' });
+      }
+    }
+
+    const result = await this.runMLAction(provider, 'Compute Signal', params);
+    if (!result) {
+      return failed(`The 'Compute Signal' action could not be run.`);
+    }
+    if (!result.Success) {
+      return failed(result.Message ?? 'The signal could not be computed.');
+    }
+
+    const values = this.actionOutput(result, 'Values');
+    return {
+      success: true,
+      outputColumn: String(this.actionOutput(result, 'OutputColumn') ?? ''),
+      values: Array.isArray(values)
+        ? values.map((raw) => {
+            const v = raw as Record<string, unknown>;
+            const value = v['Value'];
+            return {
+              recordId: String(v['RecordID'] ?? ''),
+              value:
+                value === null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean'
+                  ? value
+                  : null
+            };
+          })
+        : [],
+      errorMessage: null
+    };
+  }
+
+  /**
+   * Runs a Predictive Studio action by name. Returns `undefined` when the action is not in metadata
+   * — which is the normal state on a server where Predictive Studio's seeds were never pushed, and
+   * the reason the two signal methods are optional on the capability surface.
+   */
+  private async runMLAction(
+    provider: GraphQLDataProvider,
+    actionName: string,
+    params: ActionParam[]
+  ): Promise<ActionResult | undefined> {
+    try {
+      const action = ActionEngineBase.Instance.Actions.find((a) => a.Name === actionName);
+      if (!action) {
+        console.error(`❌ the '${actionName}' action is not in metadata — Predictive Studio seeds may not be pushed.`);
+        return undefined;
+      }
+      return await new GraphQLActionClient(provider).RunAction(action.ID, params);
+    } catch (error) {
+      LogError(error);
+      return undefined;
+    }
+  }
+
+  /** Read one output parameter off an action result. */
+  private actionOutput(result: ActionResult, name: string): unknown {
+    return result.Params?.find((p) => p.Name === name)?.Value;
   }
 
   /**

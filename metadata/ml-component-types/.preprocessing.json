@@ -62,6 +62,10 @@
     },
     "primaryKey": {
       "ID": "123A2201-8EBD-49EC-8CA1-B9E507133C5D"
+    },
+    "sync": {
+      "lastModified": "2026-09-02T21:12:05.991Z",
+      "checksum": "5ff61a8b37690663acb4520bf7462aab091917ecb3b65627f5e867227ee9d281"
     }
   },
   {
@@ -135,7 +139,7 @@
     "fields": {
       "Name": "Z-Score Clamped",
       "Kind": "Preprocessing",
-      "Description": "Z-score clamped to \u00b13\u03c3 and mapped to [0,1]. Ported from Sonar.",
+      "Description": "Z-score clamped to ±3σ and mapped to [0,1]. Ported from Sonar.",
       "Story": "Standardization with guard rails: outliers stop mattering more than three standard deviations out.",
       "IsAbstract": false,
       "Trainable": true,
@@ -202,8 +206,8 @@
     "fields": {
       "Name": "Curve Mapping",
       "Kind": "Preprocessing",
-      "Description": "Stateless, parameterized value\u2192value curves (no population fit). Ported from Sonar.",
-      "Story": "Hand-shaped curves that encode judgment \u2014 how quickly goodness saturates, where the cliff is \u2014 without any training.",
+      "Description": "Stateless, parameterized value→value curves (no population fit). Ported from Sonar.",
+      "Story": "Hand-shaped curves that encode judgment — how quickly goodness saturates, where the cliff is — without any training.",
       "IsAbstract": true,
       "Trainable": false,
       "Status": "Published",
@@ -235,7 +239,7 @@
     "fields": {
       "Name": "Banded",
       "Kind": "Preprocessing",
-      "Description": "Bucket\u2192fraction step mapping.",
+      "Description": "Bucket→fraction step mapping.",
       "Story": "Judgment as a staircase: these ranges are bad, these fine, these excellent.",
       "IsAbstract": false,
       "Trainable": false,

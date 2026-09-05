@@ -17,6 +17,7 @@ import {
   type IMetadataProvider,
 } from '@memberjunction/core';
 import { isErrorMetric } from '@memberjunction/predictive-studio-core';
+import type { ProblemType } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training';
 import type { TrainingDeps } from '../training';
@@ -141,7 +142,7 @@ export function extractNormalizedScore(
   holdoutMetricsJson: string | null,
   trainMetricsJson: string | null,
   successMetric: string,
-  problemType: 'classification' | 'regression',
+  problemType: ProblemType,
 ): number {
   const metrics = parseMetrics(holdoutMetricsJson) ?? parseMetrics(trainMetricsJson) ?? {};
   const key = successMetric.toLowerCase();

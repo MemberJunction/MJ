@@ -93,7 +93,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Include the full cleaned page text per result. Default false \u2014 this is large.",
+            "Description": "Include the full cleaned page text per result. Default false — this is large.",
             "IsRequired": false
           },
           "primaryKey": {

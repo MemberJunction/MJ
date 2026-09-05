@@ -5991,7 +5991,7 @@ export const MJAIModelCostSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
         * * Default Value: ECE2BCB7-C854-4BF7-A517-D72793A40652
-        * * Description: DEPRECATED — descriptive only. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained because the column is NOT NULL and referenced by shipped configurations; do not populate it for new cost rows.`),
+        * * Description: DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.`),
     InputPricePerUnit: z.number().describe(`
         * * Field Name: InputPricePerUnit
         * * Display Name: Input Price Per Unit
@@ -23368,7 +23368,7 @@ export const MJMLAlgorithmUseCaseSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional description of the scenario`),
-    ProblemTypeScope: z.union([z.literal('any'), z.literal('classification'), z.literal('regression')]).describe(`
+    ProblemTypeScope: z.union([z.literal('any'), z.literal('classification'), z.literal('regression'), z.literal('sequence')]).describe(`
         * * Field Name: ProblemTypeScope
         * * Display Name: Problem Type Scope
         * * SQL Data Type: nvarchar(20)
@@ -23378,6 +23378,7 @@ export const MJMLAlgorithmUseCaseSchema = z.object({
     *   * any
     *   * classification
     *   * regression
+    *   * sequence
         * * Description: Which problem type this scenario applies to: classification, regression, or any`),
     Guidance: z.string().nullable().describe(`
         * * Field Name: Guidance
@@ -24084,6 +24085,176 @@ export const MJMLComponentSchema = z.object({
 export type MJMLComponentEntityType = z.infer<typeof MJMLComponentSchema>;
 
 /**
+ * zod schema definition for the entity MJ: ML Findings
+ */
+export const MJMLFindingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Short label naming the relationship, for lists and citations (e.g. "Committee membership and lapse risk"). The full claim lives in Statement.`),
+    Statement: z.string().describe(`
+        * * Field Name: Statement
+        * * Display Name: Statement
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The claim in one plain sentence, written so it can be quoted verbatim into a board paper or an agent's answer without further interpretation. Must carry its own hedging: an association says "is associated with", never "causes".`),
+    MLModelID: z.string().nullable().describe(`
+        * * Field Name: MLModelID
+        * * Display Name: ML Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: The model whose promotion produced this measurement. NULL for a finding recorded independently of any model (an operator's asserted domain fact, or one carried over from an external study).`),
+    ComponentID: z.string().nullable().describe(`
+        * * Field Name: ComponentID
+        * * Display Name: Component
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)
+        * * Description: The signal (MJ: ML Components row) this finding is about — the measure whose contribution was quantified. This is what lets a finding be re-tested later: the signal is executable, so the same measurement can be repeated on new data.`),
+    TargetVariable: z.string().nullable().describe(`
+        * * Field Name: TargetVariable
+        * * Display Name: Target Variable
+        * * SQL Data Type: nvarchar(255)
+        * * Description: What the finding is a claim ABOUT — the outcome the relationship was measured against (e.g. "Renewed", "Lapsed", "DonationAmount"). Denormalized from the model so a finding stays legible after the model is archived.`),
+    EvidenceType: z.union([z.literal('Asserted'), z.literal('Descriptive'), z.literal('Observed Association'), z.literal('Predictive Contribution'), z.literal('Tested Intervention')]).describe(`
+        * * Field Name: EvidenceType
+        * * Display Name: Evidence Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Asserted
+    *   * Descriptive
+    *   * Observed Association
+    *   * Predictive Contribution
+    *   * Tested Intervention
+        * * Description: THE EPISTEMIC STATUS, and the most important column here. Observed Association = the two move together in the data. Predictive Contribution = this input measurably improved out-of-sample prediction (a stronger statement about usefulness, still not about cause). Tested Intervention = something was deliberately changed and the effect measured — the only kind that supports "if we do X, Y follows". Descriptive = a stated property of the population, no relationship claimed. Asserted = a human recorded it without measurement here. An agent citing a finding must not flatten these into one voice, which is exactly what it will do if the distinction is not on the record.`),
+    Direction: z.union([z.literal('Decreases'), z.literal('Increases'), z.literal('Mixed'), z.literal('None'), z.literal('Unknown')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Unknown
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Decreases
+    *   * Increases
+    *   * Mixed
+    *   * None
+    *   * Unknown
+        * * Description: Which way the relationship runs with respect to TargetVariable: Increases, Decreases, Mixed (non-monotonic — more is better up to a point), None (measured and found not to matter, worth keeping so the next person does not re-test it), or Unknown.`),
+    Magnitude: z.number().nullable().describe(`
+        * * Field Name: Magnitude
+        * * Display Name: Magnitude
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: How large the effect is, in the units named by MagnitudeUnit. NULL when the finding is directional only — an honest NULL beats a number nobody can interpret.`),
+    MagnitudeUnit: z.string().nullable().describe(`
+        * * Field Name: MagnitudeUnit
+        * * Display Name: Magnitude Unit
+        * * SQL Data Type: nvarchar(50)
+        * * Description: What Magnitude is measured in, so a number is never read in the wrong scale: "probability", "percent", "ratio", "odds ratio", "days", "importance share", or a domain unit. Required whenever Magnitude is present.`),
+    Confidence: z.union([z.literal('High'), z.literal('Low'), z.literal('Moderate')]).nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * High
+    *   * Low
+    *   * Moderate
+        * * Description: How much weight to put on this finding — Low, Moderate or High — reflecting population size, out-of-sample performance and how directly the effect was measured. Deliberately coarse: a spurious decimal here would invite false precision about something that is a judgment.`),
+    MeasuredAt: z.date().describe(`
+        * * Field Name: MeasuredAt
+        * * Display Name: Measured At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the measurement was taken. A finding without a date is not citable — the business changes, and a 2024 relationship is evidence about 2024. Ordering by this column over a chain of superseded findings is how a lever's movement becomes visible.`),
+    PopulationSize: z.number().nullable().describe(`
+        * * Field Name: PopulationSize
+        * * Display Name: Population Size
+        * * SQL Data Type: int
+        * * Description: How many records the measurement rested on. The difference between a finding worth acting on and one worth re-testing is usually this number.`),
+    HoldoutMetric: z.string().nullable().describe(`
+        * * Field Name: HoldoutMetric
+        * * Display Name: Holdout Metric
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Which out-of-sample metric backs this finding (e.g. "auc", "r2", "accuracy") — named rather than assumed, because the same number means different things across problem types.`),
+    HoldoutMetricValue: z.number().nullable().describe(`
+        * * Field Name: HoldoutMetricValue
+        * * Display Name: Holdout Metric Value
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: The value of HoldoutMetric on the LOCKED holdout — data the model never saw. This is what separates a finding from a story: the relationship held on records that played no part in discovering it.`),
+    Evidence: z.string().nullable().describe(`
+        * * Field Name: Evidence
+        * * Display Name: Evidence
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The numbers behind the claim, as JSON — importance share, coefficient, the holdout metric set, the assembly window, whatever the writer had. Kept so a skeptical reader can check the arithmetic rather than take the sentence on trust.`),
+    Story: z.string().nullable().describe(`
+        * * Field Name: Story
+        * * Display Name: Story
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The finding in business language — what it means and what someone might do about it — written at promotion time. This is the text that gets embedded, so it is what a meaning search actually matches against.`),
+    StoryVector: z.string().nullable().describe(`
+        * * Field Name: StoryVector
+        * * Display Name: Story Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Embedding vector of Story (JSON float array), for similarity search over what the organization has learned. Written by the entity server on save when Story changes, using the same local model that embeds component stories — a vector from a different model produces distances that look like numbers and mean nothing.`),
+    StoryEmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: StoryEmbeddingModelID
+        * * Display Name: Embedding Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Which AI model produced StoryVector, so a later re-embedding can tell whether the corpus is still in one vector space.`),
+    ContentHash: z.string().nullable().describe(`
+        * * Field Name: ContentHash
+        * * Display Name: Content Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Hash of the claim's identity (signal + target + evidence type), so a retrain that re-measures the SAME relationship supersedes the prior finding instead of accumulating a near-duplicate beside it.`),
+    SupersededByID: z.string().nullable().describe(`
+        * * Field Name: SupersededByID
+        * * Display Name: Superseded By
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Findings (vwMLFindings.ID)
+        * * Description: The newer measurement of this same relationship. Set when a retrain re-measures it; the old row stays, dated, so the chain shows how the relationship moved rather than only where it ended up.`),
+    Status: z.union([z.literal('Active'), z.literal('Retracted'), z.literal('Superseded')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Retracted
+    *   * Superseded
+        * * Description: Active (the current measurement), Superseded (a newer one exists — kept for the historical chain), or Retracted (found to be wrong; kept deliberately, because a retracted finding someone already acted on is itself worth knowing about).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Component: z.string().nullable().describe(`
+        * * Field Name: Component
+        * * Display Name: Component Name
+        * * SQL Data Type: nvarchar(255)`),
+    StoryEmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: StoryEmbeddingModel
+        * * Display Name: Embedding Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    SupersededBy: z.string().nullable().describe(`
+        * * Field Name: SupersededBy
+        * * Display Name: Superseded By Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLFindingEntityType = z.infer<typeof MJMLFindingSchema>;
+
+/**
  * zod schema definition for the entity MJ: ML Model Scoring Bindings
  */
 export const MJMLModelScoringBindingSchema = z.object({
@@ -24211,7 +24382,7 @@ export const MJMLModelSchema = z.object({
         * * Display Name: Target Variable
         * * SQL Data Type: nvarchar(500)
         * * Description: The label this model predicts`),
-    ProblemType: z.union([z.literal('classification'), z.literal('regression')]).describe(`
+    ProblemType: z.union([z.literal('classification'), z.literal('regression'), z.literal('sequence')]).describe(`
         * * Field Name: ProblemType
         * * Display Name: Problem Type
         * * SQL Data Type: nvarchar(20)
@@ -24219,6 +24390,7 @@ export const MJMLModelSchema = z.object({
     * * Possible Values 
     *   * classification
     *   * regression
+    *   * sequence
         * * Description: Problem type: classification or regression`),
     Metrics: z.string().nullable().describe(`
         * * Field Name: Metrics
@@ -24350,7 +24522,7 @@ export const MJMLTrainingPipelineSchema = z.object({
         * * Display Name: Target Variable
         * * SQL Data Type: nvarchar(500)
         * * Description: The label being predicted — a column or expression on the target entity (e.g., "Renewed")`),
-    ProblemType: z.union([z.literal('classification'), z.literal('regression')]).describe(`
+    ProblemType: z.union([z.literal('classification'), z.literal('regression'), z.literal('sequence')]).describe(`
         * * Field Name: ProblemType
         * * Display Name: Problem Type
         * * SQL Data Type: nvarchar(20)
@@ -24358,6 +24530,7 @@ export const MJMLTrainingPipelineSchema = z.object({
     * * Possible Values 
     *   * classification
     *   * regression
+    *   * sequence
         * * Description: Problem type: classification or regression`),
     AlgorithmID: z.string().describe(`
         * * Field Name: AlgorithmID
@@ -25870,7 +26043,7 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     SQL: z.string().nullable().describe(`
         * * Field Name: SQL
-        * * Display Name: SQL
+        * * Display Name: SQL Query
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The actual SQL query text to execute, may include parameters.`),
     TechnicalDescription: z.string().nullable().describe(`
@@ -25955,7 +26128,7 @@ export const MJQuerySchema = z.object({
         * * Description: Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis`),
     EmbeddingModelID: z.string().nullable().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.`),
@@ -25966,20 +26139,20 @@ export const MJQuerySchema = z.object({
         * * Description: SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`),
     SQLDialectID: z.string().describe(`
         * * Field Name: SQLDialectID
-        * * Display Name: SQL Dialect
+        * * Display Name: SQL Dialect ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
         * * Default Value: 1F203987-A37B-4BC1-85B3-BA50DC33C3E0
         * * Description: The SQL dialect that the SQL column is written in. Defaults to T-SQL for backward compatibility.`),
     Reusable: z.boolean().describe(`
         * * Field Name: Reusable
-        * * Display Name: Is Reusable
+        * * Display Name: Reusable
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this query can be referenced by other queries using composition syntax. Only queries that are both Reusable and Approved can be composed into other queries.`),
     ExternalDataSourceID: z.string().nullable().describe(`
         * * Field Name: ExternalDataSourceID
-        * * Display Name: External Data Source ID
+        * * Display Name: External Data Source
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)`),
     IsMaterialized: z.boolean().describe(`
@@ -25988,21 +26161,26 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Author's declared intent that this Query should be materialized. CodeGen scans for IsMaterialized = 1 and, if the query qualifies (§9/§10), materializes it. The authoritative state lives on the linked MJ: Materialized Results row (found via the MaterializedResultQuery join table).`),
+    DefaultEnrichment: z.string().nullable().describe(`
+        * * Field Name: DefaultEnrichment
+        * * Display Name: Default Enrichment
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Enrichment applied to this query's results when the caller supplies none, as JSON matching RunQueryEnrichment: { "EnricherKey": "<ClassFactory key>", "Config": { ... } }. A runtime Enrichment argument takes precedence. Lets a saved query return model predictions as extra columns without the caller knowing an enricher exists.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
         * * SQL Data Type: nvarchar(50)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model Name
+        * * Display Name: Embedding Model
         * * SQL Data Type: nvarchar(50)`),
     SQLDialect: z.string().describe(`
         * * Field Name: SQLDialect
-        * * Display Name: SQL Dialect Name
+        * * Display Name: SQL Dialect
         * * SQL Data Type: nvarchar(100)`),
     ExternalDataSource: z.string().nullable().describe(`
         * * Field Name: ExternalDataSource
-        * * Display Name: External Data Source
+        * * Display Name: External Data Source Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -51278,10 +51456,11 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     /**
     * * Field Name: PriceTypeID
     * * Display Name: Price Type
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
     * * Default Value: ECE2BCB7-C854-4BF7-A517-D72793A40652
-    * * Description: DEPRECATED — descriptive only. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained because the column is NOT NULL and referenced by shipped configurations; do not populate it for new cost rows.
+    * * Description: DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.
     */
     get PriceTypeID(): string {
         return this.Get('PriceTypeID');
@@ -97557,12 +97736,13 @@ export class MJMLAlgorithmUseCaseEntity extends BaseEntity<MJMLAlgorithmUseCaseE
     *   * any
     *   * classification
     *   * regression
+    *   * sequence
     * * Description: Which problem type this scenario applies to: classification, regression, or any
     */
-    get ProblemTypeScope(): 'any' | 'classification' | 'regression' {
+    get ProblemTypeScope(): 'any' | 'classification' | 'regression' | 'sequence' {
         return this.Get('ProblemTypeScope');
     }
-    set ProblemTypeScope(value: 'any' | 'classification' | 'regression') {
+    set ProblemTypeScope(value: 'any' | 'classification' | 'regression' | 'sequence') {
         this.Set('ProblemTypeScope', value);
     }
 
@@ -99296,6 +99476,456 @@ export class MJMLComponentEntity extends BaseEntity<MJMLComponentEntityType> {
 
 
 /**
+ * MJ: ML Findings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLFinding
+ * * Base View: vwMLFindings
+ * * @description A dated, measured fact this organization has learned about itself — the durable residue of modeling. A model is perishable (retrained, replaced, retired); what it LEARNED is not, and belongs to the business rather than to the artifact that measured it. Findings are written when a model is promoted, from its measured importances and coefficients, and are SUPERSEDED rather than updated so the record shows a lever shifting over time instead of only its latest value. Story/StoryVector make them searchable by meaning exactly as MJ: ML Components are, so "what have we learned about lapsing?" is a vector query rather than a report someone has to write. EXAMPLE: "Committee membership is associated with 31% lower lapse risk" — EvidenceType Observed Association, Direction Decreases, Magnitude 0.31, measured out-of-sample on 2,180 members.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Findings')
+export class MJMLFindingEntity extends BaseEntity<MJMLFindingEntityType> {
+    /**
+    * Loads the MJ: ML Findings record from the database
+    * @param ID: string - primary key value to load the MJ: ML Findings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLFindingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: ML Findings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Evidence: If evidence is provided, it must be a valid JSON-formatted string to ensure data integrity.
+    * * PopulationSize: If a population size is specified, it must be a positive number greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEvidenceIsJson(result);
+        this.ValidatePopulationSizeGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If evidence is provided, it must be a valid JSON-formatted string to ensure data integrity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEvidenceIsJson(result: ValidationResult) {
+    	if (this.Evidence !== null && this.Evidence !== undefined && this.Evidence.trim() !== "") {
+    		try {
+    			JSON.parse(this.Evidence);
+    		} catch (e) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Evidence",
+    				"The Evidence field must be a valid JSON string.",
+    				this.Evidence,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If a population size is specified, it must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePopulationSizeGreaterThanZero(result: ValidationResult) {
+    	if (this.PopulationSize != null && this.PopulationSize <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"PopulationSize",
+    			"Population size must be greater than zero.",
+    			this.PopulationSize,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Short label naming the relationship, for lists and citations (e.g. "Committee membership and lapse risk"). The full claim lives in Statement.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Statement
+    * * Display Name: Statement
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The claim in one plain sentence, written so it can be quoted verbatim into a board paper or an agent's answer without further interpretation. Must carry its own hedging: an association says "is associated with", never "causes".
+    */
+    get Statement(): string {
+        return this.Get('Statement');
+    }
+    set Statement(value: string) {
+        this.Set('Statement', value);
+    }
+
+    /**
+    * * Field Name: MLModelID
+    * * Display Name: ML Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The model whose promotion produced this measurement. NULL for a finding recorded independently of any model (an operator's asserted domain fact, or one carried over from an external study).
+    */
+    get MLModelID(): string | null {
+        return this.Get('MLModelID');
+    }
+    set MLModelID(value: string | null) {
+        this.Set('MLModelID', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Components (vwMLComponents.ID)
+    * * Description: The signal (MJ: ML Components row) this finding is about — the measure whose contribution was quantified. This is what lets a finding be re-tested later: the signal is executable, so the same measurement can be repeated on new data.
+    */
+    get ComponentID(): string | null {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string | null) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: TargetVariable
+    * * Display Name: Target Variable
+    * * SQL Data Type: nvarchar(255)
+    * * Description: What the finding is a claim ABOUT — the outcome the relationship was measured against (e.g. "Renewed", "Lapsed", "DonationAmount"). Denormalized from the model so a finding stays legible after the model is archived.
+    */
+    get TargetVariable(): string | null {
+        return this.Get('TargetVariable');
+    }
+    set TargetVariable(value: string | null) {
+        this.Set('TargetVariable', value);
+    }
+
+    /**
+    * * Field Name: EvidenceType
+    * * Display Name: Evidence Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Asserted
+    *   * Descriptive
+    *   * Observed Association
+    *   * Predictive Contribution
+    *   * Tested Intervention
+    * * Description: THE EPISTEMIC STATUS, and the most important column here. Observed Association = the two move together in the data. Predictive Contribution = this input measurably improved out-of-sample prediction (a stronger statement about usefulness, still not about cause). Tested Intervention = something was deliberately changed and the effect measured — the only kind that supports "if we do X, Y follows". Descriptive = a stated property of the population, no relationship claimed. Asserted = a human recorded it without measurement here. An agent citing a finding must not flatten these into one voice, which is exactly what it will do if the distinction is not on the record.
+    */
+    get EvidenceType(): 'Asserted' | 'Descriptive' | 'Observed Association' | 'Predictive Contribution' | 'Tested Intervention' {
+        return this.Get('EvidenceType');
+    }
+    set EvidenceType(value: 'Asserted' | 'Descriptive' | 'Observed Association' | 'Predictive Contribution' | 'Tested Intervention') {
+        this.Set('EvidenceType', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Unknown
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Decreases
+    *   * Increases
+    *   * Mixed
+    *   * None
+    *   * Unknown
+    * * Description: Which way the relationship runs with respect to TargetVariable: Increases, Decreases, Mixed (non-monotonic — more is better up to a point), None (measured and found not to matter, worth keeping so the next person does not re-test it), or Unknown.
+    */
+    get Direction(): 'Decreases' | 'Increases' | 'Mixed' | 'None' | 'Unknown' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Decreases' | 'Increases' | 'Mixed' | 'None' | 'Unknown') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: Magnitude
+    * * Display Name: Magnitude
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: How large the effect is, in the units named by MagnitudeUnit. NULL when the finding is directional only — an honest NULL beats a number nobody can interpret.
+    */
+    get Magnitude(): number | null {
+        return this.Get('Magnitude');
+    }
+    set Magnitude(value: number | null) {
+        this.Set('Magnitude', value);
+    }
+
+    /**
+    * * Field Name: MagnitudeUnit
+    * * Display Name: Magnitude Unit
+    * * SQL Data Type: nvarchar(50)
+    * * Description: What Magnitude is measured in, so a number is never read in the wrong scale: "probability", "percent", "ratio", "odds ratio", "days", "importance share", or a domain unit. Required whenever Magnitude is present.
+    */
+    get MagnitudeUnit(): string | null {
+        return this.Get('MagnitudeUnit');
+    }
+    set MagnitudeUnit(value: string | null) {
+        this.Set('MagnitudeUnit', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * High
+    *   * Low
+    *   * Moderate
+    * * Description: How much weight to put on this finding — Low, Moderate or High — reflecting population size, out-of-sample performance and how directly the effect was measured. Deliberately coarse: a spurious decimal here would invite false precision about something that is a judgment.
+    */
+    get Confidence(): 'High' | 'Low' | 'Moderate' | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: 'High' | 'Low' | 'Moderate' | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: MeasuredAt
+    * * Display Name: Measured At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the measurement was taken. A finding without a date is not citable — the business changes, and a 2024 relationship is evidence about 2024. Ordering by this column over a chain of superseded findings is how a lever's movement becomes visible.
+    */
+    get MeasuredAt(): Date {
+        return this.Get('MeasuredAt');
+    }
+    set MeasuredAt(value: Date) {
+        this.Set('MeasuredAt', value);
+    }
+
+    /**
+    * * Field Name: PopulationSize
+    * * Display Name: Population Size
+    * * SQL Data Type: int
+    * * Description: How many records the measurement rested on. The difference between a finding worth acting on and one worth re-testing is usually this number.
+    */
+    get PopulationSize(): number | null {
+        return this.Get('PopulationSize');
+    }
+    set PopulationSize(value: number | null) {
+        this.Set('PopulationSize', value);
+    }
+
+    /**
+    * * Field Name: HoldoutMetric
+    * * Display Name: Holdout Metric
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Which out-of-sample metric backs this finding (e.g. "auc", "r2", "accuracy") — named rather than assumed, because the same number means different things across problem types.
+    */
+    get HoldoutMetric(): string | null {
+        return this.Get('HoldoutMetric');
+    }
+    set HoldoutMetric(value: string | null) {
+        this.Set('HoldoutMetric', value);
+    }
+
+    /**
+    * * Field Name: HoldoutMetricValue
+    * * Display Name: Holdout Metric Value
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: The value of HoldoutMetric on the LOCKED holdout — data the model never saw. This is what separates a finding from a story: the relationship held on records that played no part in discovering it.
+    */
+    get HoldoutMetricValue(): number | null {
+        return this.Get('HoldoutMetricValue');
+    }
+    set HoldoutMetricValue(value: number | null) {
+        this.Set('HoldoutMetricValue', value);
+    }
+
+    /**
+    * * Field Name: Evidence
+    * * Display Name: Evidence
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The numbers behind the claim, as JSON — importance share, coefficient, the holdout metric set, the assembly window, whatever the writer had. Kept so a skeptical reader can check the arithmetic rather than take the sentence on trust.
+    */
+    get Evidence(): string | null {
+        return this.Get('Evidence');
+    }
+    set Evidence(value: string | null) {
+        this.Set('Evidence', value);
+    }
+
+    /**
+    * * Field Name: Story
+    * * Display Name: Story
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The finding in business language — what it means and what someone might do about it — written at promotion time. This is the text that gets embedded, so it is what a meaning search actually matches against.
+    */
+    get Story(): string | null {
+        return this.Get('Story');
+    }
+    set Story(value: string | null) {
+        this.Set('Story', value);
+    }
+
+    /**
+    * * Field Name: StoryVector
+    * * Display Name: Story Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Embedding vector of Story (JSON float array), for similarity search over what the organization has learned. Written by the entity server on save when Story changes, using the same local model that embeds component stories — a vector from a different model produces distances that look like numbers and mean nothing.
+    */
+    get StoryVector(): string | null {
+        return this.Get('StoryVector');
+    }
+    set StoryVector(value: string | null) {
+        this.Set('StoryVector', value);
+    }
+
+    /**
+    * * Field Name: StoryEmbeddingModelID
+    * * Display Name: Embedding Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Which AI model produced StoryVector, so a later re-embedding can tell whether the corpus is still in one vector space.
+    */
+    get StoryEmbeddingModelID(): string | null {
+        return this.Get('StoryEmbeddingModelID');
+    }
+    set StoryEmbeddingModelID(value: string | null) {
+        this.Set('StoryEmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: ContentHash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Hash of the claim's identity (signal + target + evidence type), so a retrain that re-measures the SAME relationship supersedes the prior finding instead of accumulating a near-duplicate beside it.
+    */
+    get ContentHash(): string | null {
+        return this.Get('ContentHash');
+    }
+    set ContentHash(value: string | null) {
+        this.Set('ContentHash', value);
+    }
+
+    /**
+    * * Field Name: SupersededByID
+    * * Display Name: Superseded By
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Findings (vwMLFindings.ID)
+    * * Description: The newer measurement of this same relationship. Set when a retrain re-measures it; the old row stays, dated, so the chain shows how the relationship moved rather than only where it ended up.
+    */
+    get SupersededByID(): string | null {
+        return this.Get('SupersededByID');
+    }
+    set SupersededByID(value: string | null) {
+        this.Set('SupersededByID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Retracted
+    *   * Superseded
+    * * Description: Active (the current measurement), Superseded (a newer one exists — kept for the historical chain), or Retracted (found to be wrong; kept deliberately, because a retracted finding someone already acted on is itself worth knowing about).
+    */
+    get Status(): 'Active' | 'Retracted' | 'Superseded' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Retracted' | 'Superseded') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Component(): string | null {
+        return this.Get('Component');
+    }
+
+    /**
+    * * Field Name: StoryEmbeddingModel
+    * * Display Name: Embedding Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get StoryEmbeddingModel(): string | null {
+        return this.Get('StoryEmbeddingModel');
+    }
+
+    /**
+    * * Field Name: SupersededBy
+    * * Display Name: Superseded By Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SupersededBy(): string | null {
+        return this.Get('SupersededBy');
+    }
+}
+
+
+/**
  * MJ: ML Model Scoring Bindings - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: MLModelScoringBinding
@@ -99637,12 +100267,13 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     * * Possible Values 
     *   * classification
     *   * regression
+    *   * sequence
     * * Description: Problem type: classification or regression
     */
-    get ProblemType(): 'classification' | 'regression' {
+    get ProblemType(): 'classification' | 'regression' | 'sequence' {
         return this.Get('ProblemType');
     }
-    set ProblemType(value: 'classification' | 'regression') {
+    set ProblemType(value: 'classification' | 'regression' | 'sequence') {
         this.Set('ProblemType', value);
     }
 
@@ -99966,12 +100597,13 @@ export class MJMLTrainingPipelineEntity extends BaseEntity<MJMLTrainingPipelineE
     * * Possible Values 
     *   * classification
     *   * regression
+    *   * sequence
     * * Description: Problem type: classification or regression
     */
-    get ProblemType(): 'classification' | 'regression' {
+    get ProblemType(): 'classification' | 'regression' | 'sequence' {
         return this.Get('ProblemType');
     }
-    set ProblemType(value: 'classification' | 'regression') {
+    set ProblemType(value: 'classification' | 'regression' | 'sequence') {
         this.Set('ProblemType', value);
     }
 
@@ -103792,6 +104424,42 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Queries entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DefaultEnrichment: If a default enrichment value is provided, it must be a valid JSON string to ensure it can be correctly parsed and processed by the system.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDefaultEnrichmentIsJson(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If a default enrichment value is provided, it must be a valid JSON string to ensure it can be correctly parsed and processed by the system.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateDefaultEnrichmentIsJson(result: ValidationResult) {
+    		if (this.DefaultEnrichment != null && this.DefaultEnrichment.trim() !== "") {
+    			try {
+    				JSON.parse(this.DefaultEnrichment);
+    			} catch (e) {
+    				result.Errors.push(new ValidationErrorInfo(
+    					"DefaultEnrichment",
+    					"Default Enrichment must be a valid JSON string.",
+    					this.DefaultEnrichment,
+    					ValidationErrorType.Failure
+    				));
+    			}
+    		}
+    	}
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -103856,7 +104524,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: SQL
-    * * Display Name: SQL
+    * * Display Name: SQL Query
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The actual SQL query text to execute, may include parameters.
     */
@@ -104055,7 +104723,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.
@@ -104082,7 +104750,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: SQLDialectID
-    * * Display Name: SQL Dialect
+    * * Display Name: SQL Dialect ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: SQL Dialects (vwSQLDialects.ID)
     * * Default Value: 1F203987-A37B-4BC1-85B3-BA50DC33C3E0
@@ -104097,7 +104765,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: Reusable
-    * * Display Name: Is Reusable
+    * * Display Name: Reusable
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, this query can be referenced by other queries using composition syntax. Only queries that are both Reusable and Approved can be composed into other queries.
@@ -104111,7 +104779,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: ExternalDataSourceID
-    * * Display Name: External Data Source ID
+    * * Display Name: External Data Source
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)
     */
@@ -104137,6 +104805,19 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: DefaultEnrichment
+    * * Display Name: Default Enrichment
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Enrichment applied to this query's results when the caller supplies none, as JSON matching RunQueryEnrichment: { "EnricherKey": "<ClassFactory key>", "Config": { ... } }. A runtime Enrichment argument takes precedence. Lets a saved query return model predictions as extra columns without the caller knowing an enricher exists.
+    */
+    get DefaultEnrichment(): string | null {
+        return this.Get('DefaultEnrichment');
+    }
+    set DefaultEnrichment(value: string | null) {
+        this.Set('DefaultEnrichment', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -104147,7 +104828,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model Name
+    * * Display Name: Embedding Model
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
@@ -104156,7 +104837,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: SQLDialect
-    * * Display Name: SQL Dialect Name
+    * * Display Name: SQL Dialect
     * * SQL Data Type: nvarchar(100)
     */
     get SQLDialect(): string {
@@ -104165,7 +104846,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: ExternalDataSource
-    * * Display Name: External Data Source
+    * * Display Name: External Data Source Name
     * * SQL Data Type: nvarchar(100)
     */
     get ExternalDataSource(): string | null {

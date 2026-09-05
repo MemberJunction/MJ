@@ -93,6 +93,35 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Ownership & Access Section -->
+    <mj-collapsible-panel
+        SectionKey="ownershipAccess"
+        SectionName="Ownership & Access"
+        Icon="fa fa-user"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="OwnerID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -124,25 +153,6 @@
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Ownership & Access Section -->
-    <mj-collapsible-panel
-        SectionKey="ownershipAccess"
-        SectionName="Ownership & Access"
-        Icon="fa fa-user"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="OwnerID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>

@@ -123,6 +123,48 @@
             "lastModified": "2026-07-01T17:33:47.491Z",
             "checksum": "9c73345bcf5686928dd3bd765f997e0d38b7feb983d0824b22d253bc425dd1e1"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Browse ML Component Tree",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7A5BD248-9CB6-4938-BBD1-9278DE3FE48E"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T03:17:52.706Z",
+            "checksum": "bde45c39cdae39dfd9d5fe95bb4ebfeb7c89a4f9c782d35c98a42110e0b9a9f7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Reusable Components",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D2EA7173-4382-4088-B4A4-1DDFFB61B83E"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T03:17:52.726Z",
+            "checksum": "10aec74f3386b99444ff4b1039278a8734257d2e3020c5ef67b7c09dc7ab1cbe"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Validate Component Graph",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F0D6714B-D099-4A11-9EA5-CAD4ADC69D79"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T03:17:52.740Z",
+            "checksum": "68383cfeec95cf8cdb83e8c1cdb04cbbe8d26f3cb1c5a0a1b6e904a120db6df3"
+          }
         }
       ],
       "MJ: AI Agents": [
@@ -352,6 +394,111 @@
                   "ID": "479EBDDA-5FE0-4244-8682-A55C0F4194E2"
                 }
               }
+            ],
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "COMPONENT_TREE",
+                  "Description": "The component-type catalog the Architect must name its ComponentTypeRefs from. Without this the Architect invents type names from memory and its graph fails validation for referencing types that do not exist. Kind partitions the space (Model, Preprocessing, Statistic, Input, Output, Parameter, Structure); IsAbstract marks organizing nodes that carry inherited properties but cannot be instantiated; ParentID gives the inheritance chain a leaf's real capabilities come from.",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: ML Component Types",
+                  "ExtraFilter": "Status = 'Published'",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "Kind",
+                    "ParentID",
+                    "IsAbstract",
+                    "Trainable",
+                    "DriverClass",
+                    "Description",
+                    "Story"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "F0D8B5DD-2C8C-4EA0-8F1F-8D1587DC7C84"
+                },
+                "sync": {
+                  "lastModified": "2026-09-04T03:17:53.443Z",
+                  "checksum": "146e8466b812ee1700fe2b3480f136864f5c78d43f00f3d351b3673e6ef45a4c"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "COMPONENT_SLOTS",
+                  "Description": "The fillable positions each component type declares — what makes a compose decision possible. A Structure's slots say what it accepts and how many (a Bagging Wrapper's base_estimator, a Stacking Wrapper's estimators and final_estimator, a Glass-Box Rubric's weights). A composed graph is validated against exactly these, so an Architect that cannot see them is guessing at the shape it is being graded on.",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: ML Component Type Slots",
+                  "ExtraFilter": "",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "ComponentTypeID",
+                    "Name",
+                    "Description",
+                    "AcceptsComponentTypeID",
+                    "MinCount",
+                    "MaxCount"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 2,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "4527EAFB-371D-4C14-AC91-C89147947FD6"
+                },
+                "sync": {
+                  "lastModified": "2026-09-04T03:17:53.534Z",
+                  "checksum": "ba5ff53487ff667568fb665a84ae345b5a4c01493c420c45a033c02a576cd994"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "REUSABLE_COMPONENTS",
+                  "Description": "Trained components from earlier models that are approved for reuse — each with the story describing what it learned. This is what makes ReuseInstanceID usable: a component here can be dropped into a slot as a FROZEN child, carrying its fitted state, so a new model inherits a proven relationship instead of re-learning it. Only components whose fitted artifact can actually be loaded appear here — offering one that cannot be frozen would fail at train time, after the Architect had already built a decision around it. Never invent an ID; a ReuseInstanceID not on this list will fail when its artifact cannot be loaded.",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: ML Components",
+                  "ExtraFilter": "PromotionState = 'Approved' AND IsTrained = 1 AND ArtifactFileID IS NOT NULL",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "ComponentType",
+                    "ComponentTypeID",
+                    "Story",
+                    "MLModelID"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 3,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "D2BA0E5B-A413-46A8-8BC9-37EC497A0A7B"
+                },
+                "sync": {
+                  "lastModified": "2026-09-04T03:21:44.671Z",
+                  "checksum": "f0c9d4e767ccc1364fde788ff773066bf49efe6cb1c8b2daec4f571b7366511f"
+                }
+              }
             ]
           }
         },
@@ -402,8 +549,8 @@
             "ID": "58A39329-BA57-4F1B-A93A-65596E552C1C"
           },
           "sync": {
-            "lastModified": "2026-07-01T17:33:47.560Z",
-            "checksum": "5ff947d921704866d0a4cdc44cfd962916a64a24655d8236dde54b8808a28f3d"
+            "lastModified": "2026-09-03T21:46:30.801Z",
+            "checksum": "a9ff6cb84cf714b4f3659e7bc5f412ba00e3f65a85a9232a3a4c8b3df6951139"
           }
         },
         {
@@ -431,8 +578,8 @@
             "ID": "3EF80176-DEEF-492B-97BF-B889DD404B64"
           },
           "sync": {
-            "lastModified": "2026-07-01T17:33:47.594Z",
-            "checksum": "f12f183d8a2905018ac31dba530f7f7d582c94420d37dc5ad137578f1015579c"
+            "lastModified": "2026-09-03T21:46:30.801Z",
+            "checksum": "dcec797bdee22ed7a2bcf532dd567a911307fd353ad39df25f640b81325c094e"
           }
         }
       ]

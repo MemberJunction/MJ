@@ -114,6 +114,10 @@
     },
     "primaryKey": {
       "ID": "DF2120D5-A722-5C5A-86A2-3D5CC20AE54C"
+    },
+    "sync": {
+      "lastModified": "2026-09-02T21:12:05.866Z",
+      "checksum": "ab705b753b6e8fc29f3d7b8aed9758c8370c52ca7d96a2d1e2f16278a85d0670"
     }
   },
   {
@@ -301,6 +305,27 @@
     },
     "primaryKey": {
       "ID": "B8DFEFD4-F521-569D-8EC9-D4A66695F551"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Forecast",
+      "Kind": "Input",
+      "Description": "A time-series foundation model (TimesFM) used as a feature extractor: the record's own history, bucketed and cut at the as-of date, becomes a forecast band — p50/p10/p90 at the horizon plus the slope from the last observed value. Zero-shot, so nothing is fitted; the model is CALLED, which is why it is an MJ: AI Models capability and not an algorithm row.",
+      "Story": "Where this is heading, with an honest range around it. A trend line says one number; this says a band, learned from a billion time points rather than fitted to the last few. It refuses series shorter than the model's 32-step input patch, because below that it would still answer confidently and the answer would be noise.",
+      "IsAbstract": false,
+      "Trainable": false,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Input",
+      "DriverClass": "forecast"
+    },
+    "primaryKey": {
+      "ID": "6E0B9C4A-5D31-4C77-9C42-8A1F0D7E33B5"
+    },
+    "sync": {
+      "lastModified": "2026-09-02T23:21:27.462Z",
+      "checksum": "d9d634522fce42e0b8886da00110e043d067abcfb0505f2dd996ab8c6c176db2"
     }
   }
 ]

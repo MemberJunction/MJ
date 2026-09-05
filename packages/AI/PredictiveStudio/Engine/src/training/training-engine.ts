@@ -206,7 +206,14 @@ export class TrainingEngine {
           componentGraph: resolved.componentGraph ?? undefined,
           componentStates: response.component_states,
         },
-        { entityFactory: deps.entityFactory, contextUser: deps.contextUser },
+        {
+          entityFactory: deps.entityFactory,
+          contextUser: deps.contextUser,
+          // The same store the model artifact goes to. Without it a composed model's sub-components
+          // are catalogued but cannot be frozen into another model — the finer-grained half of
+          // reuse would silently never work.
+          artifactStore: deps.artifactStore,
+        },
         deps.provider,
       );
       for (const w of result.Warnings) {
