@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 import {
     DatabaseProviderBase,
     SaveSQLResult,
@@ -20,7 +20,7 @@ vi.mock('sql-formatter', () => ({
 /**
  * Concrete test subclass with mocked SQL execution for dataset caching tests.
  */
-class TestProvider extends GenericDatabaseProvider {
+class TestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 

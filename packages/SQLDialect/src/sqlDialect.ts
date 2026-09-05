@@ -917,4 +917,25 @@ export abstract class SQLDialect implements SQLParserDialect {
      * PostgreSQL: CASE WHEN condition THEN trueVal ELSE falseVal END
      */
     abstract IIF(condition: string, trueVal: string, falseVal: string): string;
+
+    // ─── Nested transactions (savepoints) ────────────────────────────
+
+    /**
+     * SQL that marks a nested transaction savepoint. SQL Server:
+     * `SAVE TRANSACTION name`. PostgreSQL: `SAVEPOINT name`.
+     */
+    abstract CreateSavepointSQL(name: string): string;
+
+    /**
+     * SQL that discards a savepoint after a nested commit, or `null` when the
+     * platform has no release (SQL Server savepoints live until the outer TX
+     * ends). PostgreSQL: `RELEASE SAVEPOINT name`.
+     */
+    abstract ReleaseSavepointSQL(name: string): string | null;
+
+    /**
+     * SQL that undoes work after a savepoint. SQL Server:
+     * `ROLLBACK TRANSACTION name`. PostgreSQL: `ROLLBACK TO SAVEPOINT name`.
+     */
+    abstract RollbackToSavepointSQL(name: string): string;
 }
