@@ -222,7 +222,7 @@ an `Application Role` record (metadata) so the app is reachable, and ensure the
 ### Step 4 — Push
 
 ```bash
-npx mj sync push --dir=metadata --include="roles,entity-permissions,application-roles"
+pnpm mj sync push --dir=metadata --include="roles,entity-permissions,application-roles"
 ```
 
 That's the whole scenario, version-controlled. To add another (say `Auditor` with

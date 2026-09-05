@@ -54,6 +54,10 @@ on:
       # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
       # "matches zero and therefore passes everything" is the precise regression to catch.
       - '.github/scripts/check-codegen-tail.mjs'
+      # Same trap again for the MJ CLI resolution guard (guards job). It is what keeps the
+      # root-bin removal from silently breaking manifest regeneration, so a PR weakening the
+      # guard must run it.
+      - '.github/scripts/check-mj-cli-resolution.mjs'
       # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
       # remote-cache configuration"), and its own suite lives in __tests__ above.
       - '.github/scripts/check-turbo-cache-env.mjs'
@@ -170,6 +174,16 @@ jobs:
       - name: Explorer DOM coverage gate
         if: ${{ !cancelled() }}
         run: node scripts/classify-explorer-components.mjs --min 85
+
+      # Bare-`mj` resolution guard. Removing the three root `workspace:*` devDeps (see root
+      # package.json) also removes the workspace-root node_modules/.bin/mj that several package
+      # scripts resolved bare `mj` through. Those call sites are prebuild/postbuild hooks ending
+      # in `|| echo 'Warning: ...'`, so a lost CLI exits 0 and the build silently proceeds
+      # against a STALE class-registration manifest — and the manifest freshness gate runs only
+      # on the FULL-suite path, so a PR run cannot catch it.
+      - name: MJ CLI resolution guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-mj-cli-resolution.mjs packages
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}

@@ -8380,6 +8380,16 @@ export const MJAISkillSchema = z.object({
     *   * Assigned
     *   * None
         * * Description: Which Search Scopes this skill may reach when activated. None = grants no retrieval scope; Assigned = only scopes listed in AISkillSearchScope; All = any active scope. NULL behaves as None so existing skills are unaffected. Mirrors AIAgent.SearchScopeAccess so a skill and an agent are interchangeable principals to SearchScopePermissionResolver.`),
+    ActivationScope: z.union([z.literal('Conversation'), z.literal('Run')]).describe(`
+        * * Field Name: ActivationScope
+        * * Display Name: Activation Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Run
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Conversation
+    *   * Run
+        * * Description: How long an activation lasts. Run (default): the skill is active for the run that activated it and no longer — a one-shot capability. Conversation: once activated in a run that belongs to a conversation, the skill stays active for that conversation (an MJ: Conversation Skills row, Status Active) and is re-requested at the start of every later root run there until ended — a persona, or a mode whose menu is pressed on the next turn. Subject to every availability gate on each run; ActivationMode still decides who may trigger the FIRST activation.`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
@@ -14614,6 +14624,74 @@ export const MJConversationDetailSchema = z.object({
 });
 
 export type MJConversationDetailEntityType = z.infer<typeof MJConversationDetailSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Conversation Skills
+ */
+export const MJConversationSkillSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationID: z.string().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+        * * Description: The conversation the skill is active in.`),
+    SkillID: z.string().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: The skill (AISkill.ActivationScope = Conversation) held active.`),
+    Status: z.union([z.literal('Active'), z.literal('Ended')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Ended
+        * * Description: Active: re-requested on every root run in the conversation. Ended: history — the mode was left; a later activation re-uses the row and sets it Active again.`),
+    ActivatedByRunID: z.string().nullable().describe(`
+        * * Field Name: ActivatedByRunID
+        * * Display Name: Activated By Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: The agent run in which the skill was (most recently) activated — provenance for the Active row.`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the mode was left. NULL while Active.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation Reference
+        * * SQL Data Type: nvarchar(255)`),
+    Skill: z.string().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill Name
+        * * SQL Data Type: nvarchar(255)`),
+    ActivatedByRun: z.string().nullable().describe(`
+        * * Field Name: ActivatedByRun
+        * * Display Name: Activated By Run Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJConversationSkillEntityType = z.infer<typeof MJConversationSkillSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Widget Instances
@@ -57391,6 +57469,24 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     }
 
     /**
+    * * Field Name: ActivationScope
+    * * Display Name: Activation Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Run
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Conversation
+    *   * Run
+    * * Description: How long an activation lasts. Run (default): the skill is active for the run that activated it and no longer — a one-shot capability. Conversation: once activated in a run that belongs to a conversation, the skill stays active for that conversation (an MJ: Conversation Skills row, Status Active) and is re-requested at the start of every later root run there until ended — a persona, or a mode whose menu is pressed on the next turn. Subject to every availability gate on each run; ActivationMode still decides who may trigger the FIRST activation.
+    */
+    get ActivationScope(): 'Conversation' | 'Run' {
+        return this.Get('ActivationScope');
+    }
+    set ActivationScope(value: 'Conversation' | 'Run') {
+        this.Set('ActivationScope', value);
+    }
+
+    /**
     * * Field Name: CreatedByUser
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
@@ -73982,6 +74078,171 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: Conversation Skills - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationSkill
+ * * Base View: vwConversationSkills
+ * * @description A skill that is, or was, active for a whole conversation. Written by BaseAgent when a skill whose ActivationScope is Conversation activates in a run that has a conversationId; Active rows are merged into requestedSkillIDs at the start of every later root run in the conversation (all availability gates still apply on each run), so a persona or a mode survives to the next turn. Ended when the app or the user leaves the mode (BaseAgent.EndConversationSkill / the composer). Precedent: UserRoutine.RequestedSkillIDs, the same idea keyed on a routine.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Skills')
+export class MJConversationSkillEntity extends BaseEntity<MJConversationSkillEntityType> {
+    /**
+    * Loads the MJ: Conversation Skills record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Skills record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJConversationSkillEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: The conversation the skill is active in.
+    */
+    get ConversationID(): string {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: The skill (AISkill.ActivationScope = Conversation) held active.
+    */
+    get SkillID(): string {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Ended
+    * * Description: Active: re-requested on every root run in the conversation. Ended: history — the mode was left; a later activation re-uses the row and sets it Active again.
+    */
+    get Status(): 'Active' | 'Ended' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Ended') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ActivatedByRunID
+    * * Display Name: Activated By Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: The agent run in which the skill was (most recently) activated — provenance for the Active row.
+    */
+    get ActivatedByRunID(): string | null {
+        return this.Get('ActivatedByRunID');
+    }
+    set ActivatedByRunID(value: string | null) {
+        this.Set('ActivatedByRunID', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the mode was left. NULL while Active.
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation Reference
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string {
+        return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: ActivatedByRun
+    * * Display Name: Activated By Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ActivatedByRun(): string | null {
+        return this.Get('ActivatedByRun');
     }
 }
 
