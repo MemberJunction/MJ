@@ -1,13 +1,20 @@
-/** Toolbar row (search + actions). */
+/**
+ * Toolbar row (search + actions, 48px as rendered) plus the four 1px borders around it and
+ * the grid: the grid container's top/bottom and AG Grid's root wrapper's top/bottom.
+ */
 export const RELATED_GRID_TOOLBAR_PX = 52;
-/** Column header row. */
-export const RELATED_GRID_HEADER_PX = 40;
+/**
+ * Column header row as AG Grid's theme renders it: `--ag-header-height` (48px in v35's
+ * default theme) + its 1px bottom border. This was 40px, which left every related grid
+ * 9px short and clipped the last row's bottom border even with no horizontal overflow.
+ */
+export const RELATED_GRID_HEADER_PX = 49;
 /** One data row. */
 export const RELATED_GRID_ROW_PX = 40;
 /** 4–5px so the last row's bottom border is not clipped by the grid edge. */
 export const RELATED_GRID_BOTTOM_PAD_PX = 5;
-/** Empty-state body when there are no rows (inline icon + title, no 200px floor). */
-export const RELATED_GRID_EMPTY_BODY_PX = 56;
+/** Empty-state body when there are no rows: the inline `mj-empty-state` (icon + title) as rendered, no 200px floor. */
+export const RELATED_GRID_EMPTY_BODY_PX = 57;
 /** Default cap for nav-related grids. `null` on the input means unbounded. */
 export const RELATED_GRID_DEFAULT_MAX_PX = 560;
 
