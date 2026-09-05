@@ -15,7 +15,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -2779,12 +2779,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
                   (!extendedType && (fieldNameLower.includes('url') ||
                                      fieldNameLower.includes('website') ||
                                      fieldNameLower.includes('link')));
-    // Photo/logo/avatar before generic URL — PhotoURL would otherwise render as a text link.
+    // Image cells key off ExtendedType (or a User View format override). Field-name
+    // heuristics (PhotoURL/LogoURL) are not used — those columns are classified as
+    // ExtendedType='Image' in metadata.
     const isImage = (customFormat?.type as string | undefined) === 'image' ||
-                    fieldNameLower.includes('photo') ||
-                    fieldNameLower.includes('logo') ||
-                    fieldNameLower.includes('avatar') ||
-                    fieldNameLower.includes('thumbnail');
+                    extendedType === 'image';
+    const isColor = extendedType === 'color';
     // Use ExtendedType='Tel' from metadata, fallback to field name pattern
     const isPhone = extendedType === 'tel' ||
                     (!extendedType && (fieldNameLower.includes('phone') ||
@@ -2848,14 +2848,31 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
       if (isImage) {
         const raw = String(params.value).trim();
-        if (this.looksLikeImageUrl(raw)) {
-          const url = this.normalizeHref(raw);
-          const escaped = HighlightUtil.escapeHtml(url);
+        const src = CoerceImageSrc(raw);
+        if (src) {
+          const escaped = HighlightUtil.escapeHtml(src);
+          const img = `<img src="${escaped}" alt="" class="cell-image" width="28" height="28" style="width:28px;height:28px;max-width:28px;max-height:28px;object-fit:cover;object-position:center;border-radius:50%;display:block" />`;
+          const inner = src.startsWith('data:')
+            ? img
+            : `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="cell-image-link" onclick="event.stopPropagation()">${img}</a>`;
           return this.wrapWithStyle(
-            `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="cell-image-link" onclick="event.stopPropagation()"><img src="${escaped}" alt="" class="cell-image" width="28" height="28" style="width:28px;height:28px;max-width:28px;max-height:28px;object-fit:cover;object-position:center;border-radius:50%;display:block" /></a>`,
+            inner,
             customFormat?.cellStyle ? this.buildCssStyle(customFormat.cellStyle) : '',
           );
         }
+      }
+
+      if (isColor) {
+        const raw = String(params.value).trim();
+        const hex = ParseCssHexColor(raw);
+        const escaped = HighlightUtil.escapeHtml(raw);
+        const swatch = hex
+          ? `<span style="width:14px;height:14px;border-radius:3px;background:${HighlightUtil.escapeHtml(hex)};border:1px solid rgba(0,0,0,.2);display:inline-block;flex-shrink:0"></span>`
+          : '';
+        return this.wrapWithStyle(
+          `<span style="display:inline-flex;align-items:center;gap:6px">${swatch}${escaped}</span>`,
+          customFormat?.cellStyle ? this.buildCssStyle(customFormat.cellStyle) : '',
+        );
       }
 
       // Handle foreign key fields - render as clickable links
@@ -3031,21 +3048,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return `<span style="${style}">${content}</span>`;
   }
 
-  private looksLikeImageUrl(value: string): boolean {
-    const v = value.trim().toLowerCase();
-    if (v.startsWith('data:image/')) return true;
-    if (!/^https?:\/\//.test(v) && !v.startsWith('/')) return false;
-    return /\.(png|jpe?g|gif|webp|svg|avif)(\?|$)/i.test(v) ||
-           v.includes('dicebear.com') ||
-           v.includes('/photo') ||
-           v.includes('avatar');
-  }
 
-  private normalizeHref(value: string): string {
-    const v = value.trim();
-    if (/^https?:\/\//i.test(v) || v.startsWith('data:') || v.startsWith('/')) return v;
-    return 'https://' + v;
-  }
 
   /**
    * Build a CSS style string from a ColumnTextStyle object

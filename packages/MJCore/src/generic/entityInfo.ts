@@ -21,13 +21,20 @@ import {
 
 /**
  * Valid values for EntityField.ExtendedType.
- * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL,
+ * inline image, CSS color, or JSON document).
+ *
+ * `Image` — the value is an image URL, a `data:image/...` URI, or raw image base64. UI surfaces
+ * render a thumbnail and (in edit mode) allow replacing it with an upload capped at the field's
+ * MaxLength.
+ * `Color` — the value is a CSS color (hex / rgb / hsl).
+ * `JSON` — the value is a JSON document; validated on save and pretty-printed in forms.
  */
 export type EntityFieldExtendedType =
-    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
+    | 'Code' | 'Color' | 'Email' | 'FaceTime' | 'Geo'
     | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
     | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
-    | 'HTML' | 'Icon' | 'Markdown'
+    | 'HTML' | 'Icon' | 'Image' | 'JSON' | 'Markdown'
     | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
 
 /**

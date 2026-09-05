@@ -3223,15 +3223,15 @@ export class ManageMetadataBase {
       // Load VE EntityField rows from DB (we need the ID and auto-update flags)
       const schema = mj_core_schema();
       const fieldsSQL = `
-         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, GeneratedFormSection, DisplayName, ExtendedType, CodeType
+         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, AutoUpdateExtendedType, GeneratedFormSection, DisplayName, ExtendedType, CodeType
          FROM ${this.qs(schema, 'EntityField')}
          WHERE EntityID = '${entity.ID}'
       `;
       const fieldsResult = await this.runQuery(pool, fieldsSQL);
       const dbFields = fieldsResult.recordset as Array<{
          ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; 
-         AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, 
-         ExtendedType: string, CodeType: string
+         AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; 
+         ExtendedType: string; CodeType: string
       }>;
 
       if (dbFields.length === 0) return false;
@@ -3399,8 +3399,8 @@ export class ManageMetadataBase {
          const escapedDescription = fd.description.replace(/'/g, "''");
          let setClauses = `Description='${escapedDescription}'`;
 
-         // Apply extended type if provided and valid
-         if (fd.extendedType) {
+         // Apply extended type if provided, valid, and the field is not locked
+         if (fd.extendedType && field.AutoUpdateExtendedType) {
             const validExtendedType = this.validateExtendedType(fd.extendedType);
             if (validExtendedType) {
                setClauses += `, ExtendedType='${validExtendedType}'`;
@@ -3424,8 +3424,9 @@ export class ManageMetadataBase {
     * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
     */
    private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>([
-      'Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
-      'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
+      'Code', 'Color', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+      'GeoCity', 'GeoPostalCode', 'GeoAddress', 'HTML', 'Icon', 'Image', 'JSON', 'Markdown',
+      'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
    ]);
 
    private static readonly EXTENDED_TYPE_ALIASES: Record<string, EntityFieldExtendedType> = {
@@ -3457,6 +3458,17 @@ export class ManageMetadataBase {
       'zoom': 'ZoomMtg',
       'whatsapp': 'WhatsApp',
       'skype': 'Skype',
+      'image': 'Image',
+      'photo': 'Image',
+      'picture': 'Image',
+      'logo': 'Image',
+      'avatar': 'Image',
+      'thumbnail': 'Image',
+      'color': 'Color',
+      'colour': 'Color',
+      'hex': 'Color',
+      'json': 'JSON',
+      'jsonb': 'JSON',
    };
 
    /**
@@ -6807,6 +6819,10 @@ export class ManageMetadataBase {
                ef.AutoUpdateIncludeInUserSearchAPI,
                ef.AutoUpdateCategory,
                ef.AutoUpdateDisplayName,
+               ef.AutoUpdateExtendedType,
+               ef.ExtendedType,
+               ef.CodeType,
+               ef.GeneratedFormSection,
                ef.EntityIDFieldName,
                ef.RelatedEntity,
                ef.IsVirtual,
@@ -7704,7 +7720,7 @@ export class ManageMetadataBase {
    protected async applyFormLayout(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string }>,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string; CodeType: string }>,
       result: FormLayoutResult,
       isNewEntity: boolean = false
    ): Promise<void> {
@@ -7845,7 +7861,7 @@ export class ManageMetadataBase {
    protected async applyFieldCategories(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string}>,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string; CodeType: string}>,
       fieldCategories: Array<{
          fieldName: string;
          category: string;
@@ -7893,9 +7909,14 @@ export class ManageMetadataBase {
                setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
             }
 
-            if (fieldCategory.extendedType !== undefined && field.ExtendedType !== fieldCategory.extendedType) {
-               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${String(fieldCategory.extendedType).replace(/'/g, "''")}'`;
-               setClauses.push(`ExtendedType = ${extendedType}`);
+            if (field.AutoUpdateExtendedType && fieldCategory.extendedType !== undefined && field.ExtendedType !== fieldCategory.extendedType) {
+               const valid = fieldCategory.extendedType == null
+                  ? null
+                  : this.validateExtendedType(String(fieldCategory.extendedType));
+               if (fieldCategory.extendedType == null || valid) {
+                  const extendedType = valid == null ? 'NULL' : `'${valid.replace(/'/g, "''")}'`;
+                  setClauses.push(`ExtendedType = ${extendedType}`);
+               }
             }
 
             if (fieldCategory.codeType !== undefined) {
