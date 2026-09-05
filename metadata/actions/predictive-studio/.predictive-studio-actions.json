@@ -1134,15 +1134,37 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "QueryText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "What you are looking for, in plain English — e.g. 'tells a real zero apart from missing data'. Embedded server-side with the same model that embedded the component stories, so the query and the catalogue are guaranteed to share a vector space. Supply this OR QueryVector."
+          },
+          "primaryKey": {
+            "ID": "7C1A5E88-0F42-4B96-B1D7-2E5A9C3F6D14"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T03:33:00.302Z",
+            "checksum": "b7c29ef5306ed483dbd5746187714ece0760af700a71f3f49c67ff52c9793828"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "QueryVector",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": true,
-            "IsRequired": true,
-            "Description": "The query embedding as a numeric array. MUST come from the same embedding model the component stories were embedded with — a vector from a different model produces distances that mean nothing."
+            "IsRequired": false,
+            "Description": "The query embedding as a numeric array. Optional: prefer QueryText and let the server embed. When supplied it MUST come from the same embedding model the component stories were embedded with — a vector from a different model produces distances that mean nothing."
           },
           "primaryKey": {
             "ID": "66B16134-B91F-448D-BA0E-24E128932D19"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T03:33:00.351Z",
+            "checksum": "75a4e44e4c6a1bd83bfb9e690c38895b13f0f93f1f0fe1408fd5aa2c4f5adff3"
           }
         },
         {
@@ -1424,6 +1446,828 @@
     },
     "primaryKey": {
       "ID": "C910B2B5-0B87-4F46-9CDC-8C15A4D61936"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Compute Signal",
+      "Description": "Compute ONE proven measure over a population — no model involved. Most business questions are measurements rather than predictions ('who has gone quiet since the conference?'), and running a whole model to answer one returns a probability where the asker wanted a number. Runs through the same feature-assembly path training uses, so the number matches what models were trained on. The optional binding parameters point a measure proven on one population at another: the signal's stored binding is a default, and anything supplied here replaces it while the meaning — the aggregate and its time window — stays fixed.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioComputeSignalAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-wave-square"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SignalID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The MJ: ML Components row to compute."
+          },
+          "primaryKey": {
+            "ID": "1B4E9C22-7A55-4F3E-9D18-6C2A0E7B4411"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:53.974Z",
+            "checksum": "ce9fea4dc0363e199ca01a85d0c26df8536d758f782dd14866d5b945f3fb2524"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetEntity",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Entity whose records are measured."
+          },
+          "primaryKey": {
+            "ID": "2C5F0D33-8B66-4A4F-8E29-7D3B1F8C5522"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.028Z",
+            "checksum": "ae5582a0783b72d7edcf2f9ddb7f357ee3bee6f3637d271d996ffb2c73a3e906"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Filter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional filter narrowing the population."
+          },
+          "primaryKey": {
+            "ID": "3D601E44-9C77-4B50-9F3A-8E4C209D6633"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.055Z",
+            "checksum": "cef5545dc4260b0e39788fca2eecffeeaa88dba522f9420c6d83659712d229e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Cap on records measured. Omitted measures the whole population."
+          },
+          "primaryKey": {
+            "ID": "4E712F55-AD88-4C61-A04B-9F5D310E7744"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.082Z",
+            "checksum": "3c940070678c3bbba4163d4faf58e9b6d1ce8b7a5bf7897ffea4595bc596837d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AsOfColumn",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Date column on the target entity. Each record's history is cut at ITS OWN value, which is what the signal was trained under. Omitted measures as of now."
+          },
+          "primaryKey": {
+            "ID": "5F823056-BE99-4D72-B15C-A06E421F8855"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.109Z",
+            "checksum": "e839a382c9089ca10dea376690b587460b87d0764b176eaf21ec3d455ca64fe4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceEntity",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Binding override: entity holding the dated rows."
+          },
+          "primaryKey": {
+            "ID": "60934167-CFAA-4E83-A26D-B17F53208966"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.133Z",
+            "checksum": "20d42766562a196c2136ad1e3f1768fb0b4f061e92662cf557d028a5e66b914d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ForeignKeyField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Binding override: column referencing the target record's primary key."
+          },
+          "primaryKey": {
+            "ID": "71A45278-D0BB-4F94-B37E-C2806431AA77"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.157Z",
+            "checksum": "c1409d14e4f27f517a057affe8e31c5ab9ad47018f105e4d49f97cfba60a74d6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DateField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Binding override: date column used to order and to cut the history."
+          },
+          "primaryKey": {
+            "ID": "82B56389-E1CC-40A5-A48F-D3917542BB88"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.181Z",
+            "checksum": "e7b1512189ae8c3da561aee044f8a70a576f468c9ce58685b088e7e1fa66214c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ValueField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Binding override: value column for sum / avg / min / max / distinct count."
+          },
+          "primaryKey": {
+            "ID": "93C6749A-F2DD-41B6-A59A-E4A28653CC99"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.203Z",
+            "checksum": "ed39b3cda8b80f0b18f37c3548114f50b259b6a0b39a3f1ef7193915108e40a7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Column",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Binding override: column name for a plain-column signal."
+          },
+          "primaryKey": {
+            "ID": "A4D785AB-03EE-42C7-A6AB-F5B39764DD00"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.230Z",
+            "checksum": "f82918b66d6c79842bc99fd97ae26a7880d811048448058f1a5981cb7a936eef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Values",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "One { RecordID, Value } per measured record."
+          },
+          "primaryKey": {
+            "ID": "B5E896BC-14FF-43D8-A7BC-06C4A8755EE1"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.254Z",
+            "checksum": "9ce50997e344014254837c46c92ba170a544ebd8ec1d9a96ce0d945048fd7f0d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OutputColumn",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The column name the values were computed into."
+          },
+          "primaryKey": {
+            "ID": "C6F9A7CD-2500-44E9-A8CD-17D5B9866FF2"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.285Z",
+            "checksum": "abb87b4db34246077d325925a55d638734f15ea447005f00c9563090e701c01a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResolvedAs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "What the signal actually measured after any override — entity, keys and window — for provenance."
+          },
+          "primaryKey": {
+            "ID": "D70AB8DE-3611-45FA-B9DE-28E6CA977001"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:30:54.310Z",
+            "checksum": "296be439e63002160e7e6107fd3ebe5dd83e22c69bd524bddfdeb7f607cb3561"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E81BC9EF-4722-46AB-AAEF-39F7DBA88112"
+    },
+    "sync": {
+      "lastModified": "2026-09-03T21:30:53.908Z",
+      "checksum": "55aa850904f87a680507293daff0f6788335360ffde18cc9c22c02080b13aeb6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Signals",
+      "Description": "List the SIGNALS available — the individual proven measures models were built from, rather than the models themselves. This is where a caller gets the id that 'Compute Signal' needs, and it cannot be guessed. Supply QueryText to rank the catalogue by meaning ('how recently someone engaged' returns the recency measure, with no table or column name involved); omit it to list the catalogue in name order. Each entry says whether it is Rebindable — whether it can be pointed at a different population — which is resolved from the component tree rather than inferred, so a measure that carries its own execution path is never offered with a population picker beside it.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioListSignalsAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Plain-English description of the measure wanted, embedded server-side with the same model that wrote the stories. Omitted, the catalogue comes back unranked in name order."
+          },
+          "primaryKey": {
+            "ID": "81D012E1-FFC8-4940-BDA1-8D99BE5D8516"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:46:30.286Z",
+            "checksum": "1b34f3b5ac822239f0aa66c4f7092c43e30251a19d321337474ef18514c01b62"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryVector",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "A pre-computed query embedding, as an alternative to QueryText. Must come from the SAME model the component stories were embedded with, or the distances are meaningless."
+          },
+          "primaryKey": {
+            "ID": "C64C2EB6-481A-43A2-8976-1280F570065B"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:46:30.310Z",
+            "checksum": "0e85b0be56b7e497fbe9265af0ec14980387d87a5b3130f599b60132f1aaed8c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RebindableOnly",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Hide measures that cannot be pointed at a different population. Defaults to false — they are still worth listing, just not rebinding."
+          },
+          "primaryKey": {
+            "ID": "7291144A-A770-46A9-89AD-F12CD7CE3509"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:46:30.334Z",
+            "checksum": "6eaea60bbfd02d41626911550ce02c1fc167e25a8c1c8e90c6efd5a572e4ec0e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Cap on entries returned. Defaults to 200."
+          },
+          "primaryKey": {
+            "ID": "5E5F9767-2587-46B6-B32E-08943D6F8EA2"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:46:30.357Z",
+            "checksum": "9b3c737b9f8a96954fd2d789430e1a6854353dfe12c60212ac0920944e31b03b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinSimilarity",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Minimum cosine similarity for a ranked search, 0–1. Below it a 'match' is noise wearing a recommendation's shape."
+          },
+          "primaryKey": {
+            "ID": "87CA0AA5-BFBF-4AAE-B50A-E1B8D1046D4E"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:46:30.381Z",
+            "checksum": "d33b2f0b3ac66148f1939b48807faebe041b7d4d27e19396a1c8cfd872c47eb5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromotionStates",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Review states to include. Defaults to every state — this is a catalogue, not a reuse proposal."
+          },
+          "primaryKey": {
+            "ID": "B080BB0A-48F0-45D2-95B6-EE7F37C37A7B"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:46:30.403Z",
+            "checksum": "c3db1292d8b28cca41ea59bd39c50a5977bbb9bae3390646f7e2a21a6959375c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Signals",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "The catalogue: ID, Name, TypeName, Story, Rebindable, PromotionState, IsTrained, and Similarity when ranked."
+          },
+          "primaryKey": {
+            "ID": "2D10C809-6FD0-4D9B-AF4D-3A5D325F9A1A"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:46:30.428Z",
+            "checksum": "6127bd8367278661cf93f11bf1c1cfe6898d84cbac8918a4f972b27f55517f55"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Warnings",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Non-fatal notes — measures excluded for not being rebindable, an unreadable story vector, an empty tree."
+          },
+          "primaryKey": {
+            "ID": "ABEBA498-38E0-414A-8183-0FE4ABF6C2B7"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T21:46:30.450Z",
+            "checksum": "023f290aeab82f367bc93f7252d1751760e40f68cdc1edb284d158f5d9060d87"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5ED19CC-16EC-4724-B208-7BFE4A5A3A24"
+    },
+    "sync": {
+      "lastModified": "2026-09-03T21:46:30.223Z",
+      "checksum": "2835fcef70e9df83835afb7f154863b11c4e4f20beeb39479a435b081e0d3e4b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Find Relevant Findings",
+      "Description": "Search what this organization has actually LEARNED — dated, measured facts written when models were promoted, ranked by meaning. The counterpart to 'Find Reusable Components': that returns a measure you can run, this returns a fact you can cite. Every match carries its evidence type, magnitude, date, population size and out-of-sample metric, so a citation can be checked rather than trusted. Use MinEvidence to demand stronger evidence than an association — an agent recommending an ACTION should ask for 'Tested Intervention' and accept an empty answer rather than present a correlation as advice. An empty result means nothing has been measured about the question, NOT that the claim is false.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioFindFindingsAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-lightbulb"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Plain-English description of what you want to know ('why do members lapse?'), embedded server-side with the same model that wrote the finding stories."
+          },
+          "primaryKey": {
+            "ID": "02CAE503-C22F-4DD0-B017-BAC1EA036EBB"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:41.803Z",
+            "checksum": "36aa45dc336c7f75ee27b6c464d12a6480294170190a62e8d2a66eac49e5df51"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryVector",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "A pre-computed query embedding, as an alternative to QueryText. Must come from the SAME model the finding stories were embedded with."
+          },
+          "primaryKey": {
+            "ID": "21B0D742-C249-4980-BFE4-5EC00AC4611E"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:41.830Z",
+            "checksum": "3db464577a4ef7fd75a6997d674d591de4b04cf4e235a1c67be1f1cf260aa5ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopK",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum findings to return. Defaults to 10."
+          },
+          "primaryKey": {
+            "ID": "FEF9D353-10E3-4E27-B3E2-4C9F6F71D2F8"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:41.855Z",
+            "checksum": "8c7eb893f008ab56ed5921b468d717be5066aa327d0060bc254aefd4a29734ab"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinSimilarity",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Minimum cosine similarity, 0-1. Below it a 'match' is noise wearing a citation's shape."
+          },
+          "primaryKey": {
+            "ID": "0D1B4F1A-C865-4A77-B004-C10D61FE6C80"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:41.879Z",
+            "checksum": "a20ed423cd738e59b3c3557cd3af8ee979f43c5144ad73b9742f87d035842b01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinEvidence",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Weakest evidence type to accept, from the ladder: Asserted, Descriptive, Observed Association, Predictive Contribution, Tested Intervention. Only the last supports 'if we do X, Y follows'."
+          },
+          "primaryKey": {
+            "ID": "351FC5A3-BBD4-4A09-B0F8-9129E13F28D3"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:41.901Z",
+            "checksum": "2b19183133d5400fa2c90be10ca1bbbdabec2537ed1eb5a726e01eac977dab1d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetVariable",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Restrict to findings about one outcome (e.g. 'Renewed')."
+          },
+          "primaryKey": {
+            "ID": "01EF39B4-D00D-4454-953B-53600787F686"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:41.926Z",
+            "checksum": "ae0d33c7c18adeb16db0623d5372d100c2fdce89c221959cf42d25ed3fb9d11f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeSuperseded",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Include earlier measurements of the same relationship — the historical chain that shows a lever moving. Defaults to false, so a caller gets the current state of knowledge."
+          },
+          "primaryKey": {
+            "ID": "077A6233-5FBB-459E-BE72-05BBE1E65709"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:41.951Z",
+            "checksum": "0f1dab37aaf53e88064dbfcaa6b114f592516d819e110e4ca189859a8cec1435"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Findings",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "The ranked findings, each with Statement, EvidenceType, Direction, Magnitude, Confidence, MeasuredAt, PopulationSize, the holdout metric behind it, and Similarity."
+          },
+          "primaryKey": {
+            "ID": "79901EB7-E2B7-4BB2-A56D-277F286E0A71"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:41.977Z",
+            "checksum": "1da2c7dbe8fd574ad9491f97e3e42c7063eb0056cf5073f0b2ae9caff2bd357e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CandidatesConsidered",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "How many findings carried a usable story vector before ranking — the denominator separating 'nothing was close enough' from 'there was nothing to search'."
+          },
+          "primaryKey": {
+            "ID": "1B018643-CF13-4171-95EE-3B4D274E30F3"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:42.002Z",
+            "checksum": "025810ce048afcefe4c5d43b1eb29d9f1d89dbeb51f3cabdb0fe139ff84d7b5b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Warnings",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Non-fatal notes — findings skipped for an unreadable vector, an unrecognized filter."
+          },
+          "primaryKey": {
+            "ID": "DE62EDF1-1E38-4D83-A5BD-A30B11B2479E"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T22:29:42.024Z",
+            "checksum": "d97ef32845bcded6a666a0ac2020c917a525da342c1f6d979d8921c60ab54e0f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "EC481271-F4E9-44F3-88AF-0C2041900206"
+    },
+    "sync": {
+      "lastModified": "2026-09-03T22:29:41.730Z",
+      "checksum": "cd21db93fd3e2722d04160e4cc00371304ca341feece6deca72a5548036363e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Assess Capability Coverage",
+      "Description": "Paste an organization's own strategic plan, funder report or board paper and get back what it can currently MEASURE, what it has actually LEARNED, and where neither is true. Coverage is reported on two axes because they come apart constantly and each combination implies different work: 'measurable but not yet studied' needs a study, 'known but not instrumented' needs instrumentation. IMPORTANT: a Gap means nothing on record DESCRIBES that objective — early in a deployment that is at least as likely to mean nobody has written the description as that the capability is missing, so the corpus sizes come back with every result and must be reported alongside any gap.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioAssessCapabilityAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-clipboard-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Text",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The document to diagnose — a strategic plan, funder report or board paper. Cut into objectives deterministically (bullets and sentences, headings become sections), so the same document always produces the same diagnosis."
+          },
+          "primaryKey": {
+            "ID": "C38FE390-C905-4021-A236-290A765A8FF9"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.491Z",
+            "checksum": "978af243fcae2f39e5920661a73f18f2f60b20efe93dd7ffa2893082c73e8a06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxObjectives",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Cap on objectives extracted. Defaults to 60, so a long plan cannot become a thousand embedding calls."
+          },
+          "primaryKey": {
+            "ID": "5286D8F1-0699-40FB-A9F5-430542C0DD01"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.516Z",
+            "checksum": "736b617a436977fc87a3ae6747aed94859906732cd33023ab6c62b7c658978bc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StrongMatch",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Similarity at or above which a match is treated as really being about the objective. Defaults to 0.55."
+          },
+          "primaryKey": {
+            "ID": "A477DEE2-A3D7-445B-A6A1-1FA358092B2F"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.539Z",
+            "checksum": "15798304d2ae093d32848e6726cda1699dc2be2ccd223f248932ff27cf966806"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WeakMatch",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Similarity at or above which something is 'close but not clearly it'. Defaults to 0.45."
+          },
+          "primaryKey": {
+            "ID": "70F16A51-79DC-40D0-8E12-490965656299"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.561Z",
+            "checksum": "5a097009ffeff2e0b6953226a6d97689e73f36349586b398a06d315b76c5ca5f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopK",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "How many signals and findings to return per objective. Defaults to 3."
+          },
+          "primaryKey": {
+            "ID": "F63FC020-B2E2-4DB1-A61E-CCD3A07D401D"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.585Z",
+            "checksum": "4baf4b1d3cb366096d2469e41a4f38c49a1b41546055d89d4d71ae225e2bf874"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Objectives",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "One entry per objective: the text, its section, the verdict (Covered / Measurable / Evidenced / Partial / Gap), the matching signals and findings with similarities, and the one-sentence next step."
+          },
+          "primaryKey": {
+            "ID": "31EA4E52-D4E1-40EE-9C43-EFADD09D2815"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.606Z",
+            "checksum": "46063043064063485e9d642d164c4779871d650b0f17bfc833c1c9b9a1d238ee"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Counts per verdict, for a headline."
+          },
+          "primaryKey": {
+            "ID": "48785D29-25E9-4533-818C-0277217FEBEB"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.628Z",
+            "checksum": "a9cb5ed0c048d8c29bf46c76a99a1825627e516a355ba73132e0b3a51d458a17"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SignalsConsidered",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "How many signals carried a usable story vector — the denominator behind every gap."
+          },
+          "primaryKey": {
+            "ID": "D398AEB1-A846-4154-ACA0-7B0DD34FF981"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.650Z",
+            "checksum": "12eb2857ca05015e5cd2bffef04646333302c7e5131307e921130157ed64ce7c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FindingsConsidered",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "How many findings carried a usable story vector."
+          },
+          "primaryKey": {
+            "ID": "D3B9F833-5F89-4E6E-909F-39AA6DE1DEA4"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.670Z",
+            "checksum": "050541a5b0c51c7329bad31121881ac45f2b29ee372db20cbe7ee1a5a9a35e68"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Warnings",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Non-fatal notes — an objective that could not be embedded, an empty corpus."
+          },
+          "primaryKey": {
+            "ID": "2D4B26A3-2683-4FCE-8812-17EAE0A72895"
+          },
+          "sync": {
+            "lastModified": "2026-09-03T23:43:57.691Z",
+            "checksum": "69972136be64ff2166964b00ee039462419d8d0568fb58f56a711b983c2b2c6a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BD3641EA-D0E9-4750-8EAF-DD03AFBAED72"
+    },
+    "sync": {
+      "lastModified": "2026-09-03T23:43:57.425Z",
+      "checksum": "5081d175cabf7449ad6d6fb2a40bd2948620895367176eb2b92a0a4b4163496d"
     }
   }
 ]

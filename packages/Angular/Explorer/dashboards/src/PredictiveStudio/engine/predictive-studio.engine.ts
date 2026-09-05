@@ -2,11 +2,22 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
+  LogError,
   Metadata,
   RunView,
   UserInfo,
 } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { ActionEngineBase, type ActionParam, type ActionResult } from '@memberjunction/actions-base';
+import { GraphQLActionClient, type GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import type { ReuseMatchRaw } from '../component-reuse.view-models';
+import type { AskFindingRaw, AskObjectiveRaw, AskSignalRaw } from '../ask.view-models';
+
+/** The action that ranks components by story similarity. Named once so a rename fails in one place. */
+const REUSE_ACTION_NAME = 'Find Reusable Components';
+const LIST_SIGNALS_ACTION_NAME = 'List Signals';
+const FIND_FINDINGS_ACTION_NAME = 'Find Relevant Findings';
+const ASSESS_CAPABILITY_ACTION_NAME = 'Assess Capability Coverage';
 import {
   MJMLAlgorithmEntity,
   MJMLAlgorithmUseCaseEntity,
@@ -347,6 +358,166 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
    * @param user the acting user
    * @param options narrow to one component type and/or cap the rows
    */
+
+  /**
+   * Search the component catalogue by MEANING, via the `Find Reusable Components` action.
+   *
+   * Runs server-side for two reasons that are not conveniences. The embedding must come from the
+   * same model that wrote every `StoryVector` — a client-chosen model yields distances against a
+   * different vector space, which look plausible and mean nothing. And `StoryVector` is
+   * deliberately excluded from {@link LoadComponentInstances}, so the vectors are not in the
+   * browser to rank against in the first place.
+   *
+   * @returns the ranked matches plus how many candidates carried a usable story vector — the
+   *   denominator is what separates "nothing was close enough" from "there was nothing to search"
+   */
+  public async FindReusableComponents(
+    request: {
+      QueryText: string;
+      TopK?: number;
+      MinSimilarity?: number;
+      TrainedOnly?: boolean;
+      PromotionStates?: string[];
+      ForComponentTypeID?: string;
+      ForSlotName?: string;
+    },
+    provider: IMetadataProvider,
+  ): Promise<{ Matches: ReuseMatchRaw[]; CandidatesConsidered: number; Warnings: string[] }> {
+    const action = ActionEngineBase.Instance.Actions.find((a) => a.Name === REUSE_ACTION_NAME);
+    if (!action) {
+      throw new Error(
+        `The '${REUSE_ACTION_NAME}' action is not in metadata. Push the Predictive Studio action seeds and restart the server.`,
+      );
+    }
+    const params: ActionParam[] = [{ Name: 'QueryText', Value: request.QueryText, Type: 'Input' }];
+    // Only send what the caller actually set: an explicit undefined would override the action's
+    // own defaults with nothing.
+    const optional: Array<[string, unknown]> = [
+      ['TopK', request.TopK],
+      ['MinSimilarity', request.MinSimilarity],
+      ['TrainedOnly', request.TrainedOnly],
+      ['PromotionStates', request.PromotionStates],
+      ['ForComponentTypeID', request.ForComponentTypeID],
+      ['ForSlotName', request.ForSlotName],
+    ];
+    for (const [name, value] of optional) {
+      if (value !== undefined) {
+        params.push({ Name: name, Value: value, Type: 'Input' });
+      }
+    }
+
+    const client = new GraphQLActionClient(provider as GraphQLDataProvider);
+    const result = await client.RunAction(action.ID, params);
+    if (!result.Success) {
+      throw new Error(result.Message ?? 'The reuse search reported a failure.');
+    }
+    const output = (name: string): unknown => result.Params?.find((p) => p.Name === name)?.Value;
+    const matches = output('Matches');
+    const considered = output('CandidatesConsidered');
+    const warnings = output('Warnings');
+    return {
+      Matches: Array.isArray(matches) ? (matches as ReuseMatchRaw[]) : [],
+      CandidatesConsidered: typeof considered === 'number' ? considered : 0,
+      Warnings: Array.isArray(warnings) ? warnings.map((w) => String(w)) : [],
+    };
+  }
+
+  /**
+   * Answer a plain-English question: what can be measured about it, and what has been learned.
+   *
+   * Both halves run server-side for the reason the reuse search does — the query has to be embedded
+   * with the model that wrote every story vector, and those vectors are deliberately never loaded
+   * into the browser. Run in parallel: they are independent, and the panel shows them together.
+   *
+   * Resilient by design. A missing action means Predictive Studio's seeds were never pushed, which
+   * is a deployment state rather than an error the reader can act on — so that half comes back
+   * empty and the other half still answers.
+   */
+  public async Ask(
+    question: string,
+    provider: IMetadataProvider,
+    options?: { topK?: number },
+  ): Promise<{ Signals: AskSignalRaw[]; Findings: AskFindingRaw[] }> {
+    const topK = options?.topK ?? 6;
+    const [signals, findings] = await Promise.all([
+      this.runAskAction(LIST_SIGNALS_ACTION_NAME, provider, [
+        { Name: 'QueryText', Value: question, Type: 'Input' },
+        { Name: 'MaxRows', Value: topK, Type: 'Input' },
+      ]),
+      this.runAskAction(FIND_FINDINGS_ACTION_NAME, provider, [
+        { Name: 'QueryText', Value: question, Type: 'Input' },
+        { Name: 'TopK', Value: topK, Type: 'Input' },
+      ]),
+    ]);
+    return {
+      Signals: this.readArray<AskSignalRaw>(signals, 'Signals'),
+      Findings: this.readArray<AskFindingRaw>(findings, 'Findings'),
+    };
+  }
+
+  /**
+   * Diagnose a pasted document — what it says the organization wants to do, against what it can
+   * measure and has learned.
+   *
+   * Unlike {@link Ask}, a failure here is thrown rather than swallowed: the reader pasted a document
+   * and is waiting for a verdict on it, so silence would read as "nothing in your plan is covered",
+   * which is the exact misreading this whole feature is built to prevent.
+   */
+  public async AssessDocument(
+    text: string,
+    provider: IMetadataProvider,
+  ): Promise<{ Objectives: AskObjectiveRaw[]; SignalsConsidered: number; Summary: Record<string, number>; Message: string }> {
+    const action = ActionEngineBase.Instance.Actions.find((a) => a.Name === ASSESS_CAPABILITY_ACTION_NAME);
+    if (!action) {
+      throw new Error(
+        `The '${ASSESS_CAPABILITY_ACTION_NAME}' action is not in metadata. Push the Predictive Studio action seeds and restart the server.`,
+      );
+    }
+    const client = new GraphQLActionClient(provider as GraphQLDataProvider);
+    const result = await client.RunAction(action.ID, [{ Name: 'Text', Value: text, Type: 'Input' }]);
+    if (!result.Success) {
+      throw new Error(result.Message ?? 'The capability assessment reported a failure.');
+    }
+    const considered = result.Params?.find((p) => p.Name === 'SignalsConsidered')?.Value;
+    const summary = result.Params?.find((p) => p.Name === 'Summary')?.Value;
+    return {
+      Objectives: this.readArray<AskObjectiveRaw>(result, 'Objectives'),
+      SignalsConsidered: typeof considered === 'number' ? considered : 0,
+      Summary: summary && typeof summary === 'object' ? (summary as Record<string, number>) : {},
+      Message: result.Message ?? '',
+    };
+  }
+
+  /** Run one Ask-side action, returning `null` rather than throwing — see {@link Ask}. */
+  protected async runAskAction(
+    name: string,
+    provider: IMetadataProvider,
+    params: ActionParam[],
+  ): Promise<ActionResult | null> {
+    try {
+      const action = ActionEngineBase.Instance.Actions.find((a) => a.Name === name);
+      if (!action) {
+        LogError(`PredictiveStudioEngine: the '${name}' action is not in metadata — Predictive Studio seeds may not be pushed.`);
+        return null;
+      }
+      const result = await new GraphQLActionClient(provider as GraphQLDataProvider).RunAction(action.ID, params);
+      if (!result.Success) {
+        LogError(`PredictiveStudioEngine: '${name}' failed: ${result.Message ?? 'unknown error'}`);
+        return null;
+      }
+      return result;
+    } catch (e) {
+      LogError(e);
+      return null;
+    }
+  }
+
+  /** Read a named array output off an action result, tolerating absence. */
+  protected readArray<T>(result: ActionResult | null, name: string): T[] {
+    const value = result?.Params?.find((p) => p.Name === name)?.Value;
+    return Array.isArray(value) ? (value as T[]) : [];
+  }
+
   public async LoadComponentInstances(
     provider: IMetadataProvider,
     user: UserInfo | undefined,

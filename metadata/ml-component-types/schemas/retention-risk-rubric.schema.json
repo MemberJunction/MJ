@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Retention Risk Rubric",
+  "description": "A rubric scored so HIGH means MORE risk, which inverts the usual reading and is the single most common way a retention score gets misused. Absent evidence defaults to NeutralMidpoint rather than Zero, because a member we know nothing about is unknown risk, not zero risk — scoring them safe is how the quiet ones get missed.",
+  "type": "object",
+  "properties": {
+    "mode": { "type": "string", "enum": ["given", "search"], "default": "given" },
+    "weights": {
+      "type": "object",
+      "description": "Risk contributors. Bind disengagement to a recency measure, tenure to a tenure column, and payment_friction to a billing signal where one exists.",
+      "properties": {
+        "disengagement": { "type": "number", "minimum": 0 },
+        "tenure": { "type": "number", "minimum": 0 },
+        "payment_friction": { "type": "number", "minimum": 0 }
+      },
+      "required": ["disengagement"],
+      "additionalProperties": true
+    },
+    "weight_modes": { "type": "object", "additionalProperties": { "type": "string", "enum": ["Additive", "Multiplier", "Gate", "Penalty", "Bonus"] } },
+    "contribution_cap": { "type": "object", "additionalProperties": { "type": "number" } },
+    "contribution_floor": { "type": "object", "additionalProperties": { "type": "number" } },
+    "missing_data_policy": { "type": "object", "additionalProperties": { "type": "string", "enum": ["Zero", "NeutralMidpoint", "Exclude"] } },
+    "scale_min": { "type": "number", "default": 0 },
+    "scale_max": { "type": "number", "default": 100 },
+    "class_threshold": { "type": "number" }
+  },
+  "required": ["mode", "weights"],
+  "additionalProperties": false
+}

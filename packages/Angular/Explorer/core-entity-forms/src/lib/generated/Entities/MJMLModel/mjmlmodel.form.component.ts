@@ -23,7 +23,8 @@ export class MJMLModelFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
             { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false },
-            { sectionKey: 'mJMLComponents', sectionName: 'ML Components', isExpanded: false }
+            { sectionKey: 'mJMLComponents', sectionName: 'ML Components', isExpanded: false },
+            { sectionKey: 'mJMLFindings', sectionName: 'ML Findings', isExpanded: false }
         ]);
     }
 }

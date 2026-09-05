@@ -212,17 +212,26 @@ describe('planModelMaterialization — outputs', () => {
 });
 
 describe('planModelMaterialization — the component row', () => {
-  it('carries the hyperparameters and the assembly facts on Spec', () => {
+  it('carries the component configuration on Spec, and nothing else', () => {
     const plan = planModelMaterialization(baseInput());
     expect(plan.ComponentTypeID).toBe('type-xgboost');
     expect(plan.MLModelID).toBe('model-1');
-    expect(plan.Spec).toEqual({
-      hyperparameters: { max_depth: 4 },
-      targetEntityName: 'Members',
-      targetVariable: 'Renewed',
-      problemType: 'classification',
-      featureCount: SCHEMA.length,
-    });
+    // Spec must be the configuration ALONE: the server-side entity subclass validates it against
+    // the component type's SpecSchema, and any extra property fails a schema that declares
+    // `additionalProperties: false`. Target entity/variable, problem type and feature count live on
+    // the model row and the Input bindings respectively, so nothing is lost by their absence.
+    expect(plan.Spec).toEqual({ max_depth: 4 });
+  });
+
+  it('produces a Spec that satisfies a strict SpecSchema (additionalProperties: false)', () => {
+    // Regression guard for the bug this shape fixes: a component type with a real schema — the
+    // Glass-Box Rubric is the first — could never be materialized, so a model built on it silently
+    // got no component row, no story, and no reuse entry.
+    const plan = planModelMaterialization(baseInput());
+    const allowed = new Set(['max_depth']);
+    for (const key of Object.keys(plan.Spec)) {
+      expect(allowed.has(key)).toBe(true);
+    }
   });
 
   it('is deterministic — same input, same plan', () => {
@@ -320,13 +329,27 @@ class FakeFactory implements IComponentEntityFactory {
   }
 }
 
-async function materialize(factory: FakeFactory, model = new FakeModel(), input = baseInput()) {
+async function materialize(
+  factory: FakeFactory,
+  model = new FakeModel(),
+  input = baseInput(),
+  artifactStore?: { save: (bytes: Uint8Array, name: string) => Promise<string> },
+) {
   const result = await new ComponentMaterializer().materialize(
     model as unknown as MJMLModelEntity,
     input,
-    { entityFactory: factory },
+    { entityFactory: factory, artifactStore },
   );
   return { result, model };
+}
+
+/** Records what was stored, so a test can assert the BYTES a sub-component was given. */
+class FakeArtifactStore {
+  public Saved: Array<{ name: string; bytes: Uint8Array }> = [];
+  public save = async (bytes: Uint8Array, name: string): Promise<string> => {
+    this.Saved.push({ name, bytes });
+    return `file-${this.Saved.length}`;
+  };
 }
 
 describe('ComponentMaterializer.materialize', () => {
@@ -444,6 +467,79 @@ function composition(overrides: Partial<CompositionMaterializationInput> = {}): 
 
 const driverOf = (name: string): string | null => TYPE_DRIVERS.get(name.trim().toLowerCase()) ?? null;
 
+
+describe('planModelMaterialization — features promoted to components of their own', () => {
+  // Driver keys as the seeded Input subtree carries them.
+  const INPUT_TYPES = new Map<string, string>([
+    ['select', 'type-column'],
+    ['asof_count', 'type-asof-count'],
+    ['asof_exists', 'type-asof-exists'],
+    ['asof_recency', 'type-asof-recency'],
+    ['embedding', 'type-embedding'],
+  ]);
+
+  it('gives every typable feature its own component and moves its binding onto it', () => {
+    const plan = planModelMaterialization({ ...baseInput(), inputTypeIdsByDriver: INPUT_TYPES });
+    expect(plan.Inputs.map((i) => [i.Binding.Name, i.DriverKey])).toEqual([
+      ['tenure', 'select'],
+      ['city', 'select'],
+      ['activity_count_asof', 'asof_count'],
+      ['activity_count_asof__present', 'asof_exists'],
+      ['emb_0', 'embedding'],
+    ]);
+    // Every promoted input fills the model's `inputs` slot, in a reproducible order.
+    expect(plan.Inputs.every((i) => i.SlotName === 'inputs')).toBe(true);
+    expect(plan.Inputs.map((i) => i.Sequence)).toEqual([0, 1, 2, 3, 4]);
+    // Their bindings are no longer on the root.
+    expect(plan.Bindings.some((b) => b.Role === 'Input' && b.Name === 'tenure')).toBe(false);
+  });
+
+  it('types a feature by its Kind when origin alone cannot place it', () => {
+    // `emb_0` matches no field and no dated source, but its Kind names its own origin — it is an
+    // Embedding input in exactly the sense a column is a Column input, so it earns a row (and
+    // therefore a story) rather than being demoted to an anonymous binding.
+    const plan = planModelMaterialization({ ...baseInput(), inputTypeIdsByDriver: INPUT_TYPES });
+    expect(plan.Inputs.find((i) => i.Binding.Name === 'emb_0')?.DriverKey).toBe('embedding');
+  });
+
+  it('keeps a genuinely untypable feature as a root binding rather than inventing a type for it', () => {
+    // A derived assembly column: numeric (so its Kind says nothing about origin), matching no
+    // field and no dated source. Dropping it would lose the model's record of an input it
+    // actually consumed; typing it would assert a lineage that does not exist.
+    const derived: FeatureSchemaEntry[] = [...SCHEMA, { Name: 'city_x_tenure', Kind: 'numeric' }];
+    const plan = planModelMaterialization({ ...baseInput(), featureSchema: derived, inputTypeIdsByDriver: INPUT_TYPES });
+    expect(plan.Inputs.some((i) => i.Binding.Name === 'city_x_tenure')).toBe(false);
+    expect(plan.Bindings.some((b) => b.Role === 'Input' && b.Name === 'city_x_tenure')).toBe(true);
+  });
+
+  it('freezes the as-of configuration on the component, so a reuser can judge it', () => {
+    const plan = planModelMaterialization({ ...baseInput(), inputTypeIdsByDriver: INPUT_TYPES });
+    const count = plan.Inputs.find((i) => i.Binding.Name === 'activity_count_asof');
+    expect(count?.Spec).toMatchObject({
+      aggregate: 'count',
+      source: 'Activities',
+      foreignKey: 'MemberID',
+      dateField: 'ActivityDate',
+    });
+    // A plain column carries no as-of configuration to freeze.
+    expect(plan.Inputs.find((i) => i.Binding.Name === 'tenure')?.Spec).toEqual({});
+  });
+
+  it('records a warning, and keeps the binding, when the tree lacks the resolved driver', () => {
+    const partial = new Map<string, string>([['select', 'type-column']]);
+    const plan = planModelMaterialization({ ...baseInput(), inputTypeIdsByDriver: partial });
+    expect(plan.Inputs.map((i) => i.DriverKey)).toEqual(['select', 'select']);
+    expect(plan.Bindings.some((b) => b.Name === 'activity_count_asof')).toBe(true);
+    expect(plan.Warnings.some((w) => w.includes('asof_count') && w.includes('not in the component tree'))).toBe(true);
+  });
+
+  it('promotes nothing when no driver map is supplied, leaving the previous shape intact', () => {
+    const plan = planModelMaterialization(baseInput());
+    expect(plan.Inputs).toEqual([]);
+    expect(plan.Bindings.filter((b) => b.Role === 'Input')).toHaveLength(SCHEMA.length);
+  });
+});
+
 describe('planComposedComponents', () => {
   it('flattens the graph depth-first, parenting each node by position', () => {
     const warnings: string[] = [];
@@ -454,7 +550,7 @@ describe('planComposedComponents', () => {
     expect(plans[0]).toMatchObject({ ParentIndex: -1, ComponentTypeID: 'type-bagging', SlotName: null });
     expect(plans[1]).toMatchObject({ ParentIndex: 0, ComponentTypeID: 'type-rf', SlotName: 'base_estimator', Sequence: 0 });
     // Each node's own params plus the driver it ran as — enough to rebuild the node from the row.
-    expect(plans[1].Spec).toEqual({ max_depth: 4, driver: 'random_forest' });
+    expect(plans[1].Spec).toEqual({ max_depth: 4 });
   });
 
   it('marks a reused node as not-trained and records what it reuses', () => {
@@ -563,5 +659,73 @@ describe('ComponentMaterializer.materialize — composed models', () => {
     expect(result.ComposedComponentCount).toBe(1); // only the final_estimator survives
     expect(result.Warnings.some((w) => w.includes("'Bagging Wrapper' has no matching ML Component Type"))).toBe(true);
     expect(result.Warnings.some((w) => w.includes("'Random Forest' was skipped because its parent was not written"))).toBe(true);
+  });
+});
+
+describe('ComponentMaterializer — the root component as a reusable part', () => {
+  it("records the model's artifact on the root, which is what makes it freezable in another model", () => {
+    const plan = planModelMaterialization({ ...baseInput(), artifactFileID: 'file-1' });
+    expect(plan.ArtifactFileID).toBe('file-1');
+  });
+
+  it('plans a null artifact when planning ahead of training, rather than inventing one', () => {
+    expect(planModelMaterialization(baseInput()).ArtifactFileID).toBeNull();
+  });
+});
+
+describe('ComponentMaterializer — a sub-component that another model can use', () => {
+  /** A bagged forest whose child came back with its own serialized estimator. */
+  const withChildArtifact = () =>
+    composition({
+      states: [
+        { driver: 'bagging', fitted: true },
+        { driver: 'random_forest', slot: 'base_estimator', fitted: true, artifact_b64: Buffer.from('child-bytes').toString('base64') },
+      ],
+    });
+
+  it("stores the child's own artifact, which is what makes it freezable elsewhere", async () => {
+    const factory = new FakeFactory();
+    const store = new FakeArtifactStore();
+
+    await materialize(factory, new FakeModel(), baseInput({ composition: withChildArtifact() }), store);
+
+    expect(store.Saved).toHaveLength(1);
+    expect(Buffer.from(store.Saved[0].bytes).toString()).toBe('child-bytes');
+    const child = factory.Components.find((c) => c.SlotName === 'base_estimator');
+    expect(child?.ArtifactFileID).toBe('file-1');
+  });
+
+  it('still catalogues the child without a store, and says it is not reusable', async () => {
+    const factory = new FakeFactory();
+
+    const { result } = await materialize(factory, new FakeModel(), baseInput({ composition: withChildArtifact() }));
+
+    // The composition is still described and searchable — only reuse is unavailable.
+    expect(result.ComposedComponentCount).toBe(1);
+    expect(factory.Components.find((c) => c.SlotName === 'base_estimator')?.ArtifactFileID).toBeUndefined();
+    // The gap is stated here rather than surfacing much later as a refused reuse.
+    expect(result.Warnings.some((w) => w.includes('cannot be frozen into another model'))).toBe(true);
+  });
+
+  it('stores nothing for a node the sidecar could not separate', async () => {
+    const factory = new FakeFactory();
+    const store = new FakeArtifactStore();
+
+    // BAGGED_STATES carries no artifact — bagging exposes an unfitted template, not the bags.
+    const { result } = await materialize(factory, new FakeModel(), baseInput({ composition: composition() }), store);
+
+    expect(store.Saved).toHaveLength(0);
+    // Not reusable is not an error, so it must not produce a warning either.
+    expect(result.Warnings.some((w) => w.includes('cannot be frozen'))).toBe(false);
+  });
+
+  it('records a failed store as a warning rather than losing the component row', async () => {
+    const factory = new FakeFactory();
+    const broken = { save: async () => { throw new Error('disk full'); } };
+
+    const { result } = await materialize(factory, new FakeModel(), baseInput({ composition: withChildArtifact() }), broken);
+
+    expect(result.ComposedComponentCount).toBe(1);
+    expect(result.Warnings.some((w) => w.includes('disk full') && w.includes('not reusable'))).toBe(true);
   });
 });

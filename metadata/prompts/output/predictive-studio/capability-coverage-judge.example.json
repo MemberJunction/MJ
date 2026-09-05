@@ -1,0 +1,12 @@
+[
+  {
+    "Index": 0,
+    "Verdict": "Measurable",
+    "Rationale": "'days_since_last_act' measures how recently a member engaged, which is what this objective asks for; no finding on the list says anything about what moves it."
+  },
+  {
+    "Index": 1,
+    "Verdict": "Gap",
+    "Rationale": "The closest candidates measure member activity and tenure; nothing shortlisted is about building works or capital projects."
+  }
+]

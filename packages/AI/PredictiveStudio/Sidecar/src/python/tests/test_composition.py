@@ -324,3 +324,67 @@ def test_request_without_a_graph_reports_no_component_states() -> None:
     })
     assert resp.status_code == 200, resp.text
     assert resp.json()["component_states"] is None
+
+
+def test_a_fitted_child_comes_back_with_its_own_reusable_artifact() -> None:
+    """The finer-grained half of the component story.
+
+    A sub-estimator that learned something should be droppable into a DIFFERENT model's slot, not
+    only exist inside the parent it was trained in. That needs the child's own bytes, so each fitted
+    node reports an artifact of its own — and it has to round-trip on its own, without the parent.
+    """
+    req = _request("classification", _stacking_graph(), "stacking")
+    body = client.post("/train", json=req).json()
+    states = body["component_states"]
+
+    final = next(s for s in states if s["slot"] == "final_estimator")
+    assert final["artifact_b64"], "a fitted child must carry its own artifact to be reusable"
+
+    # The claim is independence: the child loads and predicts with no reference to its parent.
+    # Its own `n_features_in_` is what makes it usable elsewhere — note a stacking final estimator
+    # takes META-features (one per base estimator), not the model's original columns, so a caller
+    # reusing it has to respect the width the child itself declares.
+    child, _envelope = artifacts.deserialize_envelope(final["artifact_b64"])
+    assert hasattr(child, "predict")
+    assert child.n_features_in_ == 2, "the final estimator consumes one meta-feature per base estimator"
+    assert child.predict(np.zeros((1, child.n_features_in_))) is not None
+
+    # A base estimator, by contrast, consumes the model's real columns and is reusable as-is.
+    base = next(s for s in states if s["driver"] == "random_forest")
+    reused, _ = artifacts.deserialize_envelope(base["artifact_b64"])
+    assert reused.n_features_in_ == len(req["feature_schema"])
+    assert reused.predict(np.zeros((1, reused.n_features_in_))) is not None
+
+
+def test_a_reused_child_reports_no_artifact_of_its_own() -> None:
+    """A frozen child's bytes belong to the component it was loaded from.
+
+    Re-storing them under the enclosing model would fork one trained thing into two rows that then
+    drift apart — two components claiming to be the same learned relationship.
+    """
+    artifact, _ = _train_reusable()
+    graph = {
+        "driver": "bagging",
+        "hyperparameters": {"n_estimators": 3, "random_state": 0},
+        "children": [{"driver": "logistic_regression", "slot": "base_estimator",
+                      "reuse_instance_id": "child-1"}],
+    }
+    req = _request("classification", graph, "bagging")
+    req["preprocessing"] = []
+    req["component_artifacts"] = {"child-1": artifact}
+
+    body = client.post("/train", json=req).json()
+    child = next(s for s in body["component_states"] if s["reuse_instance_id"] == "child-1")
+    assert child["fitted"] is False
+    assert child["artifact_b64"] is None
+
+
+def test_an_unfitted_template_is_not_advertised_as_reusable() -> None:
+    """Bagging exposes its unfitted base template, not the individual bags.
+
+    Serializing that would advertise a trained part that never learned anything — worse than
+    reporting nothing, because a caller would store it and later freeze a blank estimator.
+    """
+    body = client.post("/train", json=_request("classification", _bagging_graph(), "bagging")).json()
+    base = next(s for s in body["component_states"] if s["slot"] == "base_estimator")
+    assert base["artifact_b64"] is None

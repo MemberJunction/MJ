@@ -611,6 +611,16 @@ def _extract_importance(estimator: Any, columns: List[str]) -> Dict[str, float]:
     class-summed ``coef_`` magnitude (linear models). Returns ``{}`` when the
     estimator exposes neither. The map drives the leakage guard's single-feature-
     dominance check (plan §6.4).
+
+    The result is normalized to sum to 1, so every value is a SHARE of the
+    explanation. Without this the scale depended on the estimator family:
+    ``feature_importances_`` already sums to 1, ``|coef_|`` is in the units of the
+    (standardized) features, and the glass-box rubric's weights are on its 0-100
+    output scale. Consumers treat the map as a share regardless — the story writer
+    is told it is "each input's share of the explanation, normalized", and any
+    cross-model comparison is meaningless otherwise — so a rubric weight of 31.0
+    would be narrated as a 31x share. The dominance check normalizes again
+    internally, which is a no-op on an already-normalized vector.
     """
     if hasattr(estimator, "feature_importances_"):
         values = np.asarray(estimator.feature_importances_, dtype=float)
@@ -620,7 +630,11 @@ def _extract_importance(estimator: Any, columns: List[str]) -> Dict[str, float]:
     else:
         return {}
     n = min(len(columns), len(values))
-    return {columns[i]: float(values[i]) for i in range(n)}
+    total = float(np.sum(np.abs(values[:n])))
+    # An all-zero vector carries no information; leave it as zeros rather than dividing by 0.
+    if total > 0:
+        return {columns[i]: float(abs(values[i])) / total for i in range(n)}
+    return {columns[i]: 0.0 for i in range(n)}
 
 
 # ---------------------------------------------------------------------------

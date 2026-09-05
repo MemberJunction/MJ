@@ -31,6 +31,9 @@ const PUBLISHED_INPUT_DRIVERS = new Set([
   'asof_count', 'asof_sum', 'asof_avg', 'asof_min', 'asof_max', 'asof_distinct_count',
   'asof_recency', 'asof_exists', 'asof_rate_per_period', 'asof_trend_slope',
   'action',
+  // Resolved by the executor's forecast step against the SEPARATE ForecastSidecar (TimesFM), not by
+  // the tabular sidecar's `_REGISTRY` — hence its absence here when the leaf was first seeded.
+  'forecast',
 ]);
 
 interface SeedRecord {
@@ -137,6 +140,58 @@ describe('the shipped component seed tree', () => {
     }
   });
 
+  /**
+   * A `DefaultSpec` its OWN `SpecSchema` rejects is a type that cannot be instantiated with its
+   * defaults — and nothing catches it until someone tries, because the server subclass validates on
+   * save rather than at seed time. Checked here against the two rules that actually bite: required
+   * properties, and `additionalProperties: false`.
+   */
+  it('every seeded DefaultSpec satisfies its own SpecSchema', () => {
+    for (const node of nodes) {
+      if (!node.SpecSchema || !node.DefaultSpec) continue;
+      const file = /^@file:(.+)$/.exec(node.SpecSchema)?.[1];
+      if (!file) continue;
+
+      const schema = JSON.parse(readFileSync(resolve(TYPES_DIR, file), 'utf-8')) as {
+        properties?: Record<string, unknown>;
+        required?: string[];
+        additionalProperties?: boolean;
+      };
+      const spec = JSON.parse(node.DefaultSpec) as Record<string, unknown>;
+
+      for (const key of schema.required ?? []) {
+        expect(Object.hasOwn(spec, key), `${node.Name}: DefaultSpec is missing required '${key}'`).toBe(true);
+      }
+      if (schema.additionalProperties === false) {
+        const allowed = new Set(Object.keys(schema.properties ?? {}));
+        for (const key of Object.keys(spec)) {
+          expect(allowed.has(key), `${node.Name}: DefaultSpec has '${key}', which its schema forbids`).toBe(true);
+        }
+      }
+    }
+  });
+
+  /**
+   * The business-case archetypes are the "specific" end of the primitive→specific range. Each one
+   * has to be a real narrowing of its parent rather than a renamed copy: same driver (it runs on the
+   * same engine), stricter schema (it constrains what an instance may be), and a story of its own.
+   */
+  it('every business-case archetype narrows a primitive rather than renaming it', () => {
+    for (const name of ['RFM Rubric', 'Retention Risk Rubric', 'Member Journey HMM']) {
+      const node = nodes.find((n) => n.Name === name);
+      expect(node, `${name} is not seeded`).toBeDefined();
+      const parent = nodes.find((n) => n.ID === node!.ParentID);
+      expect(parent, `${name} has no parent`).toBeDefined();
+
+      // Runs on the same engine as the primitive it specializes.
+      expect(node!.DriverClass, `${name} must keep its parent's driver`).toBe(parent!.DriverClass);
+      // And constrains it — a schema identical to the parent's would be a rename, not an archetype.
+      expect(node!.SpecSchema, `${name} must declare its own schema`).not.toBe(parent!.SpecSchema);
+      expect(node!.SpecSchema).toBeTruthy();
+      expect(node!.IsAbstract, `${name} must be instantiable`).toBe(false);
+    }
+  });
+
   it('resolves XGBoost to the inherited profile the guidance promises', () => {
     const profile = resolveComponentProfile(idByName.get('XGBoost') as string, nodesById, groupByType(properties), groupByType(slots));
     expect(profile.Chain.map((n) => n.Name)).toEqual(['Model', 'Tree Ensemble', 'Boosting', 'XGBoost']);
@@ -148,11 +203,28 @@ describe('the shipped component seed tree', () => {
     expect(profile.Properties.CompatibleProblemTypes?.[0].Value).toEqual(['classification', 'regression']);
   });
 
-  it('resolves the rubric with exact explainability and its two slots', () => {
+  it('resolves the rubric with exact explainability and its own two slots on top of the inherited one', () => {
     const profile = resolveComponentProfile(idByName.get('Glass-Box Rubric') as string, nodesById, groupByType(properties), groupByType(slots));
     expect(profile.Properties.Explainability?.[0].Value).toBe('per-record-exact');
-    expect(profile.Slots.map((s) => s.Name)).toEqual(['weights', 'bands']);
+    // `inputs` is declared on the abstract Model root — every model reads inputs, without
+    // exception — so it arrives by inheritance, ahead of the rubric's own two.
+    expect(profile.Slots.map((s) => s.Name)).toEqual(['inputs', 'weights', 'bands']);
     expect(profile.Leaf.Trainable).toBe(true);
+  });
+
+  it('gives every concrete model an `inputs` slot, because the property genuinely holds', () => {
+    // The tree's whole discipline: a property belongs to a node only if it holds for every
+    // descendant. A model with no inputs is not a model, so this must be true of all of them.
+    const concreteModels = nodes.filter((n) => n.Kind === 'Model' && !n.IsAbstract);
+    expect(concreteModels.length).toBeGreaterThan(0);
+    for (const model of concreteModels) {
+      const profile = resolveComponentProfile(model.ID, nodesById, groupByType(properties), groupByType(slots));
+      const inputs = profile.Slots.find((s) => s.Name === 'inputs');
+      expect(inputs, `${model.Name} has no inputs slot`).toBeDefined();
+      // Unbounded and optional: a model may read one feature or a hundred.
+      expect(inputs?.MinCount).toBe(0);
+      expect(inputs?.MaxCount).toBeNull();
+    }
   });
 
   it('has no Draft family left — everything seeded has a runtime behind it', () => {

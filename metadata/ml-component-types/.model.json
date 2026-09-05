@@ -229,6 +229,10 @@
     },
     "primaryKey": {
       "ID": "CCFA46D5-1533-52F5-AC45-186C1672AD62"
+    },
+    "sync": {
+      "lastModified": "2026-09-02T21:12:05.889Z",
+      "checksum": "63012b10a8b2d7619caf6ec00c682860a8b778e3bb8774eda18061bcd5344752"
     }
   },
   {
@@ -247,6 +251,79 @@
     },
     "primaryKey": {
       "ID": "979E1858-5712-5AF5-B8D5-161F428E88FB"
+    },
+    "sync": {
+      "lastModified": "2026-09-02T21:12:05.907Z",
+      "checksum": "8a89364cef09e805de8d6c414602c83210855c0d0c12506697e5e879718167bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "RFM Rubric",
+      "Kind": "Model",
+      "Description": "Recency-Frequency-Monetary scoring as a rubric: three named roles, each bound to a real as-of measure, combined by operator weights. Narrows Glass-Box Rubric to exactly those three roles so an instance cannot quietly become something else wearing the RFM name. Weights default to equal — a stated starting point, not a claim about this organization — and the missing-data policies differ per role on purpose: an unknown recency is unknown (NeutralMidpoint), whereas no purchases really is zero monetary value.",
+      "Story": "The oldest scoring idea in direct marketing, written down so it can be argued with: how recently someone engaged, how often, and how much it was worth. Its value is not sophistication — it is that every part of the number has a name a fundraiser already uses.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "DriverClass": "rubric",
+      "SpecSchema": "@file:schemas/rfm-rubric.schema.json",
+      "DefaultSpec": "{\"mode\":\"given\",\"scale_min\":0,\"scale_max\":100,\"weights\":{\"recency\":1,\"frequency\":1,\"monetary\":1},\"missing_data_policy\":{\"recency\":\"NeutralMidpoint\",\"frequency\":\"Zero\",\"monetary\":\"Zero\"}}"
+    },
+    "primaryKey": {
+      "ID": "34A16563-512A-4220-B14E-04FBBF43669F"
+    },
+    "sync": {
+      "lastModified": "2026-09-05T21:14:33.176Z",
+      "checksum": "e6f022d6faed0fa1c1514346a94fb0c3398d1e086aa8324229139891093ba559"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Retention Risk Rubric",
+      "Kind": "Model",
+      "Description": "A rubric scored so HIGH means MORE risk. The inversion is the whole point and the most common way such a score gets misread, so it is fixed by the archetype rather than left to each instance. Absent evidence defaults to NeutralMidpoint everywhere: a member nobody has heard from is UNKNOWN risk, not zero risk, and scoring them safe is precisely how the quiet ones get missed.",
+      "Story": "The question every membership organization asks and few can answer evenly: who is drifting away. It reads high for trouble, counts silence as uncertainty rather than safety, and shows its working — so a retention call can start from what the score actually saw.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
+      "DriverClass": "rubric",
+      "SpecSchema": "@file:schemas/retention-risk-rubric.schema.json",
+      "DefaultSpec": "{\"mode\":\"given\",\"scale_min\":0,\"scale_max\":100,\"weights\":{\"disengagement\":1,\"tenure\":1},\"missing_data_policy\":{\"disengagement\":\"NeutralMidpoint\",\"tenure\":\"NeutralMidpoint\"}}"
+    },
+    "primaryKey": {
+      "ID": "395DECED-9B80-414B-A034-437F744A22E6"
+    },
+    "sync": {
+      "lastModified": "2026-09-05T21:14:33.143Z",
+      "checksum": "9f94697bb9872052561472957cb9e1b1e9c51a2b3928db1c9f8e3aa5e5083e8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Member Journey HMM",
+      "Kind": "Model",
+      "Description": "A sequence model whose hidden states are read as journey stages, with the state count bounded to 3-6 and an optional label per state. The bound is a deliberate constraint, not a limitation: a twelve-state fit may score better and cannot be discussed, which defeats the reason to choose a sequence model over a stronger tabular one.",
+      "Story": "Instead of asking what a member looks like today, this asks what path they have been on — and finds the handful of stages members actually move between. The stages are learned from behaviour, then named by a human, which is what makes 'they moved from engaged to drifting last quarter' a sentence anyone can act on.",
+      "IsAbstract": false,
+      "Trainable": true,
+      "Status": "Published",
+      "Version": 1,
+      "ParentID": "@lookup:MJ: ML Component Types.Name=Hidden Markov Model",
+      "DriverClass": "hmm",
+      "SpecSchema": "@file:schemas/member-journey-hmm.schema.json",
+      "DefaultSpec": "{\"n_components\":4,\"covariance_type\":\"diag\",\"n_iter\":100}"
+    },
+    "primaryKey": {
+      "ID": "E1CAC6C7-9C34-48B6-ABC0-099AAFEFE33B"
+    },
+    "sync": {
+      "lastModified": "2026-09-05T21:14:33.161Z",
+      "checksum": "a4e002fa43997eebc7c086a64744a2200846b16f2ec302bf2b279fa750ca784d"
     }
   }
 ]

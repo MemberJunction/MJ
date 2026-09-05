@@ -33,12 +33,14 @@ import type { MJMLComponentEntity, MJMLComponentBindingEntity, MJMLModelEntity }
 import type {
   ComponentGraphNode,
   FeatureSchemaEntry,
+  FeatureKind,
   ProblemType,
   TrainedComponentState,
 } from '@memberjunction/predictive-studio-core';
 
 import type { DatedSourceSpec } from '../feature-assembly';
 import { findAutoPathHops, type FkGraphEntity, type RelationshipHop } from './join-path';
+import type { IArtifactStore } from '../training/types';
 
 // region: types ---------------------------------------------------------------
 
@@ -91,6 +93,14 @@ export interface MaterializationInput {
   /** Hyperparameters, stored on the component `Spec` (they are configuration, not bindings). */
   hyperparameters?: Record<string, unknown>;
   /**
+   * The trained model's artifact (`MJ: Files` id), which IS the root component's fitted state.
+   *
+   * Without it the root is written `IsTrained: true` carrying nothing to load, and the frozen-reuse
+   * loader correctly refuses it — so a model can never be dropped into another model's slot. That
+   * is the whole "combine existing models under a base structure" path, silently unavailable.
+   */
+  artifactFileID?: string | null;
+  /**
    * Structural entity list for FK-path resolution (`EntityInfo[]` satisfies it). When absent,
    * as-of bindings record the declared foreign key alone instead of the full hop chain.
    */
@@ -104,6 +114,21 @@ export interface MaterializationInput {
    * row that merely says "bagging".
    */
   composition?: CompositionMaterializationInput;
+  /**
+   * `MJ: ML Component Types` ids keyed by `DriverClass`, restricted to the `Input` subtree
+   * (`select`, `asof_count`, `asof_recency`, …).
+   *
+   * When supplied, every resolvable feature is promoted to a component ROW OF ITS OWN, filling the
+   * model's `inputs` slot, and its binding hangs off that row instead of the root. That is what
+   * makes a feature independently describable and therefore independently reusable: a story and a
+   * story vector live on a component, so with everything collapsed onto one root row the catalog
+   * can only be searched at model granularity — "find me something that measures engagement
+   * recency" can only ever return whole models.
+   *
+   * Absent ⇒ the previous shape (one root component, all bindings on it), so callers that have no
+   * component tree loaded are unaffected.
+   */
+  inputTypeIdsByDriver?: Map<string, string>;
 }
 
 /** Everything needed to project a composed model's non-root nodes into component rows. */
@@ -140,6 +165,35 @@ export interface ComposedComponentPlan {
   IsTrained: boolean;
   /** The `MJ: ML Components` row this node reuses, when it reuses one. */
   SourceComponentID: string | null;
+  /**
+   * This node's own serialized estimator, when the sidecar could separate one.
+   *
+   * Present ⇒ the node is independently reusable and gets its own `ArtifactFileID`. Null ⇒ it
+   * exists as a described part of its parent but cannot be frozen into another model — which is
+   * the honest state for a bagging template or a reused child, and must not be papered over.
+   */
+  ArtifactB64: string | null;
+}
+
+/**
+ * One planned Input component: a single feature promoted from "a binding on the model" to a
+ * component in its own right, filling the model's `inputs` slot.
+ */
+export interface InputComponentPlan {
+  /** The resolved `Input` leaf (Column, As-Of Count, As-Of Recency, …). */
+  ComponentTypeID: string;
+  /** The `DriverClass` the type was resolved by — carried for warnings and tests. */
+  DriverKey: string;
+  /** Row name: the model name plus the feature, so it reads standalone in a catalog. */
+  Name: string;
+  /** The parent slot this fills — always `inputs`. */
+  SlotName: string;
+  /** Position among siblings, so ordering is reproducible. */
+  Sequence: number;
+  /** The feature's own configuration (aggregate, field, window for as-of; empty for a column). */
+  Spec: Record<string, unknown>;
+  /** The binding that moves from the root onto this component. */
+  Binding: BindingPlan;
 }
 
 /** One planned `MJ: ML Component Bindings` row. */
@@ -161,7 +215,15 @@ export interface MaterializationPlan {
   MLModelID: string | null;
   /** JSON-serializable component spec (hyperparameters + the assembly facts worth freezing). */
   Spec: Record<string, unknown>;
+  /** The model artifact that is this root component's fitted state; null when planning ahead of training. */
+  ArtifactFileID: string | null;
+  /**
+   * Bindings that stay on the ROOT: the outputs, plus any input the tree could not type (a derived
+   * assembly column with no Input leaf to be an instance of). Never silently dropped.
+   */
   Bindings: BindingPlan[];
+  /** Features promoted to components of their own. Empty when no `inputTypeIdsByDriver` was given. */
+  Inputs: InputComponentPlan[];
   /** Non-fatal notes: features that resolved to no field, unreachable as-of paths, etc. */
   Warnings: string[];
 }
@@ -174,6 +236,8 @@ export interface MaterializationResult {
   BindingCount: number;
   /** Non-fatal notes from planning and persistence. */
   Warnings: string[];
+  /** How many features were written as components of their own, filling the `inputs` slot. */
+  InputComponentCount: number;
   /** How many non-root component rows a composed model produced. Zero for a plain model. */
   ComposedComponentCount: number;
 }
@@ -187,6 +251,15 @@ export interface IComponentEntityFactory {
 export interface MaterializationDeps {
   entityFactory: IComponentEntityFactory;
   contextUser?: UserInfo;
+  /**
+   * Where a composed sub-component's own artifact is stored, giving it an `ArtifactFileID` of its
+   * own and therefore making it reusable in a DIFFERENT model.
+   *
+   * Optional: without it the sub-component rows are still written (the composition is still
+   * described and searchable), they simply cannot be frozen elsewhere. That degradation is
+   * recorded as a warning rather than left to be discovered at the point of reuse.
+   */
+  artifactStore?: IArtifactStore;
 }
 
 // region: metadata adapter ----------------------------------------------------
@@ -253,9 +326,34 @@ export function planModelMaterialization(input: MaterializationInput): Materiali
   const warnings: string[] = [];
   const asOfOwners = indexAsOfFeatures(input.datedSources ?? []);
   const bindings: BindingPlan[] = [];
+  const inputs: InputComponentPlan[] = [];
 
   for (const feature of input.featureSchema) {
-    bindings.push(planInputBinding(feature, input, asOfOwners, warnings));
+    const binding = planInputBinding(feature, input, asOfOwners, warnings);
+    // Promote the feature to a component of its own when the tree can say WHAT KIND of input it
+    // is. Anything untypable (a derived assembly column) stays a binding on the root rather than
+    // being invented into a component type it is not an instance of.
+    const driver = input.inputTypeIdsByDriver ? inputDriverForFeature(feature, input, asOfOwners) : null;
+    const typeId = driver ? input.inputTypeIdsByDriver?.get(driver) : undefined;
+    if (driver && typeId) {
+      inputs.push({
+        ComponentTypeID: typeId,
+        DriverKey: driver,
+        Name: `${input.componentName} › ${feature.Name}`,
+        SlotName: MODEL_INPUTS_SLOT,
+        Sequence: inputs.length,
+        Spec: inputSpecForFeature(feature, asOfOwners, input.datedSources ?? []),
+        Binding: binding,
+      });
+      continue;
+    }
+    if (driver && !typeId) {
+      warnings.push(
+        `Feature '${feature.Name}' resolves to input driver '${driver}', which is not in the ` +
+          `component tree; its binding stays on the model rather than becoming a component.`,
+      );
+    }
+    bindings.push(binding);
   }
   bindings.push(...planOutputBindings(input, warnings));
 
@@ -263,14 +361,23 @@ export function planModelMaterialization(input: MaterializationInput): Materiali
     ComponentTypeID: input.componentTypeID,
     Name: input.componentName,
     MLModelID: input.mlModelID,
-    Spec: {
-      hyperparameters: input.hyperparameters ?? {},
-      targetEntityName: input.targetEntity.EntityName,
-      targetVariable: input.targetVariable,
-      problemType: input.problemType,
-      featureCount: input.featureSchema.length,
-    },
+    // The component's Spec IS its configuration, because that is what the component type's
+    // `SpecSchema` describes (for an algorithm leaf, SpecSchema is the hyperparameter schema).
+    // Wrapping the config under a `hyperparameters` key and adding assembly facts alongside it
+    // made the Spec unable to satisfy ANY real schema: the server-side entity subclass validates
+    // Spec against SpecSchema, and a schema with `additionalProperties: false` (or any required
+    // config key) rejected every one of those extra properties. That went unnoticed only because
+    // every seeded leaf but one carries a null SpecSchema, which skips validation entirely — so
+    // the first component type to declare a schema, Glass-Box Rubric, could never be materialized,
+    // and a model built on it silently got no component row, no story, and no reuse entry.
+    //
+    // The dropped fields were redundant, not lost: target entity/variable and problem type live on
+    // the `MJ: ML Models` row this component points at, and the feature count is the number of
+    // Input bindings written below.
+    Spec: { ...(input.hyperparameters ?? {}) },
+    ArtifactFileID: input.artifactFileID ?? null,
     Bindings: bindings,
+    Inputs: inputs,
     Warnings: warnings,
   };
 }
@@ -327,9 +434,14 @@ export function planComposedComponents(
       ComponentTypeRef: node.ComponentTypeRef,
       SlotName: node.SlotName ?? null,
       Sequence: sequence,
-      Spec: { ...(node.Params ?? {}), driver: state.driver },
+      // Same rule as the root: Spec is the node's own configuration, so it can satisfy the
+      // component type's SpecSchema. The sidecar driver key is NOT config — it is derivable
+      // from the component type's `DriverClass`, and carrying it here made a child unable to
+      // pass any schema declaring `additionalProperties: false`.
+      Spec: { ...(node.Params ?? {}) },
       IsTrained: state.fitted,
       SourceComponentID: node.ReuseInstanceID ?? null,
+      ArtifactB64: state.artifact_b64 ?? null,
     });
   }
   return plans;
@@ -363,6 +475,80 @@ function indexAsOfFeatures(datedSources: DatedSourceSpec[]): Map<string, { sourc
     }
   }
   return byColumn;
+}
+
+
+/** The slot on the abstract `Model` node that every model's inputs fill. */
+export const MODEL_INPUTS_SLOT = 'inputs';
+
+/**
+ * Normalize an as-of aggregate to the `DriverClass` of its `Input` leaf.
+ *
+ * The two legacy spellings (`activity_count`, `days_since_last_activity`) are aliases kept for
+ * pipelines authored before the vocabulary widened, and the presence mask is a synthetic kind the
+ * binding indexer invents for `<col>__present`; all three must land on the same leaf as their
+ * modern equivalent or the same feature would be typed differently depending on how it was spelled.
+ */
+export function asOfDriverKey(aggregate: string): string {
+  const canonical =
+    aggregate === 'activity_count' ? 'count'
+    : aggregate === 'days_since_last_activity' ? 'recency'
+    : aggregate === 'presence' ? 'exists'
+    : aggregate;
+  return `asof_${canonical}`;
+}
+
+/**
+ * `FeatureKind` → the `DriverClass` of the `Input` leaf that kind is always an instance of.
+ *
+ * Only the kinds that map 1:1 appear here. `numeric` and `categorical` are deliberately absent:
+ * they describe a value's TYPE, not its origin, so the same kind covers a plain column and an
+ * as-of aggregate — origin has to be resolved first, which is what {@link inputDriverForFeature}
+ * does before falling back to this table.
+ */
+const DRIVER_BY_FEATURE_KIND: Readonly<Partial<Record<FeatureKind, string>>> = {
+  embedding: 'embedding',
+  'llm-derived': 'llm-derived',
+  forecast: 'forecast',
+};
+
+/** The `DriverClass` of the `Input` leaf a feature is an instance of, or null when untypable. */
+function inputDriverForFeature(
+  feature: FeatureSchemaEntry,
+  input: MaterializationInput,
+  asOfOwners: ReturnType<typeof indexAsOfFeatures>,
+): string | null {
+  // Origin first: an as-of aggregate and a plain column can both be `numeric`, so the feature's
+  // Kind cannot distinguish them.
+  const asOf = asOfOwners.get(feature.Name);
+  if (asOf) return asOfDriverKey(asOf.aggregate);
+  if (input.targetEntity.FieldsByName.has(feature.Name.toLowerCase())) return 'select';
+  // Then the kinds that name their own origin. A feature produced by a model we CALL rather than
+  // read — an embedding, an LLM-derived value, and in future a forecast — is an input in exactly
+  // the same sense as a column, and deserves its own component row so it can carry a story and be
+  // found by meaning. Leaving these unmapped made them invisible to reuse for no reason.
+  return DRIVER_BY_FEATURE_KIND[feature.Kind] ?? null;
+}
+
+/** The configuration worth freezing on an as-of input component — what a reuser needs to judge it. */
+function inputSpecForFeature(
+  feature: FeatureSchemaEntry,
+  asOfOwners: ReturnType<typeof indexAsOfFeatures>,
+  datedSources: DatedSourceSpec[],
+): Record<string, unknown> {
+  const asOf = asOfOwners.get(feature.Name);
+  if (!asOf) return {};
+  const featureSpec = asOf.source.Features.find((f) => f.OutputColumn === feature.Name);
+  const spec: Record<string, unknown> = {
+    aggregate: asOf.aggregate,
+    source: asOf.source.EntityName,
+    foreignKey: asOf.source.ForeignKeyField,
+    dateField: asOf.source.DateField,
+  };
+  if (asOf.field) spec.field = asOf.field;
+  if (featureSpec?.Window) spec.window = featureSpec.Window;
+  void datedSources;
+  return spec;
 }
 
 /** Plan one `Input` binding, resolving it to the most specific real thing we can name. */
@@ -531,19 +717,29 @@ export class ComponentMaterializer {
     input: MaterializationInput,
     deps: MaterializationDeps,
   ): Promise<MaterializationResult> {
-    const plan = planModelMaterialization({ ...input, mlModelID: model.ID });
+    // The model is saved by now, so its artifact id is available — and it is the root component's
+    // fitted state, not merely the model's.
+    const plan = planModelMaterialization({
+      ...input,
+      mlModelID: model.ID,
+      artifactFileID: input.artifactFileID ?? model.ArtifactFileID ?? null,
+    });
     try {
       const component = await this.writeComponent(plan, deps);
-      const bindingCount = await this.writeBindings(component.ID, plan, deps, plan.Warnings);
+      let bindingCount = await this.writeBindings(component.ID, plan.Bindings, deps, plan.Warnings);
       await this.linkModel(model, component.ID, plan.Warnings);
+      const inputCount = await this.writeInputComponents(component.ID, plan, deps);
+      bindingCount += inputCount.bindingsWritten;
       const composedCount = await this.writeComposedComponents(component.ID, input, plan, deps);
       LogStatus(
         `ComponentMaterializer: model ${model.ID} materialized as component ${component.ID} with ${bindingCount} binding(s)` +
+          (inputCount.componentsWritten > 0 ? `, ${inputCount.componentsWritten} input component(s)` : '') +
           (composedCount > 0 ? ` and ${composedCount} composed sub-component(s).` : '.'),
       );
       return {
         ComponentID: component.ID,
         BindingCount: bindingCount,
+        InputComponentCount: inputCount.componentsWritten,
         ComposedComponentCount: composedCount,
         Warnings: plan.Warnings,
       };
@@ -553,10 +749,56 @@ export class ComponentMaterializer {
       return {
         ComponentID: null,
         BindingCount: 0,
+        InputComponentCount: 0,
         ComposedComponentCount: 0,
         Warnings: [...plan.Warnings, `Materialization failed: ${message}`],
       };
     }
+  }
+
+
+  /**
+   * Write one `MJ: ML Components` row per planned input, filling the root's `inputs` slot, and
+   * move that feature's binding onto it.
+   *
+   * Each row is what makes a feature independently reusable: `Story` and `StoryVector` live on a
+   * component, so a feature that is merely a binding can never be described in its own words nor
+   * found by meaning. An individual failure is recorded and skipped — losing one input's row is
+   * better than losing the model's whole provenance map.
+   */
+  private async writeInputComponents(
+    rootComponentID: string,
+    plan: MaterializationPlan,
+    deps: MaterializationDeps,
+  ): Promise<{ componentsWritten: number; bindingsWritten: number }> {
+    let componentsWritten = 0;
+    let bindingsWritten = 0;
+    for (const spec of plan.Inputs) {
+      const row = await deps.entityFactory.getEntityObject<MJMLComponentEntity>('MJ: ML Components', deps.contextUser);
+      row.NewRecord();
+      row.ComponentTypeID = spec.ComponentTypeID;
+      row.Name = spec.Name;
+      row.MLModelID = plan.MLModelID;
+      row.ParentComponentID = rootComponentID;
+      row.SlotName = spec.SlotName;
+      row.Sequence = spec.Sequence;
+      row.Spec = JSON.stringify(spec.Spec);
+      // An input is a computed feature, not a fitted estimator — it holds no learned state of its
+      // own, so claiming it is trained would misreport what the reuse search is offering.
+      row.IsTrained = false;
+      row.PromotionState = 'Draft';
+      row.Status = 'Draft';
+      row.Version = 1;
+      if (!(await row.Save())) {
+        plan.Warnings.push(
+          `Input component '${spec.Name}' was not saved: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+        continue;
+      }
+      componentsWritten++;
+      bindingsWritten += await this.writeBindings(row.ID, [spec.Binding], deps, plan.Warnings);
+    }
+    return { componentsWritten, bindingsWritten };
   }
 
   /**
@@ -613,6 +855,12 @@ export class ComponentMaterializer {
       row.Spec = JSON.stringify(node.Spec);
       row.IsTrained = node.IsTrained;
       row.SourceComponentID = node.SourceComponentID;
+      // Its OWN artifact — this is what separates "a described part of a model" from "a trained
+      // part another model can use". Without it the row is catalogued and not reusable.
+      const artifactFileID = await this.storeNodeArtifact(node, plan, deps);
+      if (artifactFileID) {
+        row.ArtifactFileID = artifactFileID;
+      }
       row.PromotionState = 'Draft';
       row.Status = 'Draft';
       row.Version = 1;
@@ -629,6 +877,40 @@ export class ComponentMaterializer {
     return written;
   }
 
+  /**
+   * Persist one composed node's own artifact, returning the file id to record on its row.
+   *
+   * Returns null — and says why once — whenever the node cannot be made independently reusable,
+   * so the gap is visible in the materialization warnings instead of surfacing much later as a
+   * refused reuse.
+   */
+  private async storeNodeArtifact(
+    node: ComposedComponentPlan,
+    plan: MaterializationPlan,
+    deps: MaterializationDeps,
+  ): Promise<string | null> {
+    if (!node.ArtifactB64) {
+      return null;
+    }
+    if (!deps.artifactStore) {
+      plan.Warnings.push(
+        `'${node.ComponentTypeRef}' was trained and could be reused elsewhere, but no artifact store was supplied, ` +
+          `so it is catalogued without one and cannot be frozen into another model.`,
+      );
+      return null;
+    }
+    try {
+      const bytes = Uint8Array.from(Buffer.from(node.ArtifactB64, 'base64'));
+      return await deps.artifactStore.save(bytes, `component-${node.ComponentTypeRef}-${node.Sequence}.bin`, deps.contextUser);
+    } catch (err) {
+      plan.Warnings.push(
+        `Could not store the artifact for '${node.ComponentTypeRef}': ${err instanceof Error ? err.message : String(err)}. ` +
+          `It is catalogued but not reusable.`,
+      );
+      return null;
+    }
+  }
+
   /** Create + save the root `MJ: ML Components` row. */
   private async writeComponent(plan: MaterializationPlan, deps: MaterializationDeps): Promise<MJMLComponentEntity> {
     const component = await deps.entityFactory.getEntityObject<MJMLComponentEntity>('MJ: ML Components', deps.contextUser);
@@ -638,8 +920,14 @@ export class ComponentMaterializer {
     component.MLModelID = plan.MLModelID;
     component.Sequence = 0;
     component.Spec = JSON.stringify(plan.Spec);
-    // The model artifact IS this component's trained state; a trained root is by definition trained.
+    // The model artifact IS this component's trained state, so it is recorded here too — that is
+    // what makes the root loadable as a FROZEN child in another model's slot. Written `IsTrained`
+    // without it, the component advertises a fitted state it cannot produce, and the reuse loader
+    // refuses it at the point of use rather than here.
     component.IsTrained = true;
+    if (plan.ArtifactFileID) {
+      component.ArtifactFileID = plan.ArtifactFileID;
+    }
     // A newly trained model is Draft until a human (or the promotion gate) says otherwise —
     // the component's promotion state must not outrun the model's.
     component.PromotionState = 'Draft';
@@ -657,12 +945,12 @@ export class ComponentMaterializer {
    */
   private async writeBindings(
     componentID: string,
-    plan: MaterializationPlan,
+    bindings: BindingPlan[],
     deps: MaterializationDeps,
     warnings: string[],
   ): Promise<number> {
     let written = 0;
-    for (const b of plan.Bindings) {
+    for (const b of bindings) {
       const binding = await deps.entityFactory.getEntityObject<MJMLComponentBindingEntity>(
         'MJ: ML Component Bindings',
         deps.contextUser,

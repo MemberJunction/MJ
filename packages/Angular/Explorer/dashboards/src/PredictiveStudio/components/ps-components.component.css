@@ -76,3 +76,29 @@
   .ps-components .split { grid-template-columns: 1fr; }
   .ps-components .tree-body { max-height: 320px; }
 }
+
+/* ── Reuse-by-meaning search ─────────────────────────────────────────────────────────── */
+.ps-components .reuse-intro { margin-bottom: 8px; line-height: 1.5; }
+
+.ps-components .reuse-search { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+
+.ps-components .reuse-input {
+  flex: 1 1 auto; min-width: 0; padding: 6px 10px;
+  border: 1px solid var(--mj-border-default); border-radius: 6px;
+  background: var(--mj-bg-surface); color: var(--mj-text-primary); font-size: 12.5px;
+}
+.ps-components .reuse-input:focus { outline: none; border-color: var(--mj-brand-primary); }
+
+.ps-components .reuse-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+
+.ps-components .reuse-match { padding: 8px 0; border-top: 1px solid var(--mj-border-subtle); }
+.ps-components .reuse-match:first-of-type { border-top: none; }
+
+.ps-components .match-score { margin-left: auto; }
+
+/* The bar restates the score positionally, so a row can be scanned without reading the number. */
+.ps-components .match-bar {
+  height: 3px; border-radius: 2px; background: var(--mj-bg-surface-sunken);
+  margin: 4px 0; overflow: hidden;
+}
+.ps-components .match-bar > span { display: block; height: 100%; background: var(--mj-brand-primary); }

@@ -140,6 +140,12 @@ class TrainedComponentState(BaseModel):
     fitted: bool
     reuse_instance_id: Optional[str] = None
     feature_importance: Optional[Dict[str, float]] = None
+    # This node's OWN serialized estimator, so it can be stored as an independently reusable
+    # component and later frozen into a different model. Present only for a node that was fitted
+    # here and whose estimator is separable; a frozen child already has an artifact of its own, and
+    # a node whose fitted estimator cannot be recovered from the parent reports None rather than
+    # something misleading.
+    artifact_b64: Optional[str] = None
 
 
 class TrainResponse(BaseModel):

@@ -24,6 +24,8 @@ import { deriveTrustVerdict } from '@memberjunction/predictive-studio-core';
 
 import { detectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelStoryTagger, tagModelStoryBestEffort } from '../stories/model-story-tagger';
+import { FindingWriter, writeFindingsBestEffort } from '../stories/finding-writer';
+import type { ModelStory } from '@memberjunction/predictive-studio-core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 
 import { RunViewStoryPromptLoader, type IStoryPromptRunner } from '../stories/seams';
@@ -75,8 +77,12 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
    * host ever did — so the feature shipped inert. Building the runner here is safe: `AIPromptRunner`
    * comes from `@memberjunction/ai-prompts`, which this package already depends on transitively
    * through `@memberjunction/ai-agents`, so there is no cycle and no new install weight.
+   *
+   * Public because it is now Predictive Studio's single prompt-runner registry: the capability
+   * judge reads it too, so a deployment opts into (or out of) every LLM-backed PS feature with one
+   * wire rather than discovering that one of them silently did nothing.
    */
-  protected static get StoryRunner(): IStoryPromptRunner | null {
+  public static get StoryRunner(): IStoryPromptRunner | null {
     if (ProductionModelPromotionGate.storyRunner !== undefined) {
       return ProductionModelPromotionGate.storyRunner;
     }
@@ -255,7 +261,8 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
       return { kind: 'save-failed', message: model.LatestResult?.CompleteMessage ?? 'unknown error' };
     }
     await this.syncScoringAction(model, targetStatus, contextUser, provider);
-    await this.writeModelStory(model, targetStatus, contextUser, provider);
+    const story = await this.writeModelStory(model, targetStatus, contextUser, provider);
+    await this.writeFindings(model, targetStatus, story, contextUser, provider);
     return { kind: 'promoted', newStatus: targetStatus, signOffNote };
   }
 
@@ -276,13 +283,13 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     targetStatus: PromoteModelRequest['targetStatus'],
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
-  ): Promise<void> {
+  ): Promise<ModelStory | null> {
     if (targetStatus !== 'Published') {
-      return;
+      return null;
     }
     const runner = ProductionModelPromotionGate.StoryRunner;
     if (!runner) {
-      return;
+      return null;
     }
     try {
       const result = await tagModelStoryBestEffort(new ModelStoryTagger(), model, deriveTrustVerdict(model), {
@@ -294,8 +301,41 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
       for (const reason of result.Reasons) {
         LogStatus(`ProductionModelPromotionGate: story — ${reason}`);
       }
+      return result.Story;
     } catch (err) {
       LogError(`ProductionModelPromotionGate: story tagging threw (promotion is unaffected): ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /**
+   * Record what the model LEARNED as dated, citable findings.
+   *
+   * Runs on `Published` alongside the story, and — unlike the story — is **deliberately independent
+   * of the LLM**. Every number a finding carries comes from the model's own measured importance and
+   * holdout metrics, so findings are written even when story tagging is switched off or failed.
+   * The story, when there is one, supplies only the business-language prose.
+   *
+   * Like {@link syncScoringAction} and {@link writeModelStory} this is a pure enhancement: a
+   * failure is logged and swallowed, never allowed to fail an otherwise-successful promotion.
+   */
+  protected async writeFindings(
+    model: MJMLModelEntity,
+    targetStatus: PromoteModelRequest['targetStatus'],
+    story: ModelStory | null,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<void> {
+    if (targetStatus !== 'Published' || !provider) {
+      return;
+    }
+    const result = await writeFindingsBestEffort(new FindingWriter(), model, deriveTrustVerdict(model), {
+      story,
+      contextUser,
+      provider,
+    });
+    for (const reason of result.Reasons) {
+      LogStatus(`ProductionModelPromotionGate: findings — ${reason}`);
     }
   }
 
