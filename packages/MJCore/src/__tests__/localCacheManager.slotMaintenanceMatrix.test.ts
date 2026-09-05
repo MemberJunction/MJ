@@ -265,17 +265,17 @@ describe('LocalCacheManager — slot maintenance matrix (slot type x mutation)',
         describe('fls: segment (field security)', () => {
             const fpWithFls = (flsKey: string): string =>
                 (cache as unknown as {
-                    GenerateRunViewFingerprint(p: RunViewParams, conn?: string, rls?: string, fls?: string): string;
-                }).GenerateRunViewFingerprint({ EntityName: ENTITY }, 'mssql://localhost:1433/', '', flsKey);
+                    GenerateRunViewFingerprint(p: RunViewParams, conn?: string, rls?: string, ds?: string, fls?: string): string;
+                }).GenerateRunViewFingerprint({ EntityName: ENTITY }, 'mssql://localhost:1433/', '', undefined, flsKey);
 
             it('appends in the SUFFIX region — every positional base index is unmoved', () => {
                 // The whole reason segment-indexing bugs recur here: a new segment inserted
                 // before the base ones silently shifts filter/orderBy/agg/userSearch.
                 const parts = (cache as unknown as {
-                    GenerateRunViewFingerprint(p: RunViewParams, conn?: string, rls?: string, fls?: string): string;
+                    GenerateRunViewFingerprint(p: RunViewParams, conn?: string, rls?: string, ds?: string, fls?: string): string;
                 }).GenerateRunViewFingerprint(
                     { EntityName: ENTITY, ExtraFilter: "Status='Active'", OrderBy: 'Name ASC', MaxRows: 7, StartRow: 3, UserSearchString: 'gala' },
-                    'mssql://localhost:1433/', '', 'salary'
+                    'mssql://localhost:1433/', '', undefined, 'salary'
                 ).split('|');
 
                 expect(parts[0]).toBe(ENTITY);

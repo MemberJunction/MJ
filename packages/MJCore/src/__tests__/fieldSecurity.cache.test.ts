@@ -211,27 +211,27 @@ describe('GenerateRunViewFingerprint — fls: segment', () => {
     const base = { EntityName: 'Employees', ExtraFilter: 'IsActive=1' } as unknown as RunViewParams;
 
     it('appends an fls: segment only when a key is provided', () => {
-        expect(cache.GenerateRunViewFingerprint(base, 'conn', '', 'id,name')).toContain('fls:');
-        expect(cache.GenerateRunViewFingerprint(base, 'conn', '', '')).not.toContain('fls:');
+        expect(cache.GenerateRunViewFingerprint(base, 'conn', '', undefined, 'id,name')).toContain('fls:');
+        expect(cache.GenerateRunViewFingerprint(base, 'conn', '', undefined, '')).not.toContain('fls:');
         expect(cache.GenerateRunViewFingerprint(base, 'conn', '')).not.toContain('fls:');
     });
 
     it('keeps the empty-key fingerprint byte-identical to the pre-FLS format (shared slots preserved)', () => {
         expect(cache.GenerateRunViewFingerprint(base, 'conn', ''))
-            .toBe(cache.GenerateRunViewFingerprint(base, 'conn', '', ''));
+            .toBe(cache.GenerateRunViewFingerprint(base, 'conn', '', undefined, ''));
     });
 
     it('distinct field sets produce distinct fingerprints; identical sets share one', () => {
-        const narrow = cache.GenerateRunViewFingerprint(base, 'conn', '', 'id,name');
-        const wider = cache.GenerateRunViewFingerprint(base, 'conn', '', 'bonus,id,name');
-        const narrowAgain = cache.GenerateRunViewFingerprint(base, 'conn', '', 'id,name');
+        const narrow = cache.GenerateRunViewFingerprint(base, 'conn', '', undefined, 'id,name');
+        const wider = cache.GenerateRunViewFingerprint(base, 'conn', '', undefined, 'bonus,id,name');
+        const narrowAgain = cache.GenerateRunViewFingerprint(base, 'conn', '', undefined, 'id,name');
 
         expect(narrow).not.toBe(wider);
         expect(narrow).toBe(narrowAgain);
     });
 
     it('composes with the rls: segment rather than replacing it', () => {
-        const fp = cache.GenerateRunViewFingerprint(base, 'conn', "UserID='u1'", 'id,name');
+        const fp = cache.GenerateRunViewFingerprint(base, 'conn', "UserID='u1'", undefined, 'id,name');
         expect(fp).toContain('rls:');
         expect(fp).toContain('fls:');
     });
@@ -259,9 +259,9 @@ describe('ProviderBase.ComputeRunViewFLSFingerprintKey', () => {
         const params = viewParams({ ExtraFilter: 'IsActive=1' });
 
         provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
-        const restricted = cache.GenerateRunViewFingerprint(params, 'conn', '', provider.fingerprintKey(params));
+        const restricted = cache.GenerateRunViewFingerprint(params, 'conn', '', undefined, provider.fingerprintKey(params));
         provider.setCurrentUser(buildUser([HR_ROLE_ID]));
-        const unrestricted = cache.GenerateRunViewFingerprint(params, 'conn', '', provider.fingerprintKey(params));
+        const unrestricted = cache.GenerateRunViewFingerprint(params, 'conn', '', undefined, provider.fingerprintKey(params));
 
         expect(restricted).toBe(unrestricted);
     });
@@ -280,7 +280,7 @@ describe('ProviderBase.ComputeRunViewFLSFingerprintKey', () => {
         const params = viewParams({ ExtraFilter: 'IsActive=1' });
         const fingerprintFor = (roles: string[]) => {
             provider.setCurrentUser(buildUser(roles));
-            return cache.GenerateRunViewFingerprint(params, 'conn', '', provider.fingerprintKey(params));
+            return cache.GenerateRunViewFingerprint(params, 'conn', '', undefined, provider.fingerprintKey(params));
         };
 
         const hr = fingerprintFor([HR_ROLE_ID]);
