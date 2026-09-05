@@ -65,6 +65,12 @@ export class MySQLDriver extends BaseAutoDocDriver {
     }
 
     this.pool = mysql.createPool(this.mysqlConfig);
+    // The promise-based Pool's typed `on()` overloads don't include 'error' (only connection/acquire/
+    // release/enqueue) even though the underlying core pool is a real EventEmitter that emits it — go
+    // through the underlying `pool` property, whose `on()` has a generic string-event overload.
+    this.pool.pool.on('error', (err: Error) => {
+      console.error('[MySQLDriver] Pool-level connection error:', err.message);
+    });
   }
 
   public async test(): Promise<AutoDocConnectionTestResult> {

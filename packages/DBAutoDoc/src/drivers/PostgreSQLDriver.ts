@@ -59,6 +59,9 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
     }
 
     this.pool = new Pool(this.pgConfig);
+    this.pool.on('error', (err) => {
+      console.error('[PostgreSQLDriver] Pool-level connection error:', err.message);
+    });
   }
 
   public async test(): Promise<AutoDocConnectionTestResult> {
