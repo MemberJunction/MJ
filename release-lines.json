@@ -65,6 +65,10 @@
         }
       },
       "scorecard": "certifications/5.51.0.md"
+    },
+    "6.1": {
+      "status": "candidate",
+      "candidateDate": "2026-09-11"
     }
   }
 }
