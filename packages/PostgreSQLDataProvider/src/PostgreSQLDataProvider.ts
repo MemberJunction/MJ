@@ -326,12 +326,15 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         // does for codegen-time SQL — runtime gets the same treatment.
         const quotedQuery = this.autoQuoteIdentifiers(query);
         try {
-            if (!options?.connectionSource) {
-                this.AssertAmbientTransactionUsable();
+            if (options?.connectionSource) {
+                const bypass = options.connectionSource as {
+                    query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+                };
+                const bypassResult = await bypass.query(quotedQuery, processedParams);
+                return bypassResult.rows as T[];
             }
-            const source = (options?.connectionSource as { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> } | undefined)
-                ?? this._transaction
-                ?? this._connectionManager.Pool;
+            this.AssertAmbientTransactionUsable();
+            const source = this._transaction ?? this._connectionManager.Pool;
             const result = await source.query(quotedQuery, processedParams);
             return result.rows as T[];
         } catch (err) {
