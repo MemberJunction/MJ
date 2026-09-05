@@ -18,6 +18,7 @@ export * from './check';
 export * from './check-registry';
 import './checks/self-test.check'; // side effect: register the permanent Phase-0 smoke check
 export * from './rls-fixture';
+export * from './fls-fixture';
 // NOTE: the check BUNDLES (MJ's own test content) live in the private
 // @memberjunction/integration-test-suite package — importing THAT package registers
 // every bundle on this registry. This framework package deliberately ships content-free.
