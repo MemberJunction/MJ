@@ -28,8 +28,8 @@ function isPostgres(ctx: IntegrationCheckContext): boolean {
     return providerOf(ctx).PlatformKey === 'postgresql';
 }
 
-function poolSource(ctx: IntegrationCheckContext): unknown {
-    const p = ctx.Provider as { DatabaseConnection?: unknown; Pool?: unknown };
+function poolSource(ctx: IntegrationCheckContext): object | undefined {
+    const p = ctx.Provider as { DatabaseConnection?: object; Pool?: object };
     return p.DatabaseConnection ?? p.Pool ?? undefined;
 }
 
