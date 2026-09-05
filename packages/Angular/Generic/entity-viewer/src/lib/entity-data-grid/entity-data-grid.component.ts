@@ -15,7 +15,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -1558,7 +1558,30 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   // Loading state
   loading: boolean = false;
-  errorMessage: string = '';
+  private _errorMessage: string = '';
+  /**
+   * Raw technical error from the last failed load. Kept for callers and the
+   * console; the error STATE shown to users leads with FriendlyErrorMessage.
+   * Setting a non-empty value logs the technical detail.
+   */
+  get errorMessage(): string {
+    return this._errorMessage;
+  }
+  set errorMessage(value: string) {
+    this._errorMessage = value;
+    if (value) {
+      LogError(`EntityDataGrid data load failed: ${value}`);
+    }
+  }
+  /**
+   * Human-first message for the error empty-state. Users see what happened and
+   * what to do; the raw error rides along as a de-emphasized parenthetical so a
+   * screenshot still carries the detail support needs.
+   */
+  get FriendlyErrorMessage(): string {
+    const friendly = 'The server may be busy or briefly unreachable — retrying usually fixes this.';
+    return this._errorMessage ? `${friendly} (Detail: ${this._errorMessage})` : friendly;
+  }
   totalRowCount: number = 0;
   private _loadDataPromise: Promise<void> | null = null;
 
@@ -2756,6 +2779,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
                   (!extendedType && (fieldNameLower.includes('url') ||
                                      fieldNameLower.includes('website') ||
                                      fieldNameLower.includes('link')));
+    // Image cells key off ExtendedType (or a User View format override). Field-name
+    // heuristics (PhotoURL/LogoURL) are not used — those columns are classified as
+    // ExtendedType='Image' in metadata.
+    const isImage = (customFormat?.type as string | undefined) === 'image' ||
+                    extendedType === 'image';
+    const isColor = extendedType === 'color';
     // Use ExtendedType='Tel' from metadata, fallback to field name pattern
     const isPhone = extendedType === 'tel' ||
                     (!extendedType && (fieldNameLower.includes('phone') ||
@@ -2792,6 +2821,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       colDef.headerClass = 'header-align-right';
     }
 
+    if (isImage) {
+      colDef.cellClass = `${colDef.cellClass || ''} mj-grid-image-cell`.trim();
+      colDef.headerClass = `${colDef.headerClass || ''} mj-grid-image-header`.trim();
+      colDef.width = 48;
+      colDef.minWidth = 44;
+      colDef.maxWidth = 56;
+      colDef.resizable = false;
+    }
+
     // Apply custom header style if provided
     if (customFormat?.headerStyle) {
       const headerStyle = this.buildCssStyle(customFormat.headerStyle);
@@ -2806,6 +2844,35 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     colDef.cellRenderer = (params: ICellRendererParams) => {
       if (params.value === null || params.value === undefined) {
         return '<span class="cell-empty">—</span>';
+      }
+
+      if (isImage) {
+        const raw = String(params.value).trim();
+        const src = CoerceImageSrc(raw);
+        if (src) {
+          const escaped = HighlightUtil.escapeHtml(src);
+          const img = `<img src="${escaped}" alt="" class="cell-image" width="28" height="28" style="width:28px;height:28px;max-width:28px;max-height:28px;object-fit:cover;object-position:center;border-radius:50%;display:block" />`;
+          const inner = src.startsWith('data:')
+            ? img
+            : `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="cell-image-link" onclick="event.stopPropagation()">${img}</a>`;
+          return this.wrapWithStyle(
+            inner,
+            customFormat?.cellStyle ? this.buildCssStyle(customFormat.cellStyle) : '',
+          );
+        }
+      }
+
+      if (isColor) {
+        const raw = String(params.value).trim();
+        const hex = ParseCssHexColor(raw);
+        const escaped = HighlightUtil.escapeHtml(raw);
+        const swatch = hex
+          ? `<span style="width:14px;height:14px;border-radius:3px;background:${HighlightUtil.escapeHtml(hex)};border:1px solid rgba(0,0,0,.2);display:inline-block;flex-shrink:0"></span>`
+          : '';
+        return this.wrapWithStyle(
+          `<span style="display:inline-flex;align-items:center;gap:6px">${swatch}${escaped}</span>`,
+          customFormat?.cellStyle ? this.buildCssStyle(customFormat.cellStyle) : '',
+        );
       }
 
       // Handle foreign key fields - render as clickable links
@@ -2980,6 +3047,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     if (!style) return content;
     return `<span style="${style}">${content}</span>`;
   }
+
+
 
   /**
    * Build a CSS style string from a ColumnTextStyle object
