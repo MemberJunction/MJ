@@ -15,7 +15,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -1558,7 +1558,30 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   // Loading state
   loading: boolean = false;
-  errorMessage: string = '';
+  private _errorMessage: string = '';
+  /**
+   * Raw technical error from the last failed load. Kept for callers and the
+   * console; the error STATE shown to users leads with FriendlyErrorMessage.
+   * Setting a non-empty value logs the technical detail.
+   */
+  get errorMessage(): string {
+    return this._errorMessage;
+  }
+  set errorMessage(value: string) {
+    this._errorMessage = value;
+    if (value) {
+      LogError(`EntityDataGrid data load failed: ${value}`);
+    }
+  }
+  /**
+   * Human-first message for the error empty-state. Users see what happened and
+   * what to do; the raw error rides along as a de-emphasized parenthetical so a
+   * screenshot still carries the detail support needs.
+   */
+  get FriendlyErrorMessage(): string {
+    const friendly = 'The server may be busy or briefly unreachable — retrying usually fixes this.';
+    return this._errorMessage ? `${friendly} (Detail: ${this._errorMessage})` : friendly;
+  }
   totalRowCount: number = 0;
   private _loadDataPromise: Promise<void> | null = null;
 
