@@ -78,6 +78,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
+import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
@@ -1107,8 +1108,42 @@ export class SQLServerDataProvider
   }
 
   /**
+   * First 8 hex of sha1(`${schema}.${table}|${pk values}`). Deterministic so
+   * MetadataSync recaptures of an unchanged tree are byte-identical. Random
+   * uuidv4 suffixes collided across large captures (loom #12 WP3 / F-D).
+   */
+  public static SaveCallVariableHash(schemaName: string, baseTable: string, pkValues: unknown[]): string {
+    const pk = pkValues.map((v) => (v === null || v === undefined ? '' : String(v))).join('|');
+    return createHash('sha1').update(`${schemaName}.${baseTable}|${pk}`).digest('hex').slice(0, 8);
+  }
+
+  /** Per transaction-group counts so the same PK twice in one batch gets `_hash_2`. */
+  private _saveCallSuffixCounts = new WeakMap<object, Map<string, number>>();
+
+  protected allocateSaveCallSuffix(entity: BaseEntity): string {
+    const pkValues = entity.PrimaryKey?.KeyValuePairs?.map((p) => p.Value) ?? [];
+    const hash = SQLServerDataProvider.SaveCallVariableHash(
+      entity.EntityInfo.SchemaName,
+      entity.EntityInfo.BaseTable,
+      pkValues,
+    );
+    const group = entity.TransactionGroup;
+    if (!group) {
+      return `_${hash}`;
+    }
+    let counts = this._saveCallSuffixCounts.get(group);
+    if (!counts) {
+      counts = new Map();
+      this._saveCallSuffixCounts.set(group, counts);
+    }
+    const n = (counts.get(hash) ?? 0) + 1;
+    counts.set(hash, n);
+    return n === 1 ? `_${hash}` : `_${hash}_${n}`;
+  }
+
+  /**
    * Renders the SQL Server DECLARE/SET/EXEC binding for a save call.
-   * Emits per-field uuid-suffixed variables to keep batched saves
+   * Emits per-field PK-hash-suffixed variables to keep batched saves
    * (`SQLServerTransactionGroup`) collision-free. PKs on UPDATE are
    * tail-appended from `entity.PrimaryKey.KeyValuePairs`.
    *
@@ -1124,7 +1159,7 @@ export class SQLServerDataProvider
     isUpdate: boolean,
     _spName: string,
   ): SaveCallBinding {
-    const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
+    const uniqueSuffix = this.allocateSaveCallSuffix(entity);
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];
