@@ -19,7 +19,7 @@
         "dbImpact": "schema"
       },
       "6.1.0-edge.5": {
-        "dbImpact": "none"
+        "dbImpact": "schema"
       }
     }
   },
@@ -65,6 +65,10 @@
         }
       },
       "scorecard": "certifications/5.51.0.md"
+    },
+    "6.1": {
+      "status": "candidate",
+      "candidateDate": "2026-09-11"
     }
   }
 }
