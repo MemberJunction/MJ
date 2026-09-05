@@ -193,7 +193,20 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   @Input() ValueField = '';
   @Input() Filterable = false;
   @Input() ValuePrimitive = false;
-  @Input() Disabled = false;
+  /**
+   * Host-driven disable. Composed with Angular Forms' `setDisabledState()` into `IsDisabled`
+   * (the actual gate) — see `syncDisabled`. A setter, not a bare field, because this input is
+   * routinely bound to an expression that changes over the control's lifetime
+   * (`[Disabled]="!draft.CompanyID"`), and the gate has to follow it every time.
+   */
+  @Input()
+  set Disabled(value: boolean) {
+    this.disabledInput = value;
+    this.syncDisabled();
+  }
+  get Disabled(): boolean {
+    return this.disabledInput;
+  }
   @Input() Placeholder = 'Select...';
   @Input() DefaultItem: Record<string, unknown> | string | null = null;
 
@@ -243,6 +256,11 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
     return /^filter\b/i.test(name) ? name : `Filter ${name}`;
   }
   IsOpen = false;
+  /**
+   * The single gate on `Toggle()` / `Open()` — true when EITHER the `Disabled` input or Angular
+   * Forms says so. Never assign it directly; go through `syncDisabled()` so both sources are
+   * always composed and a lock closes an open panel.
+   */
   IsDisabled = false;
   HighlightedIndex = -1;
   SelectedValue: unknown = null;
@@ -257,6 +275,33 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
 
   private onChange: (value: unknown) => void = () => {};
   private onTouched: () => void = () => {};
+
+  /** Backing field for the `Disabled` input. */
+  private disabledInput = false;
+  /** The forms-driven disabled state, kept SEPARATE so neither source can stomp the other. */
+  private formDisabled = false;
+
+  /**
+   * Recompute the gate from both of its sources. Called whenever either changes.
+   *
+   * `IsDisabled` is derived state, and the only thing that assigned it was `setDisabledState()`.
+   * The forms-driven half was in fact fine — `setUpControl` also wires `registerOnDisabledChange`,
+   * so that hook fires on every `control.disable()`/`enable()`, not just at registration. What had
+   * no recompute path at all was the `Disabled` @Input: a plain field, so the gate froze at
+   * whatever the first compose produced and every later change to the input was dropped.
+   *
+   * That is how a `[Disabled]="!draft.CompanyID"` picker stayed dead for the life of the
+   * component after the company was finally chosen.
+   */
+  private syncDisabled(): void {
+    const disabled = this.disabledInput || this.formDisabled;
+    if (disabled === this.IsDisabled) return;
+    this.IsDisabled = disabled;
+    // Becoming disabled while the panel is open would otherwise leave an interactive list
+    // hanging off a control the user can no longer operate.
+    if (disabled) this.resetPanelState();
+    this.cdr.markForCheck();
+  }
 
   get FilteredItems(): unknown[] {
     const data = (this.Data ?? []) as unknown[];
@@ -295,10 +340,19 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
 
   Close(): void {
     if (!this.IsOpen) return;
+    this.resetPanelState();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Panel state only — no change detection. Split out of `Close()` because `syncDisabled()` can
+   * run from an @Input setter, i.e. DURING the parent's change-detection pass, where a nested
+   * `detectChanges()` re-enters CD and trips NG0100 on the parent's own bindings.
+   */
+  private resetPanelState(): void {
     this.IsOpen = false;
     this.filterText = '';
     this.HighlightedIndex = -1;
-    this.cdr.detectChanges();
   }
 
   SelectItem(item: unknown | null, event?: Event): void {
@@ -378,7 +432,7 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   writeValue(value: unknown): void { this.SelectedValue = value; }
   registerOnChange(fn: (value: unknown) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
-  setDisabledState(isDisabled: boolean): void { this.IsDisabled = isDisabled || this.Disabled; }
+  setDisabledState(isDisabled: boolean): void { this.formDisabled = isDisabled; this.syncDisabled(); }
   ngOnDestroy(): void { this.Close(); }
 
   private getSelectedIndex(): number {
