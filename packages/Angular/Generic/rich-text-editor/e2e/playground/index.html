@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>mj-rich-text-editor — playground</title>
+<style>
+  :root { color-scheme: light dark; font: 14px/1.45 -apple-system, system-ui, sans-serif; }
+  body { margin: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; height: 100vh; }
+  header { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #8884; flex-wrap: wrap; }
+  header b { margin-right: 8px; }
+  section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #8884; }
+  section:last-child { border-right: none; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin: 0; padding: 8px 12px; opacity: .7; border-bottom: 1px solid #8884; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 12px; border-bottom: 1px solid #8884; }
+  .toolbar button { min-width: 32px; height: 28px; padding: 0 8px; font: inherit; border: 1px solid #8886; border-radius: 4px; background: transparent; cursor: pointer; }
+  .toolbar button[aria-pressed="true"] { background: #4a90e233; border-color: #4a90e2; }
+  .toolbar button:disabled { opacity: .4; cursor: default; }
+  #root { flex: 1; min-height: 240px; padding: 12px 16px; overflow: auto; outline: none; }
+  #root:focus { box-shadow: inset 0 0 0 2px #4a90e2; }
+  #root blockquote { border-left: 3px solid #8888; margin: 0 0 0 4px; padding-left: 12px; opacity: .85; }
+  textarea, pre { font: 12px/1.4 ui-monospace, Menlo, monospace; margin: 0; }
+  textarea { flex: 1; min-height: 120px; resize: vertical; border: none; border-bottom: 1px solid #8884; padding: 8px 12px; background: transparent; color: inherit; }
+  pre { flex: 1; overflow: auto; padding: 8px 12px; white-space: pre-wrap; word-break: break-all; }
+  .row { display: flex; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid #8884; flex-wrap: wrap; }
+  .ok { color: #2e9a4b; } .bad { color: #d64545; }
+  #log { max-height: 140px; font-size: 11px; opacity: .8; }
+  select, button.small { font: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <b>mj-rich-text-editor playground</b>
+  <label>Profile <select id="profile"><option value="email">email</option><option value="strict">strict</option></select></label>
+  <label>Sample <select id="sample"></select></label>
+  <button class="small" id="load">Load sample into editor</button>
+  <button class="small" id="reset">Reset diff baseline</button>
+  <span id="status"></span>
+</header>
+
+<section>
+  <h2>Editor (engine only, no Angular)</h2>
+  <div class="toolbar" id="toolbar"></div>
+  <div id="root"></div>
+  <h2>Events</h2>
+  <pre id="log"></pre>
+</section>
+
+<section>
+  <h2>Step 1 — capture a real message: copy it in Outlook / Gmail / Word, click the box, paste</h2>
+  <div id="capture" contenteditable="true" spellcheck="false" style="min-height:44px;padding:8px 12px;border-bottom:1px dashed #8886;opacity:.85">Click here and paste. The clipboard's HTML (not just its text) is captured into the box below.</div>
+  <h2>Step 2 — input HTML (editable; a textarea alone would only receive plain text)</h2>
+  <textarea id="input" spellcheck="false"></textarea>
+  <div class="row">
+    <button class="small" id="loadCustom">◀ Load this HTML into the editor</button>
+    <span id="captureStatus"></span>
+  </div>
+  <div class="row">
+    <b>Semantic diff vs loaded:</b> <span id="diff"></span>
+    <label><input type="checkbox" id="allowFiller" checked> allow filler &lt;br&gt;</label>
+  </div>
+  <pre id="diffList"></pre>
+  <h2>GetHTML() — live output</h2>
+  <pre id="output"></pre>
+</section>
+
+<script src="./engine.bundle.js"></script>
+<script>
+(() => {
+  const { RichTextEngine, diffHtml, ROUND_TRIP_FIXTURES } = window.MJRichText;
+  const $ = (id) => document.getElementById(id);
+  const IZZY_SAMPLE = {
+    Name: 'izzy-ai-reply-with-outlook-thread',
+    Profile: 'email',
+    Html: '<div>Hi Dana,</div><div><br></div><div>Thanks for flagging this. We have issued the refund and you should see it within 3–5 business days.</div><div><br></div><div>Best,<br>Izzy</div><div><br></div>'
+      + '<div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p class="MsoNormal"><b>From:</b> Dana Whitfield &lt;dana@example.org&gt;<br><b>Sent:</b> Tuesday, September 2, 2026 9:14 AM<br><b>Subject:</b> Duplicate charge on invoice 4471<o:p></o:p></p></div>'
+      + '<!--[if mso]><p class="MsoNormal">&nbsp;</p><![endif]--><p class="MsoNormal">Hello,<o:p></o:p></p><p class="MsoNormal" style="margin:0;mso-spacerun:yes">I was charged twice for invoice 4471. Please advise.<o:p></o:p></p>'
+      + '<table border="0" cellspacing="0" cellpadding="0" width="100%" style="width:100.0%"><tbody><tr><td style="padding:6.0pt 0in"><p class="MsoNormal" style="font-size:9.0pt;color:#7F7F7F">Dana Whitfield · Membership Director · Example Association<o:p></o:p></p></td></tr></tbody></table>',
+  };
+  const samples = [IZZY_SAMPLE, ...ROUND_TRIP_FIXTURES];
+  for (const s of samples) { const o = document.createElement('option'); o.value = s.Name; o.textContent = s.Name; $('sample').appendChild(o); }
+
+  const COMMANDS = ['bold','italic','underline','strikethrough','code','heading1','heading2','heading3','bulletList','orderedList','blockquote','link','removeFormat','undo','redo'];
+  let engine = null; let baseline = ''; let baselineProfile = 'email';
+
+  function log(line) { const el = $('log'); el.textContent = (new Date().toLocaleTimeString() + '  ' + line + '\n' + el.textContent).slice(0, 4000); }
+
+  function refresh() {
+    if (!engine) return;
+    $('output').textContent = engine.GetHTML();
+    for (const b of $('toolbar').querySelectorAll('button[data-command]')) {
+      const c = b.dataset.command;
+      if (c === 'undo') b.disabled = !engine.CanUndo; else if (c === 'redo') b.disabled = !engine.CanRedo;
+      else b.setAttribute('aria-pressed', String(engine.IsCommandActive(c)));
+    }
+    const d = diffHtml(baseline, engine.GetHTML(), { AllowFillerLineBreaks: $('allowFiller').checked, IgnoreFormattingWhitespace: true });
+    $('diff').innerHTML = d.Equal ? '<span class="ok">identical</span>' : '<span class="bad">' + d.Differences.length + ' difference(s)</span>';
+    $('diffList').textContent = d.Differences.map((x) => `${x.Kind} @ ${x.Path}\n    expected: ${x.Expected}\n    actual:   ${x.Actual}`).join('\n');
+  }
+
+  function create(html, profile) {
+    if (engine) engine.Destroy();
+    const root = $('root'); root.innerHTML = '';
+    engine = new RichTextEngine(root, { SanitizeProfile: profile });
+    engine.On('input', () => { log('input'); refresh(); });
+    engine.On('pathChange', (e) => { log('pathChange ' + e.Path); refresh(); });
+    engine.On('select', refresh);
+    engine.On('undoStateChange', (e) => log(`undoStateChange canUndo=${e.CanUndo} canRedo=${e.CanRedo}`));
+    engine.On('pasteImage', (e) => { log(`pasteImage ${e.File.name} ${e.File.type} ${e.File.size}B → inlining as data URI for the demo`); const r = new FileReader(); r.onload = () => engine.InsertImage(r.result, e.File.name); r.readAsDataURL(e.File); });
+    engine.On('willPaste', (e) => log('willPaste ' + e.Fragment.childNodes.length + ' node(s)'));
+    engine.SetHTML(html);
+    baseline = engine.GetHTML(); baselineProfile = profile;
+    $('input').value = html;
+    $('status').textContent = `loaded ${html.length} chars, ${profile} profile — edit, then watch the diff: only what you touched should change`;
+    engine.Focus();
+    refresh();
+    log('loaded');
+  }
+
+  const tb = $('toolbar');
+  for (const c of COMMANDS) {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.command = c; b.textContent = c;
+    b.addEventListener('mousedown', (e) => e.preventDefault());
+    b.addEventListener('click', () => {
+      if (!engine) return;
+      if (c === 'link') {
+        const current = engine.GetLinkHref();
+        const href = window.prompt('Link address (empty removes)', current ?? 'https://');
+        if (href === null) return;
+        if (href === '') engine.RemoveLink(); else engine.MakeLink(href);
+      } else engine.ExecuteCommand(c);
+      engine.Focus(); refresh();
+    });
+    tb.appendChild(b);
+  }
+  const addLine = document.createElement('button'); addLine.type = 'button'; addLine.textContent = '+ line below'; addLine.title = 'AppendTrailingLine()';
+  addLine.addEventListener('click', () => { engine && engine.AppendTrailingLine(); refresh(); }); tb.appendChild(addLine);
+
+  $('load').addEventListener('click', () => { const s = samples.find((x) => x.Name === $('sample').value); $('profile').value = s.Profile; create(s.Html, s.Profile); });
+  $('loadCustom').addEventListener('click', () => create($('input').value, $('profile').value));
+  // The capture box intercepts paste so the clipboard's text/html survives; a textarea would
+  // only ever receive text/plain, which is not what the editor has to preserve.
+  $('capture').addEventListener('paste', (e) => {
+    e.preventDefault();
+    const data = e.clipboardData;
+    const html = data ? data.getData('text/html') : '';
+    const text = data ? data.getData('text/plain') : '';
+    const types = data ? Array.from(data.types).join(', ') : '(none)';
+    if (html) {
+      // Browsers wrap clipboard HTML in a document; keep the body's inner markup.
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      $('input').value = doc.body ? doc.body.innerHTML : html;
+      $('captureStatus').innerHTML = `<span class="ok">captured text/html (${html.length} chars; types: ${types}) — now load it</span>`;
+    } else {
+      $('input').value = text;
+      $('captureStatus').innerHTML = `<span class="bad">clipboard had no text/html (types: ${types}); captured plain text instead</span>`;
+    }
+    $('capture').textContent = 'Captured. Paste again to replace.';
+    log('captured clipboard: ' + types);
+  });
+  $('capture').addEventListener('keydown', (e) => { if (!(e.metaKey || e.ctrlKey)) e.preventDefault(); });
+  $('reset').addEventListener('click', () => { if (engine) { baseline = engine.GetHTML(); refresh(); log('baseline reset'); } });
+  $('allowFiller').addEventListener('change', refresh);
+  $('root').addEventListener('mousedown', (e) => {
+    if (!engine || e.target !== $('root') || !engine.NeedsTrailingLine()) return;
+    const last = $('root').lastElementChild; if (last && e.clientY <= last.getBoundingClientRect().bottom) return;
+    e.preventDefault(); engine.AppendTrailingLine(); engine.Focus(); refresh();
+  });
+
+  create(IZZY_SAMPLE.Html, 'email');
+})();
+</script>
+</body>
+</html>

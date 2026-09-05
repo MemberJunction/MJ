@@ -1,0 +1,75 @@
+/*
+ * mj-rich-text-toolbar — token-styled native buttons. ViewEncapsulation.None, so these
+ * rules are global once the component loads; the class prefix keeps them scoped.
+ */
+
+
+.mj-rte-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mj-space-0-5);
+    padding: var(--mj-space-1) var(--mj-space-1-5);
+    background: var(--mj-bg-surface-sunken);
+    border-bottom: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md) var(--mj-radius-md) 0 0;
+}
+
+.mj-rte-toolbar-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 var(--mj-space-2);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--mj-radius-sm);
+    color: var(--mj-text-secondary);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+    transition: var(--mj-transition-colors);
+}
+
+.mj-rte-toolbar-button i {
+    font-size: var(--mj-text-sm);
+}
+
+.mj-rte-toolbar-button:hover:not(:disabled) {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-hover);
+}
+
+.mj-rte-toolbar-button:focus-visible {
+    outline: none;
+    box-shadow: var(--mj-focus-ring);
+}
+
+.mj-rte-toolbar-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.mj-rte-toolbar-button.is-active {
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+}
+
+.mj-rte-toolbar-badge {
+    position: absolute;
+    right: 0.2rem;
+    bottom: 0.15rem;
+    font-size: 0.55rem;
+    font-weight: var(--mj-font-bold);
+    line-height: 1;
+}
+
+.mj-rte-toolbar-separator {
+    width: 1px;
+    height: 1.25rem;
+    margin: 0 var(--mj-space-1);
+    background: var(--mj-border-default);
+}
+

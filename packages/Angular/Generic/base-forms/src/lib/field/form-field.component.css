@@ -131,6 +131,16 @@
   overflow: auto;
 }
 
+/* HTML fields: WYSIWYG editor plus the Visual / Source switch (<mj-view-toggle>) above it */
+.mj-forms-field-input--rich {
+  display: block;
+  width: 100%;
+}
+
+.mj-forms-field-html-toggle {
+  margin-bottom: 6px;
+}
+
 /* Read-only fields in edit mode */
 .mj-forms-field--readonly {
   opacity: 0.7;

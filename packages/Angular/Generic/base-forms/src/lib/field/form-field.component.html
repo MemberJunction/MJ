@@ -292,12 +292,33 @@
           </div>
         }
         @else if (EditRichTextMode !== 'plain') {
-          <!-- Markdown / HTML / Code long-text: edit raw with a syntax-highlighted code editor -->
-          <mj-code-editor
-            class="mj-forms-field-input--code"
-            [value]="FormatValue()"
-            [language]="CodeEditorLanguage"
-            (change)="OnCodeEditorChange($event)"></mj-code-editor>
+          <!-- Long-text with a rich format. HTML edits visually by default with a Source switch;
+               a field holding a whole document (<html>/<head>) opens in Source, because a visual
+               editor can only hold a body fragment and would drop the head on save. Markdown and
+               Code edit as raw source in the code editor. -->
+          @if (EditRichTextMode === 'html') {
+            <mj-view-toggle
+              class="mj-forms-field-html-toggle"
+              [Options]="HtmlEditorModeOptions"
+              [ActiveKey]="HtmlEditorMode"
+              (KeyChange)="SetHtmlEditorMode($event)"></mj-view-toggle>
+          }
+          @if (EditRichTextMode === 'html' && HtmlEditorMode === 'visual') {
+            <mj-rich-text-editor
+              class="mj-forms-field-input--rich"
+              [Html]="FormatValue()"
+              [AriaLabel]="FieldInfo?.DisplayNameOrName ?? 'HTML'"
+              MinHeight="160px"
+              MaxHeight="480px"
+              ImagePaste="data-uri"
+              (ContentChange)="OnRichTextChange($event)"></mj-rich-text-editor>
+          } @else {
+            <mj-code-editor
+              class="mj-forms-field-input--code"
+              [value]="FormatValue()"
+              [language]="CodeEditorLanguage"
+              (change)="OnCodeEditorChange($event)"></mj-code-editor>
+          }
         }
         @else {
           @switch (Type) {

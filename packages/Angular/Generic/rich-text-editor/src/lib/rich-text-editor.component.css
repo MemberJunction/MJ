@@ -1,0 +1,101 @@
+/*
+ * mj-rich-text-editor
+ *
+ * Every colour is a semantic --mj-* token so the editor follows the host theme and dark
+ * mode. Content styling (quotes, code, links) is presentation inside the editing surface
+ * only — none of it is serialized into the document.
+ */
+
+.mj-rte {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md);
+    color: var(--mj-text-primary);
+    font-family: var(--mj-font-family);
+    font-size: var(--mj-text-base);
+    line-height: 1.5;
+    transition: var(--mj-transition-colors), box-shadow var(--mj-transition-base);
+}
+
+.mj-rte--focused {
+    border-color: var(--mj-border-focus);
+    box-shadow: var(--mj-focus-ring);
+}
+
+.mj-rte--disabled {
+    opacity: 0.6;
+    background: var(--mj-bg-surface-sunken);
+}
+
+.mj-rte--disabled .mj-rte-surface,
+.mj-rte--readonly .mj-rte-surface {
+    cursor: default;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Editing surface                                                         */
+/* ---------------------------------------------------------------------- */
+
+.mj-rte-surface {
+    position: relative;
+    flex: 1 1 auto;
+    padding: var(--mj-space-3) var(--mj-space-4);
+    overflow-y: auto;
+    overflow-wrap: break-word;
+    outline: none;
+    cursor: text;
+}
+
+.mj-rte-surface--empty::before {
+    content: attr(data-placeholder);
+    position: absolute;
+    top: var(--mj-space-3);
+    left: var(--mj-space-4);
+    right: var(--mj-space-4);
+    color: var(--mj-text-disabled);
+    pointer-events: none;
+    white-space: pre-wrap;
+}
+
+/* Content presentation — applies only to markup without its own inline styles. */
+.mj-rte-surface a {
+    color: var(--mj-text-link);
+}
+
+.mj-rte-surface blockquote:not([style]) {
+    margin: 0 0 0 var(--mj-space-1);
+    padding: 0 0 0 var(--mj-space-3);
+    border-left: 3px solid var(--mj-border-strong);
+    color: var(--mj-text-secondary);
+}
+
+.mj-rte-surface pre,
+.mj-rte-surface code {
+    font-family: var(--mj-font-family-mono);
+    font-size: 0.9em;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: var(--mj-radius-sm);
+}
+
+.mj-rte-surface pre {
+    padding: var(--mj-space-2) var(--mj-space-3);
+    white-space: pre-wrap;
+}
+
+.mj-rte-surface code {
+    padding: 0 var(--mj-space-1);
+}
+
+.mj-rte-surface h1,
+.mj-rte-surface h2,
+.mj-rte-surface h3 {
+    margin: var(--mj-space-2) 0 var(--mj-space-1);
+    line-height: 1.25;
+}
+
+.mj-rte-surface img {
+    max-width: 100%;
+}

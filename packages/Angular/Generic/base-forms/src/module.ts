@@ -22,8 +22,9 @@ import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { RichTextEditorComponent } from '@memberjunction/ng-rich-text-editor';
 import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJViewToggleComponent } from '@memberjunction/ng-ui-components';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
 
@@ -68,6 +69,7 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
     FormsModule,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJViewToggleComponent,
     RecordChangesModule,
     ListManagementModule,
     EntityViewerModule,
@@ -76,6 +78,7 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
     MJReactModule,
     MarkdownModule,
     CodeEditorModule,
+    RichTextEditorComponent,
     MJSafeRichHtmlPipe,
     SharedGenericModule
   ],

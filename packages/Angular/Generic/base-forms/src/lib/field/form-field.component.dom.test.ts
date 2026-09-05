@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
 import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { MJViewToggleComponent } from '@memberjunction/ng-ui-components';
 import { MjFormFieldComponent } from './form-field.component';
 
 /**
@@ -24,10 +25,11 @@ import { MjFormFieldComponent } from './form-field.component';
  *   / `RunView` against related-entity metadata — that path is integration-shaped and
  *   is exercised against a live provider, not stubbed here.
  * - `AllowFKCreate` dialogs (`CanCreateFK` needs entity permissions off a real provider).
- * - Rich-text branches (`mj-markdown` / `mj-code-editor` / `mjSafeRichHtml`): the child
- *   components are heavy (CodeMirror, marked); inert selector-matching stubs below keep
- *   the template compiling — none of these tests assert rich-text behavior, and all
- *   test fields stay under the 255-char rich-text-eligibility threshold.
+ * - Rich-text branches (`mj-markdown` / `mj-code-editor` / `mj-rich-text-editor` /
+ *   `mjSafeRichHtml`): the child components are heavy (CodeMirror, marked, the rich-text
+ *   engine); inert selector-matching stubs below keep the template compiling. The HTML
+ *   edit-mode tests assert only which child is chosen and how the value flows; the rich
+ *   text editor's behaviour is covered in its own package.
  */
 
 // ---- Inert child stubs (template compile only — see header) ----
@@ -43,6 +45,16 @@ class StubCodeEditorComponent {
   @Input() language = '';
   @Input() readonly = false;
   @Output() change = new EventEmitter<string>();
+}
+
+@Component({ standalone: true, selector: 'mj-rich-text-editor', template: '<span class="stub-rich-text-editor">{{ Html }}</span>' })
+class StubRichTextEditorComponent {
+  @Input() Html = '';
+  @Input() AriaLabel = '';
+  @Input() MinHeight = '';
+  @Input() MaxHeight: string | null = null;
+  @Input() ImagePaste = 'event';
+  @Output() ContentChange = new EventEmitter<{ Html: string; IsUserChange: boolean }>();
 }
 
 @Pipe({ standalone: true, name: 'mjSafeRichHtml' })
@@ -87,6 +99,8 @@ function makeWidgetEntityInfo(): EntityInfo {
         EntityFieldValues: [{ Value: 'Active' }, { Value: 'Inactive' }, { Value: 'Pending' }],
       },
       { ID: 'F8', Name: 'Email', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true },
+      // An explicit HTML field: nvarchar(max) with ExtendedType 'HTML' → the WYSIWYG edit branch.
+      { ID: 'F10', Name: 'Body', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'HTML' },
       { ID: 'F9', Name: 'Website', Type: 'nvarchar', Length: 400, AllowsNull: true, AllowUpdateAPI: true },
     ],
   });
@@ -105,7 +119,7 @@ function render(
 ): ComponentFixture<MjFormFieldComponent> {
   return renderComponentFixture(MjFormFieldComponent, {
     declarations: [MjFormFieldComponent],
-    imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
+    imports: [CommonModule, MJViewToggleComponent, StubMarkdownComponent, StubCodeEditorComponent, StubRichTextEditorComponent, StubSafeRichHtmlPipe],
     inputs,
     setup,
   });
@@ -226,6 +240,56 @@ describe('MjFormFieldComponent (DOM)', () => {
 
       typeInto(f, 'textarea.mj-forms-field-input--textarea', 'new text');
       expect(record.Get('Description')).toBe('new text');
+    });
+
+    it('edits an HTML field visually by default, writing user changes through to the record', () => {
+      const record = makeWidget({ Body: '<div>hello</div>' });
+      const f = render({ Record: record, FieldName: 'Body', Type: 'textarea', EditMode: true });
+      const changes = capture(f.componentInstance.ValueChange);
+
+      expect(text(f, '.stub-rich-text-editor')).toBe('<div>hello</div>');
+      expect(query(f, '.stub-code-editor')).toBeNull();
+      const buttons = queryAll(f, '.mj-forms-field-html-toggle .mj-view-toggle-btn');
+      expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
+
+      const editor = f.debugElement.query((d) => d.name === 'mj-rich-text-editor');
+      const stub = editor.componentInstance as { ContentChange: EventEmitter<{ Html: string; IsUserChange: boolean }> };
+      // A programmatic write is not an edit…
+      stub.ContentChange.emit({ Html: '<div>ignored</div>', IsUserChange: false });
+      expect(record.Get('Body')).toBe('<div>hello</div>');
+      // …a user change is.
+      stub.ContentChange.emit({ Html: '<div>hello <b>there</b></div>', IsUserChange: true });
+      expect(record.Get('Body')).toBe('<div>hello <b>there</b></div>');
+      expect(changes).toEqual([{ FieldName: 'Body', OldValue: '<div>hello</div>', NewValue: '<div>hello <b>there</b></div>' }]);
+    });
+
+    it('opens a whole HTML document in Source, since a visual editor cannot hold its head', () => {
+      const record = makeWidget({ Body: '<!DOCTYPE html><html><head><style>p{}</style></head><body><p>x</p></body></html>' });
+      const f = render({ Record: record, FieldName: 'Body', Type: 'textarea', EditMode: true });
+      expect(query(f, '.stub-rich-text-editor')).toBeNull();
+      expect(query(f, '.stub-code-editor')).not.toBeNull();
+      const buttons = queryAll(f, '.mj-forms-field-html-toggle .mj-view-toggle-btn');
+      expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+    });
+
+    it('switches an HTML field between Visual and Source on request', () => {
+      const record = makeWidget({ Body: '<div>hello</div>' });
+      const f = render({ Record: record, FieldName: 'Body', Type: 'textarea', EditMode: true });
+      const [visual, source] = queryAll(f, '.mj-forms-field-html-toggle .mj-view-toggle-btn') as HTMLButtonElement[];
+      source.click();
+      f.detectChanges();
+      expect(query(f, '.stub-rich-text-editor')).toBeNull();
+      expect(text(f, '.stub-code-editor')).toBe('<div>hello</div>');
+      visual.click();
+      f.detectChanges();
+      expect(query(f, '.stub-rich-text-editor')).not.toBeNull();
+    });
+
+    it('still edits Markdown and Code fields as raw source', () => {
+      const record = makeWidget({ Description: 'plain' });
+      const f = render({ Record: record, FieldName: 'Description', Type: 'textarea', EditMode: true });
+      expect(query(f, '.mj-forms-field-html-toggle')).toBeNull();
+      expect(query(f, '.stub-rich-text-editor')).toBeNull();
     });
 
     it('renders a number input and change emits a numeric value (empty input emits null)', () => {

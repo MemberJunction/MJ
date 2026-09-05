@@ -95,6 +95,7 @@ General-purpose UI components, services, and helpers.
 |---------|-----|-------------|
 | [generic-dialog](./generic-dialog/README.md) | `@memberjunction/ng-generic-dialog` | Component for a generic dialog |
 | [code-editor](./code-editor/README.md) | `@memberjunction/ng-code-editor` | Angular code editor component |
+| [rich-text-editor](./rich-text-editor/README.md) | `@memberjunction/ng-rich-text-editor` | DOM-native WYSIWYG rich text editor -- no internal model or schema, so untouched HTML (email reply chains, tables, conditional comments) survives a round trip |
 | [file-storage](./file-storage/README.md) | `@memberjunction/ng-file-storage` | Components for managing files and related operations |
 | [export-service](./export-service/README.md) | `@memberjunction/ng-export-service` | Export service and dialog for exporting data to Excel, CSV, and JSON |
 | [list-management](./list-management/README.md) | `@memberjunction/ng-list-management` | Components for managing entity list membership with responsive UI |

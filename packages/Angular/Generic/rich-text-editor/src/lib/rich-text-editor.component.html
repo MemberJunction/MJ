@@ -1,0 +1,27 @@
+<div
+    class="mj-rte"
+    [class.mj-rte--disabled]="Disabled"
+    [class.mj-rte--readonly]="ReadOnly"
+    [class.mj-rte--focused]="HasFocus"
+    [class.mj-rte--no-toolbar]="!ShowToolbar"
+>
+    @if (ShowToolbar) {
+        <mj-rich-text-toolbar [Engine]="Engine" [Items]="ToolbarItems ?? DefaultToolbar" [Disabled]="Disabled || ReadOnly" />
+    }
+    <div
+        #surface
+        class="mj-rte-surface"
+        [class.mj-rte-surface--empty]="IsEmpty"
+        role="textbox"
+        aria-multiline="true"
+        [attr.aria-label]="AriaLabel"
+        [attr.aria-placeholder]="Placeholder || null"
+        [attr.aria-disabled]="Disabled ? 'true' : null"
+        [attr.aria-readonly]="ReadOnly ? 'true' : null"
+        [attr.data-placeholder]="Placeholder"
+        [style.min-height]="MinHeight"
+        [style.max-height]="MaxHeight"
+        (mousedown)="OnSurfaceMouseDown($event)"
+        (keydown)="OnSurfaceKeydown($event)"
+    ></div>
+</div>
