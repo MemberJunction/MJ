@@ -1,6 +1,6 @@
 import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityDenialMessage, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
@@ -2982,7 +2982,7 @@ export abstract class BaseEntity<T = unknown> {
     private AssertFieldReadable(fieldName: string): void {
         const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
         if (denied?.has(fieldName?.trim().toLowerCase())) {
-            throw new Error(FieldSecurityDenialMessage(fieldName, this.EntityInfo.Name));
+            throw new FieldSecurityError(fieldName, this.EntityInfo.Name);
         }
     }
 
@@ -4287,7 +4287,7 @@ export abstract class BaseEntity<T = unknown> {
                     `[FieldSecurity] Rejected save on '${this.EntityInfo.Name}': ` +
                     `field '${field.Name}' is not updatable by this user`
                 );
-                throw new Error(FieldSecurityDenialMessage(field.Name, this.EntityInfo.Name));
+                throw new FieldSecurityError(field.Name, this.EntityInfo.Name);
             }
         }
     }
