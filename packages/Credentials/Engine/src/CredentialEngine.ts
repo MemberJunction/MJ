@@ -378,42 +378,48 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     ): Promise<void> {
         this.TryThrowIfNotLoaded();
 
-        const md = this.ProviderToUse;
-        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-        const loaded = await credEntity.Load(credentialId);
-        if (!loaded) {
-            throw new Error(`Credential not found: ${credentialId}`);
-        }
+        // Serialized against the background timestamp touches (see
+        // enqueueCredentialWrite): a fire-and-forget LastUsedAt save that loaded
+        // this row before we commit would otherwise rewrite Values from its stale
+        // snapshot and silently revert this update.
+        await this.enqueueCredentialWrite(credentialId, async () => {
+            const md = this.ProviderToUse;
+            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+            const loaded = await credEntity.Load(credentialId);
+            if (!loaded) {
+                throw new Error(`Credential not found: ${credentialId}`);
+            }
 
-        // Get credential type for validation
-        const credType = this._credentialTypes.find(t => UUIDsEqual(t.ID, credEntity.CredentialTypeID));
-        if (credType) {
-            // Apply default and const values from schema
-            const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
+            // Get credential type for validation
+            const credType = this._credentialTypes.find(t => UUIDsEqual(t.ID, credEntity.CredentialTypeID));
+            if (credType) {
+                // Apply default and const values from schema
+                const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
 
-            // Validate against FieldSchema using Ajv
-            this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
+                // Validate against FieldSchema using Ajv
+                this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
 
-            // Use values with defaults applied
-            credEntity.Values = JSON.stringify(valuesWithDefaults); // Encryption happens on save
-        } else {
-            // No credential type found, just use provided values
-            credEntity.Values = JSON.stringify(values);
-        }
+                // Use values with defaults applied
+                credEntity.Values = JSON.stringify(valuesWithDefaults); // Encryption happens on save
+            } else {
+                // No credential type found, just use provided values
+                credEntity.Values = JSON.stringify(values);
+            }
 
-        const saved = await credEntity.Save();
-        if (!saved) {
-            throw new Error('Failed to update credential');
-        }
+            const saved = await credEntity.Save();
+            if (!saved) {
+                throw new Error('Failed to update credential');
+            }
 
-        // Log update
-        await this.logAccess(credEntity, contextUser, {
-            operation: 'Update',
-            success: true
+            // Log update
+            await this.logAccess(credEntity, contextUser, {
+                operation: 'Update',
+                success: true
+            });
+
+            // Refresh cache
+            await this.RefreshItem('_credentials');
         });
-
-        // Refresh cache
-        await this.RefreshItem('_credentials');
     }
 
     /**
@@ -645,30 +651,89 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     }
 
     /**
+     * Per-credential write chains backing {@link enqueueCredentialWrite}. Keyed by
+     * normalized credential ID; entries are removed as soon as their chain drains,
+     * so the map only holds credentials with a write currently in flight.
+     */
+    private _credentialWriteChains: Map<string, Promise<void>> = new Map();
+
+    /**
+     * Serializes writes to a single credential row within this process.
+     *
+     * Why: BaseEntity.Save() writes every updatable column from the entity's
+     * in-memory snapshot. The fire-and-forget LastUsedAt/LastValidatedAt touches
+     * load the row, and if a legitimate updateCredential() commits between that
+     * load and the touch's save, the touch rewrites Values from its stale
+     * decrypted snapshot — silently reverting the update (last writer wins, both
+     * paths report success). Chaining every write to the same credential through
+     * one promise makes each operation load only after the previous one
+     * committed, so a full-row save always writes a current snapshot.
+     *
+     * Scope: this closes the race within one process. Two separate processes can
+     * still clobber each other's columns — that is a property of MJ's
+     * write-all-columns spUpdate semantics affecting every entity, tracked by the
+     * sparse-update work in issue #2552.
+     *
+     * The returned promise settles with the operation's own outcome; a rejected
+     * operation does not break the chain for subsequent writers.
+     */
+    private enqueueCredentialWrite(credentialId: string, operation: () => Promise<void>): Promise<void> {
+        const key = credentialId.trim().toLowerCase();
+        const prev = this._credentialWriteChains.get(key) ?? Promise.resolve();
+        const next = prev.then(operation, operation);
+        // The chain link swallows the rejection (it surfaces to this call's
+        // caller via `next`) so an un-awaited chain never emits an unhandled
+        // rejection, and cleans the map up once it drains.
+        const link: Promise<void> = next.then(
+            () => undefined,
+            () => undefined
+        ).finally(() => {
+            if (this._credentialWriteChains.get(key) === link) {
+                this._credentialWriteChains.delete(key);
+            }
+        });
+        this._credentialWriteChains.set(key, link);
+        return next;
+    }
+
+    /**
      * Updates the LastUsedAt timestamp on a credential.
      */
     private async updateLastUsedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
-        try {
-            const md = this.ProviderToUse;
-            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-            await credEntity.Load(credentialId);
-            credEntity.LastUsedAt = new Date();
-            await credEntity.Save();
-        } catch (e) {
-            // Non-fatal - just log
-            LogError(e);
-        }
+        await this.enqueueCredentialWrite(credentialId, () =>
+            this.touchCredentialTimestamp(credentialId, 'LastUsedAt', contextUser));
     }
 
     /**
      * Updates the LastValidatedAt timestamp on a credential.
      */
     private async updateLastValidatedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
+        await this.enqueueCredentialWrite(credentialId, () =>
+            this.touchCredentialTimestamp(credentialId, 'LastValidatedAt', contextUser));
+    }
+
+    /**
+     * Sets a timestamp column via a normal entity save. Must only run inside
+     * {@link enqueueCredentialWrite} — unserialized, the full-row save this
+     * performs is exactly the stale-snapshot clobber described there.
+     */
+    private async touchCredentialTimestamp(
+        credentialId: string,
+        column: 'LastUsedAt' | 'LastValidatedAt',
+        contextUser: UserInfo
+    ): Promise<void> {
         try {
             const md = this.ProviderToUse;
             const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-            await credEntity.Load(credentialId);
-            credEntity.LastValidatedAt = new Date();
+            const loaded = await credEntity.Load(credentialId);
+            if (!loaded) {
+                return; // Row deleted since the read that triggered this touch — nothing to do
+            }
+            if (column === 'LastUsedAt') {
+                credEntity.LastUsedAt = new Date();
+            } else {
+                credEntity.LastValidatedAt = new Date();
+            }
             await credEntity.Save();
         } catch (e) {
             // Non-fatal - just log
