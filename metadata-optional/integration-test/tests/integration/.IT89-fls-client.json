@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT89 - FLS Over-The-Wire (client transport)",
+    "Description": "Field-Level Security proven OVER THE WIRE — the legs the server-transport IT87 cannot reach because there enforcement and observation share a process. A GraphQL client authenticates as ONE wire identity and a passed contextUser cannot change what the server returns, so per-user enforcement over the wire is only observable through per-user AUTHENTICATION: the fls-enforcement-client lifecycle mints one user API key (mj_sk_*, x-api-key header) each for the seeded it-fls-reader and it-fls-writer users and builds two secondary GraphQLDataProvider connections (separateConnection — the process-global system-key provider is untouched). MJAPI resolves each key to its real user with roles, making the reader connection a genuinely restricted principal end to end. All provisioning happens through the wire as the system-key identity: enabling EnableFieldLevelSecurity on 'MJ: Employees' runs snapshot initialization inside MJAPI's own entity layer, and the reader role's Email rule is tightened to Deny the same way; because MJAPI's metadata refresh after those saves is asynchronous, Setup polls the reader connection until the denied column disappears — live coverage of permission-change propagation to a running API (test-plan 5.6's single-server half). Four checks: FC1 list results to the restricted wire identity omit the denied column (3.1, wire); FC2 the single-record GraphQL payload omits the denied field's value entirely (3.8 — the MapFieldNamesToCodeNames output boundary); FC3 the unrestricted wire identity still receives the column with its real value (3.2, wire); FC4 an ExtraFilter naming the denied field is rejected over the wire with exactly the ambiguous 'does not exist or you do not have access' wording (3.4/3.12, wire). Teardown restores the reader rule to the snapshot default, disables the flag, deletes the fixture employee and the minted keys with their usage logs. Skips-as-pass loudly when MJAPI is unreachable, the seed is absent, or the entity is already FLS-enabled by an administrator.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A restricted wire identity never receives a denied column (lists or single-record payloads), predicates naming it are rejected with the ambiguous wording, an unrestricted identity is unaffected, and permission changes propagate to the running API."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "fls-enforcement-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "007A8D7F-80B6-4997-9880-1651B9F61DB9"
+  },
+  "sync": {
+    "lastModified": "2026-09-04T15:26:47.347Z",
+    "checksum": "0c4488c6365d10fb61f16832edfc9f9b19183eb539c9ba584ee3a0a0bef4013b"
+  }
+}

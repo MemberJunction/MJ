@@ -52,6 +52,9 @@ import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
+import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
+import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
+import { FlsClientChecks } from '../checks/fls-client.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
@@ -156,6 +159,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         // move of this count has been deliberate, which is what the guard is for.
         ['task-graph-execution', TaskGraphExecutionChecks, 27],
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
+        ['fls-enforcement', FlsEnforcementChecks, 20], // FLS1-FLS20 field-level security against a live DB (IT87)
+        ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT88)
+        ['fls-enforcement-client', FlsClientChecks, 4], // FC1-FC4 FLS over the wire via per-user API keys (IT89)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -245,6 +251,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'entity-server-invariants': 9,
         'entity-writes': 9,
         'field-rules-bulk-update': 3,
+        'fls-enforcement': 20,
+        'fls-enforcement-client': 4,
+        'fls-lifecycle': 9,
         'layered-base-views': 6,
         'lists': 3,
         'materialized-entity-read': 2,
@@ -314,7 +323,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(88);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(91);
     });
 });
 
@@ -413,6 +422,15 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-writes.EW6',
         'entity-writes.EW7',
         'entity-writes.EW9',
+        'fls-lifecycle.LC1',
+        'fls-lifecycle.LC2',
+        'fls-lifecycle.LC3',
+        'fls-lifecycle.LC4',
+        'fls-lifecycle.LC5',
+        'fls-lifecycle.LC6',
+        'fls-lifecycle.LC7',
+        'fls-lifecycle.LC8',
+        'fls-lifecycle.LC9',
         'nested-transactions.NT1',
         'nested-transactions.NT10',
         'nested-transactions.NT2',

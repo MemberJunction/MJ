@@ -103,6 +103,79 @@ export interface RlsFixture {
     SeededNoGrant?: UserInfo;
 }
 
+/**
+ * Fixture for the `fls-enforcement` bundle: the three seeded Field-Level-Security test users
+ * (metadata-optional/integration-test) plus the runtime state the bundle's lifecycle provisions —
+ * it enables `EnableFieldLevelSecurity` on the target entity through the REAL server entity path
+ * (so the snapshot/reconciliation code gets live coverage), and teardown restores the flag and
+ * deletes every permission row the snapshot wrote.
+ *
+ * `Usable=false` + `Reason` ⇒ the seed is absent or the entity is already FLS-enabled by a real
+ * administrator (the bundle refuses to mutate a configured entity) — checks skip-as-pass.
+ * `EnableError` is different: the seed IS present but enabling through the entity path FAILED.
+ * That is a product bug (it has happened — the snapshot/guard collision), so checks FAIL on it
+ * rather than skipping.
+ */
+export interface FlsFixture {
+    /** True iff seeded users resolved, the entity was FLS-disabled, and Setup enabled it successfully. */
+    Usable: boolean;
+    /** Why the fixture is unusable (seed absent / entity pre-configured), when Usable is false. */
+    Reason?: string;
+    /** Set when the seed was present but enabling field security through the entity path failed — a product bug, not a skip. */
+    EnableError?: string;
+    /** Seeded user holding ONLY the FLS Reader role (read-only; Email tightened to Deny, BCMID row deleted). */
+    Reader?: UserInfo;
+    /** Seeded user holding ONLY the FLS Writer role (read+create+update+delete; fully allowed). */
+    Writer?: UserInfo;
+    /** Seeded user holding Writer + Denier + Neutral — the cross-role aggregation user. */
+    Multi?: UserInfo;
+    /** The FLS target entity name ('MJ: Employees'). */
+    EntityName: string;
+    /** The four seeded FLS role IDs, resolved by name from live metadata. */
+    RoleIDs?: { Reader: string; Writer: string; Denier: string; Neutral: string };
+    /** ID of the fixture Employee row Setup seeds (via Pool SQL), for the load/update/round-trip checks. */
+    FixtureEmployeeID?: string;
+    /** An existing Company ID for creating Employee rows (Employee.CompanyID is required). */
+    CompanyID?: string;
+    /** Employee rows the checks created (create-suppression), swept by teardown. */
+    CreatedEmployeeIds: string[];
+}
+
+/**
+ * Fixture for the `fls-enforcement-client` bundle (client transport, needs MJAPI): the
+ * over-the-wire Field-Level Security leg. The lifecycle provisions everything THROUGH the wire
+ * as the system-key identity — enables field security on the target entity (the snapshot runs
+ * inside MJAPI), tightens the reader role's Email rule, mints one user API key each for the
+ * seeded reader and writer users, and builds two secondary GraphQLDataProvider connections
+ * authenticated AS those users. That gives genuinely restricted/unrestricted WIRE identities —
+ * a passed contextUser cannot change what the server returns (see RLS7's notes), so per-user
+ * enforcement over the wire is only observable through per-user authentication.
+ */
+export interface FlsClientFixture {
+    /** True iff seeded users resolved over the wire, the entity was FLS-disabled, and provisioning succeeded. */
+    Usable: boolean;
+    /** Why the fixture is unusable (seed absent / entity pre-configured), when Usable is false. */
+    Reason?: string;
+    /** Set when the seed was present but wire provisioning FAILED — a product bug, not a skip. */
+    ProvisionError?: string;
+    /** The FLS target entity name ('MJ: Employees'). */
+    EntityName: string;
+    /** Secondary GraphQL provider authenticated as the seeded restricted reader (user API key). */
+    ReaderProvider?: IMetadataProvider;
+    /** Secondary GraphQL provider authenticated as the seeded unrestricted writer (user API key). */
+    WriterProvider?: IMetadataProvider;
+    /** IDs of the minted `MJ: API Keys` rows, deleted (after their usage logs) in teardown. */
+    CreatedKeyIds: string[];
+    /** IDs of the `MJ: API Key Scopes` rules granting the minted keys `full_access` (deleted before the keys). */
+    CreatedScopeRuleIds: string[];
+    /** ID of the fixture Employee row created over the wire by the writer identity. */
+    FixtureEmployeeID?: string;
+    /** ID of the fixture Company created over the wire when the table was empty (deleted after the employee). */
+    CreatedCompanyID?: string;
+    /** ID of the reader role's Email permission row (tightened to Deny; restored in teardown). */
+    ReaderEfpRowID?: string;
+}
+
 /** An accumulator of `{ entity, id }` rows a mutating bundle created and must delete in FK-safe order. */
 export interface CreatedRow {
     entity: string;
@@ -524,6 +597,10 @@ export interface IntegrationCheckContext {
     Fixtures?: RunQueryFixtures;
     /** Discovered two-user RLS fixture for the `rls-isolation` bundle (suite-scoped). */
     RlsFixture?: RlsFixture;
+    /** Seeded + lifecycle-provisioned fixture for the `fls-enforcement` bundle. */
+    FlsFixture?: FlsFixture;
+    /** Wire-provisioned fixture for the `fls-enforcement-client` bundle (client transport). */
+    FlsClientFixture?: FlsClientFixture;
     /** Shared fixture for the `record-process-facade` bundle (setup → checks → teardown). */
     RpFacadeFixture?: RecordProcessFacadeFixture;
     /** Shared fixture for the `scheduled-jobs` bundle. */

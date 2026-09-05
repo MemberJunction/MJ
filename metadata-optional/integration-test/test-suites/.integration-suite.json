@@ -1013,6 +1013,39 @@
           "primaryKey": {
             "ID": "2EE162F6-4504-4FDF-BBFA-48AB414D9590"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT87 - Field-Level Security Enforcement",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8288C0DA-20F3-42ED-8669-734149F2B90D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT88 - FLS Lifecycle and System-User Guards",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5E73D80E-69CB-4E29-B2BC-0D9B86A26F24"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT89 - FLS Over-The-Wire (client transport)",
+            "Sequence": 69,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "034A5285-F437-4735-8324-9F81893ECB2A"
+          }
         }
       ]
     },
