@@ -51,7 +51,10 @@ const LINE_BRANCH = /(?:^|\/)lts\/[^/]+$/;
 const DB_TRIGGERS = [
     { label: 'migration', pattern: /^migrations\/v[0-9]+\/.+\.sql$/ },
     { label: 'repeatable migration', pattern: /^migrations\/R__.+\.sql$/ },
-    { label: 'metadata', pattern: /^metadata\/.+/ },
+    // Authoring docs (CLAUDE.md / README.md) under metadata/ are read by people, never by
+    // `mj sync push`, so they become no migration. Other .md files there (prompt templates
+    // pulled in via @file:) DO ship, which is why only these two names are excluded.
+    { label: 'metadata', pattern: /^metadata\/(?!(?:.+\/)?(?:CLAUDE|README)\.md$).+/ },
 ];
 const CHANGESET_FILE = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 /** Bump levels a changeset entry may declare, worst first. */

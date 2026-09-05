@@ -14,7 +14,7 @@ file is that **you cannot infer it from the neighbouring files**.
 
 | Level | When |
 |---|---|
-| `minor` | The branch touches the **database**: a versioned migration (`migrations/vN/*.sql`), a **repeatable** migration (`migrations/R__*.sql`), or anything under **`metadata/`** |
+| `minor` | The branch touches the **database**: a versioned migration (`migrations/vN/*.sql`), a **repeatable** migration (`migrations/R__*.sql`), or anything under **`metadata/`** except its authoring docs (`CLAUDE.md`, `README.md`) |
 | `patch` | Everything else — TypeScript, tests, docs, guides, CI, refactors |
 | `major` | **Never** without explicit user approval |
 
