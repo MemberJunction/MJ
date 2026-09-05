@@ -79,6 +79,16 @@ export abstract class ShelterCategoryBase extends BaseResourceComponent {
         return this.Pages.find((p) => p.id === this.ActivePageId);
     }
 
+    /**
+     * The active page as a single-element list, so the template can drive it with `@for ... track
+     * page.id`. That track key is the ONLY thing that makes Angular destroy and recreate the body
+     * when the rail changes, and it is load-bearing -- see the note in the template.
+     */
+    public get ActivePageAsList(): ShelterCategoryPage[] {
+        const page = this.ActivePage;
+        return page ? [page] : [];
+    }
+
     public OnRailItemClicked(event: { id: string } | string): void {
         const id = typeof event === 'string' ? event : event?.id;
         if (id) {

@@ -14,35 +14,43 @@
         (ItemClicked)="OnRailItemClicked($event)"></mj-left-nav>
 
     <mj-left-nav-content>
-      @if (ActivePage) {
-        @switch (ActivePage.kind) {
+      <!-- `@for ... track page.id` over a ONE-ELEMENT list is not a loop -- it is a KEY. It is what
+           makes Angular DESTROY and RECREATE this whole body when the rail changes, and it is
+           load-bearing. Without it every 'entity' page reuses ONE <mj-entity-viewer> instance, and
+           that instance carries its `_gridState.columnSettings` across the switch. Those settings
+           name the PREVIOUS entity's fields, and mj-entity-data-grid drops any setting whose field
+           the new entity does not have (`buildAgColumnDefsFromGridState`, `if (!field) continue`)
+           with no floor when everything is dropped -- so the grid renders ZERO columns while still
+           loading the rows. Measured 4 Sep 2026 on Animals -> Care Log: 21 rows in the DOM, 6
+           columns built into `_columns`, `agColumnDefs.length === 0`, and the grid state still
+           holding [Name, Species, IntakeDate, Status, Breed, Housing] -- Animal's columns. Breeds
+           hid the bug because it shares Name + Species with Animal, so two columns survived. -->
+      @for (page of ActivePageAsList; track page.id) {
+        @switch (page.kind) {
           @case ('entity') {
-            <!-- The same generic grid every other shelter page uses. Keyed on the page id so
-                 Angular destroys and recreates it when the rail changes -- without the key the
-                 viewer would keep the previous entity's grid state and columns. -->
             <mj-entity-viewer
-                [EntityName]="ActivePage.entityName!"
-                (CreateRecordRequested)="onCreateNewRecord(ActivePage.entityName!)"
+                [EntityName]="page.entityName!"
+                (CreateRecordRequested)="onCreateNewRecord(page.entityName!)"
                 (RecordOpened)="onRecordOpened($any($event))"
                 (OpenRelatedRecordRequested)="onOpenRelatedRecord($event)"
                 (DataLoaded)="NotifyLoadComplete()"
                 style="display:block; width:100%; height:100%;"></mj-entity-viewer>
           }
           @case ('query') {
-            @if (QueryIds[ActivePage.queryName!]) {
+            @if (QueryIds[page.queryName!]) {
               <mj-query-viewer
-                  [QueryId]="QueryIds[ActivePage.queryName!]"
+                  [QueryId]="QueryIds[page.queryName!]"
                   style="display:block; width:100%; height:100%;"></mj-query-viewer>
             } @else {
               <!-- Resolving, or the query is missing. Say which rather than showing a blank pane. -->
-              <p class="shelter-cat__note">Loading “{{ ActivePage.queryName }}”…</p>
+              <p class="shelter-cat__note">Loading “{{ page.queryName }}”…</p>
             }
           }
           @case ('pending') {
             <div class="shelter-cat__pending">
               <i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i>
-              <h2>{{ ActivePage.label }}</h2>
-              <p>{{ ActivePage.pendingNote }}</p>
+              <h2>{{ page.label }}</h2>
+              <p>{{ page.pendingNote }}</p>
             </div>
           }
         }
