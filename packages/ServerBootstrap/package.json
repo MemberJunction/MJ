@@ -123,6 +123,7 @@
     "@memberjunction/external-data-source-snowflake": "6.1.0-edge.5",
     "@memberjunction/external-data-source-sqlserver": "6.1.0-edge.5",
     "@memberjunction/external-data-sources": "6.1.0-edge.5",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.5",
     "@memberjunction/geo-core": "6.1.0-edge.5",
     "@memberjunction/integration-actions": "6.1.0-edge.5",
     "@memberjunction/integration-engine": "6.1.0-edge.5",
