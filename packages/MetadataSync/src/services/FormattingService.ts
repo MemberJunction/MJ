@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { ValidationResult, ValidationError, ValidationWarning, FileValidationResult } from '../types/validation';
+import type { MJCLIResultError } from '@memberjunction/cli-core';
 import type { RecordChangeDetail } from './PushService';
 
 export class FormattingService {
@@ -37,6 +38,26 @@ export class FormattingService {
         
         return JSON.stringify(output, null, 2);
     }
+    /**
+     * Flatten a failed {@link ValidationResult} into the CLI's machine-readable error
+     * list, so `--format json` / `--ci` runs carry the same entity/field/file detail
+     * that the human report prints. Without this a CI log shows only "Validation
+     * failed" and nobody can tell which record in which file is wrong.
+     */
+    public formatValidationResultAsCLIErrors(result: ValidationResult, command: 'push' | 'pull'): MJCLIResultError[] {
+        const detail: MJCLIResultError[] = result.errors.map(e => ({
+            context: [e.entity, e.field].filter(Boolean).join('.') || e.file,
+            message: `${e.message} — ${e.file}`,
+            code: 'E_VALIDATION_FAILED' as const,
+            suggestion: e.suggestion
+        }));
+
+        return [
+            { context: 'validation', message: `Validation failed. Cannot proceed with ${command}.`, code: 'E_VALIDATION_FAILED' as const },
+            ...detail
+        ];
+    }
+
     private readonly symbols = {
         success: '✓',
         error: '✗',
