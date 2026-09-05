@@ -92,9 +92,13 @@ jobs:
 
       # ─── Step 2: Build MJCLI + SQLConverter ─────────────────────────
       # MJCLI (`@memberjunction/cli`) is the production migration entry point —
-      # applying via `npx mj migrate` is what real users run, so CI runs the
-      # same path. Turbo builds MJCLI's full transitive dep graph, which also
-      # covers SQLConverter (so we don't need a second build step).
+      # applying via `mj migrate` is what real users run, so CI runs the same
+      # code path via the workspace entry point (`node packages/MJCLI/bin/run.js`).
+      # NOT `npx mj`: nothing in this repo creates a workspace-root
+      # node_modules/.bin/mj, so `npx` would fall through to the npm registry —
+      # where `mj` is an UNRELATED package — inside a job holding DB credentials.
+      # Turbo builds MJCLI's full transitive dep graph, which also covers
+      # SQLConverter (so we don't need a second build step).
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
@@ -220,7 +224,7 @@ jobs:
           PGPASSWORD: testpass
           PGDATABASE: mj_pg_ci
         run: |
-          npx mj migrate --dir=migrations-pg -v
+          node packages/MJCLI/bin/run.js migrate --dir=migrations-pg -v
 
           # Read back the applied count from Skyway's history table for the
           # parity report. `mj migrate` exits non-zero on any failure, so by
@@ -445,8 +449,8 @@ jobs:
           CODEGEN_DB_PASSWORD: testpass
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: |
-          npx mj sync push --dir=metadata --ci
-          npx mj sync push --dir=metadata-optional/integration-test --ci
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
 
       # Curated server-transport subset. Chosen for engine-level coverage with the least
       # provider-specific SQL probing; extend the list as members prove green on PG.
@@ -474,7 +478,7 @@ jobs:
             "IT48 - ClassFactory Resolution Contracts" \
             "IT20 - Lists Keyset Pagination"; do
             echo "=== $TEST (PostgreSQL) ==="
-            npx mj test run --name "$TEST"
+            node packages/MJCLI/bin/run.js test run --name "$TEST"
           done
 
       - name: (Nightly) Functional lane verdict

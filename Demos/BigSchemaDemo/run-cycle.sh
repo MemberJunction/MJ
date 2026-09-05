@@ -51,10 +51,16 @@ echo "cycle start profile=$PROFILE log=$LOG" | tee "$LOG"
 
 time_step "verify-before" node "$SCRIPT_DIR/verify.mjs" --expect-schemas "$EXPECT_SCHEMAS" --expect-tables "$EXPECT_TABLES" --skip-codegen || true
 
-time_step "codegen-pass-1" npx mj codegen
+# NOT `npx mj`: nothing in this repo creates a workspace-root node_modules/.bin/mj (the root
+# `workspace:*` devDependencies that used to are gone, so turbo's hashOfInternalDependencies
+# stays empty), and this demo has no package.json of its own. `npx` would walk up, find
+# nothing, and fetch the UNRELATED `mj` package from the registry.
+MJ_CLI="$REPO_ROOT/packages/MJCLI/bin/run.js"
+
+time_step "codegen-pass-1" node "$MJ_CLI" codegen
 time_step "verify-pass-1" node "$SCRIPT_DIR/verify.mjs" --expect-schemas "$EXPECT_SCHEMAS" --expect-tables "$EXPECT_TABLES"
 
-time_step "codegen-pass-2-noop" npx mj codegen
+time_step "codegen-pass-2-noop" node "$MJ_CLI" codegen
 time_step "verify-pass-2" node "$SCRIPT_DIR/verify.mjs" --expect-schemas "$EXPECT_SCHEMAS" --expect-tables "$EXPECT_TABLES"
 
 echo "cycle complete. log=$LOG"

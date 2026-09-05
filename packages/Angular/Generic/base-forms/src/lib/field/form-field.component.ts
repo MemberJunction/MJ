@@ -2089,4 +2089,30 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (isNaN(date.getTime())) return '';
     return date.toISOString().split('T')[0];
   }
+
+  /**
+   * The field holds SOMETHING, and the date editor cannot show it.
+   *
+   * WHY A SEPARATE SIGNAL IS THE ONLY OPTION. `DateInputValue` returns '' for a value it cannot
+   * render, and an `<input type="date">` renders '' as an empty box — the same empty box it shows
+   * for a field that was never set. There is no string that makes the element display
+   * `not-a-date`, so the control physically cannot surface the problem itself. The most the getter
+   * can do is refuse to emit garbage; saying WHY has to happen beside it.
+   *
+   * The consequence of not saying it is not cosmetic. The field reads as "no date", and the next
+   * save writes that emptiness over whatever was actually stored — so an unreadable value becomes a
+   * destroyed one, silently, by a user who was never told anything was wrong.
+   *
+   * READ MODE ALREADY DOES THIS and needs nothing: `FormatValue()` shows `Invalid Date` for a bad
+   * Date and the raw text for a bad string. It is only the EDITOR that hides the problem, which is
+   * why this is scoped to EditMode rather than to the field.
+   *
+   * An ABSENT value is not unreadable. Empty means empty, and must never be decorated as a fault.
+   */
+  get StoredDateIsUnreadable(): boolean {
+    if (!this.EditMode) return false;
+    const val = this.Value;
+    if (val === null || val === undefined || val === '') return false;
+    return this.DateInputValue === '';
+  }
 }

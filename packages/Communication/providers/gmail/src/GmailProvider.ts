@@ -1,6 +1,9 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import {
+  AppliedMessageFilters,
   BaseCommunicationProvider,
+  CombineFilterClauses,
+  MessageRetrievalCapabilities,
   CreateDraftParams,
   CreateDraftResult,
   ForwardMessageParams,
@@ -132,8 +135,31 @@ interface GmailPushData {
 /**
  * Implementation of the Gmail provider for sending and receiving messages
  */
+/**
+ * Gmail's `after:` / `before:` accept epoch SECONDS as well as `YYYY/MM/DD`. Seconds are used
+ * deliberately: the date form is day-granular in the mailbox's own timezone, which would move an
+ * instant-based bound by up to a day without saying so.
+ *
+ * Both operators are EXCLUSIVE, while `ReceivedAfter` / `ReceivedBefore` are documented as
+ * inclusive. Each bound is therefore widened by one second so the boundary message is returned
+ * rather than dropped. That errs toward returning one extra message, which a caller de-duplicates;
+ * the opposite error loses mail silently, which it cannot detect at all.
+ */
+function GmailBoundSeconds(when: Date, bound: 'after' | 'before'): number {
+  const seconds = Math.floor(when.getTime() / 1000);
+  return bound === 'after' ? seconds - 1 : seconds + 1;
+}
+
 @RegisterClass(BaseCommunicationProvider, 'Gmail')
 export class GmailProvider extends BaseCommunicationProvider {
+  /**
+   * Gmail filters both server-side via search operators, so neither is emulated here. Note the date
+   * bound is approximate at second granularity — see `GmailBoundSeconds`.
+   */
+  public override get MessageRetrieval(): MessageRetrievalCapabilities {
+    return { FilterByReceivedDate: true, FilterByUnread: true };
+  }
+
   /** Cached Gmail client for environment credentials */
   private envGmailClient: CachedGmailClient | null = null;
 
@@ -419,15 +445,32 @@ export class GmailProvider extends BaseCommunicationProvider {
         };
       }
 
-      // Build query
-      let query = '';
+      // Build query. COMPOSED, not assigned. The ContextData branch below used to overwrite the
+      // whole query, so a caller passing it alongside UnreadOnly silently got read mail back. Every
+      // term now narrows: Gmail joins search terms with an implicit AND, hence the space operator.
+      const applied: AppliedMessageFilters = { ReceivedAfter: false, ReceivedBefore: false, UnreadOnly: false };
+      const clauses: string[] = [];
+
       if (params.UnreadOnly) {
-        query = 'is:unread';
+        clauses.push('is:unread');
+        applied.UnreadOnly = true;
+      }
+
+      if (params.ReceivedAfter) {
+        clauses.push(`after:${GmailBoundSeconds(params.ReceivedAfter, 'after')}`);
+        applied.ReceivedAfter = true;
+      }
+
+      if (params.ReceivedBefore) {
+        clauses.push(`before:${GmailBoundSeconds(params.ReceivedBefore, 'before')}`);
+        applied.ReceivedBefore = true;
       }
 
       if (params.ContextData?.query) {
-        query = params.ContextData.query as string;
+        clauses.push(String(params.ContextData.query));
       }
+
+      const query: string = CombineFilterClauses(clauses, ' ');
 
       // Get messages
       const response = await cached.client.users.messages.list({
@@ -437,9 +480,13 @@ export class GmailProvider extends BaseCommunicationProvider {
       });
 
       if (!response.data.messages || response.data.messages.length === 0) {
+        // AppliedFilters belongs on the EMPTY result too. Zero messages is precisely when a caller
+        // cannot tell "the narrowing worked and nothing matched" from "the narrowing was ignored
+        // and the mailbox is empty", so omitting it here would defeat the field's whole purpose.
         return {
           Success: true,
-          Messages: []
+          Messages: [],
+          AppliedFilters: applied
         };
       }
 
@@ -499,7 +546,8 @@ export class GmailProvider extends BaseCommunicationProvider {
       return {
         Success: true,
         Messages: processedMessages,
-        SourceData: fullMessages
+        SourceData: fullMessages,
+        AppliedFilters: applied
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Error getting messages';
