@@ -3697,6 +3697,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     },
                 };
 
+                // The event drives BaseEngine caches directly, AND — because this provider
+                // registers the entities its metadata is built from (the MJ_Metadata dataset's
+                // items) with ProviderBase's static event fan-out — it also schedules a debounced
+                // metadata staleness check when the written entity is one of them. See
+                // ProviderBase.handleMetadataMemberEntityEvent; no entity names are listed here.
                 MJGlobal.Instance.RaiseEvent({
                     event: MJEventType.ComponentEvent,
                     eventCode: BaseEntity.BaseEventCode,
@@ -3717,9 +3722,25 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * How this client refreshes after one of the entities its metadata is built from changes
+     * (see ProviderBase.handleMetadataMemberEntityEvent — membership comes from the MJ_Metadata
+     * dataset definition, not a list). A browser must not re-pull the full metadata graph on
+     * every such write, so instead of the base class's hard Refresh this runs the staleness
+     * check: `RefreshIfNeeded` compares server timestamps and refetches only when genuinely
+     * stale, so a spurious event costs one cheap status round-trip. The check-interval throttle
+     * is bypassed because the caller holds positive evidence a member entity was just written —
+     * the throttle would otherwise silently drop the second of two permission changes made less
+     * than its window apart.
+     */
+    protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
+        return this.RefreshIfNeeded(undefined, true);
+    }
+
+    /**
      * Unsubscribes from cache invalidation events. Called during cleanup/logout.
      */
     public UnsubscribeFromCacheInvalidation(): void {
+        this.CancelPendingMetadataMemberRefresh();
         if (this._cacheInvalidationSubscription) {
             this._cacheInvalidationSubscription.unsubscribe();
             this._cacheInvalidationSubscription = null;

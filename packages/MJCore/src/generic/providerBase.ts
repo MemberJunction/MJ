@@ -455,6 +455,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     continue;
                 }
                 instance.invalidateInflightViewsForEntity(entityName);
+                instance.handleMetadataMemberEntityEvent(entityName, entityEvent);
             }
         });
     }
@@ -508,6 +509,141 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
         return names;
+    }
+
+    // ── Metadata-Dataset Membership Refresh ────────────────────────────
+    /**
+     * Coalescing window, in milliseconds, for metadata refreshes triggered by writes to the
+     * entities that compose this provider's metadata. A single administrative action produces a
+     * burst (enabling field security writes one permission row per field/role pair, each raising
+     * its own event) — one refresh per burst, not one per row. The window also gives an enclosing
+     * entity transaction time to COMMIT before the re-read: every event in the burst re-arms the
+     * timer, so the refresh runs no earlier than this long after the LAST write.
+     */
+    public static MetadataDatasetRefreshDebounceMs: number = 500;
+
+    /**
+     * Lowercased names of the entities whose rows COMPOSE this provider's metadata — the
+     * MJ_Metadata dataset's item entities, recorded each time the dataset is loaded (and restored
+     * from local storage on warm boot). Membership is DATA: adding a `DatasetItem` row to
+     * MJ_Metadata extends refresh coverage with no code change, which is why no entity names are
+     * hardcoded anywhere in this mechanism.
+     */
+    private _metadataDatasetEntityNames: ReadonlySet<string> | null = null;
+
+    /** Debounce timer for {@link scheduleMetadataMemberRefresh}. */
+    private _metadataMemberRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Records which entities compose this provider's metadata, from the loaded MJ_Metadata
+     * dataset result, and registers this instance with the static event fan-out so writes to any
+     * of them schedule a debounced metadata refresh. Called from {@link GetAllMetadata} on every
+     * successful load, so the set tracks the dataset definition as it changes.
+     */
+    protected registerMetadataDatasetMembership(dataset: DatasetResultType): void {
+        const names = new Set<string>();
+        for (const item of dataset.Results ?? []) {
+            const n = item.EntityName?.trim().toLowerCase();
+            if (n) {
+                names.add(n);
+            }
+        }
+        if (names.size === 0) {
+            return; // a failed/empty load must not erase a previously recorded set
+        }
+        this._metadataDatasetEntityNames = names;
+        this.ensureInflightViewInvalidation();
+    }
+
+    /**
+     * Static fan-out callback: a BaseEntity save/delete (or a remote-invalidate from another
+     * server) touched `lowerEntityName`. If that entity is one of the entities this provider's
+     * metadata is BUILT FROM, the metadata this provider is serving — and, on the server, the
+     * metadata every per-request provider adopts from it — is now stale, so schedule a debounced
+     * refresh. Permission metadata is the load-bearing case: field-level security is enforced
+     * FROM metadata at every enforcement point, so a rule an administrator just tightened is
+     * simply not enforced until this re-read happens.
+     */
+    protected handleMetadataMemberEntityEvent(lowerEntityName: string, entityEvent: BaseEntityEvent): void {
+        if (!this._metadataDatasetEntityNames?.has(lowerEntityName)) {
+            return; // the overwhelming majority of writes
+        }
+        if (!this.eventTargetsThisProviderBackend(entityEvent)) {
+            return;
+        }
+        this.scheduleMetadataMemberRefresh();
+    }
+
+    /**
+     * Whether the write described by `entityEvent` happened against the backend THIS provider's
+     * metadata comes from. In a multi-provider process (a client connected to several MJ servers,
+     * a server connected to several databases) a write on one backend must not refresh another's
+     * metadata. Deliberately fails OPEN — when the event does not identify its provider, or a
+     * connection string is unavailable, the answer is "yes": a spurious refresh is a bounded
+     * cost, a suppressed one is a stale-permissions window.
+     */
+    protected eventTargetsThisProviderBackend(entityEvent: BaseEntityEvent): boolean {
+        try {
+            if (entityEvent.type === 'remote-invalidate') {
+                // The transport that received the message attaches itself; other providers in the
+                // same process are connected to other servers.
+                return !entityEvent.provider || entityEvent.provider === this;
+            }
+            const self: ProviderBase = this;
+            const saveProvider = entityEvent.baseEntity?.ProviderToUse;
+            if (saveProvider instanceof ProviderBase && saveProvider !== self) {
+                const theirs = saveProvider.InstanceConnectionString;
+                const mine = this.InstanceConnectionString;
+                if (theirs && mine && theirs !== mine) {
+                    return false;
+                }
+            }
+            return true;
+        } catch {
+            return true; // a connection-string getter with no live pool must not veto the refresh
+        }
+    }
+
+    /**
+     * Debounced metadata refresh after a write to a metadata member entity. The refresh targets
+     * THIS instance — the provider that loaded the dataset owns the metadata built from it;
+     * short-lived per-request providers never load the dataset (they adopt the global's metadata
+     * as a shared shell), so on the server only the process-global provider ever gets here.
+     */
+    protected scheduleMetadataMemberRefresh(): void {
+        if (this._metadataMemberRefreshTimer) {
+            clearTimeout(this._metadataMemberRefreshTimer);
+        }
+        this._metadataMemberRefreshTimer = setTimeout(() => {
+            this._metadataMemberRefreshTimer = null;
+            this.RefreshAfterMetadataMemberChange().catch((e: unknown) => {
+                LogError(`Metadata refresh after a member-entity change failed: ${e instanceof Error ? e.message : String(e)}`);
+            });
+        }, ProviderBase.MetadataDatasetRefreshDebounceMs);
+    }
+
+    /**
+     * How this provider refreshes after a metadata member entity changed. The base behavior is a
+     * hard {@link Refresh} — correct for database providers, where the process that PERFORMED the
+     * write is the one refreshing, so re-checking staleness first is wasted work and the re-read
+     * must bypass every cache layer. Transport providers (GraphQL) override this with a staleness
+     * check so a browser doesn't re-pull the full metadata graph for a change the server-side
+     * timestamp comparison can disconfirm.
+     */
+    protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
+        return this.Refresh();
+    }
+
+    /**
+     * Cancels any pending debounced metadata refresh. Call during teardown (logout, provider
+     * disposal) so a timer armed just before teardown doesn't fire a refresh against a
+     * connection that no longer has a valid session.
+     */
+    protected CancelPendingMetadataMemberRefresh(): void {
+        if (this._metadataMemberRefreshTimer) {
+            clearTimeout(this._metadataMemberRefreshTimer);
+            this._metadataMemberRefreshTimer = null;
+        }
     }
 
     /******** ABSTRACT SECTION ****************************************************************** */
@@ -4310,6 +4446,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // cache the dataset for anyone who wants to use it
                 await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
 
+                // Record which entities this metadata is built from, so a write to any of them
+                // schedules a debounced refresh of this provider's metadata (see
+                // registerMetadataDatasetMembership — membership is the dataset definition, not a list).
+                this.registerMetadataDatasetMembership(d);
+
                 // got the results, let's build our response in the format we need
                 const simpleMetadata: any = {};
                 for (let r of d.Results) {
@@ -4622,13 +4763,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Checks if local metadata is out of date and needs refreshing.
      * Compares local timestamps with server timestamps.
+     * @param bypassMinCheckInterval - When true, skips the {@link MinRefreshCheckIntervalMs}
+     * throttle. Event-driven callers pass true: they hold positive evidence that a metadata
+     * member entity was just written, and the throttle otherwise answers "fresh" for any check
+     * arriving within the window of the previous one — which would silently drop the second of
+     * two permission changes made less than the window apart.
      * @returns True if refresh is needed, false otherwise
      */
-    public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean> {
+    public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
         if (!this.AllowRefresh) return false;
 
         const now = Date.now();
-        if ((now - this._lastRefreshCheckAt) < ProviderBase.MinRefreshCheckIntervalMs) {
+        if (!bypassMinCheckInterval && (now - this._lastRefreshCheckAt) < ProviderBase.MinRefreshCheckIntervalMs) {
             LogStatusEx({
                 message: `[RefreshCheck] Skipped — last check was ${now - this._lastRefreshCheckAt}ms ago (min interval ${ProviderBase.MinRefreshCheckIntervalMs}ms)`,
                 verboseOnly: true
@@ -4645,10 +4791,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Refreshes metadata only if needed based on timestamp comparison.
      * Combines check and refresh into a single operation.
+     * @param bypassMinCheckInterval - Passed through to {@link CheckToSeeIfRefreshNeeded};
+     * event-driven callers set true so the throttle cannot eat a check they have positive
+     * evidence for.
      * @returns True if refresh was successful or not needed
      */
-    public async RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean> {
-        if (await this.CheckToSeeIfRefreshNeeded(providerToUse)) 
+    public async RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
+        if (await this.CheckToSeeIfRefreshNeeded(providerToUse, bypassMinCheckInterval))
             return this.Refresh(providerToUse);
         else
             return true;
@@ -5250,16 +5399,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const tsKey   = this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey;
             const fmtKey  = this.LocalStoragePrefix + ProviderBase.localStorageFormatKey;
             const dataKey = this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey;
+            const membershipKey = this.LocalStoragePrefix + ProviderBase.localStorageDatasetMembershipKey;
 
             const readStart = Date.now();
-            const all = await ls.GetItems<string>([tsKey, fmtKey, dataKey]);
+            const all = await ls.GetItems<string>([tsKey, fmtKey, dataKey, membershipKey]);
             const readMs = Date.now() - readStart;
 
             const tsRaw = all.get(tsKey) ?? null;
             const format = all.get(fmtKey) ?? null;
             const raw = all.get(dataKey) ?? null;
+            const membershipRaw = all.get(membershipKey) ?? null;
 
             this._latestLocalMetadataTimestamps = tsRaw ? JSON.parse(tsRaw) : null;
+
+            // Restore the metadata-member entity set so the event-driven refresh works on a warm
+            // boot that never calls GetAllMetadata (the stale-while-revalidate fast start). The
+            // set is only stored after a successful dataset load, so restoring it is exactly as
+            // trustworthy as restoring the metadata itself.
+            if (membershipRaw) {
+                try {
+                    const names: string[] = JSON.parse(membershipRaw);
+                    if (Array.isArray(names) && names.length > 0) {
+                        this._metadataDatasetEntityNames = new Set(names);
+                        this.ensureInflightViewInvalidation();
+                    }
+                } catch (membershipErr) {
+                    LogError(`[Metadata Cache] Failed to restore dataset membership: ${membershipErr instanceof Error ? membershipErr.message : String(membershipErr)}`);
+                }
+            }
+
             if (!raw) return;
 
             // Decompress if stored in compressed format, otherwise parse directly
@@ -5306,11 +5474,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private static localStorageTimestampsKey = this.localStorageRootKey + '_Timestamps'
     private static localStorageAllMetadataKey = this.localStorageRootKey + '_AllMetadata'
     private static localStorageFormatKey = this.localStorageRootKey + '_Format'
+    private static localStorageDatasetMembershipKey = this.localStorageRootKey + '_DatasetMembership'
 
     private static localStorageKeys = [
         ProviderBase.localStorageTimestampsKey,
         ProviderBase.localStorageAllMetadataKey,
         ProviderBase.localStorageFormatKey,
+        ProviderBase.localStorageDatasetMembershipKey,
     ];
 
     /**
@@ -5363,6 +5533,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // string storage so the compressed (gzip+base64) format below can round-trip cleanly
             // through providers that don't support binary natively.
             await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
+
+            // Persist the metadata-member entity set beside the snapshot it belongs to, so the
+            // event-driven refresh survives a warm boot (see LoadLocalMetadataFromStorage).
+            if (this._metadataDatasetEntityNames?.size) {
+                await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageDatasetMembershipKey, JSON.stringify([...this._metadataDatasetEntityNames]));
+            }
 
             // Serialize the AllMetadata object
             const jsonString = JSON.stringify(this._localMetadata);

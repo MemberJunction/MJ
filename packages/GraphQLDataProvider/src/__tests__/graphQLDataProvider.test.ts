@@ -314,3 +314,32 @@ describe('GraphQLDataProvider - Config flow', () => {
     expect(config.WSURL).toBe('ws://localhost:4000');
   });
 });
+
+// ─── Metadata refresh after a metadata member entity changes ──────────────
+//
+// Which entities can stale this provider's metadata — and the debounce, burst collapse, and
+// backend matching — live in ProviderBase's dataset-membership mechanism, tested in MJCore
+// (providerBase.metadataMemberRefresh.test.ts) where ProviderBase is real (this file mocks
+// @memberjunction/core away). What is GraphQL-specific, and pinned here, is the refresh
+// POLICY: a browser must not re-pull the full metadata graph on every member write, so the
+// client override runs the staleness check instead of the base class's hard Refresh — and it
+// bypasses the min-check-interval throttle, because the caller holds positive evidence that a
+// member entity was just written.
+
+describe('GraphQLDataProvider - refresh policy after a metadata member change', () => {
+  it('runs the staleness check (RefreshIfNeeded) with the throttle bypassed, not a hard Refresh', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    const refreshIfNeeded = vi.fn().mockResolvedValue(true);
+    const hardRefresh = vi.fn().mockResolvedValue(true);
+    (provider as unknown as { RefreshIfNeeded: unknown }).RefreshIfNeeded = refreshIfNeeded;
+    (provider as unknown as { Refresh: unknown }).Refresh = hardRefresh;
+
+    const result = await (provider as unknown as { RefreshAfterMetadataMemberChange(): Promise<boolean> })
+      .RefreshAfterMetadataMemberChange();
+
+    expect(result).toBe(true);
+    expect(refreshIfNeeded).toHaveBeenCalledTimes(1);
+    expect(refreshIfNeeded).toHaveBeenCalledWith(undefined, true);
+    expect(hardRefresh).not.toHaveBeenCalled();
+  });
+});
