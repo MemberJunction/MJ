@@ -330,6 +330,18 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
                 }
             }
             fx.FixtureEmployeeID = emp.ID;
+
+            // Phase 2: enforcement propagation — the tightened Email rule must actually BITE on
+            // the wire before the checks run. Deliberately after the fixture employee exists, and
+            // with a row-count demand in the condition, so this can never pass vacuously over an
+            // empty table ("no row carries Email" is trivially true over 0 rows — the exact hole
+            // the original leak hid behind). With the event-driven metadata refresh this
+            // converges in about a second; the budget only bounds pathological environments.
+            await waitForPropagation(
+                fx.ReaderProvider,
+                rows => rows.length > 0 && rows.every(r => !(FLS_READER_DENIED_FIELD in r)),
+                'denied column stripped from reader list results');
+
             fx.Usable = true;
         } catch (e) {
             fx.ProvisionError = e instanceof Error ? e.message : String(e);
