@@ -1,3 +1,7 @@
+export * from './custom/HarborShelter/MJAnimalEntityServer.server';
+export * from './custom/HarborShelter/MJHousingEntityServer.server';
+export * from './custom/HarborShelter/MJBreedEntityServer.server';
+export * from './custom/HarborShelter/MJCareLogEntityServer.server';
 export * from './custom/MJAIPromptEntityServer.server';
 export * from './custom/MJEntityDocumentEntityServer.server';
 export * from './custom/MJAIPromptRunEntityServer.server';

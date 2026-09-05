@@ -205,7 +205,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (411 classes)
+// @memberjunction/core-entities (415 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -304,6 +304,7 @@ import {
     MJActionParamEntity,
     MJActionResultCodeEntity,
     MJAnimalEntity,
+    MJAnimalEntityExtended,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -325,7 +326,9 @@ import {
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJBreedEntityExtended,
     MJCareLogEntity,
+    MJCareLogEntityExtended,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -450,6 +453,7 @@ import {
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJHousingEntity,
+    MJHousingEntityExtended,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1207,7 +1211,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (42 classes)
+// @memberjunction/core-entities-server (46 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1226,14 +1230,18 @@ import {
     MJAPIApplicationScopeEntityServer,
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
+    MJAnimalEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
+    MJBreedEntityServer,
+    MJCareLogEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
+    MJHousingEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -1610,6 +1618,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionParamEntity,
     MJActionResultCodeEntity,
     MJAnimalEntity,
+    MJAnimalEntityExtended,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1631,7 +1640,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJBreedEntityExtended,
     MJCareLogEntity,
+    MJCareLogEntityExtended,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1756,6 +1767,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJHousingEntity,
+    MJHousingEntityExtended,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -2268,14 +2280,18 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAPIApplicationScopeEntityServer,
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
+    MJAnimalEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
+    MJBreedEntityServer,
+    MJCareLogEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
+    MJHousingEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2463,7 +2479,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1002;
+export const CLASS_REGISTRATIONS_COUNT = 1010;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

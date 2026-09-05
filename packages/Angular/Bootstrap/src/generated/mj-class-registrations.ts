@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (411 classes)
+// @memberjunction/core-entities (415 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -131,6 +131,7 @@ import {
     MJActionParamEntity,
     MJActionResultCodeEntity,
     MJAnimalEntity,
+    MJAnimalEntityExtended,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -152,7 +153,9 @@ import {
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJBreedEntityExtended,
     MJCareLogEntity,
+    MJCareLogEntityExtended,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -277,6 +280,7 @@ import {
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJHousingEntity,
+    MJHousingEntityExtended,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -865,6 +869,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionParamEntity,
     MJActionResultCodeEntity,
     MJAnimalEntity,
+    MJAnimalEntityExtended,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -886,7 +891,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJBreedEntityExtended,
     MJCareLogEntity,
+    MJCareLogEntityExtended,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1011,6 +1018,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJHousingEntity,
+    MJHousingEntityExtended,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1419,7 +1427,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 654;
+export const CLASS_REGISTRATIONS_COUNT = 658;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
