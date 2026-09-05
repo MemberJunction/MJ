@@ -388,17 +388,34 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     expect(sfxB).toBe(`${sfxA}_2`);
   });
 
-  it('120_000 unique PKs in one batch produce 120_000 distinct declarations after disambiguation', () => {
-    const counts = new Map<string, number>();
+  it('120_000 distinct PKs in one transaction group → 120_000 distinct suffixes, and exactly the two sha1[:8] collisions the keys really produce', async () => {
+    // Drives the REAL allocator, not a re-implementation of it. The expectation is
+    // pinned to what sha1 does on these keys: `dbo.Widget|id-0` … `id-119999`
+    // collide twice in their first 8 hex chars (id-42236 / id-64356 → 031e1622,
+    // id-101514 / id-104669 → 37ccdac1). So a correct allocator yields 119_998
+    // bare `_<hash>` suffixes plus two `_<hash>_2`. Ignoring the transaction
+    // group drops to 119_998 distinct; a degenerate hash yields one bare suffix
+    // and 119_999 `_n` suffixes. Both fail here.
+    const { SQLServerTransactionGroup } = await import('../SQLServerTransactionGroup');
+    const group = new SQLServerTransactionGroup();
+    const info = makeWidgetEntityInfo();
+    const entity = makeNewWidgetEntity(info, TEST_USER);
+    const provider = makeProvider();
+
     const suffixes = new Set<string>();
+    const disambiguated: string[] = [];
     for (let i = 0; i < 120_000; i++) {
-      const hash = SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', [`id-${i}`]);
-      const n = (counts.get(hash) ?? 0) + 1;
-      counts.set(hash, n);
-      const sfx = n === 1 ? `_${hash}` : `_${hash}_${n}`;
-      expect(suffixes.has(sfx)).toBe(false);
+      // Hydrate resets the cached PrimaryKey (a plain Set('ID') would not), so one
+      // entity instance can stand in for 120_000 distinct records.
+      entity.Hydrate({ ID: `id-${i}` });
+      entity.TransactionGroup = group;
+      const sfx = provider.AllocateSaveCallSuffix(entity);
+      expect(sfx).toMatch(/^_[0-9a-f]{8}(?:_[0-9]+)?$/);
+      if (sfx.length > 9) disambiguated.push(`id-${i}${sfx}`);
       suffixes.add(sfx);
     }
+
     expect(suffixes.size).toBe(120_000);
+    expect(disambiguated).toEqual(['id-64356_031e1622_2', 'id-104669_37ccdac1_2']);
   });
 });

@@ -1120,6 +1120,15 @@ export class SQLServerDataProvider
   /** Per transaction-group counts so the same PK twice in one batch gets `_hash_2`. */
   private _saveCallSuffixCounts = new WeakMap<object, Map<string, number>>();
 
+  /**
+   * Naming contract for the variable suffix appended to every `@Field` in a
+   * rendered save call: `_<8 lowercase hex>` (see `SaveCallVariableHash`),
+   * followed by `_<n>` with n >= 2 only when the same hash has already been
+   * allocated inside the same `TransactionGroup`. Outside a transaction group
+   * every save is its own batch, so the bare form is always emitted there —
+   * which is what MetadataSync captures contain. Downstream parsers (for
+   * example a MetadataSync ID-parity gate) may rely on this shape.
+   */
   protected allocateSaveCallSuffix(entity: BaseEntity): string {
     const pkValues = entity.PrimaryKey?.KeyValuePairs?.map((p) => p.Value) ?? [];
     const hash = SQLServerDataProvider.SaveCallVariableHash(
