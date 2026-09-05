@@ -1108,8 +1108,8 @@ export class SQLServerDataProvider
 
   /**
    * Renders the SQL Server DECLARE/SET/EXEC binding for a save call.
-   * Emits per-field uuid-suffixed variables to keep batched saves
-   * (`SQLServerTransactionGroup`) collision-free. PKs on UPDATE are
+   * Suffixes come from GenericDatabaseProvider.allocateSaveCallSuffix
+   * (PK hash, not uuidv4). PKs on UPDATE are
    * tail-appended from `entity.PrimaryKey.KeyValuePairs`.
    *
    * Emits `_Clear` companion args when a nullable column carrying a
@@ -1124,7 +1124,7 @@ export class SQLServerDataProvider
     isUpdate: boolean,
     _spName: string,
   ): SaveCallBinding {
-    const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
+    const uniqueSuffix = this.allocateSaveCallSuffix(entity);
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];

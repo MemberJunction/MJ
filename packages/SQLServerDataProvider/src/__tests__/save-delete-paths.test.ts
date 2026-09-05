@@ -19,6 +19,7 @@ vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMs
 
 import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
 import {
@@ -76,6 +77,7 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
   protected override async HandleEntityAIActions(): Promise<void> {
     // no-op — AI engine not under test
   }
+
 }
 
 function makeProvider(): SaveDeleteTestProvider {
@@ -84,9 +86,9 @@ function makeProvider(): SaveDeleteTestProvider {
   return provider;
 }
 
-/** Extracts the uuid-derived variable suffix RenderSaveCallBinding appended (e.g. '_a1b2c3d4'). */
+/** Extracts the PK-hash variable suffix RenderSaveCallBinding appended (e.g. '_a1b2c3d4' or '_a1b2c3d4_2'). */
 function extractSuffix(sql: string, codeName: string): string {
-  const match = new RegExp(`@${codeName}(_[0-9a-f]{8})`).exec(sql);
+  const match = new RegExp(`@${codeName}(_[0-9a-f]{8}(?:_[0-9]+)?)`).exec(sql);
   expect(match, `expected a suffixed @${codeName} variable in:\n${sql}`).not.toBeNull();
   return (match as RegExpExecArray)[1];
 }
@@ -324,4 +326,49 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
 
     expect(deleted).toBe(true);
   });
+});
+
+describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('same record → same suffix across two independent Save() calls', async () => {
+    const info = makeWidgetEntityInfo();
+    const a = makeSavedWidgetEntity(info, TEST_USER);
+    const b = makeSavedWidgetEntity(info, TEST_USER);
+    a.Set('Name', 'Once');
+    b.Set('Name', 'Twice');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Once' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Twice' }] });
+    const provider = makeProvider();
+    await provider.Save(a, TEST_USER, new EntitySaveOptions());
+    await provider.Save(b, TEST_USER, new EntitySaveOptions());
+    const sfxA = extractSuffix(mssqlState.Queries[0].sql, 'Name');
+    const sfxB = extractSuffix(mssqlState.Queries[1].sql, 'Name');
+    expect(sfxA).toBe(sfxB);
+    expect(sfxA).toMatch(/^_[0-9a-f]{8}$/);
+    expect(sfxA).toBe(
+      '_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
+    );
+  });
+
+  it('different records → different suffixes', async () => {
+    const info = makeWidgetEntityInfo();
+    const a = makeSavedWidgetEntity(info, TEST_USER);
+    const b = makeNewWidgetEntity(info, TEST_USER);
+    b.Set('ID', 'w-9999');
+    b.Set('Name', 'Other');
+    b.Set('IsActive', true);
+    a.Set('Name', 'First');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'First' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), ID: 'w-9999', Name: 'Other' }] });
+    const provider = makeProvider();
+    await provider.Save(a, TEST_USER, new EntitySaveOptions());
+    await provider.Save(b, TEST_USER, new EntitySaveOptions());
+    expect(extractSuffix(mssqlState.Queries[0].sql, 'Name')).not.toBe(
+      extractSuffix(mssqlState.Queries[1].sql, 'Name'),
+    );
+  });
+
 });
