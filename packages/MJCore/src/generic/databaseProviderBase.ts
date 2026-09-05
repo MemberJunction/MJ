@@ -2370,5 +2370,5 @@ export interface ExecuteSQLOptions {
    * Explicit driver handle (pool, client, or transaction). When set, the statement
    * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
    */
-  connectionSource?: unknown;
+  connectionSource?: object;
 }

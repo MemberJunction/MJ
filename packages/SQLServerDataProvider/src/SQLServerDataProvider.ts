@@ -2036,6 +2036,7 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
+      this.AssertAmbientTransactionUsable();
       // Build combined batch SQL and parameters (same as static method)
       let batchSQL = '';
       const batchParameters: Record<string, any> = {};
@@ -2375,14 +2376,6 @@ IF ${varName} IS NOT NULL
 
   protected override async OnBeginFailedAtDepthZero(): Promise<void> {
     await this.AbandonPhysicalTransaction();
-  }
-
-  protected override async HandleFailedSavepointRollback(savepointName: string, error: unknown): Promise<void> {
-    LogError(
-      `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
-      `(XACT_STATE() = -1). Abandoning the physical handle; frames stay until the outer settle.`,
-    );
-    await super.HandleFailedSavepointRollback(savepointName, error);
   }
 
   /**

@@ -139,6 +139,17 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         await provider.RollbackTransaction();
     });
 
+    it('ExecuteSQLBatch rejects while doomed and does not hit the pool (H6c)', async () => {
+        await provider.BeginTransaction();
+        provider.Handle()!.abortServerSide();
+        await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        await expect(
+            provider.ExecuteSQLBatch(['UPDATE Orders SET Status=1', 'INSERT lineB']),
+        ).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(mssqlState.Queries.filter((q) => !q.viaTransaction)).toEqual([]);
+        await provider.RollbackTransaction();
+    });
+
     it('queued nested units after a server abort all reject and never commit (H5)', async () => {
         await provider.BeginTransaction();
         provider.Handle()!.abortServerSide();
