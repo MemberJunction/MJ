@@ -31,7 +31,7 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift, StripSQLStringLiterals } from '@memberjunction/global';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
@@ -799,6 +799,46 @@ export class ResolverBase {
   }
 
   /**
+   * SECURITY — GraphQL-boundary screen for one client-supplied SQL clause fragment.
+   *
+   * The shared `ValidateUserProvidedSQLClause` screen (databaseProviderBase) blocks stacked
+   * statements, DML, comments, UNION and WAITFOR, but deliberately permits SELECT because
+   * server-internal engines legitimately pass richer filters straight into RunView. A
+   * CLIENT, however, has no legitimate reason to embed a subquery in ExtraFilter / OrderBy /
+   * UserSearchString / OverrideExcludeFilter — and permitting one turns those fields into a
+   * blind boolean oracle over tables the caller cannot read (e.g.
+   * `EXISTS (SELECT 1 FROM __mj.User WHERE ...)`). So clauses arriving through the GraphQL
+   * resolvers are additionally rejected when they contain SELECT or EXISTS outside of
+   * string literals.
+   */
+  protected assertNoClientSubquery(clause: string | undefined | null, label: string): void {
+    if (!clause) return;
+    // Strip string literals first so a legitimate value like Name LIKE '%select%' passes.
+    const stripped = StripSQLStringLiterals(clause);
+    if (/\bselect\b/i.test(stripped) || /\bexists\b/i.test(stripped)) {
+      throw new Error(`Invalid ${label}: subqueries are not permitted in client-supplied filters`);
+    }
+  }
+
+  /**
+   * Applies {@link assertNoClientSubquery} to the full set of client-supplied clause fields a
+   * view request can carry. Every GraphQL entry point that accepts these fields
+   * (RunViewByName, RunViewByID, RunDynamicView, and the batched RunViews) funnels through
+   * RunViewGenericInternal / RunViewsGenericInternal, which both call this.
+   */
+  protected screenClientViewClauses(clauses: {
+    extraFilter?: string | null;
+    orderBy?: string | null;
+    userSearchString?: string | null;
+    overrideExcludeFilter?: string | null;
+  }): void {
+    this.assertNoClientSubquery(clauses.extraFilter, 'ExtraFilter');
+    this.assertNoClientSubquery(clauses.orderBy, 'OrderBy');
+    this.assertNoClientSubquery(clauses.userSearchString, 'UserSearchString');
+    this.assertNoClientSubquery(clauses.overrideExcludeFilter, 'OverrideExcludeFilter');
+  }
+
+  /**
    * Optimized RunViewGenericInternal implementation with:
    * - Field filtering at source (Fix #7)
    * - Improved error handling (Fix #9)
@@ -828,6 +868,10 @@ export class ResolverBase {
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
+
+      // SECURITY: reject client-supplied clause fragments containing subqueries before they
+      // reach the provider (see screenClientViewClauses).
+      this.screenClientViewClauses({ extraFilter, orderBy, userSearchString, overrideExcludeFilter });
 
       // Check API key scope authorization for view operations
       await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
@@ -990,6 +1034,14 @@ export class ResolverBase {
 
       // Transform parameters
       for (const param of params) {
+        // SECURITY: same GraphQL-boundary subquery screen as RunViewGenericInternal.
+        this.screenClientViewClauses({
+          extraFilter: param.extraFilter,
+          orderBy: param.orderBy,
+          userSearchString: param.userSearchString,
+          overrideExcludeFilter: param.overrideExcludeFilter,
+        });
+
         if (param.viewInfo) {
           // Validate entity only once per entity type
           const entityName = param.viewInfo.Entity;

@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import type { DatabaseProviderBase, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import type { UserPayload } from '../types.js';
-import type { RunViewByNameInput } from '../generic/RunViewResolver.js';
+import type { RunDynamicViewInput, RunViewByNameInput } from '../generic/RunViewResolver.js';
 import type { PubSubEngine } from 'type-graphql';
 
 /**
@@ -37,7 +37,9 @@ function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = []):
     return {
         Entities: [
             {
+                ID: 'E1',
                 Name: ENTITY_NAME,
+                BaseView: 'vwUsers',
                 Fields: [
                     { Name: 'Email', NeedsQuotes: true },
                     { Name: 'Name', NeedsQuotes: true },
@@ -60,10 +62,18 @@ function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = []):
 const fakeUser = () => ({ Email: 'tester@example.com' } as UserInfo);
 const fakePayload = () => ({ email: 'tester@example.com', userRecord: fakeUser() } as UserPayload);
 
-/** Reaches the protected `findBy`. */
+/** Reaches the protected `findBy` and the client-subquery screen. */
 class Probe extends ResolverBase {
     public FindBy(provider: DatabaseProviderBase, entity: string, params: Record<string, unknown>) {
         return this.findBy(provider, entity, params, fakeUser());
+    }
+
+    public AssertNoClientSubquery(clause: string | undefined | null, label: string) {
+        return this.assertNoClientSubquery(clause, label);
+    }
+
+    public RunDynamic(input: RunDynamicViewInput, provider: DatabaseProviderBase) {
+        return this.RunDynamicViewGeneric(input, provider, fakePayload(), undefined as unknown as PubSubEngine);
     }
 }
 
@@ -124,6 +134,78 @@ describe('ResolverBase.findBy — ExtraFilter escaping', () => {
         await expect(
             new Probe().FindBy(fakeProvider({ params: null }), ENTITY_NAME, { NotAField: 'x' })
         ).rejects.toThrow(/NotAField/);
+    });
+});
+
+describe('ResolverBase — GraphQL-boundary subquery screen (assertNoClientSubquery)', () => {
+    // ValidateUserProvidedSQLClause deliberately permits SELECT (server-internal engines pass
+    // richer filters straight into RunView), so a client could previously turn ExtraFilter into
+    // a blind boolean oracle over tables it cannot read. These tests pin the stricter screen
+    // applied only to clauses arriving through the GraphQL resolvers.
+
+    it('rejects an EXISTS subquery probing a foreign table', () => {
+        expect(() =>
+            new Probe().AssertNoClientSubquery(`EXISTS (SELECT 1 FROM __mj.[User] WHERE Type='Owner')`, 'ExtraFilter')
+        ).toThrow(/subqueries are not permitted/);
+    });
+
+    it('rejects a scalar SELECT subquery in ORDER BY', () => {
+        expect(() =>
+            new Probe().AssertNoClientSubquery('(SELECT COUNT(*) FROM __mj.APIKey)', 'OrderBy')
+        ).toThrow(/subqueries are not permitted/);
+    });
+
+    it('rejects EXISTS regardless of case', () => {
+        expect(() =>
+            new Probe().AssertNoClientSubquery(`eXiStS (SeLeCt 1 FROM __mj.[User])`, 'ExtraFilter')
+        ).toThrow(/subqueries are not permitted/);
+    });
+
+    it('allows an ordinary comparison filter', () => {
+        expect(() =>
+            new Probe().AssertNoClientSubquery(`Email = 'a@b.com' AND IsActive = 1`, 'ExtraFilter')
+        ).not.toThrow();
+    });
+
+    it('does not false-positive on SELECT/EXISTS inside string literals', () => {
+        // Literals are stripped before the keyword test, so a value that merely CONTAINS the
+        // words is fine.
+        expect(() =>
+            new Probe().AssertNoClientSubquery(`Name LIKE '%select%' OR Name = 'exists'`, 'ExtraFilter')
+        ).not.toThrow();
+    });
+
+    it('allows empty/undefined clauses', () => {
+        expect(() => new Probe().AssertNoClientSubquery('', 'ExtraFilter')).not.toThrow();
+        expect(() => new Probe().AssertNoClientSubquery(undefined, 'OrderBy')).not.toThrow();
+    });
+
+    it('RunDynamicViewGeneric never reaches RunView when ExtraFilter carries a subquery', async () => {
+        const captured: Captured = { params: null };
+        const input = {
+            EntityName: ENTITY_NAME,
+            ExtraFilter: `EXISTS (SELECT 1 FROM __mj.[User] WHERE Type='Owner')`,
+        } as RunDynamicViewInput;
+
+        // The screen throws inside RunViewGenericInternal. RunDynamicViewGeneric returns that
+        // promise without awaiting it, so its try/catch does not swallow the rejection — the
+        // caller sees the error directly.
+        await expect(new Probe().RunDynamic(input, fakeProvider(captured))).rejects.toThrow(
+            /subqueries are not permitted/
+        );
+        expect(captured.params).toBeNull(); // never reached RunView
+    });
+
+    it('RunDynamicViewGeneric passes a benign ExtraFilter through to RunView', async () => {
+        const captured: Captured = { params: null };
+        const input = {
+            EntityName: ENTITY_NAME,
+            ExtraFilter: `Email = 'a@b.com'`,
+        } as RunDynamicViewInput;
+
+        await new Probe().RunDynamic(input, fakeProvider(captured));
+
+        expect(captured.params?.ExtraFilter).toBe(`Email = 'a@b.com'`);
     });
 });
 
