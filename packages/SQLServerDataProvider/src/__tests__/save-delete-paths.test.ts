@@ -19,6 +19,7 @@ vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMs
 
 import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
 import {
@@ -77,18 +78,6 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
     // no-op — AI engine not under test
   }
 
-  public AllocateSaveCallSuffix(entity: BaseEntity): string {
-    return this.allocateSaveCallSuffix(entity);
-  }
-
-  public AllocateSaveCallSuffixForPk(
-    group: object | null,
-    schemaName: string,
-    baseTable: string,
-    pkValues: unknown[],
-  ): string {
-    return this.allocateSaveCallSuffixForPk(group, schemaName, baseTable, pkValues);
-  }
 }
 
 function makeProvider(): SaveDeleteTestProvider {
@@ -360,7 +349,7 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     expect(sfxA).toBe(sfxB);
     expect(sfxA).toMatch(/^_[0-9a-f]{8}$/);
     expect(sfxA).toBe(
-      '_' + SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
+      '_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
     );
   });
 
@@ -382,38 +371,4 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     );
   });
 
-  it('same record twice inside one transaction group → _hash and _hash_2', async () => {
-    const { SQLServerTransactionGroup } = await import('../SQLServerTransactionGroup');
-    const group = new SQLServerTransactionGroup();
-    const info = makeWidgetEntityInfo();
-    const a = makeSavedWidgetEntity(info, TEST_USER);
-    const b = makeSavedWidgetEntity(info, TEST_USER);
-    a.TransactionGroup = group;
-    b.TransactionGroup = group;
-    const provider = makeProvider();
-    const sfxA = provider.AllocateSaveCallSuffix(a);
-    const sfxB = provider.AllocateSaveCallSuffix(b);
-    expect(sfxA).toMatch(/^_[0-9a-f]{8}$/);
-    expect(sfxB).toBe(`${sfxA}_2`);
-  });
-
-  it('120_000 unique PKs in one transaction group: distinct suffixes, two real sha1[:8] collisions', async () => {
-    const { SQLServerTransactionGroup } = await import('../SQLServerTransactionGroup');
-    const group = new SQLServerTransactionGroup();
-    const provider = makeProvider();
-    const suffixes: string[] = [];
-    for (let i = 0; i < 120_000; i++) {
-      suffixes.push(provider.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [`id-${i}`]));
-    }
-    expect(new Set(suffixes).size).toBe(120_000);
-    const bare = suffixes.filter((s) => /^_[0-9a-f]{8}$/.test(s));
-    const second = suffixes.filter((s) => /^_[0-9a-f]{8}_2$/.test(s));
-    expect(bare).toHaveLength(119_998);
-    expect(second).toHaveLength(2);
-    expect(new Set(second.map((s) => s.slice(0, 9)))).toEqual(new Set(['_031e1622', '_37ccdac1']));
-    expect(SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['id-42236'])).toBe('031e1622');
-    expect(SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['id-64356'])).toBe('031e1622');
-    expect(SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['id-101514'])).toBe('37ccdac1');
-    expect(SQLServerDataProvider.SaveCallVariableHash('dbo', 'Widget', ['id-104669'])).toBe('37ccdac1');
-  });
 });

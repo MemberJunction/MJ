@@ -76,6 +76,7 @@ import {
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
+import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
@@ -1074,6 +1075,62 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         value: unknown,
         isUpdate: boolean,
     ): SaveCoercedValue;
+
+    /**
+     * First 8 hex of sha1(`${schema}.${table}|${pk values}`). Dialect-agnostic
+     * identity of a save call so sqlLogging recaptures of an unchanged tree
+     * are byte-identical. A random uuidv4 slice (previously only in
+     * SQLServerDataProvider.RenderSaveCallBinding) made every MetadataSync
+     * recapture a 250 MB diff and collided under birthday paradox at ~120k
+     * variables (loom #12 WP3 / F-D).
+     */
+    public static SaveCallVariableHash(schemaName: string, baseTable: string, pkValues: unknown[]): string {
+        const pk = pkValues.map((v) => (v === null || v === undefined ? '' : String(v))).join('|');
+        return createHash('sha1').update(`${schemaName}.${baseTable}|${pk}`).digest('hex').slice(0, 8);
+    }
+
+    /** Per transaction-group counts so the same PK twice in one batch gets `_hash_2`. */
+    private _saveCallSuffixCounts = new WeakMap<object, Map<string, number>>();
+
+    /**
+     * Variable suffix for DECLARE/SET (or any named-local dialect) in a save call.
+     *
+     * Naming contract: `_<8 lowercase hex>` from
+     * `sha1(\`${schema}.${table}|${pk values joined by |}\`)`, plus an optional
+     * `_<n>` with n ≥ 2 when that hash repeats inside one `TransactionGroup`
+     * (`_abc12345`, `_abc12345_2`, …). SQL Server's RenderSaveCallBinding
+     * consumes this; PostgreSQL positional/json-arg bindings do not name
+     * locals today but share the same GenerateSaveSQL orchestrator.
+     */
+    protected allocateSaveCallSuffixForPk(
+        group: object | null | undefined,
+        schemaName: string,
+        baseTable: string,
+        pkValues: unknown[],
+    ): string {
+        const hash = GenericDatabaseProvider.SaveCallVariableHash(schemaName, baseTable, pkValues);
+        if (!group) {
+            return `_${hash}`;
+        }
+        let counts = this._saveCallSuffixCounts.get(group);
+        if (!counts) {
+            counts = new Map();
+            this._saveCallSuffixCounts.set(group, counts);
+        }
+        const n = (counts.get(hash) ?? 0) + 1;
+        counts.set(hash, n);
+        return n === 1 ? `_${hash}` : `_${hash}_${n}`;
+    }
+
+    protected allocateSaveCallSuffix(entity: BaseEntity): string {
+        const pkValues = entity.PrimaryKey?.KeyValuePairs?.map((p) => p.Value) ?? [];
+        return this.allocateSaveCallSuffixForPk(
+            entity.TransactionGroup,
+            entity.EntityInfo.SchemaName,
+            entity.EntityInfo.BaseTable,
+            pkValues,
+        );
+    }
 
     /**
      * Renders the dialect-specific parameter binding for a save call.

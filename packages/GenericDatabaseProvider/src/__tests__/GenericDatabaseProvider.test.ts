@@ -189,6 +189,15 @@ class TestGenericProvider extends GenericDatabaseProvider {
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
+
+    public AllocateSaveCallSuffixForPk(
+        group: object | null,
+        schemaName: string,
+        baseTable: string,
+        pkValues: unknown[],
+    ): string {
+        return this.allocateSaveCallSuffixForPk(group, schemaName, baseTable, pkValues);
+    }
 }
 
 // Minimal mock user
@@ -2066,5 +2075,44 @@ describe('GenericDatabaseProvider nested transactions', () => {
         expect(p.executeSQLCalls.map((c) => c.sql)).not.toContain('UPDATE Orders SET Status=Confirmed');
         await p.ExecuteSQL('SELECT 1', undefined, { connectionSource: {} });
         expect(p.executeSQLCalls.map((c) => c.sql)).toContain('SELECT 1');
+    });
+});
+
+describe('GenericDatabaseProvider save-call variable suffix (loom #12 WP3)', () => {
+    it('hashes schema.table|pk deterministically', () => {
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001'])).toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
+        );
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['a'])).not.toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['b']),
+        );
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-42236'])).toBe('031e1622');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-64356'])).toBe('031e1622');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-101514'])).toBe('37ccdac1');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-104669'])).toBe('37ccdac1');
+    });
+
+    it('same PK twice in one group → _hash then _hash_2', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const a = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', ['w-0001']);
+        const b = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', ['w-0001']);
+        expect(a).toMatch(/^_[0-9a-f]{8}$/);
+        expect(b).toBe(`${a}_2`);
+    });
+
+    it('120_000 unique PKs in one group: distinct suffixes, two real sha1[:8] collisions', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const suffixes: string[] = [];
+        for (let i = 0; i < 120_000; i++) {
+            suffixes.push(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [`id-${i}`]));
+        }
+        expect(new Set(suffixes).size).toBe(120_000);
+        const bare = suffixes.filter((s) => /^_[0-9a-f]{8}$/.test(s));
+        const second = suffixes.filter((s) => /^_[0-9a-f]{8}_2$/.test(s));
+        expect(bare).toHaveLength(119_998);
+        expect(second).toHaveLength(2);
+        expect(new Set(second.map((s) => s.slice(0, 9)))).toEqual(new Set(['_031e1622', '_37ccdac1']));
     });
 });
