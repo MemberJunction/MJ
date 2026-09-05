@@ -1771,7 +1771,7 @@ export class SQLServerDataProvider
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
     } else if (!connectionSource) {
-      // Use instance transaction
+      this.AssertAmbientTransactionUsable();
       transaction = this._transaction;
     }
     
@@ -2374,8 +2374,7 @@ IF ${varName} IS NOT NULL
   }
 
   protected override async OnBeginFailedAtDepthZero(): Promise<void> {
-    this._transaction = null;
-    this._transactionState$.next(false);
+    await this.AbandonPhysicalTransaction();
   }
 
   protected override async HandleFailedSavepointRollback(savepointName: string, error: unknown): Promise<void> {

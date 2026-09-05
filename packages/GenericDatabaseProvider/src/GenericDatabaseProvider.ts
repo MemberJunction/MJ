@@ -5375,6 +5375,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return this.SavepointStack;
     }
 
+    /** True after the ambient physical TX was abandoned and frames are still settling. */
+    protected get IsDoomed(): boolean {
+        return this._doomed;
+    }
+
+    /**
+     * Throw if a statement would run on the pool while frames are still open
+     * after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
+     * — outermost begin has depth 1 before the handle is published, and
+     * concurrent reads on SQL Server legitimately use the pool in that window.
+     */
+    protected AssertAmbientTransactionUsable(): void {
+        if (this._doomed) {
+            throw new DoomedTransactionError(
+                `SQL issued at depth ${this._transactionDepth} while the ambient transaction is doomed would autocommit on the pool`,
+            );
+        }
+    }
+
     /**
      * True when the driver has a begun physical transaction object.
      * Must be truthful: a published-but-unbegun handle is a poison state.
@@ -5448,10 +5467,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Nested savepoint rollback failed. Default abandons the physical TX so
-     * depth cannot stay > 0 with a dead or swapped handle.
+     * Nested savepoint rollback failed. Abandon the physical handle and keep
+     * frames until the outer settle.
      */
-    protected async HandleFailedSavepointRollback(_savepointName: string, _error: unknown): Promise<void> {
+    protected async HandleFailedSavepointRollback(savepointName: string, error: unknown): Promise<void> {
+        LogError(`Savepoint rollback to ${savepointName} failed`, undefined, error);
         await this.AbandonPhysicalTransaction();
         this.markDoomed();
     }
@@ -5606,10 +5626,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
         if (releaseSQL) {
-            await this.ExecuteSQL(releaseSQL, undefined, {
-                description: `Releasing savepoint ${savepointName}`,
-                ignoreLogging: true,
-            });
+            try {
+                await this.ExecuteSQL(releaseSQL, undefined, {
+                    description: `Releasing savepoint ${savepointName}`,
+                    ignoreLogging: true,
+                });
+            } catch (e) {
+                await this.AbandonPhysicalTransaction();
+                this.markDoomed();
+                this.popDoomedFrame();
+                throw new DoomedTransactionError(undefined, { cause: e });
+            }
         }
         this._savepointStack.pop();
         this._transactionDepth--;

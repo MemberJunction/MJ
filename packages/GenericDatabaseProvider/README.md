@@ -82,7 +82,7 @@ Depth 1 is a physical `BEGIN`. Depth 2+ is a dialect savepoint on that same tran
 - `AbandonPhysicalTransaction` unpublishes even when driver rollback rejects (`EABORT`).
 - `AfterPhysicalCommit` (SQL Server deferred AI tasks) runs **after** depth is 0 and **outside** the mutex.
 
-**Failure semantics.** A server abort of the ambient TX (mssql `ENOTBEGUN`/`EABORT`, pg `25P01`) is not recoverable. The physical handle is abandoned and the provider stays **doomed until the outermost frame settles**: nested `BeginTransaction` throws `DoomedTransactionError` without opening a new physical TX, nested `Commit` pops a frame, outermost `Commit` throws `DoomedTransactionError`, outermost `Rollback` resolves. That stops a queued sibling begin from becoming a second physical commit (torn write). `Save()` returns false. `ResetTransactionState()` is the fixture/ops escape hatch — do not poke private fields.
+**Failure semantics.** A server abort of the ambient TX (mssql `ENOTBEGUN`/`EABORT`, pg `25P01`) is not recoverable. The physical handle is abandoned and the provider stays **doomed until the outermost frame settles**: nested `BeginTransaction` throws `DoomedTransactionError` without opening a new physical TX, nested `Commit` pops a frame, outermost `Commit` throws `DoomedTransactionError`, outermost `Rollback` resolves. While doomed, **every statement without an explicit `connectionSource` — reads included — throws `DoomedTransactionError`**, so a plain `Save()` returns false instead of autocommitting on the pool. `ResetTransactionState()` is the fixture/ops escape hatch — do not poke private fields.
 
 **`TransactionDepth` vs `IsInTransaction` vs SQL Server `isTransactionActive`:**
 

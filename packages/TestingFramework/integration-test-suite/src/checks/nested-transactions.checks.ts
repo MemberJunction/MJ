@@ -33,12 +33,26 @@ function poolSource(ctx: IntegrationCheckContext): unknown {
     return p.DatabaseConnection ?? p.Pool ?? undefined;
 }
 
+async function namedExists(ctx: IntegrationCheckContext, label: string): Promise<boolean> {
+    if (!fixture) return false;
+    const table = isPostgres(ctx) ? '"__mj"."vwActionCategories"' : '[__mj].[vwActionCategories]';
+    const col = isPostgres(ctx) ? '"Name"' : '[Name]';
+    const name = `${fixture.Prefix}-${label}`.replace(/'/g, "''");
+    const rows = await providerOf(ctx).ExecuteSQL(
+        `SELECT COUNT(*) AS c FROM ${table} WHERE ${col} = '${name}'`,
+        undefined,
+        { connectionSource: poolSource(ctx) },
+    ) as Array<Record<string, unknown>>;
+    const n = rows?.[0] ? Object.values(rows[0])[0] : 0;
+    return Number(n) === 1;
+}
+
 async function committed(ctx: IntegrationCheckContext, id: string): Promise<boolean> {
     const table = isPostgres(ctx) ? '"__mj"."vwActionCategories"' : '[__mj].[vwActionCategories]';
     const rows = await providerOf(ctx).ExecuteSQL(
         `SELECT COUNT(*) AS c FROM ${table} WHERE ID = '${id.replace(/'/g, "''")}'`,
         undefined,
-        { connectionSource: poolSource(ctx) } as never,
+        { connectionSource: poolSource(ctx) },
     ) as Array<Record<string, unknown>>;
     const n = rows?.[0] ? Object.values(rows[0])[0] : 0;
     return Number(n) === 1;
@@ -284,14 +298,12 @@ export const NestedTransactionChecks: NamedCheck[] = [
             try { await doomAmbient(ctx); } catch { /* expected */ }
             const results = await Promise.allSettled([unit('nt8b-a'), unit('nt8b-b')]);
             Assert(results.every((r) => r.status === 'rejected'), 'NT8b: both nested units must reject');
-            try {
-                await p.CommitTransaction();
-                Assert(false, 'NT8b: outer commit must reject');
-            } catch {
-                /* doomed */
-            }
+            const outer = await p.CommitTransaction().then(() => 'fulfilled' as const, () => 'rejected' as const);
+            AssertEqual(outer, 'rejected', 'NT8b: outer commit must reject');
             try { await p.ResetTransactionState(); } catch { /* already clear */ }
             Assert(!(await committed(ctx, header.ID)), 'NT8b: header must not persist');
+            Assert(!(await namedExists(ctx, 'nt8b-a')), 'NT8b: sibling nt8b-a must not persist');
+            Assert(!(await namedExists(ctx, 'nt8b-b')), 'NT8b: sibling nt8b-b must not persist');
         },
     },
     {
@@ -315,6 +327,33 @@ export const NestedTransactionChecks: NamedCheck[] = [
             AssertEqual(p.TransactionDepth, 0, 'NT9: depth 0');
             Assert(p.isTransactionActive === false, 'NT9: isTransactionActive false');
             Assert(seen.includes(false), 'NT9: observed false emission');
+        },
+    },
+    {
+        Id: 'nested-transactions.NT10',
+        Name: 'NT10: plain Save() while doomed returns false and does not autocommit on the pool',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const p = providerOf(ctx);
+            await p.BeginTransaction();
+            const a = await newCategory(ctx, 'nt10-a');
+            Assert(await a.Save(), 'NT10: header save');
+            fixture!.Ids.push(a.ID);
+            try { await doomAmbient(ctx); } catch { /* expected */ }
+            try { await p.BeginTransaction(); } catch { /* doomed nested begin */ }
+            const b = await newCategory(ctx, 'nt10-b');
+            const saved = await b.Save();
+            AssertEqual(saved, false, 'NT10: plain save while doomed must return false');
+            Assert(
+                /doomed|autocommit/i.test(b.LatestResult?.CompleteMessage ?? ''),
+                `NT10: LatestResult must mention doomed, got ${b.LatestResult?.CompleteMessage}`,
+            );
+            if (b.ID) fixture!.Ids.push(b.ID);
+            const outer = await p.CommitTransaction().then(() => 'fulfilled' as const, () => 'rejected' as const);
+            AssertEqual(outer, 'rejected', 'NT10: outer commit must reject');
+            try { await p.ResetTransactionState(); } catch { /* already clear */ }
+            Assert(!(await committed(ctx, a.ID)), 'NT10: a must not persist');
+            Assert(!(await namedExists(ctx, 'nt10-b')), 'NT10: b must not persist');
         },
     },
 ];

@@ -156,7 +156,10 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public executeSQLResults: Array<Record<string, unknown>[]> = [];
     private executeSQLCallIndex = 0;
 
-    override async ExecuteSQL<T>(sql?: string, params?: unknown[]): Promise<Array<T>> {
+    override async ExecuteSQL<T>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> {
+        if (!options?.connectionSource) {
+            this.AssertAmbientTransactionUsable();
+        }
         this.executeSQLCalls.push({ sql: sql ?? '', params });
         const result = this.executeSQLResults[this.executeSQLCallIndex] ?? [];
         this.executeSQLCallIndex++;
@@ -2043,5 +2046,25 @@ describe('GenericDatabaseProvider nested transactions', () => {
         await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
         expect(p.TransactionDepth).toBe(0);
         expect(p.physicalOpen).toBe(false);
+    });
+
+    it('ExecuteSQL without connectionSource throws while doomed (H6)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        let firstSave = true;
+        const orig = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async (sql?: string, params?: unknown[], options?: { connectionSource?: unknown }) => {
+            if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION') && firstSave) {
+                firstSave = false;
+                throw Object.assign(new Error('Transaction has not begun'), { code: 'ENOTBEGUN' });
+            }
+            return orig(sql, params, options);
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        p.resetExecuteSQLState();
+        await expect(p.ExecuteSQL('UPDATE Orders SET Status=Confirmed')).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.executeSQLCalls.map((c) => c.sql)).not.toContain('UPDATE Orders SET Status=Confirmed');
+        await p.ExecuteSQL('SELECT 1', undefined, { connectionSource: {} });
+        expect(p.executeSQLCalls.map((c) => c.sql)).toContain('SELECT 1');
     });
 });

@@ -64,7 +64,7 @@ than poking private fields.
 That is not a nicety, it is a correctness requirement. Before 6.2 MemberJunction had two transaction
 mechanisms that were blind to each other:
 
-- `GenericDatabaseProvider.BeginTransaction()` — depth-counted, re-entrant, dialect savepoints. A server abort of the ambient TX is not recoverable (`DoomedTransactionError`); the outer `Commit` fails and `Save()` returns false. Concurrent nested scopes on one provider instance are unsupported.
+- `GenericDatabaseProvider.BeginTransaction()` — depth-counted, re-entrant, dialect savepoints. A server abort of the ambient TX is not recoverable (`DoomedTransactionError`); the outer `Commit` fails and `Save()` returns false. While doomed, every statement without an explicit `connectionSource` throws. Concurrent nested scopes on one provider instance are unsupported — do not let a nested unit outlive its outer scope (`Promise.all` over throwing units on one provider starts a fresh physical TX); use `allSettled` or serialize.
 - `BeginISATransaction()` — four lines that opened a brand-new `sql.Transaction` on the pool with no
   depth awareness at all.
 

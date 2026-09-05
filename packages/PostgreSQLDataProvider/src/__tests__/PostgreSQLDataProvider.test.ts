@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
 import { CompositeKey, EntityInfo, EntityFieldTSType } from '@memberjunction/core';
+import { DoomedTransactionError } from '@memberjunction/generic-database-provider';
 
 /**
  * Helper: build a minimal EntityInfo-like object with the given field names.
@@ -280,6 +281,43 @@ describe('PostgreSQLDataProvider', () => {
             expect(provider.TransactionDepth).toBe(0);
             expect(client.released).toBe(true);
             expect(client.queries).toContain('ROLLBACK');
+        });
+
+        it('ExecuteSQL without connectionSource throws while doomed (H6)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('SAVEPOINT')) {
+                    throw Object.assign(new Error('current transaction is aborted'), { code: '25P01' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            await expect(provider.ExecuteSQL('UPDATE orders SET status = 1')).rejects.toBeInstanceOf(DoomedTransactionError);
+            const poolQuery = vi.fn(async () => ({ rows: [{ ok: 1 }] }));
+            await provider.ExecuteSQL('SELECT 1', undefined, { connectionSource: { query: poolQuery } });
+            expect(poolQuery).toHaveBeenCalled();
+            await provider.RollbackTransaction();
+        });
+
+        it('RELEASE SAVEPOINT failure dooms and pops the frame (P4/C11)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('RELEASE')) {
+                    throw Object.assign(new Error('current transaction is aborted'), { code: '25P01' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            expect(provider.TransactionDepth).toBe(1);
+            expect(client.released).toBe(true);
+            expect(client.queries).toContain('ROLLBACK');
+            await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            expect(provider.TransactionDepth).toBe(0);
         });
     });
 

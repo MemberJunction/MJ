@@ -2366,4 +2366,9 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers to emit logging of a simpler SQL statement that doesn't have extra functionality that isn't important for migrations or other logging purposes. */
   simpleSQLFallback?: string;
+  /**
+   * Explicit driver handle (pool, client, or transaction). When set, the statement
+   * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
+   */
+  connectionSource?: unknown;
 }

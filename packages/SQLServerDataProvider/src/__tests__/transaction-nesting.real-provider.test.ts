@@ -118,6 +118,27 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         expect(provider.TransactionDepth).toBe(0);
     });
 
+    it('ExecuteSQL with no source rejects while doomed; pool-scoped source still runs (H6)', async () => {
+        await provider.BeginTransaction();
+        provider.Handle()!.abortServerSide();
+        await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        await expect(provider.ExecuteSQL('UPDATE Orders SET Status=Confirmed')).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(mssqlState.Queries.filter((q) => !q.viaTransaction && /UPDATE Orders/.test(q.sql))).toEqual([]);
+        await provider.ExecuteSQL('SELECT 1 AS ok', undefined, { connectionSource: pool });
+        expect(mssqlState.Queries.some((q) => !q.viaTransaction && /SELECT 1/.test(q.sql))).toBe(true);
+        await provider.RollbackTransaction();
+    });
+
+    it('ExecuteSQL rejects while doomed after nested-rollback doom (H6)', async () => {
+        await provider.BeginTransaction();
+        await provider.BeginTransaction();
+        provider.Handle()!.abortServerSide();
+        await provider.RollbackTransaction();
+        await expect(provider.ExecuteSQL('EXEC spCreateOrderLine line2')).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(mssqlState.Queries.filter((q) => !q.viaTransaction && /spCreateOrderLine/.test(q.sql))).toEqual([]);
+        await provider.RollbackTransaction();
+    });
+
     it('queued nested units after a server abort all reject and never commit (H5)', async () => {
         await provider.BeginTransaction();
         provider.Handle()!.abortServerSide();
@@ -212,6 +233,17 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         expect(mssqlState.Queries.some((q) => /SAVE TRANSACTION SavePoint_1/i.test(q.sql))).toBe(true);
         await inner.Commit();
         await outer.Rollback();
+    });
+
+    it('begin failure with a stray begun handle rolls it back (P8)', async () => {
+        const stray = new MockTransaction(pool);
+        await stray.begin();
+        (provider as unknown as { _transaction: MockTransaction })._transaction = stray;
+        await expect(provider.BeginTransaction()).rejects.toThrow(/existing handle/);
+        expect(stray.begun).toBe(false);
+        expect(mssqlState.EventKinds()).toContain('rollback');
+        expect(provider.Handle()).toBeNull();
+        expect(provider.TransactionDepth).toBe(0);
     });
 
     it('instanceof sql.Transaction still holds for the published handle', async () => {

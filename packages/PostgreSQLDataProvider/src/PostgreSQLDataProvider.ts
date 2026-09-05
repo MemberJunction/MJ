@@ -326,7 +326,12 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         // does for codegen-time SQL — runtime gets the same treatment.
         const quotedQuery = this.autoQuoteIdentifiers(query);
         try {
-            const source = this._transaction ?? this._connectionManager.Pool;
+            if (!options?.connectionSource) {
+                this.AssertAmbientTransactionUsable();
+            }
+            const source = (options?.connectionSource as { query: typeof this._connectionManager.Pool.query } | undefined)
+                ?? this._transaction
+                ?? this._connectionManager.Pool;
             const result = await source.query(quotedQuery, processedParams);
             return result.rows as T[];
         } catch (err) {
@@ -357,6 +362,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * auto-quoting — the vector provider emits its own correctly-quoted SQL.
      */
     public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
+        this.AssertAmbientTransactionUsable();
         const source = this._transaction ?? this._connectionManager.Pool;
         const result = await source.query(sql, params ? [...params] : undefined);
         return result.rows as T[];
