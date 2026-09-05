@@ -93,6 +93,16 @@ export class ConditionalAction extends BaseAction {
                 };
             }
 
+            // SECURITY: reject conditions containing dangerous code patterns BEFORE any
+            // Function construction (mirrors calculate-expression.action.ts).
+            if (this.containsDangerousCode(condition)) {
+                return {
+                    Success: false,
+                    Message: "Condition contains invalid or potentially dangerous code",
+                    ResultCode: "INVALID_CONDITION"
+                };
+            }
+
             // Evaluate condition
             let conditionResult: boolean;
             try {
@@ -186,16 +196,64 @@ export class ConditionalAction extends BaseAction {
     }
 
     /**
-     * Evaluate condition safely
+     * Checks if the condition contains potentially dangerous code patterns.
+     * Replicated from calculate-expression.action.ts so both `new Function` call
+     * sites screen caller-supplied text identically.
+     *
+     * SECURITY NOTE: a denylist is a mitigation, not a sandbox — the long-term fix
+     * is routing condition evaluation through @memberjunction/code-execution's
+     * isolated-vm sandbox instead of `new Function`.
+     */
+    private containsDangerousCode(condition: string): boolean {
+        const dangerousPatterns = [
+            /import\s/i,
+            /require\s*\(/i,
+            /eval\s*\(/i,
+            /function\s*\(/i,
+            /=>/,
+            /new\s+/i,
+            /\.\s*constructor/i,
+            /\[["'`].*["'`]\]/,  // Array access with strings
+            /process\./i,
+            /global\./i,
+            /window\./i,
+            /document\./i,
+            /console\./i,
+            /alert\s*\(/i,
+            /prompt\s*\(/i,
+            /confirm\s*\(/i,
+            /while\s*\(/i,
+            /for\s*\(/i,
+            /do\s*{/i,
+            /if\s*\(/i,
+            /return/i,
+            /throw/i,
+            /await/i,
+            /async/i,
+            /class\s/i,
+            /extends/i,
+            /\${/,  // Template literals
+            /`/,    // Backticks
+            /;/,    // Semicolons (prevent multiple statements)
+            /{/,    // Curly braces (prevent code blocks)
+            /}/,
+        ];
+
+        return dangerousPatterns.some(pattern => pattern.test(condition));
+    }
+
+    /**
+     * Evaluate condition safely.
+     * NOTE: `"use strict"` is ALWAYS enforced regardless of the StrictMode parameter —
+     * sloppy-mode evaluation of caller text is never acceptable. StrictMode is retained
+     * only for backward parameter compatibility.
      */
     private evaluateCondition(condition: string, context: any, strictMode: boolean): boolean {
         // Create a safe evaluation context
         const safeContext = { ...context };
-        
-        // Build the evaluation function
-        const functionBody = strictMode 
-            ? `"use strict"; return (${condition});`
-            : `return (${condition});`;
+
+        // Build the evaluation function — always strict mode (see note above)
+        const functionBody = `"use strict"; return (${condition});`;
 
         // Create function with context variables
         const contextKeys = Object.keys(safeContext);
