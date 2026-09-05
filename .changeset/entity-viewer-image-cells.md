@@ -1,5 +1,6 @@
 ---
 "@memberjunction/ng-entity-viewer": patch
+"@memberjunction/ng-timeline": patch
 ---
 
-Grid cells for PhotoURL / LogoURL / avatar / thumbnail fields (or `format.type: image`) render as a linked thumbnail instead of a text URL.
+Photo/logo/avatar cells crop, center, and scale to the cell (28px circle in the grid, 48px circle on cards, 40px circle on timeline). AG Grid injects HTML without Angular attributes, so size is also inlined on the img. Timeline auto-binds PhotoURL/LogoURL as the card image.

@@ -2798,6 +2798,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       colDef.headerClass = 'header-align-right';
     }
 
+    if (isImage) {
+      colDef.cellClass = `${colDef.cellClass || ''} mj-grid-image-cell`.trim();
+      colDef.headerClass = `${colDef.headerClass || ''} mj-grid-image-header`.trim();
+      colDef.width = 48;
+      colDef.minWidth = 44;
+      colDef.maxWidth = 56;
+      colDef.resizable = false;
+    }
+
     // Apply custom header style if provided
     if (customFormat?.headerStyle) {
       const headerStyle = this.buildCssStyle(customFormat.headerStyle);
@@ -2820,7 +2829,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
           const url = this.normalizeHref(raw);
           const escaped = HighlightUtil.escapeHtml(url);
           return this.wrapWithStyle(
-            `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="cell-image-link" onclick="event.stopPropagation()"><img src="${escaped}" alt="" class="cell-image" /></a>`,
+            `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="cell-image-link" onclick="event.stopPropagation()"><img src="${escaped}" alt="" class="cell-image" width="28" height="28" style="width:28px;height:28px;max-width:28px;max-height:28px;object-fit:cover;object-position:center;border-radius:50%;display:block" /></a>`,
             customFormat?.cellStyle ? this.buildCssStyle(customFormat.cellStyle) : '',
           );
         }
