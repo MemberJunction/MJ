@@ -11,23 +11,35 @@ Thanks for your interest in contributing to MemberJunction! This guide covers ho
 
 ## Getting set up
 
-MemberJunction is an npm-workspace monorepo built with [Turborepo](https://turbo.build/).
+MemberJunction is a **pnpm**-workspace monorepo built with [Turborepo](https://turbo.build/).
+
+> ⚠️ **Never run `npm install` here.** It would write a `package-lock.json` this repo no longer
+> uses and resolve a different dependency tree. The package manager is pinned by
+> `packageManager` in the root `package.json`; `corepack enable` will honour it automatically.
 
 ```bash
 # Clone and install (always install from the repo root)
 git clone https://github.com/MemberJunction/MJ.git && cd MJ
-npm install
+pnpm install
 
 # Build everything
-npm run build
+pnpm run build
 
 # Build a single package (run inside that package's directory)
-cd packages/<PackageName> && npm run build
+cd packages/<PackageName> && pnpm run build
 ```
 
-> **Prerequisites:** Node.js 20+, npm 9+, SQL Server 2019+ (or Azure SQL), Angular CLI 21+.
+> **Prerequisites:** Node.js 22+ (24 recommended — see [`.nvmrc`](./.nvmrc)), pnpm 10.33+,
+> SQL Server 2019+ (or Azure SQL). The Angular CLI is a workspace dependency — you do not need
+> it installed globally.
 
-See the root [`README.md`](./README.md) for a full Quick Start, and [`DEPLOYMENT.md`](./DEPLOYMENT.md) for deployment details.
+Adding a dependency? Put it in the individual package's `package.json`, then run `pnpm install`
+**at the repository root** — never inside a package directory. pnpm enforces declared
+dependencies strictly, so a package that imports something it does not declare fails to resolve
+rather than falling through to a hoisted copy.
+
+See the root [`README.md`](./README.md) for install and architecture, and
+[`DEPLOYMENT.md`](./DEPLOYMENT.md) for deployment details.
 
 ## Coding standards
 
@@ -46,11 +58,25 @@ Topic-specific guides live in [`guides/`](./guides/README.md) and in per-area `C
 MemberJunction uses [Vitest](https://vitest.dev/) across all packages.
 
 ```bash
-# Run all tests (from repo root)
-npm test
+# Unit tests — all packages, from repo root (Turborepo-cached, so unchanged packages skip)
+pnpm test
 
-# Run tests for one package
-cd packages/<PackageName> && npm run test
+# Unit tests — one package
+cd packages/<PackageName> && pnpm test
+
+# Deterministic integration tier (run after migrations + CodeGen have been applied)
+pnpm run test:integration
+```
+
+Before opening a PR, the local CI mirrors are worth a minute — each one mirrors a gate that
+would otherwise fail your PR:
+
+```bash
+pnpm run check:ui               # design-token + button gates on changed CSS/SCSS
+pnpm run check:standards        # every adopted MJ standard (see .mj-standards.json)
+pnpm run check:esm              # native-ESM import guard for "type": "module" packages
+pnpm run check:browser-manifest # server-only packages leaking into the browser bundle
+pnpm run check:codegen-tail     # new-table migrations ship their generated entity
 ```
 
 - **When you change a package's source, run that package's tests** and update them to match new behavior.
@@ -64,11 +90,18 @@ Schema changes go through Flyway migrations. Read [`migrations/CLAUDE.md`](./mig
 
 ## Pull request process
 
-1. **Branch** from the appropriate base branch using a descriptive feature-branch name.
+1. **Branch** from `next` (the default branch) using a descriptive feature-branch name, and
+   push with `git push -u origin <branch-name>` so it tracks a **same-named** remote branch.
+   A feature branch left tracking `origin/next` sends your commits straight to `next` on the
+   next bare `git push`, bypassing review entirely. Verify with `git branch -vv` before pushing.
 2. **Make focused changes** that follow the standards above.
-3. **Build and test** the affected packages locally (`npm run build` + `npm run test`).
-4. **Open a PR** with a clear description of what changed and why. Link any related issues.
-5. **Respond to review feedback** — CI must be green before merge.
+3. **Build and test** the affected packages locally (`pnpm run build` + `pnpm test`), then run
+   the deterministic integration tier (`pnpm run test:integration`).
+4. **Add a changeset** (`pnpm run change`) describing the user-visible change. `minor` is
+   reserved for branches that add or modify a migration or anything under `metadata/`;
+   everything else is `patch`. Check it with `pnpm run check:changeset`.
+5. **Open a PR** with a clear description of what changed and why. Link any related issues.
+6. **Respond to review feedback** — CI must be green before merge.
 
 ## License
 

@@ -212,9 +212,23 @@ eliminate.
 - This solves the npm distribution gap: published packages only have `dist/` (no `src/`), so the manifest generator can't scan them externally.
 
 **Key scripts:**
-- `npm run mj:manifest` — regenerates all 4 manifests (server-bootstrap, ng-bootstrap, MJAPI, MJExplorer)
-- `npm run mj:manifest:server-bootstrap` / `mj:manifest:ng-bootstrap` — regenerate bootstrap pre-built manifests
-- `npm run mj:manifest:api` / `mj:manifest:explorer` — regenerate app supplemental manifests
+- `pnpm run mj:manifest` — regenerates all **9** manifests, serially (server-bootstrap,
+  server-bootstrap-lite, ng-bootstrap, ng-bootstrap-lite, MJAPI, MJExplorer, A2AServer,
+  MCPServer, MJCodeGenAPI). Runs automatically from the root `postbuild`.
+- `pnpm run mj:manifest:server-bootstrap` / `:server-bootstrap-lite` / `:ng-bootstrap` /
+  `:ng-bootstrap-lite` — regenerate the pre-built bootstrap manifests
+- `pnpm run mj:manifest:api` / `:explorer` / `:a2a-server` / `:mcp-server` / `:codegen-api` —
+  regenerate the app supplemental manifests
+
+> The two `ng-bootstrap*` manifests ship to the **browser**. Regenerating them can pull a
+> server-only package into the bundle — run `pnpm run check:browser-manifest` afterwards
+> (CI runs it too). See [`packages/Angular/Bootstrap/CLAUDE.md`](../Angular/Bootstrap/CLAUDE.md).
+
+> **Ordering caveat.** These 9 steps are not order-independent: each runs with
+> `syncDependencies` on, so it may rewrite `<appDir>/package.json` while another step is
+> walking it. The current serial order does not fully respect that — see
+> [`plans/manifest-generation-parallelization.md`](../../plans/manifest-generation-parallelization.md)
+> before reordering or parallelizing them.
 
 **See**: [CLASS_MANIFEST_GUIDE.md](../../plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) for comprehensive
 documentation on the manifest system, including how external consumers and MJ distribution users

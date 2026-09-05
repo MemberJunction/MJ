@@ -18,8 +18,13 @@ vi.mock('@memberjunction/communication-types', async () => {
   const addressUtils = await vi.importActual<{
     ParseEmailAddressList: (headerValue: string | null | undefined) => string[];
   }>('../../../../base-types/src/AddressUtils');
+  // Same reasoning for the clause combiner: real, not stubbed, so the composition is exercised.
+  const filterUtils = await vi.importActual<{
+    CombineFilterClauses: (clauses: (string | null | undefined)[], operator: string) => string;
+  }>('../../../../base-types/src/FilterUtils');
   return {
     ...addressUtils,
+    ...filterUtils,
     BaseCommunicationProvider: class {
       getSupportedOperations() { return []; }
     },
@@ -431,6 +436,82 @@ describe('GmailProvider', () => {
       });
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toContain('Message ID not provided');
+    });
+  });
+
+  describe('GetMessages narrowing — what actually reaches Gmail', () => {
+    /** Runs GetMessages and hands back the `q` search expression the Gmail client was given. */
+    const queryFor = async (params: Record<string, unknown>): Promise<{ q: string; applied: unknown }> => {
+      mockMessagesList.mockResolvedValue({ data: { messages: [] } });
+      const result = await provider.GetMessages({ NumMessages: 10, ...params } as never);
+      const call = mockMessagesList.mock.calls[mockMessagesList.mock.calls.length - 1][0] as { q: string };
+      return { q: call.q, applied: (result as { AppliedFilters?: unknown }).AppliedFilters };
+    };
+
+    it('asks for everything when the caller narrows nothing', async () => {
+      const { q } = await queryFor({});
+      expect(q).toBe('');
+    });
+
+    it('pushes UnreadOnly down as a search operator', async () => {
+      const { q } = await queryFor({ UnreadOnly: true });
+      expect(q).toBe('is:unread');
+    });
+
+    describe('date bounds use epoch seconds, not the day-granular date form', () => {
+      /**
+       * `after:2026/08/30` is a DAY in the mailbox's own timezone, which would move an
+       * instant-based bound by up to a day without saying so. Epoch seconds are exact.
+       */
+      it('sends ReceivedAfter as epoch seconds', async () => {
+        const when = new Date('2026-08-30T12:00:00.000Z');
+        const { q } = await queryFor({ ReceivedAfter: when });
+        expect(q).toBe(`after:${Math.floor(when.getTime() / 1000) - 1}`);
+      });
+
+      it('widens the lower bound by one second so an INCLUSIVE bound stays inclusive', async () => {
+        // Gmail's after: is exclusive; the param is documented inclusive. Erring wide returns the
+        // boundary message, which a caller de-duplicates. Erring narrow loses it silently.
+        const when = new Date('2026-08-30T12:00:00.000Z');
+        const { q } = await queryFor({ ReceivedAfter: when });
+        const sent = Number(q.split(':')[1]);
+        expect(sent).toBeLessThan(Math.floor(when.getTime() / 1000));
+      });
+
+      it('widens the upper bound in the other direction, for the same reason', async () => {
+        const when = new Date('2026-08-31T00:00:00.000Z');
+        const { q } = await queryFor({ ReceivedBefore: when });
+        const sent = Number(q.split(':')[1]);
+        expect(sent).toBeGreaterThan(Math.floor(when.getTime() / 1000));
+      });
+    });
+
+    describe('a caller-supplied ContextData.query NARROWS, it does not replace', () => {
+      /**
+       * THE REGRESSION. `query = params.ContextData.query` overwrote whatever had been built, so
+       * asking for unread mail plus a custom expression silently returned read mail.
+       */
+      it('keeps UnreadOnly when a custom query is also supplied', async () => {
+        const { q } = await queryFor({ UnreadOnly: true, ContextData: { query: 'from:a@b.com' } });
+        expect(q).toContain('is:unread');
+        expect(q).toContain('from:a@b.com');
+        expect(q).toBe('is:unread from:a@b.com');
+      });
+
+      it('keeps the date bound too', async () => {
+        const when = new Date('2026-08-30T00:00:00.000Z');
+        const { q } = await queryFor({ ReceivedAfter: when, ContextData: { query: 'has:attachment' } });
+        expect(q).toBe(`after:${Math.floor(when.getTime() / 1000) - 1} has:attachment`);
+      });
+    });
+
+    it('reports exactly which narrowings it applied', async () => {
+      const { applied } = await queryFor({ ReceivedAfter: new Date('2026-08-30T00:00:00.000Z'), UnreadOnly: true });
+      expect(applied).toEqual({ ReceivedAfter: true, ReceivedBefore: false, UnreadOnly: true });
+    });
+
+    it('declares both capabilities, because Gmail really does filter server-side', async () => {
+      expect(provider.MessageRetrieval).toEqual({ FilterByReceivedDate: true, FilterByUnread: true });
     });
   });
 });

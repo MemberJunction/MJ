@@ -1,6 +1,7 @@
 import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
@@ -361,6 +362,36 @@ export class EntityField {
                 result.Success = false;
                 const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
+            }
+
+            // ExtendedType semantic checks (Image / Color / JSON). Empty values are handled by
+            // the AllowsNull rung above — only non-empty strings are inspected here.
+            if (ef.TSType === EntityFieldTSType.String && this.Value != null && this.Value !== '') {
+                const text = String(this.Value);
+                switch (ef.ExtendedType) {
+                    case 'JSON': {
+                        const parsed = TryParseJsonText(text);
+                        if (parsed.ok === false) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be valid JSON. ${parsed.message}`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Color': {
+                        if (!IsValidCssColor(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be a CSS color (hex, rgb, or hsl)`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Image': {
+                        if (!IsPermittedImageFieldValue(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be an image URL or inline image (data URI / base64)`, this.Value));
+                        }
+                        break;
+                    }
+                }
             }
         }
 

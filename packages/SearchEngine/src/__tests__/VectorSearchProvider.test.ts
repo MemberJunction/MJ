@@ -231,10 +231,19 @@ describe('VectorSearchProvider', () => {
             expect(result).toBe('abc-123-def-456');
         });
 
-        it('should extract concatenated values from multi-field composite key "F1|V1||F2|V2"', () => {
+        it('should extract just the value from an alt-named single key "individual_id|VALUE"', () => {
+            const extractFn = (provider as unknown as { extractRecordIDFromCompositeKey: (raw: string) => string }).extractRecordIDFromCompositeKey;
+            const result = extractFn.call(provider, 'individual_id|abc-123');
+            expect(result).toBe('abc-123');
+        });
+
+        it('should keep a multi-field composite key "F1|V1||F2|V2" intact, field names included', () => {
+            // The prefixed segment IS the compact form for a composite key — it is what
+            // CompositeKey.FromURLSegment(entity, RecordID) parses at the nav sites. Joining the
+            // bare values with '||' (the old behavior) produced a string nothing could parse.
             const extractFn = (provider as unknown as { extractRecordIDFromCompositeKey: (raw: string) => string }).extractRecordIDFromCompositeKey;
             const result = extractFn.call(provider, 'Field1|Value1||Field2|Value2');
-            expect(result).toBe('Value1||Value2');
+            expect(result).toBe('Field1|Value1||Field2|Value2');
         });
     });
 

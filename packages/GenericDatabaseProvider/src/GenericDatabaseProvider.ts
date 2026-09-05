@@ -131,6 +131,26 @@ const GEO_EXTENDED_TYPES = new Set([
     'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
 ]);
 
+/**
+ * Thrown when a nested savepoint fails because the ambient physical transaction
+ * was already rolled back by the server (mssql ENOTBEGUN/EABORT, pg 25P01).
+ * Opening a second physical TX would commit inner work after the outer writes
+ * were gone. Callers must fail the outer unit — `Save()` returns false.
+ */
+export class DoomedTransactionError extends Error {
+    public readonly code = 'DOOMED_TRANSACTION';
+    constructor(
+        message = 'Ambient transaction was rolled back by the server; outer work is lost',
+        options?: { cause?: unknown },
+    ) {
+        super(message);
+        this.name = 'DoomedTransactionError';
+        if (options?.cause !== undefined) {
+            (this as Error & { cause?: unknown }).cause = options.cause;
+        }
+    }
+}
+
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // Composition engine is now owned by RenderPipeline
 
@@ -5326,5 +5346,367 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             });
         }
         return out;
+    }
+
+    // ─── Nested transactions ─────────────────────────────────────────
+    //
+    // Depth 1 = physical BEGIN. Depth 2+ = a dialect savepoint on that same
+    // transaction. Nested begin with no physical TX is corruption, not a
+    // chance to start a second physical TX (that commits inner work after the
+    // outer transaction was already aborted).
+
+    private _transactionDepth = 0;
+    private _savepointCounter = 0;
+    private _savepointStack: string[] = [];
+    /** Physical handle is gone but outer frames still must settle. Queued nested begins must not become outermost. */
+    private _doomed = false;
+
+    protected override get CurrentTransactionDepth(): number {
+        return this._transactionDepth;
+    }
+
+    /** Copy of the savepoint stack, outermost first. */
+    public get SavepointStack(): string[] {
+        return [...this._savepointStack];
+    }
+
+    /** @deprecated Use {@link SavepointStack}. */
+    public get savepointStack(): string[] {
+        return this.SavepointStack;
+    }
+
+    /** True after the ambient physical TX was abandoned and frames are still settling. */
+    protected get IsDoomed(): boolean {
+        return this._doomed;
+    }
+
+    /**
+     * Throw if a statement would run on the pool while frames are still open
+     * after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
+     * — outermost begin has depth 1 before the handle is published, and
+     * concurrent reads on SQL Server legitimately use the pool in that window.
+     */
+    protected AssertAmbientTransactionUsable(): void {
+        if (this._doomed) {
+            throw new DoomedTransactionError(
+                `SQL issued at depth ${this._transactionDepth} while the ambient transaction is doomed would autocommit on the pool`,
+            );
+        }
+    }
+
+    /**
+     * True when the driver has a begun physical transaction object.
+     * Must be truthful: a published-but-unbegun handle is a poison state.
+     */
+    protected abstract get HasPhysicalTransaction(): boolean;
+
+    /**
+     * Outermost BEGIN. Publish the driver object only after it has begun.
+     * Must not call public Begin/Commit/Rollback (the mutex is not reentrant).
+     */
+    protected abstract BeginPhysicalTransaction(): Promise<void>;
+
+    /**
+     * Outermost COMMIT. Release the driver object in `finally` even if commit rejects.
+     * Must not call public Begin/Commit/Rollback.
+     */
+    protected abstract CommitPhysicalTransaction(): Promise<void>;
+
+    /**
+     * Outermost ROLLBACK. Release the driver object in `finally` even if rollback rejects.
+     * Must not call public Begin/Commit/Rollback.
+     */
+    protected abstract RollbackPhysicalTransaction(): Promise<void>;
+
+    /**
+     * Drop a dead physical handle without going through public RollbackTransaction.
+     * Default is RollbackPhysicalTransaction if one is open. Subclasses override
+     * to unpublish even when the driver rollback itself rejects (EABORT).
+     */
+    protected async AbandonPhysicalTransaction(): Promise<void> {
+        if (!this.HasPhysicalTransaction) {
+            return;
+        }
+        try {
+            await this.RollbackPhysicalTransaction();
+        } catch (e) {
+            LogError('AbandonPhysicalTransaction: rollback of doomed handle failed', undefined, e);
+        }
+    }
+
+    protected SavepointName(n: number): string {
+        return `SavePoint_${n}`;
+    }
+
+    private _txMutex: Promise<void> = Promise.resolve();
+
+    /** Serialize begin/commit/rollback so depth/stack mutations cannot interleave. */
+    protected async WithTransactionLock<T>(fn: () => Promise<T>): Promise<T> {
+        const previous = this._txMutex;
+        let release!: () => void;
+        this._txMutex = new Promise<void>((resolve) => { release = resolve; });
+        try {
+            await previous;
+            return await fn();
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * After a successful outermost commit, once depth is 0 and the transaction lock is released.
+     * SQL Server drains deferred tasks here — those saves must be able to BeginTransaction.
+     */
+    protected async AfterPhysicalCommit(): Promise<void> {
+        /* no-op */
+    }
+
+    /** Called when a begin fails and depth is back to 0 — unpublish any leftover driver object. */
+    protected async OnBeginFailedAtDepthZero(): Promise<void> {
+        /* subclasses clear the physical TX handle */
+    }
+
+    /**
+     * Nested savepoint rollback failed. Abandon the physical handle and keep
+     * frames until the outer settle.
+     */
+    protected async HandleFailedSavepointRollback(savepointName: string, error: unknown): Promise<void> {
+        LogError(`Savepoint rollback to ${savepointName} failed`, undefined, error);
+        await this.AbandonPhysicalTransaction();
+        this.markDoomed();
+    }
+
+    protected markDoomed(): void {
+        this._doomed = true;
+    }
+
+    /**
+     * Drop a dead physical handle and reset depth/stack. Safe to call when
+     * already at depth 0. Does not go through {@link RollbackTransaction}
+     * (that would re-enter the mutex).
+     */
+    public async ResetTransactionState(): Promise<void> {
+        await this.WithTransactionLock(() => this.abandonDoomedTransaction());
+    }
+
+    public async BeginTransaction(): Promise<void> {
+        return this.WithTransactionLock(() => this.beginTransactionCore());
+    }
+
+    public async CommitTransaction(): Promise<void> {
+        let runAfter = false;
+        await this.WithTransactionLock(async () => {
+            const outermost = this._transactionDepth === 1;
+            await this.commitTransactionCore();
+            runAfter = outermost;
+        });
+        if (runAfter) {
+            await this.AfterPhysicalCommit();
+        }
+    }
+
+    public async RollbackTransaction(): Promise<void> {
+        return this.WithTransactionLock(() => this.rollbackTransactionCore());
+    }
+
+    private async beginTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            throw new DoomedTransactionError();
+        }
+        this._transactionDepth++;
+        try {
+            if (this._transactionDepth === 1) {
+                await this.BeginPhysicalTransaction();
+                return;
+            }
+            if (!this.HasPhysicalTransaction) {
+                throw new Error(
+                    `Transaction state corrupted: nested BeginTransaction at depth ${this._transactionDepth} with no physical transaction`,
+                );
+            }
+            const savepointName = this.SavepointName(++this._savepointCounter);
+            this._savepointStack.push(savepointName);
+            try {
+                await this.createSavepoint(savepointName);
+            } catch (savepointError) {
+                this._savepointStack.pop();
+                this._savepointCounter--;
+                throw savepointError;
+            }
+        } catch (e) {
+            if (this._transactionDepth > 0) {
+                this._transactionDepth--;
+            }
+            if (e instanceof DoomedTransactionError || this._doomed) {
+                throw e;
+            }
+            if (this._transactionDepth === 0 || !this.HasPhysicalTransaction) {
+                this.clearTransactionState();
+                await this.OnBeginFailedAtDepthZero();
+            }
+            LogError(e);
+            throw e;
+        }
+    }
+
+    private async createSavepoint(savepointName: string): Promise<void> {
+        const sql = this.Dialect.CreateSavepointSQL(savepointName);
+        const options: ExecuteSQLOptions = {
+            description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
+            ignoreLogging: true,
+        };
+        try {
+            await this.ExecuteSQL(sql, undefined, options);
+        } catch (savepointError) {
+            if (this.HasPhysicalTransaction && this.isDoomedPhysicalTransactionError(savepointError)) {
+                await this.AbandonPhysicalTransaction();
+                this.markDoomed();
+                throw new DoomedTransactionError(undefined, { cause: savepointError });
+            }
+            throw savepointError;
+        }
+    }
+
+    /**
+     * Driver codes for a server-aborted ambient TX. Walk `cause` because some
+     * wrappers nest the original error. Do not match English message text.
+     */
+    private isDoomedPhysicalTransactionError(error: unknown): boolean {
+        let current: unknown = error;
+        for (let i = 0; i < 5 && current; i++) {
+            if (current && typeof current === 'object' && 'code' in current) {
+                const code = String((current as { code: unknown }).code);
+                if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01') {
+                    return true;
+                }
+            }
+            current =
+                current && typeof current === 'object' && 'cause' in current
+                    ? (current as { cause: unknown }).cause
+                    : undefined;
+        }
+        return false;
+    }
+
+    private async abandonDoomedTransaction(): Promise<void> {
+        await this.AbandonPhysicalTransaction();
+        this.clearTransactionState();
+        await this.OnBeginFailedAtDepthZero();
+    }
+
+    private async commitTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            this.popDoomedFrame();
+            if (this._transactionDepth === 0) {
+                throw new DoomedTransactionError();
+            }
+            return;
+        }
+        if (!this.HasPhysicalTransaction) {
+            throw new Error('No active transaction to commit');
+        }
+        if (this._transactionDepth === 0) {
+            throw new Error('Transaction depth mismatch - no transaction to commit');
+        }
+        if (this._transactionDepth === 1) {
+            try {
+                await this.CommitPhysicalTransaction();
+            } catch (e) {
+                await this.AbandonPhysicalTransaction();
+                this.clearTransactionState();
+                LogError(e);
+                throw e;
+            }
+            this.clearTransactionState();
+            return;
+        }
+        const savepointName = this._savepointStack[this._savepointStack.length - 1];
+        if (!savepointName) {
+            throw new Error(`Savepoint stack mismatch — expected savepoint at depth ${this._transactionDepth}.`);
+        }
+        const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
+        if (releaseSQL) {
+            try {
+                await this.ExecuteSQL(releaseSQL, undefined, {
+                    description: `Releasing savepoint ${savepointName}`,
+                    ignoreLogging: true,
+                });
+            } catch (e) {
+                await this.AbandonPhysicalTransaction();
+                this.markDoomed();
+                this.popDoomedFrame();
+                throw new DoomedTransactionError(undefined, { cause: e });
+            }
+        }
+        this._savepointStack.pop();
+        this._transactionDepth--;
+    }
+
+    private async rollbackTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            this.popDoomedFrame();
+            return;
+        }
+        if (!this.HasPhysicalTransaction) {
+            throw new Error('No active transaction to rollback');
+        }
+        if (this._transactionDepth === 0) {
+            throw new Error('Transaction depth mismatch - no transaction to rollback');
+        }
+        if (this._transactionDepth === 1) {
+            try {
+                await this.RollbackPhysicalTransaction();
+            } finally {
+                this.clearTransactionState();
+            }
+            return;
+        }
+        const savepointName = this._savepointStack[this._savepointStack.length - 1];
+        if (!savepointName) {
+            throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
+        }
+        try {
+            await this.ExecuteSQL(this.Dialect.RollbackToSavepointSQL(savepointName), undefined, {
+                description: `Rolling back to savepoint ${savepointName}`,
+                ignoreLogging: true,
+            });
+            const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
+            if (releaseSQL) {
+                await this.ExecuteSQL(releaseSQL, undefined, {
+                    description: `Releasing savepoint ${savepointName} after rollback`,
+                    ignoreLogging: true,
+                });
+            }
+            this._savepointStack.pop();
+            this._transactionDepth--;
+        } catch (savepointError) {
+            await this.HandleFailedSavepointRollback(savepointName, savepointError);
+            this.popDoomedFrame();
+            return;
+        }
+    }
+
+    /**
+     * Drop one doomed frame without SQL. Depth 1 clears the flag so the next
+     * begin is a real outermost. Nested commit-while-doomed uses this too.
+     */
+    private popDoomedFrame(): void {
+        if (this._transactionDepth <= 1) {
+            this.clearTransactionState();
+            return;
+        }
+        this._savepointStack.pop();
+        this._transactionDepth--;
+    }
+
+    private clearSavepointState(): void {
+        this._savepointStack = [];
+        this._savepointCounter = 0;
+    }
+
+    private clearTransactionState(): void {
+        this._transactionDepth = 0;
+        this._doomed = false;
+        this.clearSavepointState();
     }
 }

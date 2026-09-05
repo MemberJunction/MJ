@@ -7,7 +7,7 @@ import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache } from "@memberjunction/global";
+import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache, EscapeSQLString } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -1199,7 +1199,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const record = result.Results[j] as Record<string, unknown>;
                     allResults.push({
                         EntityName: entity.Name,
-                        RecordID: String(record[entity.FirstPrimaryKey?.Name ?? 'ID'] ?? ''),
+                        // Compact CompositeKey segment: the bare value for a single-column key (any
+                        // column name), "F1|v1||F2|v2" for a composite key — what
+                        // CompositeKey.FromURLSegment(entity, RecordID) reads back.
+                        RecordID: CompositeKey.FromEntityRecord(entity, record).ToCompactURLSegment(),
                         Title: String(record[titleField] ?? 'Untitled'),
                         Snippet: String(record[snippetField] ?? '').substring(0, 200),
                         Score: 1.0 / (j + 1) // Rank-based scoring for RRF compatibility
@@ -1775,7 +1778,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const nameField = entity.NameField?.Name ?? entity.Fields.find(f => f.IsNameField)?.Name ?? null;
         const out: ScoredCandidate[] = [];
         for (const row of (r.Results ?? [])) {
-            const id = String(row['ID'] ?? '');
+            // The entity is arbitrary: read the key off its primary-key metadata, not a hardcoded
+            // `ID` column. Compact segment so single-column keys stay the raw value.
+            const id = CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
             if (!id) continue;
             const nameVal = nameField ? String(row[nameField] ?? '').toLowerCase() : '';
             let score = 0.5; // any match (in some searchable field)
@@ -1838,16 +1843,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         contextUser: UserInfo | undefined
     ): Promise<Set<string>> {
         if (ids.length === 0) return new Set();
-        const escaped = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
-        const r = await this.RunView<{ ID: string }>({
+        // `ids` are compact CompositeKey segments (see searchEntitiesLexicalPass): a single-column
+        // key — whatever the column is called — uses one IN(); a composite key needs one
+        // (F1=.. AND F2=..) term per record. Hardcoding `ID` here returned nothing for every entity
+        // whose key isn't named ID, so SearchEntity silently produced zero results for them.
+        const filter = entity.PrimaryKeys.length === 1
+            ? `${entity.FirstPrimaryKey.Name} IN (${ids.map(id => `'${EscapeSQLString(id)}'`).join(',')})`
+            : ids.map(id => `(${CompositeKey.FromURLSegment(entity, id).ToWhereClause()})`).join(' OR ');
+        const r = await this.RunView<Record<string, unknown>>({
             EntityName: entity.Name,
-            ExtraFilter: `ID IN (${escaped})`,
-            Fields: ['ID'],
+            ExtraFilter: filter,
+            Fields: entity.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
             MaxRows: ids.length,
         }, contextUser);
         if (!r.Success) return new Set();
-        return new Set((r.Results ?? []).map(row => row.ID));
+        return new Set((r.Results ?? []).map(row => CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment()));
     }
 
     /**
