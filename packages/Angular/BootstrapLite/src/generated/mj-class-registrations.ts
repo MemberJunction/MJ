@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (411 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -1037,11 +1037,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJUserNotificationTypeEntity,
     MJUserRecordLogEntity,
     MJUserRoleEntity,
-    MJUserRoutineEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJUserRoutineEntity,
     MJUserRoutineRecipientEntity,
     MJUserRoutineRunEntity,
     MJUserSettingEntity,
@@ -1195,7 +1195,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 540;
+export const CLASS_REGISTRATIONS_COUNT = 541;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

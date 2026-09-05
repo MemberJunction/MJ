@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (411 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -1646,11 +1646,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
-    MJSignatureRequestLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
@@ -1850,11 +1850,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     InstagramCreatePostAction,
     InstagramCreateStoryAction,
     InstagramGetAccountInsightsAction,
-    InstagramGetBusinessPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    InstagramGetBusinessPostsAction,
     InstagramGetCommentsAction,
     InstagramGetPostInsightsAction,
     InstagramSchedulePostAction,
@@ -2054,11 +2054,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
-    BulkUpdateListItemStatusAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
     CalculateExpressionAction,

@@ -205,7 +205,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (411 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -1894,11 +1894,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchProviderEntity,
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
-    MJSearchScopeExternalIndexEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -2098,11 +2098,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FacebookGetPagePostsAction,
     FacebookGetPostInsightsAction,
     FacebookRespondToCommentsAction,
-    FacebookSchedulePostAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FacebookSchedulePostAction,
     FacebookSearchPostsAction,
     GetAccountAnalyticsAction,
     GetCommentsAction,
@@ -2302,11 +2302,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
-    TaskGraphSetBreakpointsServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
@@ -2506,11 +2506,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
-    TestRuntimeActionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TestRuntimeActionAction,
     TextAnalyzerAction,
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
