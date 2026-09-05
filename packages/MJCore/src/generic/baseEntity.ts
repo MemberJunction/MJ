@@ -1,4 +1,4 @@
-import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -1828,7 +1828,10 @@ export abstract class BaseEntity<T = unknown> {
 
             if (!result.Success || !result.Output?.Success) {
                 const detail = result.ErrorMessage ?? result.Output?.ErrorMessage ?? 'unknown error';
-                this.registerGraphFailure(detail);
+                // The structured refusal rides alongside the prose so a form can paint the fields a
+                // server-side ValidateAsync named — the same thing a plain save gets from the
+                // GraphQL error's `extensions.validationErrors`.
+                this.registerGraphFailure(detail, 'save', result.Output?.ValidationErrors);
                 this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: detail });
                 return false;
             }
@@ -2290,11 +2293,14 @@ export abstract class BaseEntity<T = unknown> {
      *
      * @param message - The failure detail.
      */
-    private registerGraphFailure(message: string | undefined, operation: 'save' | 'delete' = 'save'): void {
+    private registerGraphFailure(message: string | undefined, operation: 'save' | 'delete' = 'save', validationErrors?: unknown): void {
         const result = new BaseEntityResult();
         result.Success = false;
         result.Type = operation === 'delete' ? 'delete' : this.IsSaved ? 'update' : 'create';
         result.Message = message ?? 'Entity graph operation failed';
+        // Rehydrated into real ValidationErrorInfo instances so `LatestResult.Errors` reads exactly as
+        // it does after a local `Validate()` refusal; `[]` when the server sent none.
+        result.Errors = DeserializeValidationErrors(validationErrors);
         result.StartedAt = new Date();
         result.EndedAt = new Date();
         result.OriginalValues = this.Fields.map(f => ({ FieldName: f.CodeName, Value: f.OldValue }));
