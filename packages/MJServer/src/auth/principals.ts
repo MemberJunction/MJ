@@ -14,6 +14,11 @@ import { UserCache } from '@memberjunction/generic-database-provider';
  * redeem and provisioning attributed to whichever user happened to sort first as an Owner.
  *
  * This module is the single ladder those consumers share.
+ *
+ * Two exports, cased to tell them apart on sight: `ResolveConfiguredPrincipal` is the shell callers
+ * use (PascalCase, like the rest of MJServer's public surface), and `resolvePrincipalFrom` is the
+ * pure core it wraps — same ladder, no cache, no logging, which is what makes the ladder testable
+ * without a singleton or a database. The casing is the signal, not an oversight.
  */
 
 /**
@@ -43,9 +48,14 @@ function normalize(value: string | null | undefined): string {
 }
 
 /**
- * The match with the lowest ID, or undefined when there are none.
+ * The lowest-ID ACTIVE match, or undefined when there is none.
  *
- * EVERY rung resolves ties through this rather than taking the first match. `UserCache.Users`
+ * Every rung that can match more than one user resolves through this, so it carries BOTH of the
+ * ladder's cross-cutting guarantees in one place instead of restating them per rung. Stating them
+ * per rung is how the `Name` and `Email` rungs came to be missing the second one while
+ * {@link resolvePrincipalFrom}'s own docstring claimed all four rungs had it.
+ *
+ * DETERMINISM. Ties go to the lowest ID rather than the first match. `UserCache.Users`
  * comes from an `ORDER BY`-less `SELECT * FROM vwUsers` and is mutated in place at runtime
  * (`Users.push`), so its order differs across boots AND within a process — which is exactly how
  * `CreatedByUserID` became noise. A rung that resolves by array order is that same defect, one
@@ -57,10 +67,17 @@ function normalize(value: string | null | undefined): string {
  *
  * Plain `<` on the normalized strings rather than `localeCompare`: ordering by code point cannot
  * shift with the process locale or the runtime's ICU build, and this ordering decides attribution.
+ *
+ * ACTIVE ONLY. A deactivated user is never a candidate, on any rung. The server acting as a
+ * disabled account is the failure this exists to prevent, and it is not less of one because an
+ * operator named that account in config — a setting outlives the person it names.
  */
-function lowestById<T extends ResolvablePrincipal>(matches: readonly T[]): T | undefined {
+function lowestActiveById<T extends ResolvablePrincipal>(matches: readonly T[]): T | undefined {
     let lowest: T | undefined;
     for (const match of matches) {
+        if (match.IsActive !== true) {
+            continue;
+        }
         if (!lowest || normalize(match.ID) < normalize(lowest.ID)) {
             lowest = match;
         }
@@ -74,17 +91,24 @@ function lowestById<T extends ResolvablePrincipal>(matches: readonly T[]): T | u
  * The ladder, in order:
  *  1. `Name`  — tried first so that every host resolving today resolves to the SAME user as
  *               before. This is what makes adding the `Email` rung a compatible change rather
- *               than a semantic one.
+ *               than a semantic one. ACTIVE only, which is that compatibility claim's one
+ *               deliberate exception: a host whose setting names a DEACTIVATED user stops
+ *               resolving to them. That is the point, not a casualty — see below.
  *  2. `Email` — the identity column everywhere else in MJServer, and the only one the schema
  *               makes unique (`UQ_User_Email`). This is the rung that resolves MJ's own default.
+ *               ACTIVE only, for the same reason.
  *  3. System  — by ID, so it survives the system user being renamed. ACTIVE only.
  *  4. Owner   — lowest ID among ACTIVE owners. A last resort, but still deterministic: the
  *               previous "first Owner in cache order" made `CreatedByUserID` depend on the order
  *               `SELECT * FROM vwUsers` happened to return, which is unstable across boots and
  *               within a process.
  *
- * Every rung breaks ties by lowest ID ({@link lowestById}), never by array position, and no rung
- * returns an inactive user.
+ * Every rung breaks ties by lowest ID ({@link lowestActiveById}), never by array position, and no rung
+ * returns an inactive user — the configured rungs included. An operator naming a user in config
+ * is the likeliest way to end up pointed at a disabled account (the admin whose address is in the
+ * setting leaves, and their account is deactivated), and honouring it would mean the server keeps
+ * provisioning as someone who no longer works there, silently and indefinitely. A guarantee that
+ * every rung holds except the two anyone actually configures is not a guarantee.
  *
  * Pure, and reports rather than logs, so the caller owns log volume and phrasing.
  *
@@ -107,11 +131,14 @@ export function resolvePrincipalFrom<T extends ResolvablePrincipal>(
     const wanted = normalize(candidate);
 
     if (wanted) {
-        const byName = lowestById(users.filter((u) => normalize(u.Name) === wanted));
+        const byName = lowestActiveById(users.filter((u) => normalize(u.Name) === wanted));
         if (byName) {
             return { user: byName, reason: 'name' };
         }
-        const byEmail = lowestById(users.filter((u) => normalize(u.Email) === wanted));
+        // Reached when `Name` matched nobody USABLE, which includes matching only deactivated
+        // rows: an inactive `Name` holder must not shadow an active `Email` holder. The ladder is
+        // looking for the user this string names, and an unusable match is not a reason to stop.
+        const byEmail = lowestActiveById(users.filter((u) => normalize(u.Email) === wanted));
         if (byEmail) {
             return { user: byEmail, reason: 'email' };
         }
@@ -124,9 +151,22 @@ export function resolvePrincipalFrom<T extends ResolvablePrincipal>(
     return {
         ...fallback,
         warning:
-            `Configured user '${candidate}' matched no user's Name or Email; ` +
+            `Configured user '${candidate}' ${describeMiss(users, wanted)}; ` +
             `falling back to ${describeFallback(fallback.reason)}.`,
     };
+}
+
+/**
+ * Why a configured candidate yielded nothing. The two causes need opposite fixes, so the message
+ * has to tell them apart: "no such user" is a typo or the wrong column, while "matched, but
+ * deactivated" is a correctly spelled setting pointing at a disabled account. Reporting the second
+ * as the first sends the operator hunting for a typo in a value that is spelled right.
+ *
+ * Runs only once the configured rungs have already missed, so the extra pass is off the happy path.
+ */
+function describeMiss<T extends ResolvablePrincipal>(users: readonly T[], wanted: string): string {
+    const matchedButInactive = users.some((u) => normalize(u.Name) === wanted || normalize(u.Email) === wanted);
+    return matchedButInactive ? 'matched only INACTIVE users' : "matched no user's Name or Email";
 }
 
 /** The candidate-independent rungs: the system user, then the lowest-ID active Owner. */
@@ -134,15 +174,16 @@ function resolveFallback<T extends ResolvablePrincipal>(
     users: readonly T[],
     systemUserId: string,
 ): PrincipalResolution<T> {
-    // `IsActive` here for the same reason as on the Owner rung below. Without it the guarantee
-    // reads "we never act as a disabled user, except as the one user we reach first" — and this
-    // change makes the system user the SHIPPED DEFAULT, so it is the rung most hosts land on.
+    // The one rung that states `IsActive` for itself: a lookup by ID matches at most one row, so
+    // there is no tie to break and nothing to route through `lowestActiveById`. It still needs the
+    // guard — this change makes the system user the SHIPPED DEFAULT, so it is the rung most hosts
+    // land on, and a host that deactivates it must fail loudly rather than act as it.
     const system = users.find((u) => UUIDsEqual(u.ID, systemUserId) && u.IsActive === true);
     if (system) {
         return { user: system, reason: 'system' };
     }
 
-    const owner = lowestById(users.filter((u) => u.IsActive === true && normalize(u.Type) === 'owner'));
+    const owner = lowestActiveById(users.filter((u) => normalize(u.Type) === 'owner'));
 
     return owner ? { user: owner, reason: 'owner' } : { user: null, reason: 'none' };
 }

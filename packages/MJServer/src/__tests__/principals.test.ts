@@ -152,6 +152,76 @@ describe('resolvePrincipalFrom', () => {
         });
     });
 
+    describe('a DEACTIVATED configured candidate', () => {
+        /**
+         * The case an operator actually hits: the admin whose address sits in
+         * `contextUserForProvisioning` leaves, and their account is deactivated. Every other rung
+         * requires `IsActive`, so without this one the ladder would read "we never act as a
+         * disabled user, except the one the operator named" — and provisioning would keep running,
+         * silently, as someone who no longer works here.
+         */
+        const RETIRED: ResolvablePrincipal = {
+            ID: 'BBBB2222-0000-0000-0000-000000000002',
+            Name: 'departed@acme.com',
+            Email: 'departed@acme.com',
+            Type: 'Owner          ',
+            IsActive: false,
+        };
+
+        it('does not resolve a deactivated candidate by Email', () => {
+            const result = resolvePrincipalFrom('departed@acme.com', [...STOCK_HOST, RETIRED], SYSTEM_USER_ID);
+
+            expect(result.user).toBe(SYSTEM);
+            expect(result.reason).toBe('system');
+        });
+
+        it('does not resolve a deactivated candidate by Name', () => {
+            // The Name rung is the compatibility rung and is tried first, so it needs the guard
+            // most: without it the guarantee holds only for the rungs nobody configures.
+            const renamed: ResolvablePrincipal = { ...RETIRED, Name: 'ops-service-account', Email: 'ops@acme.com' };
+
+            const result = resolvePrincipalFrom('ops-service-account', [...STOCK_HOST, renamed], SYSTEM_USER_ID);
+
+            expect(result.user).toBe(SYSTEM);
+            expect(result.reason).toBe('system');
+        });
+
+        it('reports that the candidate matched but is inactive, not that it matched nothing', () => {
+            const result = resolvePrincipalFrom('departed@acme.com', [...STOCK_HOST, RETIRED], SYSTEM_USER_ID);
+
+            // "matched no user's Name or Email" would send the operator hunting for a typo in a
+            // value that is spelled correctly. The fix here is to reactivate the account or name a
+            // different user, and the message has to point at that one.
+            expect(result.warning).toMatch(/inactive/i);
+            expect(result.warning).not.toMatch(/matched no user/i);
+        });
+
+        it('advances to the next rung rather than stopping at the inactive match', () => {
+            // An inactive Name match must not shadow an ACTIVE Email match. The ladder's job is to
+            // find the user the string names, and at that point it has not run out of places to
+            // look — this is #4209's own shape, with the Name holder deactivated.
+            const inactiveByName: ResolvablePrincipal = {
+                ID: 'CCCC3333-0000-0000-0000-000000000003',
+                Name: 'ops@acme.com',
+                Email: 'old-ops@acme.com',
+                Type: 'User           ',
+                IsActive: false,
+            };
+            const activeByEmail: ResolvablePrincipal = {
+                ID: 'DDDD4444-0000-0000-0000-000000000004',
+                Name: 'Ops Service Account',
+                Email: 'ops@acme.com',
+                Type: 'User           ',
+                IsActive: true,
+            };
+
+            const result = resolvePrincipalFrom('ops@acme.com', [inactiveByName, activeByEmail], SYSTEM_USER_ID);
+
+            expect(result.user).toBe(activeByEmail);
+            expect(result.reason).toBe('email');
+            expect(result.warning).toBeUndefined();
+        });
+    });
     describe('fallbacks', () => {
         it('falls back to the System user rather than an arbitrary Owner when the candidate is unresolvable', () => {
             const result = resolvePrincipalFrom('nobody@nowhere.example', STOCK_HOST, SYSTEM_USER_ID);

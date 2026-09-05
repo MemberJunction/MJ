@@ -36,10 +36,13 @@ whose configured user resolves is unaffected):
 - Provisioning that previously landed on an arbitrary Owner now lands on the system user, so
   `CreatedByUserID` for newly provisioned users changes — to a stable value. Historical rows are
   untouched.
-- **No rung returns an inactive user** — the system rung as well as the Owner fallback. A
-  deployment whose system user (or whose only Owner) is deactivated previously provisioned under
-  that disabled account, and now resolves to no principal at all, failing loudly instead of
-  silently acting as a disabled user.
+- **No rung returns an inactive user** — the two configured rungs as well as the system rung and
+  the Owner fallback. Two cases follow. A setting naming a user who has since been **deactivated**
+  no longer resolves to them: it falls through to the system user and says so, naming the account
+  as inactive rather than as missing, because the remedy (reactivate it, or name someone else) is
+  the opposite of the one a "not found" message implies. And a deployment whose system user (or
+  whose only Owner) is deactivated now resolves to no principal at all, failing loudly instead of
+  silently provisioning under that disabled account.
 - **Every rung breaks ties by lowest ID**, not by array position. `User.Name` has no unique
   constraint, so two rows can share one; resolving that by whatever order
   `SELECT * FROM vwUsers` returned would be the same attribution drift one rung further down.

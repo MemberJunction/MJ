@@ -86,7 +86,8 @@ The second variant is the correct one. The two broken sites use the first.
 | Cache ordering | `SELECT * FROM vwUsers` has no `ORDER BY` (`UserCache.ts:112`), and is mutated in place at runtime by `Users.push` (`auth/index.ts:291`, `MagicLinkService:682`). Unstable across boots *and* within a process |
 | Config merge | `mergeConfigs` is a lodash deep merge (`config-merger.test.ts:85`) — the default reaches every host that does not set the key |
 | Zod default | `''` — an explicitly-empty value is falsy and skips the lookup |
-| Trust | The candidate is server config, never user input. No injection surface, and no privilege change in any fallback: System and the Owner fallback are both `Type='Owner'` |
+| Trust (candidate) | The candidate is server config, never user input. No injection surface, and no privilege change in any fallback: System and the Owner fallback are both `Type='Owner'` |
+| Trust (match target) | The *candidate* is trusted; the **column it is matched against is not**. On the baseline seed `UI` is read-only on `MJ: Users` while `Developer` and `Integration` hold full update, and the shipped `newUserRoles` default is `['UI', 'Developer']` (`config.ts:666`) — so on a stock config every auto-provisioned user can update `User` rows, `Name` and `Type` included. Name-first ordering therefore rests on a column that grant makes writable. Pre-existing and far wider than this ladder (it dwarfs anything the `Name` rung adds), so it is recorded here rather than fixed here — but the ordering must not be read as resting on an immutable column |
 | Tested invariant | Integration check `scoped-anon-elevation.SA2` already asserts `GetSystemUser()` resolves *and* carries grants |
 
 ## 4. Edge cases and failure modes
