@@ -17,7 +17,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
-import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
+import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -2006,6 +2006,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Success = false;
             result.EndedAt = new Date();
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
+            // A refusal from Validate()/ValidateAsync() on the server arrives twice: as the prose in
+            // `message` (kept above, for the toast) and as `extensions.validationErrors`, the same
+            // reasons with their field names. Rehydrating them here — the result is already
+            // registered on the entity — means `record.LatestResult.Errors` reads exactly as it does
+            // after a local Validate() refusal, so the form paints the fields either way. Empty when
+            // the server sent none (a SQL error, a permission refusal).
+            result.Errors = DeserializeValidationErrors(e.response?.errors?.[0]?.extensions?.validationErrors);
             LogError(e);
             return null;
         }
@@ -2244,6 +2251,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.EndedAt = new Date(); // done processing
             result.Success = false;
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
+            // Same rehydration as Save(): a delete refused with field-named reasons keeps them.
+            result.Errors = DeserializeValidationErrors(e.response?.errors?.[0]?.extensions?.validationErrors);
             LogError(e);
 
             return false;
