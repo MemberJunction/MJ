@@ -1296,26 +1296,31 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       // Build ExtraFilter from view's WhereClause if available
       // The view's WhereClause is the "business filter" - UserSearchString is additive
       const extraFilter = this.ViewEntity?.WhereClause || undefined;
+      const userSearchString = config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
+        ? this.DebouncedFilterText || undefined
+        : undefined;
 
-      const result = await rv.RunView<Record<string, unknown>>({
-        EntityName: entity.Name,
-        ResultType: 'simple',
-        // Load the FULL field set. The container is a generic plug-in host: different view types need
-        // different fields (the grid shows its columns, but Timeline needs the date field, Map needs
-        // lat/long, etc.). It cannot restrict to any one plug-in's columns, so it fetches all fields and
-        // lets each plug-in pick what it needs. (Omitting `Fields` on a 'simple' RunView returns all
-        // entity fields.) Previously this used `computeFieldsList(entity, GridState)` — correct when the
-        // host WAS the grid, but it dropped `__mj_*` date fields, leaving Timeline with "no events".
-        MaxRows: maxRows,
-        StartRow: startRow,
-        OrderBy: orderBy,
-        ExtraFilter: extraFilter,
-        // Only use UserSearchString for regular text search, NOT for smart filters
-        // Smart filters generate WhereClause via AI on the server, so the prompt text should not be passed as UserSearchString
-        UserSearchString: config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
-          ? this.DebouncedFilterText || undefined
-          : undefined
-      });
+      // Page of rows + a count_only query (IgnoreMaxRows so UserViewMaxRows=1000 cannot
+      // cap the total). One RunViews round trip. TotalRowCount on the paged call is the
+      // page length whenever the server skipped COUNT.
+      const [result, countResult] = await rv.RunViews<Record<string, unknown>>([
+        {
+          EntityName: entity.Name,
+          ResultType: 'simple',
+          MaxRows: maxRows,
+          StartRow: startRow,
+          OrderBy: orderBy,
+          ExtraFilter: extraFilter,
+          UserSearchString: userSearchString,
+        },
+        {
+          EntityName: entity.Name,
+          ResultType: 'count_only',
+          ExtraFilter: extraFilter,
+          UserSearchString: userSearchString,
+          IgnoreMaxRows: true,
+        },
+      ]);
 
       // Check if this load is still the current one (detect stale responses)
       if (loadId !== this._loadSequence) {
@@ -1327,15 +1332,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         // Always replace records (page-based navigation, not accumulation)
         this.InternalRecords = result.Results;
 
-        this.TotalRecordCount = result.TotalRowCount;
+        const total = countResult?.Success && countResult.TotalRowCount != null
+          ? countResult.TotalRowCount
+          : result.TotalRowCount;
+        this.TotalRecordCount = total;
         this.FilteredRecordCount = this.InternalRecords.length;
 
         // Update pagination state
-        this.Pagination.totalRecords = result.TotalRowCount;
+        this.Pagination.totalRecords = total;
         this.Pagination.hasMore = false; // No longer used with page-based paging
 
         this.DataLoaded.emit({
-          totalRowCount: result.TotalRowCount,
+          totalRowCount: total,
           loadedRowCount: this.InternalRecords.length,
           loadTime: Date.now() - startTime,
           records: this.InternalRecords
@@ -1343,7 +1351,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
         this.FilteredCountChanged.emit({
           filteredCount: this.InternalRecords.length,
-          totalCount: result.TotalRowCount
+          totalCount: total
         });
       } else {
         if (this.isInitialLoad) {

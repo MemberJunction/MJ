@@ -88,6 +88,9 @@ function makeWidgetEntityInfo(): EntityInfo {
       },
       { ID: 'F8', Name: 'Email', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F9', Name: 'Website', Type: 'nvarchar', Length: 400, AllowsNull: true, AllowUpdateAPI: true },
+      { ID: 'F10', Name: 'PhotoURL', Type: 'nvarchar', Length: 8000, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Image' },
+      { ID: 'F11', Name: 'ThemeColor', Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Color' },
+      { ID: 'F12', Name: 'ConfigJSON', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'JSON' },
     ],
   });
 }
@@ -196,6 +199,69 @@ describe('MjFormFieldComponent (DOM)', () => {
         expect(e.Url).toBe('https://example.com');
         expect(e.OpenInNewTab).toBe(true);
       }
+    });
+
+    const PNG_1X1 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const PNG_DATA_URI = `data:image/png;base64,${PNG_1X1}`;
+
+    it('Image ExtendedType renders a data URI as a thumbnail and never dumps the base64 as text', () => {
+      const f = render({
+        Record: makeWidget({ PhotoURL: PNG_DATA_URI }),
+        FieldName: 'PhotoURL',
+        Type: 'textbox',
+        LinkType: 'URL',
+      });
+      const img = query(f, 'img.mj-forms-image-preview') as HTMLImageElement;
+      expect(img).not.toBeNull();
+      expect(img.getAttribute('src')).toBe(PNG_DATA_URI);
+      expect(text(f, '.mj-forms-image-meta')).toContain('Inline image');
+      expect(query(f, '.mj-forms-field-link')).toBeNull();
+    });
+
+    it('Image ExtendedType renders a raw base64 payload (no data: prefix) as an image', () => {
+      const f = render({
+        Record: makeWidget({ PhotoURL: PNG_1X1 }),
+        FieldName: 'PhotoURL',
+        Type: 'textbox',
+      });
+      const img = query(f, 'img.mj-forms-image-preview') as HTMLImageElement;
+      expect(img).not.toBeNull();
+      expect(img.getAttribute('src')).toBe(PNG_DATA_URI);
+    });
+
+    it('Image ExtendedType renders an https URL as a thumbnail even when LinkType is URL', () => {
+      const f = render({
+        Record: makeWidget({ PhotoURL: 'https://cdn.example.com/avatar.png' }),
+        FieldName: 'PhotoURL',
+        Type: 'textbox',
+        LinkType: 'URL',
+      });
+      const img = query(f, 'img.mj-forms-image-preview') as HTMLImageElement;
+      expect(img).not.toBeNull();
+      expect(img.getAttribute('src')).toBe('https://cdn.example.com/avatar.png');
+    });
+
+    it('Color ExtendedType renders a swatch and the hex value', () => {
+      const f = render({
+        Record: makeWidget({ ThemeColor: '#aabbcc' }),
+        FieldName: 'ThemeColor',
+        Type: 'textbox',
+      });
+      const swatch = query(f, '.mj-forms-color-swatch') as HTMLElement;
+      expect(swatch).not.toBeNull();
+      expect(swatch.style.backgroundColor).toBe('rgb(170, 187, 204)');
+      expect(text(f, '.mj-forms-color')).toContain('#aabbcc');
+    });
+
+    it('JSON ExtendedType pretty-prints in read mode', () => {
+      const f = render({
+        Record: makeWidget({ ConfigJSON: '{"a":1}' }),
+        FieldName: 'ConfigJSON',
+        Type: 'textarea',
+      });
+      expect(text(f, 'pre.mj-forms-json')).toContain('"a"');
+      expect(text(f, 'pre.mj-forms-json')).toContain('1');
     });
   });
 
@@ -332,6 +398,41 @@ describe('MjFormFieldComponent (DOM)', () => {
       const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(query(f, '.mj-forms-field')).not.toBeNull();
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
+    });
+
+    it('Image ExtendedType edit mode shows upload, hides the data URI from the URL box, and Clear empties the field', () => {
+      const png =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      const record = makeWidget({ PhotoURL: png });
+      const f = render({ Record: record, FieldName: 'PhotoURL', Type: 'textbox', EditMode: true });
+      expect(query(f, 'img.mj-forms-image-preview')).not.toBeNull();
+      expect(query(f, 'input.mj-forms-image-file')).not.toBeNull();
+      expect(text(f, '.mj-forms-image-btn')).toContain('Replace');
+      const urlBox = query(f, 'input.mj-forms-field-input') as HTMLInputElement;
+      expect(urlBox.value).toBe('');
+      click(f, '.mj-forms-image-btn--ghost');
+      f.detectChanges();
+      expect(record.Get('PhotoURL')).toBeNull();
+    });
+
+    it('Color ExtendedType edit mode renders a color picker and hex text', () => {
+      const record = makeWidget({ ThemeColor: '#ff0000' });
+      const f = render({ Record: record, FieldName: 'ThemeColor', Type: 'textbox', EditMode: true });
+      const picker = query(f, 'input.mj-forms-color-picker') as HTMLInputElement;
+      expect(picker).not.toBeNull();
+      expect(picker.value).toBe('#ff0000');
+      typeInto(f, 'input.mj-forms-color-hex', '#00ff00');
+      expect(record.Get('ThemeColor')).toBe('#00ff00');
+    });
+
+    it('JSON ExtendedType edit mode uses a textarea and pretty-prints on blur', () => {
+      const record = makeWidget({ ConfigJSON: '{"a":1}' });
+      const f = render({ Record: record, FieldName: 'ConfigJSON', Type: 'textarea', EditMode: true });
+      const area = query(f, 'textarea.mj-forms-json') as HTMLTextAreaElement;
+      expect(area).not.toBeNull();
+      area.dispatchEvent(new Event('blur'));
+      f.detectChanges();
+      expect(String(record.Get('ConfigJSON'))).toContain('\n');
     });
 
     it('autocomplete: focus shows all value-list options, typing filters them, and mousedown selects', () => {

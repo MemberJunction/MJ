@@ -1,6 +1,7 @@
 import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
@@ -361,6 +362,36 @@ export class EntityField {
                 result.Success = false;
                 const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
+            }
+
+            // ExtendedType semantic checks (Image / Color / JSON). Empty values are handled by
+            // the AllowsNull rung above — only non-empty strings are inspected here.
+            if (ef.TSType === EntityFieldTSType.String && this.Value != null && this.Value !== '') {
+                const text = String(this.Value);
+                switch (ef.ExtendedType) {
+                    case 'JSON': {
+                        const parsed = TryParseJsonText(text);
+                        if (parsed.ok === false) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be valid JSON. ${parsed.message}`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Color': {
+                        if (!IsValidCssColor(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be a CSS color (hex, rgb, or hsl)`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Image': {
+                        if (!IsPermittedImageFieldValue(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be an image URL or inline image (data URI / base64)`, this.Value));
+                        }
+                        break;
+                    }
+                }
             }
         }
 
@@ -2637,6 +2668,47 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         return this._fieldCache.get(lcase) || null;
+    }
+
+    /**
+     * True when any of the named fields exists on this entity and its current value
+     * differs from the last loaded or saved value.
+     *
+     * This is the boolean form of `GetFieldByName(name)?.Dirty === true`. Prefer it at
+     * call sites that only care whether a column has been edited — pricing, validation,
+     * and "did the user type this" gates — so they do not repeat the optional-chain and
+     * do not treat a missing field as a distinct third state.
+     *
+     * Semantics:
+     * - **Unknown or blank names return `false`.** They are not dirty; they are absent.
+     *   Callers that must distinguish "no such field" from "field is clean" should use
+     *   {@link GetFieldByName} and inspect the result.
+     * - **Names are case-insensitive and trimmed**, matching {@link GetFieldByName}.
+     * - **Read-only fields are never dirty**, even if their value was overwritten internally.
+     * - **Multiple names are OR'd.** `FieldIsDirty('UnitPrice', 'ProductPriceID')` is true
+     *   if either field has been edited. An empty rest list is a single-field check.
+     *
+     * @param fieldName First field to test. A missing/blank name contributes `false`.
+     * @param more Additional field names, each OR'd with the first.
+     * @returns `true` if at least one named field exists and is dirty; otherwise `false`.
+     *
+     * @example
+     * ```ts
+     * // Single field
+     * if (line.FieldIsDirty('UnitPrice')) { ... }
+     *
+     * // Either money column was edited
+     * if (line.FieldIsDirty('UnitPrice', 'ProductPriceID')) { ... }
+     * ```
+     */
+    public FieldIsDirty(fieldName: string, ...more: string[]): boolean {
+        const names = more.length === 0 ? [fieldName] : [fieldName, ...more];
+        for (const name of names) {
+            if (this.GetFieldByName(name)?.Dirty === true) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
