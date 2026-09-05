@@ -1714,6 +1714,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // 1. View where clause
             if (viewEntity?.WhereClause && viewEntity.WhereClause.length > 0) {
                 const renderedWhere = await this.RenderViewWhereClause(viewEntity, user);
+                // SECURITY: a stored view WhereClause originates from a client save, so pass the
+                // rendered clause through the same screen ExtraFilter gets. The one exemption is
+                // CustomWhereClause views: those are admin-authored (MJUserViewEntityServer's save
+                // gate restricts setting/changing them to Owner-type users) and may legitimately
+                // contain constructs the screen blocks. Auto-generated clauses (FilterState /
+                // SmartFilter / nested {%UserView%} templates) always pass — the screen permits
+                // plain SELECT subqueries and blocks only stacked statements, DML, comments,
+                // UNION and WAITFOR.
+                const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
+                if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
+                    throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
+                }
                 whereSQL = `(${renderedWhere})`;
                 bHasWhere = true;
             }
