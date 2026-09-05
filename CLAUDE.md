@@ -189,6 +189,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ```bash
 npm run check:ui          # design-token + button gates on changed CSS/SCSS (mirrors the PR gate)
+npm run check:a11y        # template accessibility gate on changed HTML (mirrors the PR gate)
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage

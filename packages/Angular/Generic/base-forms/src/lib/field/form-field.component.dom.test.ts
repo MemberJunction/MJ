@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
 import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
 
 /**
@@ -351,6 +352,151 @@ describe('MjFormFieldComponent (DOM)', () => {
       f.detectChanges();
       expect(record.Get('Status')).toBe('Pending');
       expect(query(f, '.mj-fk-dropdown')).toBeNull();
+    });
+  });
+
+  describe('accessibility', () => {
+    function keydown(target: HTMLElement, key: string): void {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    }
+
+    it('associates the visible label with the edit control via for/id', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      const label = query(f, 'label.mj-forms-field-label') as HTMLLabelElement;
+      const input = query(f, 'input.mj-forms-field-input') as HTMLInputElement;
+      expect(label.getAttribute('for')).toBe(input.id);
+      expect(input.id).not.toBe('');
+    });
+
+    it('marks a required (non-nullable) field aria-required', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      expect((query(f, 'input') as HTMLInputElement).getAttribute('aria-required')).toBe('true');
+    });
+
+    it('leaves optional (nullable) fields without aria-required', () => {
+      const f = render({ Record: makeWidget({ Description: 'x' }), FieldName: 'Description', Type: 'textbox', EditMode: true });
+      expect((query(f, 'input') as HTMLInputElement).getAttribute('aria-required')).toBeNull();
+    });
+
+    it('falls back to an aria-label from the display name when the visible label is hidden', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, ShowLabel: false });
+      expect((query(f, 'input') as HTMLInputElement).getAttribute('aria-label')).toBe('Widget Name');
+    });
+
+    it('exposes form-level validation errors via aria-invalid, aria-describedby and role="alert"', () => {
+      const f = render({
+        Record: makeWidget({ Name: '' }),
+        FieldName: 'Name',
+        Type: 'textbox',
+        EditMode: true,
+        FormContext: {
+          showValidation: true,
+          validationErrors: [new ValidationErrorInfo('Name', 'Widget Name is required', '', ValidationErrorType.Failure)],
+        },
+      });
+      const input = query(f, 'input.mj-forms-field-input') as HTMLInputElement;
+      const alert = query(f, '.mj-forms-field-validation--error') as HTMLElement;
+      expect(input.getAttribute('aria-invalid')).toBe('true');
+      expect(alert).not.toBeNull();
+      expect(alert.getAttribute('role')).toBe('alert');
+      expect(input.getAttribute('aria-describedby')).toBe(alert.id);
+      expect(alert.textContent).toContain('Widget Name is required');
+    });
+
+    it('select: exposes the combobox pattern (role, aria-expanded, aria-controls, options)', () => {
+      const f = render({ Record: makeWidget({ Status: 'Active' }), FieldName: 'Status', Type: 'select', EditMode: true });
+      const trigger = query(f, '.mj-custom-select-trigger') as HTMLElement;
+      expect(trigger.getAttribute('role')).toBe('combobox');
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+      click(f, '.mj-custom-select-trigger');
+      f.detectChanges();
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      const listbox = query(f, '.mj-fk-dropdown') as HTMLElement;
+      expect(listbox.getAttribute('role')).toBe('listbox');
+      expect(trigger.getAttribute('aria-controls')).toBe(listbox.id);
+      const options = queryAll(f, '.mj-fk-option');
+      expect(options.every((o) => o.getAttribute('role') === 'option')).toBe(true);
+      expect(options[0].getAttribute('aria-selected')).toBe('true'); // 'Active' is current
+    });
+
+    it('select: is fully keyboard operable (open with Enter, navigate with arrows, commit with Enter)', () => {
+      const record = makeWidget({ Status: 'Active' });
+      const f = render({ Record: record, FieldName: 'Status', Type: 'select', EditMode: true });
+      const trigger = query(f, '.mj-custom-select-trigger') as HTMLElement;
+
+      keydown(trigger, 'Enter');
+      f.detectChanges();
+      expect(query(f, '.mj-fk-dropdown')).not.toBeNull();
+      // Active option starts at the current value and tracks aria-activedescendant
+      expect(trigger.getAttribute('aria-activedescendant')).toBe(queryAll(f, '.mj-fk-option')[0].id);
+
+      keydown(trigger, 'ArrowDown');
+      keydown(trigger, 'ArrowDown');
+      f.detectChanges();
+      expect(trigger.getAttribute('aria-activedescendant')).toBe(queryAll(f, '.mj-fk-option')[2].id);
+
+      keydown(trigger, 'Enter');
+      f.detectChanges();
+      expect(record.Get('Status')).toBe('Pending');
+      expect(query(f, '.mj-fk-dropdown')).toBeNull();
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('select: Escape closes the dropdown without changing the value', () => {
+      const record = makeWidget({ Status: 'Active' });
+      const f = render({ Record: record, FieldName: 'Status', Type: 'select', EditMode: true });
+      const trigger = query(f, '.mj-custom-select-trigger') as HTMLElement;
+
+      keydown(trigger, ' ');
+      f.detectChanges();
+      keydown(trigger, 'ArrowDown');
+      keydown(trigger, 'Escape');
+      f.detectChanges();
+      expect(record.Get('Status')).toBe('Active');
+      expect(query(f, '.mj-fk-dropdown')).toBeNull();
+    });
+
+    it('autocomplete: arrow keys navigate the filtered options and Enter commits the active one', () => {
+      const record = makeWidget({ Status: '' });
+      const f = render({ Record: record, FieldName: 'Status', Type: 'autocomplete', EditMode: true });
+      const input = query(f, 'input.mj-forms-field-input') as HTMLInputElement;
+      expect(input.getAttribute('role')).toBe('combobox');
+
+      input.dispatchEvent(new Event('focus'));
+      f.detectChanges();
+      expect(input.getAttribute('aria-expanded')).toBe('true');
+
+      keydown(input, 'ArrowDown');
+      keydown(input, 'ArrowDown');
+      f.detectChanges();
+      expect(input.getAttribute('aria-activedescendant')).toBe(queryAll(f, '.mj-fk-option')[1].id);
+
+      keydown(input, 'Enter');
+      f.detectChanges();
+      expect(record.Get('Status')).toBe('Inactive');
+      expect(query(f, '.mj-fk-dropdown')).toBeNull();
+    });
+
+    it('read-only links are keyboard focusable and Enter activates them', () => {
+      const f = render({
+        Record: makeWidget({ Email: 'ada@example.com' }),
+        FieldName: 'Email',
+        Type: 'textbox',
+        LinkType: 'Email',
+      });
+      const events = capture(f.componentInstance.Navigate);
+      const link = query(f, '.mj-forms-field-link') as HTMLElement;
+      expect(link.getAttribute('tabindex')).toBe('0');
+      keydown(link, 'Enter');
+      expect(events).toHaveLength(1);
+      expect(events[0].Kind).toBe('email');
+    });
+
+    it('read-only disabled checkbox keeps an accessible name from the display name', () => {
+      const f = render({ Record: makeWidget({ IsActive: true }), FieldName: 'IsActive', Type: 'checkbox' });
+      const box = query(f, '.mj-forms-field-checkbox input') as HTMLInputElement;
+      expect(box.getAttribute('aria-label')).toBe('IsActive');
     });
   });
 });

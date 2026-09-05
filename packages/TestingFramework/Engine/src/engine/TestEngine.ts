@@ -30,6 +30,7 @@ import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
+import { AccessibilityOracle } from '../oracles/AccessibilityOracle';
 import {
     TestRunOptions,
     SuiteRunOptions,
@@ -654,6 +655,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         this.RegisterOracle(new LLMJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
+        this.RegisterOracle(new AccessibilityOracle());
     }
 
     /**

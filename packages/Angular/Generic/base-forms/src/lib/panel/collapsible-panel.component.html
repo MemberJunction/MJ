@@ -6,9 +6,13 @@
   <!-- Panel Header -->
   <div class="mj-forms-panel-header"
        [class.mj-forms-panel-header--static]="!Collapsible"
+       [id]="PanelHeaderId"
        [attr.role]="Collapsible ? 'button' : null"
        [attr.tabindex]="Collapsible ? 0 : null"
-       (click)="Toggle()">
+       [attr.aria-expanded]="Collapsible ? Expanded : null"
+       [attr.aria-controls]="Collapsible ? PanelBodyId : null"
+       (click)="Toggle()"
+       (keydown)="OnHeaderKeydown($event)">
     <!-- Drag Handle (hidden when reorder disabled) -->
     @if (ReorderAllowed) {
       <div class="mj-forms-drag-handle"
@@ -17,13 +21,13 @@
            (dragstart)="OnDragStart($event)"
            (dragend)="OnDragEnd()"
            (click)="$event.stopPropagation()">
-        <i class="fa-solid fa-grip-vertical"></i>
+        <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
       </div>
     }
 
     <!-- Icon + Title -->
     <div class="mj-forms-panel-title-group">
-      <i [class]="Icon" class="mj-forms-panel-icon"></i>
+      <i [class]="Icon" class="mj-forms-panel-icon" aria-hidden="true"></i>
       <h3 class="mj-forms-panel-title">
         <span [innerHTML]="DisplayName"></span>
         <!-- Row count badge for related entities -->
@@ -37,9 +41,11 @@
 
     <!-- Inherited From badge (IS-A) -->
     @if (Variant === 'inherited' && InheritedFromEntity) {
-      <a class="mj-forms-inherited-badge" (click)="OnInheritedBadgeClick($event)"
+      <a class="mj-forms-inherited-badge" role="link" tabindex="0"
+         (click)="OnInheritedBadgeClick($event)"
+         (keydown.enter)="OnInheritedBadgeClick($event)"
          [title]="'View parent record: ' + InheritedFromEntity">
-        <i class="fa-solid fa-arrow-up"></i>
+        <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
         Inherited from {{ InheritedFromEntity }}
       </a>
     }
@@ -47,13 +53,14 @@
     <!-- Chevron (hidden when sections are locked open) -->
     @if (Collapsible) {
       <div class="mj-forms-panel-chevron">
-        <i [class]="Expanded ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+        <i [class]="Expanded ? 'fa fa-chevron-up' : 'fa fa-chevron-down'" aria-hidden="true"></i>
       </div>
     }
   </div>
 
   <!-- Panel Body -->
-  <div class="mj-forms-panel-body" [class.mj-forms-panel-body--collapsed]="!Expanded">
+  <div class="mj-forms-panel-body" [class.mj-forms-panel-body--collapsed]="!Expanded"
+       [id]="PanelBodyId" role="region" [attr.aria-labelledby]="PanelHeaderId">
     <div class="mj-forms-panel-content"
          #panelContent
          [style.height.px]="PanelContentHeight">

@@ -223,4 +223,52 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
     (query(f, '.mj-forms-panel-header') as HTMLElement).click();
     expect(stub.SetSectionExpanded).toHaveBeenCalledWith('k', true);
   });
+
+  describe('accessibility', () => {
+    function keydown(target: HTMLElement, key: string): boolean {
+      return target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    }
+
+    it('exposes the header as an expanded/collapsed button controlling a labelled region', () => {
+      const f = render({ SectionName: 'Details', SectionKey: 'k', Form: formStub(true) });
+      const header = query(f, '.mj-forms-panel-header') as HTMLElement;
+      const body = query(f, '.mj-forms-panel-body') as HTMLElement;
+      expect(header.getAttribute('role')).toBe('button');
+      expect(header.getAttribute('tabindex')).toBe('0');
+      expect(header.getAttribute('aria-expanded')).toBe('true');
+      expect(header.getAttribute('aria-controls')).toBe(body.id);
+      expect(body.getAttribute('role')).toBe('region');
+      expect(body.getAttribute('aria-labelledby')).toBe(header.id);
+    });
+
+    it('reports aria-expanded="false" when the form reports the section collapsed', () => {
+      const f = render({ SectionName: 'Details', SectionKey: 'k', Form: formStub(false) });
+      expect((query(f, '.mj-forms-panel-header') as HTMLElement).getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('drops button semantics entirely when sections are locked open', () => {
+      const ctx: FormContext = { collapsibleSections: false };
+      const f = render({ SectionName: 'Details', FormContext: ctx, Form: formStub(true) });
+      const header = query(f, '.mj-forms-panel-header') as HTMLElement;
+      expect(header.getAttribute('role')).toBeNull();
+      expect(header.getAttribute('tabindex')).toBeNull();
+      expect(header.getAttribute('aria-expanded')).toBeNull();
+    });
+
+    it('toggles on Enter and Space (and suppresses default Space scrolling)', () => {
+      const stub = formStub(false);
+      const f = render({ SectionName: 'X', SectionKey: 'k', Form: stub });
+      const header = query(f, '.mj-forms-panel-header') as HTMLElement;
+
+      keydown(header, 'Enter');
+      expect(stub.SetSectionExpanded).toHaveBeenCalledWith('k', true);
+
+      const spaceNotCancelled = keydown(header, ' ');
+      expect(stub.SetSectionExpanded).toHaveBeenCalledTimes(2);
+      expect(spaceNotCancelled).toBe(false); // preventDefault() fired
+
+      keydown(header, 'a');
+      expect(stub.SetSectionExpanded).toHaveBeenCalledTimes(2); // other keys ignored
+    });
+  });
 });
