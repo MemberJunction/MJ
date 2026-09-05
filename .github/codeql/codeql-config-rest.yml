@@ -4,9 +4,9 @@
 # TypeScript files after filtering, verified against MemberJunction/MJ@next on
 # 5 September 2026. Predominantly the Angular Explorer packages.
 #
-# Runs weekly and on demand only, on the security-extended suite. A full scan of next
-# on the default suite measured 15m33s on a hosted runner on 5 September 2026 (172
-# results); the extended suite will take longer. See codeql.yml for the full table.
+# Runs weekly and on demand only, on the security-extended suite. A full scan on that
+# suite measured 10m38s on a hosted runner on 5 September 2026 (226 results; the default
+# suite measured 15m33s and 172). See codeql.yml for the full table.
 #
 # The exclusion list below is the shared baseline from codeql-config.yml, plus the six
 # package paths the security-critical job owns. Keep the baseline section identical

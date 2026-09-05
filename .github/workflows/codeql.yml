@@ -20,16 +20,16 @@
 #   actions   actions                  n/a  security-extended    1m23s       66
 #   python    python                   n/a  security-extended    1m27s        3
 #   js-core   javascript-typescript  1,572  security-extended    7m31s      133
-#   js-rest   javascript-typescript  3,680  default             15m33s      172
+#   js-rest   javascript-typescript  3,680  security-extended   10m38s      226
 #
-# js-rest was measured on the default suite and now runs security-extended, so expect it
-# to take longer than the figure above. The 60-minute timeout is a ceiling with margin,
-# not a forecast: a run approaching it is a regression to investigate, not a reason to
-# raise the number.
+# The js-rest figure is from a dispatch run of this configuration on its PR branch the same
+# day (run 33974166719); on the default suite the same set measured 15m33s with 172
+# results. The 60-minute timeout is a ceiling with margin, not a forecast: a run
+# approaching it is a regression to investigate, not a reason to raise the number.
 #
 # PULL-REQUEST RUNS ARE DIFF-INFORMED. On pull_request events the CodeQL action computes
 # the changed line ranges and restricts path-problem queries to them. A PR run is
-# therefore faster than a full scan (js-core: under 3 minutes) and reports only findings
+# therefore faster than a full scan (js-core: about 3 minutes) and reports only findings
 # on changed lines. A PR run showing zero results says nothing about the rest of the
 # package; full-scan figures come only from push and scheduled runs on next.
 #
