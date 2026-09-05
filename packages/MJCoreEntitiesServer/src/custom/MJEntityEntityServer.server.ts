@@ -1,5 +1,5 @@
 import { BaseEntity, EntitySaveOptions, IMetadataProvider, LogDebug, RunInEntityTransaction } from '@memberjunction/core';
-import { MJEntityEntity } from '@memberjunction/core-entities';
+import { MJEntityEntityExtended } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ReconcileFieldPermissions } from './fieldPermissionReconciler';
 
@@ -18,7 +18,7 @@ import { ReconcileFieldPermissions } from './fieldPermissionReconciler';
  * rows alone.
  */
 @RegisterClass(BaseEntity, 'MJ: Entities')
-export class MJEntityEntityServer extends MJEntityEntity {
+export class MJEntityEntityServer extends MJEntityEntityExtended {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (!this.isTurningFieldSecurityOn()) {
             return super.Save(options);
