@@ -18,6 +18,32 @@
             }
           </span>
         }
+        @else if (ExtendedDisplay === 'image') {
+          <div class="mj-forms-image">
+            @if (ImagePreviewSrc) {
+              <img class="mj-forms-image-preview" [src]="ImagePreviewSrc" alt="" />
+            }
+            @if (IsInlineImageValue) {
+              <span class="mj-forms-image-meta">Inline image ({{ ImageValueSizeLabel }})</span>
+            } @else if (ImagePreviewSrc) {
+              <a class="mj-forms-field-link" (click)="OnUrlLinkClick($event)" title="Open image">
+                {{ ImageUrlDisplay }}
+                <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+              </a>
+            } @else {
+              <span class="mj-forms-field-value">{{ FormatValue() }}</span>
+            }
+          </div>
+        }
+        @else if (ExtendedDisplay === 'color') {
+          <div class="mj-forms-color">
+            <span class="mj-forms-color-swatch" [style.background-color]="ColorSwatchValue"></span>
+            <span class="mj-forms-field-value">{{ FormatValue() }}</span>
+          </div>
+        }
+        @else if (ExtendedDisplay === 'json') {
+          <pre class="mj-forms-json">{{ JsonDisplayValue }}</pre>
+        }
         @else {
           @switch (LinkType) {
             @case ('Email') {
@@ -290,6 +316,60 @@
               </div>
             }
           </div>
+        }
+        @else if (ExtendedDisplay === 'image') {
+          <div class="mj-forms-image mj-forms-image--edit">
+            @if (ImagePreviewSrc) {
+              <img class="mj-forms-image-preview" [src]="ImagePreviewSrc" alt="" />
+            } @else {
+              <div class="mj-forms-image-preview mj-forms-image-preview--empty" aria-hidden="true">
+                <i class="fa-regular fa-image"></i>
+              </div>
+            }
+            <div class="mj-forms-image-meta">
+              @if (IsInlineImageValue) {
+                <span>Inline image ({{ ImageValueSizeLabel }})</span>
+              }
+              <span class="mj-forms-image-hint">Max {{ ImageMaxSizeLabel }}</span>
+            </div>
+            <div class="mj-forms-image-actions">
+              <input #imageFileInput type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                class="mj-forms-image-file" (change)="OnImageFileSelected($event)">
+              <button type="button" class="mj-forms-image-btn" (click)="imageFileInput.click()">
+                <i class="fa-solid fa-upload"></i>
+                {{ ImagePreviewSrc ? 'Replace' : 'Upload' }}
+              </button>
+              @if (ImagePreviewSrc) {
+                <button type="button" class="mj-forms-image-btn mj-forms-image-btn--ghost" (click)="OnImageClear()">Clear</button>
+              }
+            </div>
+            <input type="text"
+              class="mj-forms-field-input"
+              [value]="ImageUrlInputValue"
+              (input)="OnImageUrlInput($event)"
+              placeholder="https://… or paste a data URI">
+          </div>
+        }
+        @else if (ExtendedDisplay === 'color') {
+          <div class="mj-forms-color mj-forms-color--edit">
+            <input type="color"
+              class="mj-forms-color-picker"
+              [value]="ColorPickerValue"
+              (input)="OnColorPickerInput($event)"
+              [attr.aria-label]="DisplayName + ' color'">
+            <input type="text"
+              class="mj-forms-field-input mj-forms-color-hex"
+              [value]="FormatValue()"
+              (input)="OnInputChange($event)"
+              placeholder="#RRGGBB">
+          </div>
+        }
+        @else if (ExtendedDisplay === 'json') {
+          <textarea
+            class="mj-forms-field-input mj-forms-field-input--textarea mj-forms-json"
+            [value]="FormatValue()"
+            (input)="OnInputChange($event)"
+            (blur)="OnJsonBlur()"></textarea>
         }
         @else if (EditRichTextMode !== 'plain') {
           <!-- Markdown / HTML / Code long-text: edit raw with a syntax-highlighted code editor -->

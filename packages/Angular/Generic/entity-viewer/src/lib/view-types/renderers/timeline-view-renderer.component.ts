@@ -641,22 +641,15 @@ export class TimelineViewRendererComponent
     return firstOther?.Name || null;
   }
 
-  /** Photo/logo/avatar URL field so timeline cards crop a thumbnail, same as grid/cards. */
+  /** Image field (ExtendedType='Image') so timeline cards crop a thumbnail, same as grid/cards. */
   private findImageField(): string | null {
     if (!this._entity) {
       return null;
     }
-    const keywords = ['photo', 'logo', 'avatar', 'thumbnail', 'picture', 'image'];
-    const fields = this._entity.Fields.filter(
-      (f) => f.TSType === EntityFieldTSType.String && !f.Name.startsWith('__mj_'),
+    const match = this._entity.Fields.find(
+      (f) => f.ExtendedType === 'Image' && f.TSType === EntityFieldTSType.String,
     );
-    for (const keyword of keywords) {
-      const match = fields.find((f) => f.Name.toLowerCase().includes(keyword));
-      if (match) {
-        return match.Name;
-      }
-    }
-    return null;
+    return match?.Name ?? null;
   }
 }
 

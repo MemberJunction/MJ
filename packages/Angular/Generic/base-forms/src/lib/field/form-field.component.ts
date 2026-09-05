@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -296,6 +296,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether the user has interacted with (changed) this field */
   private _touched = false;
 
+  /** Set when an image upload is rejected (type/size) — shown with field validation. */
+  private imageUploadError: string | null = null;
+
   /** Locally computed validation errors for this field */
   private _fieldErrors: ValidationErrorInfo[] = [];
 
@@ -321,6 +324,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Whether this field has active error-level validation failures to display */
   get ShowErrors(): boolean {
+    if (this.imageUploadError) return true;
     return this.ShowValidation && this.FieldErrors.some(e => e.Type === 'Failure');
   }
 
@@ -331,8 +335,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Error messages to render in the template */
   get DisplayErrors(): ValidationErrorInfo[] {
-    if (!this.ShowValidation) return [];
-    return this.FieldErrors.filter(e => e.Type === 'Failure');
+    const errors = this.ShowValidation
+      ? this.FieldErrors.filter(e => e.Type === 'Failure')
+      : [];
+    if (this.imageUploadError) {
+      return [
+        ...errors,
+        new ValidationErrorInfo(this.FieldName, this.imageUploadError, this.Value),
+      ];
+    }
+    return errors;
   }
 
   /** Warning messages to render in the template */
@@ -1876,6 +1888,66 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
   }
 
+  /**
+   * Runtime display kind from EntityField.ExtendedType. Honored ahead of the
+   * generated `LinkType` input so PhotoURL forms still tagged LinkType=URL
+   * render as images once metadata says Image.
+   */
+  get ExtendedDisplay(): 'image' | 'color' | 'json' | null {
+    switch (this.FieldInfo?.ExtendedType) {
+      case 'Image': return 'image';
+      case 'Color': return 'color';
+      case 'JSON':  return 'json';
+      default:      return null;
+    }
+  }
+
+  get ImagePreviewSrc(): string | null {
+    const raw = this.FormatValue();
+    return CoerceImageSrc(raw);
+  }
+
+  get IsInlineImageValue(): boolean {
+    const raw = this.FormatValue().trim();
+    if (!raw) return false;
+    return IsInlineImageDataUri(raw) || CoerceRawImageBase64ToDataUri(raw) != null;
+  }
+
+  get ImageValueSizeLabel(): string {
+    const raw = this.FormatValue();
+    if (!raw) return '';
+    return FormatByteSize(raw.length);
+  }
+
+  get ImageMaxSizeLabel(): string {
+    return FormatByteSize(MaxInlineImageBytes(this.FieldInfo?.MaxLength ?? 0));
+  }
+
+  /** URL box: empty for inline images so we never dump a data URI into a text input. */
+  get ImageUrlInputValue(): string {
+    if (this.IsInlineImageValue) return '';
+    return this.FormatValue();
+  }
+
+  get ImageUrlDisplay(): string {
+    const raw = this.FormatValue().trim();
+    return raw.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+  }
+
+  get ColorPickerValue(): string {
+    return ParseCssHexColor(this.FormatValue()) ?? '#000000';
+  }
+
+  get ColorSwatchValue(): string {
+    return ParseCssHexColor(this.FormatValue()) ?? 'transparent';
+  }
+
+  get JsonDisplayValue(): string {
+    // Pretty-print only in read mode. Edit mode shows the live value; OnJsonBlur pretty-prints.
+    if (this.EditMode) return this.FormatValue();
+    return PrettyPrintJson(this.FormatValue());
+  }
+
   /** Handle value changes coming from the embedded code editor (emits a plain string). */
   OnCodeEditorChange(value: string): void {
     this.Value = value;
@@ -2051,7 +2123,134 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   OnInputChange(event: Event): void {
     const input = event.target as HTMLInputElement;
+    this.imageUploadError = null;
     this.Value = input.value;
+  }
+
+  OnImageUrlInput(event: Event): void {
+    this.OnInputChange(event);
+  }
+
+  OnImageClear(): void {
+    this.imageUploadError = null;
+    this.Value = null;
+    this.cdr.markForCheck();
+  }
+
+  async OnImageFileSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    this.imageUploadError = null;
+    if (!file) return;
+
+    const allowed = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml']);
+    if (file.type && !allowed.has(file.type)) {
+      this.imageUploadError = 'That file is not a supported image type (PNG, JPEG, GIF, WebP, or SVG).';
+      this._touched = true;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const absoluteReadCap = 8 * 1024 * 1024;
+    if (file.size > absoluteReadCap) {
+      this.imageUploadError = `File is too large to read (max ${FormatByteSize(absoluteReadCap)}).`;
+      this._touched = true;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    try {
+      const maxChars = MaxStoredImageChars(this.FieldInfo?.MaxLength ?? 0);
+      const dataUri = await this.readFileAsDataUri(file);
+      if (!IsInlineImageDataUri(dataUri)) {
+        this.imageUploadError = 'That file is not a supported image type (PNG, JPEG, GIF, WebP, or SVG).';
+        this._touched = true;
+        this.cdr.markForCheck();
+        return;
+      }
+      if (dataUri.length <= maxChars) {
+        this.Value = dataUri;
+        this.cdr.markForCheck();
+        return;
+      }
+      const compressed = await this.compressImageDataUriToFit(dataUri, maxChars);
+      if (compressed) {
+        this.Value = compressed;
+        this.cdr.markForCheck();
+        return;
+      }
+      this.imageUploadError = `Image is too large for this field (max ${this.ImageMaxSizeLabel}). Try a smaller file or paste an image URL.`;
+      this._touched = true;
+    } catch {
+      this.imageUploadError = 'Could not read that image.';
+      this._touched = true;
+    }
+    this.cdr.markForCheck();
+  }
+
+  OnColorPickerInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.imageUploadError = null;
+    this.Value = input.value;
+  }
+
+  OnJsonBlur(): void {
+    const raw = this.FormatValue();
+    const pretty = PrettyPrintJson(raw);
+    if (pretty !== raw) {
+      this.Value = pretty;
+    }
+  }
+
+  private readFileAsDataUri(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private loadHtmlImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image decode failed'));
+      img.src = src;
+    });
+  }
+
+  /**
+   * Re-encode a raster data URI as JPEG, shrinking dimensions/quality until it fits
+   * `maxChars`. GIF/SVG are left alone (would lose animation / vectors).
+   */
+  private async compressImageDataUriToFit(dataUri: string, maxChars: number): Promise<string | null> {
+    if (typeof document === 'undefined') return null;
+    if (/^data:image\/(gif|svg\+xml)/i.test(dataUri)) return null;
+    const img = await this.loadHtmlImage(dataUri);
+    const naturalW = img.naturalWidth || img.width;
+    const naturalH = img.naturalHeight || img.height;
+    if (!naturalW || !naturalH) return null;
+
+    let maxDim = Math.min(Math.max(naturalW, naturalH), 1024);
+    let quality = 0.85;
+    for (let i = 0; i < 8; i++) {
+      const scale = maxDim / Math.max(naturalW, naturalH);
+      const w = Math.max(1, Math.round(naturalW * scale));
+      const h = Math.max(1, Math.round(naturalH * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, w, h);
+      const next = canvas.toDataURL('image/jpeg', quality);
+      if (next.length <= maxChars) return next;
+      maxDim = Math.max(32, Math.round(maxDim * 0.65));
+      quality = Math.max(0.4, quality - 0.1);
+    }
+    return null;
   }
 
   /**
@@ -2111,6 +2310,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   get StoredDateIsUnreadable(): boolean {
     if (!this.EditMode) return false;
+    if (this.Type !== 'datepicker' && this.FieldInfo?.TSType !== EntityFieldTSType.Date) return false;
     const val = this.Value;
     if (val === null || val === undefined || val === '') return false;
     return this.DateInputValue === '';
