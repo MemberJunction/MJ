@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (409 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -203,6 +203,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -939,6 +940,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -960,11 +962,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDatasetItemEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
-    MJDuplicateRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDuplicateRunEntity,
     MJEmployeeCompanyIntegrationEntity,
     MJEmployeeEntity,
     MJEmployeeRoleEntity,
@@ -1164,11 +1166,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJUserRecordLogEntity,
     MJUserRoleEntity,
     MJUserRoutineEntity,
-    MJUserRoutineRecipientEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJUserRoutineRecipientEntity,
     MJUserRoutineRunEntity,
     MJUserSettingEntity,
     MJUserViewCategoryEntity,
@@ -1368,11 +1370,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
-    PSModelsResourceComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    PSModelsResourceComponent,
     PSPredictionsResourceComponent,
     PSStudioResourceComponent,
     PermissionsAuditLogResourceComponent,
@@ -1440,7 +1442,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 653;
+export const CLASS_REGISTRATIONS_COUNT = 654;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

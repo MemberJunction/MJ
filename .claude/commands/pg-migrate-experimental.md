@@ -135,7 +135,7 @@ MJ_CORE_SCHEMA=__mj MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3
 ## Path A — delta migrations (common and fast)
 
 ```bash
-docker exec claude-dev bash -lc 'cd /workspace/MJ && MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate convert --split --bake-codegen --file <V…sql> --verbose'
+docker exec claude-dev bash -lc 'cd /workspace/MJ && MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 pnpm mj migrate convert --split --bake-codegen --file <V…sql> --verbose'
 ```
 
 `--file` takes the migration FILENAME only — it is resolved against
@@ -166,7 +166,7 @@ step 1). A later sync push that reseeds the same rows is fine, because the upser
 is idempotent. So a self-seeding migration and a later push do not conflict.
 
 ```bash
-npx mj migrate convert --file <V…_Metadata_Sync.sql>   # NO --split → real DO/PERFORM DML, not a marker
+pnpm mj migrate convert --file <V…_Metadata_Sync.sql>   # NO --split → real DO/PERFORM DML, not a marker
 ```
 
 ### A `.needs-hand` output
@@ -248,7 +248,7 @@ Use `mj migrate` and `mj codegen`.
 ```bash
 # fresh MJ_PG_Rebake + roles (cdp_UI/cdp_Developer/cdp_Integration NOLOGIN + GRANT USAGE ON SCHEMA public)
 # apply committed .pg.sql with ts <= baseline ts (move any newer .pg.sql aside first so migrate stops at the baseline point):
-DB_DATABASE=MJ_PG_Rebake PG_DATABASE=MJ_PG_Rebake npx mj migrate
+DB_DATABASE=MJ_PG_Rebake PG_DATABASE=MJ_PG_Rebake pnpm mj migrate
 # CRITICAL: transpile-only deltas leave CodeGen views MISSING (e.g. vwScopedPromptConfigs).
 # Run codegen to fill them, else sync push at deploy dies with "relation … does not exist":
 DB_DATABASE=MJ_PG_Rebake PG_DATABASE=MJ_PG_Rebake node scripts/pg-codegen-await.mjs --skipfiles
@@ -304,7 +304,7 @@ Start the SQL Server comparison database build now. It is independent, so it run
 during the gate.
 
 ```bash
-docker exec -d claude-dev bash -lc '/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -Q "IF DB_ID(''MJ_SQL_Compare'') IS NOT NULL BEGIN ALTER DATABASE MJ_SQL_Compare SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE MJ_SQL_Compare; END; CREATE DATABASE MJ_SQL_Compare;" && /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_SQL_Compare -I -Q "CREATE SCHEMA __mj;" && cd /workspace/MJ && DB_PLATFORM=sqlserver DB_HOST=sql-claude DB_PORT=1433 DB_DATABASE=MJ_SQL_Compare DB_USERNAME=sa DB_PASSWORD=Claude2Sql99 DB_ENCRYPT=false DB_TRUST_SERVER_CERTIFICATE=true CODEGEN_DB_USERNAME=sa CODEGEN_DB_PASSWORD=Claude2Sql99 MJ_CORE_SCHEMA=__mj npx mj migrate > /tmp/ss-compare.log 2>&1 && echo SS_DONE >> /tmp/ss-compare.log'
+docker exec -d claude-dev bash -lc '/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -Q "IF DB_ID(''MJ_SQL_Compare'') IS NOT NULL BEGIN ALTER DATABASE MJ_SQL_Compare SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE MJ_SQL_Compare; END; CREATE DATABASE MJ_SQL_Compare;" && /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_SQL_Compare -I -Q "CREATE SCHEMA __mj;" && cd /workspace/MJ && DB_PLATFORM=sqlserver DB_HOST=sql-claude DB_PORT=1433 DB_DATABASE=MJ_SQL_Compare DB_USERNAME=sa DB_PASSWORD=Claude2Sql99 DB_ENCRYPT=false DB_TRUST_SERVER_CERTIFICATE=true CODEGEN_DB_USERNAME=sa CODEGEN_DB_PASSWORD=Claude2Sql99 MJ_CORE_SCHEMA=__mj pnpm mj migrate > /tmp/ss-compare.log 2>&1 && echo SS_DONE >> /tmp/ss-compare.log'
 ```
 
 ### The gate
@@ -322,12 +322,12 @@ psql -h postgres-claude -U mj_admin -d postgres -c "DO \$\$ BEGIN
 END \$\$;"
 psql -h postgres-claude -U mj_admin -d MJ_PG_Gate -c 'GRANT USAGE ON SCHEMA public TO "cdp_UI","cdp_Developer","cdp_Integration";'
 # 1. mj migrate — applies the NEW baseline (Skyway auto-selects the highest B*) + deltas. Must be clean.
-DB_DATABASE=MJ_PG_Gate PG_DATABASE=MJ_PG_Gate npx mj migrate --verbose
+DB_DATABASE=MJ_PG_Gate PG_DATABASE=MJ_PG_Gate pnpm mj migrate --verbose
 # 2. mj sync push — reseed metadata. MUST set DB_USERNAME/PASSWORD (else it falls back to SQL Server `sa`)
 #    AND MJ_BOT_CONTEXT_USER_EMAIL=<an Owner user's email> (it runs as "User: System" and the Dashboard
 #    server subclass blocks System from editing owner-owned dashboards). Find one:
 #      psql … -tAc "SELECT \"Email\" FROM __mj.\"User\" WHERE \"IsActive\" AND \"Type\"='Owner' LIMIT 1"
-DB_DATABASE=MJ_PG_Gate PG_DATABASE=MJ_PG_Gate MJ_BOT_CONTEXT_USER_EMAIL=<owner> npx mj sync push --dir metadata --ci
+DB_DATABASE=MJ_PG_Gate PG_DATABASE=MJ_PG_Gate MJ_BOT_CONTEXT_USER_EMAIL=<owner> pnpm mj sync push --dir metadata --ci
 ```
 
 The gate passes when `mj migrate` applies with no errors. A residual sync-push

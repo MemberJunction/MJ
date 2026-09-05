@@ -1,0 +1,177 @@
+# .github/workflows/codeql.yml
+#
+# Advanced CodeQL setup for MemberJunction/MJ.
+# Replaces default setup. Enabling this workflow disables default setup — do that
+# deliberately in one change rather than discovering the swap.
+#
+# WHY FOUR ANALYSES RATHER THAN THREE, AND WHAT ACTUALLY CAUSED THE TIMEOUT
+#
+# Default setup analysed all of JavaScript/TypeScript in one job and hit the six-hour
+# Actions ceiling, so TypeScript — the language the platform is written in — produced no
+# findings at all. The job log of that run (3 September 2026) shows where the time went:
+#
+#   extraction of all 8,183 files            4.5 min
+#   queries 1–57 of 105                       10 min
+#   query 58, SqlInjection                    329 min
+#   query 59, CodeInjection                   341 min
+#   queries 60–105                            never ran; cancelled at 360 min
+#
+# Two taint-tracking queries consumed the budget; everything else was cheap. The trigger
+# is the generated code: the generated GraphQL resolvers under MJServer alone hold 411
+# template-string SQL statements feeding ExecuteSQL, and the excluded generated files
+# hold 843 SQL-building lines against 161 in the authored security-critical packages.
+# With generated code excluded, both JavaScript/TypeScript analyses were measured
+# locally on 5 September 2026 with the same CodeQL 2.26.4 bundle, 4 threads and 14 GB:
+#
+#   id        language               files  suite              measured   when
+#   actions   actions                  n/a  security-extended  ~1 min     PR, merge, weekly, manual
+#   python    python                   n/a  security-extended  ~1 min     PR, merge, weekly, manual
+#   js-core   javascript-typescript  1,572  security-extended  ~3 min     PR, weekly, manual
+#   js-rest   javascript-typescript  3,680  default            ~3 min     weekly, manual
+#
+# SqlInjection and CodeInjection took 14 s each on js-core and under 50 s each on
+# js-rest. Hosted runners are slower per core than the machine that measured this, so
+# expect a small multiple of those figures in Actions, not hours. The 350-minute
+# timeout below is a safety net, not a forecast.
+#
+# js-core is MJServer, AuthProviders, AI, Actions, MJGlobal and React/runtime — the API
+# surface, identity, the prompt and agent pipeline, the code execution sandbox, SQL
+# expression validation and model-authored component execution. It runs the extended
+# suite on every pull request. js-rest is the remainder, predominantly Angular
+# Explorer, weekly.
+#
+# The result is better than a single scan of everything: the code where a finding matters
+# most is scanned more often and more deeply than the code where it matters least.
+#
+# js-core is NOT run on merge to next. Every change reaches next through a pull request —
+# direct commits are blocked and review is required — so the pull-request run has already
+# analysed it. The weekly run on next is what keeps the default-branch alert baseline
+# current.
+#
+# WHY A "plan" JOB
+#
+# Which analyses run depends on the event, and the natural place to express that — a
+# job-level `if` on matrix.run_on — is not allowed: the matrix context is unavailable in
+# jobs.<id>.if, and GitHub rejects the workflow. So a short first job filters the list
+# of analyses for the current event and hands the survivors to the matrix. Analyses that
+# do not apply never start, which also keeps them out of the run's job list.
+#
+# Run on demand before a significant release rather than waiting for Monday:
+#   gh workflow run CodeQL --repo MemberJunction/MJ --ref next
+
+name: CodeQL
+
+on:
+  push:
+    branches: [next]
+  pull_request:
+    branches: [next]
+  schedule:
+    - cron: '0 10 * * 1'      # Monday 10:00 UTC
+  workflow_dispatch:
+
+jobs:
+  plan:
+    name: Select analyses
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - name: Select analyses for ${{ github.event_name }}
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+        # run_on controls which events each analysis answers to:
+        #   always    every event
+        #   pr        pull requests, the weekly schedule and manual runs — not merges
+        #   schedule  the weekly schedule and manual runs only
+        #
+        # queries: '' means the default suite. js-rest was given the default suite when
+        # the extended one was assumed not to fit the ceiling; measured at ~3 min it
+        # would now fit, so upgrading it is a choice, not a constraint.
+        run: |
+          selected=$(jq -c --arg event "$EVENT" '
+            { include: map(select(
+                .run_on == "always"
+                or (.run_on == "pr" and $event != "push")
+                or (.run_on == "schedule" and ($event == "schedule" or $event == "workflow_dispatch"))
+              )) }' <<'JSON'
+          [
+            { "id": "actions",
+              "language": "actions",
+              "queries": "security-extended",
+              "config": "./.github/codeql/codeql-config.yml",
+              "category": "/language:actions",
+              "run_on": "always" },
+
+            { "id": "python",
+              "language": "python",
+              "queries": "security-extended",
+              "config": "./.github/codeql/codeql-config.yml",
+              "category": "/language:python",
+              "run_on": "always" },
+
+            { "id": "js-core",
+              "language": "javascript-typescript",
+              "queries": "security-extended",
+              "config": "./.github/codeql/codeql-config-core.yml",
+              "category": "/language:javascript-typescript/core",
+              "run_on": "pr" },
+
+            { "id": "js-rest",
+              "language": "javascript-typescript",
+              "queries": "",
+              "config": "./.github/codeql/codeql-config-rest.yml",
+              "category": "/language:javascript-typescript/rest",
+              "run_on": "schedule" }
+          ]
+          JSON
+          )
+          echo "Event: $EVENT"
+          echo "Selected: $(jq -r '.include[].id' <<<"$selected" | paste -sd, -)"
+          echo "matrix=$selected" >> "$GITHUB_OUTPUT"
+
+  analyze:
+    name: Analyze (${{ matrix.id }})
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 350        # fail cleanly below the 360-minute job ceiling
+
+    # Per-analysis concurrency. A superseded run is cancelled for everything except
+    # js-rest, which is the long one: a merge landing mid-analysis must not kill it. That
+    # is the failure mode that produced continuous compute and no findings under default
+    # setup.
+    concurrency:
+      group: codeql-${{ matrix.id }}-${{ github.ref }}
+      cancel-in-progress: ${{ matrix.id != 'js-rest' }}
+
+    permissions:
+      security-events: write    # required to upload results
+      contents: read
+      actions: read
+
+    strategy:
+      fail-fast: false          # one language failing must not hide the others
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          queries: ${{ matrix.queries }}
+          config-file: ${{ matrix.config }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          # Distinct categories keep the two JavaScript/TypeScript analyses as separate
+          # result sets. Without this the second upload overwrites the first and half the
+          # codebase silently disappears from the Security tab.
+          category: ${{ matrix.category }}
