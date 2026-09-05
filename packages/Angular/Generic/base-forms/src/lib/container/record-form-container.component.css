@@ -126,6 +126,52 @@ mj-record-form-container {
   overflow: visible;
 }
 
+/* Details: every field panel shows under ONE rail item, and the rail label
+   cannot head several loose field lists — without a surface the rows float
+   on the page background. So the Details panels render as ONE card: each
+   panel is a segment (surface + side borders, no radius), and the container
+   marks the visual first / last (CSS order, not DOM order) to close the top
+   and bottom edges. No per-section headers — the sections are plain groups. */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-details .mj-forms-panel {
+  background: var(--mj-bg-surface-card);
+  border-left: 1px solid var(--mj-border-default);
+  border-right: 1px solid var(--mj-border-default);
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-details-first {
+  margin-top: 8px;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-details-first .mj-forms-panel {
+  border-top: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md) var(--mj-radius-md) 0 0;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-details-last .mj-forms-panel {
+  border-bottom: 1px solid var(--mj-border-default);
+  border-radius: 0 0 var(--mj-radius-md) var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+/* One panel = whole card: both edges on the same element. */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-details-first.mj-chrome-details-last .mj-forms-panel {
+  border-radius: var(--mj-radius-md);
+}
+
+/* Segment padding: sides always; top / bottom only at the card's edges, and a
+   half-step between segments so the groups still read as groups. */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-details .mj-forms-panel-content {
+  padding: 8px 20px;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-details-first .mj-forms-panel-content {
+  padding-top: 20px;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-details-last .mj-forms-panel-content {
+  padding-bottom: 20px;
+}
+
 .mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show {
   /* Content-sized (see RelatedGridHeightPx). Do not flex-fill leftover
      column space — a form header above the grid can collapse that to 0. */
@@ -245,6 +291,20 @@ mj-collapsible-panel.mj-form-role-more {
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-subtle);
   border-radius: var(--mj-radius-md);
+}
+
+/* The rail is as tall as the body column; when it has more items than fit,
+   the ITEMS scroll (the pin / collapse toolbar above stays fixed). Without
+   this the overflow was clipped by the panels container. */
+.mj-forms-chrome-rail-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
 }
 
 .mj-forms-chrome-rail.is-resizing {

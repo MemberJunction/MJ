@@ -38,7 +38,7 @@ import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
-import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
+import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
 import {
   ClampRailWidth,
@@ -1007,6 +1007,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const host = this.host.nativeElement;
     if (!host) return;
     const layout = this.chrome.Spec.Layout;
+    const detailsKeys: string[] = [];
     host.querySelectorAll('mj-collapsible-panel').forEach((node: Element) => {
       const key = node.getAttribute('data-section-key') ?? '';
       const variant = node.getAttribute('data-variant') ?? 'default';
@@ -1015,6 +1016,23 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       node.classList.toggle('mj-chrome-show', layout === 'left-nav' && visible);
       node.classList.toggle('mj-chrome-hidden', !visible);
       node.classList.toggle('mj-form-role-more', inMore);
+      // Details shows several panels under one rail item; they render as ONE
+      // card (see the left-nav rules in the component CSS).
+      const isDetails = layout === 'left-nav' && visible && IsDetailsSectionKey(this.chrome.Spec, key);
+      node.classList.toggle('mj-chrome-details', isDetails);
+      if (isDetails) detailsKeys.push(key);
+    });
+    // The card's top and bottom edges follow the VISUAL order (CSS `order`
+    // = the form's section display order), not DOM order.
+    const form = this.FormComponent as { getSectionDisplayOrder?: (key: string) => number } | null;
+    const edges = DetailsCardEdges(detailsKeys, (k) => form?.getSectionDisplayOrder?.(k) ?? 0);
+    host.querySelectorAll('mj-collapsible-panel.mj-chrome-details').forEach((node: Element) => {
+      const key = node.getAttribute('data-section-key') ?? '';
+      node.classList.toggle('mj-chrome-details-first', key === edges.First);
+      node.classList.toggle('mj-chrome-details-last', key === edges.Last);
+    });
+    host.querySelectorAll('mj-collapsible-panel:not(.mj-chrome-details)').forEach((node: Element) => {
+      node.classList.remove('mj-chrome-details-first', 'mj-chrome-details-last');
     });
   }
 
