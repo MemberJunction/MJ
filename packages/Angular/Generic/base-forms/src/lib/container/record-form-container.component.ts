@@ -1,7 +1,7 @@
 import {
   Component, Input, Output, EventEmitter,
   ChangeDetectionStrategy, ChangeDetectorRef, inject, NgZone,
-  ContentChildren, QueryList, AfterContentInit, OnDestroy,
+  ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
@@ -113,7 +113,7 @@ export interface VariantPickerItem {
   // related-entity grids and slot-mounted panels can inject them.
   providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator],
 })
-export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, OnDestroy  {
+export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, DoCheck, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
   private notificationService = inject(MJNotificationService);
@@ -124,6 +124,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
   private chromeResolveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Last values `ngDoCheck` resolved the rail for — see that method. */
+  private lastRailEditMode = false;
+  private lastRailShowEmptyFields = false;
   private chromeRules: FormChromeRule[] = [];
   private chromeRulesForEntityId: string | null = null;
 
@@ -662,6 +665,26 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     // Watch for changes to record dirty state
     this.watchRecordChanges();
+  }
+
+  /**
+   * Edit mode and Show Empty Fields both flip `mj-panel-empty` on a panel whose
+   * fields are all blank (see `MjFormFieldComponent.ShouldHideField`), and
+   * `domPanelSnapshots()` drops those panels from the rail. The panel itself
+   * recomputes live, but the rail is only resolved on structural changes — so
+   * without this the nav entry never comes back on switching to edit.
+   *
+   * Watched here rather than in `OnEditModeChange` because the toolbar is not
+   * the only writer: `SaveRecord()` and `CancelEdit()` call `EndEditMode()` on
+   * the form component directly, bypassing that handler entirely.
+   */
+  ngDoCheck(): void {
+    const editMode = this.EffectiveEditMode;
+    const showEmptyFields = this.EffectiveShowEmptyFields;
+    if (editMode === this.lastRailEditMode && showEmptyFields === this.lastRailShowEmptyFields) return;
+    this.lastRailEditMode = editMode;
+    this.lastRailShowEmptyFields = showEmptyFields;
+    this.scheduleChromeResolve();
   }
 
   ngOnDestroy(): void {
