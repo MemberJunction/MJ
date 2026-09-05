@@ -2756,6 +2756,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
                   (!extendedType && (fieldNameLower.includes('url') ||
                                      fieldNameLower.includes('website') ||
                                      fieldNameLower.includes('link')));
+    // Photo/logo/avatar before generic URL — PhotoURL would otherwise render as a text link.
+    const isImage = (customFormat?.type as string | undefined) === 'image' ||
+                    fieldNameLower.includes('photo') ||
+                    fieldNameLower.includes('logo') ||
+                    fieldNameLower.includes('avatar') ||
+                    fieldNameLower.includes('thumbnail');
     // Use ExtendedType='Tel' from metadata, fallback to field name pattern
     const isPhone = extendedType === 'tel' ||
                     (!extendedType && (fieldNameLower.includes('phone') ||
@@ -2806,6 +2812,18 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     colDef.cellRenderer = (params: ICellRendererParams) => {
       if (params.value === null || params.value === undefined) {
         return '<span class="cell-empty">—</span>';
+      }
+
+      if (isImage) {
+        const raw = String(params.value).trim();
+        if (this.looksLikeImageUrl(raw)) {
+          const url = this.normalizeHref(raw);
+          const escaped = HighlightUtil.escapeHtml(url);
+          return this.wrapWithStyle(
+            `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="cell-image-link" onclick="event.stopPropagation()"><img src="${escaped}" alt="" class="cell-image" /></a>`,
+            customFormat?.cellStyle ? this.buildCssStyle(customFormat.cellStyle) : '',
+          );
+        }
       }
 
       // Handle foreign key fields - render as clickable links
@@ -2979,6 +2997,22 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   private wrapWithStyle(content: string, style: string): string {
     if (!style) return content;
     return `<span style="${style}">${content}</span>`;
+  }
+
+  private looksLikeImageUrl(value: string): boolean {
+    const v = value.trim().toLowerCase();
+    if (v.startsWith('data:image/')) return true;
+    if (!/^https?:\/\//.test(v) && !v.startsWith('/')) return false;
+    return /\.(png|jpe?g|gif|webp|svg|avif)(\?|$)/i.test(v) ||
+           v.includes('dicebear.com') ||
+           v.includes('/photo') ||
+           v.includes('avatar');
+  }
+
+  private normalizeHref(value: string): string {
+    const v = value.trim();
+    if (/^https?:\/\//i.test(v) || v.startsWith('data:') || v.startsWith('/')) return v;
+    return 'https://' + v;
   }
 
   /**

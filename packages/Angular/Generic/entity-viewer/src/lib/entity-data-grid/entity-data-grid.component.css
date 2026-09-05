@@ -1241,3 +1241,16 @@
 ::ng-deep .ag-header-cell.mj-grid-filler-header:hover {
   background-color: transparent !important;
 }
+
+.cell-image-link {
+  display: inline-flex;
+  align-items: center;
+}
+.cell-image {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--mj-radius-sm, 4px);
+  vertical-align: middle;
+  background: var(--mj-bg-surface-sunken);
+}
