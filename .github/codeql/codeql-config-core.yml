@@ -4,9 +4,9 @@
 # filtering, verified against MemberJunction/MJ@next on 5 September 2026.
 #
 # This job exists so the code where a finding matters most is scanned on the extended
-# query suite and on every pull request, rather than waiting for a weekly run of the
-# whole repository. It is under one fifth of the JS/TS surface that timed out at the
-# six-hour ceiling, so it should complete with a wide margin.
+# query suite on every pull request and every merge to next, rather than waiting for a
+# weekly run of the whole repository. A full scan of next measured 7m31s on a hosted
+# runner on 5 September 2026 (133 results); see codeql.yml for the full table.
 #
 # Generated code is excluded here as it is everywhere else in this workflow. Only six
 # generated JavaScript/TypeScript files sit inside these packages, but one of them —
