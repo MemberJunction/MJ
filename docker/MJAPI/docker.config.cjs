@@ -182,7 +182,8 @@ const mjServerConfig = {
     newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
-    contextUserForNewUserCreation: 'not.set@nowhere.com',
+    // Matched against User.Name first, then User.Email — 'System' is the seeded system user.
+    contextUserForNewUserCreation: 'System',
   },
   databaseSettings: {
     connectionTimeout: 45000,

@@ -30,6 +30,7 @@ import {
   type MJApplicationRoleEntity,
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { ResolveConfiguredPrincipal } from '../principals.js';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
@@ -698,14 +699,7 @@ export class MagicLinkService {
   /** Resolves the user whose context provisions magic-link users. */
   private resolveProvisioningContextUser(): UserInfo | null {
     const candidate = this.config.contextUserForProvisioning || configInfo.userHandling?.contextUserForNewUserCreation;
-    if (candidate) {
-      const byName = UserCache.Instance.UserByName(candidate);
-      if (byName) {
-        return byName;
-      }
-      LogError(`[MagicLink] Configured provisioning user '${candidate}' not found; falling back to an Owner.`);
-    }
-    return UserCache.Users.find((u) => u.Type?.trim().toLowerCase() === 'owner') ?? null;
+    return ResolveConfiguredPrincipal(candidate, 'MagicLink');
   }
 
   /** Sends the invite email via the configured communication provider. Best-effort. */

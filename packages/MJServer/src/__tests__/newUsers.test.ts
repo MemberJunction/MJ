@@ -21,7 +21,7 @@ import type { UserInfo } from '@memberjunction/core';
 const {
     mockConfig,
     mockCacheUsers,
-    mockUserByName,
+    mockSystemUserId,
     mockRefresh,
     mockGetEntityObject,
     mockRunViewFn,
@@ -39,6 +39,7 @@ const {
         Name: string;
         Email: string;
         Type: string;
+        IsActive?: boolean;
     }
     return {
         mockConfig: {
@@ -55,7 +56,11 @@ const {
             },
         },
         mockCacheUsers: [] as HoistedCacheUser[],
-        mockUserByName: vi.fn(),
+        // The system user's ID as the cache reports it. A well-formed UUID that matches NO fixture
+        // below, so the resolver's system rung stays inert unless a test opts into it. Well-formed
+        // matters: `UUIDsEqual` is a string compare with no shape check, so a malformed value here
+        // would read as real data while being unrepresentable in the column it stands for.
+        mockSystemUserId: { value: '00000000-0000-0000-0000-00000000d1f5' },
         mockRefresh: vi.fn(),
         mockGetEntityObject: vi.fn(),
         mockRunViewFn: vi.fn(),
@@ -76,9 +81,11 @@ vi.mock('../config.js', () => ({ configInfo: mockConfig }));
 
 vi.mock('@memberjunction/generic-database-provider', () => {
     const instance = {
-        UserByName: mockUserByName,
         get Users() {
             return mockCacheUsers;
+        },
+        get SYSTEM_USER_ID() {
+            return mockSystemUserId.value;
         },
         Refresh: mockRefresh,
         GetSystemUser: vi.fn(),
@@ -234,7 +241,9 @@ function entitiesOf(name: string): MockEntity[] {
     return createdEntities.filter((e) => e.TestEntityName === name);
 }
 
-const CONTEXT_USER = { ID: 'sys-1', Name: 'system@test.com', Email: 'system@test.com', Type: 'Owner' } as unknown as UserInfo;
+/** The cache row for the configured context user; `CONTEXT_USER` is the same object, typed. */
+const CONTEXT_USER_ROW = { ID: 'sys-1', Name: 'system@test.com', Email: 'system@test.com', Type: 'Owner', IsActive: true };
+const CONTEXT_USER = CONTEXT_USER_ROW as unknown as UserInfo;
 
 function resetConfig(): void {
     mockConfig.userHandling = {
@@ -261,14 +270,22 @@ beforeEach(() => {
     getEntityObjectCalls = [];
     saveBehavior = {};
     entitySeq = 0;
+    // defineProperty rather than assignment: one test replaces this with a throwing getter.
+    Object.defineProperty(mockSystemUserId, 'value', {
+        value: '00000000-0000-0000-0000-00000000d1f5',
+        writable: true,
+        configurable: true,
+    });
+    // The configured context user must be IN the cache: resolution reads the cache directly rather
+    // than going through a UserByName stub that answered regardless of what the cache held.
     mockCacheUsers.length = 0;
+    mockCacheUsers.push(CONTEXT_USER_ROW);
 
     mockRolesArray.length = 0;
     mockRolesArray.push({ ID: 'role-ui', Name: 'UI' }, { ID: 'role-dev', Name: 'Developer' });
     mockApplicationsArray.length = 0;
     mockApplicationsArray.push({ ID: 'app-crm', Name: ' CRM ' }, { ID: 'app-admin', Name: 'Admin' });
 
-    mockUserByName.mockImplementation((name: string) => (name === 'system@test.com' ? CONTEXT_USER : undefined));
     mockGetEntityObject.mockImplementation(async (entityName: string, contextUser?: UserInfo) => {
         const entity = makeMockEntity(entityName);
         createdEntities.push(entity);
@@ -290,7 +307,6 @@ describe('NewUserBase.createNewUser', () => {
             const user = await create();
 
             expect(user).not.toBeNull();
-            expect(mockUserByName).toHaveBeenCalledWith('system@test.com');
             expect(getEntityObjectCalls[0]).toEqual({ entityName: 'MJ: Users', contextUser: CONTEXT_USER });
             // Role records are scoped to the same creation context user
             for (const call of getEntityObjectCalls) {
@@ -299,9 +315,9 @@ describe('NewUserBase.createNewUser', () => {
         });
 
         it('falls back to an Owner-typed cache user (case-insensitive, trimmed) when the configured user is missing', async () => {
-            mockUserByName.mockReturnValue(undefined);
-            const owner = { ID: 'owner-9', Name: 'Fallback Owner', Email: 'owner@x.com', Type: '  OWNER  ' };
-            mockCacheUsers.push({ ID: 'u-1', Name: 'Plain', Email: 'p@x.com', Type: 'User' }, owner);
+            const owner = { ID: 'owner-9', Name: 'Fallback Owner', Email: 'owner@x.com', Type: '  OWNER  ', IsActive: true };
+            mockCacheUsers.length = 0; // the configured user is absent from this deployment
+            mockCacheUsers.push({ ID: 'u-1', Name: 'Plain', Email: 'p@x.com', Type: 'User', IsActive: true }, owner);
 
             const user = await create();
 
@@ -311,8 +327,8 @@ describe('NewUserBase.createNewUser', () => {
         });
 
         it('returns null without opening a transaction when no context user can be resolved at all', async () => {
-            mockUserByName.mockReturnValue(undefined);
-            mockCacheUsers.push({ ID: 'u-1', Name: 'Plain', Email: 'p@x.com', Type: 'User' });
+            mockCacheUsers.length = 0; // no configured user, no system user, no Owner
+            mockCacheUsers.push({ ID: 'u-1', Name: 'Plain', Email: 'p@x.com', Type: 'User', IsActive: true });
 
             const user = await create();
 
@@ -322,8 +338,12 @@ describe('NewUserBase.createNewUser', () => {
         });
 
         it('returns undefined (outer catch) when context resolution throws', async () => {
-            mockUserByName.mockImplementation(() => {
-                throw new Error('cache exploded');
+            // A cache that cannot report its own system user id fails resolution outright.
+            Object.defineProperty(mockSystemUserId, 'value', {
+                get() {
+                    throw new Error('cache exploded');
+                },
+                configurable: true,
             });
 
             const user = await create();
@@ -604,7 +624,9 @@ describe('verifyUserRecord', () => {
             const user = await verifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeUndefined();
-            expect(mockCacheUsers).toHaveLength(0);
+            // The cache is no longer empty at rest (it holds the configured context user), so
+            // assert the thing that actually matters: the failed user was not added to it.
+            expect(mockCacheUsers.some((u) => u.Email === 'new@example.com')).toBe(false);
         });
     });
 
