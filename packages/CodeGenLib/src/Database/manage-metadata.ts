@@ -3421,13 +3421,9 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
+    * Valid values for EntityField.ExtendedType. Domain lives on {@link EntityFieldInfo.ExtendedTypes}.
     */
-   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>([
-      'Code', 'Color', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
-      'GeoCity', 'GeoPostalCode', 'GeoAddress', 'HTML', 'Icon', 'Image', 'JSON', 'Markdown',
-      'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
-   ]);
+   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>(EntityFieldInfo.ExtendedTypes);
 
    private static readonly EXTENDED_TYPE_ALIASES: Record<string, EntityFieldExtendedType> = {
       'phone': 'Tel',

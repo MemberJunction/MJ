@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { EntityFieldInfo, EntityFieldExtendedTypes } from '../generic/entityInfo';
 import {
     CoerceImageSrc,
     CoerceRawImageBase64ToDataUri,
@@ -12,6 +13,13 @@ import {
     PrettyPrintJson,
     TryParseJsonText,
 } from '../generic/extendedTypeValue';
+
+describe('EntityFieldExtendedTypes', () => {
+    it('is the same array EntityFieldInfo.ExtendedTypes exposes', () => {
+        expect(EntityFieldInfo.ExtendedTypes).toBe(EntityFieldExtendedTypes);
+        expect(EntityFieldExtendedTypes).toEqual(expect.arrayContaining(['Image', 'Color', 'JSON', 'URL', 'Email', 'Icon']));
+    });
+});
 
 const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
