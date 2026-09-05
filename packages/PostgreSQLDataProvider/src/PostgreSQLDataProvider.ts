@@ -329,7 +329,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             if (!options?.connectionSource) {
                 this.AssertAmbientTransactionUsable();
             }
-            const source = (options?.connectionSource as { query: typeof this._connectionManager.Pool.query } | undefined)
+            const source = (options?.connectionSource as { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> } | undefined)
                 ?? this._transaction
                 ?? this._connectionManager.Pool;
             const result = await source.query(quotedQuery, processedParams);
