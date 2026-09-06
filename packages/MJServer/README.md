@@ -126,7 +126,8 @@ module.exports = {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
     newUserRoles: ['UI', 'Developer'],
-    contextUserForNewUserCreation: 'admin@example.com',
+    // Matched against User.Name first, then User.Email. Defaults to 'System', the seeded system user.
+    contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
   },
 

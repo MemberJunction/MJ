@@ -1439,14 +1439,14 @@ export class AgentRunner {
         try {
             if (fo.fileId) {
                 // File already in storage — create file-backed artifact
-                return await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
+                return await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, 'file', fo.visibility);
             }
 
             const fileId = await this.uploadToStorageIfConfigured(
                 fo.fileData!, fo.fileName, fo.mimeType, contextUser, resolvedStorageAccountId, provider, 'ProcessFileArtifacts');
             return fileId
-                ? await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles)
-                : await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
+                ? await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, 'file', fo.visibility)
+                : await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, fo.visibility);
         } catch (error) {
             LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
             return undefined;
@@ -1496,11 +1496,13 @@ export class AgentRunner {
             acceptUnregisteredFiles: boolean;
             /** Callback to set version-specific fields (ContentMode, FileID/Content, etc.) */
             setVersionFields: (version: MJArtifactVersionEntity) => void;
+            /** The artifact's Visibility; `Always` when the caller says nothing. */
+            visibility?: MJArtifactEntity['Visibility'];
             /** Label for log/error messages (e.g. 'file' or 'inline file') */
             label: string;
         }
     ): Promise<CreatedArtifactInfo> {
-        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, setVersionFields, label } = params;
+        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, setVersionFields, label, visibility } = params;
 
         // Resolve the artifact type using the wildcard-aware resolver with an
         // extension hint for application/octet-stream uploads.
@@ -1546,7 +1548,7 @@ export class AgentRunner {
             artifact.Name = fileName;
             artifact.TypeID = artifactTypeId;
             artifact.UserID = contextUser.ID;
-            artifact.Visibility = 'Always';
+            artifact.Visibility = visibility ?? 'Always';
             if (!(await artifact.Save())) {
                 throw new Error(`Failed to save artifact for ${label}: ${fileName}`);
             }
@@ -1610,10 +1612,11 @@ export class AgentRunner {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         acceptUnregisteredFiles: boolean,
-        label: string = 'file'
+        label: string = 'file',
+        visibility?: MJArtifactEntity['Visibility']
     ): Promise<CreatedArtifactInfo> {
         return this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, visibility,
             label,
             setVersionFields: (version) => {
                 version.ContentMode = 'File';
@@ -1631,10 +1634,11 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        acceptUnregisteredFiles: boolean
+        acceptUnregisteredFiles: boolean,
+        visibility?: MJArtifactEntity['Visibility']
     ): Promise<CreatedArtifactInfo> {
         return this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, visibility,
             label: 'inline file',
             setVersionFields: (version) => {
                 version.ContentMode = 'Text';
