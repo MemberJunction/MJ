@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Member Journey HMM",
+  "description": "A sequence model whose hidden states are read as journey stages. Fixes the state count to a number a person can hold in their head and name; a 12-state fit may score better and cannot be talked about, which defeats the point of choosing this archetype.",
+  "type": "object",
+  "properties": {
+    "n_components": { "type": "integer", "minimum": 3, "maximum": 6, "default": 4, "description": "Journey stages. Bounded low on purpose — these get named and discussed." },
+    "covariance_type": { "type": "string", "enum": ["spherical", "diag"], "default": "diag" },
+    "n_iter": { "type": "integer", "minimum": 10, "maximum": 1000, "default": 100 },
+    "stage_labels": {
+      "type": "array",
+      "description": "Optional names for the fitted states, in order. Naming them is what turns a state index into something a person can act on.",
+      "items": { "type": "string" },
+      "minItems": 3,
+      "maxItems": 6
+    }
+  },
+  "additionalProperties": false
+}

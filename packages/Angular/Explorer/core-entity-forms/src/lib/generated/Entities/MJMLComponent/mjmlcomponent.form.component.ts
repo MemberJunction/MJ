@@ -20,7 +20,8 @@ export class MJMLComponentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMLComponentBindings', sectionName: 'ML Component Bindings', isExpanded: false },
             { sectionKey: 'mJMLComponentsSourceComponentID', sectionName: 'ML Components (Source Component ID)', isExpanded: false },
             { sectionKey: 'mJMLComponentsParentComponentID', sectionName: 'ML Components (Parent Component ID)', isExpanded: false },
-            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false }
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false },
+            { sectionKey: 'mJMLFindings', sectionName: 'ML Findings', isExpanded: false }
         ]);
     }
 }

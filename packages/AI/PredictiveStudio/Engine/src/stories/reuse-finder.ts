@@ -23,7 +23,7 @@
 import { RunView, LogError } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
-import type { ReusableComponentMatch } from '@memberjunction/predictive-studio-core';
+import type { ComponentKind, ReusableComponentMatch } from '@memberjunction/predictive-studio-core';
 
 import { MLComponentEngine } from '../components/ml-component-engine';
 
@@ -51,6 +51,12 @@ export interface ReuseSearchRequest {
   PromotionStates?: string[];
   /** Only consider components that are trained (have fitted state worth reusing). Defaults to true. */
   TrainedOnly?: boolean;
+  /**
+   * Restrict to one kind of component — `'Input'` searches only the signal catalogue. Structural,
+   * like `ForSlot`, so it narrows BEFORE ranking: a caller asking for a measure never has its TopK
+   * spent on preprocessing steps that happen to describe themselves similarly.
+   */
+  OfKind?: ComponentKind;
 }
 
 /** The outcome of a reuse search, with the reasons anything was excluded. */
@@ -116,7 +122,7 @@ export class ReuseFinder {
     }
 
     const rows = await this.loadCandidates(request, contextUser, provider, warnings);
-    const entries = this.toVectorEntries(rows, accepts, engine, warnings);
+    const entries = this.toVectorEntries(rows, accepts, request.OfKind, engine, warnings);
     if (entries.length === 0) {
       return { Matches: [], CandidatesConsidered: 0, Warnings: warnings };
     }
@@ -175,7 +181,13 @@ export class ReuseFinder {
       `PromotionState IN (${states.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')})`,
     ];
     if (request.TrainedOnly !== false) {
+      // `IsTrained` and a stored artifact are two different facts, and the reuse LOADER requires
+      // both — it refuses a row that is "marked trained but has no stored artifact"
+      // (`train-graph-seam.ts`). Filtering on `IsTrained` alone therefore offers candidates that
+      // are guaranteed to fail the moment someone accepts one, which is the worst place to learn
+      // it. A component is offered as reusable only if it can actually be loaded.
       filters.push('IsTrained = 1');
+      filters.push('ArtifactFileID IS NOT NULL');
     }
 
     const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
@@ -201,14 +213,20 @@ export class ReuseFinder {
   private toVectorEntries(
     rows: CandidateRow[],
     accepts: string | null,
+    ofKind: ComponentKind | undefined,
     engine: MLComponentEngine,
     warnings: string[],
   ): Array<{ key: string; vector: number[]; metadata: CandidateMetadata }> {
     const entries: Array<{ key: string; vector: number[]; metadata: CandidateMetadata }> = [];
     let skippedForVector = 0;
     let skippedForSlot = 0;
+    let skippedForKind = 0;
 
     for (const row of rows) {
+      if (ofKind && engine.FindTypeByID(row.ComponentTypeID)?.Kind !== ofKind) {
+        skippedForKind++;
+        continue;
+      }
       if (accepts && !engine.IsDescendantOf(row.ComponentTypeID, accepts)) {
         skippedForSlot++;
         continue;
@@ -234,6 +252,9 @@ export class ReuseFinder {
 
     if (skippedForVector > 0) {
       warnings.push(`${skippedForVector} component(s) had an unreadable story vector and were skipped.`);
+    }
+    if (skippedForKind > 0) {
+      warnings.push(`${skippedForKind} component(s) were excluded because they are not of kind '${ofKind}'.`);
     }
     if (skippedForSlot > 0) {
       warnings.push(`${skippedForSlot} component(s) matched by meaning but cannot legally fill that slot, and were excluded.`);

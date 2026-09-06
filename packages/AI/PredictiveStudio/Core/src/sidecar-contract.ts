@@ -17,24 +17,22 @@
  * sidecar. Embedding dimensions arrive as individual `numeric` columns; this
  * `Kind` describes the *origin* of the feature for schema/UI purposes.
  */
-export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'presence';
+export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'presence' | 'forecast';
 
 /**
- * The supported supervised-learning problem shapes. Predictive Studio is deliberately opinionated
- * (plan §1.2) — classification (yes/no, multiclass) and regression (predict a number) cover the
- * canonical use cases.
+ * The supported supervised-learning problem shapes.
  *
- * **`'sequence'` is coming and is deliberately NOT here yet.** The sidecar already trains it (the
- * `hmm` driver), and the CHECK-constraint widening is written
- * (`migrations/v6/V202609011200__v6.1.x__ML_ProblemType_Sequence.sql` + its PG twin). What is
- * missing is the step in between: until that migration is applied AND CodeGen regenerates the
- * entity types, `MJMLModelEntity.ProblemType` is still a two-value union and the database CHECK
- * still rejects a third. Widening here first would compile against entities that cannot hold the
- * value and write rows the database refuses — so the two halves move together, in the order:
- * migrate → codegen → widen this union → publish the `Sequence` / `Hidden Markov Model` component
- * types (they are seeded `Status='Draft'` for exactly this reason).
+ * `classification` (yes/no, multiclass) and `regression` (predict a number) both answer a
+ * per-RECORD question: given this record's features, what is the answer for this record.
+ * `sequence` answers a different one — given a record's history IN ORDER, which latent state is it
+ * in now. Renewal risk that builds over four quarters of declining engagement is a different shape
+ * of question from renewal risk read off one snapshot, and flattening it into per-row features
+ * discards the ordering that carried the signal.
+ *
+ * A `sequence` model is trained by the `hmm` driver, which requires the sequence boundaries saying
+ * which rows belong to which entity; see `estimators/hmm.py`.
  */
-export type ProblemType = 'classification' | 'regression';
+export type ProblemType = 'classification' | 'regression' | 'sequence';
 
 /**
  * One entry in the ordered feature schema — the inference input contract. The
@@ -219,6 +217,15 @@ export interface TrainRequest {
    * different model than the one they described.
    */
   component_artifacts?: Record<string, string>;
+  /**
+   * Sequence boundaries, REQUIRED when `problem_type` is `'sequence'`.
+   *
+   * An HMM learns transitions within one entity's history. Without knowing where one entity's rows
+   * end and the next begin it treats the whole matrix as a single sequence and learns transitions
+   * between unrelated records — returning a fitted model with confident scores that nothing
+   * downstream would question. The sidecar refuses rather than guessing.
+   */
+  sequence?: SequenceSpec;
 }
 
 /**
@@ -226,6 +233,20 @@ export interface TrainRequest {
  * driver-keyed (rather than the TypeScript-side `ComponentTypeRef` names), because the sidecar knows
  * nothing about the component tree — the caller resolves names to drivers before sending.
  */
+/**
+ * How to segment the training matrix into per-entity sequences.
+ *
+ * `group_field` names a column present in `data` but NOT in `feature_schema` — the same way
+ * `target` rides along. Rows are expected already grouped and ordered; `order_field` records what
+ * they were ordered by, so the model's lineage says it rather than leaving it implicit.
+ */
+export interface SequenceSpec {
+  /** Column identifying which entity a row belongs to (the per-entity sequence key). */
+  group_field: string;
+  /** Column the rows were ordered by within each group. Recorded for lineage. */
+  order_field?: string;
+}
+
 export interface TrainComponentNode {
   /**
    * What to build here. A structure key (`bagging`, `stacking`) composes its children; any other
@@ -293,6 +314,16 @@ export interface TrainedComponentState {
   reuse_instance_id?: string;
   /** Per-feature contribution for this node alone, when its estimator exposes one. */
   feature_importance?: FeatureImportance;
+  /**
+   * This node's OWN serialized estimator, so it can be stored as an independently reusable
+   * component and later frozen into a DIFFERENT model.
+   *
+   * Absent in the three cases where an artifact would be a lie: a frozen child (its bytes belong to
+   * the component it was loaded from), a node whose fitted estimator cannot be recovered from its
+   * parent (bagging exposes an unfitted template, not the individual bags), and anything that fails
+   * to serialize. Absent therefore means "not independently reusable" — never "look at the parent".
+   */
+  artifact_b64?: string;
 }
 
 /**
@@ -477,4 +508,104 @@ export interface DescribeFeature {
   mutual_information?: number;
   /** Most frequent values (categorical columns only), descending by count. */
   top_values?: Array<{ value: string; count: number }>;
+}
+
+// ---------------------------------------------------------------------------
+// Forecast sidecar contract (§ TimesFM design brief)
+//
+// A SECOND sidecar, deliberately: the foundation model needs torch and Python >=3.10, while the
+// tabular sidecar targets 3.9+ with a numpy/pandas pin chosen for the xgboost/lightgbm wheels.
+//
+// The unit here is a SERIES and a HORIZON, not a record and a label — which is exactly why this
+// is a distinct contract rather than another algorithm on `TrainRequest`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Quantile levels the forecaster returns at every horizon step, low to high.
+ *
+ * Fixed rather than configurable because the two upstream APIs disagree — TimesFM 2.5 returns ten
+ * columns with the mean at index 0, 3.0 returns nine quantiles — and a caller should not have to
+ * know which checkpoint answered. The sidecar maps whichever it got onto this list.
+ */
+export const FORECAST_QUANTILE_LEVELS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9] as const;
+
+/** One series to forecast. */
+export interface ForecastSeries {
+  /**
+   * Caller-chosen identifier echoed back on the result, so a batch of series can be matched up
+   * without relying on array position.
+   */
+  Key: string;
+  /**
+   * The historical values, oldest first, ending AT the as-of cutoff. The caller is responsible for
+   * that cutoff: the sidecar cannot know which points are in the future, so a context assembled
+   * past the cutoff is a leak the model has no way to detect.
+   */
+  Context: number[];
+}
+
+/** `POST /forecast` request body. */
+export interface ForecastRequest {
+  /** The series to forecast. Batched because a population-scale assembly asks for many at once. */
+  Series: ForecastSeries[];
+  /** How many steps ahead to predict. */
+  Horizon: number;
+  /**
+   * Checkpoint to run. Defaults to the 2.5 weights, which are Apache-2.0 and the only ones
+   * licensed for production; `timesfm-3.0` weights are non-commercial and evaluation-only.
+   */
+  Checkpoint?: ForecastCheckpoint;
+  /**
+   * Refuse a series shorter than this many points instead of forecasting it. Defaults to
+   * {@link FORECAST_MIN_CONTEXT}. A refusal is reported per-series, never silently imputed.
+   */
+  MinContext?: number;
+}
+
+/** Supported checkpoints. 3.0 is evaluation-only — its weights are not licensed for production. */
+export type ForecastCheckpoint = 'timesfm-2.5-200m' | 'timesfm-3.0-200m';
+
+/**
+ * The shortest context the model can honestly forecast from.
+ *
+ * The input patch is 32 steps, so a shorter series is below the model's own resolution: it will
+ * still return a confident-looking band, and that band means nothing. Enforced as a refusal
+ * rather than a warning because a quiet, tight band around noise is worse than a null.
+ */
+export const FORECAST_MIN_CONTEXT = 32;
+
+/** One series' forecast, or the reason there isn't one. */
+export interface ForecastResult {
+  /** Echoes {@link ForecastSeries.Key}. */
+  Key: string;
+  /** Median (p50) at each horizon step, length = `Horizon`. Null when `Refused` is set. */
+  Median: number[] | null;
+  /**
+   * Quantiles at each horizon step: `Quantiles[step][q]`, aligned to
+   * {@link FORECAST_QUANTILE_LEVELS}. Null when `Refused` is set.
+   */
+  Quantiles: number[][] | null;
+  /** Plain reason this series was not forecast (too short, all-constant, non-finite), else null. */
+  Refused: string | null;
+}
+
+/** `POST /forecast` response body. */
+export interface ForecastResponse {
+  Results: ForecastResult[];
+  /** The checkpoint that actually answered — pinned into model Lineage by the caller. */
+  Checkpoint: ForecastCheckpoint;
+  /** Whether that checkpoint's weights are licensed for production use. */
+  ProductionLicensed: boolean;
+  DurationMs: number;
+}
+
+/** `GET /health` on the forecast sidecar. */
+export interface ForecastHealthResponse {
+  Status: 'ok';
+  /** Checkpoints whose weights are present locally and loadable. */
+  AvailableCheckpoints: ForecastCheckpoint[];
+  /** False when the timesfm package is not installed — the service runs but cannot forecast. */
+  ModelAvailable: boolean;
+  /** Why forecasting is unavailable, when it is. */
+  Unavailable: string | null;
 }

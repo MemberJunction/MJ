@@ -78,3 +78,102 @@ describe('modelingPlanToPipelineConfig', () => {
     expect(() => modelingPlanToPipelineConfig(baseSpec({ ProposedExperiments: [] }))).toThrow(/ProposedExperiment/);
   });
 });
+
+describe('modelingPlanToPipelineConfig — carrying a compose decision through', () => {
+  const GRAPH = {
+    ComponentTypeRef: 'Bagging Wrapper',
+    Children: [{ ComponentTypeRef: 'Random Forest', SlotName: 'base_estimator' }],
+  };
+
+  it('carries the architecture\'s composed graph onto the pipeline config', () => {
+    const cfg = modelingPlanToPipelineConfig(
+      baseSpec({
+        Architecture: {
+          Decision: 'compose',
+          Rationale: 'a bagged forest suits the variance here',
+          Candidates: [{ ComponentTypeRef: 'Bagging Wrapper', Rationale: 'reduces variance' }],
+          ComposedGraph: GRAPH,
+        },
+      } as never),
+    );
+
+    // Without this the gate approves a compose decision and a bare single-algorithm model trains,
+    // while the plan, the leaderboard and the model row all say a composed one was built.
+    expect(cfg.componentGraph).toEqual(GRAPH);
+  });
+
+  it("prefers the chosen experiment's own graph over the plan-level one", () => {
+    const perExperiment = { ComponentTypeRef: 'Stacking Wrapper', Children: [] };
+    const cfg = modelingPlanToPipelineConfig(
+      baseSpec({
+        Architecture: { Decision: 'compose', Rationale: 'x', Candidates: [], ComposedGraph: GRAPH },
+        ProposedExperiments: [
+          { Label: 'Stack', AlgorithmName: 'logistic_regression', FeatureSet: ['AutoRenew'], Rationale: 'r', Priority: 1, ComponentGraph: perExperiment },
+        ],
+      } as never),
+    );
+
+    // The combination search proposes a graph per candidate; that is more specific than the plan's.
+    expect(cfg.componentGraph).toEqual(perExperiment);
+  });
+
+  it('refuses a compose decision that describes no composition', () => {
+    expect(() =>
+      modelingPlanToPipelineConfig(
+        baseSpec({ Architecture: { Decision: 'compose', Rationale: 'x', Candidates: [] } } as never),
+      ),
+    ).toThrow(/carries no ComposedGraph/);
+  });
+
+  it('leaves an ordinary single-family plan with no graph', () => {
+    expect(modelingPlanToPipelineConfig(baseSpec()).componentGraph).toBeNull();
+    expect(
+      modelingPlanToPipelineConfig(
+        baseSpec({ Architecture: { Decision: 'commit', Rationale: 'clear', Candidates: [{ ComponentTypeRef: 'Random Forest', Rationale: 'r' }] } } as never),
+      ).componentGraph,
+    ).toBeNull();
+  });
+});
+
+describe('modelingPlanToPipelineConfig — a reify decision picks from what it reified', () => {
+  const reify = (candidates: string[], parent = 'Tree Ensemble') => ({
+    Decision: 'reify',
+    Rationale: 'these are all variations of one family',
+    Candidates: candidates.map((c) => ({ ComponentTypeRef: c, Rationale: 'variation' })),
+    ReifiedUnderComponentTypeRef: parent,
+  });
+
+  it('builds a candidate the decision actually named, not merely the top-priority experiment', () => {
+    const cfg = modelingPlanToPipelineConfig(
+      baseSpec({
+        // 'logistic_regression' has the better priority but is NOT one of the reified variations.
+        Architecture: reify(['random_forest']),
+      } as never),
+    );
+
+    expect(cfg.algorithmName).toBe('random_forest');
+  });
+
+  it('still respects priority among the candidates it reified', () => {
+    const cfg = modelingPlanToPipelineConfig(
+      baseSpec({ Architecture: reify(['random_forest', 'logistic_regression']) } as never),
+    );
+
+    expect(cfg.algorithmName).toBe('logistic_regression');
+  });
+
+  it('refuses when no experiment matches the family it reified', () => {
+    expect(() =>
+      modelingPlanToPipelineConfig(baseSpec({ Architecture: reify(['xgboost', 'lightgbm']) } as never)),
+    ).toThrow(/no ProposedExperiment names any of them/);
+  });
+
+  it('leaves commit and defer picking by priority as before', () => {
+    expect(modelingPlanToPipelineConfig(baseSpec()).algorithmName).toBe('logistic_regression');
+    expect(
+      modelingPlanToPipelineConfig(
+        baseSpec({ Architecture: { Decision: 'defer', Rationale: 'r', Candidates: [] } } as never),
+      ).algorithmName,
+    ).toBe('logistic_regression');
+  });
+});

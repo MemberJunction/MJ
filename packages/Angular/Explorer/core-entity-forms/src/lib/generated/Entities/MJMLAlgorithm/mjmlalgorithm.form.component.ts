@@ -19,6 +19,7 @@ export class MJMLAlgorithmFormComponent extends BaseFormComponent {
             { sectionKey: 'algorithmOverview', sectionName: 'Algorithm Overview', isExpanded: true },
             { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
             { sectionKey: 'capabilities', sectionName: 'Capabilities', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
             { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false },

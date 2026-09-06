@@ -18,7 +18,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -144,7 +144,7 @@
   {
     "fields": {
       "Name": "Apollo - Create List",
-      "Description": "Creates an Apollo list (label) idempotently \u2014 an existing label with the same name is reused rather than duplicated, because Apollo will happily create two labels with one name.",
+      "Description": "Creates an Apollo list (label) idempotently — an existing label with the same name is reused rather than duplicated, because Apollo will happily create two labels with one name.",
       "DriverClass": "ApolloCreateListAction",
       "Type": "Custom",
       "Status": "Active",
@@ -175,7 +175,7 @@
             "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "'contacts' (default) or 'accounts' \u2014 Apollo rejects a mismatched modality on later use. Echoed back as an output carrying the modality the label actually has, which differs from the input when an existing label was reused.",
+            "Description": "'contacts' (default) or 'accounts' — Apollo rejects a mismatched modality on later use. Echoed back as an output carrying the modality the label actually has, which differs from the input when an existing label was reused.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -189,7 +189,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -345,7 +345,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Exact label name. Required \u2014 run Apollo - Get Lists to see them.",
+            "Description": "Exact label name. Required — run Apollo - Get Lists to see them.",
             "IsRequired": true
           },
           "primaryKey": {
@@ -403,7 +403,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -598,7 +598,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Exact label name. Required \u2014 run Apollo - Get Lists to see them.",
+            "Description": "Exact label name. Required — run Apollo - Get Lists to see them.",
             "IsRequired": true
           },
           "primaryKey": {
@@ -656,7 +656,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -835,7 +835,7 @@
   {
     "fields": {
       "Name": "Apollo - Search People",
-      "Description": "Searches Apollo's people database for net-new prospects by organization, title and seniority. Does NOT return emails or phones \u2014 that is Apollo's design for this endpoint. At least one filter should be supplied; Apollo accepts a request with none and returns an unhelpfully broad result.",
+      "Description": "Searches Apollo's people database for net-new prospects by organization, title and seniority. Does NOT return emails or phones — that is Apollo's design for this endpoint. At least one filter should be supplied; Apollo accepts a request with none and returns an unhelpfully broad result.",
       "DriverClass": "ApolloSearchPeopleAction",
       "Type": "Custom",
       "Status": "Active",
@@ -937,7 +937,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -951,7 +951,7 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Matching people. No email or phone \u2014 see the description.",
+            "Description": "Matching people. No email or phone — see the description.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1088,7 +1088,7 @@
   {
     "fields": {
       "Name": "Apollo - Move List Accounts",
-      "Description": "Moves accounts from one Apollo list to another. Labels are full-replace in Apollo, so the add is performed BEFORE the remove \u2014 a failed add can then never strip the source label. Reads page 1 of the source list only; ids not found there are reported in NotOnSourcePage rather than treated as failures.",
+      "Description": "Moves accounts from one Apollo list to another. Labels are full-replace in Apollo, so the add is performed BEFORE the remove — a failed add can then never strip the source label. Reads page 1 of the source list only; ids not found there are reported in NotOnSourcePage rather than treated as failures.",
       "DriverClass": "ApolloMoveListAccountsAction",
       "Type": "Custom",
       "Status": "Active",
@@ -1146,7 +1146,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1188,7 +1188,7 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Number whose write SUCCEEDED but which Apollo did not appear to honour. Not failures \u2014 Apollo silently ignores some removes.",
+            "Description": "Number whose write SUCCEEDED but which Apollo did not appear to honour. Not failures — Apollo silently ignores some removes.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1255,7 +1255,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "PARTIAL_FAILURE",
             "IsSuccess": false,
-            "Description": "Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage \u2014 a partial move is NOT rolled back."
+            "Description": "Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage — a partial move is NOT rolled back."
           },
           "primaryKey": {
             "ID": "97885C61-BAAA-4080-8807-4F917F9D9FC9"
@@ -1336,7 +1336,7 @@
   {
     "fields": {
       "Name": "Apollo - Move List Contacts",
-      "Description": "Moves contacts from one Apollo list to another. Labels are full-replace in Apollo, so the add is performed BEFORE the remove \u2014 a failed add can then never strip the source label. Reads page 1 of the source list only; ids not found there are reported in NotOnSourcePage rather than treated as failures.",
+      "Description": "Moves contacts from one Apollo list to another. Labels are full-replace in Apollo, so the add is performed BEFORE the remove — a failed add can then never strip the source label. Reads page 1 of the source list only; ids not found there are reported in NotOnSourcePage rather than treated as failures.",
       "DriverClass": "ApolloMoveListContactsAction",
       "Type": "Custom",
       "Status": "Active",
@@ -1394,7 +1394,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1436,7 +1436,7 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Number whose write SUCCEEDED but which Apollo did not appear to honour. Not failures \u2014 Apollo silently ignores some removes.",
+            "Description": "Number whose write SUCCEEDED but which Apollo did not appear to honour. Not failures — Apollo silently ignores some removes.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1503,7 +1503,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "PARTIAL_FAILURE",
             "IsSuccess": false,
-            "Description": "Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage \u2014 a partial move is NOT rolled back."
+            "Description": "Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage — a partial move is NOT rolled back."
           },
           "primaryKey": {
             "ID": "6A0B6E39-A3DF-4FCF-83FB-E3E81FAED2A5"

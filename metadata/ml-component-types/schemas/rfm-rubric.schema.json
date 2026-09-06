@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RFM Rubric",
+  "description": "Narrows the Glass-Box Rubric to the three RFM roles. The STRUCTURE is fixed (which measures, which direction each runs); the weights stay the operator's, because how much recency matters relative to spend is a business judgment and not something this archetype can know.",
+  "type": "object",
+  "properties": {
+    "mode": { "type": "string", "enum": ["given", "search"], "default": "given" },
+    "weights": {
+      "type": "object",
+      "description": "The three RFM roles. Bind each to a real signal when instantiating: recency to an As-Of Recency measure, frequency to an As-Of Count, monetary to an As-Of Sum.",
+      "properties": {
+        "recency": { "type": "number", "minimum": 0 },
+        "frequency": { "type": "number", "minimum": 0 },
+        "monetary": { "type": "number", "minimum": 0 }
+      },
+      "required": ["recency", "frequency", "monetary"],
+      "additionalProperties": false
+    },
+    "weight_modes": { "type": "object", "additionalProperties": { "type": "string", "enum": ["Additive", "Multiplier", "Gate", "Penalty", "Bonus"] } },
+    "contribution_cap": { "type": "object", "additionalProperties": { "type": "number" } },
+    "contribution_floor": { "type": "object", "additionalProperties": { "type": "number" } },
+    "missing_data_policy": { "type": "object", "additionalProperties": { "type": "string", "enum": ["Zero", "NeutralMidpoint", "Exclude"] } },
+    "scale_min": { "type": "number", "default": 0 },
+    "scale_max": { "type": "number", "default": 100 },
+    "class_threshold": { "type": "number" }
+  },
+  "required": ["mode", "weights"],
+  "additionalProperties": false
+}

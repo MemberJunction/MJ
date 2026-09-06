@@ -28,12 +28,20 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
   selector: 'mj-ps-predictions-resource',
   template: `
     <mj-page-header-interior
-      [Title]="view === 'workspace' ? (selected?.title ?? 'Prediction') : 'Predictions'"
-      [Subtitle]="view === 'workspace' ? 'Who to focus on, how much to trust it, and what to do next' : 'Ready-to-use predictions for your members'">
+      [Title]="headerTitle"
+      [Subtitle]="headerSubtitle">
       <div actions>
         @if (view === 'catalog') {
+          <button mjButton variant="secondary" size="sm" data-testid="ps-open-ask" (click)="openAsk()">
+            <i class="fa-solid fa-comment"></i> Ask a question
+          </button>
           <button mjButton variant="primary" size="sm" data-testid="ps-new-prediction" (click)="newPrediction()">
             <i class="fa-solid fa-plus"></i> New prediction
+          </button>
+        }
+        @if (view === 'ask') {
+          <button mjButton variant="secondary" size="sm" data-testid="ps-ask-back" (click)="backToCatalog()">
+            <i class="fa-solid fa-arrow-left"></i> Back to predictions
           </button>
         }
       </div>
@@ -53,6 +61,11 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
       } @else {
         <div class="ps-biz-host" [class.chat-open]="chatOpen">
           <div class="ps-biz-main">
+            <!-- ───────── ASK ───────── -->
+            @if (view === 'ask') {
+              <ps-ask [engine]="engine" [Provider]="ProviderToUse"></ps-ask>
+            }
+
             <!-- ───────── CATALOG ───────── -->
             @if (view === 'catalog') {
               @if (cards.length === 0) {
@@ -303,7 +316,33 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   private readonly cdrLocal = inject(ChangeDetectorRef);
 
   /** catalog (the home grid) ↔ workspace (a selected prediction). */
-  public view: 'catalog' | 'workspace' = 'catalog';
+  public view: 'catalog' | 'workspace' | 'ask' = 'catalog';
+
+  /**
+   * Ask is a peer of the catalogue, not a section buried in the analyst workbench.
+   *
+   * Someone who arrives with a question ("why do members lapse?") is on the business door already;
+   * making them cross into Studio and learn the word "component" to get an answer is exactly the
+   * shape problem this view exists to fix.
+   */
+  public openAsk(): void {
+    this.view = 'ask';
+    this.cdr.detectChanges();
+  }
+
+  /** Header title for the current view. */
+  public get headerTitle(): string {
+    if (this.view === 'workspace') return this.selected?.title ?? 'Prediction';
+    return this.view === 'ask' ? 'Ask' : 'Predictions';
+  }
+
+  /** Header subtitle for the current view. */
+  public get headerSubtitle(): string {
+    if (this.view === 'workspace') return 'Who to focus on, how much to trust it, and what to do next';
+    return this.view === 'ask'
+      ? 'What you can measure, and what you have already learned'
+      : 'Ready-to-use predictions for your members';
+  }
   public selected: BusinessPredictionCard | null = null;
   public chatOpen = false;
   public pendingPrompt: string | null = null;

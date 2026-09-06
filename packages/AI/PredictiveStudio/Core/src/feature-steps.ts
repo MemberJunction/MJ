@@ -23,7 +23,8 @@ export type FeatureStepKind =
   | 'llm-derived'
   | 'flow-agent'
   | 'vision-llm'
-  | 'action';
+  | 'action'
+  | 'forecast';
 
 /**
  * Fields shared by every step in the DAG. `Inputs` lists the ids of upstream
@@ -280,7 +281,57 @@ export type FeatureStep =
   | LLMDerivedFeatureStep
   | FlowAgentFeatureStep
   | VisionLLMFeatureStep
-  | ActionFeatureStep;
+  | ActionFeatureStep
+  | ForecastFeatureStep;
+
+
+/**
+ * `forecast` — **time-series foundation model as feature** (TimesFM).
+ *
+ * For each row, the dated rows belonging to that record are ordered and cut at the as-of date,
+ * that history is handed to the forecast sidecar, and the returned band becomes feature columns:
+ * the median at the horizon, the p10/p90 bounds, and the slope from the last observed value.
+ *
+ * Like `embedding` and `vision-llm`, this is a **per-row, stateless extraction** — the model is
+ * zero-shot, nothing is fitted, so it produces RAW columns directly and is exempt from the
+ * fit-once/apply-everywhere split. What it adds over `As-Of Trend Slope` (a regression over recent
+ * history) is a *learned, probabilistic* view: a band rather than a line.
+ *
+ * The context ends at the as-of cutoff by construction, so this inherits the existing leakage
+ * boundary rather than needing a new one. What it does NOT inherit is a guarantee that the context
+ * is long enough to mean anything — a series below the model's 32-step input patch yields nulls,
+ * never a confident band around noise.
+ */
+export interface ForecastFeatureStep extends FeatureStepBase {
+  Kind: 'forecast';
+  /** Entity holding the dated rows that form the series (e.g. an Activities entity). */
+  SourceEntity: string;
+  /** Column on those rows referencing the target record's primary key. */
+  ForeignKeyField: string;
+  /** Date column used to order the series and to apply the as-of cut. */
+  DateField: string;
+  /** Numeric column being forecast. Omit to forecast the COUNT of rows per bucket. */
+  ValueField?: string;
+  /** Bucket width in days — the series is aggregated to one point per bucket before forecasting. */
+  BucketDays: number;
+  /** How many buckets ahead to forecast. The emitted values are taken at the final step. */
+  Horizon: number;
+  /**
+   * Prefix for the emitted columns: `<Prefix>_p50`, `_p10`, `_p90`, `_slope`. Named rather than
+   * derived so a pipeline can carry two forecasts over different sources without collision.
+   */
+  OutputPrefix: string;
+  /**
+   * Checkpoint to run. Defaults to the 2.5 weights — the only ones licensed for production. Pinned
+   * into the model's Lineage so scoring uses the same weights that training saw.
+   */
+  Checkpoint?: string;
+  /**
+   * Minimum context length. Below this the row's forecast columns are null rather than a band the
+   * model cannot honestly produce. Defaults to the model's 32-step input patch.
+   */
+  MinContext?: number;
+}
 
 /**
  * The whole feature-engineering DAG for a pipeline — the frozen spec the

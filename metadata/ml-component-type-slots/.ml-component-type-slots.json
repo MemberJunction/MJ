@@ -1,6 +1,24 @@
 [
   {
     "fields": {
+      "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Model",
+      "Name": "inputs",
+      "AcceptsComponentTypeID": "@lookup:MJ: ML Component Types.Name=Input",
+      "MinCount": 0,
+      "Description": "The inputs the model reads. Declared on the abstract Model root because it holds for every descendant without exception — a model with no inputs is not a model. Unbounded, and each filled position is a component in its own right, so an input carries its own story and can be found and reused on meaning rather than on column name.",
+      "Sequence": 0,
+      "MaxCount": null
+    },
+    "primaryKey": {
+      "ID": "A26A6649-2362-43DB-92D6-FCAE5FA62D7D"
+    },
+    "sync": {
+      "lastModified": "2026-09-02T21:12:06.068Z",
+      "checksum": "158f7fb8a19c35eaba9401cd09e4dbb4126513c393ea6572b948d540b8c9eef4"
+    }
+  },
+  {
+    "fields": {
       "ComponentTypeID": "@lookup:MJ: ML Component Types.Name=Glass-Box Rubric",
       "Name": "weights",
       "AcceptsComponentTypeID": "@lookup:MJ: ML Component Types.Name=Weight Set",

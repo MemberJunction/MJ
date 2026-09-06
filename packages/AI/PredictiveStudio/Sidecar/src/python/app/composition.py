@@ -20,6 +20,7 @@ Three deliberate positions:
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from sklearn.base import BaseEstimator
@@ -32,6 +33,8 @@ from sklearn.ensemble import (
 
 from . import algorithms, artifacts
 from .schemas import TrainComponentNode, TrainedComponentState
+
+LOGGER = logging.getLogger(__name__)
 
 #: Structure drivers, and the slots each one accepts. A structure composes its children; any other
 #: driver is a leaf, looked up in the estimator registry.
@@ -298,6 +301,7 @@ def _describe(
             fitted=not frozen,
             reuse_instance_id=node.reuse_instance_id,
             feature_importance=_importance_of(estimator, output_columns),
+            artifact_b64=None if frozen else _node_artifact(estimator),
         )
     )
     for child, child_estimator in _child_pairs(node, estimator):
@@ -323,6 +327,37 @@ def _child_pairs(node: TrainComponentNode, estimator: Any) -> List[Tuple[TrainCo
                 i += 1
         return pairs
     return [(c, None) for c in children]
+
+
+def _node_artifact(estimator: Any) -> Optional[str]:
+    """This node's own estimator, serialized so it can be reused independently of its parent.
+
+    The point of the whole component model: a sub-estimator that learned a real relationship should
+    be droppable into a DIFFERENT model's slot, rather than existing only inside the parent it was
+    trained in. That requires the child's own bytes, not the parent's.
+
+    Returns ``None`` — never a placeholder — in the two cases where an artifact would be a lie:
+    the estimator could not be recovered from the parent (bagging exposes its unfitted template,
+    not the individual bags), or it cannot be serialized. A caller must treat ``None`` as "this node
+    is not independently reusable", which is exactly what it means.
+    """
+    if estimator is None:
+        return None
+    # A frozen child's bytes belong to the component it was loaded from; re-storing them here would
+    # fork one trained thing into two rows that drift apart.
+    inner = estimator.estimator if isinstance(estimator, FrozenEstimator) else estimator
+    if not hasattr(inner, "predict"):
+        return None
+    try:
+        # Fitted estimators carry trailing-underscore attributes; an unfitted template does not, and
+        # storing one would advertise a trained part that never learned anything.
+        if not any(a.endswith("_") and not a.startswith("__") for a in vars(inner)):
+            return None
+        artifact_b64, _ = artifacts.serialize_envelope(inner, {}, [])
+        return artifact_b64
+    except Exception:  # noqa: BLE001 - a node that cannot be serialized is simply not reusable
+        LOGGER.warning("Could not serialize a composed node for reuse; it will not be independently reusable.")
+        return None
 
 
 def _importance_of(estimator: Any, output_columns: List[str]) -> Optional[Dict[str, float]]:

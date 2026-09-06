@@ -19,6 +19,7 @@ import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AIPromp
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import type { PredictiveStudioBuilderPayload, PredictiveStudioBuildOutcome } from './pipeline-builder-agent';
 import { shouldForceStatisticsPass, type PredictiveStudioStatisticsPayload } from './statistics-pass-agent';
+import { shouldForceArchitect, type PredictiveStudioArchitecturePayload } from './architect-forcing';
 
 /** The minimal payload slice the build decision reads (so it's callable with a partial in tests). */
 type BuildDecisionState = { Approved?: boolean; BuildResult?: PredictiveStudioBuildOutcome; BuildAttemptUserMessageCount?: number };
@@ -28,6 +29,11 @@ export const PIPELINE_BUILDER_SUBAGENT_NAME = 'Pipeline Builder';
 const BUILD_MESSAGE = 'The plan is approved — build the pipeline, train it, and apply the publish gate now.';
 
 /** The sub-agent NAME the orchestrator forces to before the architecture is chosen (matches the metadata). */
+export const ARCHITECT_SUBAGENT_NAME = 'Architect';
+const ARCHITECT_MESSAGE =
+  'The statistics and gate reports are in the payload. Decide the architecture now and write your ' +
+  'Architecture slice — commit, defer, reify or compose.';
+
 export const STATISTICS_PASS_SUBAGENT_NAME = 'Statistics Pass';
 const STATISTICS_MESSAGE =
   'Measure the data before we choose an approach: describe the training rows, flag suspicious inputs, ' +
@@ -82,6 +88,22 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
       // re-fire for the SAME message, while a fresh user message still gets a retry.
       const stamped = { ...(statsPayload ?? {}), StatisticsAttemptUserMessageCount: userMessageCount } as unknown as P;
       return this.buildSubAgentStep(STATISTICS_PASS_SUBAGENT_NAME, STATISTICS_MESSAGE, stamped);
+    }
+
+    // Decide the architecture BEFORE building. Reached only by LLM routing before, so a build could
+    // proceed having never consulted the Architect at all — and the resulting plan was
+    // indistinguishable from one predating it.
+    const archPayload = currentPayload as PredictiveStudioArchitecturePayload | undefined;
+    if (shouldForceArchitect(archPayload, userMessageCount)) {
+      // Stamp for the same reason the statistics pass does: an Architect that returns nothing must
+      // not re-fire for the SAME message, while a fresh user message still gets a retry. The flag
+      // is what makes a silent no-op visible to the gate afterwards.
+      const stamped = {
+        ...(archPayload ?? {}),
+        ArchitectureAttemptUserMessageCount: userMessageCount,
+        ArchitectureAttempted: true,
+      } as unknown as P;
+      return this.buildSubAgentStep(ARCHITECT_SUBAGENT_NAME, ARCHITECT_MESSAGE, stamped);
     }
 
     if (shouldForceBuild(payload, this.lastUserMessageText(params), userMessageCount)) {

@@ -15,16 +15,33 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
 // Import Generated Components
-
+import { demoActivityFormComponent } from "./Entities/demoActivity/demoactivity.form.component";
+import { demoMemberFormComponent } from "./Entities/demoMember/demomember.form.component";
    
 
+@NgModule({
+declarations: [
+    demoActivityFormComponent,
+    demoMemberFormComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    BaseFormsModule,
+    EntityViewerModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_0 { }
+    
 
 
 @NgModule({
 declarations: [
 ],
 imports: [
-    
+    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }

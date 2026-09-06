@@ -76,7 +76,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Include articles with no publish date. Default false \u2014 an undated article cannot be age-filtered.",
+            "Description": "Include articles with no publish date. Default false — an undated article cannot be age-filtered.",
             "IsRequired": false
           },
           "primaryKey": {

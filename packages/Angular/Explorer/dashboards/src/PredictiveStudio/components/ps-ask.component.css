@@ -1,0 +1,71 @@
+.ps-ask { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── the question ─────────────────────────────────────────────────── */
+.ps-ask .mode-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.ps-ask .mode {
+  padding: 7px 14px; border-radius: 999px; border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface); color: var(--mj-text-secondary);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .12s;
+}
+.ps-ask .mode:hover { background: var(--mj-bg-surface-hover); }
+.ps-ask .mode.on { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: var(--mj-text-inverse); }
+
+.ps-ask .ask-row { display: flex; gap: 10px; align-items: center; }
+.ps-ask .ask-input,
+.ps-ask .ask-textarea {
+  flex: 1; padding: 10px 14px; border-radius: 8px;
+  border: 1px solid var(--mj-border-default); background: var(--mj-bg-input);
+  color: var(--mj-text-primary); font-size: 14px; font-family: inherit;
+}
+.ps-ask .ask-textarea { width: 100%; margin-bottom: 12px; resize: vertical; line-height: 1.5; }
+.ps-ask .ask-input:focus, .ps-ask .ask-textarea:focus { outline: 2px solid var(--mj-brand-primary); outline-offset: -1px; }
+
+.ps-ask .suggestions { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ps-ask .suggestion {
+  padding: 4px 10px; border-radius: 999px; border: 1px dashed var(--mj-border-default);
+  background: transparent; color: var(--mj-text-secondary); font-size: 11.5px; cursor: pointer;
+}
+.ps-ask .suggestion:hover { background: var(--mj-bg-surface-hover); border-style: solid; }
+
+/* ── the answer ───────────────────────────────────────────────────── */
+.ps-ask .headline { font-size: 15px; font-weight: 600; color: var(--mj-text-primary); padding: 0 2px; }
+.ps-ask .answer-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .ps-ask .answer-split { grid-template-columns: 1fr; } }
+
+.ps-ask .list { display: flex; flex-direction: column; gap: 14px; }
+.ps-ask .row { display: flex; flex-direction: column; gap: 5px; }
+.ps-ask .row + .row { border-top: 1px solid var(--mj-border-subtle); padding-top: 14px; }
+.ps-ask .row-head { display: flex; gap: 8px; align-items: center; }
+.ps-ask .row-name { font-weight: 600; font-size: 13.5px; color: var(--mj-text-primary); }
+.ps-ask .row-kind { font-style: italic; }
+.ps-ask .row-desc, .ps-ask .row-statement { font-size: 13px; color: var(--mj-text-primary); line-height: 1.45; }
+.ps-ask .row-statement { font-weight: 500; }
+
+.ps-ask .tag {
+  padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600;
+  background: var(--mj-bg-surface-hover); color: var(--mj-text-secondary); border: 1px solid var(--mj-border-subtle);
+}
+/* Only a tested intervention supports acting; it is the one tag that earns emphasis. */
+.ps-ask .tag-strong { background: color-mix(in srgb, var(--mj-status-success-text) 14%, transparent); color: var(--mj-status-success-text); border-color: transparent; }
+
+.ps-ask .fact-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.ps-ask .bar { height: 3px; border-radius: 2px; background: var(--mj-bg-surface-hover); overflow: hidden; margin-top: 3px; }
+.ps-ask .bar-fill { height: 100%; background: var(--mj-brand-primary); }
+
+.ps-ask .empty-card .ps-card-body,
+.ps-ask .error-card .ps-card-body { display: flex; gap: 12px; align-items: flex-start; font-size: 13px; line-height: 1.5; }
+.ps-ask .empty-card i { color: var(--mj-text-secondary); margin-top: 2px; }
+.ps-ask .error-card i { color: var(--mj-status-error-text); margin-top: 2px; }
+
+/* ── the diagnosis ────────────────────────────────────────────────── */
+.ps-ask .objective .next-step { font-size: 12px; color: var(--mj-text-secondary); line-height: 1.45; }
+.ps-ask .verdict {
+  padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: var(--mj-bg-surface-hover); color: var(--mj-text-secondary);
+}
+.ps-ask .verdict[data-tone='good'] { background: color-mix(in srgb, var(--mj-status-success-text) 14%, transparent); color: var(--mj-status-success-text); }
+.ps-ask .verdict[data-tone='partial'] { background: color-mix(in srgb, var(--mj-status-warning-text) 16%, transparent); color: var(--mj-status-warning-text); }
+/* A gap is neutral, not alarming: it usually means "not described yet", not "broken". */
+.ps-ask .verdict[data-tone='gap'] { background: var(--mj-bg-surface-hover); color: var(--mj-text-secondary); }
+.ps-ask .verdict[data-tone='unknown'] { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); }

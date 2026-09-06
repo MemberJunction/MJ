@@ -68,6 +68,7 @@ const STEP_ICONS: Record<FeatureStepKind, string> = {
   embedding: 'fa-solid fa-vector-square',
   'llm-derived': 'fa-solid fa-wand-magic-sparkles',
   'flow-agent': 'fa-solid fa-robot',
+  forecast: 'fa-solid fa-chart-line',
   // Code as a feature — a padlock, because an Action reaches the matrix only once approved.
   action: 'fa-solid fa-code',
   'vision-llm': 'fa-solid fa-eye',
@@ -693,6 +694,20 @@ export class PSPipelinesComponent implements OnInit {
       case 'flow-agent': return { ...base, Kind: 'flow-agent', FlowAgentRef: '', InputMapping: {}, OutputMapping: {} };
       case 'vision-llm': return { ...base, Kind: 'vision-llm', ImageColumn: '', Prompt: { InlinePrompt: '' }, Output: { FeatureName: '', Kind: 'category' } };
       case 'action': return { ...base, Kind: 'action', ActionRef: '', FeatureName: '' };
+      case 'forecast':
+        // A time-series foundation model as a feature extractor. Weekly buckets by default: the
+        // model's input patch is 32 steps, so a daily bucket over a short history would be refused
+        // and a monthly one would rarely clear the floor.
+        return {
+          ...base,
+          Kind: 'forecast',
+          SourceEntity: '',
+          ForeignKeyField: '',
+          DateField: '',
+          BucketDays: 7,
+          Horizon: 13,
+          OutputPrefix: id,
+        };
     }
   }
 

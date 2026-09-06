@@ -57,6 +57,10 @@ export async function createTrainingPipeline(
   pipeline.DatedSources = config.datedSources?.length ? JSON.stringify(config.datedSources) : null;
   // Without this the plan's proposed hyperparameters never reach TrainingEngine, which reads them
   // from this column — every model would train at the algorithm's defaults regardless.
+  // The composition, when there is one. Without this the pipeline describes a single algorithm and
+  // `TrainingEngine` has nothing to compose — the decision that authorized a custom structure would
+  // vanish between the plan and the model.
+  pipeline.ComponentGraph = config.componentGraph ? JSON.stringify(config.componentGraph) : null;
   pipeline.Hyperparameters = JSON.stringify(config.hyperparameters ?? {});
   pipeline.LeakageGuard = JSON.stringify(config.leakageGuard);
   pipeline.ValidationStrategy = JSON.stringify(config.validation);

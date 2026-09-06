@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio: Capability Coverage Judge",
+      "Description": "Decides, per objective in a client's own strategy document, whether a shortlisted signal actually MEASURES it and whether a shortlisted finding says anything about it. The second half of a deliberate two-stage design: embedding similarity shortlists candidates and is measurably unable to tell coverage from coincidence (on live data an objective about a parking-structure lease outranked one about member engagement), so relevance is judged from the candidates' own prose instead. The judge chooses only among candidates retrieval already found and cannot invent a signal; the structural half of each verdict — whether a signal or a finding exists at all — is enforced in code afterwards, so a persuasive sentence cannot collapse the two axes. Anything malformed degrades to Undetermined rather than to a guess.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/predictive-studio/capability-coverage-judge.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/predictive-studio/capability-coverage-judge.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "130FC590-5C9A-4F0D-8696-BA795A272324"
+    },
+    "sync": {
+      "lastModified": "2026-09-03T23:49:21.753Z",
+      "checksum": "7fd367da4bb52fe5d187507888ee0fb31ec917ef665049465d97c3c9b94d00ef"
+    }
+  }
+]

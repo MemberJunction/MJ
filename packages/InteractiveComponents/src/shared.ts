@@ -375,6 +375,39 @@ export interface SimpleMLListModelsFilter {
  * NOTE: the owning `ComponentUtilities.ml` property may be `undefined` when this capability is not
  * available in the current environment/security context — component code must guard for that.
  */
+/** A signal available to a component — a proven measure it can compute. */
+export interface SimpleMLSignalInfo {
+    /** `MJ: ML Components` id, passed back to {@link SimpleMLTools.computeSignal}. */
+    id: string;
+    /** The measure's own name, without the model that produced it. */
+    name: string;
+    /** The kind of measure — e.g. `As-Of Count`, `As-Of Recency`, `Column`, `Forecast`. */
+    type: string;
+    /** What it measures, in business language, as written when its model was published. */
+    story: string | null;
+    /** Whether it can be pointed at a different population; false for kinds that cannot be rebound. */
+    rebindable: boolean;
+}
+
+/** Substitutions that point a signal at a different population. Omitted fields keep its default. */
+export interface SimpleMLSignalBinding {
+    sourceEntity?: string;
+    foreignKeyField?: string;
+    dateField?: string;
+    valueField?: string;
+    column?: string;
+}
+
+/** The outcome of computing a signal. */
+export interface SimpleMLComputeSignalResult {
+    success: boolean;
+    /** The column the values were computed into. */
+    outputColumn: string;
+    /** One entry per measured record. */
+    values: Array<{ recordId: string; value: number | string | boolean | null }>;
+    errorMessage: string | null;
+}
+
 export interface SimpleMLTools {
     /**
      * List the trained predictive models available to the component, newest version first.
@@ -397,6 +430,41 @@ export interface SimpleMLTools {
         records: Array<Record<string, unknown> | string>,
         options?: { primaryKeyField?: string; contextUser?: UserInfo }
     ) => Promise<SimpleMLScoreResult>;
+
+    /**
+     * List the SIGNALS available — the individual proven measures models were built from, rather
+     * than the models themselves. Most questions a component wants to answer are measurements, not
+     * predictions, and this is the catalogue of those.
+     * @param filter - Optional narrowing; `rebindableOnly` hides measures that cannot be pointed
+     *                 at a different population.
+     * @param contextUser - Optional context user (server-side scoping; ignored in the browser).
+     */
+    listSignals?: (
+        filter?: { search?: string; rebindableOnly?: boolean; maxRows?: number },
+        contextUser?: UserInfo
+    ) => Promise<SimpleMLSignalInfo[]>;
+
+    /**
+     * Compute one signal over a population — no model involved.
+     *
+     * Runs through the same feature-assembly path training uses, so the number a component renders
+     * matches the number models were trained on. Supply `binding` to point a measure proven on one
+     * population at another; the meaning (the aggregate and its time window) stays fixed.
+     * @param signalId - The {@link SimpleMLSignalInfo.id} to compute.
+     * @param targetEntity - Entity whose records are measured.
+     * @param options - Filter, row cap, as-of date column, binding substitutions, context user.
+     */
+    computeSignal?: (
+        signalId: string,
+        targetEntity: string,
+        options?: {
+            filter?: string;
+            maxRows?: number;
+            asOfColumn?: string;
+            binding?: SimpleMLSignalBinding;
+            contextUser?: UserInfo;
+        }
+    ) => Promise<SimpleMLComputeSignalResult>;
 }
 
 /**

@@ -70,6 +70,7 @@ import {
     IsKeysetPaginationOrderableType,
     ExternalDataSourceReadRouter,
     resolveQueryResultEnricher,
+    RunQueryEnrichment,
     QueryInfo,
 } from '@memberjunction/core';
 
@@ -3686,9 +3687,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         rows = paginated.paginatedResult;
                         matTotalRowCount = paginated.totalRowCount;
                     }
-                    if (params.Enrichment?.EnricherKey) {
-                        rows = await this.enrichQueryResults(rows, params, query, contextUser);
-                    }
+                    // Called unconditionally: the directive may come from the caller OR from the
+                    // query's own DefaultEnrichment, and enrichQueryResults returns the rows
+                    // untouched when there is neither. Guarding on params here would make a saved
+                    // directive unreachable.
+                    rows = await this.enrichQueryResults(rows, params, query, contextUser);
                     this.auditQueryExecution(query, params, materializedSQL, rows.length, matTotalRowCount, matExecutionTime, contextUser);
                     return {
                         Success: true,
@@ -3792,9 +3795,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // (no-op when none is registered — i.e. the providing package isn't loaded),
             // and on ANY failure logs and leaves the rows untouched so a scoring problem
             // never breaks the query. Runs after paging so only the returned page is scored.
-            if (params.Enrichment?.EnricherKey) {
-                paginatedResult = await this.enrichQueryResults(paginatedResult, params, query, contextUser);
-            }
+            // Called unconditionally — see enrichQueryResults, which resolves the directive from
+            // the caller's params or the query's saved DefaultEnrichment and no-ops when there is
+            // neither. A guard on params alone would make a saved directive unreachable.
+            paginatedResult = await this.enrichQueryResults(paginatedResult, params, query, contextUser);
 
             // Handle audit logging (fire-and-forget)
             this.auditQueryExecution(query, params, finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
@@ -4248,13 +4252,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * @param contextUser the request user, threaded through for isolation/audit
      * @returns the enriched rows on success, or the original rows on any failure / no-op
      */
+
+    /**
+     * Read the enrichment saved on a query row, or null when it has none.
+     *
+     * Parsed defensively and never thrown from: `Query.DefaultEnrichment` is operator-authored
+     * JSON, and a typo in it must degrade to an un-enriched query rather than break a report that
+     * was working yesterday. The database CHECK already rejects non-JSON, so this guards the
+     * narrower case of well-formed JSON that isn't a valid directive.
+     */
+    protected savedQueryEnrichment(query: MJQueryEntityExtended): RunQueryEnrichment | null {
+        const raw = query?.DefaultEnrichment;
+        if (!raw || raw.trim().length === 0) {
+            return null;
+        }
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return null;
+            }
+            const candidate = parsed as Partial<RunQueryEnrichment>;
+            if (typeof candidate.EnricherKey !== 'string' || candidate.EnricherKey.trim().length === 0) {
+                return null;
+            }
+            const config = candidate.Config;
+            return {
+                EnricherKey: candidate.EnricherKey,
+                // A directive with a malformed Config is still worth honouring — the enricher owns
+                // that shape and is the right place for it to be rejected.
+                Config: config && typeof config === 'object' && !Array.isArray(config) ? (config as Record<string, unknown>) : {},
+            };
+        } catch {
+            LogError(`Query '${query?.Name ?? query?.ID}' has a DefaultEnrichment that is not valid JSON; running the query without enrichment.`);
+            return null;
+        }
+    }
+
     protected async enrichQueryResults(
         rows: Record<string, unknown>[],
         params: RunQueryParams,
         query: MJQueryEntityExtended,
         contextUser?: UserInfo,
     ): Promise<Record<string, unknown>[]> {
-        const enrichment = params.Enrichment;
+        // A runtime directive wins; otherwise fall back to one saved on the query itself. Without
+        // the fallback the capability is complete but unreachable — a caller has to already know an
+        // enricher exists to ask for it, so a saved report can never carry predictions and an agent
+        // has nothing to discover.
+        const enrichment = params.Enrichment ?? this.savedQueryEnrichment(query);
         if (!enrichment?.EnricherKey) {
             return rows;
         }

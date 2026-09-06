@@ -61,6 +61,7 @@ export * from './agent';
 export * from './components';
 export * from './statistics';
 export * from './stories';
+export * from './capability';
 
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the

@@ -81,14 +81,35 @@ export class MetadataComponentMaterializer implements IModelComponentMaterialize
           hyperparameters: ctx.hyperparameters,
           fkGraph: toFkGraph(md.Entities),
           entityIdsByName: entityIdsByName(md.Entities),
+          inputTypeIdsByDriver: await this.resolveInputTypeIdsByDriver(deps.contextUser, provider),
         },
         deps,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MetadataComponentMaterializer: ${message}`);
-      return { ComponentID: null, BindingCount: 0, ComposedComponentCount: 0, Warnings: [`Materialization failed: ${message}`] };
+      return { ComponentID: null, BindingCount: 0, InputComponentCount: 0, ComposedComponentCount: 0, Warnings: [`Materialization failed: ${message}`] };
     }
+  }
+
+
+  /**
+   * `MJ: ML Component Types` ids keyed by `DriverClass`, for the `Input` subtree only.
+   *
+   * Keyed by driver rather than by name because the driver is the stable identifier the assembly
+   * vocabulary already speaks (`asof_count`, `select`); a display name is presentation and may be
+   * reworded without anything breaking.
+   */
+  protected async resolveInputTypeIdsByDriver(
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider | undefined,
+  ): Promise<Map<string, string>> {
+    await this.engine.Config(false, contextUser, provider);
+    const byDriver = new Map<string, string>();
+    for (const type of this.engine.TypesByKind('Input', true)) {
+      if (type.DriverClass) byDriver.set(type.DriverClass, type.ID);
+    }
+    return byDriver;
   }
 
   /**
@@ -165,5 +186,5 @@ function entityIdsByName(entities: EntityInfo[]): Map<string, string> {
 /** A skipped materialization: no rows written, one plain-language reason. */
 function skipped(reason: string): MaterializationResult {
   LogStatus(`MetadataComponentMaterializer: skipping materialization — ${reason}.`);
-  return { ComponentID: null, BindingCount: 0, ComposedComponentCount: 0, Warnings: [`Materialization skipped: ${reason}.`] };
+  return { ComponentID: null, BindingCount: 0, InputComponentCount: 0, ComposedComponentCount: 0, Warnings: [`Materialization skipped: ${reason}.`] };
 }

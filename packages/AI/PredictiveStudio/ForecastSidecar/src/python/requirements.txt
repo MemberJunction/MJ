@@ -1,0 +1,24 @@
+# Predictive Studio FORECAST sidecar — deliberately a SECOND environment.
+#
+# torch is hundreds of megabytes and TimesFM needs Python >=3.10, while the tabular sidecar
+# targets 3.9+ with a numpy/pandas pin chosen for xgboost/lightgbm wheels. Merging the two would
+# force every tabular install to carry torch. Keep them apart; they are separate processes that
+# speak HTTP, exactly like the tabular sidecar's managed/remote split.
+#
+# LICENCE NOTE: the timesfm SOURCE is Apache-2.0, and so are the 2.5 weights. The 3.0 weights ship
+# under timesfm-non-commercial-license-v1.0 and MUST NOT reach a customer build. This sidecar
+# therefore defaults to the 2.5 checkpoint; 3.0 is reachable only by explicit opt-in and is
+# marked non-production wherever it surfaces.
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+numpy>=1.26.4
+
+# The foundation model itself. `torch` extra = the PyTorch inference path (no JAX, so no covariate
+# support yet — that is deliberate: XReg covariates on 2.5 require jax[cuda]).
+timesfm[torch]==3.0.1
+
+# Test deps
+pytest==8.2.2
+httpx==0.27.0

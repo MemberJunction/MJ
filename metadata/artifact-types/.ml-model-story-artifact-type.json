@@ -1,16 +1,20 @@
 [
-    {
-        "fields": {
-            "Name": "ML Model Story",
-            "Description": "The prose identity of a trained Predictive Studio model, authored at promotion by the Model Story Tagger: what the model decides, what the data says, why it matters to the business, what each of its components contributes and when that component is worth reusing, and the honest limits. Deliberately declares NO DriverClass — it inherits the parent JSON viewer, which renders the `displayMarkdown` extract rule. Naming a plugin that is not registered does not fall back; it renders a 'Viewer Component Not Found' error instead. Add a DriverClass only together with a @RegisterClass(BaseArtifactViewerPluginComponent, ...) component.",
-            "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
-            "ContentType": "application/vnd.mj.ml-model-story",
-            "ExtractRules": "@file:extract-rules/ml-model-story.json",
-            "IsEnabled": true,
-            "Icon": "fa-solid fa-book-open"
-        },
-        "primaryKey": {
-            "ID": "DFCC8756-6D7D-4463-9F0F-7954EB9D5711"
-        }
+  {
+    "fields": {
+      "Name": "ML Model Story",
+      "Description": "The prose identity of a trained Predictive Studio model, authored at promotion by the Model Story Tagger: what the model decides, what the data says, why it matters to the business, what each of its components contributes and when that component is worth reusing, and the honest limits. Deliberately declares NO DriverClass — it inherits the parent JSON viewer, which renders the `displayMarkdown` extract rule. Naming a plugin that is not registered does not fall back; it renders a 'Viewer Component Not Found' error instead. Add a DriverClass only together with a @RegisterClass(BaseArtifactViewerPluginComponent, ...) component.",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
+      "ContentType": "application/vnd.mj.ml-model-story",
+      "ExtractRules": "@file:extract-rules/ml-model-story.json",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-book-open"
+    },
+    "primaryKey": {
+      "ID": "DFCC8756-6D7D-4463-9F0F-7954EB9D5711"
+    },
+    "sync": {
+      "lastModified": "2026-09-02T18:36:17.655Z",
+      "checksum": "6f767c3382b8c1861d799f03a747e7cd5f711a995ed00e1621daa79a5bd3eeb9"
     }
+  }
 ]

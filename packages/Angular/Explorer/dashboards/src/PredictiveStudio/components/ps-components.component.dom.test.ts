@@ -143,3 +143,110 @@ describe('PSComponentsComponent (DOM)', () => {
     expect(queryAll(fixture, '[data-testid="ps-components-lint-flag"]').length).toBeGreaterThan(0);
   });
 });
+
+describe('PSComponentsComponent — reuse by meaning (DOM)', () => {
+  const MATCHES = [
+    {
+      ID: 'c1',
+      Name: 'Renewal v1 › acts_90d__present',
+      ComponentTypeName: 'As-Of Exists',
+      Story: 'A flag separating a real zero from missing data.',
+      Similarity: 0.7481,
+      PromotionState: 'Approved',
+    },
+    {
+      ID: 'c2',
+      Name: 'Renewal v1 › days_since_last_act',
+      ComponentTypeName: 'As-Of Recency',
+      Story: 'How long the silence has lasted.',
+      Similarity: 0.6612,
+      PromotionState: 'Draft',
+    },
+  ];
+
+  const searchEngine = (result: unknown, calls?: unknown[]) =>
+    makeEngine({
+      FindReusableComponents: async (request: unknown) => {
+        calls?.push(request);
+        return result;
+      },
+    });
+
+  it('shows example queries before anything has been searched', () => {
+    const fixture = render();
+    const examples = queryAll(fixture, '[data-testid="ps-components-reuse-example"]');
+    expect(examples.length).toBeGreaterThan(0);
+    // They demonstrate the KIND of question that works: meaning, not naming.
+    expect(examples.map((e) => e.textContent?.trim()).join(' ')).toContain('missing data');
+  });
+
+  it('ranks matches by the part name, with its type and score', async () => {
+    const fixture = render(searchEngine({ Matches: MATCHES, CandidatesConsidered: 42, Warnings: [] }));
+    const component = fixture.componentInstance as unknown as { reuseQuery: string; runReuseSearch: () => Promise<void> };
+    component.reuseQuery = 'tells a real zero apart from missing data';
+    await component.runReuseSearch();
+    fixture.detectChanges();
+
+    const rows = queryAll(fixture, '[data-testid="ps-components-reuse-match"]');
+    expect(rows).toHaveLength(2);
+    // The PART leads; the model that built it is provenance, not the headline.
+    expect(rows[0].textContent).toContain('acts_90d__present');
+    expect(rows[0].textContent).toContain('As-Of Exists');
+    expect(rows[0].textContent).toContain('75% match');
+    expect(query(fixture, '[data-testid="ps-components-reuse-from"]')?.textContent).toContain('Renewal v1');
+  });
+
+  it('sends the plain-English text, and does NOT restrict to trained components', async () => {
+    // An Input component holds no fitted state — it is reused by its definition. Leaving the
+    // action's TrainedOnly default on would filter out exactly what this panel exists to surface.
+    const calls: unknown[] = [];
+    const fixture = render(searchEngine({ Matches: MATCHES, CandidatesConsidered: 42, Warnings: [] }, calls));
+    const component = fixture.componentInstance as unknown as { reuseQuery: string; runReuseSearch: () => Promise<void> };
+    component.reuseQuery = 'how recently someone engaged';
+    await component.runReuseSearch();
+
+    const request = calls[0] as Record<string, unknown>;
+    expect(request.QueryText).toBe('how recently someone engaged');
+    expect(request.TrainedOnly).toBe(false);
+  });
+
+  it('distinguishes "nothing close enough" from "nothing to search"', async () => {
+    const fixture = render(searchEngine({ Matches: [], CandidatesConsidered: 42, Warnings: [] }));
+    const component = fixture.componentInstance as unknown as { reuseQuery: string; runReuseSearch: () => Promise<void> };
+    component.reuseQuery = 'something nothing matches';
+    await component.runReuseSearch();
+    fixture.detectChanges();
+    expect(query(fixture, '[data-testid="ps-components-reuse-message"]')?.textContent).toContain('42 components');
+
+    const empty = render(searchEngine({ Matches: [], CandidatesConsidered: 0, Warnings: [] }));
+    const c2 = empty.componentInstance as unknown as { reuseQuery: string; runReuseSearch: () => Promise<void> };
+    c2.reuseQuery = 'anything';
+    await c2.runReuseSearch();
+    empty.detectChanges();
+    expect(query(empty, '[data-testid="ps-components-reuse-message"]')?.textContent).toContain('story vector');
+  });
+
+  it('surfaces a failure instead of rendering an empty result as "no match"', async () => {
+    const fixture = render(
+      makeEngine({
+        FindReusableComponents: async () => {
+          throw new Error('action not in metadata');
+        },
+      }),
+    );
+    const component = fixture.componentInstance as unknown as { reuseQuery: string; runReuseSearch: () => Promise<void> };
+    component.reuseQuery = 'anything';
+    await component.runReuseSearch();
+    fixture.detectChanges();
+    expect(query(fixture, '[data-testid="ps-components-reuse-message"]')?.textContent).toContain('action not in metadata');
+  });
+
+  it('ignores an empty query rather than searching for nothing', async () => {
+    const calls: unknown[] = [];
+    const fixture = render(searchEngine({ Matches: [], CandidatesConsidered: 0, Warnings: [] }, calls));
+    const component = fixture.componentInstance as unknown as { reuseQuery: string; runReuseSearch: () => Promise<void> };
+    component.reuseQuery = '   ';
+    await component.runReuseSearch();
+    expect(calls).toHaveLength(0);
+  });
+});

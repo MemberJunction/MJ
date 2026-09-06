@@ -10,3 +10,5 @@ export * from './seams';
 export * from './story-context-loader';
 export * from './model-story-tagger';
 export * from './reuse-finder';
+export * from './finding-writer';
+export * from './finding-finder';

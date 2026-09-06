@@ -1,0 +1,42 @@
+{
+  "name": "@memberjunction/predictive-studio-forecast-sidecar",
+  "version": "6.1.0-edge.4",
+  "description": "Self-managing TypeScript wrapper for the Predictive Studio FORECAST sidecar (TimesFM). A second Python service, deliberately separate from the tabular sidecar: it carries torch and needs Python >=3.10. Exposes a typed /forecast + /health client.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist",
+    "/src/python"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "setup:python": "node scripts/setup-python.mjs",
+    "test:python": "node scripts/run-pytest.mjs"
+  },
+  "keywords": [
+    "memberjunction",
+    "predictive-studio",
+    "forecasting",
+    "timesfm",
+    "time-series",
+    "sidecar",
+    "fastapi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/predictive-studio-core": "6.1.0-edge.4",
+    "@memberjunction/predictive-studio-sidecar": "6.1.0-edge.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.10",
+    "vitest": "^4.0.18"
+  }
+}

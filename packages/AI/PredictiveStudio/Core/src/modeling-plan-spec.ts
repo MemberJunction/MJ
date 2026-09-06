@@ -1,3 +1,4 @@
+import type { ProblemType } from './sidecar-contract';
 /**
  * @module modeling-plan-spec
  *
@@ -55,8 +56,8 @@ export interface ModelingPlanSpec {
     EntityName: string;
     /** Label expression/column. */
     TargetVariable: string;
-    /** Classification or regression. */
-    ProblemType: 'classification' | 'regression';
+    /** What shape of question this is — see the Core `ProblemType` union. */
+    ProblemType: ProblemType;
     /** The deterministic success metric driving the search. */
     SuccessMetric: 'AUC' | 'F1' | 'Accuracy' | 'RMSE' | string;
     /** Optional point-in-time assembly strategy. */
@@ -95,6 +96,16 @@ export interface ModelingPlanSpec {
    * rather than re-picking an algorithm from scratch.
    */
   Architecture?: ArchitectureSpec;
+  /**
+   * Whether the Architect has been RUN, regardless of whether it produced a decision.
+   *
+   * Without this, `Architecture: undefined` has two meanings that must not be confused: a plan from
+   * before the Architect existed (execute exactly as before) and a plan where the Architect ran and
+   * silently returned nothing — which happens intermittently in practice. The second is a failure,
+   * and reading it as the first builds a model with no architecture decision behind it while the
+   * plan looks entirely normal.
+   */
+  ArchitectureAttempted?: boolean;
   /**
    * What the **statistics pre-pass** measured about the training partition (additive). Written by
    * the `Statistics Pass` code sub-agent before the architecture is chosen, so the decision rests on

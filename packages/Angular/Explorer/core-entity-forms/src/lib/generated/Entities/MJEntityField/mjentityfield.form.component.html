@@ -298,7 +298,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CodeType"
-            Type="select"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -726,6 +726,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityFieldValues', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ML Component Bindings Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLComponentBindings"
+        SectionName="ML Component Bindings"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLComponentBindings')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Component Bindings','EntityFieldID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Component Bindings','EntityFieldID')"
+                [AllowLoad]="IsSectionExpanded('mJMLComponentBindings')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLComponentBindings', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

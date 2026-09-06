@@ -36,7 +36,7 @@ export const ModelingPlanSpecSchema = z
       .object({
         EntityName: z.string().min(1, 'TargetDefinition.EntityName is required'),
         TargetVariable: z.string().min(1, 'TargetDefinition.TargetVariable is required'),
-        ProblemType: z.enum(['classification', 'regression']),
+        ProblemType: z.enum(['classification', 'regression', 'sequence']),
         SuccessMetric: z.string().min(1, 'TargetDefinition.SuccessMetric is required'),
       })
       .passthrough(),

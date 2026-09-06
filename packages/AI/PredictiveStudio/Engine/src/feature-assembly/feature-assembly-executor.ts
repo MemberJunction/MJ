@@ -60,6 +60,15 @@ import {
 } from './action-feature';
 import { MJActionApprovalCheck, MJActionRunner } from './action-feature-seam';
 import { buildVisionPromptResolver, MJVisionPromptRunner } from './vision-llm-seam';
+import {
+  ForecastFeatureExtractor,
+  forecastColumnNames,
+  type ForecastFeatureValues,
+  type ForecastStep,
+  type ForecastTarget,
+  type IForecastRunner,
+} from './forecast-feature';
+import { SidecarForecastRunner } from './forecast-seam';
 
 /**
  * Resolves a {@link VisionLLMFeatureStep}'s `Prompt` (id/name/inline) into the
@@ -181,6 +190,12 @@ export interface FeatureAssemblyParams {
    */
   visionRunner?: IVisionPromptRunner | null;
   /**
+   * Forecast seam for `forecast` steps. Omitted ⇒ the real sidecar-backed runner; `null` ⇒
+   * forecasting is OFF and every forecast column is null (used by tests and by hosts that have
+   * not staged the model weights).
+   */
+  forecastRunner?: IForecastRunner | null;
+  /**
    * Optional resolver turning a `vision-llm` step's `Prompt` reference into the
    * prompt entity the runner executes. Required alongside {@link visionRunner}
    * when vision steps are present.
@@ -213,6 +228,116 @@ export interface FeatureAssemblyResult {
 /**
  * The FeatureAssembly executor. Stateless per call; construct once and reuse.
  */
+
+/**
+ * Batch size for the `FK IN (...)` scoping filter on a dated source. Small enough that the
+ * generated predicate stays well inside SQL Server's expression limits, large enough that a
+ * 100k-record population is a few hundred reads rather than 100k.
+ */
+const DATED_SOURCE_ID_BATCH = 250;
+
+/**
+ * Row ceiling for an unbounded target-record read. Reaching it is treated as truncation rather
+ * than trusted as the complete population (see {@link FeatureAssemblyExecutor.resolveRecords}).
+ */
+const TARGET_RECORD_ROW_CAP = 250000;
+
+/**
+ * Row ceiling requested per dated-source batch. Hitting it exactly is treated as truncation
+ * (see {@link fetchDatedRowsForTargets}) rather than trusted as a complete read.
+ */
+const DATED_SOURCE_ROW_CAP = 50000;
+
+/** The distinct primary keys of the target records, as strings. */
+function collectTargetIds(records: SourceRow[], pkField: string): string[] {
+  const ids = new Set<string>();
+  for (const record of records) {
+    const raw = record[pkField];
+    if (raw != null) ids.add(String(raw));
+  }
+  return [...ids];
+}
+
+/** SQL string literal, single quotes escaped. */
+function sqlLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/**
+ * Fetch the dated rows belonging to the target records.
+ *
+ * Two things this must not do, both of which it previously did:
+ *
+ * 1. **Fetch the entire dated entity.** An unfiltered read of an activity/transaction table is
+ *    unbounded work that grows with the tenant, not with the population being assembled.
+ * 2. **Accept a truncated read.** The fetch carried no `MaxRows`, so it inherited RunView's
+ *    default page size. Every dated row past that page simply did not exist as far as assembly
+ *    was concerned, and each affected record's as-of aggregates silently became `0` — not null,
+ *    not an error, but a fabricated zero indistinguishable from "no activity". A model trained on
+ *    that learns from mostly-invented data and still reports a plausible-looking metric. Observed
+ *    directly: a 13,528-row activity table read back 1,000 rows, leaving 86% of records with a
+ *    fabricated `count = 0` and collapsing holdout AUC toward chance.
+ *
+ * So: scope by foreign key in batches, and if a batch comes back at the cap — where a complete
+ * read and a truncated one are indistinguishable — halve it and retry rather than guessing,
+ * failing loudly only when a single record's own history cannot fit.
+ */
+async function fetchDatedRowsForTargets(
+  dataAccess: IFeatureDataAccess,
+  ds: DatedSourceSpec,
+  targetIds: string[],
+): Promise<SourceRow[]> {
+  if (targetIds.length === 0) return [];
+  const out: SourceRow[] = [];
+  for (let i = 0; i < targetIds.length; i += DATED_SOURCE_ID_BATCH) {
+    out.push(...(await fetchDatedBatch(dataAccess, ds, targetIds.slice(i, i + DATED_SOURCE_ID_BATCH))));
+  }
+  return out;
+}
+
+/**
+ * Fetch one batch, halving and retrying when the read comes back at the cap.
+ *
+ * A fixed batch size cannot be right for every source: the same 250 records are a few hundred rows
+ * in a sparse activity table and tens of thousands in a dense one (two years of weekly history is
+ * ~300 rows per record, so 250 records is ~75,000 — over the cap on its own). Splitting adapts to
+ * whatever the data turns out to be, while preserving the property that matters: a read that MIGHT
+ * be truncated is never accepted, because a truncated read silently becomes as-of aggregates of 0.
+ *
+ * The recursion bottoms out at a single record. If one record's own history exceeds the cap, the
+ * read genuinely cannot be split further through this seam, and that fails loudly.
+ */
+async function fetchDatedBatch(
+  dataAccess: IFeatureDataAccess,
+  ds: DatedSourceSpec,
+  batch: string[],
+): Promise<SourceRow[]> {
+  const res = await dataAccess.fetchRows({
+    EntityName: ds.EntityName,
+    ExtraFilter: `${ds.ForeignKeyField} IN (${batch.map(sqlLiteral).join(',')})`,
+    MaxRows: DATED_SOURCE_ROW_CAP,
+  });
+  if (!res.Success) {
+    throw new Error(`Failed to fetch dated source '${ds.EntityName}': ${res.ErrorMessage ?? 'unknown error'}`);
+  }
+  if (res.Rows.length < DATED_SOURCE_ROW_CAP) {
+    return res.Rows;
+  }
+  if (batch.length === 1) {
+    throw new Error(
+      `Dated source '${ds.EntityName}' returned ${res.Rows.length} rows for a SINGLE target record, hitting the ` +
+        `${DATED_SOURCE_ROW_CAP}-row read cap, so the read may be truncated and cannot be split further. A ` +
+        `truncated read would silently turn missing history into as-of aggregates of 0 — indistinguishable from ` +
+        `genuine inactivity. Narrow the dated source with a filter or a shorter window.`,
+    );
+  }
+  const mid = Math.ceil(batch.length / 2);
+  return [
+    ...(await fetchDatedBatch(dataAccess, ds, batch.slice(0, mid))),
+    ...(await fetchDatedBatch(dataAccess, ds, batch.slice(mid))),
+  ];
+}
+
 export class FeatureAssemblyExecutor {
   /**
    * Assemble the raw feature matrix + schema + preprocessing recipe for the
@@ -248,7 +373,7 @@ export class FeatureAssemblyExecutor {
     this.assertRequiredColumnsPresent(records, columnPlan, params);
 
     // 4. Pre-index dated sources by record for as-of features.
-    const datedIndex = await this.indexDatedSources(params, dataAccess, pkField, guard);
+    const datedIndex = await this.indexDatedSources(records, params, dataAccess, pkField, guard);
 
     // 5. Produce the matrix rows.
     const matrix = await this.buildMatrix(records, columnPlan, datedIndex, params, dataAccess, pkField);
@@ -272,14 +397,28 @@ export class FeatureAssemblyExecutor {
     if (!params.recordSet) {
       throw new Error('FeatureAssembly requires either `records` or a `recordSet` descriptor.');
     }
+    // A caller-supplied MaxRows is a deliberate sample and is honored as-is. NO MaxRows means
+    // "the whole population" — but leaving it undefined inherits RunView's default page size, so
+    // the population was quietly halved (observed: 2,000 members, 1,000 assembled) and the model
+    // trained on whatever the first page happened to contain, reporting metrics as if it had seen
+    // everything. Request an explicit ceiling and treat reaching it as truncation.
+    const explicitCap = params.recordSet.MaxRows;
     const res = await dataAccess.fetchRows({
       EntityName: params.recordSet.EntityName,
       ExtraFilter: params.recordSet.ExtraFilter,
       OrderBy: params.recordSet.OrderBy,
-      MaxRows: params.recordSet.MaxRows,
+      MaxRows: explicitCap ?? TARGET_RECORD_ROW_CAP,
     });
     if (!res.Success) {
       throw new Error(`Failed to fetch target records: ${res.ErrorMessage ?? 'unknown error'}`);
+    }
+    if (explicitCap === undefined && res.Rows.length >= TARGET_RECORD_ROW_CAP) {
+      throw new Error(
+        `Target record set '${params.recordSet.EntityName}' returned ${res.Rows.length} rows, hitting the ` +
+          `${TARGET_RECORD_ROW_CAP}-row read cap, so the population may be truncated. Training on a silently ` +
+          `truncated population reports metrics for a sample while claiming the whole. Narrow the record set ` +
+          `with a filter, or set an explicit MaxRows to declare the sample deliberate.`,
+      );
     }
     return res.Rows;
   }
@@ -407,6 +546,7 @@ export class FeatureAssemblyExecutor {
         case 'flow-agent':
         case 'vision-llm':
         case 'action':
+        case 'forecast':
           dataSteps.push(step);
           break;
         case 'impute':
@@ -499,6 +639,11 @@ export class FeatureAssemblyExecutor {
         case 'vision-llm':
           // §11/§5.6: per-row, stateless vision extraction → one RAW feature column.
           this.planVisionLLMColumn(step, guard, schema, emitters);
+          break;
+        case 'forecast':
+          // A time-series foundation model as a feature extractor: four RAW numeric columns
+          // (p50/p10/p90/slope) from the record's own history, cut at the as-of date.
+          this.planForecastColumns(step, guard, schema, emitters);
           break;
         case 'action':
           // Donation item 8: code as a feature — one RAW numeric column, computed by running an
@@ -634,6 +779,27 @@ export class FeatureAssemblyExecutor {
    * The output name goes through the leakage guard like any other, so an operator can deny-list a
    * code feature that turns out to reach forward in time.
    */
+  /**
+   * Plan the four columns a `forecast` step emits. Marked `Kind: 'forecast'` rather than
+   * `'numeric'` so the component materializer can type them as Forecast inputs — a numeric kind
+   * would say nothing about where the value came from.
+   */
+  private planForecastColumns(
+    step: ForecastStep,
+    guard: LeakageGuardEnforcer,
+    schema: FeatureSchemaEntry[],
+    emitters: ColumnEmitter[],
+  ): void {
+    if (!guard.isSourceAllowed(step.SourceEntity)) {
+      return;
+    }
+    for (const [index, col] of forecastColumnNames(step).entries()) {
+      if (!guard.isFieldAllowed(col)) continue;
+      schema.push({ Name: col, Kind: 'forecast' });
+      emitters.push({ column: col, kind: 'forecast', step, part: index });
+    }
+  }
+
   private planActionColumn(
     step: Extract<FeatureStep, { Kind: 'action' }>,
     guard: LeakageGuardEnforcer,
@@ -653,22 +819,21 @@ export class FeatureAssemblyExecutor {
    * feature computation. Filtered through the source deny-list.
    */
   private async indexDatedSources(
+    records: SourceRow[],
     params: FeatureAssemblyParams,
     dataAccess: IFeatureDataAccess,
     pkField: string,
     guard: LeakageGuardEnforcer,
   ): Promise<DatedIndex> {
     const index: DatedIndex = new Map();
+    const targetIds = collectTargetIds(records, pkField);
     for (const ds of params.datedSources ?? []) {
       if (!guard.isSourceAllowed(ds.EntityName)) {
         continue;
       }
-      const res = await dataAccess.fetchRows({ EntityName: ds.EntityName });
-      if (!res.Success) {
-        throw new Error(`Failed to fetch dated source '${ds.EntityName}': ${res.ErrorMessage ?? 'unknown error'}`);
-      }
+      const rows = await fetchDatedRowsForTargets(dataAccess, ds, targetIds);
       const bySource = new Map<string, DatedRow[]>();
-      for (const row of res.Rows) {
+      for (const row of rows) {
         const fk = row[ds.ForeignKeyField];
         const dateVal = row[ds.DateField];
         if (fk == null || dateVal == null) {
@@ -710,6 +875,7 @@ export class FeatureAssemblyExecutor {
     // Action features run BEFORE the row loop: one bounded fan-out per step over the whole
     // population, rather than a serial call per record inside the emitter loop.
     const actionValues = await this.runActionFeatures(plan, records, params, pkField);
+    const forecastValues = await this.runForecastFeatures(plan, records, params, pkField, datedIndex);
 
     const rows: Array<Array<string | number | boolean | null>> = [];
     for (const record of records) {
@@ -718,7 +884,7 @@ export class FeatureAssemblyExecutor {
 
       const rowValues: Array<string | number | boolean | null> = [];
       for (const emitter of plan.emitters) {
-        rowValues.push(await this.emitValue(emitter, record, recordId, asOfDate, datedIndex, dataAccess, vision, actionValues));
+        rowValues.push(await this.emitValue(emitter, record, recordId, asOfDate, datedIndex, dataAccess, vision, actionValues, forecastValues));
       }
       if (params.targetVariable) {
         rowValues.push(normalizeValue(record[params.targetVariable]));
@@ -757,6 +923,49 @@ export class FeatureAssemblyExecutor {
    * the assembly. That is deliberate: it is wrong for every record, and degrading to nulls would
    * train a model on a feature that silently is not there.
    */
+
+  /**
+   * Run every `forecast` step over the whole population, one batched sidecar call per step.
+   *
+   * Batched because the model costs seconds per series on CPU: a per-row call over a few thousand
+   * records would be hours, which is the difference between a usable feature and an unusable one.
+   */
+  private async runForecastFeatures(
+    plan: { emitters: ColumnEmitter[] },
+    records: SourceRow[],
+    params: FeatureAssemblyParams,
+    pkField: string,
+    datedIndex: DatedIndex,
+  ): Promise<Map<string, Map<string, ForecastFeatureValues>>> {
+    const byStep = new Map<string, Map<string, ForecastFeatureValues>>();
+    // One emitter per COLUMN, but one call per STEP — dedupe by step id.
+    const steps = new Map<string, ForecastStep>();
+    for (const e of plan.emitters) {
+      if (e.kind === 'forecast') steps.set(e.step.Id, e.step);
+    }
+    // `null` is an explicit "forecasting is off"; `undefined` means "use the real runner".
+    if (steps.size === 0 || params.forecastRunner === null) {
+      return byStep;
+    }
+    const extractor = new ForecastFeatureExtractor(
+      params.forecastRunner ?? SidecarForecastRunner.Instance,
+      params.contextUser,
+    );
+    for (const step of steps.values()) {
+      const bySource = datedIndex.get(step.SourceEntity);
+      const targets: ForecastTarget[] = records.map((record) => {
+        const recordId = String(record[pkField] ?? '');
+        return {
+          recordId,
+          asOf: resolveAsOfDate(params.asOf, record, params.labelEventDates?.[recordId] ?? null),
+          rows: bySource?.get(recordId) ?? [],
+        };
+      });
+      byStep.set(step.Id, await extractor.extract(step, targets));
+    }
+    return byStep;
+  }
+
   private async runActionFeatures(
     plan: { emitters: ColumnEmitter[] },
     records: SourceRow[],
@@ -793,6 +1002,7 @@ export class FeatureAssemblyExecutor {
     dataAccess: IFeatureDataAccess,
     vision: VisionContext | null,
     actionValues: Map<string, Map<string, number | null>>,
+    forecastValues: Map<string, Map<string, ForecastFeatureValues>>,
   ): Promise<string | number | boolean | null> {
     switch (emitter.kind) {
       case 'select':
@@ -802,6 +1012,13 @@ export class FeatureAssemblyExecutor {
       case 'action':
         // Precomputed above; a record with no entry had no value, which stays null.
         return actionValues.get(emitter.step.Id)?.get(recordId) ?? null;
+      case 'forecast': {
+        // Precomputed in one batched sidecar call; a record whose series was too short to forecast
+        // has no entry, and null is the honest answer rather than an invented band.
+        const values = forecastValues.get(emitter.step.Id)?.get(recordId);
+        if (!values) return null;
+        return [values.P50, values.P10, values.P90, values.Slope][emitter.part] ?? null;
+      }
       case 'embedding': {
         const vector = await dataAccess.fetchEmbedding(emitter.embeddingEntity, recordId, emitter.embeddingModelRef, emitter.embeddingTotalDims);
         // No persisted vector → zero-fill (never regenerate inline; §6.5).
@@ -904,6 +1121,8 @@ type ColumnEmitter =
   | { column: string; kind: 'select'; sourceColumn: string }
   | { column: string; kind: 'vision-llm'; step: VisionLLMFeatureStep }
   | { column: string; kind: 'action'; step: ActionFeatureStep }
+  // `part` indexes forecastColumnNames(): 0=p50, 1=p10, 2=p90, 3=slope.
+  | { column: string; kind: 'forecast'; step: ForecastStep; part: number }
   | {
       column: string;
       kind: 'embedding';

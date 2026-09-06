@@ -2647,11 +2647,36 @@
         }
     </mj-collapsible-panel>
 
+    <!-- ML Component Bindings Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLComponentBindings"
+        SectionName="ML Component Bindings"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLComponentBindings')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Component Bindings','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Component Bindings','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJMLComponentBindings')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLComponentBindings', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Identity Claims Section -->
     <mj-collapsible-panel
         SectionKey="mJIdentityClaims"
         SectionName="Identity Claims"
-        Icon="fa fa-id-card"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

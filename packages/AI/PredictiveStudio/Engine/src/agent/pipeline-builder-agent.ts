@@ -96,7 +96,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilderAgent: build threw: ${errorMessage}`);
-      result = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
+      result = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage, decisionNote: null };
     }
 
     const outcome = summarizeBuildResult(result);

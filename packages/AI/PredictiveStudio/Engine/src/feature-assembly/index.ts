@@ -14,3 +14,5 @@ export * from './feature-assembly-executor';
 export * from './action-feature';
 export * from './action-feature-seam';
 export * from './vision-llm-seam';
+export * from './forecast-feature';
+export * from './forecast-seam';

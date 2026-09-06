@@ -70,6 +70,19 @@ export interface ArchitectureGateResult {
  */
 export function gateArchitecture(spec: ModelingPlanSpec, engine?: MLComponentEngine): ArchitectureGateResult {
   if (spec.Architecture === undefined) {
+    if (spec.ArchitectureAttempted) {
+      // The Architect RAN and wrote nothing. Treating that as the pre-Architect shape would build a
+      // model with no architecture decision behind it while the plan looks entirely normal — the
+      // failure is invisible precisely because the absent field looks like the legacy case.
+      return {
+        Executable: false,
+        Architecture: null,
+        Reasons: [
+          'The Architect ran but produced no architecture decision, so there is nothing to execute. ' +
+            'Re-run it; building now would train a model no decision selected.',
+        ],
+      };
+    }
     // A plan with no architecture decision is the pre-Architect shape — the Experiment Designer's
     // ranked list is the whole plan, and it executes exactly as it always did.
     return { Executable: true, Architecture: null, Reasons: [] };

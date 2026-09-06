@@ -92,6 +92,17 @@ class TrainComponentNode(BaseModel):
     reuse_instance_id: Optional[str] = None
 
 
+class SequenceSpec(BaseModel):
+    """How to segment the training matrix into per-entity sequences (problem_type='sequence').
+
+    `group_field` names a column present in `data` but NOT in `feature_schema` — the same way
+    `target` rides along.
+    """
+
+    group_field: str
+    order_field: Optional[str] = None
+
+
 class TrainRequest(BaseModel):
     """``POST /train`` request body."""
 
@@ -116,6 +127,9 @@ class TrainRequest(BaseModel):
     # Base64 artifacts for nodes that REUSE an already-trained component, keyed by reuse_instance_id.
     # The sidecar has no database, so a reused child's fitted state has to travel with the request.
     component_artifacts: Optional[Dict[str, str]] = None
+    # REQUIRED for problem_type='sequence'. Without boundaries an HMM learns transitions between
+    # unrelated entities and still returns a confident-looking fitted model.
+    sequence: Optional[SequenceSpec] = None
 
 
 class TrainedComponentState(BaseModel):
@@ -126,6 +140,12 @@ class TrainedComponentState(BaseModel):
     fitted: bool
     reuse_instance_id: Optional[str] = None
     feature_importance: Optional[Dict[str, float]] = None
+    # This node's OWN serialized estimator, so it can be stored as an independently reusable
+    # component and later frozen into a different model. Present only for a node that was fitted
+    # here and whose estimator is separable; a frozen child already has an artifact of its own, and
+    # a node whose fitted estimator cannot be recovered from the parent reports None rather than
+    # something misleading.
+    artifact_b64: Optional[str] = None
 
 
 class TrainResponse(BaseModel):

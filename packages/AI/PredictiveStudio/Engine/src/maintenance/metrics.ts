@@ -16,11 +16,15 @@
 
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { isErrorMetric } from '@memberjunction/predictive-studio-core';
+import type { ProblemType } from '@memberjunction/predictive-studio-core';
 
 /** Default higher-is-better metric per problem type, in priority order. */
-const DEFAULT_METRICS_BY_PROBLEM: Record<'classification' | 'regression', string[]> = {
+const DEFAULT_METRICS_BY_PROBLEM: Record<ProblemType, string[]> = {
   classification: ['roc_auc', 'auc', 'f1', 'accuracy'],
   regression: ['r2', 'explained_variance'],
+  // An HMM has no AUC or R². What IS comparable across sequence models is the mean posterior
+  // confidence of the assigned state; log-likelihood is unbounded and comparable to nothing.
+  sequence: ['mean_posterior', 'state_confidence'],
 };
 
 /**
@@ -44,7 +48,7 @@ export function resolveComparisonMetric(
   }
   const incumbentMetrics = parseMetrics(incumbent.HoldoutMetrics);
   const challengerMetrics = parseMetrics(challenger.HoldoutMetrics);
-  const problem = (incumbent.ProblemType as 'classification' | 'regression') ?? 'classification';
+  const problem = (incumbent.ProblemType as ProblemType) ?? 'classification';
 
   for (const name of DEFAULT_METRICS_BY_PROBLEM[problem] ?? []) {
     if (isFiniteNumber(incumbentMetrics[name]) && isFiniteNumber(challengerMetrics[name])) {
