@@ -1,5 +1,5 @@
 import { IncomingMessage } from 'http';
-import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
@@ -25,13 +25,6 @@ import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server'
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-
-/**
- * Per-process key for the HMAC used to compare the system API key in constant time.
- * Never persisted and never shared: it only has to be the same for both sides of one
- * comparison inside this process.
- */
-const SYSTEM_KEY_COMPARE_SECRET = randomBytes(32);
 
 // ── Session / login audit (Phase 3) ───────────────────────────────────────────
 // Writes one `MJ: Audit Logs` row per session establishment (and per auth failure),
@@ -465,13 +458,10 @@ export const getUserPayload = async (
     if (systemApiKey && systemApiKey != String(undefined)) {
       // SECURITY: compare the superadmin system API key in constant time. A plain `===`
       // short-circuits on the first differing byte, leaking a timing side-channel that could
-      // be used to recover the key byte-by-byte. Reduce both sides to fixed-length digests so
+      // be used to recover the key byte-by-byte. Hash both sides to fixed-length digests so
       // timingSafeEqual never throws on length mismatch and the comparison is length-agnostic.
-      // A keyed HMAC rather than a bare hash: the digests exist only for this comparison and
-      // are never stored, so a per-process random key costs nothing and makes that intent
-      // explicit. (A bare hash of a secret reads as password storage to static analysis.)
-      const systemKeyDigest = createHmac('sha256', SYSTEM_KEY_COMPARE_SECRET).update(String(systemApiKey)).digest();
-      const providedKeyDigest = createHmac('sha256', SYSTEM_KEY_COMPARE_SECRET).update(String(apiKey)).digest();
+      const systemKeyDigest = createHash('sha256').update(String(systemApiKey)).digest();
+      const providedKeyDigest = createHash('sha256').update(String(apiKey)).digest();
       if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
         const systemUser = await getSystemUser(readOnlyDataSource);
         return {

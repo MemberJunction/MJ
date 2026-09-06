@@ -7,7 +7,6 @@ Security hardening from the first full CodeQL scan of the security-critical pack
 
 **`@memberjunction/server`**
 
-- System API key comparison (`context.ts`) reduces both sides to a keyed HMAC-SHA256 digest instead of a bare SHA-256 before the constant-time compare. Same length-agnostic property, same result for every key; the per-process random key makes explicit that the digests are compared, never stored.
 - The Teams meetings Graph webhook rejects a `validationToken` that is not bounded-length printable ASCII with 400 before echoing anything, and sets `X-Content-Type-Options: nosniff` on the echo. Graph's real token is a short ASCII sentence plus a request id and is unaffected.
 
 **`@memberjunction/ai-mcp-server`**
