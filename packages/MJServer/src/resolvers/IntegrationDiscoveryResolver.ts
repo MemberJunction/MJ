@@ -4440,8 +4440,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // DB-backed cancel (durable runs): stamps CancelRequestedAt on the live run row, so
             // the request reaches the owning process wherever it is — this server, another API
-            // node, or a worker — via its heartbeat/boundary checks. No in-memory signal.
-            const cancelled = await IntegrationEngine.CancelSyncAsync(companyIntegrationID, user, provider);
+            // node, or a worker — via its heartbeat/boundary checks. Written first so
+            // cross-process correctness is unchanged regardless of what the fallback below does.
+            let cancelled = await IntegrationEngine.CancelSyncAsync(companyIntegrationID, user, provider);
+            // In-process fallback: when the run is executing in THIS server, trip its live
+            // AbortController directly rather than waiting for the next boundary check /
+            // heartbeat poll of the stamp above. Also the only cancel that works at all on a
+            // deployment whose schema predates the ownership columns CancelSyncAsync needs —
+            // there the durable stamp is a no-op, so without this fallback there would be no
+            // working cancel for a run this process owns.
+            if (!cancelled) {
+                cancelled = IntegrationEngine.RequestCancelInProcess(companyIntegrationID);
+            }
             if (!cancelled) {
                 return { Success: false, Message: 'No active sync found for this connector' };
             }

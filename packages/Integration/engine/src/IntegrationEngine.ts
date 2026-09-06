@@ -579,6 +579,38 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
 
     /**
+     * Live-run cancel hooks, keyed lowercase like {@link activeSyncs}. `CancelSyncAsync` stamps
+     * `CancelRequestedAt` on the run row so a cancel reaches the owner in ANY process — but when
+     * the run is executing in THIS process, waiting for its next boundary check / heartbeat poll
+     * of that stamp is pure latency: the engine already holds a live `(cancelRequested flag,
+     * AbortController)` pair for the run. Registering that pair here lets a caller trip it
+     * directly via {@link RequestCancelInProcess}.
+     *
+     * This also covers deployments whose schema predates the ownership columns
+     * `CancelSyncAsync` needs: there `CancelRequestedAt` does not exist, so the durable stamp is
+     * a no-op and this in-process registry is the only cancel path that works at all. It needs
+     * no schema — it is a plain in-memory map, populated and cleared around the same run
+     * lifecycle as `activeSyncs`.
+     */
+    private static readonly liveRunCancels = new Map<string, () => void>();
+
+    /**
+     * Requests cancellation of a run executing in THIS process, without touching the database.
+     * Invokes the same `(cancelRequested flag, AbortController)` pair the run's own
+     * `onCancelRequested` / boundary-check path already honors, so the run winds down through
+     * its normal cancel handling and finalizes as `Cancelled` — this is a faster trigger for
+     * that path, not a second one. Returns `false` when no live run is registered for this
+     * CompanyIntegration (nothing running here, or it already finished), matching the "did this
+     * actually cancel something" contract callers rely on from {@link CancelSyncAsync}.
+     */
+    public static RequestCancelInProcess(companyIntegrationID: string): boolean {
+        const hook = IntegrationEngine.liveRunCancels.get(companyIntegrationID.toLowerCase());
+        if (!hook) return false;
+        hook();
+        return true;
+    }
+
+    /**
      * Maintenance locks: while a metadata refresh / schema evolution / RSU pipeline is
      * running for a CompanyIntegration, data syncs MUST NOT start ("locks of sync and scheduled
      * sync must occur" — the refresh is rewriting the very metadata, field maps and DDL the sync
@@ -1075,6 +1107,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 onCancelRequested: () => { runCtx.cancelRequested = true; abortController.abort(); },
                 progressSupplier: () => JSON.stringify(progressSnapshot),
             });
+            // Adopted/resumed runs are cancellable in-process too — same (flag, abort) pair as
+            // onCancelRequested above, so RequestCancelInProcess drives the SAME cancel path.
+            IntegrationEngine.liveRunCancels.set(lockKey, () => {
+                runCtx.cancelRequested = true;
+                abortController.abort();
+            });
 
             const result = await IntegrationEngine.runContext.run(runCtx, async () => {
                 const r = await this.ExecuteEntityMaps(config, run, contextUser, undefined, abortController.signal);
@@ -1111,6 +1149,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // Release the C1 lock + unblock any RunSync that began awaiting this resume (RunSync returns
             // `existing`). Resolve with the real result when we have one, else a benign empty result so no
             // waiter hangs. Promise resolve is idempotent and the early-exit `return`s also land here.
+            // liveRunCancels.delete is a no-op when an early return above skipped registration.
+            IntegrationEngine.liveRunCancels.delete(lockKey);
             IntegrationEngine.activeSyncs.delete(lockKey);
             resolveResumeLock(resumeResult ?? {
                 Success: false, ErrorMessage: 'Resume produced no result', RecordsProcessed: 0,
@@ -1321,9 +1361,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             companyIntegrationID, contextUser, triggerType, wrappedProgress, onNotification, options, abortController.signal, existingRun
         ));
         IntegrationEngine.activeSyncs.set(lockKey, syncPromise);
+        // Same (flag, abort) pair the boundary-check / heartbeat cancel path already honors —
+        // RequestCancelInProcess trips it directly instead of waiting on a DB round trip.
+        IntegrationEngine.liveRunCancels.set(lockKey, () => {
+            runCtx.cancelRequested = true;
+            abortController.abort();
+        });
         try {
             return await syncPromise;
         } finally {
+            IntegrationEngine.liveRunCancels.delete(lockKey);
             IntegrationEngine.activeSyncs.delete(lockKey);
             runCtx.ownership?.StopHeartbeat();
         }
