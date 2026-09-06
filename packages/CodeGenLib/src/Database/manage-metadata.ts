@@ -4154,7 +4154,7 @@ export class ManageMetadataBase {
       // AN: 14-June-2025 - See note below about the new order of these steps, this must
       // happen before we update existing entity fields from schema.
       const step2StartTime: Date = new Date();
-      if (! await this.createNewEntityFieldsFromSchema(pool, scopedEntityIDs)) { // has its own internal filtering for exclude schema/table so don't pass in
+      if (! await this.createNewEntityFieldsFromSchema(pool, scopedEntityIDs, excludeSchemas)) {
          logError ('Error creating new entity fields from schema')
          bSuccess = false;
       }
@@ -4826,9 +4826,9 @@ export class ManageMetadataBase {
     *
     * @returns {string} - The SQL statement to retrieve pending entity fields.
     */
-   protected getPendingEntityFieldsSELECTSQL(entityIDs?: string[]): string {
+   protected getPendingEntityFieldsSELECTSQL(entityIDs?: string[], excludeSchemas?: string[]): string {
       const schema = mj_core_schema();
-      return this.dbProvider.getPendingEntityFieldsSQL(schema, entityIDs);
+      return this.dbProvider.getPendingEntityFieldsSQL(schema, entityIDs, excludeSchemas);
    }
 
    /**
@@ -4994,11 +4994,14 @@ export class ManageMetadataBase {
       return this.dbProvider.parseColumnDefaultValue(sqlDefaultValue) as string ?? null!;
    }
 
-   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection, entityIDs?: string[]): Promise<boolean> {
+   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection, entityIDs?: string[], excludeSchemas?: string[]): Promise<boolean> {
       try   {
          // entityIDs flows down to the provider's WHERE clause so the inline SELECT
-         // narrows to changed entities only when scoped.
-         const sSQL = this.getPendingEntityFieldsSELECTSQL(entityIDs);
+         // narrows to changed entities only when scoped. excludeSchemas is the compiled
+         // includeSchemas scope (out-of-allow-list schemas). Without it, Pass 1 inserts
+         // pending fields for every schema in the database (Forms CodeGen emitted Common
+         // Activity Files EntityField rows).
+         const sSQL = this.getPendingEntityFieldsSELECTSQL(entityIDs, excludeSchemas);
          const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
          if (newEntityFields.length > 0) {
