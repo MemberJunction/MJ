@@ -73,9 +73,10 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
+import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
@@ -1074,6 +1075,107 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         value: unknown,
         isUpdate: boolean,
     ): SaveCoercedValue;
+
+    /**
+     * Hex characters kept from the sha1 digest in {@link SaveCallVariableHash}. 12 hex = 48 bits:
+     * expected sha1-prefix collisions across 120k distinct save calls (a cheese-scale MetadataSync
+     * capture) fall from ~1.7 at 8 hex to ~3e-5, so `_n` disambiguation is a same-record safety net
+     * rather than something a large capture exercises. SQL Server identifiers allow 128 characters;
+     * `@CodeName_` plus 12 hex fits every generated name.
+     */
+    public static readonly SaveCallVariableHashLength = 12;
+
+    private static readonly uuidShape = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    /**
+     * First {@link SaveCallVariableHashLength} hex of sha1(`${schema}.${table}|${pk values}`).
+     * Dialect-agnostic identity of a save call so sqlLogging recaptures of an unchanged tree
+     * are byte-identical. A random uuidv4 slice (previously only in
+     * SQLServerDataProvider.RenderSaveCallBinding) made every MetadataSync recapture a 250 MB
+     * diff and, inside a batched TransactionGroup, collided under the birthday paradox at
+     * ~120k variables (loom #12 WP3 / F-D).
+     *
+     * sha1 is an identity hash here, not a security primitive: it only has to be stable and
+     * well distributed. Key values are normalized first so the same record hashes the same
+     * wherever its key came from: UUID-shaped strings are lower-cased (SQL Server returns
+     * upper-case, PostgreSQL and hand-authored JSON are usually lower-case), Dates use
+     * ISO-8601, null/undefined are empty. A create with no client-side PK therefore hashes
+     * `schema.table|`, a per-table constant, and inside a group the `_n` ordinal is what
+     * tells those inserts apart.
+     */
+    public static SaveCallVariableHash(schemaName: string, baseTable: string, pkValues: unknown[]): string {
+        const pk = pkValues.map((v) => GenericDatabaseProvider.normalizeSaveCallKeyValue(v)).join('|');
+        return createHash('sha1')
+            .update(`${schemaName}.${baseTable}|${pk}`)
+            .digest('hex')
+            .slice(0, GenericDatabaseProvider.SaveCallVariableHashLength);
+    }
+
+    private static normalizeSaveCallKeyValue(value: unknown): string {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (value instanceof Date) {
+            return value.toISOString();
+        }
+        const text = String(value);
+        return GenericDatabaseProvider.uuidShape.test(text.trim()) ? NormalizeUUID(text) : text;
+    }
+
+    /** Per transaction-group counts so the same hash twice in one batch gets `_hash_2`. */
+    private _saveCallSuffixCounts = new WeakMap<object, Map<string, number>>();
+
+    /**
+     * Variable suffix for DECLARE/SET (or any named-local dialect) in a save call.
+     *
+     * Naming contract: `_<12 lowercase hex>` from
+     * `sha1(\`${schema}.${table}|${normalized pk values joined by |}\`)`, plus an optional
+     * `_<n>` with n ≥ 2 when that hash repeats inside one `TransactionGroup`
+     * (`_abc123456789`, `_abc123456789_2`, …). Outside a group there is no ordinal: each
+     * `Save()` is its own batch (MetadataSync captures put a batch separator after every
+     * statement), so equal suffixes never share a scope.
+     *
+     * Inside a `BatchedSubmit` group the ordinal is load-bearing: two items whose hashes
+     * repeat (same record twice, or PK-less inserts) would otherwise declare the same locals in
+     * one batch. `SQLServerTransactionGroup.scopeItemVariables` also appends `_mjb<i>` per item.
+     *
+     * Ordinals are consumed at RENDER time, not at submit. An item whose SQL is regenerated
+     * (the transaction-variables path re-renders `Use` items in `HandleSubmit`) carries `_n`
+     * for a record rendered once before — deterministic run to run, but "same record → same
+     * suffix" holds only for items rendered exactly once.
+     *
+     * SQL Server's RenderSaveCallBinding consumes this; PostgreSQL positional/json-arg
+     * bindings do not name locals today but share the same GenerateSaveSQL orchestrator.
+     */
+    protected allocateSaveCallSuffixForPk(
+        group: object | null | undefined,
+        schemaName: string,
+        baseTable: string,
+        pkValues: unknown[],
+    ): string {
+        const hash = GenericDatabaseProvider.SaveCallVariableHash(schemaName, baseTable, pkValues);
+        if (!group) {
+            return `_${hash}`;
+        }
+        let counts = this._saveCallSuffixCounts.get(group);
+        if (!counts) {
+            counts = new Map();
+            this._saveCallSuffixCounts.set(group, counts);
+        }
+        const n = (counts.get(hash) ?? 0) + 1;
+        counts.set(hash, n);
+        return n === 1 ? `_${hash}` : `_${hash}_${n}`;
+    }
+
+    protected allocateSaveCallSuffix(entity: BaseEntity): string {
+        const pkValues = entity.PrimaryKey?.KeyValuePairs?.map((p) => p.Value) ?? [];
+        return this.allocateSaveCallSuffixForPk(
+            entity.TransactionGroup,
+            entity.EntityInfo.SchemaName,
+            entity.EntityInfo.BaseTable,
+            pkValues,
+        );
+    }
 
     /**
      * Renders the dialect-specific parameter binding for a save call.
