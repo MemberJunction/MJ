@@ -242,33 +242,34 @@ function handleAuthorizeEndpoint(
     'nonce',
   ] as const);
 
-  // Validate required parameters
+  // Until the client is known AND redirect_uri is registered for it, redirect_uri is an
+  // arbitrary caller-supplied URL. RFC 6749 §4.1.2.1: the server MUST NOT redirect the
+  // user-agent to an invalid redirect_uri, and must inform the user directly instead.
+  // Redirecting these early errors would make the proxy an open redirector.
   if (!client_id) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_request', 'client_id is required', state);
+    sendErrorPage(res, 'Invalid Request', 'client_id is required');
     return;
   }
 
   if (!redirect_uri) {
-    // Cannot redirect if no redirect_uri - show error page
     sendErrorPage(res, 'Invalid Request', 'redirect_uri is required');
     return;
   }
 
-  if (response_type !== 'code') {
-    sendAuthorizationError(res, redirect_uri, 'unsupported_response_type', 'Only code response type is supported', state);
-    return;
-  }
-
-  // Validate client
   const client = clientRegistry.getClient(client_id);
   if (!client) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_client', 'Unknown client_id', state);
+    sendErrorPage(res, 'Invalid Request', 'Unknown client_id');
     return;
   }
 
-  // Validate redirect URI
   if (!clientRegistry.validateRedirectUri(client, redirect_uri)) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_request', 'redirect_uri not registered for this client', state);
+    sendErrorPage(res, 'Invalid Request', 'redirect_uri not registered for this client');
+    return;
+  }
+
+  // From here on redirect_uri is a registered URI of a known client: errors may redirect.
+  if (response_type !== 'code') {
+    sendAuthorizationError(res, redirect_uri, 'unsupported_response_type', 'Only code response type is supported', state);
     return;
   }
 
@@ -319,7 +320,7 @@ function handleAuthorizeEndpoint(
     upstreamUrl.searchParams.set('nonce', nonce);
   }
 
-  console.log(`OAuth Proxy: Redirecting client ${client_id} to upstream provider`);
+  console.log(`OAuth Proxy: Redirecting client ${JSON.stringify(client_id)} to upstream provider`);
 
   // Redirect to upstream provider
   res.redirect(upstreamUrl.toString());
@@ -344,7 +345,7 @@ async function handleCallbackEndpoint(
 
   // Handle errors from upstream
   if (error) {
-    console.error(`OAuth Proxy: Upstream error: ${error} - ${error_description}`);
+    console.error(`OAuth Proxy: Upstream error: ${JSON.stringify(error)} - ${JSON.stringify(error_description)}`);
     sendErrorPage(res, 'Authentication Failed', error_description ?? error);
     return;
   }
