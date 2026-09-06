@@ -1132,8 +1132,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * `sha1(\`${schema}.${table}|${normalized pk values joined by |}\`)`, plus an optional
      * `_<n>` with n ≥ 2 when that hash repeats inside one `TransactionGroup`
      * (`_abc123456789`, `_abc123456789_2`, …). Outside a group there is no ordinal: each
-     * `Save()` is its own batch (MetadataSync captures put a batch separator after every
-     * statement), so equal suffixes never share a scope.
+     * `Save()` is its own batch, or the SQL logger separates redeclarations. `mj sync push`
+     * captures put a batch separator after every statement; threshold-mode sessions (Explorer
+     * logging, `mj sync watch`) concatenate saves into one batch, so `SqlLoggingSessionImpl`
+     * emits the separator before any statement that would redeclare a name already declared in
+     * the current batch. Either way equal suffixes never share a scope.
      *
      * Inside a `BatchedSubmit` group the ordinal is load-bearing: two items whose hashes
      * repeat (same record twice, or PK-less inserts) would otherwise declare the same locals in
