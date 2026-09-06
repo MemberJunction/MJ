@@ -285,19 +285,29 @@ export class GmailProvider extends BaseCommunicationProvider {
   }
 
   /**
+   * SECURITY: strips CR/LF from a value before it is interpolated into an RFC-2822
+   * header line. Without this, a caller-controlled To/Cc/Bcc/Subject/From containing
+   * "\r\n" injects arbitrary additional headers (or body content) into the raw message.
+   */
+  private sanitizeHeaderValue(value: string | null | undefined): string {
+    if (!value) return '';
+    return String(value).replace(/[\r\n]+/g, ' ');
+  }
+
+  /**
    * Encode and format email content for Gmail API
    */
   private createEmailContent(message: ProcessedMessage, creds: ResolvedGmailCredentials): string {
-    // Get sender email
-    const from = message.From || creds.serviceAccountEmail;
-    const fromName = message.FromName || '';
+    // Get sender email — sanitize every header value against CRLF header injection
+    const from = this.sanitizeHeaderValue(message.From || creds.serviceAccountEmail);
+    const fromName = this.sanitizeHeaderValue(message.FromName);
     const fromHeader = fromName ? `${fromName} <${from}>` : from;
 
     // Create email content
-    const subject = message.ProcessedSubject;
-    const to = message.To;
-    const cc = message.CCRecipients?.join(', ') || '';
-    const bcc = message.BCCRecipients?.join(', ') || '';
+    const subject = this.sanitizeHeaderValue(message.ProcessedSubject);
+    const to = this.sanitizeHeaderValue(message.To);
+    const cc = this.sanitizeHeaderValue(message.CCRecipients?.join(', '));
+    const bcc = this.sanitizeHeaderValue(message.BCCRecipients?.join(', '));
     
     // Headers
     let emailContent = [
@@ -669,15 +679,15 @@ export class GmailProvider extends BaseCommunicationProvider {
       // Convert raw message to proper format
       const rawContent = Buffer.from(originalMessage.data.raw, 'base64').toString('utf-8');
 
-      // Build forwarded message
-      const userEmail = await this.getUserEmail(cached);
-      const to = params.ToRecipients.join(', ');
-      const cc = params.CCRecipients?.join(', ') || '';
-      const bcc = params.BCCRecipients?.join(', ') || '';
+      // Build forwarded message — sanitize every header value against CRLF header injection
+      const userEmail = this.sanitizeHeaderValue(await this.getUserEmail(cached));
+      const to = this.sanitizeHeaderValue(params.ToRecipients.join(', '));
+      const cc = this.sanitizeHeaderValue(params.CCRecipients?.join(', '));
+      const bcc = this.sanitizeHeaderValue(params.BCCRecipients?.join(', '));
 
       // Parse the original email to extract subject
       const subjectMatch = rawContent.match(/Subject: (.*?)(\r?\n)/);
-      const subject = subjectMatch ? `Fwd: ${subjectMatch[1]}` : 'Fwd: ';
+      const subject = this.sanitizeHeaderValue(subjectMatch ? `Fwd: ${subjectMatch[1]}` : 'Fwd: ');
 
       // Headers for new message
       const emailContent = [
