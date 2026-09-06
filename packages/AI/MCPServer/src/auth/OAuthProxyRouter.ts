@@ -224,7 +224,9 @@ function handleAuthorizeEndpoint(
 ): void {
   const {
     client_id,
-    redirect_uri,
+    // Deliberately not named redirect_uri: nothing may redirect to the request's own URI until it
+    // has been matched against a registered client, and a name this ugly is hard to use by accident.
+    redirect_uri: untrustedRedirectUri,
     response_type,
     state,
     scope,
@@ -233,44 +235,50 @@ function handleAuthorizeEndpoint(
     nonce,
   } = req.query as Record<string, string | undefined>;
 
-  // Validate required parameters
+  // Identify the client FIRST. RFC 6749 section 4.1.2.1 (and the OAuth 2.0 Security BCP): when the
+  // client identifier or the redirect URI is missing, invalid or mismatched, the authorization
+  // server MUST NOT redirect the user-agent to the supplied redirection URI - it has no basis for
+  // trusting it yet, so an error redirect would forward the browser wherever the request asked.
+  // Everything in this block therefore answers with a locally rendered error page.
   if (!client_id) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_request', 'client_id is required', state);
+    sendErrorPage(res, 'Invalid Request', 'client_id is required');
     return;
   }
 
-  if (!redirect_uri) {
-    // Cannot redirect if no redirect_uri - show error page
+  if (!untrustedRedirectUri) {
     sendErrorPage(res, 'Invalid Request', 'redirect_uri is required');
     return;
   }
 
-  if (response_type !== 'code') {
-    sendAuthorizationError(res, redirect_uri, 'unsupported_response_type', 'Only code response type is supported', state);
-    return;
-  }
-
-  // Validate client
   const client = clientRegistry.getClient(client_id);
   if (!client) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_client', 'Unknown client_id', state);
+    sendErrorPage(res, 'Invalid Request', 'Unknown client_id');
     return;
   }
 
-  // Validate redirect URI
-  if (!clientRegistry.validateRedirectUri(client, redirect_uri)) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_request', 'redirect_uri not registered for this client', state);
+  if (!clientRegistry.validateRedirectUri(client, untrustedRedirectUri)) {
+    sendErrorPage(res, 'Invalid Request', 'redirect_uri not registered for this client');
+    return;
+  }
+
+  // The URI is registered to this client. This binding is the only redirectable handle in the
+  // function, and it does not exist above this line - so no earlier branch can redirect to it,
+  // however it fails. Errors below report themselves the spec's way, by redirecting here.
+  const redirectUri = untrustedRedirectUri;
+
+  if (response_type !== 'code') {
+    sendAuthorizationError(res, redirectUri, 'unsupported_response_type', 'Only code response type is supported', state);
     return;
   }
 
   // OAuth 2.1 requires PKCE
   if (!code_challenge) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_request', 'code_challenge is required (PKCE)', state);
+    sendAuthorizationError(res, redirectUri, 'invalid_request', 'code_challenge is required (PKCE)', state);
     return;
   }
 
   if (code_challenge_method && code_challenge_method !== 'S256') {
-    sendAuthorizationError(res, redirect_uri, 'invalid_request', 'Only S256 code_challenge_method is supported', state);
+    sendAuthorizationError(res, redirectUri, 'invalid_request', 'Only S256 code_challenge_method is supported', state);
     return;
   }
 
@@ -281,7 +289,7 @@ function handleAuthorizeEndpoint(
   // Create state for tracking this authorization flow
   const proxyState = stateManager.createState({
     clientId: client_id,
-    redirectUri: redirect_uri,
+    redirectUri,
     originalState: state,
     codeChallenge: code_challenge,
     codeChallengeMethod: code_challenge_method ?? 'S256',
@@ -942,19 +950,18 @@ function isValidRedirectUri(uri: string): boolean {
 
 /**
  * Sends an OAuth authorization error redirect.
+ *
+ * `redirectUri` is required and MUST already have been matched against the registered client -
+ * redirecting to an unvalidated URI is an open redirect. Callers that fail before that match is
+ * possible use {@link sendErrorPage} instead, which is why this no longer accepts `undefined`.
  */
 function sendAuthorizationError(
   res: Response,
-  redirectUri: string | undefined,
+  redirectUri: string,
   error: string,
   errorDescription: string,
   state: string | undefined
 ): void {
-  if (!redirectUri) {
-    sendErrorPage(res, 'Authorization Error', errorDescription);
-    return;
-  }
-
   const url = new URL(redirectUri);
   url.searchParams.set('error', error);
   url.searchParams.set('error_description', errorDescription);
