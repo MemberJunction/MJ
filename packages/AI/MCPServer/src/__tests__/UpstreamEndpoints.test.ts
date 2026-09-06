@@ -23,6 +23,27 @@ describe('detectUpstreamFlavor()', () => {
   it('falls back to generic when the issuer is missing', () => {
     expect(detectUpstreamFlavor(undefined)).toBe('generic');
   });
+
+  // The flavor decides which host the user's browser is sent to for login, so it is read from the
+  // issuer's hostname and never from a substring of the whole URL. Each of these carries a provider
+  // name somewhere a substring check would find it, while belonging to none of those providers.
+  it.each([
+    ['https://evil.example/?microsoftonline.com'],
+    ['https://evil.example/#sts.windows.net'],
+    ['https://evil.example/cognito-idp.us-east-1.amazonaws.com/pool'],
+    ['https://evil.example/path?next=https://login.microsoftonline.com/tid/v2.0'],
+    ['https://microsoftonline.com.evil.example/tid/v2.0'],
+    ['https://notmicrosoftonline.com/tid/v2.0'],
+    ['https://cognito-idp.evil.example/pool'],
+    ['https://evil.example@login.microsoftonline.com.attacker.test/tid'],
+    ['not-a-url'],
+  ])('classifies the hostile issuer %s as generic', (issuer) => {
+    expect(detectUpstreamFlavor(issuer)).toBe('generic');
+  });
+
+  it('still accepts a legitimate subdomain of a provider domain', () => {
+    expect(detectUpstreamFlavor('https://login.partner.microsoftonline.com/tid/v2.0')).toBe('azure-ad');
+  });
 });
 
 describe('resolveUpstreamOAuthEndpoints() - Cognito', () => {

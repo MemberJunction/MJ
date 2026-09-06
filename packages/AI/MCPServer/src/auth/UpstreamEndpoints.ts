@@ -40,19 +40,51 @@ export interface UpstreamProviderInfo {
 }
 
 /**
+ * Extracts the lowercased hostname from an issuer URL.
+ *
+ * The flavor below is chosen from the hostname alone, never from a substring of the whole URL: an
+ * issuer is caller-supplied configuration, and `https://evil.example/?microsoftonline.com` contains
+ * every provider name you might look for while belonging to none of them.
+ *
+ * @param issuer - The provider's OIDC issuer URL
+ * @returns The hostname, or an empty string when the issuer is missing or not an absolute URL
+ */
+function issuerHostname(issuer: string | undefined): string {
+  if (!issuer) {
+    return '';
+  }
+  try {
+    return new URL(issuer).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * True when a hostname is a domain itself or a subdomain of it.
+ *
+ * The leading dot on the suffix is load-bearing: without it `notmicrosoftonline.com` matches.
+ *
+ * @param hostname - The hostname to test
+ * @param domain - The registrable domain to match against
+ * @returns Whether the hostname belongs to that domain
+ */
+function isHostOf(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
+/**
  * Classifies a provider by its issuer URL.
  *
  * @param issuer - The provider's OIDC issuer URL
  * @returns The upstream flavor to derive endpoints for
  */
 export function detectUpstreamFlavor(issuer: string | undefined): UpstreamFlavor {
-  if (!issuer) {
-    return 'generic';
-  }
-  if (issuer.includes('microsoftonline.com') || issuer.includes('sts.windows.net')) {
+  const hostname = issuerHostname(issuer);
+  if (isHostOf(hostname, 'microsoftonline.com') || isHostOf(hostname, 'sts.windows.net')) {
     return 'azure-ad';
   }
-  if (issuer.includes('cognito-idp.')) {
+  if (hostname.startsWith('cognito-idp.') && isHostOf(hostname, 'amazonaws.com')) {
     return 'cognito';
   }
   return 'generic';
