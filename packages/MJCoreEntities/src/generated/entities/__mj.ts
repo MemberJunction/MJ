@@ -18363,13 +18363,14 @@ export const MJEntityFieldSchema = z.object({
     *   * ListOrUserEntry
     *   * None
         * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
-    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('HTML'), z.literal('Icon'), z.literal('MSTeams'), z.literal('Markdown'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
+    ExtendedType: z.union([z.literal('Code'), z.literal('Color'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('HTML'), z.literal('Icon'), z.literal('Image'), z.literal('JSON'), z.literal('MSTeams'), z.literal('Markdown'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
     *   * Code
+    *   * Color
     *   * Email
     *   * FaceTime
     *   * Geo
@@ -18382,6 +18383,8 @@ export const MJEntityFieldSchema = z.object({
     *   * GeoStateProvince
     *   * HTML
     *   * Icon
+    *   * Image
+    *   * JSON
     *   * MSTeams
     *   * Markdown
     *   * Other
@@ -18392,7 +18395,7 @@ export const MJEntityFieldSchema = z.object({
     *   * URL
     *   * WhatsApp
     *   * ZoomMtg
-        * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`),
+        * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, Icon, Image, Color, and JSON. When set to Image, the field holds an image URL or inline image (data URI / base64) and UI surfaces render a thumbnail. Color is a CSS color. JSON is a JSON document, validated on save.`),
     CodeType: z.union([z.literal('CSS'), z.literal('HTML'), z.literal('JavaScript'), z.literal('Other'), z.literal('SQL'), z.literal('TypeScript')]).nullable().describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
@@ -84008,6 +84011,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Code
+    *   * Color
     *   * Email
     *   * FaceTime
     *   * Geo
@@ -84020,6 +84024,8 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * GeoStateProvince
     *   * HTML
     *   * Icon
+    *   * Image
+    *   * JSON
     *   * MSTeams
     *   * Markdown
     *   * Other
@@ -84030,12 +84036,12 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * URL
     *   * WhatsApp
     *   * ZoomMtg
-    * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.
+    * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, Icon, Image, Color, and JSON. When set to Image, the field holds an image URL or inline image (data URI / base64) and UI surfaces render a thumbnail. Color is a CSS color. JSON is a JSON document, validated on save.
     */
-    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
+    get ExtendedType(): 'Code' | 'Color' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'Image' | 'JSON' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
         return this.Get('ExtendedType');
     }
-    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
+    set ExtendedType(value: 'Code' | 'Color' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'Image' | 'JSON' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
         this.Set('ExtendedType', value);
     }
 
