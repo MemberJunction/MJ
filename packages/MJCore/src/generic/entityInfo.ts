@@ -20,15 +20,25 @@ import {
 } from "./entityConfiguration"
 
 /**
- * Valid values for EntityField.ExtendedType.
- * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
+ * truth; {@link EntityFieldExtendedType} is derived from it. CodeGen validates LLM suggestions
+ * against {@link EntityFieldInfo.ExtendedTypes} rather than duplicating the list.
+ *
+ * `Image` — the value is an image URL, a `data:image/...` URI, or raw image base64. UI surfaces
+ * render a thumbnail and (in edit mode) allow replacing it with an upload capped at the field's
+ * MaxLength.
+ * `Color` — the value is a CSS color (hex / rgb / hsl).
+ * `JSON` — the value is a JSON document; validated on save and pretty-printed in forms.
  */
-export type EntityFieldExtendedType =
-    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
-    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
-    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
-    | 'HTML' | 'Icon' | 'Markdown'
-    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
+export const EntityFieldExtendedTypes = [
+    'Code', 'Color', 'Email', 'FaceTime', 'Geo',
+    'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+    'GeoCity', 'GeoPostalCode', 'GeoAddress',
+    'HTML', 'Icon', 'Image', 'JSON', 'Markdown',
+    'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg',
+] as const;
+
+export type EntityFieldExtendedType = typeof EntityFieldExtendedTypes[number];
 
 /**
  * The possible status values for a record change
@@ -623,6 +633,10 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
+    /**
+     * Runtime domain for {@link ExtendedType}. Same array as {@link EntityFieldExtendedTypes}.
+     */
+    static readonly ExtendedTypes: readonly EntityFieldExtendedType[] = EntityFieldExtendedTypes
     ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
