@@ -177,8 +177,15 @@ Do this **before** the metadata sync step (Step 3) so new models are captured in
 2. **If no AI model research PR exists**, run the Claude AI-model-research routine to generate one
    (the same routine that produced the PRs in `reports/ai-model-research/` and PR #2924), then merge it
    as in step 1. Do not skip the release's model refresh just because a PR wasn't waiting — generate it.
+   The routine's prompt is checked in at
+   [`reports/ai-model-research/ROUTINE_PROMPT.md`](reports/ai-model-research/ROUTINE_PROMPT.md) — run it
+   from there if you are driving it by hand. That file is a **copy** of the live Routine's prompt; if you
+   change one, change the other, or the next weekly run reverts to the old rules.
 3. **Sanity-check** the merged entries against `metadata/ai-models/.ai-models.json` and confirm
-   `@lookup:` references resolve.
+   `@lookup:` references resolve. Per-entity `Status` values are the failure mode that has bitten twice
+   (PRs #4030, #4110): a deprecated vendor row is `Inactive`, but its paired **cost** row must be
+   `Expired` with an `EndedAt` — `Inactive` is not a legal cost status and fails the sync push. The
+   pre-flight check in §0.3 of the routine prompt catches it offline; `metadata/CLAUDE.md` states the rule.
 4. Run `mj sync push --dir ./metadata` to sync to your local database — the changes are then captured
    in the metadata migration script generated in Step 3.
 

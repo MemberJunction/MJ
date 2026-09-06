@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 
 // Mock sql-formatter (used by SqlLoggingSessionImpl)
 vi.mock('sql-formatter', () => ({
@@ -19,7 +19,7 @@ import { MJQueryEntityExtended, MJQueryEntityEntity, MJQueryPermissionEntity, Qu
 
 // ---- Test subclass exposing protected methods ----
 
-class TestPermissionProvider extends GenericDatabaseProvider {
+class TestPermissionProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 
