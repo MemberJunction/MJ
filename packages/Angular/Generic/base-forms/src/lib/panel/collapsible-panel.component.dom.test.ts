@@ -30,20 +30,27 @@ function formStub(expanded: boolean) {
 
 /**
  * Duck-typed stand-in for the @ContentChildren QueryList of mj-form-field children. The panel
- * only ever reads `length`, `forEach`, `toArray()`, `changes` and each child's `Navigate` /
- * `DisplayName` / `IsFieldReadableByUser`, so this is the whole contract — projecting real
- * form-field components would drag their entire dependency graph in for a visibility assertion.
+ * reads `length`, `forEach`, `toArray()`, `some()` and `changes` off the list, and each child's
+ * `Navigate` / `DisplayName` / `IsFieldReadableByUser` / `ShouldHideField` — that is the whole
+ * contract, and projecting real form-field components would drag their entire dependency graph
+ * in for a visibility assertion.
+ *
+ * `ShouldHideField` mirrors the real component: a field the user cannot read reports itself
+ * hidden WITHOUT reading its value, because BaseEntity.Get() throws for a denied field and
+ * hasRenderableContent() sweeps this property on every change-detection cycle.
  */
 function fieldChildren(readable: boolean[]) {
   const items = readable.map((r, i) => ({
     DisplayName: `Field ${i}`,
     IsFieldReadableByUser: r,
+    ShouldHideField: !r,
     Navigate: of(),
   }));
   return {
     length: items.length,
     toArray: () => items,
     forEach: (fn: (item: unknown) => void) => items.forEach(fn),
+    some: (fn: (item: unknown) => boolean) => items.some(fn),
     changes: new Subject(),
   };
 }

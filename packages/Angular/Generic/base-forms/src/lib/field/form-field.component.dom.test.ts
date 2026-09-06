@@ -512,6 +512,7 @@ describe('date-only fields are a calendar day, not an instant', () => {
             const shown = text(f, '.mj-forms-field-value');
             expect(shown, 'a datetime must keep local-time rendering').toMatch(/\d{1,2}:\d{2}/);
         });
+    });
 });
 
 describe('an unreadable stored date is announced, not hidden (bc-aidp-next-golive#185)', () => {
@@ -723,6 +724,25 @@ describe('MjFormFieldComponent — field-level security', () => {
     // denied field must not be able to take out the form it sits in.
     const f = renderAs('Description', [INTERN_ROLE_ID]);
     expect(() => f.detectChanges()).not.toThrow();
+  });
+
+  it('ShouldHideField answers for a denied field WITHOUT reading its value', () => {
+    // The template guards rendering behind IsFieldReadableByUser, but ShouldHideField is also
+    // called PROGRAMMATICALLY — MjCollapsiblePanelComponent.hasRenderableContent() sweeps
+    // `FieldComponents.some(f => !f.ShouldHideField)` to decide whether a section has anything
+    // to show. That path skips the template guard entirely, so before this was fixed the getter
+    // fell through to `this.Value` → BaseEntity.Get() → FieldSecurityError, thrown fresh on
+    // EVERY change-detection cycle for as long as the record stayed open.
+    const f = renderAs('Description', [INTERN_ROLE_ID]);
+    expect(() => f.componentInstance.ShouldHideField).not.toThrow();
+    expect(f.componentInstance.ShouldHideField).toBe(true);
+  });
+
+  it('ShouldHideField still reflects emptiness for a READABLE field', () => {
+    // The denied short-circuit must not swallow the ordinary hide-when-empty behaviour.
+    const f = renderAs('Description', [HR_ROLE_ID]);
+    f.componentInstance.HideWhenEmptyInReadOnlyMode = true;
+    expect(f.componentInstance.ShouldHideField).toBe(false); // 'secret' is present
   });
 
   // ---- write gate: readable but not writable ----
