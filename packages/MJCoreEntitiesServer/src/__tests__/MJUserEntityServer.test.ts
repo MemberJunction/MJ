@@ -1,11 +1,13 @@
 /**
  * Unit tests for `MJUserEntityServer` — the privilege-elevation guard on `MJ: Users` (issue #4260).
  *
- * The guard exists because role grants cannot express it. On the baseline seed the `Developer`
- * and `Integration` roles hold unfiltered CanUpdate on `MJ: Users`, `AllowUpdateAPI` is true on
- * the entity and on both the `Type` and `Name` fields, and there is no per-role FIELD permission
- * in MJ — only `RowLevelSecurityFilter`, which cannot help here: scoping the update to the
- * caller's own row still permits setting one's OWN `Type` to 'Owner', which IS the escalation.
+ * The guard exists because role grants cannot express it. Verified against a LIVE database (not
+ * just the baseline seed): the `Developer` and `Integration` roles hold unfiltered
+ * CanCreate/CanUpdate/CanDelete on `MJ: Users`, `AllowUpdateAPI`/`AllowDeleteAPI` are true on the
+ * entity and `AllowUpdateAPI` is true on both `Type` and `Name`, `__mj.User.Name` has NO unique
+ * index, and there is no per-role FIELD permission in MJ — only `RowLevelSecurityFilter`, which
+ * cannot help here: scoping an update to the caller's own row still permits setting one's OWN
+ * `Type` to 'Owner', which IS the escalation.
  *
  * The generated base (`MJUserEntity`) is mocked to a settable stub with per-field Dirty/OldValue
  * state, matching the approach in MJUserRoutineEntityServer.test.ts.
@@ -28,12 +30,12 @@ interface StubField {
 }
 
 // `vi.mock` factories are hoisted above every top-level declaration in this file (including
-// `import`s and `class`/`const` statements below this point). The brief's original draft declared
-// `StubUserEntity` as an outer `class` and referenced it from inside this factory, which throws
-// `ReferenceError: Cannot access 'StubUserEntity' before initialization` at import time — the
-// factory runs before the outer class's own declaration does. Declaring the stub class INSIDE the
-// factory (as MJUserRoutineEntityServer.test.ts does with `MockMJUserRoutineEntity`) avoids the
-// forward reference entirely.
+// `import`s and `class`/`const` statements below this point). A stub class declared as an outer
+// `class` and referenced from inside this factory throws `ReferenceError: Cannot access
+// 'StubUserEntity' before initialization` at import time — the factory runs before the outer
+// class's own declaration does. Declaring the stub class INSIDE the factory (as
+// MJUserRoutineEntityServer.test.ts does with `MockMJUserRoutineEntity`) avoids the forward
+// reference entirely.
 vi.mock('@memberjunction/core-entities', () => {
     /** Minimal stand-in for the generated MJUserEntity, with controllable field state. */
     class StubUserEntity {
@@ -42,6 +44,7 @@ vi.mock('@memberjunction/core-entities', () => {
         public Type: 'Owner' | 'User' = 'User';
         public IsSaved = true;
         public ContextCurrentUser: { ID: string; Type: string } | null = null;
+        public SuperDeleteCalled = false;
 
         protected fields = new Map<string, StubField>();
 
@@ -53,13 +56,29 @@ vi.mock('@memberjunction/core-entities', () => {
             this.fields.set(name, { Name: name, Dirty: dirty, OldValue: oldValue });
         }
 
-        /** BaseEntity exposes this as a protected getter; the guard reads it. */
+        /**
+         * BaseEntity exposes this as a protected getter; the guard reads it. NOTE: this stub
+         * returns only `ContextCurrentUser`. The real getter (`baseEntity.ts:3967`) falls back
+         * further — `ContextCurrentUser || ProviderToUse.CurrentUser || Metadata.Provider.CurrentUser`
+         * — so production's per-provider / global-default caller resolution is NOT exercised by
+         * these tests. Every test here sets `ContextCurrentUser` explicitly to sidestep that gap.
+         */
         protected get ActiveUser(): { ID: string; Type: string } | null {
             return this.ContextCurrentUser;
         }
 
         public Validate(): { Success: boolean; Errors: unknown[] } {
             return { Success: true, Errors: [] };
+        }
+
+        public async Delete(): Promise<boolean> {
+            this.SuperDeleteCalled = true;
+            return true;
+        }
+
+        /** No-op stand-in: the guard's Delete() refusal path records a BaseEntityResult here. */
+        public RegisterResultHistoryEntry(_result: unknown): void {
+            // intentionally empty — these tests assert on the boolean return value, not LatestResult
         }
     }
     return { MJUserEntity: StubUserEntity };
@@ -95,7 +114,50 @@ function messages(result: { Errors: unknown[] }): string {
 describe('MJUserEntityServer — privilege elevation guard (issue #4260)', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    describe('invariant 1: a non-Owner may not change Type', () => {
+    describe('creation: a non-Owner may not create a MJ: Users row at all', () => {
+        it('REJECTS a non-Owner creating a new user — even one that never touches Type=Owner', () => {
+            // Fix-round-1 (Important #1): Name has no unique index and non-Owner roles hold
+            // CanCreate, so refusing only Type='Owner' on create leaves a non-Owner free to repeat
+            // `Create` with Name set to the configured principal string until a row sorts below
+            // the real system user by ID — the same escalation invariant 4 blocks on UPDATE,
+            // reached through INSERT instead. Creation must be refused outright.
+            const e = new MJUserEntityServer();
+            e.IsSaved = false;
+            e.Type = 'User';
+            e.Name = 'System'; // the configured principal string, chosen by the attacker
+            e.SetFieldState('Type', true, null);
+            e.SetFieldState('Name', true, null);
+            e.ContextCurrentUser = ALICE;
+
+            const result = e.Validate();
+
+            expect(result.Success).toBe(false);
+        });
+
+        it('REJECTS a non-Owner creating a new Owner (the original escalation vector)', () => {
+            const e = new MJUserEntityServer();
+            e.IsSaved = false;
+            e.Type = 'Owner';
+            e.SetFieldState('Type', true, null);
+            e.ContextCurrentUser = ALICE;
+
+            expect(e.Validate().Success).toBe(false);
+        });
+
+        it('ALLOWS an Owner to create a new user — auto-provisioning and admin user-creation both run as an Owner', () => {
+            const e = new MJUserEntityServer();
+            e.IsSaved = false;
+            e.Name = 'new@example.com';
+            e.Type = 'User';
+            e.SetFieldState('Name', true, null);
+            e.SetFieldState('Type', true, null);
+            e.ContextCurrentUser = OWNER;
+
+            expect(e.Validate().Success).toBe(true);
+        });
+    });
+
+    describe('invariant: a non-Owner may not change Type on an existing row', () => {
         it('REJECTS a non-Owner promoting their OWN row to Owner — the core escalation', () => {
             const e = existingRow(ALICE.ID, ALICE);
             e.Type = 'Owner';
@@ -140,7 +202,7 @@ describe('MJUserEntityServer — privilege elevation guard (issue #4260)', () =>
         });
     });
 
-    describe('invariant 2: a non-Owner may only modify their own row', () => {
+    describe('invariant: a non-Owner may only modify their own row', () => {
         it("REJECTS a non-Owner editing another user's row", () => {
             const e = existingRow(BOB.ID, ALICE);
             e.Name = 'hijacked@example.com';
@@ -160,29 +222,20 @@ describe('MJUserEntityServer — privilege elevation guard (issue #4260)', () =>
             expect(e.Validate().Success).toBe(false);
         });
 
-        it('ALLOWS a new record (no pre-save row to protect)', () => {
-            const e = new MJUserEntityServer();
-            e.IsSaved = false;
-            e.ID = '';
-            e.Type = 'User';
-            e.SetFieldState('Type', true, null);   // dirty on create, but not to 'Owner'
-            e.ContextCurrentUser = ALICE;
+        it('REJECTS (fails CLOSED) when the pre-save ID cannot be established at all', () => {
+            // Fix-round-1 (Minor #5): the guard must not fail open when it cannot determine the
+            // pre-save identity. `OldValue: null` simulates a row whose pre-save value is unknown.
+            const e = existingRow(BOB.ID, ALICE);
+            e.SetFieldState('ID', false, null);
+            e.Name = 'edited@example.com';
 
-            expect(e.Validate().Success).toBe(true);
-        });
+            const result = e.Validate();
 
-        it('REJECTS a non-Owner creating a new Owner', () => {
-            const e = new MJUserEntityServer();
-            e.IsSaved = false;
-            e.Type = 'Owner';
-            e.SetFieldState('Type', true, null);
-            e.ContextCurrentUser = ALICE;
-
-            expect(e.Validate().Success).toBe(false);
+            expect(result.Success).toBe(false);
         });
     });
 
-    describe('invariant 3: a non-Owner may not change Name (the context-user ladder rung)', () => {
+    describe('invariant: a non-Owner may not change Name on an existing row (the context-user ladder rung)', () => {
         it("REJECTS a non-Owner renaming themselves to the configured principal's name", () => {
             // resolvePrincipalFrom matches contextUserForNewUserCreation against User.Name FIRST,
             // breaking ties by lowest ID. Renaming yourself to 'System' is how you become the
@@ -211,26 +264,48 @@ describe('MJUserEntityServer — privilege elevation guard (issue #4260)', () =>
 
             expect(e.Validate().Success).toBe(true);
         });
+    });
 
-        it('ALLOWS a new record to have its Name set (auto-provisioning sets Name = email)', () => {
-            const e = new MJUserEntityServer();
-            e.IsSaved = false;
-            e.Name = 'new@example.com';
-            e.SetFieldState('Name', true, null);
-            e.SetFieldState('Type', false, null);
-            e.ContextCurrentUser = ALICE;
+    describe('deletion: a non-Owner may not delete a MJ: Users row at all', () => {
+        it('REJECTS a non-Owner deleting their OWN row — MJ deactivates via IsActive, it does not delete', async () => {
+            const e = existingRow(ALICE.ID, ALICE);
 
-            expect(e.Validate().Success).toBe(true);
+            const ok = await e.Delete();
+
+            expect(ok).toBe(false);
+            expect((e as unknown as { SuperDeleteCalled: boolean }).SuperDeleteCalled).toBe(false);
+        });
+
+        it('REJECTS a non-Owner deleting an OWNER row — an unguarded delete would let a non-Owner remove the very accounts this guard depends on', async () => {
+            const e = existingRow(OWNER.ID, ALICE);
+
+            expect(await e.Delete()).toBe(false);
+        });
+
+        it('ALLOWS an Owner to delete a user row', async () => {
+            const e = existingRow(BOB.ID, OWNER);
+
+            const ok = await e.Delete();
+
+            expect(ok).toBe(true);
+            expect((e as unknown as { SuperDeleteCalled: boolean }).SuperDeleteCalled).toBe(true);
         });
     });
 
     describe('no caller', () => {
-        it('does not throw when there is no context user', () => {
+        it('is treated as exempt (Owner-equivalent) — but CheckPermissions rejects a caller-less save before Validate() ever runs in production', () => {
+            // BaseEntity.CheckPermissions throws when ActiveUser is falsy (baseEntity.ts:4003-4005),
+            // and Save() calls CheckPermissions (baseEntity.ts:3702) BEFORE it calls Validate()
+            // (baseEntity.ts:3730). So a caller-less save never reaches this guard at all in
+            // production — treating "no caller" as exempt here is a deliberate default for the
+            // callers that DO legitimately invoke Validate() directly with no context user (this
+            // test, or a system/CLI path running under a bound provider default), not a hole this
+            // guard is meant to police.
             const e = existingRow(ALICE.ID, null);
             e.Type = 'Owner';
             e.SetFieldState('Type', true, 'User');
 
-            expect(() => e.Validate()).not.toThrow();
+            expect(e.Validate().Success).toBe(true);
         });
     });
 
