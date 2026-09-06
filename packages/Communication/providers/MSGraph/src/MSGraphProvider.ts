@@ -1,5 +1,8 @@
 import {
+    AppliedMessageFilters,
     BaseCommunicationProvider,
+    CombineFilterClauses,
+    MessageRetrievalCapabilities,
     CreateDraftParams,
     CreateDraftResult,
     ForwardMessageParams,
@@ -124,6 +127,17 @@ interface ResolvedMSGraphCredentials {
  * The maximum lifetime, in minutes, that Microsoft Graph allows for a mail-resource
  * change-notification subscription (~3 days). Requested expirations are clamped to this.
  */
+/**
+ * Format an instant the way an OData `$filter` comparison wants it: ISO-8601, UTC, UNQUOTED.
+ *
+ * Quoting it makes Graph compare a datetime against a string and reject the request, which is the
+ * mistake this exists to keep out of the call sites. `toISOString` is always UTC with a trailing Z
+ * regardless of the Date's origin, so a caller passing a local-time Date still filters correctly.
+ */
+function ODataInstant(when: Date): string {
+    return when.toISOString();
+}
+
 const MSGRAPH_MAX_SUBSCRIPTION_MINUTES = 4230;
 
 /** Options carried in {@link CreateSubscriptionParams.ContextData} for MS Graph. */
@@ -168,6 +182,13 @@ type MSGraphSubscriptionContext = {
  */
 @RegisterClass(BaseCommunicationProvider, 'Microsoft Graph')
 export class MSGraphProvider extends BaseCommunicationProvider {
+    /**
+     * Graph filters both of these server-side, so neither is emulated here — `receivedDateTime`
+     * comparisons and `isRead` are ordinary `$filter` clauses.
+     */
+    public override get MessageRetrieval(): MessageRetrievalCapabilities {
+        return { FilterByReceivedDate: true, FilterByUnread: true };
+    }
 
     private HTMLConverter: compiledFunction;
 
@@ -436,16 +457,33 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const contextData = params.ContextData;
         const emailToUse = params.Identifier || (contextData?.Email as string) || creds.accountEmail;
 
-        let filter: string = "";
         const top: number = params.NumMessages;
+        const applied: AppliedMessageFilters = { ReceivedAfter: false, ReceivedBefore: false, UnreadOnly: false };
+        const clauses: string[] = [];
 
         if (params.UnreadOnly) {
-            filter = "(isRead eq false)";
+            clauses.push("(isRead eq false)");
+            applied.UnreadOnly = true;
         }
 
-        if (contextData && contextData.Filter) {
-            filter = contextData.Filter as string;
+        if (params.ReceivedAfter) {
+            clauses.push(`(receivedDateTime ge ${ODataInstant(params.ReceivedAfter)})`);
+            applied.ReceivedAfter = true;
         }
+
+        if (params.ReceivedBefore) {
+            clauses.push(`(receivedDateTime le ${ODataInstant(params.ReceivedBefore)})`);
+            applied.ReceivedBefore = true;
+        }
+
+        // COMPOSED, not assigned. This branch used to overwrite `filter` outright, so a caller that
+        // passed UnreadOnly together with a ContextData.Filter silently lost the UnreadOnly clause
+        // and got read mail back. Anything the caller supplies here now narrows alongside the rest.
+        if (contextData && contextData.Filter) {
+            clauses.push(String(contextData.Filter));
+        }
+
+        const filter: string = CombineFilterClauses(clauses, " and ");
 
         // Use email address directly in API path
         const messagesPath: string = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages`;
@@ -464,7 +502,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const messageResults: GetMessagesResult = {
             Success: true,
             SourceData: sourceMessages,
-            Messages: []
+            Messages: [],
+            AppliedFilters: applied
         };
 
 
