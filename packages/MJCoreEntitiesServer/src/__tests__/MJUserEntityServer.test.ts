@@ -96,9 +96,20 @@ const OWNER = { ID: '11111111-1111-1111-1111-111111111111', Type: 'Owner' };
 const ALICE = { ID: '22222222-2222-2222-2222-222222222222', Type: 'User' };
 const BOB = { ID: '33333333-3333-3333-3333-333333333333', Type: 'User' };
 
+/**
+ * The stub base's `SuperDeleteCalled` tracking flag (declared on `StubUserEntity` above, inside
+ * the `vi.mock` factory) is not part of the real `MJUserEntity`/`MJUserEntityServer` TYPE — the
+ * mock swaps the runtime value, not what `tsc` sees. A single non-`unknown` intersection cast
+ * (mirroring `MockHooks` in MJUserRoutineEntityServer.test.ts) gives call sites a typed member
+ * with no per-call-site cast, instead of `as unknown as {...}`, which this repo forbids.
+ */
+interface StubDeleteHooks {
+    SuperDeleteCalled: boolean;
+}
+
 /** Builds a guard instance representing an EXISTING row `rowId`, saved by `caller`. */
-function existingRow(rowId: string, caller: { ID: string; Type: string } | null) {
-    const e = new MJUserEntityServer();
+function existingRow(rowId: string, caller: { ID: string; Type: string } | null): MJUserEntityServer & StubDeleteHooks {
+    const e = new MJUserEntityServer() as MJUserEntityServer & StubDeleteHooks;
     e.IsSaved = true;
     e.ID = rowId;
     e.SetFieldState('ID', false, rowId);
@@ -273,7 +284,7 @@ describe('MJUserEntityServer — privilege elevation guard (issue #4260)', () =>
             const ok = await e.Delete();
 
             expect(ok).toBe(false);
-            expect((e as unknown as { SuperDeleteCalled: boolean }).SuperDeleteCalled).toBe(false);
+            expect(e.SuperDeleteCalled).toBe(false);
         });
 
         it('REJECTS a non-Owner deleting an OWNER row — an unguarded delete would let a non-Owner remove the very accounts this guard depends on', async () => {
@@ -288,7 +299,7 @@ describe('MJUserEntityServer — privilege elevation guard (issue #4260)', () =>
             const ok = await e.Delete();
 
             expect(ok).toBe(true);
-            expect((e as unknown as { SuperDeleteCalled: boolean }).SuperDeleteCalled).toBe(true);
+            expect(e.SuperDeleteCalled).toBe(true);
         });
     });
 

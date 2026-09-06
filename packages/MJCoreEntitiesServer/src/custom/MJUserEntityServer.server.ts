@@ -31,18 +31,31 @@ import { MJUserEntity } from '@memberjunction/core-entities';
  * THE INVARIANTS, for a caller whose `Type` is not `'Owner'`:
  *
  *   1. **Creating a `MJ: Users` row at all is refused.** This is stricter than "may not create an
- *      Owner": the only two automated creators of this entity — `NewUserBase.createNewUser`
- *      (`MJServer/src/auth/newUsers.ts`) and `MagicLinkService`'s provisioning path
- *      (`MJServer/src/auth/magicLink/MagicLinkService.ts`) — both run as
- *      `ResolveConfiguredPrincipal(...)`, which in a healthy system resolves to the seeded System
- *      user (`Type='Owner'`; rung 4 of the ladder is "lowest ID among ACTIVE owners"). Explorer's
- *      user-management UI is itself an Owner-level admin surface. So no legitimate path creates a
- *      user row as a non-Owner, and refusing non-Owner creation outright costs nothing real.
- *      Refusing only `Type='Owner'` on create is NOT enough: `Name` has no unique index and both
- *      seeded non-Owner roles hold `CanCreate`, so a non-Owner could otherwise repeatedly `Create`
- *      rows named to match the configured `contextUserForNewUserCreation` string until one sorts
- *      below the real system user by ID — the exact principal-redirection invariant 3 (below)
- *      exists to prevent, just reached through INSERT instead of UPDATE.
+ *      Owner": there are THREE automated creators of this entity — `NewUserBase.createNewUser`
+ *      (`MJServer/src/auth/newUsers.ts`), `MagicLinkService`'s provisioning path
+ *      (`MJServer/src/auth/magicLink/MagicLinkService.ts`), and `CreateNewUserBase.createNewUser`
+ *      (`CodeGenLib/src/Misc/createNewUser.ts:33`, a CLI provisioning tool that sets `Type='Owner'`
+ *      unconditionally at `:39` — already refused for a non-Owner caller before this round,
+ *      regardless of the analysis below). The first two run as `ResolveConfiguredPrincipal(...)`,
+ *      whose ladder is: rung 1 matches the configured string against `User.Name`, rung 2 against
+ *      `User.Email` — NEITHER rung filters by `Type` (`MJServer/src/auth/principals.ts:134,141`) —
+ *      and only rungs 3-4 (System-by-ID, then lowest-ID-among-ACTIVE-Owners) guarantee an Owner.
+ *      So "no legitimate path creates a user row as a non-Owner" is NOT unconditional: it holds
+ *      only while a deployment's `contextUserForNewUserCreation` / `contextUserForProvisioning`
+ *      names an Owner-type user's `Name` or `Email` (the shipped default, `not.set@nowhere.com`,
+ *      resolves by Email to the seeded Owner, so default installs are unaffected). A deployment
+ *      that instead points either setting at a non-Owner user will have JWT auto-provisioning and
+ *      magic-link provisioning fail CLOSED at `Save()` after this change — loudly, not silently —
+ *      rather than continuing to create rows as that non-Owner; see the changeset for the upgrade
+ *      note. Separately, Explorer's user-management UI has NO Owner gate today (no such guard
+ *      exists in `user-management.component.ts` or its module), so a Developer-role non-Owner
+ *      reaches it in practice and will now receive this same create/delete refusal there — a real
+ *      consequence for such deployments, not a hypothetical one.
+ *      Refusing only `Type='Owner'` on create is NOT enough on its own: `Name` has no unique index
+ *      and both seeded non-Owner roles hold `CanCreate`, so a non-Owner could otherwise repeatedly
+ *      `Create` rows named to match the configured principal string until one sorts below the real
+ *      system user by ID — the exact principal-redirection invariant 4 (below) exists to prevent,
+ *      just reached through INSERT instead of UPDATE.
  *   2. `Type` may not be changed on an EXISTING row. It is a two-value CHECK column
  *      (`'User' | 'Owner'`), so any change by a non-Owner is either self-promotion or demoting
  *      somebody else. (Creation is already covered by invariant 1, so this only needs to consider
@@ -72,13 +85,19 @@ import { MJUserEntity } from '@memberjunction/core-entities';
  *      non-Owner remove ANY account — Owners included, which destroys the very accounts every
  *      exemption above depends on.
  *
- * Owner-type callers are exempt from all five. That is deliberate and load-bearing: it keeps admin
- * user management working, and it keeps auto-provisioning working — `NewUserBase.createNewUser`
- * runs as `contextUserForNewUserCreation`, which resolves to the seeded system user (`Type='Owner'`).
- * A caller-less save/delete (no `ActiveUser` at all — e.g. a system/CLI path running under a bound
- * provider default) is likewise treated as exempt: `BaseEntity.CheckPermissions` already throws on a
- * falsy `ActiveUser` and runs BEFORE `Validate()` inside `Save()`, so in production this guard never
- * actually evaluates a caller-less request — see the "no caller" test for the exact call ordering.
+ * Owner-type callers are exempt from all five — CONDITIONALLY on the deployment's own configuration
+ * keeping `contextUserForNewUserCreation` / `contextUserForProvisioning` pointed at an Owner (see
+ * invariant 1 above for why that is not automatic). Provided it is, this keeps admin user management
+ * working, and it keeps auto-provisioning working — `NewUserBase.createNewUser` runs as
+ * `contextUserForNewUserCreation`, which resolves to the seeded system user (`Type='Owner'`) under
+ * the shipped default.
+ * A caller-less save (no `ActiveUser` at all — e.g. a system/CLI path running under a bound provider
+ * default) is likewise treated as exempt, though for `Save()` this is effectively decorative:
+ * `BaseEntity.CheckPermissions` already throws on a falsy `ActiveUser` and runs BEFORE `Validate()`
+ * inside `Save()`, so in production a caller-less `Save()` never reaches this guard's `Validate()`
+ * body at all — see the "no caller" test for the exact call ordering. `Delete()`'s sequencing is the
+ * OPPOSITE and the "no caller ⇒ exempt" default IS load-bearing there — see `callerIsOwner()`'s
+ * docstring.
  *
  * Pure: reads only this record's own field state and the caller. No `RunView`, no provider, no
  * engine, no I/O — so it costs nothing per save/delete and is unit-testable without a database.
@@ -141,9 +160,7 @@ export class MJUserEntityServer extends MJUserEntity {
     private validateCreateRefused(result: ValidationResult): void {
         result.Errors.push(new ValidationErrorInfo(
             'Type',
-            'Only an Owner may create a user record. Every legitimate creator of a MJ: Users row ' +
-            '(auto-provisioning, magic-link provisioning, Explorer\'s user-management UI) already runs ' +
-            'as an Owner.',
+            'Only an Owner may create a user record.',
             this.Type,
             ValidationErrorType.Failure
         ));
@@ -223,9 +240,21 @@ export class MJUserEntityServer extends MJUserEntity {
 
     /**
      * True when the caller is an Owner (or when there is no caller to evaluate — the guard has
-     * nothing to compare against, and `CheckPermissions` already refuses a caller-less save/delete
-     * before either `Validate()` or `Delete()`'s body ever runs in production; see the class
-     * docstring).
+     * nothing to compare against).
+     *
+     * The "no caller ⇒ exempt" default has DIFFERENT reachability for `Save()` vs. `Delete()`:
+     *   - `Save()`: `BaseEntity.CheckPermissions` throws on a falsy `ActiveUser`
+     *     (`baseEntity.ts:4003-4005`) and runs at `baseEntity.ts:3702`, BEFORE `Validate()` is
+     *     called at `baseEntity.ts:3730` — so a caller-less `Save()` never reaches this method at
+     *     all in production. The default is effectively decorative there.
+     *   - `Delete()`: the sequencing is the OPPOSITE. THIS class's `Delete()` override calls
+     *     `callerIsOwner()` as its very first statement, before `super.Delete()` is ever invoked —
+     *     `CheckPermissions` only runs later, INSIDE `super.Delete()` (`baseEntity.ts:4612`). So a
+     *     caller-less `Delete()` call DOES reach this method first, and the "no caller ⇒ exempt"
+     *     default here is load-bearing: it lets the call proceed into `super.Delete()`, where
+     *     `CheckPermissions` is the thing that actually refuses it. If this default were flipped to
+     *     "no caller ⇒ refuse", a caller-less delete would be refused by `refuseDelete()` instead —
+     *     same ultimate outcome (refused), different refusal mechanism and message.
      *
      * `Type` is an `NCHAR` column, so it arrives space-padded; casing is normalized for the same
      * reason `principals.ts` does. Reads `ActiveUser` rather than `ContextCurrentUser` directly so
