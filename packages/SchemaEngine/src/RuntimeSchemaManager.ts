@@ -307,7 +307,67 @@ interface PostMigrationResult {
  * `MJ: RSU Pending Works`.PayloadJSON by {@link RuntimeSchemaManager.WritePendingWork}
  * and read back by the post-restart consumer via {@link RuntimeSchemaManager.ReadPendingWork}.
  */
+/**
+ * How many times one pending-work item may be attempted before it is failed terminally. Three is
+ * enough to survive a restart landing mid-consumption plus one genuinely transient error, and few
+ * enough that a broken item surfaces the same day rather than retrying quietly forever.
+ */
+export const MAX_RSU_PENDING_ATTEMPTS = 3;
+
 export interface RSUPendingWork {
+  /**
+   * What the post-restart consumer should do with this row.
+   *
+   * Absent means `'apply-objects'` — every row written before this field existed is that, and
+   * the consumer must keep treating it that way.
+   *
+   * `'promote-columns'` carries {@link RSUPendingWork.PromotedColumns} instead of relying on a
+   * fresh introspection: promotion has already decided which source keys become which columns,
+   * including any collision suffix, and re-deriving those names after the restart could produce
+   * different ones.
+   */
+  WorkType?: 'apply-objects' | 'promote-columns';
+
+  /**
+   * How many times a consumer has already tried and failed to finish this work.
+   *
+   * Absent means zero — every row written before this field existed has not been retried. The
+   * consumer increments it when it re-queues work that failed for a reason a later attempt could
+   * plausibly survive (a restart mid-consumption, a transient provider error), and gives up once
+   * {@link MAX_RSU_PENDING_ATTEMPTS} is reached so a genuinely broken item cannot retry forever.
+   */
+  Attempts?: number;
+
+  /**
+   * `promote-columns` only: what to finish once the restart has loaded the regenerated entity
+   * classes — the IntegrationObjectField rows, the field maps, and the overflow→column spread.
+   *
+   * The destination names are carried rather than recomputed because `uniqueColumnName` may have
+   * suffixed one (`_2`) to avoid a collision; deriving it again post-restart would not know that.
+   */
+  PromotedColumns?: Array<{
+    /** MJ entity the columns were added to. */
+    EntityName: string;
+    /** The connection's entity map — field maps hang off this. */
+    EntityMapID: string;
+    /** The connector's name for the object, for resolving its IntegrationObject. */
+    ExternalObjectName: string;
+    /** Owning integration, for the same resolution. */
+    IntegrationID: string;
+    Columns: Array<{
+      /** Key as it appears in the overflow JSON. */
+      SourceKey: string;
+      /** Column actually created — possibly collision-suffixed. */
+      ColumnName: string;
+      /** Inferred schema type, for the IntegrationObjectField row. */
+      SchemaFieldType: string;
+      /** Inferred length; null for an unbounded type. */
+      MaxLength: number | null;
+      /** Share of sampled records carrying the key, recorded on the IntegrationObjectField row. */
+      Coverage: number;
+    }>;
+  }>;
+
   CompanyIntegrationID: string;
   SourceObjectNames: string[];
   /** Per-object field selections. Key = source object name, value = field names (null = all fields). */
@@ -645,6 +705,41 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /** Mark a pending work row Failed, recording why. */
+  /**
+   * Re-queues failed work for one more attempt, narrowed to what has NOT yet been done.
+   *
+   * RSU is a long chain — migrations, CodeGen, a git commit, a compile, a restart — and a failure
+   * partway through it is frequently transient: the process was restarted mid-consumption, or a
+   * provider call failed once. Marking such an item Failed terminally means the objects it would
+   * have mapped are silently never mapped, and the only recovery is for someone to notice and
+   * re-apply the connector by hand.
+   *
+   * The remainder matters as much as the retry. Re-running an item whole would redo the objects
+   * that already succeeded; carrying only the outstanding ones makes each attempt strictly smaller
+   * and keeps a single poison object from blocking its siblings forever.
+   *
+   * Returns false when the budget is spent, in which case the caller should fail the item
+   * terminally — the message it writes is the operator's only signal, so it should name what was
+   * left undone.
+   */
+  public async RetryPendingWork(
+    id: string,
+    work: RSUPendingWork,
+    remainingObjectNames: string[],
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    const attempts = (work.Attempts ?? 0) + 1;
+    if (attempts >= MAX_RSU_PENDING_ATTEMPTS) return false;
+    if (remainingObjectNames.length === 0) return false;
+    return this.rewritePendingWorkPayload(
+      id,
+      { ...work, Attempts: attempts, SourceObjectNames: remainingObjectNames },
+      contextUser,
+      provider,
+    );
+  }
+
   public async FailPendingWork(
     id: string,
     errorMessage: string,
@@ -652,6 +747,34 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     provider?: IMetadataProvider,
   ): Promise<boolean> {
     return this.setPendingWorkTerminalStatus(id, 'Failed', errorMessage, contextUser, provider);
+  }
+
+  /**
+   * Rewrites a pending row's payload while leaving it PENDING, so the next consumer picks it up.
+   *
+   * Deliberately not a status transition: the row must stay claimable. Only the payload and the
+   * error message change, and ProcessedAt is left alone so "when did this last complete" keeps
+   * meaning that rather than "when was it last touched".
+   */
+  private async rewritePendingWorkPayload(
+    id: string,
+    work: RSUPendingWork,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    const md = provider ?? new Metadata();
+    const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
+    if (!(await row.Load(id))) {
+      LogError(`[RSU] Pending work ${id} not found when re-queueing`);
+      return false;
+    }
+    row.PayloadJSON = JSON.stringify(work);
+    row.Status = 'Pending';
+    if (!(await row.Save())) {
+      LogError(`[RSU] Failed to re-queue pending work ${id}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      return false;
+    }
+    return true;
   }
 
   private async setPendingWorkTerminalStatus(

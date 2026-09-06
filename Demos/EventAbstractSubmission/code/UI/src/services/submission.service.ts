@@ -1,15 +1,15 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { SubmissionEntity } from 'mj_generatedentities';
+import { EventsSubmissionEntity } from 'mj_generatedentities';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SubmissionService {
 
-  async getAllSubmissions(): Promise<SubmissionEntity[]> {
+  async getAllSubmissions(): Promise<EventsSubmissionEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<SubmissionEntity>({
+    const result = await rv.RunView<EventsSubmissionEntity>({
       EntityName: 'Submissions',
       OrderBy: '__mj_CreatedAt DESC',
       ResultType: 'entity_object'
@@ -18,9 +18,9 @@ export class SubmissionService {
     return result.Success ? (result.Results || []) : [];
   }
 
-  async getSubmissionsByEvent(eventId: string): Promise<SubmissionEntity[]> {
+  async getSubmissionsByEvent(eventId: string): Promise<EventsSubmissionEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<SubmissionEntity>({
+    const result = await rv.RunView<EventsSubmissionEntity>({
       EntityName: 'Submissions',
       ExtraFilter: `EventID='${eventId}'`,
       OrderBy: '__mj_CreatedAt DESC',
@@ -30,16 +30,16 @@ export class SubmissionService {
     return result.Success ? (result.Results || []) : [];
   }
 
-  async getSubmissionById(id: string): Promise<SubmissionEntity | null> {
+  async getSubmissionById(id: string): Promise<EventsSubmissionEntity | null> {
     const md = new Metadata();
-    const submission = await md.GetEntityObject('Submissions') as unknown as SubmissionEntity;
+    const submission = await md.GetEntityObject('Submissions') as unknown as EventsSubmissionEntity;
     const loaded = await submission.Load(id);
     return loaded ? submission : null;
   }
 
-  async createSubmission(): Promise<SubmissionEntity> {
+  async createSubmission(): Promise<EventsSubmissionEntity> {
     const md = new Metadata();
-    return await md.GetEntityObject('Submissions') as unknown as SubmissionEntity;
+    return await md.GetEntityObject('Submissions') as unknown as EventsSubmissionEntity;
   }
 
   async getSubmissionStatistics(eventId?: string): Promise<{

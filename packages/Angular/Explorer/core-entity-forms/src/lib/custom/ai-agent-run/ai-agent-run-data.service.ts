@@ -1,6 +1,7 @@
 import { BehaviorSubject, Observable } from 'rxjs';
 import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
 import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { SortAgentRunStepsByExecutionOrder } from './agent-run-step-order';
 
 export interface AgentRunData {
   steps: MJAIAgentRunStepEntity[];
@@ -97,17 +98,21 @@ export class AIAgentRunDataHelper {
     const rv = RunView.FromMetadataProvider(this.Provider);
     
     // First, get all steps to determine what additional data we need
+    // StartedAt is execution time (what the timeline paints). __mj_CreatedAt is persist time
+    // and inverts for fast sibling steps whose fire-and-forget INSERTs race. StepNumber is
+    // the same-millisecond tie-break. Client-sort after the query as well — T-SQL NULLs
+    // sort first, and SQL datetime rounding can still disagree with JS Date.getTime().
     const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID='${agentRunId}'`,
-      OrderBy: '__mj_CreatedAt, StepNumber'
+      OrderBy: 'StartedAt, StepNumber'
     });
     
     if (!stepsResult.Success) {
       throw new Error('Failed to load agent run steps');
     }
     
-    const steps = stepsResult.Results as MJAIAgentRunStepEntity[] || [];
+    const steps = SortAgentRunStepsByExecutionOrder(stepsResult.Results as MJAIAgentRunStepEntity[] || []);
     
     // Build filters for batch loading
     const actionLogIds = steps
@@ -211,14 +216,14 @@ export class AIAgentRunDataHelper {
     const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
-      OrderBy: '__mj_CreatedAt, StepNumber'
+      OrderBy: 'StartedAt, StepNumber'
     });
     
     if (!stepsResult.Success || !stepsResult.Results) {
       return { steps: [], promptRuns: [] };
     }
     
-    const steps = stepsResult.Results;
+    const steps = SortAgentRunStepsByExecutionOrder(stepsResult.Results);
     
     // Get prompt run IDs
     const promptRunIds = steps

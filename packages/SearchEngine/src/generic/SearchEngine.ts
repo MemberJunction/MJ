@@ -20,7 +20,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { EntityInfo, EntityPermissionType, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, EntityPermissionType, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     SearchEngineBase,
     MJSearchProviderEntity,
@@ -30,7 +30,7 @@ import {
     MJAISkillEntity,
     ScopeBundle
 } from '@memberjunction/core-entities';
-import { BaseSingleton, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     SearchParams,
     SearchResult,
@@ -66,6 +66,7 @@ import {
     EntitlementExplanation,
 } from './ScopeExplanation';
 import { GetSearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
+import type { SearchScopePermissionSource } from '../permissions/SearchScopePermissionResolver';
 
 /**
  * Collects lane problems keyed by the lane's **row ID** instead of throwing.
@@ -906,11 +907,62 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         let effectiveContext: SearchContext | undefined;
         let dimensionFailure: string | null = null;
         try {
+            // DO NOT BIND A PRINCIPAL THE ENTITLEMENT STEP JUST REFUSED. `deriveServerValue` binds
+            // `Principals.SkillID` (and AgentID) into a dimension's expansion query, so resolving
+            // with the caller's principals after `explainEntitlement` denied them would run
+            // server-authored SQL parameterised by an ID that failed its gate — the exact thing the
+            // action refuses with INVALID_PARAM rather than "continuing with a null skill". The
+            // dimension explanation is still produced, just for an unprincipled search, and the
+            // diagnostic says so rather than leaving the reader to assume the principals applied.
+            // Drop the principals ONLY when the principals are what was refused. Dropping them for
+            // an unrelated denial — the user simply has no per-scope grant — drives the expansion
+            // query with null ids, which returns no rows, which makes a required dimension throw and
+            // the explanation announce "dimension resolution FAILED". The admin then goes and fixes a
+            // dimension that was never broken. `PrincipalNotActivatable` is exactly the distinction
+            // needed to tell those two cases apart.
+            // EVERY principal-side refusal drops the principals, not just one of them.
+            //
+            // The rule stated above is "drop them ONLY when the principals are what was refused", and
+            // `PrincipalNotActivatable` was the only source honouring it. `AgentNone`,
+            // `AgentAssignedNotListed`, `SkillNone` and `SkillAssignedNotListed` are equally
+            // principal-side — the principal IS the reason — yet their ids were still bound into the
+            // expansion query. This is the same set the Scoped Search action classifies as
+            // ACCESS_DENIED rather than PERMISSION_DENIED, for the same reason.
+            // A TOTAL MAP, NOT A LIST: `SearchScopePermissionSource` is a closed union, so writing
+            // this as `Record<Source, boolean>` makes the compiler demand an answer for any source
+            // added later. As a `string[]` a new principal-side source would silently default to
+            // "bind it" — which is the exact defect this block exists to fix, re-openable by an
+            // unrelated edit.
+            const IS_PRINCIPAL_SIDE: Record<SearchScopePermissionSource, boolean> = {
+                PrincipalNotActivatable: true,
+                AgentNone: true,
+                AgentAssignedNotListed: true,
+                SkillNone: true,
+                SkillAssignedNotListed: true,
+                // Grant-only sources: unreachable while `Allowed` is false, listed for totality.
+                AgentUnscopedAll: false,
+                SkillUnscopedAll: false,
+                // User-side: dropping principals here would drive the expansion query with nulls,
+                // making a required dimension throw and the explanation announce a failure that is
+                // not real. `DirectGrant` covers the explicit-None deny, which is still user-side.
+                DirectGrant: false,
+                RoleGrant: false,
+                NoGrant: false,
+            };
+            const principalsJudged =
+                entitlement.Allowed || !IS_PRINCIPAL_SIDE[entitlement.Source];
+            if (!principalsJudged && (input.AIAgentID || input.AISkillID)) {
+                diagnostics.push(
+                    'principals were NOT bound into dimension resolution: entitlement denied them, '
+                    + 'so the bound below is the one an unprincipled search would see.');
+            }
             const resolved = await this.dimensionResolver.Resolve({
                 Scope: scope,
                 CallerContext: input.SearchContext,
                 ContextUser: contextUser,
-                Principals: this.principalsFrom(input),
+                Principals: principalsJudged
+                    ? this.principalsFrom(input)
+                    : { AgentID: null, SkillID: null },
             });
             dimensions = resolved.Provenance;
             diagnostics.push(...resolved.Diagnostics);
@@ -950,8 +1002,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         };
     }
 
-    /** Resolve entitlement for the dry run, including the skill and tenant principals. */
-    private async explainEntitlement(
+    /** Resolve entitlement for the dry run, including the skill and tenant principals.
+     * `protected`, like {@link principalsFrom}, so a test can drive it without weak-typed casts.
+     */
+    protected async explainEntitlement(
         scopeID: string,
         input: ExplainScopeInput,
         contextUser: UserInfo
@@ -963,10 +1017,40 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             PrimaryScopeRecordID: input.SearchContext?.PrimaryScopeRecordID ?? null,
         };
         try {
+            // No ENTITLEMENT gate here on purpose — that judgement belongs to
+            // ResolveEffectivePermission. (The loadability check just below is a different thing: it
+            // refuses an id that names nothing, which the resolver could not judge either way.)
+            // The principals are judged inside ResolveEffectivePermission,
+            // where a principal actually widens — so the preview and the search reach the same
+            // verdict because they run the same code, not because two copies agree.
             const [agent, skill] = await Promise.all([
                 this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
                 this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
             ]);
+
+            // A PRINCIPAL THAT WAS NAMED BUT WOULD NOT LOAD IS A REFUSAL, NOT AN ABSENCE.
+            //
+            // `loadPrincipal` returns null both when nothing was supplied and when what was supplied
+            // does not exist. Letting the second case fall through as null means the resolver never
+            // sees a principal, so its rules never fire, and a user with their own grant is reported
+            // ALLOWED — after which `principalsJudged` is true and `principalsFrom(input)` binds the
+            // caller's RAW id string into the expansion query, unjudged. That is precisely what the
+            // action refuses with INVALID_PARAM rather than "continuing with a null skill", and a
+            // preview that promises what the search refuses is worse than no preview.
+            const unloadable =
+                (input.AIAgentID && !agent) ? `agent '${input.AIAgentID}'`
+                : (input.AISkillID && !skill) ? `skill '${input.AISkillID}'`
+                : null;
+            if (unloadable) {
+                return {
+                    Allowed: false,
+                    Level: 'None',
+                    Source: 'PrincipalNotActivatable',
+                    Reason: `${unloadable} was supplied but could not be loaded, so it cannot be judged. The Scoped Search action refuses this with INVALID_PARAM, and the SearchKnowledge resolvers refuse an unloadable agent the same way — preview and enforcement agree.`,
+                    Principals: principals,
+                };
+            }
+
             const permission = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
                 User: contextUser,
                 SearchScopeID: scopeID,
@@ -985,6 +1069,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         } catch (e) {
             // A resolver failure must read as "denied", never as "allowed" — an explanation that
             // fails open would be worse than no explanation at all.
+            // NOTE: Source 'NoGrant' is user-side, so the caller's principals are still bound into
+            // dimension resolution even though nothing judged them — reaching here requires the
+            // permission store itself to be failing. Revisit if ExplainScope gains a production caller.
             const msg = e instanceof Error ? e.message : String(e);
             return {
                 Allowed: false,
@@ -996,8 +1083,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
     }
 
-    /** Load an agent or skill principal by ID; null when no ID was supplied. */
-    private async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
+    /** Load an agent or skill principal by ID; null when no ID was supplied.
+     * `protected` so a test can substitute principal loading; see {@link explainEntitlement}.
+     */
+    protected async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
         entityName: string,
         id: string | null | undefined,
         contextUser: UserInfo
@@ -1968,18 +2057,22 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             return;
         }
 
-        const pkFieldName = pkField.Name;
-        const recordIDs = entityResults.map(r => `'${r.RecordID.replace(/'/g, "''")}'`).join(',');
+        // `RecordID` is a compact CompositeKey segment: the bare value for a single-column key, a
+        // "F1|v1||F2|v2" segment for a composite one. A single-column key is verified with one IN();
+        // a composite key needs a (F1=.. AND F2=..) term per record — an IN() on the first column
+        // alone could never match the segment, and this check fails closed, so every composite-key
+        // result would have been dropped as unauthorized.
+        const membership = entity.PrimaryKeys.length === 1
+            ? this.buildSingleKeyMembership(pkField.Name, entityResults)
+            : this.buildCompositeKeyMembership(entity, entityResults);
         // Without a row filter this is a pure existence check against the entity's own view.
-        const filter = rlsClause
-            ? `${pkFieldName} IN (${recordIDs}) AND (${rlsClause})`
-            : `${pkFieldName} IN (${recordIDs})`;
+        const filter = rlsClause ? `(${membership}) AND (${rlsClause})` : membership;
 
         const rv = new RunView();
-        const result = await rv.RunView<Record<string, string>>({
+        const result = await rv.RunView<Record<string, unknown>>({
             EntityName: entity.Name,
             ExtraFilter: filter,
-            Fields: [pkFieldName],
+            Fields: entity.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple'
         }, contextUser);
 
@@ -1989,15 +2082,45 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             return;
         }
 
-        const validIDs = new Set(
-            result.Results.map(r => NormalizeUUID(String(r[pkFieldName])))
+        const validKeys = new Set(
+            result.Results.map(r => this.canonicalKeyValues(entity, CompositeKey.FromEntityRecord(entity, r)))
         );
 
         for (const item of entityResults) {
-            if (validIDs.has(NormalizeUUID(item.RecordID))) {
+            const key = CompositeKey.FromURLSegment(entity, item.RecordID);
+            if (validKeys.has(this.canonicalKeyValues(entity, key))) {
                 permitted.push(item);
             }
         }
+    }
+
+    /** `PK IN ('a','b',...)` — the fast path for the overwhelmingly common single-column key. */
+    private buildSingleKeyMembership(pkFieldName: string, results: SearchResultItem[]): string {
+        const ids = results.map(r => `'${EscapeSQLString(r.RecordID)}'`).join(',');
+        return `${pkFieldName} IN (${ids})`;
+    }
+
+    /** `(F1='v1' AND F2='v2') OR (...)` — one term per composite-key result. */
+    private buildCompositeKeyMembership(entity: EntityInfo, results: SearchResultItem[]): string {
+        return results
+            .map(r => `(${CompositeKey.FromURLSegment(entity, r.RecordID).ToWhereClause()})`)
+            .join(' OR ');
+    }
+
+    /**
+     * Key values in primary-key metadata order, UUID-normalized and joined — the comparison form for
+     * matching a result's RecordID against the rows the database returned. Field-name lookup is
+     * case-insensitive and values are normalized so a segment written by an external index (lowercase
+     * UUIDs, differently-cased column names) still matches. For a single-column key this is exactly
+     * `NormalizeUUID(value)`.
+     */
+    private canonicalKeyValues(entity: EntityInfo, key: CompositeKey): string {
+        return entity.PrimaryKeys
+            .map(pk => {
+                const match = key.KeyValuePairs.find(kv => kv.FieldName.trim().toLowerCase() === pk.Name.trim().toLowerCase());
+                return NormalizeUUID(String(match?.Value ?? ''));
+            })
+            .join('||');
     }
 
     /** Build an error SearchResult */

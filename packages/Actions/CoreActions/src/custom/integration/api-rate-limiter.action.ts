@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass, BaseSingleton, MJLruCache } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import axios, { AxiosRequestConfig } from "axios";
+import { HttpRequest, HttpRequestConfig, HttpResponse, HttpMethod, IsHttpError, SSRFError } from "@memberjunction/network-utils";
 import { Subject, Subscription, from, Observable } from "rxjs";
 import { concatMap, delay, map, catchError } from "rxjs/operators";
 
@@ -48,9 +48,9 @@ export interface RateLimitConfig {
 }
 
 interface QueuedRequest {
-    config: AxiosRequestConfig;
-    resolve: (value: any) => void;
-    reject: (reason?: any) => void;
+    config: HttpRequestConfig;
+    resolve: (value: HttpResponse) => void;
+    reject: (reason?: unknown) => void;
     retryCount: number;
 }
 
@@ -80,10 +80,10 @@ export class APIRateLimiter {
         this.requestQueue$.complete();
     }
 
-    async execute(axiosConfig: AxiosRequestConfig): Promise<any> {
-        return new Promise((resolve, reject) => {
+    async execute(requestConfig: HttpRequestConfig): Promise<HttpResponse> {
+        return new Promise<HttpResponse>((resolve, reject) => {
             this.requestQueue$.next({
-                config: axiosConfig,
+                config: requestConfig,
                 resolve,
                 reject,
                 retryCount: 0
@@ -123,18 +123,19 @@ export class APIRateLimiter {
                 this.activeRequests++;
 
                 try {
-                    const response = await axios(request.config);
+                    const response = await HttpRequest(request.config);
                     this.activeRequests--;
                     request.resolve(response);
                     observer.next();
                     observer.complete();
-                } catch (error: any) {
+                } catch (error: unknown) {
                     this.activeRequests--;
 
                     // Check if rate limited
-                    const isRateLimited = error.response?.status === 429 || 
-                                        error.response?.status === 503 ||
-                                        (error.response?.headers && error.response.headers['x-ratelimit-remaining'] === '0');
+                    const isRateLimited = IsHttpError(error) &&
+                                        (error.Status === 429 ||
+                                         error.Status === 503 ||
+                                         error.Headers['x-ratelimit-remaining'] === '0');
 
                     if (isRateLimited && this.config.retryOnRateLimit && request.retryCount < this.config.maxRetries) {
                         // Calculate backoff
@@ -287,17 +288,19 @@ export class APIRateLimiterAction extends BaseAction {
                 maxRetries
             });
 
-            // Build request config
-            const config: AxiosRequestConfig = {
-                url,
-                method: method as any,
-                headers,
-                timeout,
-                validateStatus: () => true // Handle all status codes
+            // Build request config. The URL is caller-controlled, so this request is SSRF-guarded
+            // (every redirect hop re-validated) — unlike the fixed-provider actions in this package.
+            const config: HttpRequestConfig = {
+                Url: url,
+                Method: method as HttpMethod,
+                Headers: headers,
+                Timeout: timeout,
+                ValidateUrl: true,
+                ThrowOnError: false // Handle all status codes
             };
 
             if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-                config.data = body;
+                config.Body = body;
             }
 
             // Execute with rate limiting
@@ -306,7 +309,7 @@ export class APIRateLimiterAction extends BaseAction {
             const duration = Date.now() - startTime;
 
             // Extract rate limit headers
-            const rateLimitHeaders: any = {};
+            const rateLimitHeaders: Record<string, string> = {};
             const headerNames = [
                 'x-ratelimit-limit',
                 'x-ratelimit-remaining',
@@ -320,8 +323,8 @@ export class APIRateLimiterAction extends BaseAction {
             ];
 
             for (const header of headerNames) {
-                if (response.headers[header]) {
-                    rateLimitHeaders[header] = response.headers[header];
+                if (response.Headers[header]) {
+                    rateLimitHeaders[header] = response.Headers[header];
                 }
             }
 
@@ -329,19 +332,19 @@ export class APIRateLimiterAction extends BaseAction {
             params.Params.push({
                 Name: 'ResponseStatus',
                 Type: 'Output',
-                Value: response.status
+                Value: response.Status
             });
 
             params.Params.push({
                 Name: 'ResponseHeaders',
                 Type: 'Output',
-                Value: response.headers
+                Value: response.Headers
             });
 
             params.Params.push({
                 Name: 'ResponseData',
                 Type: 'Output',
-                Value: response.data
+                Value: response.Data
             });
 
             params.Params.push({
@@ -357,23 +360,31 @@ export class APIRateLimiterAction extends BaseAction {
             });
 
             // Check if request was successful
-            const isSuccess = response.status >= 200 && response.status < 300;
+            const isSuccess = response.Status >= 200 && response.Status < 300;
 
             return {
                 Success: true,
-                ResultCode: isSuccess ? "SUCCESS" : `HTTP_${response.status}`,
+                ResultCode: isSuccess ? "SUCCESS" : `HTTP_${response.Status}`,
                 Message: JSON.stringify({
                     message: "API request completed with rate limiting",
-                    status: response.status,
-                    statusText: response.statusText,
+                    status: response.Status,
+                    statusText: response.StatusText,
                     duration: duration,
                     rateLimitInfo: rateLimitHeaders,
                     rateLimitKey: rateLimitKey,
-                    data: response.data
+                    data: response.Data
                 }, null, 2)
             };
 
         } catch (error) {
+            if (error instanceof SSRFError) {
+                return {
+                    Success: false,
+                    Message: "URL resolves to a private or reserved address and was blocked",
+                    ResultCode: "SSRF_BLOCKED"
+                };
+            }
+
             return {
                 Success: false,
                 Message: `Rate limited API request failed: ${error instanceof Error ? error.message : String(error)}`,

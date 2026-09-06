@@ -1,5 +1,6 @@
 import { Dropbox, DropboxOptions, files } from 'dropbox';
 import { RegisterClass } from '@memberjunction/global';
+import { DrainResponseBody } from '@memberjunction/network-utils';
 import env from 'env-var';
 import mime from 'mime-types';
 import { Readable } from 'stream';
@@ -1201,6 +1202,7 @@ export class DropboxFileStorage extends FileStorageBase {
       const response = await fetch(downloadUrl, headers ? { headers } : undefined);
 
       if (!response.ok && response.status !== 206) {
+        await DrainResponseBody(response);
         throw new Error(`Failed to stream item: ${response.statusText}`);
       }
       if (!response.body) {

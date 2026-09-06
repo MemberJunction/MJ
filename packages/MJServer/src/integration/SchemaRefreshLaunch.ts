@@ -75,3 +75,19 @@ export function BuildUpdateConnectionMessage(summary: SchemaRefreshSummaryLike):
 export function BuildDetachedRefreshMessage(runID: string): string {
     return `Updated, schema refresh running — tail run ${runID}`;
 }
+
+/**
+ * Builds the human-facing `Message` for IntegrationReactivateConnection.
+ *
+ * Reactivation is committed before any refresh starts, so every message here begins by saying so.
+ * That ordering is the whole point: whatever the refresh does or fails to do afterwards, the
+ * connection IS active, and the operator must not read a refresh problem as "resume didn't work".
+ *
+ * @param summary the refresh summary, or undefined when no refresh was requested
+ */
+export function BuildReactivateMessage(summary: SchemaRefreshSummaryLike | undefined): string {
+    if (!summary) return 'Reactivated';
+    // Never report a detached run's placeholder counts as findings — point at the run stream instead.
+    if (summary.InProgress) return `Reactivated, schema refresh running — tail run ${summary.RunID}`;
+    return `Reactivated, ${describeFinishedRefresh(summary)}`;
+}

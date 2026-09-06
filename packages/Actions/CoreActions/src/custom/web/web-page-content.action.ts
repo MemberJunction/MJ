@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import { SafeFetch, SSRFError, DrainResponseBody } from "@memberjunction/network-utils";
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
 import pdfParse from 'pdf-parse';
@@ -133,6 +134,7 @@ export class WebPageContentAction extends BaseAction {
             });
 
             if (!response.ok) {
+                await DrainResponseBody(response);
                 return {
                     Success: false,
                     Message: `Failed to fetch URL: ${response.status} ${response.statusText}`,
@@ -174,6 +176,13 @@ export class WebPageContentAction extends BaseAction {
             };
 
         } catch (error) {
+            if (error instanceof SSRFError) {
+                return {
+                    Success: false,
+                    Message: "URL resolves to a private or reserved address and was blocked",
+                    ResultCode: "SSRF_BLOCKED"
+                };
+            }
             return {
                 Success: false,
                 Message: `Failed to retrieve web content: ${error instanceof Error ? error.message : String(error)}`,
@@ -735,10 +744,15 @@ export class WebPageContentAction extends BaseAction {
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                const response = await fetch(url, options);
+                // Route through the SSRF guard: the URL is caller-controlled, so private/loopback/
+                // link-local/reserved targets are blocked and every redirect hop is re-validated.
+                const response = await SafeFetch(url, options);
 
                 // Retry on specific status codes that might be transient
                 if (attempt < maxRetries && this.shouldRetry(response.status)) {
+                    // Discarding this response in favor of a retry — drain its body so the
+                    // connection isn't held open until GC finalizes an unconsumed stream.
+                    await DrainResponseBody(response);
                     await this.delay(this.getRetryDelay(attempt));
                     continue;
                 }

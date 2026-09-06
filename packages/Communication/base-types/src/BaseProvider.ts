@@ -202,7 +202,61 @@ export type GetMessagesParams<T = Record<string, any>> = {
      * Optional, include the headers in the response (defaults to false)
      */
     IncludeHeaders?: boolean;
+
+    /**
+     * Optional. Restrict results to messages received at or AFTER this instant.
+     *
+     * Inclusive, matching the underlying provider filters this maps onto (Graph `ge`). Callers doing
+     * incremental sync should expect the boundary message back again and de-duplicate on their own
+     * key; returning it twice is recoverable, skipping it silently is not.
+     *
+     * NOT every provider can honour this. Check `MessageRetrievalCapabilities.FilterByReceivedDate`
+     * before relying on it, or read `GetMessagesResult.AppliedFilters` afterwards — a provider that
+     * cannot filter by date returns unfiltered results rather than failing, so a caller that assumes
+     * support and checks neither will silently process messages it asked to exclude.
+     */
+    ReceivedAfter?: Date;
+
+    /**
+     * Optional. Restrict results to messages received at or BEFORE this instant. Inclusive, and
+     * subject to the same capability caveat as `ReceivedAfter`.
+     */
+    ReceivedBefore?: Date;
 };
+
+/**
+ * What a provider can actually do when asked to narrow a message read.
+ *
+ * This exists because `GetMessages` is abstract: there is no base implementation to fall back on, so
+ * an unsupported filter is simply ignored by whichever provider received it. Ignoring a date bound
+ * is not a cosmetic failure — the caller gets MORE messages than it asked for and has no way to tell
+ * that from a mailbox that genuinely holds them. Declaring capability makes that knowable before the
+ * call, and `GetMessagesResult.AppliedFilters` makes it checkable after.
+ *
+ * The base class declares everything FALSE. A provider opts in by overriding, so a provider that has
+ * not considered the question is described accurately rather than optimistically.
+ */
+export type MessageRetrievalCapabilities = {
+    /** Whether `ReceivedAfter` / `ReceivedBefore` are pushed to the provider rather than ignored. */
+    FilterByReceivedDate: boolean;
+    /** Whether `UnreadOnly` is pushed to the provider rather than ignored. */
+    FilterByUnread: boolean;
+};
+
+/**
+ * Which of the requested narrowings the provider actually applied on this call.
+ *
+ * A field is true only when the provider pushed that constraint down to the underlying service. It
+ * is false both when the caller did not ask and when the provider could not comply, so it answers
+ * "is this result set narrowed" rather than "what did the caller request" — the former is what a
+ * caller needs to decide whether to filter again itself.
+ */
+export type AppliedMessageFilters = {
+    ReceivedAfter: boolean;
+    ReceivedBefore: boolean;
+    UnreadOnly: boolean;
+};
+
 
 export type GetMessageMessage = {
     From: string;
@@ -250,6 +304,12 @@ export type GetMessagesResult<T = Record<string, any>> = BaseMessageResult & {
      * Messages returned in a standardized format
      */
     Messages: GetMessageMessage[];
+    /**
+     * Which requested narrowings were actually pushed to the provider. Optional for backwards
+     * compatibility: a provider that predates this field returns undefined, which a caller must read
+     * as "unknown", NOT as "applied".
+     */
+    AppliedFilters?: AppliedMessageFilters;
 };
 
 export type ForwardMessageParams = {
@@ -1057,6 +1117,17 @@ export type ProviderOperation =
  * ```
  */
 export abstract class BaseCommunicationProvider {
+    /**
+     * What this provider can narrow on when reading messages. See `MessageRetrievalCapabilities`.
+     *
+     * Deliberately declares nothing supported. A provider that can push a filter down overrides this
+     * and says so; one that has not been updated keeps describing itself accurately instead of
+     * promising a filter it silently ignores.
+     */
+    public get MessageRetrieval(): MessageRetrievalCapabilities {
+        return { FilterByReceivedDate: false, FilterByUnread: false };
+    }
+
     /**
      * Sends a single message using the provider
      * @param message - The processed message to send

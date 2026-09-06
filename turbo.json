@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "remoteCache": { "signature": true },
   "globalDependencies": [
     "vitest.shared.ts",
     "vitest.dom.shared.ts",

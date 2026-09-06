@@ -345,7 +345,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public async SetSetting(settingKey: string, value: string, contextUser?: UserInfo): Promise<boolean> {
     const md = this.ProviderToUse;
-    const userId = contextUser?.ID || md.CurrentUser?.ID;
+    // `ProviderToUse` falls back to the global `Metadata.Provider`, which is undefined when no
+    // provider is configured (a unit-test environment, or after one is torn down). Guard the
+    // provider itself and not just `CurrentUser`: `SetSetting` is reachable from the debounced
+    // flush timer below, which can outlive its provider, and an unguarded read throws there
+    // instead of taking the "no user context" path.
+    const userId = contextUser?.ID || md?.CurrentUser?.ID;
 
     if (!userId) {
       console.error('UserInfoEngine.SetSetting: No user context available');
@@ -480,8 +485,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       clearTimeout(this._settingsDebounceTimer);
     }
 
+    // Fire-and-forget: nothing awaits this timer, so an unhandled rejection here would surface as
+    // a process-level error rather than anything a caller can catch. Swallow it into a log so a
+    // flush that fails (or fires after the environment it belonged to has gone away) can never
+    // take down the host process or fail an unrelated test run.
     this._settingsDebounceTimer = setTimeout(() => {
-      this.FlushPendingSettings();
+      this.FlushPendingSettings().catch((err) => {
+        console.error('UserInfoEngine: debounced settings flush failed', err);
+      });
     }, this._settingsDebounceMs);
   }
 

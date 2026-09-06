@@ -1,10 +1,56 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, MediaFile, SocialPost, SearchParams, SocialAnalytics } from '../../base/base-social.action';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, HttpGet, HttpPost, IsHttpError } from '@memberjunction/network-utils';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
-import FormData from 'form-data';
 import { BaseAction } from '@memberjunction/actions';
+
+/**
+ * The Graph API's standard collection envelope: a `data` array plus cursor-based `paging`.
+ * Nearly every list endpoint (`/me/accounts`, `/{page}/posts`, `/{post}/comments`) returns this.
+ */
+export interface FacebookPagedResponse<T> {
+    data: T[];
+    paging?: {
+        next?: string;
+        previous?: string;
+        cursors?: { before?: string; after?: string };
+    };
+}
+
+/**
+ * The `/{post-id}?fields=reactions.summary(true),comments.summary(true),shares` shape used to
+ * read a post's engagement counters in one call.
+ */
+export interface FacebookPostEngagement {
+    reactions?: { summary?: { total_count?: number } };
+    likes?: { summary?: { total_count?: number } };
+    comments?: { summary?: { total_count?: number } };
+    shares?: { count?: number };
+}
+
+/** Response from a Graph API write that returns only the new object's id. */
+export interface FacebookIdResponse {
+    id: string;
+    post_id?: string;
+}
+
+/** Response from the `oauth/access_token` token-exchange endpoint. */
+export interface FacebookTokenResponse {
+    access_token: string;
+    token_type?: string;
+    expires_in?: number;
+}
+
+/** The Facebook Graph API error envelope this class inspects for rate-limit signals. */
+interface FacebookErrorPayload {
+    error?: {
+        code?: number;
+        error_subcode?: number;
+        message?: string;
+        type?: string;
+    };
+}
 
 /**
  * Base class for all Facebook actions.
@@ -33,71 +79,63 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
     }
 
     /**
-     * Axios instance for making HTTP requests
+     * HTTP client for making requests
      */
-    private _axiosInstance: AxiosInstance | null = null;
+    private _httpClient: HttpClient | null = null;
 
     /**
-     * Get or create axios instance with interceptors
+     * Get or create the HTTP client. `OnRequest` / `OnResponse` / `OnRetry` replace what were
+     * axios-era interceptors: token injection, rate-limit logging, and 429 back-off + retry.
      */
-    protected get axiosInstance(): AxiosInstance {
-        if (!this._axiosInstance) {
-            this._axiosInstance = axios.create({
-                baseURL: this.apiBaseUrl,
-                timeout: 30000,
-                headers: {
+    protected get httpClient(): HttpClient {
+        if (!this._httpClient) {
+            this._httpClient = new HttpClient({
+                BaseURL: this.apiBaseUrl,
+                Timeout: 30000,
+                Headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
-                }
-            });
-
-            // Add request interceptor for auth
-            this._axiosInstance.interceptors.request.use(
-                (config) => {
+                },
+                OnRequest: (config) => {
                     const token = this.getAccessToken();
                     if (token) {
                         // Facebook uses access_token as query parameter
-                        config.params = {
-                            ...config.params,
-                            access_token: token
+                        return {
+                            ...config,
+                            Query: {
+                                ...config.Query,
+                                access_token: token
+                            }
                         };
                     }
                     return config;
                 },
-                (error) => Promise.reject(error)
-            );
-
-            // Add response interceptor for rate limit handling
-            this._axiosInstance.interceptors.response.use(
-                (response) => {
+                OnResponse: (response) => {
                     // Log rate limit info if available
-                    const rateLimitInfo = this.parseRateLimitHeaders(response.headers);
+                    const rateLimitInfo = this.parseRateLimitHeaders(response.Headers);
                     if (rateLimitInfo) {
                         LogStatus(`Facebook Rate Limit - Remaining: ${rateLimitInfo.remaining}/${rateLimitInfo.limit}`);
                     }
-                    return response;
                 },
-                async (error: AxiosError) => {
-                    if (error.response?.status === 429 || this.isFacebookRateLimitError(error)) {
+                OnRetry: async (error) => {
+                    if (error.Status === 429 || this.isFacebookRateLimitError(error)) {
                         // Rate limit exceeded - Facebook returns various codes
                         const waitTime = this.extractRateLimitWaitTime(error) || 60;
                         await this.handleRateLimit(waitTime);
-                        
-                        // Retry the request
-                        return this._axiosInstance!.request(error.config!);
+                        return true;
                     }
-                    return Promise.reject(error);
+                    return false;
                 }
-            );
+            });
         }
-        return this._axiosInstance;
+        return this._httpClient;
     }
 
     /**
      * Check if error is a Facebook rate limit error
      */
-    private isFacebookRateLimitError(error: AxiosError): boolean {
-        const errorData = error.response?.data as any;
+    private isFacebookRateLimitError(error: HttpError): boolean {
+        const errorData = error.Data as FacebookErrorPayload | undefined;
         const errorCode = errorData?.error?.code;
         const errorSubcode = errorData?.error?.error_subcode;
         
@@ -112,9 +150,9 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
     /**
      * Extract wait time from Facebook rate limit error
      */
-    private extractRateLimitWaitTime(error: AxiosError): number | null {
-        const errorData = error.response?.data as any;
-        const headers = error.response?.headers;
+    private extractRateLimitWaitTime(error: HttpError): number | null {
+        const errorData = error.Data as FacebookErrorPayload | undefined;
+        const headers = error.Headers;
         
         // Check headers first
         if (headers?.['x-app-usage'] || headers?.['x-page-usage'] || headers?.['x-ad-account-usage']) {
@@ -149,8 +187,8 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
             const clientSecret = this.getCustomAttribute(3) || ''; // App Secret stored in CustomAttribute3
 
             // Exchange short-lived token for long-lived token
-            const response = await axios.get(`${this.apiBaseUrl}/oauth/access_token`, {
-                params: {
+            const response = await HttpGet<FacebookTokenResponse>(`${this.apiBaseUrl}/oauth/access_token`, {
+                Query: {
                     grant_type: 'fb_exchange_token',
                     client_id: clientId,
                     client_secret: clientSecret,
@@ -158,7 +196,7 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
                 }
             });
 
-            const { access_token, expires_in } = response.data;
+            const { access_token, expires_in } = response.Data;
 
             // Update stored tokens
             await this.updateStoredTokens(
@@ -179,12 +217,12 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
      */
     protected async getUserPages(): Promise<FacebookPage[]> {
         try {
-            const response = await this.axiosInstance.get('/me/accounts', {
-                params: {
+            const response = await this.httpClient.Get<FacebookPagedResponse<FacebookPage>>('/me/accounts', {
+                Query: {
                     fields: 'id,name,access_token,category,picture'
                 }
             });
-            return response.data.data || [];
+            return response.Data.data || [];
         } catch (error) {
             LogError(`Failed to get user pages: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -215,22 +253,18 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
                 : file.data;
 
             const formData = new FormData();
-            formData.append('source', fileData, {
-                filename: file.filename,
-                contentType: file.mimeType
-            });
+            formData.append('source', new Blob([new Uint8Array(fileData)], { type: file.mimeType }), file.filename);
 
             const isVideo = file.mimeType.startsWith('video/');
             const endpoint = isVideo ? '/me/videos' : '/me/photos';
 
-            const response = await this.axiosInstance.post(endpoint, formData, {
-                headers: formData.getHeaders(),
-                params: {
+            const response = await this.httpClient.Post<FacebookIdResponse>(endpoint, formData, {
+                                Query: {
                     published: 'false' // Upload as unpublished for later use
                 }
             });
 
-            return response.data.id;
+            return response.Data.id;
         } catch (error) {
             LogError(`Failed to upload media to Facebook: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -248,23 +282,19 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
 
             const pageToken = await this.getPageAccessToken(pageId);
             const formData = new FormData();
-            formData.append('source', fileData, {
-                filename: file.filename,
-                contentType: file.mimeType
-            });
+            formData.append('source', new Blob([new Uint8Array(fileData)], { type: file.mimeType }), file.filename);
 
             const isVideo = file.mimeType.startsWith('video/');
             const endpoint = `/${pageId}/${isVideo ? 'videos' : 'photos'}`;
 
-            const response = await axios.post(`${this.apiBaseUrl}${endpoint}`, formData, {
-                headers: formData.getHeaders(),
-                params: {
+            const response = await HttpPost<FacebookIdResponse>(`${this.apiBaseUrl}${endpoint}`, formData, {
+                                Query: {
                     access_token: pageToken,
                     published: 'false' // Upload as unpublished for later use
                 }
             });
 
-            return response.data.id;
+            return response.Data.id;
         } catch (error) {
             LogError(`Failed to upload media to Facebook page: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -318,20 +348,20 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
         try {
             const pageToken = await this.getPageAccessToken(pageId);
             
-            const response = await axios.post(
+            const response = await HttpPost<FacebookIdResponse>(
                 `${this.apiBaseUrl}/${pageId}/feed`,
                 postData,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken
                     }
                 }
             );
             
             // Get the full post data
-            return await this.getPost(response.data.id);
+            return await this.getPost(response.Data.id);
         } catch (error) {
-            this.handleFacebookError(error as AxiosError);
+            this.handleFacebookError(error as HttpError);
         }
     }
 
@@ -340,12 +370,12 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
      */
     protected async getPost(postId: string): Promise<FacebookPost> {
         try {
-            const response = await this.axiosInstance.get(`/${postId}`, {
-                params: {
+            const response = await this.httpClient.Get<FacebookPost>(`/${postId}`, {
+                Query: {
                     fields: this.getPostFields()
                 }
             });
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError(`Failed to get post: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -359,8 +389,8 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
         try {
             const pageToken = await this.getPageAccessToken(pageId);
             
-            const response = await axios.get(`${this.apiBaseUrl}/${pageId}/posts`, {
-                params: {
+            const response = await HttpGet<FacebookPagedResponse<FacebookPost>>(`${this.apiBaseUrl}/${pageId}/posts`, {
+                Query: {
                     access_token: pageToken,
                     fields: this.getPostFields(),
                     limit: params.limit || 100,
@@ -370,7 +400,7 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
                 }
             });
 
-            return response.data.data || [];
+            return response.Data.data || [];
         } catch (error) {
             LogError(`Failed to get page posts: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -386,12 +416,12 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
         const limit = params.limit || 100;
 
         while (nextUrl) {
-            const response = await axios.get(nextUrl, {
-                params: nextUrl === url ? { ...params, limit } : {}
+            const response = await HttpGet<FacebookPagedResponse<T>>(nextUrl, {
+                Query: nextUrl === url ? { ...params, limit } : {}
             });
 
-            if (response.data.data && Array.isArray(response.data.data)) {
-                results.push(...response.data.data);
+            if (response.Data.data && Array.isArray(response.Data.data)) {
+                results.push(...response.Data.data);
             }
 
             // Check if we've reached max results
@@ -400,7 +430,7 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
             }
 
             // Get next page URL
-            nextUrl = response.data.paging?.next || null;
+            nextUrl = response.Data.paging?.next || null;
         }
 
         return results;
@@ -527,10 +557,10 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
     /**
      * Handle Facebook-specific errors
      */
-    protected handleFacebookError(error: AxiosError): never {
-        if (error.response) {
-            const { status, data } = error.response;
-            const errorData = data as any;
+    protected handleFacebookError(error: HttpError): never {
+        if (error.Status) {
+            const status = error.Status;
+            const errorData = error.Data as { error?: Record<string, unknown>; message?: string } | undefined;
             const fbError = errorData?.error;
 
             if (fbError) {
@@ -587,7 +617,7 @@ export abstract class FacebookBaseAction extends BaseSocialMediaAction {
                 default:
                     throw new Error(`Facebook API Error (${status}): ${errorData.message || 'Unknown error'}`);
             }
-        } else if (error.request) {
+        } else if (error.IsTimeout) {
             throw new Error('Network Error: No response from Facebook');
         } else {
             throw new Error(`Request Error: ${error.message}`);

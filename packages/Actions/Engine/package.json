@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "Main library for MemberJunction Actions. This library is only intended to be imported on the server side.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,14 +22,14 @@
     "vitest": "^3.1.1"
   },
   "dependencies": {
-    "@memberjunction/action-runtime": "6.1.0-edge.3",
-    "@memberjunction/actions-base": "6.1.0-edge.3",
-    "@memberjunction/ai": "6.1.0-edge.3",
-    "@memberjunction/code-execution": "6.1.0-edge.3",
-    "@memberjunction/core": "6.1.0-edge.3",
-    "@memberjunction/core-entities": "6.1.0-edge.3",
-    "@memberjunction/doc-utils": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3"
+    "@memberjunction/action-runtime": "6.1.0-edge.5",
+    "@memberjunction/actions-base": "6.1.0-edge.5",
+    "@memberjunction/ai": "6.1.0-edge.5",
+    "@memberjunction/code-execution": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/doc-utils": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5"
   },
   "repository": {
     "type": "git",

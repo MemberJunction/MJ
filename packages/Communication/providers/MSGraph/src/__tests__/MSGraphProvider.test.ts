@@ -8,7 +8,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@memberjunction/communication-types', () => ({
+vi.mock('@memberjunction/communication-types', async () => {
+  // Pull the REAL clause combiner from source rather than stubbing it. It is pure and
+  // dependency-free for exactly this reason (same rationale as AddressUtils in the Gmail suite):
+  // a stub would agree with whatever these tests expect, so the composition that fixes the
+  // silent-overwrite bug would never actually be exercised.
+  const filterUtils = await vi.importActual<{
+    CombineFilterClauses: (clauses: (string | null | undefined)[], operator: string) => string;
+  }>('../../../../base-types/src/FilterUtils');
+  return {
+  ...filterUtils,
   BaseCommunicationProvider: class {
     getSupportedOperations() { return []; }
   },
@@ -24,7 +33,8 @@ vi.mock('@memberjunction/communication-types', () => ({
       }
     }
   },
-}));
+  };
+});
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -183,6 +193,94 @@ describe('MSGraphProvider', () => {
       });
       expect(message.ToRecipients).toEqual([]);
       expect(message.CCRecipients).toEqual([]);
+    });
+  });
+
+  describe('GetMessages narrowing — what actually reaches Graph', () => {
+    /** Runs GetMessages and hands back the `$filter` string the Graph client was given. */
+    const filterFor = async (params: Record<string, unknown>): Promise<{ filter: string; applied: unknown }> => {
+      const chain = {
+        filter: vi.fn().mockReturnThis(),
+        top: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue({ value: [] }),
+      };
+      mockGraphApi.mockReturnValueOnce(chain);
+      const result = (await provider.GetMessages({ NumMessages: 10, ...params } as never)) as {
+        AppliedFilters?: unknown;
+      };
+      return { filter: chain.filter.mock.calls[0][0] as string, applied: result.AppliedFilters };
+    };
+
+    it('asks for everything when the caller narrows nothing', async () => {
+      const { filter } = await filterFor({});
+      expect(filter).toBe('');
+    });
+
+    it('pushes ReceivedAfter down as an inclusive receivedDateTime comparison', async () => {
+      const { filter } = await filterFor({ ReceivedAfter: new Date('2026-08-30T12:00:00.000Z') });
+      // `ge`, not `gt`: the param is documented as inclusive. Unquoted: quoting the instant makes
+      // Graph compare a datetime to a string and reject the request.
+      expect(filter).toBe('(receivedDateTime ge 2026-08-30T12:00:00.000Z)');
+    });
+
+    it('pushes ReceivedBefore down as an inclusive upper bound', async () => {
+      const { filter } = await filterFor({ ReceivedBefore: new Date('2026-08-31T00:00:00.000Z') });
+      expect(filter).toBe('(receivedDateTime le 2026-08-31T00:00:00.000Z)');
+    });
+
+    it('combines both bounds into a single range', async () => {
+      const { filter } = await filterFor({
+        ReceivedAfter: new Date('2026-08-30T00:00:00.000Z'),
+        ReceivedBefore: new Date('2026-08-31T00:00:00.000Z'),
+      });
+      expect(filter).toBe(
+        '(receivedDateTime ge 2026-08-30T00:00:00.000Z) and (receivedDateTime le 2026-08-31T00:00:00.000Z)',
+      );
+    });
+
+    it('converts a non-UTC Date to UTC rather than sending local time', async () => {
+      // A caller can hand over any Date. Graph has no idea what timezone the caller sits in, so an
+      // unconverted local instant would silently shift the boundary by the UTC offset.
+      const { filter } = await filterFor({ ReceivedAfter: new Date(Date.UTC(2026, 7, 30, 5, 30, 0)) });
+      expect(filter).toBe('(receivedDateTime ge 2026-08-30T05:30:00.000Z)');
+    });
+
+    describe('a caller-supplied ContextData.Filter NARROWS, it does not replace', () => {
+      /**
+       * THE REGRESSION THIS FILE EXISTS FOR. The old code assigned `filter = ContextData.Filter`
+       * unconditionally, so asking for unread mail AND a custom clause returned READ mail — the
+       * caller's first constraint vanished with nothing reported. Both must survive.
+       */
+      it('keeps UnreadOnly when a custom filter is also supplied', async () => {
+        const { filter } = await filterFor({ UnreadOnly: true, ContextData: { Filter: "(from/emailAddress/address eq 'a@b.com')" } });
+        expect(filter).toContain('(isRead eq false)');
+        expect(filter).toContain("(from/emailAddress/address eq 'a@b.com')");
+        expect(filter).toBe("(isRead eq false) and (from/emailAddress/address eq 'a@b.com')");
+      });
+
+      it('keeps the date bounds too', async () => {
+        const { filter } = await filterFor({
+          ReceivedAfter: new Date('2026-08-30T00:00:00.000Z'),
+          ContextData: { Filter: '(hasAttachments eq true)' },
+        });
+        expect(filter).toBe('(receivedDateTime ge 2026-08-30T00:00:00.000Z) and (hasAttachments eq true)');
+      });
+    });
+
+    it('reports exactly which narrowings it applied', async () => {
+      const { applied } = await filterFor({ ReceivedAfter: new Date('2026-08-30T00:00:00.000Z'), UnreadOnly: true });
+      expect(applied).toEqual({ ReceivedAfter: true, ReceivedBefore: false, UnreadOnly: true });
+    });
+
+    it('reports false for narrowings the caller never asked for', async () => {
+      // AppliedFilters answers "is this result set narrowed", not "what was requested" — a caller
+      // deciding whether to filter again needs the former.
+      const { applied } = await filterFor({});
+      expect(applied).toEqual({ ReceivedAfter: false, ReceivedBefore: false, UnreadOnly: false });
+    });
+
+    it('declares both capabilities, because Graph really does filter server-side', async () => {
+      expect(provider.MessageRetrieval).toEqual({ FilterByReceivedDate: true, FilterByUnread: true });
     });
   });
 

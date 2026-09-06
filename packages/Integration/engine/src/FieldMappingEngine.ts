@@ -1,5 +1,6 @@
 import { FieldTransformEngine } from '@memberjunction/global';
 import { computeUnmappedFields } from './CustomOverflow.js';
+import { StripExcludedFields } from './SyncDirectives.js';
 import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
 import type { ICompanyIntegrationFieldMap } from './entity-types.js';
 import type { ExternalRecord, MappedRecord } from './types.js';
@@ -17,6 +18,9 @@ import type { TransformStep } from './transforms.js';
  * capture. See the Field Rules guide in `@memberjunction/global` for the shared engine, and
  * `EntityFieldRules` in `@memberjunction/core` for the metadata-aware entity-update sibling.
  */
+/** Shared empty set for the common no-exclusions call. */
+const EMPTY_EXCLUSIONS: ReadonlySet<string> = new Set();
+
 export class FieldMappingEngine {
     /** The shared transform pipeline. Holds its own LRU cache of compiled custom expressions. */
     private readonly transformEngine = new FieldTransformEngine();
@@ -33,10 +37,12 @@ export class FieldMappingEngine {
     public Apply(
         records: ExternalRecord[],
         fieldMaps: ICompanyIntegrationFieldMap[],
-        entityName: string
+        entityName: string,
+        excludedSourceNames?: ReadonlySet<string>
     ): MappedRecord[] {
         const activeMaps = fieldMaps.filter(fm => fm.Status === 'Active');
-        return records.map(record => this.MapSingleRecord(record, activeMaps, entityName));
+        const excluded = excludedSourceNames ?? EMPTY_EXCLUSIONS;
+        return records.map(record => this.MapSingleRecord(record, activeMaps, entityName, excluded));
     }
 
     /**
@@ -45,8 +51,20 @@ export class FieldMappingEngine {
     private MapSingleRecord(
         record: ExternalRecord,
         fieldMaps: ICompanyIntegrationFieldMap[],
-        entityName: string
+        entityName: string,
+        excludedSourceNames: ReadonlySet<string>
     ): MappedRecord {
+        // Field-level exclusions strip BEFORE flatten and BEFORE mapping, so an excluded
+        // key reaches neither MappedFields, nor computeUnmappedFields (-> CustomOverflow),
+        // nor the content hash (whose basis is MappedFields). Deactivating a field map
+        // does NOT do this - the unmapped key would flow into overflow instead.
+        // No-exclusions and no-match paths return the original object: zero allocation.
+        if (excludedSourceNames.size > 0) {
+            const stripped = StripExcludedFields(record.Fields, excludedSourceNames);
+            if (stripped !== record.Fields) {
+                record = { ...record, Fields: stripped };
+            }
+        }
         // Flatten nested source objects to scalar columns (e.g. checkin_question.id →
         // checkin_question_id) BEFORE mapping. The match keys on the mapped PK VALUE
         // (MatchEngine.FindByKeyFields), so an object-valued source field would produce a

@@ -24,17 +24,14 @@
  * present in the catalog.
  *
  * ── PLATFORM ────────────────────────────────────────────────────────────────────────────────
- * The catalog checks are SQL Server only, and not merely by dialect: CodeGen REFUSES layering on
- * PostgreSQL, because PG freezes `SELECT *` at view creation and has no `sp_refreshview`, so the
- * outer view would go silently stale.
+ * Catalog inspection (LBV2–LBV5) runs on BOTH platforms: `sys.columns` / `sys.sql_modules` via
+ * `ctx.Pool` on SQL Server, `pg_catalog` via the provider's `ExecuteSQL` on PostgreSQL. They skip
+ * only when neither seam is reachable. LBV1 and LBV6 are metadata + `RunView` and run everywhere.
  *
- * LBV1 and LBV6 — the two that carry the feature's actual promise — are driven from METADATA and
- * `RunView`, so they run on every run path, pool or no pool. They are still bounded by the PLATFORM
- * note above: LBV6 skips on PostgreSQL, where CodeGen declines to layer and the generated display
- * columns it proves therefore do not exist. That is a platform boundary, not a gap in coverage. Only LBV2–LBV5 need `ctx.Pool`, and they
- * skip with a loud "no assertions ran" note when it is absent. That split is deliberate: a bundle
- * whose most important check silently skips is worse than no bundle, because green reads the same
- * either way.
+ * These checks previously skipped on PostgreSQL — and a skipped check still scores 1.0 and counts
+ * as passed, so the bundle reported 6/6 / 100% while only two of six ran. LBV5 was among the
+ * silent ones, which is the one that matters most here: PostgreSQL freezes `g.*` at CREATE VIEW,
+ * so an outer view silently failing to inherit a new inner column is a PG-only failure mode.
  *
  * ── CHECKS ──────────────────────────────────────────────────────────────────────────────────
  *   LBV1 layering metadata is coherent (BaseViewGenerated=0, names differ, EntityInfo agrees)
@@ -71,45 +68,80 @@ function requireLayered(ctx: IntegrationCheckContext): EntityInfo[] {
 }
 
 /**
- * The layered entities, or null when this run cannot reach the physical catalog.
+ * Structural view of the run provider's raw-SQL seam.
  *
- * Only LBV2–LBV5 need `sys.*`. They skip when `ctx.Pool` is absent — which happens on PostgreSQL
- * (where CodeGen refuses layering outright, so there is genuinely nothing to assert) and also on
- * run paths that do not bootstrap an mssql pool. The skip is logged with the provider name so a
- * green result is never mistaken for a real one; the checks that carry the feature's actual
- * promise (LBV1, LBV6) deliberately do NOT depend on the pool, so they run everywhere.
+ * `IMetadataProvider` does not declare either member — both concrete database providers do
+ * (`ExecuteSQL` is the shared seam `UserCache` already relies on to serve SQL Server and
+ * PostgreSQL from one code path). Declared narrowly here rather than widening the interface,
+ * and rather than reaching for `any`.
  */
-/**
- * True when the run is on a platform where CodeGen refuses to build layered views at all.
- *
- * PostgreSQL freezes `SELECT *` at view-creation time and has no `sp_refreshview`, so an outer
- * wrapper would go silently stale the moment the inner view gained a column — the exact failure
- * layering exists to prevent. CodeGen therefore declines to layer on PG, which means the two LAYERED
- * entities get no generated inner view at all there. (Display fields themselves are alive on PG —
- * `sql_codegen` emits them through the dialect quoter on both platforms; it is the layering, not
- * the display columns, that PostgreSQL declines.)
- *
- * Metadata still carries `BaseViewGenerated = 0` on those entities (it is platform-independent and
- * migrated from the same source), so `requireLayered` finds them and the bundle proceeds — the
- * arrangement is declared, the implementation is deliberately absent. Asserting the promise of a
- * feature the platform does not implement is not a finding; it is the wrong question.
- */
-function layeringUnsupported(ctx: IntegrationCheckContext): boolean {
-    const platform = (ctx.Provider as unknown as { PlatformKey?: string })?.PlatformKey;
-    return typeof platform === 'string' && platform.toLowerCase().includes('postgres');
+interface CatalogQueryProvider {
+    PlatformKey?: string;
+    ExecuteSQL?<T>(query: string): Promise<T[]>;
 }
 
+/** Which catalog dialect this run can interrogate, and how to reach it. */
+type CatalogAccess =
+    | { kind: 'sqlserver' }
+    | { kind: 'postgresql'; run: <T>(query: string) => Promise<T[]> };
+
+/**
+ * How this run reaches the physical catalog, or null when it cannot.
+ *
+ * SQL Server keeps its original `ctx.Pool` + `sys.*` path untouched. PostgreSQL goes through the
+ * provider's `ExecuteSQL` against `pg_catalog`, so LBV2-LBV5 assert on PG rather than skipping.
+ *
+ * That they skipped was not a cosmetic gap: a skipped check still scored 1.0 and counted as
+ * passed, so IT69 reported 6/6 / 100% on PostgreSQL while only LBV1 and LBV6 ran - including
+ * LBV5, which is precisely the silent-staleness failure PostgreSQL has and SQL Server does not.
+ */
+function catalogAccess(ctx: IntegrationCheckContext): CatalogAccess | null {
+    if (ctx.Pool) {
+        return { kind: 'sqlserver' };
+    }
+    const provider = ctx.Provider as unknown as CatalogQueryProvider;
+    if (provider?.PlatformKey === 'postgresql' && typeof provider.ExecuteSQL === 'function') {
+        const execute = provider.ExecuteSQL.bind(provider);
+        return { kind: 'postgresql', run: execute };
+    }
+    return null;
+}
+
+/**
+ * The layered entities, or null when this run genuinely cannot reach any catalog.
+ *
+ * The skip is logged with the provider name so a green result is never mistaken for a real one.
+ */
 function catalogOrSkip(ctx: IntegrationCheckContext, checkId: string): EntityInfo[] | null {
-    if (!ctx.Pool) {
+    if (!catalogAccess(ctx)) {
         const providerName = ctx.Provider?.constructor?.name ?? 'unknown';
-        console.log(`      → ${checkId} SKIPPED (no assertions ran): no mssql pool on this run path (provider '${providerName}') — catalog inspection unavailable`);
+        console.log(`      → ${checkId} SKIPPED (no assertions ran): no catalog access on this run path (provider '${providerName}')`);
         return null;
     }
     return requireLayered(ctx);
 }
 
+/** Single-quote escape for an identifier interpolated into a catalog query as a literal. */
+function sqlLiteral(value: string): string {
+    return value.replace(/'/g, "''");
+}
+
 /** Physical column names for a view, lowercased. Empty set when the object does not exist. */
 async function viewColumns(ctx: IntegrationCheckContext, schema: string, view: string): Promise<Set<string>> {
+    const access = catalogAccess(ctx);
+    if (access?.kind === 'postgresql') {
+        const rows = await access.run<{ name: string }>(
+            `SELECT a.attname AS "name"
+               FROM pg_attribute a
+               JOIN pg_class c ON c.oid = a.attrelid
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = '${sqlLiteral(schema)}'
+                AND c.relname = '${sqlLiteral(view)}'
+                AND a.attnum > 0
+                AND NOT a.attisdropped`
+        );
+        return new Set(rows.map(r => String(r.name).toLowerCase()));
+    }
     const result = await ctx.Pool!.request().query(
         `SELECT c.name FROM sys.columns c
          WHERE c.object_id = OBJECT_ID('[${schema}].[${view}]')`
@@ -117,8 +149,22 @@ async function viewColumns(ctx: IntegrationCheckContext, schema: string, view: s
     return new Set(result.recordset.map((r: { name: string }) => r.name.toLowerCase()));
 }
 
-/** The SQL text of a view, or null when it does not exist. */
+/**
+ * The SQL text of a view, or null when it does not exist.
+ *
+ * PostgreSQL uses `pg_get_viewdef`, not `information_schema.views`: the latter is portable but
+ * SQL Server truncates `VIEW_DEFINITION` at 4000 characters, and the FROM clause LBV3 looks for
+ * sits at the end of the definition - exactly what truncation would drop.
+ */
 async function viewDefinition(ctx: IntegrationCheckContext, schema: string, view: string): Promise<string | null> {
+    const access = catalogAccess(ctx);
+    if (access?.kind === 'postgresql') {
+        const rows = await access.run<{ definition: string | null }>(
+            `SELECT pg_get_viewdef(to_regclass('"${schema.replace(/"/g, '""')}"."${view.replace(/"/g, '""')}"'), true) AS "definition"`
+        );
+        const definition = rows.length > 0 ? rows[0].definition : null;
+        return definition ? String(definition) : null;
+    }
     const result = await ctx.Pool!.request().query(
         `SELECT m.definition FROM sys.sql_modules m
          WHERE m.object_id = OBJECT_ID('[${schema}].[${view}]')`
@@ -200,7 +246,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
                 // The generated view selects from the BASE TABLE. If the outer view did too, CodeGen
                 // has replaced the wrapper with a generated view under the public name — hand-written
                 // SQL destroyed, and nothing would error until somebody looked.
-                const outerSelectsBaseTable = new RegExp(`\\[${e.BaseTable}\\]|\\b${e.BaseTable}\\b\\s+AS\\b`, 'i').test(outer!);
+                const outerSelectsBaseTable = new RegExp(`\\[${e.BaseTable}\\]|"${e.BaseTable}"|\\b${e.BaseTable}\\b\\s+AS\\b`, 'i').test(outer!);
                 Assert(!outerSelectsBaseTable || outer!.toLowerCase().includes(e.GeneratedViewName.toLowerCase()),
                     `${e.Name}: outer view [${e.BaseView}] reads the base table directly and does not reference the inner view — it looks like CodeGen overwrote the application's wrapper`);
                 Assert(inner!.toLowerCase().includes(e.BaseTable.toLowerCase()),
@@ -230,37 +276,6 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV6',
         Name: 'LBV6: a CodeGen-generated column reaches the public surface and is queryable via RunView',
         Fn: async (ctx): Promise<void> => {
-            if (layeringUnsupported(ctx)) {
-                // NOT a silent skip. CodeGen hard-throws on any entity carrying
-                // `GeneratedBaseViewName` when the platform is PostgreSQL
-                // (`PostgreSQLCodeGenProvider.assertLayeredBaseViewSupported`), so an entity marked
-                // for layering here is not merely unproven — it is a database on which `mj codegen`
-                // will FAIL. The layering metadata is platform-neutral and reaches PG by a
-                // different route than the views do, which is exactly the open hazard recorded in
-                // `migrations-pg/v6/V202608050105__…Layered_Base_Views_Pilot.pg.sql` as issue #3477.
-                //
-                // Asserting the absence turns this bundle's PG run from "no signal" into the
-                // detector that hazard currently lacks, at no cost on SQL Server.
-                const declared = layeredEntities(ctx).map(e => e.Name);
-                if (declared.length > 0) {
-                    // Reported at ERROR level on every run rather than asserted. It is a REAL and
-                    // pre-existing defect — `mj codegen` throws on this database today — but it is
-                    // a metadata/migration problem, not something this bundle's subject can fix,
-                    // and failing here would red the shared tier for everyone without moving the
-                    // hazard an inch. Loud and non-blocking is the honest position for a known
-                    // tracked issue that the change under test neither caused nor closes.
-                    console.error(
-                        `      → layered-base-views.LBV6 HAZARD (#3477): PostgreSQL builds no layered base views, ` +
-                        `yet ${declared.length} entit${declared.length === 1 ? 'y is' : 'ies are'} still marked for layering ` +
-                        `(${declared.join(', ')}). \`mj codegen\` THROWS on this database — ` +
-                        `PostgreSQLCodeGenProvider.assertLayeredBaseViewSupported rejects them. The layering metadata is ` +
-                        `platform-neutral and reaches PostgreSQL by a different route than the views do.`
-                    );
-                } else {
-                    console.log('      → layered-base-views.LBV6: PostgreSQL declares no layered entities, as expected');
-                }
-                return;
-            }
             const entities = requireLayered(ctx);
 
             // The whole promise of layering, stated as an assertion: a related-entity DISPLAY field

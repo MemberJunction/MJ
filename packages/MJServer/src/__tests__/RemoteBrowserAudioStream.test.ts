@@ -50,6 +50,17 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
       GetSessionForAgentSession: (...args: unknown[]) => getSessionMock(...(args as [])),
     },
   },
+  // The resolver's per-surface bookkeeping (`streamKey`) and its publish envelopes route through the
+  // engine's own key normaliser (#3531), so the double has to supply it or every audio-path test dies
+  // at import-of-symbol rather than on an assertion. Mirrors the real pure export exactly — trim +
+  // lowercase, with empty/whitespace collapsing to `null` (the single unnamed instance) — because the
+  // whole point of the shared export is that no layer normalises differently. Re-implemented rather
+  // than spread from `importOriginal` on purpose: this factory exists to keep the engine module inert,
+  // and loading it for real would run its import-time `RegisterForStartup` side effect.
+  NormalizeInstanceKey: (instanceKey?: string | null): string | null => {
+    const name = (instanceKey ?? '').trim().toLowerCase();
+    return name.length === 0 ? null : name;
+  },
 }));
 
 // Keep the AI imports (visual interpreter) inert — they aren't exercised by the audio path.
@@ -152,6 +163,10 @@ describe('RemoteBrowserActionResolver — audio stream', () => {
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserAudioChunk',
       agentSessionID: 'sess-1',
+      // WHICH surface made this sound (#3531). `null` is the unnamed instance, and the envelope states
+      // it explicitly rather than omitting the property so a client can route on the value — asserted
+      // here (not dropped from the exact-match) to pin that contract.
+      instanceKey: null,
       dataBase64: 'QUJD',
       codec: 'webm-opus',
       sampleRate: 48000,

@@ -550,6 +550,8 @@ export interface IntegrationCheckContext {
     EntityGraphClientFixture?: EntityGraphClientFixture;
     /** Shared fixture for the `transaction-groups` bundle (client transport, mutating). */
     TransactionGroupsFixture?: TransactionGroupsFixture;
+    /** Fixture for the `transaction-groups-batched` bundle — same shape, its own per-run prefix. */
+    TransactionGroupsBatchedFixture?: TransactionGroupsFixture;
     /** Shared fixture for the `user-routines` bundle. */
     UserRoutinesFixture?: UserRoutinesFixture;
     /** Shared fixture for the `permission-engine` bundle's mutation checks (PE11/PE12) only. */

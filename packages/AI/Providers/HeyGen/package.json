@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-heygen",
   "type": "module",
-  "version": "6.1.0-edge.3",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction Wrapper for HeyGen Video Generation",
   "main": "dist/index.js",
   "scripts": {
@@ -16,10 +16,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.3",
-    "@memberjunction/global": "6.1.0-edge.3",
-    "axios": "^1.13.4",
-    "@elevenlabs/elevenlabs-js": "^2.34.0"
+    "@elevenlabs/elevenlabs-js": "^2.34.0",
+    "@memberjunction/ai": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/network-utils": "6.1.0-edge.5"
   },
   "repository": {
     "type": "git",

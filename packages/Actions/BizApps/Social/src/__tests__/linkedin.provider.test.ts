@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Per-action tests for the LinkedIn provider.
  *
  * Boundary mocking: BaseOAuthAction is mocked (OAuth succeeds by default) and
- * axios is mocked so `axiosInstance.get/post` capture the exact endpoint and
+ * the HTTP layer is mocked so `httpClient.get/post` capture the exact endpoint and
  * payload each action sends to the LinkedIn REST API.
  * Base-class behaviors (normalizeAnalytics, handleLinkedInError, rate-limit
  * parsing) are covered once in social.test.ts.
@@ -12,31 +12,36 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -145,10 +150,10 @@ function makeShare(id: string, authorUrn: string, text: string): Record<string, 
 }
 
 function mockGetByUrl(routes: Record<string, unknown>): void {
-  http.instance.get.mockImplementation((url: string) => {
+  http.instance.Get.mockImplementation((url: string) => {
     for (const [prefix, data] of Object.entries(routes)) {
       if (url.startsWith(prefix)) {
-        return Promise.resolve({ data, headers: {} });
+        return Promise.resolve({ Data: data, Headers: {} });
       }
     }
     return Promise.reject(new Error(`Unmocked GET ${url}`));
@@ -156,8 +161,8 @@ function mockGetByUrl(routes: Record<string, unknown>): void {
 }
 
 beforeEach(() => {
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
 });
 
 // ─── LinkedInCreatePostAction ───────────────────────────────────────────────
@@ -200,14 +205,14 @@ describe('LinkedInCreatePostAction', () => {
       '/me': { id: 'me-1' },
       '/ugcPosts': { elements: [makeShare('share-1', authorUrn, 'Hello LinkedIn')] },
     });
-    http.instance.post.mockResolvedValue({ data: { id: 'share-1' }, headers: {} });
+    http.instance.Post.mockResolvedValue({ Data: { id: 'share-1' }, Headers: {}, Status: 200 });
 
     const result = await run(
       action,
       inputs({ CompanyIntegrationID: 'ci-1', Content: 'Hello LinkedIn' }, ['CreatedPost', 'PostID']),
     );
 
-    expect(http.instance.post).toHaveBeenCalledWith('/ugcPosts', {
+    expect(http.instance.Post).toHaveBeenCalledWith('/ugcPosts', {
       author: authorUrn,
       lifecycleState: 'PUBLISHED',
       specificContent: {
@@ -232,14 +237,14 @@ describe('LinkedInCreatePostAction', () => {
   it('should use the organization URN when OrganizationID is provided', async () => {
     const orgUrn = 'urn:li:organization:987';
     mockGetByUrl({ '/ugcPosts': { elements: [makeShare('share-2', orgUrn, 'Org post')] } });
-    http.instance.post.mockResolvedValue({ data: { id: 'share-2' }, headers: {} });
+    http.instance.Post.mockResolvedValue({ Data: { id: 'share-2' }, Headers: {}, Status: 200 });
 
     const result = await run(
       action,
       inputs({ CompanyIntegrationID: 'ci-1', Content: 'Org post', AuthorType: 'organization', OrganizationID: '987' }),
     );
 
-    const [, payload] = http.instance.post.mock.calls[0] as [string, { author: string }];
+    const [, payload] = http.instance.Post.mock.calls[0] as [string, { author: string }];
     expect(payload.author).toBe(orgUrn);
     expect(result.Success).toBe(true);
   });
@@ -330,8 +335,8 @@ describe('LinkedInGetOrganizationPostsAction', () => {
       inputs({ CompanyIntegrationID: 'ci-1', OrganizationID: '42', Count: 10 }, ['Posts', 'TotalCount']),
     );
 
-    expect(http.instance.get).toHaveBeenCalledWith('/ugcPosts', {
-      params: { q: 'authors', authors: `List(${orgUrn})`, count: 10, start: 0 },
+    expect(http.instance.Get).toHaveBeenCalledWith('/ugcPosts', {
+      Query: { q: 'authors', authors: `List(${orgUrn})`, count: 10, start: 0 },
     });
     expect(result.Success).toBe(true);
     expect(result.Message).toBe('Successfully retrieved 1 organization posts');
@@ -364,8 +369,8 @@ describe('LinkedInGetPersonalPostsAction', () => {
 
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1' }, ['Posts', 'TotalCount']));
 
-    expect(http.instance.get).toHaveBeenCalledWith('/ugcPosts', {
-      params: { q: 'authors', authors: `List(${meUrn})`, count: 50, start: 0 },
+    expect(http.instance.Get).toHaveBeenCalledWith('/ugcPosts', {
+      Query: { q: 'authors', authors: `List(${meUrn})`, count: 50, start: 0 },
     });
     expect(result.Success).toBe(true);
     expect(result.Message).toBe('Successfully retrieved 1 personal posts');
@@ -412,8 +417,8 @@ describe('LinkedInGetPostAnalyticsAction', () => {
       inputs({ CompanyIntegrationID: 'ci-1', PostID: 'share-1', OrganizationID: '42' }, ['Analytics', 'RawAnalytics']),
     );
 
-    expect(http.instance.get).toHaveBeenCalledWith('/organizationalEntityShareStatistics', {
-      params: { q: 'organizationalEntity', organizationalEntity: orgUrn, shares: 'List(share-1)' },
+    expect(http.instance.Get).toHaveBeenCalledWith('/organizationalEntityShareStatistics', {
+      Query: { q: 'organizationalEntity', organizationalEntity: orgUrn, shares: 'List(share-1)' },
     });
     expect(result.Success).toBe(true);
     expect(result.Message).toBe('Successfully retrieved analytics for post share-1');

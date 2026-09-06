@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, SocialPost, SocialAnalytics, MediaFile } from '../../base/base-social.action';
 import { LogError, LogStatus } from '@memberjunction/core';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, HttpPost, IsHttpError } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -41,6 +41,17 @@ export interface TikTokUser {
  * Base class for all TikTok social media actions.
  * Handles TikTok-specific authentication and API interaction patterns.
  */
+/** TikTok's OAuth refresh response, wrapped in the API's standard `data` envelope. */
+interface TikTokTokenResponse {
+    data: {
+        access_token: string;
+        refresh_token?: string;
+        expires_in?: number;
+        open_id?: string;
+        scope?: string;
+    };
+}
+
 @RegisterClass(BaseAction, 'TikTokBaseAction')
 export abstract class TikTokBaseAction extends BaseSocialMediaAction {
     
@@ -52,57 +63,43 @@ export abstract class TikTokBaseAction extends BaseSocialMediaAction {
         return 'https://open-api.tiktok.com';
     }
     
-    private axiosInstance: AxiosInstance | null = null;
-    
+    private httpClientInstance: HttpClient | null = null;
+
     /**
-     * Initialize axios instance with interceptors
+     * Initialize the HTTP client. `OnRequest` / `OnResponse` / `OnRetry` replace what were
+     * axios-era interceptors: request/response logging and 429 back-off + retry.
      */
-    protected getAxiosInstance(): AxiosInstance {
-        if (!this.axiosInstance) {
-            this.axiosInstance = axios.create({
-                baseURL: this.apiBaseUrl,
-                timeout: 30000,
-                headers: {
+    protected getHttpClient(): HttpClient {
+        if (!this.httpClientInstance) {
+            this.httpClientInstance = new HttpClient({
+                BaseURL: this.apiBaseUrl,
+                Timeout: 30000,
+                Headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
-                }
-            });
-            
-            // Request interceptor for logging
-            this.axiosInstance.interceptors.request.use(
-                (config) => {
-                    this.logApiRequest(config.method?.toUpperCase() || 'GET', config.url || '', config.data);
+                },
+                OnRequest: (config) => {
+                    this.logApiRequest(config.Method || 'GET', config.Url || '', config.Body);
                     return config;
                 },
-                (error) => {
-                    LogError(`TikTok API Request Error: ${error.message}`);
-                    return Promise.reject(error);
-                }
-            );
-            
-            // Response interceptor for logging and error handling
-            this.axiosInstance.interceptors.response.use(
-                (response) => {
-                    this.logApiResponse(response.data);
-                    return response;
+                OnResponse: (response) => {
+                    this.logApiResponse(response.Data);
                 },
-                async (error: AxiosError) => {
-                    if (error.response?.status === 429) {
+                OnRetry: async (error) => {
+                    if (error.Status === 429) {
                         // Rate limit hit
-                        const retryAfter = error.response.headers['retry-after'];
+                        const retryAfter = error.Headers['retry-after'];
                         await this.handleRateLimit(retryAfter ? parseInt(retryAfter) : undefined);
-                        
-                        // Retry the request
-                        return this.axiosInstance?.request(error.config!);
+                        return true;
                     }
-                    
+
                     LogError(`TikTok API Response Error: ${error.message}`);
-                    return Promise.reject(error);
+                    return false;
                 }
-            );
+            });
         }
-        
-        return this.axiosInstance;
+
+        return this.httpClientInstance;
     }
     
     /**
@@ -119,42 +116,42 @@ export abstract class TikTokBaseAction extends BaseSocialMediaAction {
             throw new Error('No access token available for TikTok');
         }
         
-        const axios = this.getAxiosInstance();
+        const client = this.getHttpClient();
         
         try {
-            const response = await axios.request<T>({
-                method,
-                url: endpoint,
-                data,
-                params,
-                headers: {
+            const response = await client.Request<T>({
+                Method: method,
+                Url: endpoint,
+                Body: data,
+                Query: params,
+                Headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
             
-            return response.data;
+            return response.Data;
         } catch (error) {
-            if (error instanceof AxiosError) {
-                if (error.response?.status === 401) {
+            if (IsHttpError(error)) {
+                if (error.Status === 401) {
                     // Token might be expired, try to refresh
                     await this.refreshAccessToken();
                     
                     // Retry with new token
                     const newToken = this.getAccessToken();
-                    const retryResponse = await axios.request<T>({
-                        method,
-                        url: endpoint,
-                        data,
-                        params,
-                        headers: {
+                    const retryResponse = await client.Request<T>({
+                        Method: method,
+                        Url: endpoint,
+                        Body: data,
+                        Query: params,
+                        Headers: {
                             'Authorization': `Bearer ${newToken}`
                         }
                     });
                     
-                    return retryResponse.data;
+                    return retryResponse.Data;
                 }
                 
-                const errorMessage = error.response?.data?.error?.message || error.message;
+                const errorMessage = (error.Data as { error?: { message?: string } } | undefined)?.error?.message || error.message;
                 throw new Error(`TikTok API error: ${errorMessage}`);
             }
             throw error;
@@ -171,13 +168,13 @@ export abstract class TikTokBaseAction extends BaseSocialMediaAction {
         }
         
         try {
-            const response = await axios.post(`${this.apiBaseUrl}/oauth/refresh_token/`, {
+            const response = await HttpPost<TikTokTokenResponse>(`${this.apiBaseUrl}/oauth/refresh_token/`, {
                 client_key: this.getCustomAttribute(2), // Store client key in CustomAttribute2
                 grant_type: 'refresh_token',
                 refresh_token: refreshToken
             });
             
-            const { access_token, refresh_token: newRefreshToken, expires_in } = response.data.data;
+            const { access_token, refresh_token: newRefreshToken, expires_in } = response.Data.data;
             
             // Update stored tokens
             await this.updateStoredTokens(access_token, newRefreshToken, expires_in);
@@ -261,7 +258,7 @@ export abstract class TikTokBaseAction extends BaseSocialMediaAction {
             }
         );
         
-        return response.data?.videos || [];
+        return response.Data?.videos || [];
     }
     
     /**
@@ -335,7 +332,7 @@ export abstract class TikTokBaseAction extends BaseSocialMediaAction {
             }
         );
         
-        return response.data?.user;
+        return response.Data?.user;
     }
     
     /**

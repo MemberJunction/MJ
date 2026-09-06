@@ -4,10 +4,14 @@
  */
 
 /**
- * Configuration for a server extension instance, loaded from the `serverExtensions`
- * array in `mj.config.cjs`.
+ * Configuration for a server extension instance.
  *
- * Each entry in the array corresponds to one extension instance. The `DriverClass`
+ * Loaded from the host `serverExtensions[]` in `mj.config.cjs`, and/or discovered
+ * from installed Open App server packages (`MJ_SERVER_EXTENSIONS` export or
+ * `package.json` `memberjunction.serverExtensions`). Host entries overlay
+ * discovered ones by `DriverClass`.
+ *
+ * Each entry corresponds to one extension instance. The `DriverClass`
  * field is used to look up the registered class via `ClassFactory.CreateInstance()`.
  *
  * @example

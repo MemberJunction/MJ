@@ -351,6 +351,27 @@ export class EntitySaveOptions {
     OnValidated?: (entity: BaseEntity) => void;
 
     /**
+     * When true, the save skips writing a Record Change (audit) row even when the entity has
+     * `TrackRecordChanges` on.
+     *
+     * This exists for high-volume MACHINE writes — an integration sync applying tens of
+     * thousands of records in minutes — where the audit row is a per-write cost with no value:
+     * the "who" is always the sync, and the real history lives in the source system. Scoping the
+     * suppression to the save (instead of turning the entity flag off) keeps the capability for
+     * every other writer: a human editing the same record through the UI is still audited,
+     * because their save never sets this option.
+     */
+    SkipRecordChanges?: boolean = false;
+
+    /**
+     * When true, the save skips the geocoding side trip even when the entity has
+     * `SupportsGeoCoding` on. Same rationale and scoping as {@link SkipRecordChanges}: a synced
+     * record arrives pre-formed from the source system and does not need a per-write geocode
+     * lookup, while a human's edit to an address should still trigger one.
+     */
+    SkipGeoCoding?: boolean = false;
+
+    /**
      * When true, this entity is being saved as part of an IS-A parent chain
      * initiated by a child entity. Provider behavior:
      * - GraphQLDataProvider: full ORM pipeline runs, skip network call
@@ -411,6 +432,13 @@ export class EntitySaveOptions {
  * during the deletion process.
  */
 export class EntityDeleteOptions {
+    /**
+     * When true, the delete skips writing its Record Change (audit) row even when the entity has
+     * `TrackRecordChanges` on. See `EntitySaveOptions.SkipRecordChanges` — same rationale, same
+     * scoping: set by high-volume machine writers (integration sync), never by interactive saves.
+     */
+    SkipRecordChanges?: boolean = false;
+
     /**
      * If set to true, an AI actions associated with the entity will be skipped during the delete operation
      */

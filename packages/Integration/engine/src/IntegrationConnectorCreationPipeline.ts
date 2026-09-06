@@ -16,7 +16,8 @@ import {
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
-import type { IntrospectSchemaOptions } from './types.js';
+import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
+import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
 
 /** Options for the creation/refresh pipeline run. */
 export interface ConnectorCreationPipelineOptions {
@@ -449,6 +450,18 @@ export class IntegrationConnectorCreationPipeline {
     ) {
         emitter.stageStart('Introspect', 'Discovering objects and fields via connector');
         const startMs = Date.now();
+        // Sampling is now per OBJECT, so this stage's cost scales with the catalog — and on a large
+        // one it is the run's whole cost. Execute races the stage against the run deadline, but
+        // `Promise.race` does not CANCEL the loser: without a check the sampling loops below keep
+        // issuing vendor requests, for hours, on behalf of a run that has already been failed and
+        // whose results nobody will read. So stop at the same wall the race enforces.
+        //
+        // Approximated from THIS stage's start rather than the run's: only ConnectionTest precedes
+        // it, so the two differ by one connectivity probe. The approximation can only ever stop
+        // work LATER than the race — never earlier — so it cannot truncate a run that would
+        // otherwise have completed.
+        const budgetMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+        const outOfTime = (): boolean => budgetMs > 0 && Date.now() - startMs >= budgetMs;
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured
             // stream (IntegrationTailRunEvents carries counts) so a client can render a real
@@ -475,47 +488,76 @@ export class IntegrationConnectorCreationPipeline {
             // can't silently lose runtime discovery). PersistDiscoveredSchema is additive, so
             // declared objects are preserved and runtime-only objects (e.g. an auth-gated file
             // feed's streams) get created as Discovered. Errors are SURFACED, never swallowed.
-            const seen = new Set(schema.Objects.map(o => o.ExternalName.toLowerCase()));
+            const declaredNames = schema.Objects.map(o => o.ExternalName);
+            const seen = new Set(declaredNames.map(n => n.toLowerCase()));
             let runtimeObjects: ExternalObjectSchema[] = [];
+            // A DiscoverObjects failure used to end sampling for the ENTIRE run: the loop below was
+            // the only thing that sampled, and it iterated this (now empty) list. The declared
+            // catalog is still in hand — IntrospectSchema already returned it — so the union pass
+            // still samples every declared object. The failure is recorded on the checkpoint so a
+            // consumer can tell "the source has no other objects" from "we never got to ask".
+            let discoverObjectsFailed = false;
             try {
                 runtimeObjects = await opts.Connector.DiscoverObjects(opts.CompanyIntegration, opts.ContextUser);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
+                discoverObjectsFailed = true;
                 emitter.stageError('Introspect', `DiscoverObjects failed: ${msg}`, { code: 'discover-objects-failed' });
                 console.error(`[IntrospectPipeline] DiscoverObjects failed: ${msg}`);
             }
+
+            // §7 — a SCOPED introspection asked about a named subset. IntrospectSchema already
+            // honours the filter; DiscoverObjects does not take it, so without this the scoped run
+            // pulled and sampled the whole runtime catalog anyway.
+            const wantedNames = opts.IntrospectOptions?.ObjectNames;
+            const wanted = wantedNames && wantedNames.length > 0
+                ? new Set(wantedNames.map(n => n.toLowerCase()))
+                : null;
+            const inScope = (name: string): boolean => !wanted || wanted.has(name.toLowerCase());
+
+            const sampledDeclared = new Set<string>();
             let runtimeAdded = 0;
+            let unsampledForTime = 0;
+
+            // Per-object progress. Everything below this point is the expensive half of discovery —
+            // one read-path sample per object — and it emitted nothing, so a consumer watching a
+            // 23-object source saw the same silence as a 5-object one for however long it ran.
+            // The denominator is the union BOTH passes will sample (in-scope runtime objects plus
+            // in-scope declared ones) rather than either loop's own length, so the total is fixed
+            // before the first sample instead of revising upward when the second pass starts.
+            const sampleUniverse = new Set<string>();
+            for (const d of runtimeObjects) if (inScope(d.Name)) sampleUniverse.add(d.Name.toLowerCase());
+            for (const n of declaredNames) if (inScope(n)) sampleUniverse.add(n.toLowerCase());
+            const sampleTotal = sampleUniverse.size;
+            // Keyed, not counted: a name the connector surfaces twice is sampled twice by the loop
+            // below, and a bare counter would then report "24 of 23".
+            const announced = new Set<string>();
+            const announceSample = (name: string): void => {
+                const k = name.toLowerCase();
+                if (announced.has(k)) return;
+                announced.add(k);
+                emitter.heartbeat('Introspect', `Sampling "${name}" (${announced.size} of ${sampleTotal})`, {
+                    processed: announced.size,
+                    totalKnown: sampleTotal,
+                    skipped: unsampledForTime,
+                });
+            };
+
             for (const d of runtimeObjects) {
                 const key = d.Name.toLowerCase();
+                if (!inScope(d.Name)) continue;
+                // Announced BEFORE the budget check so an exhausted budget reads as a run that
+                // reached the end of its object list, not one that stalled partway through it.
+                announceSample(d.Name);
+                if (outOfTime()) { unsampledForTime++; continue; }
                 if (seen.has(key)) {
                     // §case-3 (data-only-discoverable): a DECLARED object the connector ALSO surfaces at
-                    // runtime, but the declared form carries NO fields (e.g. a file-feed stream declared by
-                    // NAME only — its columns are knowable solely from the records). Without this, the loop
-                    // skipped it, it stayed field-less + PK-less, and ApplyAll dropped it — so the user's data
-                    // for that object never landed. Discover its fields over the read path and populate the
-                    // existing declared object IN PLACE so it becomes syncable.
+                    // runtime. Sampling populates it IN PLACE so a name-only declaration becomes syncable
+                    // and a fully-declared one gets its true widths and undeclared columns.
                     const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
-                    if (existing && existing.Fields.length === 0) {
-                        try {
-                            const dfields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
-                            existing.Fields = dfields.map(f => ({
-                                Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
-                                IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
-                                Precision: f.Precision ?? null, Scale: f.Scale ?? null, DefaultValue: f.DefaultValue ?? null,
-                                // U1 — preserve `undefined` (no opinion); `?? false` fabricated a "not a PK/FK" opinion
-                                IsPrimaryKey: f.IsPrimaryKey, IsUniqueKey: f.IsUniqueKey, IsReadOnly: f.IsReadOnly,
-                                IsForeignKey: f.IsForeignKey, ForeignKeyTarget: f.ForeignKeyTarget ?? null,
-                            }));
-                            existing.PrimaryKeyFields = dfields.filter(f => f.IsPrimaryKey).map(f => f.Name);
-                            existing.Relationships = dfields
-                                .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
-                                .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' }));
-                            console.log(`[IntrospectPipeline] declared field-less object "${d.Name}" → discovered ${dfields.length} fields via read path`);
-                        } catch (err) {
-                            const msg = err instanceof Error ? err.message : String(err);
-                            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared field-less "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
-                            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared "${d.Name}": ${msg}`);
-                        }
+                    if (existing) {
+                        await this.SampleDeclaredObjectInPlace(existing, d.Name, opts, emitter);
+                        sampledDeclared.add(key);
                     }
                     continue;
                 }
@@ -526,7 +568,10 @@ export class IntegrationConnectorCreationPipeline {
                     // SAVE-LESS — stream as much of the feed as the budget allows so the PK decision is
                     // made on a statistically-significant sample, not a single (possibly tiny) file. No
                     // DB write happens here; the real save is the later ApplyAll → StartSync.
-                    fields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
+                    fields = await opts.Connector.DiscoverFieldsViaFetch(
+                        opts.CompanyIntegration, d.Name, opts.ContextUser,
+                        { OnFallback: (err) => this.ReportSampleFallback(d.Name, err, emitter) }
+                    );
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
                     emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
@@ -561,7 +606,41 @@ export class IntegrationConnectorCreationPipeline {
                 });
                 runtimeAdded++;
             }
-            console.log(`[IntrospectPipeline] declared=${seen.size - runtimeAdded} runtime-added=${runtimeAdded} total=${schema.Objects.length}`);
+
+            // The union's second half: DECLARED objects the runtime pass never reached. Sampling used
+            // to be reachable only through a DiscoverObjects hit, so an object the connector declares
+            // but does not re-surface at runtime — the normal shape for a catalog-driven connector, and
+            // for every object when DiscoverObjects fails — was never sampled at all. It kept whatever
+            // widths the catalog guessed (a truncation waiting to happen) and could only ever gain its
+            // undeclared columns later, one sync at a time, through the overflow path.
+            let declaredOnlySampled = 0;
+            for (const name of declaredNames) {
+                const key = name.toLowerCase();
+                if (sampledDeclared.has(key) || !inScope(name)) continue;
+                announceSample(name);
+                if (outOfTime()) { unsampledForTime++; continue; }
+                const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
+                if (!existing) continue;
+                // Record it here too: two declared entries that differ only by case resolve to the
+                // SAME object, and sampling it twice doubles the most expensive part of discovery.
+                sampledDeclared.add(key);
+                await this.SampleDeclaredObjectInPlace(existing, name, opts, emitter);
+                declaredOnlySampled++;
+            }
+
+            if (unsampledForTime > 0) {
+                // NOT a failure: every unsampled object keeps its declaration, which is exactly the
+                // behaviour that shipped before sampling existed. But it is not the complete sample
+                // the run appears to have done, and the difference is real — unsampled objects keep
+                // catalog-guessed widths and gain undeclared columns only via the overflow path.
+                const msg =
+                    `Ran out of time after ${Math.round((Date.now() - startMs) / 1000)}s: ` +
+                    `${unsampledForTime} object(s) were not sampled and keep their declared fields ` +
+                    `and catalog widths. Raise RunDeadlineMs or introspect a named subset.`;
+                emitter.stageError('Introspect', msg, { code: 'sample-budget-exhausted' });
+                console.warn(`[IntrospectPipeline] ${msg}`);
+            }
+            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} total=${schema.Objects.length}`);
 
             const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
@@ -573,6 +652,8 @@ export class IntegrationConnectorCreationPipeline {
                 objectsDiscovered: schema.Objects.length,
                 fieldsDiscovered: fieldCount,
                 durationMs: Date.now() - startMs,
+                discoverObjectsFailed,
+                unsampledForTime,
             });
             return schema;
         } catch (err) {
@@ -583,6 +664,94 @@ export class IntegrationConnectorCreationPipeline {
     }
 
     // ── Stage 3: persist ─────────────────────────────────────────────────
+
+    /**
+     * Samples a DECLARED object over the read path and merges the result into it IN PLACE.
+     *
+     * Sampling is UNCONDITIONAL — it used to run only for a declared object with no fields, a gate
+     * on the wrong question, because streaming answers three things and a declaration can only
+     * pre-answer one of them. A declared key IS authoritative; which fields the source actually
+     * sends, and how wide their values are, only the data knows.
+     *
+     * The merge is one-directional (see DeclaredSampleMerge): sampling fills gaps and widens, never
+     * overrides. A fetch failure leaves the declaration exactly as it was, so the worst case is the
+     * behaviour that shipped before sampling existed.
+     */
+    /**
+     * Surfaces a silent degradation: streaming failed, so the fields came from the catalog's own
+     * description instead of from records. That distinction is the whole value of sampling — the
+     * catalog states no observed widths — but from the outside the two are indistinguishable, so
+     * without this an object quietly keeps a guessed width and drops every longer value at sync.
+     */
+    private ReportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
+        const msg = err instanceof Error ? err.message : String(err);
+        emitter.stageError(
+            'Introspect',
+            `Sampling fell back to the catalog description for "${objectName}" — real widths and ` +
+            `undeclared columns are unknown for this run: ${msg}`,
+            { code: 'discover-fields-fallback' }
+        );
+        console.warn(`[IntrospectPipeline] sample fallback for "${objectName}": ${msg}`);
+    }
+
+    private async SampleDeclaredObjectInPlace(
+        existing: SourceObjectInfo,
+        objectName: string,
+        opts: ConnectorCreationPipelineOptions,
+        emitter: IntegrationProgressEmitter
+    ): Promise<void> {
+        try {
+            const dfields = await opts.Connector.DiscoverFieldsViaFetch(
+                opts.CompanyIntegration, objectName, opts.ContextUser,
+                { OnFallback: (err) => this.ReportSampleFallback(objectName, err, emitter) }
+            );
+            const sampled = dfields.map(f => ({
+                Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
+                IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
+                Precision: f.Precision ?? null, Scale: f.Scale ?? null, DefaultValue: f.DefaultValue ?? null,
+                // U1 — preserve `undefined` (no opinion); `?? false` fabricated a "not a PK/FK" opinion
+                IsPrimaryKey: f.IsPrimaryKey, IsUniqueKey: f.IsUniqueKey, IsReadOnly: f.IsReadOnly,
+                IsForeignKey: f.IsForeignKey, ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+            }));
+            if (existing.Fields.length === 0) {
+                // Nothing was declared, so there is nothing to defer to — the
+                // sample is the whole truth, exactly as before this change.
+                existing.Fields = sampled;
+                existing.PrimaryKeyFields = dfields.filter(f => f.IsPrimaryKey).map(f => f.Name);
+                existing.Relationships = dfields
+                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                    .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' }));
+                console.log(`[IntrospectPipeline] declared field-less object "${objectName}" → discovered ${dfields.length} field(s) via read path`);
+            } else {
+                const merged = MergeDeclaredWithSample(existing.Fields, sampled);
+                existing.Fields = merged.Fields;
+                // Only when the declaration named no key at all — a declared key
+                // stays authoritative even if the sample nominates another column,
+                // which is how a child table ends up keyed on its parent's FK.
+                if (merged.AdoptedKeyNames.length > 0) {
+                    existing.PrimaryKeyFields = merged.AdoptedKeyNames;
+                }
+                // Relationships come from the declaration when there is one; a
+                // sampled FK target is a guess and must not rewrite a stated graph.
+                const parts = [
+                    merged.AddedFieldNames.length ? `added ${merged.AddedFieldNames.length} undeclared field(s): ${merged.AddedFieldNames.join(', ')}` : null,
+                    merged.WidenedFieldNames.length ? `widened ${merged.WidenedFieldNames.length}: ${merged.WidenedFieldNames.join(', ')}` : null,
+                    merged.AdoptedKeyNames.length ? `adopted key [${merged.AdoptedKeyNames.join(', ')}]` : null,
+                ].filter(Boolean);
+                console.log(`[IntrospectPipeline] declared object "${objectName}" sampled ${dfields.length} field(s) — ${parts.length ? parts.join('; ') : 'declaration already matched the data'}`);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            // The declaration stands exactly as it was — the worst case of sampling
+            // failing is the behaviour that shipped before it. Say which was lost so
+            // an operator can tell "no columns at all" from "possibly narrow ones".
+            const lost = existing.Fields.length === 0
+                ? 'object has NO fields and cannot be synced until this succeeds'
+                : 'keeping the declared fields; undeclared columns and true widths are unknown for this run';
+            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared "${objectName}" — ${lost}: ${msg}`, { code: 'discover-fields-failed' });
+            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared "${objectName}" — ${lost}: ${msg}`);
+        }
+    }
 
     private async StagePersist(
         emitter: IntegrationProgressEmitter,
@@ -608,6 +777,24 @@ export class IntegrationConnectorCreationPipeline {
         }
         for (const fieldLog of persistResult.FieldMergeLog) {
             emitter.fieldAdded(fieldLog.ObjectName, fieldLog.FieldName, fieldLog.EffectiveSource);
+        }
+        // A comprehensive refresh deactivates declared objects/fields it did not observe. That is
+        // the intended behaviour, but it is also the point where a connector's declared field stops
+        // being materialized by every later apply — so say which ones, on the progress stream the
+        // caller is already reading, instead of only in a server console line.
+        if (persistResult.ObjectsDeactivated.length > 0 || persistResult.FieldsDeactivated.length > 0) {
+            emitter.warning(
+                'Persist',
+                'DECLARED_ROWS_DEACTIVATED',
+                `${persistResult.ObjectsDeactivated.length} object(s) and ${persistResult.FieldsDeactivated.length} ` +
+                `field(s) were declared but not observed by this authoritative discovery, so they were deactivated ` +
+                `(never deleted) and will not be materialized by a later apply until they are observed again or ` +
+                `re-enabled.`,
+                {
+                    objects: persistResult.ObjectsDeactivated,
+                    fields: persistResult.FieldsDeactivated,
+                },
+            );
         }
         emitter.stageComplete('Persist', {
             processed: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,

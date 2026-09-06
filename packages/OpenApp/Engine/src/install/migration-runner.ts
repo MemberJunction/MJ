@@ -199,6 +199,32 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             .filter((d: { Success: boolean }) => d.Success)
             .map((d: { Migration: { Filename: string } }) => d.Migration.Filename);
 
+        if (result.Success) {
+            const { executeOpenAppMetadataRefresh, isOpenAppSchema } = await import('./open-app-metadata-refresh.js');
+            const coreSchema = MJCoreSchema ?? '__mj';
+            if (isOpenAppSchema(SchemaName, coreSchema)) {
+                if (Verbose) {
+                    console.log(`Refreshing metadata for Open App schema '${SchemaName}'`);
+                }
+                try {
+                    await executeOpenAppMetadataRefresh({
+                        platform,
+                        coreSchema,
+                        appSchema: SchemaName,
+                        database: DatabaseConfig,
+                    });
+                } catch (refreshError: unknown) {
+                    const refreshMessage = refreshError instanceof Error ? refreshError.message : String(refreshError);
+                    return {
+                        Success: false,
+                        MigrationsApplied: result.MigrationsApplied,
+                        AppliedFiles: appliedFiles,
+                        ErrorMessage: `Migrations applied for schema '${SchemaName}' but metadata refresh failed: ${refreshMessage}`,
+                    };
+                }
+            }
+        }
+
         return {
             Success: result.Success,
             MigrationsApplied: result.MigrationsApplied,

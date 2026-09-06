@@ -16,6 +16,14 @@ export { SQLServerDialect } from './sqlServerDialect.js';
 export { PostgreSQLDialect } from './postgresqlDialect.js';
 export { GetDialect } from './dialectFactory.js';
 export {
+    restarLayeredOuterView,
+    buildCreateOrReplaceLayeredOuterViewSQL,
+    LayeredOuterRestarError,
+    findTopLevelKeyword,
+    splitTopLevelCommaList,
+} from './postgresqlRestarLayeredOuter.js';
+export type { RestarLayeredOuterViewArgs } from './postgresqlRestarLayeredOuter.js';
+export {
     AutoQuotePostgreSQLIdentifiers,
     PostgreSQLQuotingKeywords,
     PostgreSQLStructuralKeywords,

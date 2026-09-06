@@ -110,24 +110,27 @@ jobs:
           # process at line cut, so its existence is the source of truth for
           # "this line has public docs".
           #
-          # 🚨 KNOWN GAP — dotted line branches (lts/6.1) get NO docs set: the
-          # filter below takes bare majors only. Do NOT "fix" this by widening
-          # the grep alone. docs-site/src/lib/documented-line.mjs THROWS on a
-          # dotted DOCS_VERSION ("Documented line must look like v6"), and
-          # because `deploy` needs `build`, one failing matrix entry takes the
-          # WHOLE site's deploy down — every line, not just the dotted one.
-          # Today's silent omission would become a total docs outage the day
-          # lts/6.1 is cut.
+          # Dotted line branches (lts/6.1) are first-class here: under the LTS
+          # version grammar every certified line after the 5.x bootstrap lands
+          # at a MINOR, so `lts/<major>.<minor>` is the steady state and a bare
+          # `lts/5` is the bootstrap exception.
           #
-          # The real fix spans docs-site, not this file: split documented-line's
-          # single value into a line-id string (v6.1) and an integer major (6),
-          # because license-line.mjs derives BOTH the BUSL cutoff comparison and
-          # `blob/lts/${documentedMajor}` from it — and Number('6.10') is 6.1,
-          # so a dotted line would link at the wrong branch. This file's own
-          # remaining work is small by comparison: this filter, `sort -V` instead
-          # of `sort -n` (sort -n orders 6.10 before 6.9), and the 404
-          # forwarder's `^(\/v\d+)\/` deep-link regex.
-          mapfile -t LTS < <(git ls-remote --heads origin 'lts/*' | sed -E 's#.*refs/heads/lts/##' | grep -E '^[0-9]+$' | sort -n)
+          # Three things had to move together for that to hold, and they are
+          # load-bearing for each other — do not revert one alone:
+          #   1. this filter, which accepts an optional dotted minor;
+          #   2. `sort -V`, because `sort -n` reads 6.10 as 6.1 and so orders it
+          #      BEFORE 6.9 — and $DEFAULT is the last element, i.e. the site's
+          #      front door;
+          #   3. docs-site/src/lib/documented-line.mjs, which used to THROW on a
+          #      dotted DOCS_VERSION. Because `deploy` needs `build`, one failing
+          #      matrix entry takes the WHOLE site's deploy down — every line,
+          #      not just the dotted one — so widening this grep on its own would
+          #      have turned a silent omission into a total docs outage.
+          # That module now exports an integer `documentedMajor` (6) separately
+          # from the `documentedLineId` string ("6.1") that license-line.mjs
+          # builds `blob/lts/<id>` from, because Number('6.1') and Number('6.10')
+          # are the same float.
+          mapfile -t LTS < <(git ls-remote --heads origin 'lts/*' | sed -E 's#.*refs/heads/lts/##' | grep -E '^[0-9]+(\.[0-9]+)?$' | sort -V)
           # Edge set: the major comes from the newest edge TAG (tags are pushed by
           # the publish workflow, so this is released state too), and its content
           # is built from main — see the ref below.
@@ -348,7 +351,12 @@ jobs:
           # program entirely, so sending the canonical program URL there would
           # answer the question on the one set where it does not apply. Falls
           # back to $DEFAULT before any BUSL line is published.
-          CERT_SET=$(jq -r '[.[] | select((.id | ltrimstr("v") | tonumber) >= 6)] | max_by(.id | ltrimstr("v") | tonumber) | .id // empty' <<<"$VERSIONS")
+          # Ranked on a [major, minor] array rather than `tonumber`: jq compares
+          # arrays element-wise, so v6.10 correctly outranks v6.9. `tonumber`
+          # reads both "6.1" and "6.10" as the float 6.1 and would pick either.
+          CERT_SET=$(jq -r '
+            map(. + {v: (.id | ltrimstr("v") | split(".") | map(tonumber))})
+            | [.[] | select(.v[0] >= 6)] | max_by(.v) | .id // empty' <<<"$VERSIONS")
           [ -n "$CERT_SET" ] || CERT_SET="$DEFAULT"
           echo "::notice::/mjcertified -> /$CERT_SET/mjcertified/"
 
@@ -389,7 +397,7 @@ jobs:
               location.replace(fallback + path + location.search + location.hash);
               return;
             }
-            var deep = path.match(/^(\/v\d+)\/(classes|interfaces|enums|functions|modules|variables|types|documents|media|hierarchy)\/(.+)\$/);
+            var deep = path.match(/^(\/v\d+(?:\.\d+)?)\/(classes|interfaces|enums|functions|modules|variables|types|documents|media|hierarchy)\/(.+)\$/);
             if (deep) {
               location.replace(deep[1] + '/api/' + deep[2] + '/' + deep[3] + location.search + location.hash);
             }

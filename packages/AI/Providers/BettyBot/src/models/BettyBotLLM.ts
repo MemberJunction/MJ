@@ -1,6 +1,6 @@
 import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError } from '@memberjunction/network-utils';
 import * as Config from '../config';
 import { BettyResponse, SettingsResponse } from '../generic/BettyBot.types';
 
@@ -27,14 +27,14 @@ export class BettyBotLLM extends BaseLLM {
 
     /**
      * Determines whether an error (or the current state of the signal) represents a caller-initiated
-     * cancellation rather than a genuine API failure. Axios rejects with a CanceledError when the
+     * cancellation rather than a genuine API failure. Fetch rejects with an AbortError when the
      * request config carries a signal that aborts.
      */
     private isCancellation(error: unknown, signal?: AbortSignal): boolean {
         if (signal?.aborted) {
             return true;
         }
-        if (axios.isCancel(error)) {
+        if (IsCancellationError(error)) {
             return true;
         }
         return error instanceof Error && error.name === 'AbortError';
@@ -90,13 +90,13 @@ export class BettyBotLLM extends BaseLLM {
             }
 
             const endpoint: string = Config.BETTY_BOT_BASE_URL + 'response';
-            // Forward the cancellation token to axios so an abort tears down the underlying HTTP socket
+            // Forward the cancellation token to fetch so an abort tears down the underlying HTTP socket
             // rather than merely abandoning this promise.
-            const config: AxiosRequestConfig = {
-                headers: {
+            const config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'> = {
+                Headers: {
                     Authorization: `Bearer ${this.JWTToken}`
                 },
-                signal: cancellationToken
+                Signal: cancellationToken
             };
 
             const userMessage = params.messages.find(m => m.role === ChatMessageRole.user);
@@ -112,8 +112,8 @@ export class BettyBotLLM extends BaseLLM {
                 input: userMessage.content,
             };
 
-            const bettyResponse = await axios.post<BettyResponse>(endpoint, data, config);
-            if(!bettyResponse || !bettyResponse.data){
+            const bettyResponse = await HttpPost<BettyResponse>(endpoint, data, config);
+            if(!bettyResponse || !bettyResponse.Data){
                 // Create an error result
                 const errorResult = new ChatResult(false, startTime, startTime);
                 errorResult.statusText = 'error';
@@ -133,7 +133,7 @@ export class BettyBotLLM extends BaseLLM {
                     {
                         message: {
                             role: ChatMessageRole.assistant,
-                            content: bettyResponse.data.response
+                            content: bettyResponse.Data.response
                         },
                         finish_reason: "",
                         index: 0
@@ -150,8 +150,8 @@ export class BettyBotLLM extends BaseLLM {
              * - choice[1]: Formatted text version (for display/backwards compatibility)
              * - choice[2]: Raw JSON structure (for programmatic access)
              */
-            if(bettyResponse.data.references && bettyResponse.data.references.length > 0){
-                const references = bettyResponse.data.references;
+            if(bettyResponse.Data.references && bettyResponse.Data.references.length > 0){
+                const references = bettyResponse.Data.references;
 
                 // Choice 1: Formatted text version
                 let text: string = "Here are some additional resources that may help you: \n";
@@ -188,13 +188,13 @@ export class BettyBotLLM extends BaseLLM {
                 return this.buildCancelledResult(new Date());
             }
 
-            if(axios.isAxiosError(ex)){
-                const axiosError: AxiosError = ex;
-                if(axiosError.response){
-                    console.log(`Error calling api: ${axiosError.response.status} - ${axiosError.response.statusText}`);
+            if(IsHttpError(ex)){
+                const httpError = ex;
+                if(httpError.Status){
+                    console.log(`Error calling api: ${httpError.Status} - ${httpError.StatusText}`);
                 }
                 else{
-                    console.log(`Error calling api: ${axiosError.message}`);
+                    console.log(`Error calling api: ${httpError.message}`);
                 }
             }
             else{
@@ -274,13 +274,13 @@ export class BettyBotLLM extends BaseLLM {
             };
 
             const endpoint: string = Config.BETTY_BOT_BASE_URL + 'settings';
-            const response = await axios.post<SettingsResponse>(endpoint, data, { signal: cancellationToken });
+            const response = await HttpPost<SettingsResponse>(endpoint, data, { Signal: cancellationToken });
 
-            if(response.data){
-                this.JWTToken = response.data.token;
+            if(response.Data){
+                this.JWTToken = response.Data.token;
             }
 
-            return response.data;
+            return response.Data;
         } 
         catch (error) {
             // Don't swallow a cancellation as a generic token failure — let the caller report it as one
@@ -288,13 +288,13 @@ export class BettyBotLLM extends BaseLLM {
                 throw error;
             }
 
-            if(axios.isAxiosError(error)){
-                const axiosError = error as AxiosError;
-                if(axiosError.response){
-                    console.log(`Error calling api: ${axiosError.response.status} - ${axiosError.response.statusText}`);
+            if(IsHttpError(error)){
+                const httpError = error;
+                if(httpError.Status){
+                    console.log(`Error calling api: ${httpError.Status} - ${httpError.StatusText}`);
                 }
                 else{
-                    console.log(`Error calling api: ${axiosError.message}`);
+                    console.log(`Error calling api: ${httpError.message}`);
                 }
             }
             else{

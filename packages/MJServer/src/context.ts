@@ -18,9 +18,10 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
+import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -554,7 +555,30 @@ export const getUserPayload = async (
       });
     }
 
-    return { userRecord: sessionUser, email: sessionUser.Email, sessionId };
+    // The IdP's OIDC email_verified assertion, read off the JWKS-verified payload. Standard
+    // claim name across Auth0/Okta/Cognito/WorkOS; MSAL and others simply omit it (undefined).
+    const emailVerified = typeof payload.email_verified === 'boolean' ? payload.email_verified : undefined;
+
+    // Automatic claim-on-login — once per issued token (deduped, own prefix so it can't eat the
+    // audit's first-seen slot), fire-and-forget so it never adds latency. Discovers pending
+    // MJ: Identity Claims addressed to this user's email and redeems each through the FULL
+    // RedeemClaim gate (email/verification rules, atomic CAS, driver error handling), passing
+    // the IdP's email_verified assertion so an unverified email can never auto-claim.
+    // Anonymous magic-link guests are skipped: their principal is synthetic and per-session.
+    if (sessionUser.Email && !sessionUser.IsMagicLinkAnonymous && markSessionAuditSeen(sessionAuditKey('claims', payload))) {
+      // Pre-context auth path: per-request providers do not exist yet here, so the global is the
+      // only provider available — same posture as every other pre-context call on this path.
+      // The allowlist marker has to sit on the reference line itself; MultiProviderCompliance
+      // matches per-line, so a marker on its own line above is invisible to the scanner.
+      const claimProvider = Metadata.Provider as unknown as IMetadataProvider; // global-provider-ok: pre-context auth path
+      if (claimProvider) {
+        void IdentityClaimEngineServer.Instance.AutoClaimForUser(sessionUser, claimProvider, { EmailVerified: emailVerified }).catch(
+          (err) => console.warn(`Auto-claim on login failed for ${sessionUser.Email}: ${err instanceof Error ? err.message : err}`),
+        );
+      }
+    }
+
+    return { userRecord: sessionUser, email: sessionUser.Email, sessionId, emailVerified };
   } catch (error) {
     // An anonymous request presenting no credentials at all (a health check, a CORS
     // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired

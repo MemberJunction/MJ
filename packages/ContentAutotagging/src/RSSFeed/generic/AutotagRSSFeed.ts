@@ -4,7 +4,7 @@ import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { MJContentSourceEntity, MJContentItemEntity } from '@memberjunction/core-entities';
 import { RSSItem } from './RSS.types';
-import axios from 'axios';
+import { HttpGet, HttpHead } from '@memberjunction/network-utils';
 import crypto from 'crypto';
 import Parser from 'rss-parser';
 
@@ -224,19 +224,20 @@ export class AutotagRSSFeed extends AutotagBase {
      * Strips navigation, headers, footers, scripts, and styles.
      */
     private async FetchAndParseWebPage(url: string): Promise<string> {
-        const response = await axios.get(url, {
-            timeout: 8000,
-            headers: {
+        const response = await HttpGet<string>(url, {
+            Timeout: 8000,
+            ResponseType: 'text',
+            Headers: {
                 'User-Agent': 'Mozilla/5.0 (compatible; MemberJunction/1.0)',
                 'Accept': 'text/html,application/xhtml+xml'
             }
         });
 
-        if (typeof response.data !== 'string') {
+        if (typeof response.Data !== 'string') {
             return '';
         }
 
-        return this.engine.parseHTML(response.data);
+        return this.engine.parseHTML(response.Data);
     }
 
     /**
@@ -288,8 +289,9 @@ export class AutotagRSSFeed extends AutotagBase {
      */
     private async UrlIsValid(url: string): Promise<boolean> {
         try {
-            const response = await axios.head(url, { timeout: 10000 });
-            return response.status >= 200 && response.status < 400;
+            // ThrowOnError off so a 3xx/4xx is reported by status rather than as a throw.
+            const response = await HttpHead(url, { Timeout: 10000, ThrowOnError: false });
+            return response.Status >= 200 && response.Status < 400;
         } catch {
             return false;
         }

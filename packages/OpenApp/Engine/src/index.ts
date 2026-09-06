@@ -76,6 +76,15 @@ export { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, Escap
 export type { SchemaOperationResult } from './install/schema-manager.js';
 
 export { RunAppMigrations } from './install/migration-runner.js';
+export {
+    buildFieldProcExcludedSchemaNames,
+    buildOpenAppRefreshMetadataSQL,
+    buildOtherEntitySchemasQuery,
+    executeOpenAppMetadataRefresh,
+    isOpenAppSchema,
+    normalizeSchema,
+} from './install/open-app-metadata-refresh.js';
+export type { RefreshDatabaseConfig } from './install/open-app-metadata-refresh.js';
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
 export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, BumpPrefixedDependencies, detectPackageManager, hasPnpmCatalog } from './install/package-manager.js';
@@ -85,6 +94,7 @@ export {
     AddServerDynamicPackages,
     AddClientDynamicPackages,
     RemoveServerDynamicPackages,
+    PruneDynamicPackagesNotInManifest,
     ToggleServerDynamicPackages
 } from './install/config-manager.js';
 export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';

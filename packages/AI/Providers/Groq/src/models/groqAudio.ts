@@ -3,10 +3,12 @@ import {
     AudioSplitter,
     BaseAudioGenerator,
     ErrorAnalyzer,
+    ModelUsage,
     PronounciationDictionary,
     SpeechResult,
     SpeechToTextParams,
     TextToSpeechParams,
+    TranscriptionPiece,
     VoiceInfo,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
@@ -25,6 +27,33 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const SPLIT_TARGET_BYTES = 24 * 1024 * 1024;
 
 const DEFAULT_MODEL = 'whisper-large-v3';
+
+/**
+ * The `verbose_json` transcription response, which carries the audio duration Groq bills by.
+ * Declared locally because groq-sdk's `Transcription` type covers only the `json` shape.
+ */
+type GroqVerboseTranscription = {
+    text?: string;
+    duration?: number;
+};
+
+/**
+ * Whether a transcription model accepts `response_format: 'verbose_json'`.
+ *
+ * Groq's STT surface is Whisper-only today, so asking unconditionally happens to work — but the
+ * moment a non-Whisper model appears, an unconditional request turns every transcription through it
+ * into a hard API error. The sibling OpenAI provider already carries this guard because OpenAI's
+ * GPT-4o transcription models reject `verbose_json` outright; the asymmetry was the bug, not the
+ * behaviour.
+ *
+ * Matched with `includes` rather than `startsWith`: Groq serves `distil-whisper-large-v3-en`
+ * alongside `whisper-large-v3`, and it is a Whisper model that supports `verbose_json`. A
+ * `startsWith('whisper')` test would deny it the duration field and leave every run through it
+ * uncosted — the exact failure this PR exists to remove.
+ */
+function supportsVerboseJson(model: string): boolean {
+    return model.toLowerCase().includes('whisper');
+}
 
 /**
  * Groq implementation of {@link BaseAudioGenerator}, covering speech-to-text via Whisper.
@@ -76,38 +105,16 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
             const audio = this.resolveAudio(params);
             const model = params.model || DEFAULT_MODEL;
 
-            let text: string;
-            if (audio.byteLength <= MAX_UPLOAD_BYTES) {
-                text = await this.transcribeOne(audio, model, params);
-            } else {
-                if (!this.Splitter) {
-                    throw new Error(
-                        `Audio is ${(audio.byteLength / (1024 * 1024)).toFixed(1)}MB, above Groq's 25MB ` +
-                            `transcription limit. Assign an AudioSplitter to the Splitter property to transcribe ` +
-                            `audio this size.`,
-                    );
-                }
-                const pieces = await this.Splitter.Split(audio, SPLIT_TARGET_BYTES);
-                if (pieces.length === 0) {
-                    throw new Error('The configured AudioSplitter returned no pieces');
-                }
+            const transcription = await this.TranscribeWithSplitting(
+                audio,
+                MAX_UPLOAD_BYTES,
+                SPLIT_TARGET_BYTES,
+                this.Splitter,
+                'Groq',
+                (piece) => this.transcribeOne(piece, model, params),
+            );
 
-                const transcripts: string[] = [];
-                for (const piece of pieces) {
-                    // A piece the splitter left oversized would fail at the API with a size
-                    // error naming neither the splitter nor which piece; say so here instead.
-                    if (piece.byteLength > MAX_UPLOAD_BYTES) {
-                        throw new Error(
-                            `The configured AudioSplitter produced a ${(piece.byteLength / (1024 * 1024)).toFixed(1)}MB ` +
-                                `piece, above Groq's 25MB limit`,
-                        );
-                    }
-                    transcripts.push(await this.transcribeOne(piece, model, params));
-                }
-                text = transcripts.filter((t) => t.length > 0).join(' ');
-            }
-
-            if (text.trim().length === 0) {
+            if (transcription.text.trim().length === 0) {
                 // Whisper returns an empty string for silence, and for audio it could not
                 // decode. Both are failures from the caller's point of view — an empty
                 // transcript reported as success gets stored as if it were the content.
@@ -115,7 +122,12 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
             }
 
             result.success = true;
-            result.content = text;
+            result.content = transcription.text;
+            if (transcription.durationSeconds != null) {
+                // Groq bills Whisper by audio-hour, so the duration is the billable quantity —
+                // without it a transcription run prices as free.
+                result.usage = ModelUsage.ForMedia('Seconds', transcription.durationSeconds);
+            }
         } catch (error) {
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'Groq Whisper');
             result.success = false;
@@ -138,16 +150,33 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
         throw new Error('SpeechToText requires either audioData (Buffer) or audioFile (base 64 string)');
     }
 
-    private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams): Promise<string> {
+    private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams): Promise<TranscriptionPiece> {
+        // `verbose_json` rather than `json` purely for the `duration` field — the quantity Groq
+        // bills by. The transcript text is identical between the two formats. Models that would
+        // reject verbose_json fall back to `json` and simply report no duration.
         const response = await this._client.audio.transcriptions.create({
             file: await toFile(audio, params.fileName || 'audio.mp3'),
             model,
-            response_format: 'json',
+            response_format: supportsVerboseJson(model) ? 'verbose_json' : 'json',
             language: params.language,
             prompt: params.prompt,
             temperature: params.temperature,
         });
-        return response.text ?? '';
+
+        // groq-sdk types the verbose response as the plain transcription shape, without `duration`.
+        // Narrow it here and range-check rather than trusting the cast: an absent or nonsense
+        // duration must leave usage unreported, not produce a NaN cost.
+        //
+        // `> 0`, not `>= 0`: a zero duration is not a billable quantity. Accepting it produces
+        // `ForMedia('Seconds', 0)`, which the pricing layer then refuses as "a measure with no
+        // quantity" and logs as an error — the right outcome reached by a route that reports
+        // genuinely silent audio as a fault. Leaving usage undefined says the same thing quietly.
+        const verbose = response as GroqVerboseTranscription;
+        const duration = typeof verbose.duration === 'number' && isFinite(verbose.duration) && verbose.duration > 0
+            ? verbose.duration
+            : undefined;
+
+        return { text: response.text ?? '', durationSeconds: duration };
     }
 
     public async CreateSpeech(_params: TextToSpeechParams): Promise<SpeechResult> {

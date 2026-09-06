@@ -1,9 +1,9 @@
 import { RegisterClass } from '@memberjunction/global';
-import { FacebookBaseAction, FacebookComment } from '../facebook-base.action';
+import { FacebookBaseAction, FacebookComment, FacebookIdResponse, FacebookPagedResponse } from '../facebook-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
-import axios from 'axios';
+import { HttpDelete, HttpGet, HttpPost } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -273,17 +273,17 @@ export class FacebookRespondToCommentsAction extends FacebookBaseAction {
      */
     private async getCommentDetails(commentId: string, accessToken: string): Promise<FacebookComment | null> {
         try {
-            const response = await axios.get(
+            const response = await HttpGet<FacebookComment>(
                 `${this.apiBaseUrl}/${commentId}`,
                 {
-                    params: {
+                    Query: {
                         access_token: accessToken,
                         fields: 'id,message,created_time,from,like_count,comment_count,parent'
                     }
                 }
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError(`Failed to get comment details: ${error}`);
             return null;
@@ -314,24 +314,24 @@ export class FacebookRespondToCommentsAction extends FacebookBaseAction {
             data.attachment_url = attachmentUrl;
         }
 
-        const response = await axios.post(endpoint, data, {
-            params: {
+        const response = await HttpPost<FacebookIdResponse>(endpoint, data, {
+            Query: {
                 access_token: accessToken
             }
         });
 
-        return response.data;
+        return response.Data;
     }
 
     /**
      * Like a comment
      */
     private async likeCommentAction(commentId: string, accessToken: string): Promise<void> {
-        await axios.post(
+        await HttpPost(
             `${this.apiBaseUrl}/${commentId}/likes`,
             {},
             {
-                params: {
+                Query: {
                     access_token: accessToken
                 }
             }
@@ -342,13 +342,13 @@ export class FacebookRespondToCommentsAction extends FacebookBaseAction {
      * Hide or unhide a comment
      */
     private async hideCommentAction(commentId: string, accessToken: string, hide: boolean): Promise<void> {
-        await axios.post(
+        await HttpPost(
             `${this.apiBaseUrl}/${commentId}`,
             {
                 is_hidden: hide
             },
             {
-                params: {
+                Query: {
                     access_token: accessToken
                 }
             }
@@ -359,10 +359,10 @@ export class FacebookRespondToCommentsAction extends FacebookBaseAction {
      * Delete a comment
      */
     private async deleteCommentAction(commentId: string, accessToken: string): Promise<void> {
-        await axios.delete(
+        await HttpDelete(
             `${this.apiBaseUrl}/${commentId}`,
             {
-                params: {
+                Query: {
                     access_token: accessToken
                 }
             }

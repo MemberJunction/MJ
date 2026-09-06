@@ -8,6 +8,7 @@ import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';
 import { loadMJConfig, type MJConfig } from '../utils/config-loader';
+import { DiscoverMJConfig, EffectiveProcessId, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
 
 // Load environment variables from .env file.
 // `override` is deliberately FALSE so an explicitly-set variable wins over `.env`
@@ -40,6 +41,22 @@ export async function initializeMJProvider(): Promise<void> {
 
   try {
     const config = await loadMJConfig();
+
+    // Installed Open App server packages register their entity/action subclasses here, before the
+    // provider exists. When this CLI runs inside `mj`, the prerun hook has already loaded them and
+    // published its process id (`cli:test:…`), which EffectiveProcessId adopts so the same scoping
+    // and policy apply here; packages already loaded are returned from cache, their startup export
+    // not re-run. Search strategy 'none' matches loadMJConfig() above (cwd only).
+    const raw = DiscoverMJConfig(undefined, { searchStrategy: 'none' });
+    // Stderr logger: this CLI's stdout is a JSON envelope under --format=json / --output=json,
+    // and the loader's default console logger would print its progress lines ahead of it.
+    await LoadDynamicPackages({
+      processId: EffectiveProcessId('testing-cli'),
+      tier: 'server',
+      config: raw.config,
+      configFilePath: raw.configFilePath,
+      log: StderrDynamicPackagesLogger,
+    });
 
     // Debug: Check what's in process.env and config
     console.log(`process.env.DB_DATABASE: ${process.env.DB_DATABASE}`);

@@ -152,6 +152,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   searchableEntities: EntityInfo[] = [];
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+  /** Mobile drawer + its toggle — used to return focus to the toggle when the drawer closes. */
+  @ViewChild('mobileNavDrawer') mobileNavDrawer?: ElementRef<HTMLElement>;
+  @ViewChild('mobileNavToggle') mobileNavToggle?: ElementRef<HTMLButtonElement>;
 
   // Legacy universal search overlay (omnibar-off MOBILE path) — opened by the
   // mobile search icon or Ctrl/Cmd+K when the inline composite isn't visible.
@@ -2205,8 +2208,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     const { item, shiftKey } = event;
 
-    // Close mobile nav if open
-    this.mobileNavOpen = false;
+    // Close mobile nav if open. Routed through closeMobileNav() rather than setting the flag
+    // directly so focus does not get dropped to <body> when the drawer goes inert — tapping a
+    // nav item is the most common way the drawer closes on a phone.
+    this.closeMobileNav();
 
     // Use NavigationService with forceNewTab option if shift was pressed
     this.navigationService.OpenNavItem(
@@ -2239,13 +2244,59 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   toggleMobileNav(): void {
     this.mobileNavOpen = !this.mobileNavOpen;
+    if (!this.mobileNavOpen) {
+      this.returnFocusFromMobileNav();
+    }
   }
 
   /**
    * Close mobile navigation drawer
    */
   closeMobileNav(): void {
-    this.mobileNavOpen = false;
+    if (this.mobileNavOpen) {
+      this.mobileNavOpen = false;
+      this.returnFocusFromMobileNav();
+    }
+  }
+
+  /**
+   * When the drawer closes it becomes `inert`, which drops focus to <body> if focus was
+   * inside it — the user's place in the page is gone and the next Tab restarts at the top.
+   * Hand focus back to the control that opened it instead. No-op when focus was elsewhere
+   * (e.g. the drawer was closed from a keyboard shortcut while the user was in the content).
+   */
+  private returnFocusFromMobileNav(): void {
+    const drawer = this.mobileNavDrawer?.nativeElement;
+    const active = document.activeElement;
+    if (!drawer || !active || !drawer.contains(active)) {
+      return;
+    }
+    this.mobileNavToggle?.nativeElement.focus();
+  }
+
+  /**
+   * Accessible name for the avatar button. The name must never depend on the avatar image
+   * rendering — a Gravatar CORS failure drops to the icon fallback, and an icon carries no
+   * name of its own — so it is set on the BUTTON and falls back to a generic label before
+   * the user record has loaded.
+   */
+  get avatarAriaLabel(): string {
+    return this.userName ? `Account: ${this.userName}` : 'Account';
+  }
+
+  /**
+   * Skip link target handoff (WCAG 2.4.1). Focus is moved programmatically rather than left
+   * to the browser's fragment navigation: the shell's main region is a Golden Layout host,
+   * and letting the URL hash change here would collide with the deep-link/tab restore path.
+   */
+  skipToMainContent(event: Event): void {
+    event.preventDefault();
+    const main = document.getElementById('mj-main-content');
+    if (!main) {
+      return;
+    }
+    main.focus();
+    main.scrollIntoView({ block: 'start' });
   }
 
   /**
@@ -2953,7 +3004,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // truthful origin (default capture) — "back" returns the user there.
       // Contrast the chat overlay, a persistent surface whose true origin is
       // the conversation (it passes an explicit recordSource).
-      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      //
+      // `RecordID` is a compact CompositeKey segment — the bare value for a single-column primary
+      // key, "F1|v1||F2|v2" for a composite one — and the key column can have ANY name (the search
+      // lanes read it off entity metadata). Resolve it against that metadata; hardcoding
+      // `{ FieldName: 'ID' }` made Load() fail with "Primary key ID not found" for every entity
+      // whose key isn't called ID, and could never open a composite-key record at all.
+      const entityInfo = this.ProviderToUse.EntityByName(result.EntityName);
+      const pkey = CompositeKey.FromURLSegment(entityInfo, result.RecordID);
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 

@@ -1,4 +1,5 @@
 import { confirm } from '@inquirer/prompts';
+import { isInteractiveRun } from '../../../lib/interactive-guard.js';
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import path from 'node:path';
@@ -242,10 +243,14 @@ export default class DevWorkspace extends Command {
   /** Decides one member's cleanup: an explicit flag wins; otherwise ask when interactive, skip loudly when not. */
   private async shouldCleanMember(name: string, treeCount: number, cleanFlag: boolean | undefined): Promise<boolean> {
     if (cleanFlag !== undefined) return cleanFlag;
-    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    // Non-interactive by default (see lib/interactive-guard). This one skips loudly rather
+    // than failing: leaving a standalone install in place is a safe no-op, and the warning
+    // names the flags. Destructive prompts elsewhere fail fast instead.
+    if (!isInteractiveRun()) {
       this.warn(
         `${name} has a standalone install (${treeCount} node_modules tree(s)) and this run is non-interactive ` +
-          `with no --clean-members/--no-clean-members given — leaving it in place.`
+          `with no --clean-members/--no-clean-members given — leaving it in place. ` +
+          `Pass --clean-members or --no-clean-members to decide explicitly, or run at a terminal to be asked.`
       );
       return false;
     }

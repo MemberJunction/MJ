@@ -23,6 +23,16 @@ vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (target: unknown) => target,
 }));
 
+vi.mock('@memberjunction/credentials', () => ({
+  CredentialEngine: {
+    Instance: {
+      Config: vi.fn(async () => undefined),
+      Credentials: [],
+      getCredential: vi.fn(async () => ({ values: {} })),
+    },
+  },
+}));
+
 vi.mock('@memberjunction/core', () => ({
   UserInfo: class UserInfo {},
   Metadata: vi.fn(),
@@ -49,14 +59,26 @@ vi.mock('@memberjunction/actions-base', () => ({
   },
 }));
 
-vi.mock('axios', () => {
-  return {
-    default: {
-      post: vi.fn(),
-      isAxiosError: vi.fn(() => false),
-    },
-  };
-});
+vi.mock('@memberjunction/network-utils', () => ({
+  HttpClient: vi.fn(function () {
+    return {
+    Get: vi.fn(), Post: vi.fn(), Put: vi.fn(), Patch: vi.fn(), Delete: vi.fn(), Head: vi.fn(), Request: vi.fn(),
+    };
+  }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  HttpGet: vi.fn(),
+  HttpPost: vi.fn(),
+  HttpPut: vi.fn(),
+  HttpPatch: vi.fn(),
+  HttpDelete: vi.fn(),
+  HttpHead: vi.fn(),
+  HttpRequest: vi.fn(),
+}));
 
 import { BaseSocialMediaAction, SocialPost, SocialAnalytics } from '../base/base-social.action';
 import { BufferBaseAction, BufferPost, BufferGraphQLError } from '../providers/buffer/buffer-base.action';
@@ -409,7 +431,7 @@ describe('BufferBaseAction', () => {
       expect(action['mapBufferError'](new Error('something'))).toBe('PLATFORM_ERROR');
     });
 
-    it('should return PLATFORM_ERROR for non-axios non-graphql errors', () => {
+    it('should return PLATFORM_ERROR for non-HTTP non-graphql errors', () => {
       expect(action['mapBufferError']('string error')).toBe('PLATFORM_ERROR');
     });
   });
@@ -487,7 +509,7 @@ describe('LinkedInBaseAction', () => {
   describe('handleLinkedInError', () => {
     it('should throw for 401 errors', () => {
       const error = {
-        response: { status: 401, data: {} },
+        Status: 401, Data: {}, Headers: {},
         request: {},
         message: 'Unauthorized',
       };
@@ -497,7 +519,7 @@ describe('LinkedInBaseAction', () => {
 
     it('should throw for 403 errors', () => {
       const error = {
-        response: { status: 403, data: {} },
+        Status: 403, Data: {}, Headers: {},
         request: {},
         message: 'Forbidden',
       };
@@ -507,7 +529,7 @@ describe('LinkedInBaseAction', () => {
 
     it('should throw for 404 errors', () => {
       const error = {
-        response: { status: 404, data: {} },
+        Status: 404, Data: {}, Headers: {},
         request: {},
         message: 'Not Found',
       };
@@ -517,7 +539,7 @@ describe('LinkedInBaseAction', () => {
 
     it('should throw for 429 errors', () => {
       const error = {
-        response: { status: 429, data: {} },
+        Status: 429, Data: {}, Headers: {},
         request: {},
         message: 'Too Many Requests',
       };

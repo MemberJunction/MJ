@@ -23,6 +23,7 @@
  */
 
 import { RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
 import { RuntimeSchemaManager, SchemaValidator } from '@memberjunction/schema-engine';
 import type { TableDefinition } from '@memberjunction/schema-engine';
@@ -30,7 +31,6 @@ import type { TableDefinition } from '@memberjunction/schema-engine';
 import {
     CODEGEN_RESERVED_COLUMNS,
     UDT_SCHEMA_NAME,
-    escapeSqlLiteral,
     type EntityValidationResult,
     type SchemaDesignEntry,
 } from './interfaces.js';
@@ -249,9 +249,9 @@ export class DatabaseSchemaValidationService {
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Entities',
             ExtraFilter:
-                `(Name = '${escapeSqlLiteral(tableDefinition.EntityName)}' ` +
-                `OR BaseTable = '${escapeSqlLiteral(tableDefinition.TableName)}') ` +
-                `AND SchemaName = '${escapeSqlLiteral(tableDefinition.SchemaName)}'`,
+                `(Name = '${EscapeSQLString(tableDefinition.EntityName)}' ` +
+                `OR BaseTable = '${EscapeSQLString(tableDefinition.TableName)}') ` +
+                `AND SchemaName = '${EscapeSQLString(tableDefinition.SchemaName)}'`,
             Fields: ['ID'],
             ResultType: 'simple',
         }, contextUser);
@@ -280,8 +280,8 @@ export class DatabaseSchemaValidationService {
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Entities',
             ExtraFilter:
-                `BaseTable = '${escapeSqlLiteral(tableDefinition.TableName)}' ` +
-                `AND SchemaName = '${escapeSqlLiteral(tableDefinition.SchemaName)}'`,
+                `BaseTable = '${EscapeSQLString(tableDefinition.TableName)}' ` +
+                `AND SchemaName = '${EscapeSQLString(tableDefinition.SchemaName)}'`,
             Fields: ['ID'],
             ResultType: 'simple',
         }, contextUser);

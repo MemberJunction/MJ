@@ -21,7 +21,7 @@
 
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 
 import { BaseDatabaseDesignerCodeAgent } from './base-database-designer-code-agent.js';
 import { AuthorizationEvaluator, LogError, Metadata, RunView } from '@memberjunction/core';
@@ -33,7 +33,6 @@ import {
     AUTHORIZATIONS,
     UDT_SCHEMA_NAME,
     UDT_SETTINGS,
-    escapeSqlLiteral,
 } from '../interfaces.js';
 
 import { DatabaseSchemaValidationService } from '../database-schema-validation.service.js';
@@ -192,7 +191,7 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
         const result = await rv.RunView<{ Name: string; Value: string }>({
             EntityName: 'MJ: Entity Settings',
             ExtraFilter: (
-                `EntityID = '${escapeSqlLiteral(existingEntityID)}' ` +
+                `EntityID = '${EscapeSQLString(existingEntityID)}' ` +
                 `AND Name IN ('${UDT_SETTINGS.OWNER_KEY}', '${UDT_SETTINGS.SOURCE_KEY}')`
             ),
             Fields: ['Name', 'Value'],

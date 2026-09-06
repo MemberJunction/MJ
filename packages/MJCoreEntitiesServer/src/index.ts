@@ -47,4 +47,6 @@ export * from './custom/util';
 
 export * from './engines/QueryEngineServer';
 export * from './engines/QueryMatchResult';
-export * from './engines/ComponentMetadataEngineServer';export * from './custom/MJRemoteOperationEntityServer.server';
+export * from './engines/ComponentMetadataEngineServer';
+export * from './engines/IdentityClaimEngineServer';
+export * from './custom/MJRemoteOperationEntityServer.server';

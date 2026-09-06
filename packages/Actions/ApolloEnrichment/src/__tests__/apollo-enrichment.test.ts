@@ -59,11 +59,10 @@ vi.mock('@memberjunction/actions-base', () => ({
     }
 }));
 
-vi.mock('axios', () => ({
-    default: {
-        get: vi.fn(),
-        post: vi.fn()
-    }
+vi.mock('@memberjunction/network-utils', () => ({
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    IsHttpError: vi.fn(() => false)
 }));
 
 vi.mock('../config', () => ({

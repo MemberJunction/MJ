@@ -21,7 +21,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
-import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
+import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { beginBrowserGoalStep, finalizeBrowserGoalStep, extractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
 import { randomUUID } from 'node:crypto';
@@ -233,18 +233,22 @@ interface VisualInterpreterPayload {
 @Resolver()
 export class RemoteBrowserActionResolver extends ResolverBase {
   /**
-   * Agent-session ids whose live CDP screencast this resolver has already started. Keyed by
-   * `agentSessionID` so a re-issued {@link RemoteBrowserActionResolver.StartRemoteBrowserScreencast}
-   * (e.g. the surface re-binding after a tab collapse) is idempotent and never stacks two screencasts
-   * on the one session. Entries are removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserScreencast}.
+   * Surfaces whose live CDP screencast this resolver has already started, keyed by
+   * {@link RemoteBrowserActionResolver.streamKey} (agent session **plus** instance) so a re-issued
+   * {@link RemoteBrowserActionResolver.StartRemoteBrowserScreencast} — the surface re-binding after a
+   * tab collapse — is idempotent and never stacks two screencasts on the one browser. Entries are
+   * removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserScreencast}.
+   *
+   * Keyed by agent session ALONE (#3531) this was the idempotency guard turning into a lockout: the
+   * first surface's entry made the SECOND surface's bind a silent `Streaming: true` no-op, so a second
+   * browser could be started and driven but never watched.
    */
   private startedScreencasts = new Set<string>();
 
   /**
-   * Agent-session ids whose live tab-audio stream this resolver has already started. Keyed by
-   * `agentSessionID` so a re-issued {@link RemoteBrowserActionResolver.StartRemoteBrowserAudioStream}
-   * (the surface re-binding) is idempotent and never stacks two captures on the one session. Entries are
-   * removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserAudioStream}.
+   * Surfaces whose live tab-audio stream this resolver has already started, keyed by
+   * {@link RemoteBrowserActionResolver.streamKey} for the same reason the screencast set is. Entries
+   * are removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserAudioStream}.
    */
   private startedAudioStreams = new Set<string>();
 
@@ -278,6 +282,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('deltaX', () => Float, { nullable: true }) deltaX?: number,
     @Arg('deltaY', () => Float, { nullable: true }) deltaY?: number,
     @Arg('ms', () => Float, { nullable: true }) ms?: number,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserActionResult> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
@@ -289,10 +294,40 @@ export class RemoteBrowserActionResolver extends ResolverBase {
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName);
+      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
       const result = await liveSession.ExecuteAction(action);
       return { Success: result.Success, CurrentUrl: result.CurrentUrl, Detail: result.Detail };
     } catch (err) {
+      // A dead handle is not a failure to report, it is a mapping to delete (#3598) — and this is the
+      // path where that fault is actually FELT: the poll below only freezes a pane, while here the
+      // agent says "the shared browser session isn't launched right now" on every request for the rest
+      // of the session. The engine decides whether the error means "gone"; anything else falls
+      // straight through to the honest report below, exactly as before.
+      const recovered = await RemoteBrowserEngine.Instance.RecoverDeadAgentSession(agentSessionID, err, {
+        InstanceKey: instanceKey,
+        ContextUser: contextUser,
+        ProviderName: providerName,
+      });
+      if (recovered) {
+        // Retrying is safe precisely BECAUSE the handle was dead: the action never reached a browser,
+        // so it cannot run twice. A `navigate` therefore heals in place; a click or a type truthfully
+        // reports that its selector is missing on the replacement's blank page, which is the answer
+        // the agent needs to re-navigate — and either way the surface is live again for the next call.
+        try {
+          const retried = await recovered.ExecuteAction(action);
+          return {
+            Success: retried.Success,
+            CurrentUrl: retried.CurrentUrl,
+            Detail: retried.Success
+              ? retried.Detail
+              : `The browser had closed and was replaced (it is now on a blank page). ${retried.Detail ?? ''}`.trim(),
+          };
+        } catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+          LogError(`ExecuteRemoteBrowserAction failed after recovering the browser (kind='${kind}'): ${retryMessage}`);
+          return { Success: false, Detail: `The browser had closed and was replaced, but '${kind}' still failed: ${retryMessage}` };
+        }
+      }
       // Surface the real failure to BOTH the MJAPI terminal (for diagnosis) and the model (so it
       // narrates the actual cause instead of the opaque client-side "no response from the server").
       const message = err instanceof Error ? err.message : String(err);
@@ -321,6 +356,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('startUrl', () => String, { nullable: true }) startUrl?: string,
     @Arg('maxSteps', () => Int, { nullable: true }) maxSteps?: number,
     @Arg('preferredStrategy', () => String, { nullable: true }) preferredStrategy?: string,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserGoalResultType> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
@@ -337,6 +373,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const goalRunID = randomUUID();
     RemoteBrowserGoalRegistry.Instance.Begin(agentSessionID, goalRunID);
     void RemoteBrowserEngine.Instance.AchieveGoal(agentSessionID, goal, {
+      InstanceKey: instanceKey,
       ContextUser: contextUser,
       ProviderName: providerName,
       StartUrl: startUrl,
@@ -400,11 +437,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   async RemoteBrowserSnapshot(
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserSnapshot> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
       return {};
     }
@@ -416,10 +454,35 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     // exactly as this query's contract above promises ("null rather than an error"). The live
     // navigate/click path (ExecuteRemoteBrowserAction) is where a genuine browser failure is
     // reported to the agent; the read-only view poll never should be.
+    //
+    // Degrading is not the same as HEALING, and this poll is where the difference shows (#3598). It
+    // fires every ~700ms, so it is almost always the first caller to meet a dead handle — an external
+    // Chrome closed, a container recycled. Returning an empty snapshot forever leaves the surface
+    // frozen on its last good frame while the mapping stays dead for the rest of the session. So the
+    // fault is reported to the engine, which decides whether it means "gone" and, if so, replaces the
+    // browser and re-attaches this surface's screencast. The degradation below still stands for every
+    // other failure, and for a recovery that could not complete.
     try {
       const screenshot = await liveSession.CaptureScreenshot();
       return { ScreenshotBase64: screenshot, CurrentUrl: liveSession.GetCurrentUrl() };
     } catch (err) {
+      const recovered = await RemoteBrowserEngine.Instance.RecoverDeadAgentSession(agentSessionID, err, {
+        InstanceKey: instanceKey,
+        ContextUser: contextUser,
+      });
+      if (recovered) {
+        try {
+          return { ScreenshotBase64: await recovered.CaptureScreenshot(), CurrentUrl: recovered.GetCurrentUrl() };
+        } catch (postRecoveryError) {
+          // The replacement is live but not yet painting. The next poll is 700ms away and will get a
+          // frame; an empty snapshot here costs one tick, not the session.
+          LogError(
+            `[RemoteBrowserActionResolver] Recovered the browser for agent session ${agentSessionID} but its first ` +
+              `snapshot failed: ${postRecoveryError instanceof Error ? postRecoveryError.message : String(postRecoveryError)}`,
+          );
+          return {};
+        }
+      }
       LogError(
         `[RemoteBrowserActionResolver] Snapshot capture failed for agent session ${agentSessionID} ` +
           `(returning empty snapshot): ${err instanceof Error ? err.message : String(err)}`,
@@ -448,6 +511,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    *
    * @param agentSessionID The `AIAgentSession` id the browser is bound to.
    * @param query Optional request — empty/"describe" for a page description, else a visual target to localize.
+   * @param instanceKey Names WHICH browser, when the session holds more than one. Omitted resolves the
+   *   single unnamed instance, which is the previous behaviour and stays the default.
    * @returns The interpretation (description + localized elements + optional detail note).
    */
   @Mutation(() => RemoteBrowserInterpretation)
@@ -455,11 +520,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
     @Arg('query', () => String, { nullable: true }) query?: string,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserInterpretation> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
       return { Description: undefined, Elements: [], Detail: 'no live browser' };
     }
@@ -496,20 +562,25 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserScreencastResult> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    // Idempotent: a re-bind must not stack a second screencast on the one live browser.
-    if (this.startedScreencasts.has(agentSessionID)) {
+    // Idempotent PER SURFACE: a re-bind must not stack a second screencast on the one live browser,
+    // but a SECOND surface binding for the first time is not a re-bind (#3531).
+    const streamKey = this.streamKey(agentSessionID, instanceKey);
+    if (this.startedScreencasts.has(streamKey)) {
       return { Streaming: true };
     }
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName);
-      await liveSession.StartScreencast((frame) => this.publishFrame(pubSub, userPayload, agentSessionID, frame));
-      this.startedScreencasts.add(agentSessionID);
+      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+      await liveSession.StartScreencast((frame) =>
+        this.publishFrame(pubSub, userPayload, agentSessionID, instanceKey, frame, liveSession.GetCurrentUrl()),
+      );
+      this.startedScreencasts.add(streamKey);
       return { Streaming: true };
     } catch (err) {
       if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
@@ -534,12 +605,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   async StopRemoteBrowserScreencast(
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    this.startedScreencasts.delete(agentSessionID);
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    this.startedScreencasts.delete(this.streamKey(agentSessionID, instanceKey));
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (liveSession) {
       try {
         await liveSession.StopScreencast();
@@ -570,20 +642,22 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserAudioStreamResult> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    // Idempotent: a re-bind must not stack a second audio capture on the one live browser.
-    if (this.startedAudioStreams.has(agentSessionID)) {
+    // Idempotent PER SURFACE — same reasoning as the screencast set (#3531).
+    const streamKey = this.streamKey(agentSessionID, instanceKey);
+    if (this.startedAudioStreams.has(streamKey)) {
       return { Streaming: true };
     }
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName);
-      await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, userPayload, agentSessionID, chunk));
-      this.startedAudioStreams.add(agentSessionID);
+      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+      await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, userPayload, agentSessionID, instanceKey, chunk));
+      this.startedAudioStreams.add(streamKey);
       return { Streaming: true };
     } catch (err) {
       if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
@@ -608,12 +682,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   async StopRemoteBrowserAudioStream(
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    this.startedAudioStreams.delete(agentSessionID);
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    this.startedAudioStreams.delete(this.streamKey(agentSessionID, instanceKey));
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (liveSession) {
       try {
         await liveSession.StopAudioStream();
@@ -663,11 +738,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('deltaX', () => Float, { nullable: true }) deltaX?: number,
     @Arg('deltaY', () => Float, { nullable: true }) deltaY?: number,
     @Arg('modifiers', () => String, { nullable: true }) modifiers?: string,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
       return false;
     }
@@ -709,11 +785,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   async GetRemoteBrowserSelection(
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserSelection> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
       return { Text: '' };
     }
@@ -748,17 +825,41 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     pubSub: PubSubEngine,
     userPayload: UserPayload,
     agentSessionID: string,
+    instanceKey: string | undefined,
     frame: { DataBase64: string; Width: number; Height: number; SequenceNumber: number },
+    currentUrl?: string | null,
   ): void {
     this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserScreencastFrame',
       agentSessionID,
+      // WHICH surface these pixels belong to (#3531). Without it two browsers in one session publish
+      // indistinguishable frames on the same topic and the client paints both panes from whichever
+      // arrived last — the two surfaces flickering into each other. `null` is the unnamed instance,
+      // stated explicitly so a client can match on it rather than on a missing property.
+      instanceKey: NormalizeInstanceKey(instanceKey),
+      // WHERE the page was when this frame was captured (#3496). Under streaming the client's
+      // snapshot poll — the only other thing carrying the URL — is stopped, so without this a user
+      // navigating mid-screencast changes the picture and nothing else, and the agent keeps
+      // describing the page it last opened. `GetCurrentUrl()` is the session's last-known URL, a
+      // synchronous read, so this costs nothing per frame.
+      currentUrl: currentUrl ?? null,
       dataBase64: frame.DataBase64,
       width: frame.Width,
       height: frame.Height,
       seq: frame.SequenceNumber,
     }), userPayload);
+  }
+
+  /**
+   * The per-SURFACE key for this resolver's stream bookkeeping — an agent session plus which browser
+   * within it. Normalised through the engine's own {@link NormalizeInstanceKey} so the resolver and
+   * the engine can never disagree about whether `Left` and `left` are the same surface.
+   */
+  private streamKey(agentSessionID: string, instanceKey?: string): string {
+    const name = NormalizeInstanceKey(instanceKey);
+    const base = agentSessionID.trim().toLowerCase();
+    return name === null ? base : `${base}::${name}`;
   }
 
   /**
@@ -771,11 +872,19 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @param agentSessionID The `AIAgentSession` id the chunk belongs to.
    * @param chunk The encoded audio chunk.
    */
-  private publishAudioChunk(pubSub: PubSubEngine, userPayload: UserPayload, agentSessionID: string, chunk: RemoteBrowserAudioChunk): void {
+  private publishAudioChunk(
+    pubSub: PubSubEngine,
+    userPayload: UserPayload,
+    agentSessionID: string,
+    instanceKey: string | undefined,
+    chunk: RemoteBrowserAudioChunk,
+  ): void {
     this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserAudioChunk',
       agentSessionID,
+      /** Which surface is making this sound (#3531) — see {@link publishFrame}. */
+      instanceKey: NormalizeInstanceKey(instanceKey),
       dataBase64: chunk.DataBase64,
       codec: chunk.Codec,
       sampleRate: chunk.SampleRate,

@@ -32,7 +32,7 @@
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { MJGlobal, MJLruCache, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     ChatMessage,
@@ -799,7 +799,7 @@ export class RealtimeClientSessionService {
             const rv = new RunView();
             const result = await rv.RunView<MJApplicationEntity>({
                 EntityName: 'MJ: Applications',
-                ExtraFilter: `ID='${this.escapeSqlLiteral(appId)}'`,
+                ExtraFilter: `ID='${EscapeSQLString(appId)}'`,
                 MaxRows: 1,
                 ResultType: 'entity_object',
             }, contextUser);
@@ -1059,7 +1059,7 @@ export class RealtimeClientSessionService {
         const rv = new RunView();
         const found = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `AgentSessionID='${this.escapeSqlLiteral(sessionID)}' AND Status='Running' AND ParentRunID IS NULL`,
+            ExtraFilter: `AgentSessionID='${EscapeSQLString(sessionID)}' AND Status='Running' AND ParentRunID IS NULL`,
             Fields: ['ID'],
             ResultType: 'simple',
         }, contextUser);
@@ -1094,7 +1094,7 @@ export class RealtimeClientSessionService {
         const rv = new RunView();
         const steps = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
             EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`,
+            ExtraFilter: `AgentRunID='${EscapeSQLString(coAgentRunID)}' AND Status='Running'`,
             Fields: ['ID', 'StepType', 'TargetLogID'],
             ResultType: 'simple',
         }, contextUser);
@@ -1111,7 +1111,7 @@ export class RealtimeClientSessionService {
 
         // Re-check Status on the prompt runs themselves: a Prompt step can still be Running while its
         // underlying prompt run has already landed, and this path only finalizes what is still open.
-        const inList = promptLogIDs.map(id => `'${this.escapeSqlLiteral(id)}'`).join(',');
+        const inList = promptLogIDs.map(id => `'${EscapeSQLString(id)}'`).join(',');
         const promptRuns = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ID IN (${inList}) AND Status='Running'`,
@@ -1123,11 +1123,6 @@ export class RealtimeClientSessionService {
             return { PromptRunID: null, StepID: stepID };
         }
         return { PromptRunID: promptRuns.Results[0]?.ID ?? null, StepID: stepID };
-    }
-
-    /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
-    private escapeSqlLiteral(value: string): string {
-        return value.replace(/'/g, "''");
     }
 
     /** Loads + finalizes the co-agent `AIAgentRun` if still `Running`. Tolerant: logs, never throws. */

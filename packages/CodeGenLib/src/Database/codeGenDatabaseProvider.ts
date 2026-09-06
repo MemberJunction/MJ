@@ -493,6 +493,110 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * Generates the composite index covering an entity's SOFT primary key, or an empty array
+     * when the entity has no soft PK (which is every ordinary entity — this is a no-op for
+     * anything with a real `PRIMARY KEY` constraint).
+     *
+     * WHY THIS EXISTS. A soft primary key lives only in metadata: `IsPrimaryKey` and
+     * `IsSoftPrimaryKey` are both set, and the table carries no `PRIMARY KEY` and no unique
+     * index. Integration tables are built that way on purpose — their keys are inferred, so
+     * enforcing one would reject valid rows whenever an inference is wrong.
+     *
+     * The consequence is a heap that MJ's own write path scans on every record. A create calls
+     * `InnerLoad` on the key to check for an existing row; a genuinely new record matches
+     * nothing; and a not-found lookup cannot short-circuit, so it reads the whole table before
+     * concluding the row is absent. The scan grows with the table, so a sync gets slower the
+     * longer it runs — measured live at 345 → 574 → 864 ms per record across consecutive
+     * batches of one connector, with nothing saturated (DB CPU 57%, log write 13%, sessions 0,
+     * app CPU 5.7%, memory flat).
+     *
+     * Note that {@link isIndexableForeignKey} excludes primary keys with the comment "a primary
+     * key is already covered by its own index". That is true for a real PK and false, by
+     * definition, for a soft one — which is precisely how these tables fell through every
+     * existing mechanism.
+     *
+     * ONE COMPOSITE INDEX, not one per column: the lookup is always an equality match on the
+     * whole key, so a single index in ordinal order serves it. Non-unique, because uniqueness
+     * is exactly what the soft-PK design refuses to assert.
+     *
+     * IDEMPOTENT BY NAME, like the FK indexes. An index someone created by hand over the same
+     * columns under a different name will not be recognised, and this will add a second one —
+     * drop the hand-made one rather than disabling this.
+     */
+    generateSoftPrimaryKeyIndex(entity: EntityInfo): string[] {
+        const keyFields = this.softPrimaryKeyFields(entity);
+        if (keyFields.length === 0) {
+            return [];
+        }
+
+        // A key column the dialect cannot index (an unbounded string, typically) makes the whole
+        // composite impossible. Say so IN THE GENERATED SQL rather than emitting nothing: a
+        // silently absent index is the failure mode this method exists to end, and swapping one
+        // silence for another would leave the next person with the same puzzle.
+        const unindexable = keyFields.filter(f => !this.isIndexableKeyColumn(f));
+        if (unindexable.length > 0) {
+            return [
+                `-- SOFT PRIMARY KEY INDEX SKIPPED for ${entity.SchemaName}.${entity.BaseTable}\n` +
+                `-- These key columns cannot be part of an index key in this dialect: ` +
+                `${unindexable.map(f => `${f.Name} (${f.Type}${f.Length === -1 ? ', unbounded' : ''})`).join(', ')}.\n` +
+                `-- Without the index, every create on this table scans it in full to decide the row is new,\n` +
+                `-- and that scan grows with the table. Give the column(s) an explicit bounded length in the\n` +
+                `-- source schema definition so the key can be indexed.`
+            ];
+        }
+
+        return [this.formatCompositeIndexStatement(entity, keyFields, this.softPrimaryKeyIndexName(entity))];
+    }
+
+    /**
+     * The entity's soft-PK fields in ordinal order, or an empty array if its PK is not soft.
+     *
+     * Requires EVERY primary-key field to be soft. A mixed key would mean the table has a real
+     * constraint on part of its key, which is not a shape the integration schema builder
+     * produces, and guessing at the right index for it is worse than leaving it alone.
+     */
+    protected softPrimaryKeyFields(entity: EntityInfo): EntityFieldInfo[] {
+        if (entity.VirtualEntity) {
+            return [];
+        }
+        const pkFields = entity.Fields.filter(f => f.IsPrimaryKey && !f.IsVirtual);
+        if (pkFields.length === 0 || !pkFields.every(f => f.IsSoftPrimaryKey)) {
+            return [];
+        }
+        return [...pkFields].sort((a, b) => a.Sequence - b.Sequence);
+    }
+
+    /** Composes the soft-PK index name in this dialect's spelling, truncated to its limit. */
+    protected softPrimaryKeyIndexName(entity: EntityInfo): string {
+        const name = `${this.softPrimaryKeyIndexPrefix()}${this.tableToken(entity)}`;
+        const max = this.maxIdentifierLength();
+        return name.length > max ? name.substring(0, max) : name;
+    }
+
+    /**
+     * Whether a column may appear in an index KEY. Dialects override where they have a rule
+     * the base class cannot know; the shared case is an unbounded string, which no dialect
+     * accepts as a key column.
+     */
+    protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
+        return f.Length !== -1;
+    }
+
+    /** Prefix for the automatic soft-PK index name. Dialects override to match their casing. */
+    protected abstract softPrimaryKeyIndexPrefix(): string;
+
+    /**
+     * Renders one complete composite index statement for the dialect — quoting, column order,
+     * and the "create only if absent" idempotency form. The index NAME arrives pre-composed and
+     * pre-truncated; implementations must use it verbatim.
+     */
+    protected abstract formatCompositeIndexStatement(
+        entity: EntityInfo,
+        fields: EntityFieldInfo[],
+        indexName: string
+    ): string;
+
+    /**
      * Composes the automatic foreign-key index name and enforces the dialect's identifier
      * length limit. Dialect-independent in shape — `{prefix}{table}_{column}` — while the
      * casing of the prefix, the table/column token spelling, and the length cap come from
@@ -1077,8 +1181,15 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `IF NOT EXISTS (checkQuery) BEGIN insertSQL END`
      * PostgreSQL: `DO $$ BEGIN IF NOT EXISTS (checkQuery) THEN insertSQL; END IF; END $$`
      *
-     * @param checkQuery The SELECT query to check for existence.
-     * @param insertSQL The INSERT statement to execute if the check returns no rows.
+     * **Both arguments must already be identifier-quoted by the caller** (`qi()`/`qs()`).
+     * On PostgreSQL the result is a `DO $$ ... $$` block, and the identifier auto-quoter
+     * (`quoteSQLForExecution`, applied later by `runQuery`/`LogSQLAndExecute`) skips dollar-quoted
+     * blocks wholesale — it cannot know whether their contents are SQL or literal text. So this is
+     * the one SQL-building path where the usual "write it bare, the quoter handles it" convention
+     * does not hold: a bare `ID` survives to PG folded as `id` and the statement fails every run.
+     *
+     * @param checkQuery The SELECT query to check for existence. Identifiers must be pre-quoted.
+     * @param insertSQL The INSERT statement to execute if the check returns no rows. Identifiers must be pre-quoted.
      */
     abstract conditionalInsertSQL(checkQuery: string, insertSQL: string): string;
 
@@ -1191,6 +1302,21 @@ export abstract class CodeGenDatabaseProvider {
      * PostgreSQL: returns empty string (no-op).
      */
     abstract generateViewRefreshSQL(schema: string, viewName: string): string;
+
+    /**
+     * SQL that rebinds a layered entity's application-owned outer view after the
+     * inner generated view has been rewritten. SQL Server: empty here — the
+     * outer is `sp_refreshview`'d via {@link generateViewRefreshSQL}. PostgreSQL:
+     * a call to `__mj.spRebindLayeredOuterView` that restars `g.*` from
+     * `pg_get_viewdef` so newly added inner columns appear on the wrapper.
+     *
+     * Default is empty: platforms that do not need a distinct rebind step leave
+     * it alone. Must be a complete statement. The caller guards it on the outer
+     * view existing (bootstrap pass).
+     */
+    generateLayeredOuterRebindSQL(_entity: EntityInfo): string {
+        return '';
+    }
 
     /**
      * Wraps `innerSQL` so it runs only when the named view already exists.
@@ -1487,6 +1613,129 @@ export abstract class CodeGenDatabaseProvider {
             !existing.has(`${e.schema.toLowerCase()}.${e.expectedRoutine.toLowerCase()}`)
         );
     }
+
+    /**
+     * Cross-check every entity's declared fields against the columns its base view
+     * actually produces.
+     *
+     * A field the metadata promises but the view cannot emit is not a cosmetic
+     * inconsistency: the runtime selects fields by name, so the first read of that
+     * entity fails with `column "X" does not exist`. Grids surface that as an empty
+     * result rather than an error, so the entity simply appears to hold no data — a
+     * failure mode that can persist for months without anyone seeing a stack trace.
+     *
+     * This drift is created whenever a migration adds a column to a base TABLE and
+     * registers an EntityField for it without also rebuilding the base VIEW. CodeGen
+     * would normally repair that on its next run, but `excludeSchemas` skips SQL
+     * generation entirely for excluded schemas (permissions only) — and `__mj` is in
+     * that list by convention on essentially every install. So for the core schema
+     * there is no regeneration pass to lean on, and the drift is permanent.
+     *
+     * Deliberately NOT filtered by `excludeSchemas`: excluded schemas are precisely
+     * where nothing else is watching.
+     *
+     * Read-only — this reports, it does not repair.
+     */
+    async validateEntityFieldsResolve(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<FieldResolutionGap[]> {
+        const relevant = entities.filter(e => !e.VirtualEntity && e.BaseView && e.SchemaName);
+        if (relevant.length === 0) return [];
+
+        const schemas = Array.from(new Set(relevant.map(e => e.SchemaName)));
+        const sql = this.getViewColumnsBySchemaSQL(schemas);
+        if (!sql || !sql.trim()) return [];
+
+        const result = await pool.query(sql);
+        // schema.view -> set of column names, all lower-cased so the comparison is
+        // dialect-neutral (PG stores as-written, SQL Server folds by collation).
+        const actual = new Map<string, Set<string>>();
+        for (const row of result.recordset) {
+            const schemaName = String(row.schema_name ?? '').toLowerCase();
+            const viewName = String(row.view_name ?? '').toLowerCase();
+            const columnName = String(row.column_name ?? '').toLowerCase();
+            if (!schemaName || !viewName || !columnName) continue;
+            const key = `${schemaName}.${viewName}`;
+            let set = actual.get(key);
+            if (!set) { set = new Set<string>(); actual.set(key, set); }
+            set.add(columnName);
+        }
+
+        const gaps: FieldResolutionGap[] = [];
+        for (const entity of relevant) {
+            const key = `${entity.SchemaName.toLowerCase()}.${entity.BaseView.toLowerCase()}`;
+            const columns = actual.get(key);
+            // No entry at all means the view does not exist. That is a different fault
+            // with its own diagnostics; reporting every field of a missing view as a gap
+            // would bury the real signal.
+            if (!columns) continue;
+            for (const field of entity.Fields) {
+                if (!columns.has(field.Name.toLowerCase())) {
+                    gaps.push({
+                        entity: entity.Name,
+                        schema: entity.SchemaName,
+                        baseView: entity.BaseView,
+                        field: field.Name,
+                        isVirtual: !!field.IsVirtual,
+                    });
+                }
+            }
+        }
+        return gaps;
+    }
+
+    /**
+     * Dialect SQL returning every view column in the given schemas as
+     * `{ schema_name, view_name, column_name }`.
+     *
+     * `information_schema.columns` restricted to views is standard in both dialects,
+     * so the base implementation serves both; override only if a dialect needs a
+     * catalog-specific path.
+     */
+    protected getViewColumnsBySchemaSQL(schemas: string[]): string {
+        if (!schemas || schemas.length === 0) return '';
+        // Case-INSENSITIVE on both sides, deliberately.
+        //
+        // The caller keys and looks up its map with `.toLowerCase()`, so matching the
+        // catalog verbatim here left the two halves disagreeing about case. On
+        // PostgreSQL an unquoted schema is folded to lowercase in the catalog, so an
+        // entity whose SchemaName is stored with any other casing matched no rows,
+        // fell into the "view does not exist" skip, and was silently dropped from
+        // validation — a validator reporting nothing, which is the exact failure this
+        // check exists to end.
+        //
+        // LOWER() on both sides rather than lowercasing only the list: that is correct
+        // whichever way the schema was actually created (PG folds unquoted, keeps
+        // quoted; SQL Server stores as-written and usually compares case-insensitively
+        // by collation), and it makes the SQL agree with the JS by construction rather
+        // than by coincidence. The cost is a scan of information_schema over a handful
+        // of schemas, which is nothing.
+        const list = schemas.map(s => `'${s.toLowerCase().replace(/'/g, "''")}'`).join(', ');
+        return `SELECT c.table_schema AS schema_name, c.table_name AS view_name, c.column_name AS column_name
+                  FROM information_schema.columns c
+                  JOIN information_schema.views v
+                    ON v.table_schema = c.table_schema AND v.table_name = c.table_name
+                 WHERE LOWER(c.table_schema) IN (${list})`;
+    }
+}
+
+/**
+ * One entity field that the metadata promises but the entity's base view does not
+ * produce. The runtime selects fields by name, so each of these makes the entity
+ * unreadable — and a grid renders that as "no data" rather than an error.
+ */
+export interface FieldResolutionGap {
+    /** Entity.Name (e.g. "MJ: Entities") */
+    entity: string;
+    /** Entity.SchemaName (e.g. "__mj") */
+    schema: string;
+    /** Entity.BaseView (e.g. "vwEntities") */
+    baseView: string;
+    /** EntityField.Name that the view does not expose. */
+    field: string;
+    /** True for join-sourced/computed fields, false for plain base-table columns. */
+    isVirtual: boolean;
 }
 
 /**

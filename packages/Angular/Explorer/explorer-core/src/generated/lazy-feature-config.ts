@@ -29,6 +29,12 @@ const loadNgDashboardsAiDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
 };
 
+// --- @memberjunction/ng-dashboards → ./archiving-dashboards.module (2 entries) ---
+const loadNgDashboardsArchivingDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/archiving-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/archiving-dashboards.module').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
 const loadNgDashboardsCommunicationDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/communication-dashboards.module',
@@ -77,7 +83,7 @@ const loadNgDashboardsMcpModule = {
   load: () => import('@memberjunction/ng-dashboards/mcp.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./module (3 entries) ---
+// --- @memberjunction/ng-dashboards → ./module (1 entries) ---
 const loadNgDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/module',
   load: () => import('@memberjunction/ng-dashboards/module').then(() => {})
@@ -163,6 +169,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::VectorManagementResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::VisualizationResource': loadNgDashboardsAiDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./archiving-dashboards.module
+  'BaseResourceComponent::ArchiveConfigResource': loadNgDashboardsArchivingDashboardsModule,
+  'BaseResourceComponent::ArchiveRunsResource': loadNgDashboardsArchivingDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationLogsResource': loadNgDashboardsCommunicationDashboardsModule,
@@ -247,8 +257,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::MCPResource': loadNgDashboardsMcpModule,
 
   // @memberjunction/ng-dashboards → ./module
-  'BaseResourceComponent::ArchiveConfigResource': loadNgDashboardsModule,
-  'BaseResourceComponent::ArchiveRunsResource': loadNgDashboardsModule,
   'BaseResourceComponent::DatabaseDesignerDashboard': loadNgDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module

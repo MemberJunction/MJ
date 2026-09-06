@@ -783,4 +783,24 @@ describe('SQLServerCodeGenProvider — foreign key indexes', () => {
             expect(provider.generateForeignKeyIndexes(entity)).toEqual([]);
         });
     });
+
+    describe('getRoutineNamesBySchemaSQL', () => {
+        it('returns empty SQL when no schemas are provided', () => {
+            expect(provider.getRoutineNamesBySchemaSQL([])).toBe('');
+        });
+
+        it('lists sys.procedures in the requested schemas', () => {
+            const sql = provider.getRoutineNamesBySchemaSQL(['bsd_billing', '__mj']);
+            expect(sql).toMatch(/sys\.procedures/i);
+            expect(sql).toContain("'bsd_billing'");
+            expect(sql).toContain("'__mj'");
+            expect(sql).toMatch(/schema_name/i);
+            expect(sql).toMatch(/routine_name/i);
+        });
+
+        it('escapes single quotes in schema names', () => {
+            const sql = provider.getRoutineNamesBySchemaSQL(["O'Brien"]);
+            expect(sql).toContain("'O''Brien'");
+        });
+    });
 });

@@ -99,9 +99,12 @@ export class RecentAccessService {
         return;
       }
 
-      // Convert CompositeKey to string if needed
+      // Persist the key in the compact CompositeKey segment form — the bare value for a single-column
+      // primary key (so existing rows and lookups are unchanged), "F1|v1||F2|v2" for a composite one.
+      // That is the form CompositeKey.FromURLSegment reads back; the previous Values(',') dropped
+      // the field names, so a composite key written here could never be re-opened.
       const recordIdString = recordId instanceof CompositeKey
-        ? recordId.Values(',')  // Values() returns joined string with specified delimiter
+        ? recordId.ToCompactURLSegment()
         : recordId;
 
       // Check if we already have a log entry for this user/entity/record combination

@@ -1,8 +1,20 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpPost, IsHttpError } from "@memberjunction/network-utils";
 import { getApiIntegrationsConfig } from "../../config";
+
+/** The slice of Perplexity's `/chat/completions` response this action reads. */
+interface PerplexityChatResponse {
+    choices?: Array<{
+        message?: { content?: string };
+        finish_reason?: string;
+    }>;
+    citations?: string[];
+    images?: Array<Record<string, unknown>>;
+    related_questions?: string[];
+    usage?: Record<string, unknown>;
+}
 
 /**
  * Action that performs AI-powered web search using Perplexity's Search API
@@ -136,24 +148,24 @@ export class PerplexitySearchAction extends BaseAction {
             }
 
             // Make API request
-            const response = await axios.post(
+            const response = await HttpPost<PerplexityChatResponse>(
                 'https://api.perplexity.ai/chat/completions',
                 requestBody,
                 {
-                    headers: {
+                    Headers: {
                         'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 60000 // 60 second timeout
+                    Timeout: 60000 // 60 second timeout
                 }
             );
 
-            if (!response.data) {
+            if (!response.Data) {
                 return this.createErrorResult("Empty response from Perplexity API", "EMPTY_RESPONSE");
             }
 
             // Extract response data
-            const result = response.data;
+            const result = response.Data;
             const choice = result.choices?.[0];
             const message = choice?.message;
             const content = message?.content || '';
@@ -198,9 +210,9 @@ export class PerplexitySearchAction extends BaseAction {
             };
 
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const status = error.response?.status;
-                const errorData = error.response?.data;
+            if (IsHttpError(error)) {
+                const status = error.Status;
+                const errorData = error.Data as { error?: { message?: string } } | undefined;
 
                 if (status === 401) {
                     return this.createErrorResult(

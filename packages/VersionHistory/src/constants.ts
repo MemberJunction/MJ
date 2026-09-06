@@ -2,6 +2,8 @@
  * Shared constants and utilities for the version-history package.
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
+
 // ---------------------------------------------------------------------------
 // Entity name constants
 // ---------------------------------------------------------------------------
@@ -24,32 +26,38 @@ export const ENTITY_RECORD_CHANGES = 'MJ: Record Changes';
 
 /**
  * Escape a string value for safe inclusion in a SQL filter.
- * Doubles single quotes to prevent SQL injection.
+ *
+ * @deprecated Import `EscapeSQLString` from `@memberjunction/global` instead — it is the one
+ * canonical escaper. This alias remains only so external callers do not break; it will be
+ * removed in the next major.
  */
-export function escapeSqlString(value: string): string {
-    if (value == null) return '';
-    return String(value).replace(/'/g, "''");
-}
+export const escapeSqlString = (value: string | null | undefined): string => EscapeSQLString(value);
 
 /**
  * Build a safe SQL equality filter: FieldName = 'escapedValue'
  */
 export function sqlEquals(fieldName: string, value: string): string {
-    return `${fieldName} = '${escapeSqlString(value)}'`;
+    return `${fieldName} = '${EscapeSQLString(value)}'`;
 }
 
 /**
  * Build a safe SQL LIKE filter: FieldName LIKE '%escapedValue%'
+ *
+ * NOTE: `EscapeSQLString` neutralises quotes but NOT LIKE metacharacters — a `value` containing
+ * `%`, `_` or `[` is still interpreted as a wildcard pattern rather than as literal text. That is
+ * the long-standing behaviour of this helper and callers depend on it. If you need a literal
+ * match, escape the metacharacters and add `ESCAPE '\'` (see `escapeLikeValue()` in
+ * `@memberjunction/core`, `generic/runQuerySQLFilterImplementations.ts`).
  */
 export function sqlContains(fieldName: string, value: string): string {
-    return `${fieldName} LIKE '%${escapeSqlString(value)}%'`;
+    return `${fieldName} LIKE '%${EscapeSQLString(value)}%'`;
 }
 
 /**
  * Build a safe SQL IN filter: FieldName IN ('a','b','c')
  */
 export function sqlIn(fieldName: string, values: string[]): string {
-    const escaped = values.map(v => `'${escapeSqlString(v)}'`).join(', ');
+    const escaped = values.map(v => `'${EscapeSQLString(v)}'`).join(', ');
     return `${fieldName} IN (${escaped})`;
 }
 
@@ -57,7 +65,7 @@ export function sqlIn(fieldName: string, values: string[]): string {
  * Build a safe SQL NOT IN filter: FieldName NOT IN ('a','b','c')
  */
 export function sqlNotIn(fieldName: string, values: string[]): string {
-    const escaped = values.map(v => `'${escapeSqlString(v)}'`).join(', ');
+    const escaped = values.map(v => `'${EscapeSQLString(v)}'`).join(', ');
     return `${fieldName} NOT IN (${escaped})`;
 }
 

@@ -1,0 +1,145 @@
+/**
+ * Bridges the per-family output flags to the one canonical `--format` contract.
+ *
+ * Three command families grew their own spelling of the same idea:
+ *
+ * | family           | flag                | values                      |
+ * |------------------|---------------------|-----------------------------|
+ * | plugin commands  | `--format`          | `text` \| `json` \| `md`     |
+ * | `mj test *`      | `--format`          | `console` \| `json` \| `markdown` |
+ * | `mj ai *`        | `--output` / `-o`   | `compact` \| `json` \| `table`    |
+ *
+ * An agent that learned one spelling got a parse error — or worse, in the `mj ai`
+ * case, silence — from the next. Worse still, `-o` means *output format* under
+ * `mj ai` but *output file path* under `mj test`, `querygen export`, and
+ * `sql-audit`, so `-o json` writes a file called `json` in half the CLI.
+ *
+ * {@link resolveLegacyFormat} keeps every existing value working while making all
+ * three families accept the canonical spellings and honor the same TTY-detection
+ * default. {@link CANONICAL_FORMAT_FLAG} is the shared flag definition to add
+ * alongside a family's own.
+ */
+import { Flags } from '@oclif/core';
+import { NormalizeFormatAlias, ResolveOutputFormat, type OutputFormat } from '@memberjunction/cli-core';
+
+/**
+ * The canonical `--format` flag for commands that are not yet `BaseCLIPlugin`
+ * subclasses (which inherit it from `baseFlags`).
+ *
+ * Deliberately has **no `default`**: the absence of a value is the signal that
+ * lets {@link resolveLegacyFormat} fall through to the family default or to
+ * TTY detection. A default here would make every run look explicit.
+ *
+ * Note `char` is omitted — `-f` and `-o` already mean other things in these
+ * families, and quietly rebinding a short flag is how the `-o` collision started.
+ */
+const FORMAT_VALUES = ['text', 'json', 'md', 'human', 'console', 'markdown', 'compact', 'table'];
+
+const FORMAT_DESCRIPTION =
+  'Output format: text (human), json (machine-readable), md (Markdown). ' +
+  'Defaults to human output on a terminal and json when stdout is piped. ' +
+  'Legacy spellings (console/markdown/compact/table) are accepted.';
+
+export const CANONICAL_FORMAT_FLAG = Flags.string({
+  options: FORMAT_VALUES,
+  description: FORMAT_DESCRIPTION,
+});
+
+/**
+ * The same flag for `mj test *`, which has always spelled its format flag
+ * `--format` **with a `-f` shorthand**.
+ *
+ * Widening the accepted *values* must not narrow the accepted *spellings*: dropping
+ * `char` would silently break every script that runs `mj test run -f json` — exactly
+ * the class of unannounced breakage this compatibility layer exists to prevent. `-f`
+ * is unclaimed across all six `mj test` commands, so restoring it collides with nothing.
+ *
+ * The `mj ai` family deliberately does NOT get this: `--format` is brand new there
+ * (its historical flag is `--output`/`-o`), so there is no `-f` to preserve, and
+ * `mj ai audit agent-run` already binds `-f` to `--file` — an output FILE path, so
+ * pointing it at a format would repeat the exact `-o` ambiguity described above.
+ */
+export const TEST_FORMAT_FLAG = Flags.string({
+  char: 'f',
+  options: FORMAT_VALUES,
+  description: FORMAT_DESCRIPTION,
+});
+
+/** Inputs to {@link resolveLegacyFormat}. */
+export interface LegacyFormatInput<TLegacy extends string> {
+  /** The canonical `--format` value, if the caller passed one. */
+  format?: string;
+  /** The family's own flag value as oclif parsed it (its default included). */
+  legacy: TLegacy;
+  /** What that flag falls back to when nothing was specified. */
+  legacyDefault: TLegacy;
+  /**
+   * Whether the caller actually typed the family's flag. Pass
+   * `metadata.flags.<name>?.setFromDefault === false` from the command's `parse()`.
+   *
+   * When omitted this falls back to comparing the value against the default, which
+   * cannot distinguish `-o compact` (the caller asking for compact) from no flag at
+   * all — so a piped `mj ai agents list -o compact` would silently return json,
+   * overriding an explicit request. Always pass it from a real command.
+   */
+  legacyWasExplicit?: boolean;
+  /** How each canonical format maps onto this family's vocabulary. */
+  map: Record<OutputFormat, TLegacy>;
+  /** Defaults to `process.stdout.isTTY`. Injectable for tests. */
+  stdoutIsTTY?: boolean;
+  /** Defaults to `process.env`. Injectable for tests. */
+  env?: NodeJS.ProcessEnv;
+}
+
+/**
+ * Resolves which value of a family's own output flag to use, honoring — in order:
+ *
+ * 1. an explicit canonical `--format`,
+ * 2. an explicit legacy value (anything other than the family default),
+ * 3. `MJ_CLI_FORMAT`,
+ * 4. a piped stdout → the family's json value,
+ * 5. the family default.
+ *
+ * Rule 2 is what makes this backwards compatible: an existing script passing
+ * `--format=markdown` or `-o table` keeps getting exactly what it always got.
+ * Rule 4 only fires when the caller expressed no preference at all, so it can
+ * never override an intentional choice — which is precisely why rule 2 needs
+ * {@link LegacyFormatInput.legacyWasExplicit} rather than a value comparison.
+ */
+export function resolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
+  const explicitCanonical = NormalizeFormatAlias(input.format);
+  if (explicitCanonical) return input.map[explicitCanonical];
+
+  // The caller typed the family's own flag — an explicit choice that outranks any
+  // inference we could make, even when the value they typed IS the default.
+  const legacyWasExplicit = input.legacyWasExplicit ?? input.legacy !== input.legacyDefault;
+  if (legacyWasExplicit) return input.legacy;
+
+  const { format, reason } = ResolveOutputFormat({
+    stdoutIsTTY: input.stdoutIsTTY,
+    env: input.env,
+  });
+
+  // 'tty-default' means nothing at all asked for a format — keep the family's own
+  // default rather than flattening every human rendering to a generic 'text'.
+  return reason === 'tty-default' ? input.legacyDefault : input.map[format];
+}
+
+/** Canonical → `mj test *` vocabulary. */
+export const TEST_FORMAT_MAP: Record<OutputFormat, 'console' | 'json' | 'markdown'> = {
+  text: 'console',
+  json: 'json',
+  md: 'markdown',
+};
+
+/**
+ * Canonical → `mj ai *` vocabulary.
+ *
+ * `md` maps to `json` because most `mj ai` commands have no Markdown renderer;
+ * the ones that do (`mj ai audit agent-run`) pass their own map with `markdown`.
+ */
+export const AI_FORMAT_MAP: Record<OutputFormat, 'compact' | 'json' | 'table'> = {
+  text: 'compact',
+  json: 'json',
+  md: 'json',
+};

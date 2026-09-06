@@ -219,7 +219,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
         'aggregates-cache': 3,
-        'ai-cost': 6,
+        'ai-cost': 7,
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
@@ -251,6 +251,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
+        'nested-transactions': 11,
         'open-app-teardown': 2,
         'permission-engine': 14,
         'predictive-studio': 5,
@@ -284,6 +285,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'task-graph-orchestration': 18,
         'templates': 8,
         'transaction-groups': 5,
+        'transaction-groups-batched': 5,
         'user-routines': 16,
         'view-execution': 12,
         'view-security': 4,
@@ -311,7 +313,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(85);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(87);
     });
 });
 
@@ -410,6 +412,17 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-writes.EW6',
         'entity-writes.EW7',
         'entity-writes.EW9',
+        'nested-transactions.NT1',
+        'nested-transactions.NT10',
+        'nested-transactions.NT2',
+        'nested-transactions.NT3',
+        'nested-transactions.NT4',
+        'nested-transactions.NT5',
+        'nested-transactions.NT6',
+        'nested-transactions.NT7',
+        'nested-transactions.NT8',
+        'nested-transactions.NT8b',
+        'nested-transactions.NT9',
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
@@ -450,6 +463,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-orchestration.TG15',
         'task-graph-orchestration.TG16',
         'task-graph-orchestration.TG18',
+        'transaction-groups-batched.TGB1',
+        'transaction-groups-batched.TGB2',
+        'transaction-groups-batched.TGB3',
+        'transaction-groups-batched.TGB4',
+        'transaction-groups-batched.TGB5',
         'transaction-groups.TG2',
         'transaction-groups.TG3',
         'transaction-groups.TG4',

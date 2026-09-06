@@ -311,6 +311,32 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    */
   private audioStreaming = false;
 
+  /**
+   * The last URL the agent was TOLD about, so an unchanged page is not re-announced (#3496). `null`
+   * until the first sighting, which is deliberately announced as a plain "current page" rather than
+   * as somebody else navigating — the first page of a session was nobody's takeover.
+   */
+  private lastNotedUrl: string | null = null;
+
+  /**
+   * How many browser operations the AGENT itself has in flight right now (#3496).
+   *
+   * Attribution cannot be read off the feed a change arrives on. A pushed frame or a perception poll
+   * only says the page moved; it is `> 0` here that says the agent is the one moving it. Two cases
+   * make that necessary rather than tidy:
+   *
+   * - **an action's frames outrun its reply.** Under streaming, frames of the new page are pushed
+   *   while `ExecuteRemoteBrowserAction` is still in flight, so the observation reliably lands BEFORE
+   *   the mutation returns the URL — the agent's own navigation announced back to it as a takeover.
+   * - **a goal drives for minutes.** `browser_AchieveGoal` runs an autonomous loop server-side and
+   *   every page it opens is observed with nothing yet returned, so the whole run would narrate
+   *   itself as somebody else.
+   *
+   * A counter, not a flag: goals and actions overlap, and the last one to finish must not clear a
+   * window another still owns.
+   */
+  private agentDrivingDepth = 0;
+
   /** The client-side audio player fed pushed chunks while {@link audioStreaming}; `null` until started. */
   private audioPlayer: RemoteBrowserAudioPlayer | null = null;
 
@@ -421,11 +447,18 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * when a `RemoteBrowserScreencastFrame` arrives on the push-status stream for THIS session. No-op when
    * the channel isn't streaming or has no bound surface (e.g. the tab pane is collapsed).
    *
+   * Under streaming the surface's snapshot poll is stopped, so this is the ONLY thing that sees the
+   * page while frames are being pushed — which is why the frame now carries the URL (#3496). Without
+   * it, a user navigating during a screencast changed the picture and nothing else: the agent kept
+   * describing the page it last opened, and the pixels proving otherwise were right there on screen.
+   *
    * @param dataBase64 The frame image as raw base64 JPEG (no `data:` prefix).
+   * @param currentUrl The browser's URL when the frame was captured; absent from older servers.
    */
-  public OnScreencastFrame(dataBase64: string): void {
+  public OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void {
     if (this.streaming) {
       this.surface?.RenderFrame(dataBase64);
+      this.notePageChange(currentUrl, 'observed');
     }
   }
 
@@ -553,6 +586,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * Fetches one live snapshot of the server browser for the surface — the PERCEPTION poll.
    * Best-effort by contract ({@link RemoteBrowserSnapshotFetcher}): returns `null` when no
    * session is live or the query fails (the surface keeps its last good frame).
+   *
+   * Also the channel's chance to NOTICE a page change it did not cause (#3496): the poll already
+   * carries the URL, and until now only the surface read it.
    */
   private async fetchSnapshot(): Promise<RemoteBrowserSnapshotView | null> {
     const sessionId = this.Context?.AgentSessionID;
@@ -560,7 +596,70 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       return null;
     }
     const data = await this.Context?.ExecuteServerAction<RemoteBrowserSnapshotResult>(REMOTE_BROWSER_SNAPSHOT_QUERY, { agentSessionID: sessionId });
-    return data?.RemoteBrowserSnapshot ?? null;
+    const snapshot = data?.RemoteBrowserSnapshot ?? null;
+    this.notePageChange(snapshot?.CurrentUrl ?? null, 'observed');
+    return snapshot;
+  }
+
+  /**
+   * The ONE place the agent is told where the page is (#3496).
+   *
+   * Before this, the `[browser] current page:` note was pushed from exactly two call sites, both
+   * immediately after a server action the MODEL itself initiated. That placement — not any caching —
+   * was the bug: **a surface change the agent did not cause was invisible to it.** A user taking over
+   * and navigating produced no note, so the agent went on confidently describing the previous page,
+   * and only corrected when told to look again. Human takeover is on by default for `Collaborative`
+   * providers, so the default configuration was the broken one.
+   *
+   * Routing every observation through here makes the rule "the agent hears about the page whenever it
+   * MOVES, whoever moved it" — a property of this method rather than of where callers happen to be.
+   *
+   * `cause` is what the agent could never work out for itself. An `'agent'` change is one this
+   * channel just performed; anything spotted by the perception poll or a pushed frame is
+   * `'observed'` — someone else is driving, and saying so is the difference between the agent
+   * knowing the page moved and knowing it is no longer the one moving it.
+   *
+   * Silent when the URL has not changed, which is not an optimisation but a requirement: the
+   * perception poll runs every ~700ms and an unconditional note would bury the conversation in
+   * hundreds of identical lines.
+   */
+  private notePageChange(url: string | null | undefined, cause: 'agent' | 'observed'): void {
+    const next = (url ?? '').trim();
+    if (next.length === 0) {
+      return;
+    }
+    // The live-view bar is refreshed even when the URL is unchanged: it is idempotent, and in
+    // streaming mode it is the only thing keeping the bar off "No page loaded yet".
+    this.surface?.SetCurrentUrl(next);
+    if (next === this.lastNotedUrl) {
+      return;
+    }
+    const firstSighting = this.lastNotedUrl === null;
+    this.lastNotedUrl = next;
+    // A change seen WHILE the agent is driving is the agent's own, whichever feed spotted it first.
+    const byAgent = cause === 'agent' || this.agentDrivingDepth > 0;
+    this.Context?.SendContextNote(
+      byAgent || firstSighting
+        ? `[browser] current page: ${next}`
+        : `[browser] the page changed to: ${next} — you did not navigate here, so someone else is driving. `
+          + `Describe THIS page, not the one you last opened.`,
+    );
+  }
+
+  /**
+   * Runs one agent-initiated browser operation with {@link agentDrivingDepth} raised, so any page
+   * change observed while it runs is attributed to the agent rather than to a phantom third party.
+   *
+   * `finally` and not a trailing decrement: the window must close on a thrown transport error too,
+   * or one failed tool call would leave the channel permanently unable to report a real takeover.
+   */
+  private async whileAgentDrives<T>(work: () => Promise<T>): Promise<T> {
+    this.agentDrivingDepth++;
+    try {
+      return await work();
+    } finally {
+      this.agentDrivingDepth--;
+    }
   }
 
   /**
@@ -609,26 +708,24 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       return this.fail('No live browser session is available yet — the realtime session may still be connecting; try again in a moment.');
     }
 
-    const data = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserActionResult>(
-      EXECUTE_REMOTE_BROWSER_ACTION_MUTATION,
-      this.buildVariables(sessionId, action),
-    );
-    const result = data?.ExecuteRemoteBrowserAction ?? null;
-    if (!result) {
-      return this.fail('The browser action could not be executed (no response from the server).');
-    }
-    if (!result.Success) {
-      return this.fail(result.Detail ?? 'The browser action failed.');
-    }
+    return this.whileAgentDrives(async () => {
+      const data = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserActionResult>(
+        EXECUTE_REMOTE_BROWSER_ACTION_MUTATION,
+        this.buildVariables(sessionId, action),
+      );
+      const result = data?.ExecuteRemoteBrowserAction ?? null;
+      if (!result) {
+        return this.fail('The browser action could not be executed (no response from the server).');
+      }
+      if (!result.Success) {
+        return this.fail(result.Detail ?? 'The browser action failed.');
+      }
 
-    if (result.CurrentUrl) {
-      // PERCEPTION: tell the agent where the page is now (background — no spoken reply).
-      this.Context?.SendContextNote(`[browser] current page: ${result.CurrentUrl}`);
-      // In streaming mode the surface's snapshot poll (which carries the URL) is stopped, so push the new
-      // URL to the live-view bar directly — otherwise it stays stuck on "No page loaded yet".
-      this.surface?.SetCurrentUrl(result.CurrentUrl);
-    }
-    return this.ok(result.CurrentUrl, result.Detail);
+      // PERCEPTION: tell the agent where the page is now (background — no spoken reply), and refresh
+      // the live-view bar, which in streaming mode has no poll feeding it.
+      this.notePageChange(result.CurrentUrl, 'agent');
+      return this.ok(result.CurrentUrl, result.Detail);
+    });
   }
 
   /** Builds the flat mutation variables from a normalized action (omitted fields ride as null). */
@@ -671,30 +768,31 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
     // START the goal (returns immediately with a GoalRunID) then POLL — a goal loop can run for
     // minutes, far longer than any single request survives, so we never hold one open for the loop.
-    const startData = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserGoalResult>(EXECUTE_REMOTE_BROWSER_GOAL_MUTATION, {
-      agentSessionID: sessionId,
-      goal,
-      startUrl,
+    // The whole span is agent-driven: every page the loop opens is observed with nothing returned
+    // yet, so without the window the agent would narrate its own goal as somebody else's takeover.
+    return this.whileAgentDrives(async () => {
+      const startData = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserGoalResult>(EXECUTE_REMOTE_BROWSER_GOAL_MUTATION, {
+        agentSessionID: sessionId,
+        goal,
+        startUrl,
+      });
+      const started = startData?.ExecuteRemoteBrowserGoal ?? null;
+      if (!started) {
+        return this.fail('The browser goal could not be started (no response from the server).');
+      }
+      // Defensive: if the server ever returns a terminal status synchronously, use it directly.
+      const result = started.Status === 'Running' && started.GoalRunID
+        ? await this.pollGoalResult(sessionId, started.GoalRunID)
+        : started;
+      if (!result) {
+        return this.fail('The browser goal is taking longer than expected and could not be confirmed. It may still be running.');
+      }
+      this.notePageChange(result.CurrentUrl, 'agent');
+      if (!result.Success) {
+        return this.fail(result.Detail ?? `The goal could not be completed (${result.Status ?? 'unknown'}).`);
+      }
+      return this.ok(result.CurrentUrl, result.Detail ?? `Goal completed (${result.Status ?? 'Completed'}, ${result.StepCount ?? 0} steps).`);
     });
-    const started = startData?.ExecuteRemoteBrowserGoal ?? null;
-    if (!started) {
-      return this.fail('The browser goal could not be started (no response from the server).');
-    }
-    // Defensive: if the server ever returns a terminal status synchronously, use it directly.
-    const result = started.Status === 'Running' && started.GoalRunID
-      ? await this.pollGoalResult(sessionId, started.GoalRunID)
-      : started;
-    if (!result) {
-      return this.fail('The browser goal is taking longer than expected and could not be confirmed. It may still be running.');
-    }
-    if (result.CurrentUrl) {
-      this.Context?.SendContextNote(`[browser] current page: ${result.CurrentUrl}`);
-      this.surface?.SetCurrentUrl(result.CurrentUrl);
-    }
-    if (!result.Success) {
-      return this.fail(result.Detail ?? `The goal could not be completed (${result.Status ?? 'unknown'}).`);
-    }
-    return this.ok(result.CurrentUrl, result.Detail ?? `Goal completed (${result.Status ?? 'Completed'}, ${result.StepCount ?? 0} steps).`);
   }
 
   /**

@@ -4,38 +4,43 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Per-action tests for the YouTube provider.
  *
  * Boundary mocking: BaseOAuthAction is mocked (OAuth succeeds by default,
- * makeAuthenticatedRequest passes a test token straight through) and axios is
- * mocked so `axiosInstance.request(config)` captures the exact endpoint,
+ * makeAuthenticatedRequest passes a test token straight through) and the HTTP layer is
+ * mocked so `httpClient.request(config)` captures the exact endpoint,
  * method, params and payload each action sends to the YouTube Data API.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -110,7 +115,7 @@ import { YouTubeUploadVideoAction } from '../providers/youtube/actions/upload-vi
 const contextUser = { ID: 'user-1', Name: 'Test User', Email: 'test@example.com' } as unknown as UserInfo;
 
 type RunnableAction = { InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> };
-type RequestConfig = { url: string; method: string; data?: unknown; params?: Record<string, unknown> };
+type RequestConfig = { Url: string; Method: string; Body?: unknown; Query?: Record<string, unknown> };
 
 function inputs(values: Record<string, unknown>, outputs: string[] = []): ActionParam[] {
   const params = Object.entries(values).map(
@@ -131,27 +136,27 @@ function outParam(result: ActionResultSimple, name: string): unknown {
   return result.Params?.find((p) => p.Name === name)?.Value;
 }
 
-/** Route mock for axiosInstance.request keyed on `${method} ${url}`. */
+/** Route mock for httpClient.request keyed on `${method} ${url}`. */
 function mockRequests(routes: Array<{ method?: string; url: string; response: unknown }>): void {
-  http.instance.request.mockImplementation((config: RequestConfig) => {
+  http.instance.Request.mockImplementation((config: RequestConfig) => {
     for (const route of routes) {
-      const methodMatches = !route.method || route.method.toUpperCase() === String(config.method).toUpperCase();
-      if (methodMatches && config.url === route.url) {
-        return Promise.resolve({ data: route.response, headers: {} });
+      const methodMatches = !route.method || route.method.toUpperCase() === String(config.Method).toUpperCase();
+      if (methodMatches && config.Url === route.url) {
+        return Promise.resolve({ Data: route.response, Headers: {}, Status: 200 });
       }
     }
-    return Promise.reject(new Error(`Unmocked request ${config.method} ${config.url}`));
+    return Promise.reject(new Error(`Unmocked request ${config.Method} ${config.Url}`));
   });
 }
 
 function requestCalls(): RequestConfig[] {
-  return http.instance.request.mock.calls.map((call) => call[0] as RequestConfig);
+  return http.instance.Request.mock.calls.map((call) => call[0] as RequestConfig);
 }
 
 beforeEach(() => {
-  http.instance.request.mockReset();
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
+  http.instance.Request.mockReset();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
 });
 
 // ─── YouTubeCreatePlaylistAction ────────────────────────────────────────────
@@ -217,11 +222,11 @@ describe('YouTubeCreatePlaylistAction', () => {
       inputs({ CompanyIntegrationID: 'ci-1', Title: 'My List' }, ['PlaylistDetails', 'PlaylistID', 'PlaylistURL']),
     );
 
-    const post = requestCalls().find((c) => String(c.method).toUpperCase() === 'POST');
+    const post = requestCalls().find((c) => String(c.Method).toUpperCase() === 'POST');
     expect(post).toBeDefined();
-    expect(post!.url).toBe('/playlists');
-    expect(post!.params).toEqual({ part: 'snippet,status' });
-    expect(post!.data).toEqual({
+    expect(post!.Url).toBe('/playlists');
+    expect(post!.Query).toEqual({ part: 'snippet,status' });
+    expect(post!.Body).toEqual({
       snippet: { title: 'My List', description: '', tags: [], defaultLanguage: 'en' },
       status: { privacyStatus: 'private' },
     });
@@ -254,8 +259,8 @@ describe('YouTubeGetChannelAnalyticsAction', () => {
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1' }));
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/channels');
-    expect(call.params).toEqual(expect.objectContaining({ mine: true }));
+    expect(call.Url).toBe('/channels');
+    expect(call.Query).toEqual(expect.objectContaining({ mine: true }));
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('ERROR');
     expect(result.Message).toBe('Failed to get channel analytics: No channel found for authenticated user');
@@ -266,7 +271,7 @@ describe('YouTubeGetChannelAnalyticsAction', () => {
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', ChannelID: 'ch-404' }));
 
     const call = requestCalls()[0];
-    expect(call.params).toEqual(expect.objectContaining({ id: 'ch-404' }));
+    expect(call.Query).toEqual(expect.objectContaining({ id: 'ch-404' }));
     expect(result.Success).toBe(false);
     // 'Channel not found: ch-404' contains '404' → mapped to NOT_FOUND
     expect(result.ResultCode).toBe('NOT_FOUND');
@@ -295,8 +300,8 @@ describe('YouTubeGetChannelVideosAction', () => {
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1' }));
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/channels');
-    expect(call.params).toEqual({ part: 'id,snippet', mine: true });
+    expect(call.Url).toBe('/channels');
+    expect(call.Query).toEqual({ part: 'id,snippet', mine: true });
     expect(result.Success).toBe(false);
     expect(result.Message).toBe('Failed to get channel videos: No channel found for authenticated user');
   });
@@ -334,8 +339,8 @@ describe('YouTubeGetCommentsAction', () => {
     );
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/commentThreads');
-    expect(call.params).toEqual(
+    expect(call.Url).toBe('/commentThreads');
+    expect(call.Query).toEqual(
       expect.objectContaining({
         part: 'snippet,replies',
         maxResults: 100,
@@ -405,8 +410,8 @@ describe('YouTubeGetVideoAnalyticsAction', () => {
     );
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/videos');
-    expect(call.params).toEqual({ part: 'snippet,statistics,contentDetails,status', id: 'v-1,v-2' });
+    expect(call.Url).toBe('/videos');
+    expect(call.Query).toEqual({ part: 'snippet,statistics,contentDetails,status', id: 'v-1,v-2' });
     expect(result.Success).toBe(true);
     expect(result.Message).toBe('Retrieved analytics for 1 videos');
     const analytics = outParam(result, 'Analytics') as Array<{ videoId: string; metrics: { views: number; likes: number } }>;
@@ -462,7 +467,7 @@ describe('YouTubeScheduleVideoAction', () => {
       inputs({ CompanyIntegrationID: 'ci-1', VideoID: 'v-1', PublishAt: '2999-01-01T00:00:00Z' }),
     );
 
-    expect(requestCalls()[0].params).toEqual({ part: 'snippet,status', id: 'v-1' });
+    expect(requestCalls()[0].Query).toEqual({ part: 'snippet,status', id: 'v-1' });
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('INVALID_STATUS');
     expect(result.Message).toBe('Failed to schedule video: Video must be private to schedule. Current status: public');
@@ -514,8 +519,8 @@ describe('YouTubeUpdateVideoMetadataAction', () => {
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', VideoID: 'v-404', Title: 'T' }));
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/videos');
-    expect(call.params).toEqual(expect.objectContaining({ id: 'v-404' }));
+    expect(call.Url).toBe('/videos');
+    expect(call.Query).toEqual(expect.objectContaining({ id: 'v-404' }));
     expect(result.Success).toBe(false);
     // 'Video not found: v-404' contains '404' → mapped to NOT_FOUND
     expect(result.ResultCode).toBe('NOT_FOUND');

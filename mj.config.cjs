@@ -14,6 +14,8 @@
  * Reduction: 69% smaller
  */
 
+const path = require('node:path');
+
 /** @type {import('@memberjunction/config').MJConfig} */
 /**
  * The active database platform, with the same contract as `resolveDbPlatformFromEnv` in
@@ -55,9 +57,14 @@ module.exports = {
    * @memberjunction/integration-test-suite package, so the published CLI cannot depend on it;
    * this config key is the sanctioned runtime-plugin seam that loads it in-repo. External
    * adopters point this at their own check packages.
+   *
+   * An absolute __dirname-based path, NOT the bare package name: nothing creates a
+   * workspace-root node_modules link for it, and check-module-loader.ts COLLECTS load
+   * failures instead of throwing — so a bare specifier would silently degrade every bundle
+   * to "Unknown integration check bundle". sibling-parity.test.ts pins this.
    */
   testing: {
-    checkModules: ['@memberjunction/integration-test-suite'],
+    checkModules: [path.join(__dirname, 'packages/TestingFramework/integration-test-suite/dist/index.js')],
   },
 
   dbPlatform: dbPlatform() || 'sqlserver',
@@ -199,6 +206,25 @@ module.exports = {
   // Soft PK/FK configuration for tables without database constraints
   additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
 
+  // Schema-scale emit. Defaults live in CodeGenLib; listed here so a brownfield
+  // / BigSchemaDemo run is explicit. `bsd_%` never lands in published packages.
+  fileEmit: {
+    perSchema: true,
+    writeIfChanged: true,
+    parallel: true,
+    concurrency: 8,
+    dirtySchemaOnly: true,
+    sqlEntityBatchSize: 8,
+  },
+  schemaOutput: [
+    {
+      schema: 'bsd_%',
+      EntitySubClasses: './Demos/BigSchemaDemo/generated/entities',
+      GraphQLServer: './Demos/BigSchemaDemo/generated/graphql',
+      skip: ['Angular'],
+    },
+  ],
+
   // Output directories specific to monorepo structure
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
@@ -229,37 +255,37 @@ module.exports = {
   commands: [
     {
       workingDirectory: './packages/MJCoreEntities',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/Angular/Explorer/core-entity-forms',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/Actions/CoreActions',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/GeneratedEntities',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/GeneratedActions',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/MJServer',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
