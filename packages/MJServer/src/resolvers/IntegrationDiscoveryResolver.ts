@@ -3,6 +3,7 @@ import { CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Meta
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { NoLog } from "../logging/NoLog.js";
 import { UUIDsEqual } from "@memberjunction/global";
+import { DrainResponseBody } from "@memberjunction/network-utils";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
     MJCompanyIntegrationEntity,
@@ -6472,6 +6473,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 body: JSON.stringify(payload)
             });
             if (!response.ok) {
+                await DrainResponseBody(response);
                 console.error(`[Integration] Webhook POST to ${url} returned ${response.status}`);
             }
         } catch (e) {
