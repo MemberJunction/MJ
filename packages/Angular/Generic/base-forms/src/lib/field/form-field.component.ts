@@ -467,6 +467,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Whether this field should be hidden (empty in read-only mode) */
   get ShouldHideField(): boolean {
+    // A read-denied field is always hidden. This must run before Value is touched: the
+    // template's own @if guards rendering behind IsFieldReadableByUser, but programmatic
+    // callers (MjCollapsiblePanelComponent.hasRenderableContent sweeps ShouldHideField to
+    // decide section visibility) reach this getter directly, and BaseEntity.Get() THROWS for
+    // a denied field. Returning true here is also what lets a section whose fields are all
+    // denied collapse away instead of rendering an empty card.
+    if (!this.IsFieldReadableByUser) return true;
     if (this.EditMode) return false;
     if (!this.HideWhenEmptyInReadOnlyMode) return false;
     if (this.FormContext?.showEmptyFields) return false;
