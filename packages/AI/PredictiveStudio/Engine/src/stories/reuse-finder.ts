@@ -181,7 +181,13 @@ export class ReuseFinder {
       `PromotionState IN (${states.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')})`,
     ];
     if (request.TrainedOnly !== false) {
+      // `IsTrained` and a stored artifact are two different facts, and the reuse LOADER requires
+      // both — it refuses a row that is "marked trained but has no stored artifact"
+      // (`train-graph-seam.ts`). Filtering on `IsTrained` alone therefore offers candidates that
+      // are guaranteed to fail the moment someone accepts one, which is the worst place to learn
+      // it. A component is offered as reusable only if it can actually be loaded.
       filters.push('IsTrained = 1');
+      filters.push('ArtifactFileID IS NOT NULL');
     }
 
     const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();

@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT88 - Predictive Studio Capability Reachability",
+    "Description": "Trains a REAL model through the real engine and sidecar, then asks whether each capability Predictive Studio advertises is reachable against what that training actually produced. This is the third of three complementary tiers and covers what neither of the others can: IT14 hand-writes rows and proves the seams accept them; IT87 sweeps existing rows and proves they agree with each other; IT88 runs the thing and proves the results are usable. Every defect found while building the signal, finding and architecture layers was of the last kind - a capability that existed in code and was unreachable in practice. PSL1: training leaves behind a root component AND the input components that make a model more than a score. PSL2: one of those signals is COMPUTABLE over a population with no model involved, through the same assembly path training used (signal kinds that legitimately refuse rebinding by name are not counted against it). PSL3: every component carrying a Story also carries a StoryVector, exercised against rows a real run just wrote - the only place the server-side entity subclass registration is actually tested. PSL4: the trained root is genuinely reusable, carrying the artifact without which the graph loader refuses it. PSL5: the pipeline to model to component lineage of a real run reads back, and the root the model points at is the one attached to it. Gated by requiresEnv PS_INTEGRATION, so it reports a REAL Skipped rather than a pass when the live environment is absent. Once PS_INTEGRATION IS set, a missing dataset FAILS with the reason rather than skipping quietly - the trap the standalone rigs fall into, since they exit 0 on 'no published model' and would go green on a fresh database by doing nothing. Creates and deletes its own pipeline, model and components.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A model trains end to end; it leaves reusable signals behind; at least one is computable standalone; every story is embedded; the root carries its artifact so reuse is reachable; and the full lineage reads back."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "requiresEnv": "PS_INTEGRATION",
+      "checks": [
+        {
+          "type": "predictive-studio-lifecycle"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "465F446A-2E76-4071-B08C-627341D8F84E"
+  },
+  "sync": {
+    "lastModified": "2026-09-06T06:28:42.237Z",
+    "checksum": "febd08caf20e7deb4ae854a12e33cdd8b51ee11e3ce6ba021be1762053f987f8"
+  }
+}

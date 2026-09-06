@@ -441,8 +441,8 @@
             "ID": "ABD94282-37DA-49D1-9F49-E383FE36A61C"
           },
           "sync": {
-            "lastModified": "2026-07-21T12:49:20.809Z",
-            "checksum": "e48ea72ceef718e149ac065cbbf351d1098b5563399046a0b056570e6b97cd3e"
+            "lastModified": "2026-09-05T23:43:05.382Z",
+            "checksum": "75e70d148a13c441da76736c557051f09337cae6819ea955f30963eefcf1bad8"
           }
         },
         {
@@ -456,8 +456,8 @@
             "ID": "F6138849-9D83-4556-AD2F-7175BD7F4C22"
           },
           "sync": {
-            "lastModified": "2026-07-21T12:49:20.819Z",
-            "checksum": "a06b0341305ebbd8ade31de44706a910a860f0ce05bbfc511274ca8612d7bba6"
+            "lastModified": "2026-09-05T23:43:05.382Z",
+            "checksum": "1578d13a97e608073e0420971ef18b9516745240d94ddc9e1690ed408a7b9c4a"
           }
         },
         {
@@ -471,8 +471,8 @@
             "ID": "2B7841A5-6413-4352-BD9A-72218B0805A2"
           },
           "sync": {
-            "lastModified": "2026-07-21T18:38:06.337Z",
-            "checksum": "d5901d62e666b93f5e9be006078f1b43c5eff0d9ec6d0c6535fbbccbdc592b85"
+            "lastModified": "2026-09-05T23:43:05.383Z",
+            "checksum": "898196862444eb092d39ed1310eb33d35cb5b998928fdf5b468c753c8a7e6af1"
           }
         },
         {
@@ -486,8 +486,8 @@
             "ID": "7BDD6F3C-9BD8-48EF-B8CA-F8F4E8DD0A4E"
           },
           "sync": {
-            "lastModified": "2026-07-21T18:56:36.217Z",
-            "checksum": "8fb9410a6b2676fb95654d82ed4ae46bfa57769d0a51e9fb3e0afa0b214e0326"
+            "lastModified": "2026-09-05T23:43:05.383Z",
+            "checksum": "891fe27d7f8c87c3aa12d9c70e81322001783f37fef1d96cac3fa0422c5c0d2f"
           }
         },
         {
@@ -501,8 +501,8 @@
             "ID": "D7D888D4-CE03-432D-989A-361ACE2563D1"
           },
           "sync": {
-            "lastModified": "2026-07-21T18:59:30.687Z",
-            "checksum": "73a34d4ae8c63c51d30720e63b259d4a927a0e165db1b59d271a8828f59661b9"
+            "lastModified": "2026-09-05T23:43:05.383Z",
+            "checksum": "f1a760331dad874f84b807bf841981d8604f845f6a0ade36b51e9eb2a8bffdb0"
           }
         },
         {
@@ -527,8 +527,8 @@
             "ID": "1E50C41A-E29C-4CCA-B04B-31438A547087"
           },
           "sync": {
-            "lastModified": "2026-07-31T16:12:26.160Z",
-            "checksum": "9810d9dfac4530c59c7bdb885595c69131833d026c3fd452cad55c782e30c076"
+            "lastModified": "2026-09-05T23:43:05.383Z",
+            "checksum": "cbe3972b4df47f03d93087526729ce1a6d83dd5d82859fbb594cd0b846b229a5"
           }
         },
         {
@@ -542,8 +542,8 @@
             "ID": "3C334350-5AA5-4F9C-94DD-CACCF140D830"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.397Z",
-            "checksum": "ff4f7cbf5fb8ba7e9b4a9186e278208023a081bb7bae7d6e0f4d668fdd0db660"
+            "lastModified": "2026-09-05T23:43:05.383Z",
+            "checksum": "73f12123d5bf96d0c1352579efe317376ddd041e4a9883bf645a593c8bf654df"
           }
         },
         {
@@ -568,8 +568,8 @@
             "ID": "03B972BB-3EC8-463C-A982-140153E65ACC"
           },
           "sync": {
-            "lastModified": "2026-08-08T15:50:31.655Z",
-            "checksum": "1507265d2d71dc30e94c9029245664fd0653798aff251b78ca928b8c19765ac5"
+            "lastModified": "2026-09-05T23:43:05.383Z",
+            "checksum": "7cd93342d635113e4192ca4df231b8ebb43bd80dfb8577e2d95a471a0fde8b9e"
           }
         },
         {
@@ -605,8 +605,8 @@
             "ID": "BB2442FB-89D6-45AE-8002-11D2938F004F"
           },
           "sync": {
-            "lastModified": "2026-08-08T15:50:31.726Z",
-            "checksum": "91d8a2f26f1f5ec8ceb4f8af36dc42701163fa21b47280d03bb21bdad61289cc"
+            "lastModified": "2026-09-05T23:43:05.384Z",
+            "checksum": "a98358d9301bd0caec982ab1e0eda72f0b545776474664dcf38f267c12332d53"
           }
         },
         {
@@ -670,6 +670,9 @@
             "TestID": "@lookup:MJ: Tests.Name=IT78 - Materialized Entity Base-View Read Redirect",
             "Sequence": 47,
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D4FACE0A-78ED-4431-97BC-F9E127EA8BBF"
           }
         },
         {
@@ -678,6 +681,9 @@
             "TestID": "@lookup:MJ: Tests.Name=IT79 - Materialized Read Served From Snapshot",
             "Sequence": 48,
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "63C423B9-5140-4BC6-8022-E8238F50597B"
           }
         },
         {
@@ -686,6 +692,13 @@
             "TestID": "@lookup:MJ: Tests.Name=IT86 - Transaction Group Batched Submit",
             "Sequence": 48,
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D1DE47B1-8751-4B8C-881C-8B36454EF45A"
+          },
+          "sync": {
+            "lastModified": "2026-09-06T06:28:42.270Z",
+            "checksum": "7baa857dacbd85219fc368b5a36156c1155f8cf97cdcd0501af842aaef055384"
           }
         },
         {
@@ -702,297 +715,331 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
+            "TestID": "@lookup:MJ: Tests.Name=IT87 - Predictive Studio Cross-Row Consistency",
             "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3A5D02B5-570B-44FE-8514-8653D6996FEC"
+          },
+          "sync": {
+            "lastModified": "2026-09-05T23:43:05.405Z",
+            "checksum": "d21b9fb368bcb5fb5e17962db105c030a8b787e837e53435d15eb9596180090c"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT88 - Predictive Studio Capability Reachability",
+            "Sequence": 50,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "16C882FF-9717-48BD-B397-AA7BE688D38A"
+          },
+          "sync": {
+            "lastModified": "2026-09-06T06:28:42.293Z",
+            "checksum": "58586ba178b5ddbcff5c80f1abd6ff56cf5472b2de314e4c2a25a415098712aa"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
+            "Sequence": 51,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "096429CB-F5BF-4DFF-A2C9-916E75BC6355"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.062Z",
-            "checksum": "741f607de725e0339af695349ae264647b087469acff4199ccedf2de09c10bf2"
+            "lastModified": "2026-09-06T06:28:42.303Z",
+            "checksum": "772ec2bee9e49d711cd452e14af2ea002132c36423493ffb80b51eb5f0016ecf"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT15 - Remote Operations Over-The-Wire Progress",
-            "Sequence": 50,
+            "Sequence": 52,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "42A5263E-E55F-40C6-85C9-0864CE17F09A"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.075Z",
-            "checksum": "3226f990a0c75ff6fc8683b418f8d31e82311112af9561a755503611522643ca"
+            "lastModified": "2026-09-06T06:28:42.313Z",
+            "checksum": "f8e0442faceff8293b62d2afe1b519616788456ef35b928018b13caeb8b01afa"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT23 - RLS Client Smart-Cache Isolation",
-            "Sequence": 51,
+            "Sequence": 53,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "DCF3FFDC-5304-423F-B8F2-F55EB7DB2B30"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.087Z",
-            "checksum": "9f1751844d9d851f876ff3902f67d6d348190f9442dbe496b3cbdb386a863d53"
+            "lastModified": "2026-09-06T06:28:42.323Z",
+            "checksum": "84c85e3520ddab5bdc5175c1bb806efa373496b8d566dc3d507b15be28780643"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT25 - View Execution (client-first)",
-            "Sequence": 52,
+            "Sequence": 54,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "D7EBE59F-E879-42F8-9E09-899340484DD7"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.097Z",
-            "checksum": "ed27ea3e5b453b5d0c90e43e3f77272876be75be1f52741b0fa140a79fc78205"
+            "lastModified": "2026-09-06T06:28:42.333Z",
+            "checksum": "dcd06a38b372eba5f5ff3e02f79436706e7312df7be89993a661758af19116c5"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT26 - Application Wiring (all shipped apps)",
-            "Sequence": 53,
+            "Sequence": 55,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "BC2A96AD-CC56-4B42-9ACA-AB28290EBDE8"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.107Z",
-            "checksum": "ccec34bf34b0c5b6d558cd6f1b9bd24549757c3a032a118e1c96077ed307cbd5"
+            "lastModified": "2026-09-06T06:28:42.344Z",
+            "checksum": "37c2b3d87c1ae06bc683959ac4d5bbe58cb6608f4564624d07e2454897423e54"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT27 - Core Entity Write-Side",
-            "Sequence": 54,
+            "Sequence": 56,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "20B1EED7-1B55-4129-A8EF-C1A2BA281CC2"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.119Z",
-            "checksum": "ae5233bfa8d97379daefbf9140c0349731e1320c04751529469cad586906d8d0"
+            "lastModified": "2026-09-06T06:28:42.355Z",
+            "checksum": "25245b2910b21aaf056fffca5659ee0c1b69501465cf6b06f39eb240b00344c0"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT28 - Permission Engine and Scope Enforcement",
-            "Sequence": 55,
+            "Sequence": 57,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "5A354F75-94F6-40D0-9E3D-8751BE3B376C"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.132Z",
-            "checksum": "7b8fd74a17db1e86eb955faebf10072e59a21927e2ac80bab045d45b701a3839"
+            "lastModified": "2026-09-06T06:28:42.366Z",
+            "checksum": "e0a75e26b39d240eeb058a3c7a6c1cd1ec64c58170afca479c33b77e4b006cab"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT31 - RunView Feature Matrix",
-            "Sequence": 56,
+            "Sequence": 58,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "178D5D02-39B7-4A83-B752-D55051D94DC5"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.145Z",
-            "checksum": "195027250ff8119e1fbb1f63541b4ed753a3122ee0ee73b412f503b3bdcf9447"
+            "lastModified": "2026-09-06T06:28:42.376Z",
+            "checksum": "aca864cec5f1fad12439e6079d4468549ed8609266abacc3b3327f9e6e911424"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT32 - RunView Cross-Feature Edges",
-            "Sequence": 57,
+            "Sequence": 59,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "2A0C6DF4-2D79-472F-9319-EFC6AED66E5E"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.223Z",
-            "checksum": "115e485a6bbbdd2264ca4debd08a009014525132e7452ad3b1a471fd272b070e"
+            "lastModified": "2026-09-06T06:28:42.389Z",
+            "checksum": "3423952d26d1261c08079e9f8891e6dc5a2246d7f97b2e31c6fed43a3b275d4d"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT33 - RunQuery Catalog Sweep",
-            "Sequence": 58,
+            "Sequence": 60,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "1DE0D412-E499-4C7F-AD78-A3808C967BCA"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.234Z",
-            "checksum": "b60d307925163fd458f6fc7c322a321d6fd6858ce6d36bed20e8523798c7db2c"
+            "lastModified": "2026-09-06T06:28:42.400Z",
+            "checksum": "9ade5339d0a1962e3eb54968570c944db8a8e15d11d3f7e89b4325eb7af2ecab"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT34 - RunQuery Parameter Permutation",
-            "Sequence": 59,
+            "Sequence": 61,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "CC88929F-11B2-4372-8548-DA7C708DC02F"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.285Z",
-            "checksum": "23ee54fe6105b5532a717f1a9e6d870a086e722f8faf4c627d24cf860b49f59b"
+            "lastModified": "2026-09-06T06:28:42.410Z",
+            "checksum": "adac9934b54c7e81329b6cab53af546986801b66fa9fdc83b8c3a8ae69de74e2"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT37 - Subscription Channel Isolation",
-            "Sequence": 60,
+            "Sequence": 62,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "0D88E040-A656-44C5-951D-450A5F562613"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.244Z",
-            "checksum": "b41c5f9075ae1c30fe0cee40d465bb779cbdca1ed91883afbb8beee2173971db"
+            "lastModified": "2026-09-06T06:28:42.428Z",
+            "checksum": "8d2edb903b78600fb9e17b1e1bcbd171bf78d0d7aa1c33d4f6c22bdf61f4c048"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT40 - Entity-Server Invariants",
-            "Sequence": 61,
+            "Sequence": 63,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "2A8BE4E4-141C-4158-A787-B72171C43F3D"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.254Z",
-            "checksum": "febd81849c04146fe407fcc949c67b6113f264edd9787c7090208461beebfcf5"
+            "lastModified": "2026-09-06T06:28:42.442Z",
+            "checksum": "0b73ca0f74606f5586d4dcbdfdad627a20bd40a4ec6d5c8013a06c56d69470a9"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT43 - AI Cost Pipeline Integrity",
-            "Sequence": 62,
+            "Sequence": 64,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "FB0673F6-BC43-4D30-BC25-5F9D76313057"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.265Z",
-            "checksum": "008324eb9ab69bbea43a69eda38a321955034f4c7bd6c278bf3c337332423d4e"
+            "lastModified": "2026-09-06T06:28:42.451Z",
+            "checksum": "639fae6b7da682854bb959c872eb2fc6c2e847655fb5e1176532e7a9d3cf0d70"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT44 - AI Permission Helpers",
-            "Sequence": 63,
+            "Sequence": 65,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "DE873D4D-D11F-4746-8F1F-912A1042DC0C"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.275Z",
-            "checksum": "8b74cf0a5891c7bf901d6fdc76222ec00572cb09870fa65eff29e732abc802c8"
+            "lastModified": "2026-09-06T06:28:42.468Z",
+            "checksum": "33e5f3d546ac090963478c9f31d337017c805b999102130fe3bb21fb4011b894"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT45 - Embedding Invariants",
-            "Sequence": 64,
+            "Sequence": 66,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "435E0695-3A0F-4155-9F62-7A5C0FBF3CD4"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.300Z",
-            "checksum": "bef7975d2cb0ea824c191e477556bf7d6428cdd6f4f1cda0f3634d4d48630b6e"
+            "lastModified": "2026-09-06T06:28:42.478Z",
+            "checksum": "273a45f09ed8c6a56871a8b08570fbe400b9234768e179bee67ed47e52044025"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT47 - Transaction Group Atomicity",
-            "Sequence": 65,
+            "Sequence": 67,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "BB859AA1-314C-4D30-9906-366EF1EF463B"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.311Z",
-            "checksum": "2a56fc4d7a5be8e86a1b3857aa8bb252d7587f578e08d2e6f194228ad47d1347"
+            "lastModified": "2026-09-06T06:28:42.490Z",
+            "checksum": "036ecc0887dda4c0363cc7e5b3f6b2c1c8c54999de1500536960d23b3ea94c8c"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT50 - CodeGen Artifact Consistency",
-            "Sequence": 66,
+            "Sequence": 68,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "0ECD532F-3586-4591-BCBB-34C778DE03D9"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.322Z",
-            "checksum": "3b0dd911ac76610922028e8905f2dbee62c85b03da7780a58e29a7ab0fa8c2f7"
+            "lastModified": "2026-09-06T06:28:42.508Z",
+            "checksum": "d04ff5b29962e14aabcc2da2e954771c95797c5c20d5e501fcb8a139ac546500"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT52 - Unified Search Seams",
-            "Sequence": 67,
+            "Sequence": 69,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "2C88A91E-96C8-4B26-A654-7BB74D571A93"
           },
           "sync": {
-            "lastModified": "2026-08-05T22:40:18.386Z",
-            "checksum": "fa7fa67543f7b791dce3ffaa637bc830552c58d9ddeaaf5f770f3919642e16d4"
+            "lastModified": "2026-09-06T06:28:42.526Z",
+            "checksum": "09c5f7f428a4ffd2b7c2d85166b225ae97e2b06ed2691d2acd0146ffaf54295b"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT73 - Entity Graph (client transport)",
-            "Sequence": 68,
+            "Sequence": 70,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "0E1289E0-2D35-4F05-A032-9E6EB09E0990"
+          },
+          "sync": {
+            "lastModified": "2026-09-06T06:28:42.535Z",
+            "checksum": "12d50d439cac1cd6c6b07293f1f39bd090fefb44f37ccc361e83e45ff4c33039"
           }
         }
       ]
@@ -1235,8 +1282,8 @@
             "ID": "CD1B0205-30A3-4C61-BF68-86A9153FD3DB"
           },
           "sync": {
-            "lastModified": "2026-07-21T17:00:43.506Z",
-            "checksum": "cca8635d3caea633ae50889f69a1cbfd137c8f0acaeeb1aa345a52d121da36cb"
+            "lastModified": "2026-09-05T23:43:05.608Z",
+            "checksum": "f90eaf806e3d2a77724a7ce92e502e86d9edcb604f79efb9d93c9537c5991c75"
           }
         },
         {

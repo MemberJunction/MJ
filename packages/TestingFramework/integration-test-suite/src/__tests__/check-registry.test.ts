@@ -19,6 +19,8 @@ import { RemoteOperationsChecks } from '../checks/remote-operations.checks';
 import { AiSkillsChecks } from '../checks/ai-skills.checks';
 import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
+import { PredictiveStudioConsistencyChecks } from '../checks/predictive-studio-consistency.checks';
+import { PredictiveStudioLifecycleChecks } from '../checks/predictive-studio-lifecycle.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
@@ -117,6 +119,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ai-skills', AiSkillsChecks, 21],
         ['api-keys', ApiKeysChecks, 3],
         ['predictive-studio', PredictiveStudioChecks, 8],
+        ['predictive-studio-consistency', PredictiveStudioConsistencyChecks, 6],
+        ['predictive-studio-lifecycle', PredictiveStudioLifecycleChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['concurrent', ConcurrentChecks, 2],
@@ -254,6 +258,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'open-app-teardown': 2,
         'permission-engine': 14,
         'predictive-studio': 8,
+        'predictive-studio-consistency': 6,
+        'predictive-studio-lifecycle': 5,
         'prompt-runner': 1,
         'queue': 7,
         'realtime-deterministic': 9,
@@ -312,7 +318,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(86);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(88);
     });
 });
 

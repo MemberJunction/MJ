@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT87 - Predictive Studio Cross-Row Consistency",
+    "Description": "Cross-row INVARIANTS over every Predictive Studio row that exists, rather than over a fixture the test just created — the gap IT14 structurally cannot cover, since PS1-PS8 assert only about rows they wrote moments earlier. Ten defects found while building the signal/finding/architecture layers were missed by 4,000+ unit tests AND by IT14, because they lived in rows produced by real runs. Four of them share one shape: a row claims something another row contradicts. PSC1: a component claiming IsTrained carries the ArtifactFileID that makes it reusable (reuse-by-reference components, which legitimately own no artifact, are exempt) — the defect that made component reuse unreachable for the life of the feature. PSC2: nothing across ML Components, ML Component Types and ML Findings carries a non-empty Story with a NULL StoryVector — BaseEntity.EmbedTextLocal throws unless overridden and GenerateEmbedding swallows the throw, so a missing override writes NULL without failing the save. PSC3: the model to root-component link points back, since a one-way link is a lineage that does not exist. PSC4: a model whose root component has children was trained from a pipeline carrying a ComponentGraph — the case where the architecture gate approved 'compose' and the builder trained a bare model. PSC5: no component instantiates an abstract type, swept over every row including rows written before the server-side guard existed. PSC6: a finding claiming the 'Predictive Contribution' evidence tier carries the holdout metric that backs it, so no finding asserts stronger evidence than it can show. Read-only: creates and deletes nothing. Every check reports the size of the population it scanned and says VACUOUS when that population is zero, so a trivially-passing sweep can never be mistaken for a real one.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every persisted Predictive Studio row agrees with the rows it references: trained components carry artifacts, stories are embedded, model and root component point at each other, composed models carry their graph, no abstract type is instantiated, and predictive claims carry their holdout number. Each check reports its scanned population so a vacuous pass is visible."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "predictive-studio-consistency"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "2040CCD4-91B7-4721-9F33-E000412BDEB9"
+  },
+  "sync": {
+    "lastModified": "2026-09-05T23:43:05.377Z",
+    "checksum": "7a4c72aafe1e624acdcded2d799382e9e508d94b18d34797597881e78b29cf39"
+  }
+}

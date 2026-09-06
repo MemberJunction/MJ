@@ -17,5 +17,12 @@
       ]
     },
     "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6D9C5995-1DFE-44C1-B286-5E84255F8EE4"
+  },
+  "sync": {
+    "lastModified": "2026-09-05T23:43:05.335Z",
+    "checksum": "f8bb6ece8a5f30b678c92f1b79aa1103eddf9f6fdf44c1ecc88543d8d1ce2048"
   }
 }

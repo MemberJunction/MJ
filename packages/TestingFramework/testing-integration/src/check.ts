@@ -205,6 +205,32 @@ export interface PredictiveStudioFixture {
 }
 
 /**
+ * Shared fixture for the `predictive-studio-lifecycle` bundle (PS_INTEGRATION-gated).
+ *
+ * Unlike `PredictiveStudioFixture` — which hand-writes rows to exercise seams — this fixture TRAINS
+ * a real model through the real engine and sidecar, then the checks ask whether each advertised
+ * capability is reachable against what that training actually produced. That distinction is the
+ * whole point of the bundle: the defects this subsystem has had were capabilities that existed in
+ * code and were unreachable in practice, and only a real run leaves the rows that expose them.
+ */
+export interface PredictiveStudioLifecycleFixture {
+    /** The pipeline the bundle created and trained. */
+    Pipeline: MJMLTrainingPipelineEntity;
+    /** The trained model. Present only once training succeeded. */
+    Model?: MJMLModelEntity;
+    /** The model's root `MJ: ML Components` row, written by the materializer. */
+    RootComponentID?: string;
+    /** Input components materialized under the root — the signals the model left behind. */
+    SignalIDs: string[];
+    /** `MJ: ML Findings` rows written at promotion. */
+    FindingIDs: string[];
+    /** Entity the model was trained against, so checks can compute a signal over the same population. */
+    TargetEntityName: string;
+    /** Why the fixture could not be built, when it could not. Checks fail with this rather than pass. */
+    SetupError?: string;
+}
+
+/**
  * Shared fixture for the `remote-op-ai-authoring` bundle (live-model): one `MJ: Remote Operations` row
  * (GenerationType='AI') created in setup and reused across the ordered RO4-1→RO4-3 checks (save→approve→emit),
  * deleted after.
@@ -551,6 +577,8 @@ export interface IntegrationCheckContext {
     AiSkillsFixture?: AiSkillsFixture;
     /** Shared fixture for the `predictive-studio` bundle. */
     PredictiveStudioFixture?: PredictiveStudioFixture;
+    /** Shared fixture for the `predictive-studio-lifecycle` bundle (PS_INTEGRATION-gated). */
+    PredictiveStudioLifecycleFixture?: PredictiveStudioLifecycleFixture;
     /** Shared fixture for the `remote-op-ai-authoring` bundle (live-model). */
     RemoteOpAiAuthoringFixture?: RemoteOpAiAuthoringFixture;
     /** Shared fixture for the `remote-op-wire-progress` bundle (client transport). */

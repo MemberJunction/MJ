@@ -1509,6 +1509,56 @@ Each Phase 2 capability ships with an MJServer integration script that exercises
 
 > PS2-5 (catalog awareness for agents) is delivered *through* PS2-2: every published model is a discoverable Action, which ActionSmith / CodeSmith see for free — no separate code.
 
+### 15.8 The failure mode this subsystem actually has
+
+Ten defects were found building the signal, finding and architecture layers. **The 4,000+ unit tests
+caught none of them, and neither did IT14 (PS1–PS8).** That is not a coverage gap to be closed by
+writing more of the same tests — it is a structural blind spot, and it is worth stating plainly
+because the next person will hit it too.
+
+Every one of the ten had the same shape: **a capability wired at one layer and contradicted at the
+layer above, where an optional field's absence did double duty — "not applicable" and "failed" looked
+identical.**
+
+- a component said `IsTrained` while carrying no artifact → component reuse was unreachable for the
+  entire life of the feature
+- a finding was saved with a `Story` and a NULL `StoryVector` → searchable by meaning in intent only
+- a plan decided `compose`, the pipeline carried no `ComponentGraph` → a bare model trained under a
+  composed decision
+- `ReifiedUnderComponentTypeRef` was written and never consulted at execution
+
+Unit tests miss these because both sides are individually correct; only their *agreement* is wrong.
+IT14 misses them because it asserts about rows **it just created** — the defects lived in rows
+produced by real runs.
+
+**Two rules follow.**
+
+**1. No optional field may carry two meanings.** If absence can mean both "this does not apply" and
+"we tried and failed", the absence is not evidence of anything and the failure is undetectable.
+Make the failure carry its own evidence: a warning, a status, a reason — something a reader can
+distinguish. Where two facts are genuinely different, keep them different: `IsTrained` means *fitted*
+and `ArtifactFileID` means *loadable*, the graph loader distinguishes them by name, and a consumer
+that filters on only one of them will offer what the other refuses.
+
+**2. Assert agreement across rows, not shape within one.** That is what
+[`predictive-studio-consistency.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/predictive-studio-consistency.checks.ts)
+(PSC1–PSC6, shipped as **IT87**) does: it sweeps *every* Predictive Studio row that exists and asks
+whether the rows agree with each other. It is read-only, needs no LLM, no sidecar and no training
+run, and takes well under a second.
+
+When adding a check to it, two rules of its own:
+
+- **Scope the population to where the invariant is actually true.** PSC1 applies to *root*
+  components, because a root's artifact is the model artifact and always exists, while a composed
+  *child* may legitimately be fitted without being serialisable (bagging exposes an unfitted template,
+  not its bags). An invariant asserted over too wide a population reports correct behaviour as a
+  defect — the first draft of PSC4 called every model composed, because every model materialises its
+  inputs as child components.
+- **Report the population you scanned.** An invariant sweep over an empty table passes trivially, and
+  a trivial pass reported as a real one is a false green. Every check prints its scanned count and the
+  word `VACUOUS` at zero.
+
+
 ---
 
 ## 16. The Business-User Experience

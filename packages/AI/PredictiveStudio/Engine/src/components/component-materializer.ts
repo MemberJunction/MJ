@@ -890,6 +890,12 @@ export class ComponentMaterializer {
     deps: MaterializationDeps,
   ): Promise<string | null> {
     if (!node.ArtifactB64) {
+      // No artifact is an ordinary outcome, not a failure: bagging exposes an unfitted template
+      // rather than its bags, so the node is fitted yet has nothing separable to hand over. It is
+      // deliberately silent — warning on a property of the algorithm would fire on every bagged
+      // model and give nobody anything to act on. The consequence is handled where it matters:
+      // `ReuseFinder` will not OFFER a component with no artifact, and the graph loader refuses one
+      // by name if a hand-written graph names it anyway.
       return null;
     }
     if (!deps.artifactStore) {

@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (408 classes)
+// @memberjunction/core-entities (414 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -458,6 +458,12 @@ import {
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLComponentBindingEntity,
+    MJMLComponentEntity,
+    MJMLComponentTypeEntity,
+    MJMLComponentTypePropertyEntity,
+    MJMLComponentTypeSlotEntity,
+    MJMLFindingEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
     MJMLTrainingPipelineEntity,
@@ -957,12 +963,18 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/predictive-studio (16 classes)
+// @memberjunction/predictive-studio (24 classes)
 import {
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
+    PredictiveStudioAssessCapabilityAction,
+    PredictiveStudioBrowseComponentTreeAction,
+    PredictiveStudioComputeSignalAction,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioFindFindingsAction,
+    PredictiveStudioFindReusableComponentsAction,
+    PredictiveStudioListSignalsAction,
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
@@ -973,8 +985,10 @@ import {
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioStatisticsPassAgent,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
+    PredictiveStudioValidateComponentGraphAction,
 } from '@memberjunction/predictive-studio';
 
 // @memberjunction/task-graph (16 classes)
@@ -1010,7 +1024,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (42 classes)
+// @memberjunction/core-entities-server (45 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1039,6 +1053,9 @@ import {
     MJEntityDocumentEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
+    MJMLComponentEntityServer,
+    MJMLComponentTypeEntityServer,
+    MJMLFindingEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
     MJQueryEntityServer,
@@ -1552,6 +1569,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLComponentBindingEntity,
+    MJMLComponentEntity,
+    MJMLComponentTypeEntity,
+    MJMLComponentTypePropertyEntity,
+    MJMLComponentTypeSlotEntity,
+    MJMLFindingEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
     MJMLTrainingPipelineEntity,
@@ -1629,16 +1652,16 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
@@ -1833,16 +1856,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     HootSuiteGetSocialProfilesAction,
     HootSuiteSearchPostsAction,
     HootSuiteUpdateScheduledPostAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     InstagramCreatePostAction,
     InstagramCreateStoryAction,
     InstagramGetAccountInsightsAction,
     InstagramGetBusinessPostsAction,
     InstagramGetCommentsAction,
     InstagramGetPostInsightsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     InstagramSchedulePostAction,
     InstagramSearchPostsAction,
     LinkedInCreateArticleAction,
@@ -1947,8 +1970,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessRunNowServerOperation,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
+    PredictiveStudioAssessCapabilityAction,
+    PredictiveStudioBrowseComponentTreeAction,
+    PredictiveStudioComputeSignalAction,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioFindFindingsAction,
+    PredictiveStudioFindReusableComponentsAction,
+    PredictiveStudioListSignalsAction,
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
@@ -1959,8 +1988,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioStatisticsPassAgent,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
+    PredictiveStudioValidateComponentGraphAction,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
@@ -2013,6 +2044,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJEntityDocumentEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
+    MJMLComponentEntityServer,
+    MJMLComponentTypeEntityServer,
+    MJMLFindingEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
     MJQueryEntityServer,
@@ -2026,6 +2060,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJTemplateContentEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     APIRateLimiterAction,
@@ -2043,10 +2081,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CensusDataLookupAction,
     CheckUserPermissionAction,
     ColorConverterAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     ComposeListsAction,
     ConditionalAction,
     CopyObjectAction,
@@ -2201,7 +2235,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 939;
+export const CLASS_REGISTRATIONS_COUNT = 956;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
