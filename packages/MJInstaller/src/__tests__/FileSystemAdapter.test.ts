@@ -129,7 +129,8 @@ describe('FileSystemAdapter', () => {
 
       await adapter.ExtractZip('/tmp/release.zip', '/new/path/target');
 
-      expect(mockFsPromises.mkdir).toHaveBeenCalledWith('/new/path/target', { recursive: true });
+      // The directory is created under its resolved name (a drive-letter path on Windows).
+      expect(mockFsPromises.mkdir).toHaveBeenCalledWith(path.resolve('/new/path/target'), { recursive: true });
     });
 
     describe('zip slip protection', () => {
