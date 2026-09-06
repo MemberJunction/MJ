@@ -53,7 +53,8 @@ export class FileSystemAdapter {
    * @param zipPath - Absolute path to the ZIP file.
    * @param targetDir - Directory to extract into (created if it doesn't exist).
    * @returns List of top-level entry names in the target directory after extraction.
-   * @throws Error if the ZIP file is corrupt or unreadable.
+   * @throws Error if the ZIP file is corrupt or unreadable, or if any entry would be written
+   *   outside `targetDir` (a "zip slip" archive — see {@link resolveWithinTarget}).
    *
    * @example
    * ```typescript
@@ -76,6 +77,7 @@ export class FileSystemAdapter {
     const rootPrefix = hasSingleRoot ? [...topLevelNames][0] + '/' : '';
 
     await fs.mkdir(targetDir, { recursive: true });
+    const root = path.resolve(targetDir);
 
     for (const entry of entries) {
       let relativePath = entry.entryName;
@@ -89,7 +91,7 @@ export class FileSystemAdapter {
         continue;
       }
 
-      const fullPath = path.join(targetDir, relativePath);
+      const fullPath = resolveWithinTarget(root, relativePath, entry.entryName);
 
       if (entry.isDirectory) {
         await fs.mkdir(fullPath, { recursive: true });
@@ -389,4 +391,25 @@ export class FileSystemAdapter {
       // skip directories we can't read
     }
   }
+}
+
+/**
+ * Resolves an archive entry against the extraction root and refuses any entry that would land
+ * outside it. Archive entry names are attacker-controlled: an entry named `../../.bashrc` or an
+ * absolute path would otherwise be written with the installer's privileges (CWE-22, "zip slip").
+ *
+ * @param root - The absolute, already-resolved extraction directory.
+ * @param relativePath - The entry name after any single-root-folder stripping.
+ * @param entryName - The original entry name, for the error message.
+ * @returns The absolute path to write, guaranteed to be `root` or inside it.
+ * @throws Error if the resolved path is not inside `root`.
+ */
+function resolveWithinTarget(root: string, relativePath: string, entryName: string): string {
+  const fullPath = path.resolve(root, relativePath);
+  if (fullPath !== root && !fullPath.startsWith(root + path.sep)) {
+    throw new Error(
+      `ExtractZip: archive entry '${entryName}' resolves outside the target directory and was refused.`
+    );
+  }
+  return fullPath;
 }

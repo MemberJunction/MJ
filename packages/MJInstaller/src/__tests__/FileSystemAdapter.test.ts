@@ -129,6 +129,80 @@ describe('FileSystemAdapter', () => {
 
       expect(mockFsPromises.mkdir).toHaveBeenCalledWith('/new/path/target', { recursive: true });
     });
+
+    describe('zip slip protection', () => {
+      function writtenPaths(): string[] {
+        return mockFsPromises.writeFile.mock.calls.map((c: [string, ...unknown[]]) => c[0]);
+      }
+
+      it('should refuse an entry that escapes the target directory with ..', async () => {
+        mockFsPromises.writeFile.mockClear();
+        mockGetEntries.mockReturnValue([
+          { entryName: 'safe.txt', isDirectory: false, getData: () => Buffer.from('ok') },
+          { entryName: '../escape.txt', isDirectory: false, getData: () => Buffer.from('evil') },
+        ]);
+
+        await expect(adapter.ExtractZip('/tmp/evil.zip', '/target')).rejects.toThrow(
+          /resolves outside the target directory/
+        );
+        expect(writtenPaths().some((p) => p.includes('escape.txt'))).toBe(false);
+      });
+
+      it('should refuse an escaping entry hidden under a single root folder', async () => {
+        mockFsPromises.writeFile.mockClear();
+        mockGetEntries.mockReturnValue([
+          { entryName: 'MemberJunction-MJ-abc1234/', isDirectory: true, getData: () => Buffer.from('') },
+          { entryName: 'MemberJunction-MJ-abc1234/package.json', isDirectory: false, getData: () => Buffer.from('{}') },
+          { entryName: 'MemberJunction-MJ-abc1234/../../escape.txt', isDirectory: false, getData: () => Buffer.from('evil') },
+        ]);
+
+        await expect(adapter.ExtractZip('/tmp/evil.zip', '/target')).rejects.toThrow(
+          /resolves outside the target directory/
+        );
+        expect(writtenPaths().some((p) => p.includes('escape.txt'))).toBe(false);
+      });
+
+      it('should refuse an absolute entry name', async () => {
+        mockFsPromises.writeFile.mockClear();
+        mockGetEntries.mockReturnValue([
+          { entryName: 'a.txt', isDirectory: false, getData: () => Buffer.from('a') },
+          { entryName: '/etc/passwd', isDirectory: false, getData: () => Buffer.from('evil') },
+        ]);
+
+        await expect(adapter.ExtractZip('/tmp/evil.zip', '/target')).rejects.toThrow(
+          /resolves outside the target directory/
+        );
+        expect(writtenPaths().some((p) => p.includes('passwd'))).toBe(false);
+      });
+
+      it('should refuse an escaping directory entry before creating it', async () => {
+        mockFsPromises.mkdir.mockClear();
+        mockGetEntries.mockReturnValue([
+          { entryName: 'ok/', isDirectory: true, getData: () => Buffer.from('') },
+          { entryName: '../outside/', isDirectory: true, getData: () => Buffer.from('') },
+        ]);
+
+        await expect(adapter.ExtractZip('/tmp/evil.zip', '/target')).rejects.toThrow(
+          /resolves outside the target directory/
+        );
+        const created: string[] = mockFsPromises.mkdir.mock.calls.map((c: [string, ...unknown[]]) => c[0]);
+        expect(created.some((p) => p.includes('outside'))).toBe(false);
+      });
+
+      it('should still extract well-formed entries that merely contain dots', async () => {
+        mockFsPromises.writeFile.mockClear();
+        mockGetEntries.mockReturnValue([
+          { entryName: 'a/', isDirectory: true, getData: () => Buffer.from('') },
+          { entryName: 'a/.env.example', isDirectory: false, getData: () => Buffer.from('x') },
+          { entryName: 'a/b..c/file.txt', isDirectory: false, getData: () => Buffer.from('y') },
+        ]);
+        mockFsPromises.readdir.mockResolvedValue(['a']);
+
+        await expect(adapter.ExtractZip('/tmp/ok.zip', '/target')).resolves.toEqual(['a']);
+        expect(writtenPaths().some((p) => p.includes('.env.example'))).toBe(true);
+        expect(writtenPaths().some((p) => p.includes('b..c'))).toBe(true);
+      });
+    });
   });
 
   describe('CreateDirectory', () => {
