@@ -286,6 +286,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'templates': 8,
         'transaction-groups': 5,
         'transaction-groups-batched': 5,
+        'user-elevation': 4,
         'user-routines': 16,
         'view-execution': 12,
         'view-security': 4,
@@ -313,7 +314,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(87);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(88);
     });
 });
 
