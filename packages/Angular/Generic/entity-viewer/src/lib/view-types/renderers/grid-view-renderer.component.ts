@@ -121,6 +121,7 @@ export interface GridViewConfig {
       [AllowLoad]="false"
       [AutoLoadEntityActions]="AutoLoadEntityActions"
       [ShowToolbar]="effectiveShowToolbar"
+      [ShowSearch]="effectiveShowSearch"
       [ToolbarConfig]="config.toolbarConfig ?? {}"
       [SelectionMode]="effectiveSelectionMode"
       [ShowAddToListButton]="effectiveShowAddToListButton"
@@ -311,6 +312,14 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   /** Effective toolbar visibility — defaults to `true` when not set in config. */
   get effectiveShowToolbar(): boolean {
     return this.config.showToolbar ?? true;
+  }
+
+  /**
+   * Grid search defaults OFF when hosted in entity-viewer. The container already owns
+   * `filterText` ("Filter records..."). Opt in with `toolbarConfig.showSearch: true`.
+   */
+  get effectiveShowSearch(): boolean {
+    return this.config.toolbarConfig?.showSearch ?? false;
   }
 
   /** Effective selection mode — defaults to `'checkbox'` when not set in config. */
