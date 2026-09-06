@@ -234,7 +234,19 @@ export interface FileOutputRef {
     fileId?: string;
     /** File size in bytes */
     sizeBytes?: number;
+    /**
+     * How the artifact MJ creates for this file is shown. `Always` (default): a normal artifact, with a
+     * card on the message and the viewer. `System Only`: the artifact, its version and its download URL
+     * exist, but the chat keeps it out of the message cards (a host opts in with `showSystemArtifacts`).
+     * An action whose file is a DOWNLOAD — an export the user asked for and will open elsewhere — says
+     * so here, instead of the host having to hide a card that opens an empty viewer.
+     * @since 6.1.0
+     */
+    visibility?: FileOutputVisibility;
 }
+
+/** The visibility an action can ask for on the artifact made from its file output. */
+export type FileOutputVisibility = 'Always' | 'System Only';
 
 /**
  * Attempts to parse an unknown value as a FileOutputRef by checking its shape.
@@ -263,12 +275,17 @@ export function ParseFileOutputRef(raw: unknown): FileOutputRef | null {
     const fileId = typeof fo['fileId'] === 'string' ? fo['fileId'] : undefined;
     if (!fileData && !fileId) return null;
 
+    const rawVisibility = fo['visibility'];
+    const visibility: FileOutputVisibility | undefined =
+        rawVisibility === 'Always' || rawVisibility === 'System Only' ? rawVisibility : undefined;
+
     return {
         fileName,
         mimeType,
         fileData,
         fileId,
-        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined
+        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined,
+        visibility
     };
 }
 

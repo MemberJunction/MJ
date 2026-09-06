@@ -1730,9 +1730,9 @@ ORDER BY
      *    PK, and unique key detection.
      * 3. **Cleanup**: Drops the temp tables.
      */
-    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         return this.buildPendingFieldsTempTables(mjCoreSchema) +
-            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs) +
+            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs, excludeSchemas) +
             this.buildPendingFieldsCleanup();
     }
 
@@ -1768,12 +1768,18 @@ FROM [${schema}].[vwTableUniqueKeys];
      * Uses MaxSequences CTE to calculate proper field ordering and NumberedRows
      * CTE to deduplicate results.
      */
-    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[]): string {
+    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         // When scoped, narrow the scan to specific entities. SQL injection isn't a concern
         // here — entityIDs are MJ-internal UUIDs from the metadata cache, not user input —
         // but we quote each ID anyway for SQL Server's UUID literal syntax.
         const scopeFilter = entityIDs && entityIDs.length > 0
             ? `AND sf.EntityID IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
+        // includeSchemas is compiled into excludeSchemas before this query runs. Without this
+        // filter, Pass 1 (unscoped entityIDs) inserts pending fields for EVERY schema in the
+        // database — e.g. a Forms CodeGen run emitted Common Activity Files EntityField rows.
+        const schemaFilter = excludeSchemas && excludeSchemas.length > 0
+            ? `AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `WITH MaxSequences AS (
    SELECT
@@ -1841,6 +1847,7 @@ NumberedRows AS (
    WHERE
       EntityFieldID IS NULL
       ${scopeFilter}
+      ${schemaFilter}
    )
    SELECT *
    FROM NumberedRows
