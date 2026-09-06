@@ -231,7 +231,16 @@ function handleAuthorizeEndpoint(
     code_challenge,
     code_challenge_method,
     nonce,
-  } = req.query as Record<string, string | undefined>;
+  } = readStringQueryParams(req, [
+    'client_id',
+    'redirect_uri',
+    'response_type',
+    'state',
+    'scope',
+    'code_challenge',
+    'code_challenge_method',
+    'nonce',
+  ] as const);
 
   // Validate required parameters
   if (!client_id) {
@@ -326,7 +335,12 @@ async function handleCallbackEndpoint(
   stateManager: AuthorizationStateManager,
   jwtIssuer?: JWTIssuer
 ): Promise<void> {
-  const { code, state, error, error_description } = req.query as Record<string, string | undefined>;
+  const { code, state, error, error_description } = readStringQueryParams(req, [
+    'code',
+    'state',
+    'error',
+    'error_description',
+  ] as const);
 
   // Handle errors from upstream
   if (error) {
@@ -750,9 +764,7 @@ async function exchangeUpstreamCode(
     console.error(`OAuth Proxy: Error details: ${errorBody}`);
     console.error(`OAuth Proxy: Request redirect_uri: ${config.baseUrl}/oauth/callback`);
     console.error(`OAuth Proxy: Request client_id: ${config.upstream.clientId}`);
-    console.error(`OAuth Proxy: Authorization code sent (last 8 chars): ...${code.slice(-8)}`);
     console.error(`OAuth Proxy: PKCE code_verifier present: ${!!codeVerifier}`);
-    console.error(`OAuth Proxy: PKCE code_verifier (first 8 chars): ${codeVerifier?.substring(0, 8) ?? 'N/A'}...`);
 
     // Parse and log the specific OAuth error
     try {
@@ -989,7 +1001,12 @@ function handleLoginEndpoint(
   res: Response,
   config: OAuthProxyConfig
 ): void {
-  const { client_id, redirect_uri, state, scope } = req.query as Record<string, string | undefined>;
+  const { client_id, redirect_uri, state, scope } = readStringQueryParams(req, [
+    'client_id',
+    'redirect_uri',
+    'state',
+    'scope',
+  ] as const);
 
   // Build the continue URL to start the OAuth flow
   const continueUrl = new URL(`${config.baseUrl}/oauth/authorize`);
@@ -1045,7 +1062,7 @@ async function handleGetConsentEndpoint(
   res: Response,
   stateManager: AuthorizationStateManager
 ): Promise<void> {
-  const { request_id } = req.query as Record<string, string | undefined>;
+  const { request_id } = readStringQueryParams(req, ['request_id'] as const);
 
   if (!request_id) {
     sendErrorPage(res, 'Invalid Request', 'Missing request_id parameter');
@@ -1213,4 +1230,26 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/**
+ * Reads the named query-string parameters, keeping only values that are plain strings.
+ *
+ * Express parses a repeated parameter (`?code=a&code=b`) into an array and bracketed
+ * parameters into objects. Casting `req.query` to `Record<string, string>` hides that, so a
+ * tampered request reaches string methods with an array (CodeQL
+ * js/type-confusion-through-parameter-tampering). A parameter that is absent or not a plain
+ * string comes back as `undefined`, which every caller's existing "missing parameter"
+ * branch already handles.
+ */
+function readStringQueryParams<TName extends string>(
+  req: Request,
+  names: readonly TName[]
+): Record<TName, string | undefined> {
+  const result = {} as Record<TName, string | undefined>;
+  for (const name of names) {
+    const value = req.query[name];
+    result[name] = typeof value === 'string' ? value : undefined;
+  }
+  return result;
 }

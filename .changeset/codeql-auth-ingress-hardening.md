@@ -1,0 +1,16 @@
+---
+"@memberjunction/server": patch
+"@memberjunction/ai-mcp-server": patch
+---
+
+Security hardening from the first full CodeQL scan of the security-critical packages. None of these changes alter behavior for well-formed requests.
+
+**`@memberjunction/server`**
+
+- System API key comparison (`context.ts`) reduces both sides to a keyed HMAC-SHA256 digest instead of a bare SHA-256 before the constant-time compare. Same length-agnostic property, same result for every key; the per-process random key makes explicit that the digests are compared, never stored.
+- The Teams meetings Graph webhook rejects a `validationToken` that is not bounded-length printable ASCII with 400 before echoing anything, and sets `X-Content-Type-Options: nosniff` on the echo. Graph's real token is a short ASCII sentence plus a request id and is unaffected.
+
+**`@memberjunction/ai-mcp-server`**
+
+- The OAuth proxy reads query-string parameters through a helper that keeps only plain strings. A repeated parameter (`?code=a&code=b`), which Express parses to an array, is now treated as missing and takes each handler's existing error path instead of reaching string operations as an array.
+- The upstream token-exchange error log no longer prints the last eight characters of the authorization code or the first eight of the PKCE verifier. The remaining lines (status, endpoint, redirect URI, client id, verifier presence, provider error) are what diagnosing a failed exchange needs.
