@@ -179,4 +179,14 @@ describe('the prefetch is unbounded — its result is what absence proofs are ju
         await host.PrefetchContentHashes([created('x')], {});
         expect(lastRunViewParams.current?.['IgnoreMaxRows']).toBe(true);
     });
+
+    it('passes BypassCache so per-batch fingerprints never accumulate in the RunView cache', async () => {
+        // Every batch's ID set is a unique fingerprint, so this query can never be a cache HIT —
+        // without BypassCache each call only DEPOSITS a dead entry and the cache grows
+        // O(records processed) for the life of the process. Observed live: a 500k+ record drain
+        // grew the sync host to the kernel OOM kill line through exactly this path.
+        const host = makeHost([]);
+        await host.PrefetchContentHashes([created('x')], {});
+        expect(lastRunViewParams.current?.['BypassCache']).toBe(true);
+    });
 });

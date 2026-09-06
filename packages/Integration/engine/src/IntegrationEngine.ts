@@ -5361,6 +5361,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // 2x margin defended by nothing is not a guard. Same reasoning as baseEngine's own
                 // IgnoreMaxRows use, and this file documents the identical trap on the push side.
                 IgnoreMaxRows: true,
+                // Every batch's ID set is a unique fingerprint, so this query can never be a cache
+                // HIT — without BypassCache each call only DEPOSITS a dead entry, and the RunView
+                // cache grows O(records processed) for the life of the process (a 500k+ record
+                // drain OOMs the host). Same reasoning as LoadAllRecordMaps' BypassCache: this is
+                // a point-in-time existence read, never a reusable result.
+                BypassCache: true,
             }, contextUser);
             if (!res.Success) return undefined;
             const Hashes = new Map<string, string>();
