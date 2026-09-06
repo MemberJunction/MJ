@@ -492,7 +492,18 @@ async function handleTokenEndpoint(
   stateManager: AuthorizationStateManager,
   jwtIssuer?: JWTIssuer
 ): Promise<void> {
-  const tokenRequest = req.body as TokenRequest;
+  // Form bodies are parsed with extended syntax, so `code_verifier[]=…` arrives as an array.
+  // Keep only plain strings; a missing field takes the grant handler's existing error path.
+  const body = readStringParams(req.body, [
+    'grant_type',
+    'code',
+    'redirect_uri',
+    'client_id',
+    'client_secret',
+    'code_verifier',
+    'refresh_token',
+  ] as const);
+  const tokenRequest: TokenRequest = { ...body, grant_type: body.grant_type ?? '' };
 
   // Extract client credentials from Authorization header or body
   const { clientId, clientSecret } = extractClientCredentials(req, tokenRequest);
@@ -1091,11 +1102,7 @@ async function handlePostConsentEndpoint(
   stateManager: AuthorizationStateManager,
   jwtIssuer?: JWTIssuer
 ): Promise<void> {
-  const { requestId, action } = req.body as {
-    requestId?: string;
-    action?: string;
-    scopes?: string | string[];
-  };
+  const { requestId, action } = readStringParams(req.body, ['requestId', 'action'] as const);
 
   if (!requestId) {
     sendErrorPage(res, 'Invalid Request', 'Missing requestId');
@@ -1233,23 +1240,32 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * Reads the named query-string parameters, keeping only values that are plain strings.
+ * Reads the named parameters from a parsed request container (`req.query` or a form
+ * `req.body`), keeping only values that are plain strings.
  *
- * Express parses a repeated parameter (`?code=a&code=b`) into an array and bracketed
- * parameters into objects. Casting `req.query` to `Record<string, string>` hides that, so a
- * tampered request reaches string methods with an array (CodeQL
- * js/type-confusion-through-parameter-tampering). A parameter that is absent or not a plain
- * string comes back as `undefined`, which every caller's existing "missing parameter"
+ * Express parses a repeated parameter (`?code=a&code=b`, `code_verifier[]=…`) into an array
+ * and bracketed parameters into objects. Casting the container to `Record<string, string>`
+ * hides that, so a tampered request reaches string methods or a hash function with an array
+ * (CodeQL js/type-confusion-through-parameter-tampering). A parameter that is absent or not a
+ * plain string comes back as `undefined`, which every caller's existing "missing parameter"
  * branch already handles.
  */
-function readStringQueryParams<TName extends string>(
-  req: Request,
+function readStringParams<TName extends string>(
+  source: Record<string, unknown> | undefined,
   names: readonly TName[]
 ): Record<TName, string | undefined> {
   const result = {} as Record<TName, string | undefined>;
   for (const name of names) {
-    const value = req.query[name];
+    const value = source?.[name];
     result[name] = typeof value === 'string' ? value : undefined;
   }
   return result;
+}
+
+/** {@link readStringParams} over `req.query`. */
+function readStringQueryParams<TName extends string>(
+  req: Request,
+  names: readonly TName[]
+): Record<TName, string | undefined> {
+  return readStringParams(req.query, names);
 }
