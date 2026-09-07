@@ -80,8 +80,11 @@ disagree. If you called any of them, switch to `BeginEntityTransaction()` — or
 
 > **Concurrency note.** The ambient transaction lives on the *provider instance*, not a global.
 > MJServer builds per-request providers, so an ambient transaction is effectively request-scoped.
-> Long-lived single-provider processes (CLI tools, workers) must not run concurrent transactional
-> work on one provider instance.
+> Long-lived CLI tools (`mj sync push`) must not share one provider across parallel Saves.
+> `DatabaseProviderBase.CreateIndependentInstance()` forks a provider that **shares the connection
+> pool and metadata cache** but has its own transaction stack (SQL Server and PostgreSQL). Default
+> `--parallel-batch-size` is 10. Do not default to 1 to paper over a shared provider.
+> `ReleaseIndependentInstance()` must not close the pool.
 
 ### Client-side
 

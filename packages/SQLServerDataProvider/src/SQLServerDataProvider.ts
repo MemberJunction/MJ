@@ -430,6 +430,25 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Share this instance's pool + metadata; own transaction stack.
+   * Used by mj sync push parallelism (MJAPI per-request pattern).
+   */
+  public override async CreateIndependentInstance(): Promise<SQLServerDataProvider> {
+    const child = new SQLServerDataProvider();
+    const parent = this.ConfigData;
+    const cfg = new SQLServerProviderConfigData(
+      this._pool,
+      parent.MJCoreSchemaName,
+      0,
+      parent.IncludeSchemas,
+      parent.ExcludeSchemas,
+      false,
+    );
+    await child.Config(cfg, this);
+    return child;
+  }
+
+  /**
    * Configures the SQL Server data provider with connection settings and initializes the connection pool
    * 
    * @param configData - Configuration data including connection string and options
@@ -1108,8 +1127,8 @@ export class SQLServerDataProvider
 
   /**
    * Renders the SQL Server DECLARE/SET/EXEC binding for a save call.
-   * Emits per-field uuid-suffixed variables to keep batched saves
-   * (`SQLServerTransactionGroup`) collision-free. PKs on UPDATE are
+   * Suffixes come from GenericDatabaseProvider.allocateSaveCallSuffix
+   * (PK hash, not uuidv4). PKs on UPDATE are
    * tail-appended from `entity.PrimaryKey.KeyValuePairs`.
    *
    * Emits `_Clear` companion args when a nullable column carrying a
@@ -1124,7 +1143,7 @@ export class SQLServerDataProvider
     isUpdate: boolean,
     _spName: string,
   ): SaveCallBinding {
-    const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
+    const uniqueSuffix = this.allocateSaveCallSuffix(entity);
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];

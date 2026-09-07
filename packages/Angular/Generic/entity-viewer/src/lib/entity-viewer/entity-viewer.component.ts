@@ -10,7 +10,7 @@ import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
   EntityViewerConfig,
-  DEFAULT_VIEWER_CONFIG,
+  ResolveViewerConfig,
   RecordSelectedEvent,
   RecordOpenedEvent,
   DataLoadedEvent,
@@ -788,7 +788,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * Get merged configuration with defaults
    */
   get EffectiveConfig(): Required<EntityViewerConfig> {
-    return { ...DEFAULT_VIEWER_CONFIG, ...this.Config };
+    return ResolveViewerConfig(this.Config);
   }
 
   /**
@@ -2030,11 +2030,27 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   private effectiveRendererConfig(option: ViewModeOption): Record<string, unknown> {
     const base = this.viewTypeConfigById.get(option.viewTypeId) ?? {};
+    const seeded = this.seedEmbeddedGridChrome(base);
     if (!option.descriptor.UsesCanonicalGridState) {
+      return seeded;
+    }
+    const gridState = this.resolveCanonicalGridState(seeded);
+    return gridState ? { ...seeded, gridState } : seeded;
+  }
+
+  /**
+   * Embedded chrome is a container concern: peek cards should not grow a grid toolbar or pager.
+   * Only fill keys the plug-in blob has not already set, so an explicit ViewTypeConfigs still wins.
+   */
+  private seedEmbeddedGridChrome(base: Record<string, unknown>): Record<string, unknown> {
+    if (this.EffectiveConfig.chrome !== 'embedded') {
       return base;
     }
-    const gridState = this.resolveCanonicalGridState(base);
-    return gridState ? { ...base, gridState } : base;
+    return {
+      ...base,
+      showToolbar: base['showToolbar'] ?? false,
+      showPager: base['showPager'] ?? false,
+    };
   }
 
   /**

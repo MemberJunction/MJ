@@ -16,7 +16,7 @@ name: Integration Tier
 #     committed CodeGen_Run_*.sql migrations AND the repeatable R__RefreshMetadata, which
 #     together provision every core view / proc / EntityField row — so no live `mj codegen`
 #     pass is needed. (Running one here would also mask the exact metadata-vs-migration drift
-#     that the separate "Test metadata sync push" gate exists to catch.)
+#     that the `mj sync push` step below surfaces.)
 #   * AssociationDB is only required by the Predictive Studio tier, which is gated OFF here.
 #   * `mj sync push --dir=metadata` pushes the default metadata dir — which includes the inert
 #     "Integration Test" TestType (metadata/test-types/). A SECOND push then applies the sibling
@@ -39,8 +39,10 @@ name: Integration Tier
 #     NIGHTLY schedule lane (RUN_MUTATION_TESTS=1 below) but skip on PR/push; the Live Model
 #     suite runs in the WEEKLY lane (separate job below).
 #
-# The migrate/sync CORRECTNESS gate is a SEPARATE workflow ("Test metadata sync push"): here
-# migrate + sync are the aggregator's SETUP, not its system-under-test.
+# There is no separate metadata-correctness workflow: the `mj sync push --dir=metadata` step in
+# this job IS where invalid committed metadata is caught. It is the aggregator's SETUP rather
+# than its system-under-test, but it fails the job, which is why `metadata/**` is in the paths
+# filter above — otherwise a metadata-only PR merges unchecked and reds the push backstop on next.
 #
 # This host-based lane is the sole CI home for the integration tier. The earlier container-based
 # lane (a reusable that provisioned via the Docker regression stack's db-setup) was removed along
@@ -53,6 +55,8 @@ on:
       - 'pnpm-lock.yaml'
       - 'packages/**'
       - 'migrations/**'
+      # The job runs `mj sync push --dir=metadata`, so a metadata-only PR must run this gate.
+      - 'metadata/**'
       # All integration test/suite/type metadata AND the RLS fixtures now live under this one
       # optional sibling root (kept out of the default-pushed metadata/ tree — R2).
       - 'metadata-optional/**'

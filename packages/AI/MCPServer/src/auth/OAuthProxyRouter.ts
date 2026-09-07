@@ -12,6 +12,7 @@
  */
 
 import { Router, Request, Response, urlencoded, json } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import * as crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import {
@@ -76,8 +77,24 @@ function generateCodeChallenge(verifier: string): string {
  * app.use(oauthRouter);
  * ```
  */
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+const DEFAULT_RATE_LIMIT_MAX = 60;
+
 export function createOAuthProxyRouter(config: OAuthProxyConfig): Router {
   const router = Router();
+
+  // Every route here is public and performs authorization, token exchange or registration,
+  // so bound each client IP against guessing and resource exhaustion (same pattern as the
+  // magic-link and provider-catalog routers in @memberjunction/server).
+  router.use(
+    rateLimit({
+      windowMs: config.rateLimit?.windowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS,
+      limit: config.rateLimit?.limit ?? DEFAULT_RATE_LIMIT_MAX,
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+      message: 'Too many requests. Try again later.',
+    })
+  );
   const clientRegistry = getClientRegistry();
   const stateManager = getAuthorizationStateManager({ stateTtlMs: config.stateTtlMs });
 
@@ -231,42 +248,50 @@ function handleAuthorizeEndpoint(
     code_challenge,
     code_challenge_method,
     nonce,
-  } = req.query as Record<string, string | undefined>;
+  } = readStringQueryParams(req, [
+    'client_id',
+    'redirect_uri',
+    'response_type',
+    'state',
+    'scope',
+    'code_challenge',
+    'code_challenge_method',
+    'nonce',
+  ] as const);
 
-  // Validate required parameters
+  // Until the client is known AND redirect_uri is registered for it, redirect_uri is an
+  // arbitrary caller-supplied URL. RFC 6749 §4.1.2.1: the server MUST NOT redirect the
+  // user-agent to an invalid redirect_uri, and must inform the user directly instead.
+  // Redirecting these early errors would make the proxy an open redirector.
   if (!client_id) {
-    sendAuthorizationError(res, redirect_uri, 'invalid_request', 'client_id is required', state);
+    sendErrorPage(res, 'Invalid Request', 'client_id is required');
     return;
   }
 
   if (!redirect_uri) {
-    // Cannot redirect if no redirect_uri - show error page
     sendErrorPage(res, 'Invalid Request', 'redirect_uri is required');
     return;
   }
 
-  if (response_type !== 'code') {
-    sendAuthorizationError(res, redirect_uri, 'unsupported_response_type', 'Only code response type is supported', state);
-    return;
-  }
-
-  // Validate client
   const client = clientRegistry.getClient(client_id);
   if (!client) {
-    // SECURITY: do NOT redirect the error to redirect_uri here — the client is unknown, so
-    // redirect_uri is unvalidated and attacker-controlled. Redirecting would be an open redirect
-    // (phishing on the deployment's trusted domain). Render a local error page instead. Per the
-    // OAuth 2.0 Security BCP, errors may only be sent to a redirect_uri once it is validated.
+    // SECURITY: the client is unknown, so redirect_uri is unvalidated and attacker-controlled;
+    // redirecting would be an open redirect (phishing on the deployment's trusted domain).
     sendErrorPage(res, 'Invalid Request', 'Unknown client_id');
     return;
   }
 
-  // Validate redirect URI
   if (!clientRegistry.validateRedirectUri(client, redirect_uri)) {
-    // SECURITY: redirect_uri is not registered for this client — treat it as untrusted and render
-    // locally rather than 302-ing the browser to it (open redirect). Only AFTER this point is
-    // redirect_uri validated, so later errors may safely use sendAuthorizationError.
+    // SECURITY: redirect_uri is not registered for this client; treat it as untrusted and render
+    // locally rather than 302-ing the browser to it.
     sendErrorPage(res, 'Invalid Request', 'redirect_uri not registered for this client');
+    return;
+  }
+
+  // Only from here on is redirect_uri a registered URI of a known client, so later errors may
+  // safely use sendAuthorizationError.
+  if (response_type !== 'code') {
+    sendAuthorizationError(res, redirect_uri, 'unsupported_response_type', 'Only code response type is supported', state);
     return;
   }
 
@@ -317,7 +342,7 @@ function handleAuthorizeEndpoint(
     upstreamUrl.searchParams.set('nonce', nonce);
   }
 
-  console.log(`OAuth Proxy: Redirecting client ${client_id} to upstream provider`);
+  console.log(`OAuth Proxy: Redirecting client ${JSON.stringify(client_id)} to upstream provider`);
 
   // Redirect to upstream provider
   res.redirect(upstreamUrl.toString());
@@ -333,11 +358,16 @@ async function handleCallbackEndpoint(
   stateManager: AuthorizationStateManager,
   jwtIssuer?: JWTIssuer
 ): Promise<void> {
-  const { code, state, error, error_description } = req.query as Record<string, string | undefined>;
+  const { code, state, error, error_description } = readStringQueryParams(req, [
+    'code',
+    'state',
+    'error',
+    'error_description',
+  ] as const);
 
   // Handle errors from upstream
   if (error) {
-    console.error(`OAuth Proxy: Upstream error: ${error} - ${error_description}`);
+    console.error(`OAuth Proxy: Upstream error: ${JSON.stringify(error)} - ${JSON.stringify(error_description)}`);
     sendErrorPage(res, 'Authentication Failed', error_description ?? error);
     return;
   }
@@ -485,7 +515,18 @@ async function handleTokenEndpoint(
   stateManager: AuthorizationStateManager,
   jwtIssuer?: JWTIssuer
 ): Promise<void> {
-  const tokenRequest = req.body as TokenRequest;
+  // Form bodies are parsed with extended syntax, so `code_verifier[]=…` arrives as an array.
+  // Keep only plain strings; a missing field takes the grant handler's existing error path.
+  const body = readStringParams(req.body, [
+    'grant_type',
+    'code',
+    'redirect_uri',
+    'client_id',
+    'client_secret',
+    'code_verifier',
+    'refresh_token',
+  ] as const);
+  const tokenRequest: TokenRequest = { ...body, grant_type: body.grant_type ?? '' };
 
   // Extract client credentials from Authorization header or body
   const { clientId, clientSecret } = extractClientCredentials(req, tokenRequest);
@@ -757,9 +798,7 @@ async function exchangeUpstreamCode(
     console.error(`OAuth Proxy: Error details: ${errorBody}`);
     console.error(`OAuth Proxy: Request redirect_uri: ${config.baseUrl}/oauth/callback`);
     console.error(`OAuth Proxy: Request client_id: ${config.upstream.clientId}`);
-    console.error(`OAuth Proxy: Authorization code sent (last 8 chars): ...${code.slice(-8)}`);
     console.error(`OAuth Proxy: PKCE code_verifier present: ${!!codeVerifier}`);
-    console.error(`OAuth Proxy: PKCE code_verifier (first 8 chars): ${codeVerifier?.substring(0, 8) ?? 'N/A'}...`);
 
     // Parse and log the specific OAuth error
     try {
@@ -996,7 +1035,12 @@ function handleLoginEndpoint(
   res: Response,
   config: OAuthProxyConfig
 ): void {
-  const { client_id, redirect_uri, state, scope } = req.query as Record<string, string | undefined>;
+  const { client_id, redirect_uri, state, scope } = readStringQueryParams(req, [
+    'client_id',
+    'redirect_uri',
+    'state',
+    'scope',
+  ] as const);
 
   // Build the continue URL to start the OAuth flow
   const continueUrl = new URL(`${config.baseUrl}/oauth/authorize`);
@@ -1052,7 +1096,7 @@ async function handleGetConsentEndpoint(
   res: Response,
   stateManager: AuthorizationStateManager
 ): Promise<void> {
-  const { request_id } = req.query as Record<string, string | undefined>;
+  const { request_id } = readStringQueryParams(req, ['request_id'] as const);
 
   if (!request_id) {
     sendErrorPage(res, 'Invalid Request', 'Missing request_id parameter');
@@ -1081,11 +1125,7 @@ async function handlePostConsentEndpoint(
   stateManager: AuthorizationStateManager,
   jwtIssuer?: JWTIssuer
 ): Promise<void> {
-  const { requestId, action } = req.body as {
-    requestId?: string;
-    action?: string;
-    scopes?: string | string[];
-  };
+  const { requestId, action } = readStringParams(req.body, ['requestId', 'action'] as const);
 
   if (!requestId) {
     sendErrorPage(res, 'Invalid Request', 'Missing requestId');
@@ -1233,4 +1273,35 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/**
+ * Reads the named parameters from a parsed request container (`req.query` or a form
+ * `req.body`), keeping only values that are plain strings.
+ *
+ * Express parses a repeated parameter (`?code=a&code=b`, `code_verifier[]=…`) into an array
+ * and bracketed parameters into objects. Casting the container to `Record<string, string>`
+ * hides that, so a tampered request reaches string methods or a hash function with an array
+ * (CodeQL js/type-confusion-through-parameter-tampering). A parameter that is absent or not a
+ * plain string comes back as `undefined`, which every caller's existing "missing parameter"
+ * branch already handles.
+ */
+function readStringParams<TName extends string>(
+  source: Record<string, unknown> | undefined,
+  names: readonly TName[]
+): Record<TName, string | undefined> {
+  const result = {} as Record<TName, string | undefined>;
+  for (const name of names) {
+    const value = source?.[name];
+    result[name] = typeof value === 'string' ? value : undefined;
+  }
+  return result;
+}
+
+/** {@link readStringParams} over `req.query`. */
+function readStringQueryParams<TName extends string>(
+  req: Request,
+  names: readonly TName[]
+): Record<TName, string | undefined> {
+  return readStringParams(req.query, names);
 }

@@ -186,6 +186,32 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         return this.CurrentTransactionDepth;
     }
 
+    /**
+     * Independent instance that **shares the connection pool and metadata cache**
+     * but has its own transaction stack. Same pattern MJAPI uses for per-request
+     * providers. Used by `mj sync push` so `--parallel-batch-size` (default 10)
+     * does not interleave `EntityTransactionScope`s on one provider.
+     *
+     * Not SQL Server-specific: each concrete provider implements this against
+     * its own pool. {@link ReleaseIndependentInstance} must NOT close the pool.
+     */
+    public async CreateIndependentInstance(): Promise<DatabaseProviderBase> {
+        throw new Error(`${this.constructor.name} does not implement CreateIndependentInstance`);
+    }
+
+    /**
+     * Drop this instance's transaction handle. Must not close the shared pool.
+     */
+    public async ReleaseIndependentInstance(): Promise<void> {
+        if (this.TransactionDepth > 0) {
+            try {
+                await this.RollbackTransaction();
+            } catch {
+                await this.ResetTransactionState();
+            }
+        }
+    }
+
     /** @deprecated Use {@link TransactionDepth}. */
     public get transactionDepth(): number {
         return this.TransactionDepth;

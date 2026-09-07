@@ -1499,6 +1499,42 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * True when {@link ExtendedType} is any Geo* tag (`Geo`, `GeoLatitude`, `GeoAddress`, …).
+     * Used by maps, distance, and GeoCodeSyncService. Display-only virtuals still count.
+     */
+    get IsGeoExtendedType(): boolean {
+        const t = this.ExtendedType;
+        return typeof t === 'string' && t.startsWith('Geo');
+    }
+
+    /**
+     * A Geo* field that can be written on Save. GeoCodeSyncService only runs when the
+     * entity has at least one of these. Virtual / AllowUpdateAPI=0 fields (PrimaryAddress*,
+     * `__mj_Latitude`, embedded `__mj_Latitude_{FK}`) are display-only — maps still use them.
+     */
+    get IsWritableGeoField(): boolean {
+        return this.IsGeoExtendedType && !this.IsVirtual && !!this.AllowUpdateAPI;
+    }
+
+    /**
+     * Native (table) latitude column — `ExtendedType=GeoLatitude`, or legacy `Geo` named Latitude.
+     */
+    get IsNativeLatitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLatitude') return true;
+        return this.ExtendedType === 'Geo' && /^lat(itude)?$/i.test(this.Name);
+    }
+
+    /**
+     * Native (table) longitude column — `ExtendedType=GeoLongitude`, or legacy `Geo` named Long*.
+     */
+    get IsNativeLongitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLongitude') return true;
+        return this.ExtendedType === 'Geo' && /^(lng|lon|long|longitude)$/i.test(this.Name);
+    }
+
+    /**
      * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps as well as the DeletedAt timestamp used for entities that
      * have DeleteType=Soft. This is only used when the entity has TrackRecordChanges=1 or for entities where DeleteType=Soft
      */
@@ -2126,11 +2162,19 @@ export class EntityInfo extends BaseInfo {
      */
     FullTextSearchFunctionGenerated: boolean = true
     /**
-     * When true, this entity supports geocoding — CodeGen generates geo-aware subclass code,
-     * adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows
-     * a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields.
+     * When true, this entity participates in geo **read** features: map view, distance
+     * calculations, and similar. That is independent of whether GeoCodeSyncService runs
+     * on Save — the service only fires when {@link HasWritableGeoSourceFields} is true.
+     * Auto-set by CodeGen when LLM detects geo-capable fields.
      */
     SupportsGeoCoding: boolean = false
+    /**
+     * True when at least one field is a writable Geo* source (street and/or native lat/lng).
+     * Person/Org PrimaryAddress* are virtual display fields and do **not** count.
+     */
+    get HasWritableGeoSourceFields(): boolean {
+        return (this.Fields ?? []).some(f => f.IsWritableGeoField);
+    }
     /**
      * When true (default), CodeGen can automatically set SupportsGeoCoding based on
      * LLM analysis of entity fields. Set to false to lock the value.
