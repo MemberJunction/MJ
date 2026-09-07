@@ -270,7 +270,21 @@ export const UserElevationChecks: NamedCheck[] = [
     {
         Id: 'user-elevation.UE4',
         Name: 'UE4: a non-Owner WITH CanUpdate cannot persist a Type change through a real Save()',
-        RequiresMutation: false,
+        // MUTATION-GATED, despite the rollback. `RequiresMutation` gates the WRITE, not its
+        // visibility: this check issues a genuine `UPDATE __mj.User SET Type=...` through
+        // `spUpdateUser` (and, since `MJ: Users` has TrackRecordChanges=1, a RecordChange row) before
+        // the transaction is rolled back. The `finally`-rollback makes the write invisible, not
+        // absent, so declaring `false` would run a real write against the platform's user table in
+        // the deterministic lane — which is defined as the non-mutating one. Every other writing
+        // check in this suite (cache-gauntlet, app-behavioral, actions-pipeline, entity-actions …)
+        // is gated the same way.
+        // Two further reasons this must not run unarmed: `BeginEntityTransaction()` opens on the
+        // SHARED provider, whose own implementation logs a hard error for concurrent transactional
+        // saves on a shared instance; and if the guard has regressed, the successful `Save()` leaves
+        // `UserCache` holding the promoted `Type` for the rest of the process even after the DB
+        // rolls back.
+        // UE1-UE3 remain ungated and still prove the guard on every run — they never call `Save()`.
+        RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const usersEntity = requireUsersEntity(ctx, 'UE4');
             const caller = findNonOwnerWithGrant(usersEntity, (p) => p.CanUpdate);
