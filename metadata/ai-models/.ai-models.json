@@ -10261,7 +10261,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-opus-4-1-20250805",
             "MaxInputTokens": 200000,
@@ -10356,16 +10356,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2026-01-08T14:56:21.963Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 15,
             "OutputPricePerUnit": 75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.1 pricing on Anthropic as of August 2025",
+            "Comments": "Claude Opus 4.1 pricing on Anthropic as of August 2025. EXPIRED 2026-08-05: Anthropic retired `claude-opus-4-1-20250805` on the Claude API on August 5, 2026 (deprecation announced June 5, 2026; recommended replacement `claude-opus-4-8`). Requests to the retired model now fail on Anthropic direct. The model remains available on Amazon Bedrock and Google Cloud, which set their own retirement schedules, so those vendor and cost rows are left Active. Row preserved for historical pricing lookups. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations",
             "CacheReadPricePerUnit": 1.5,
-            "CacheWritePricePerUnit": 18.75
+            "CacheWritePricePerUnit": 18.75,
+            "EndedAt": "2026-08-05T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "28C400E6-4DAC-4DE2-915C-8525D77FE92C"
@@ -22140,6 +22141,22 @@
         {
           "fields": {
             "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ZAILLM",
+            "APIName": "glm-5.3",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
             "Status": "Active",
@@ -22161,7 +22178,25 @@
           }
         }
       ],
-      "MJ: AI Model Costs": []
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-08-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.4,
+            "OutputPricePerUnit": 4.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM-5.3 rate card on Z.AI direct, effective August 19, 2026: $1.40/1M input, $4.40/1M output, $0.26/1M cached input - identical to the GLM-5.2 rate card. Cached-input storage is listed by Z.AI as free for a limited time. Resolves the 'pricing TBD' note left when GLM-5.3 was added on 2026-08-24. Z.AI serves the model as `glm-5.3` at https://api.z.ai/api/paas/v4/chat/completions; 1M context / 128K max output. Z.AI also sells a separate GLM Coding Plan subscription that bundles GLM-5.3 - that is not a per-token rate and is not modelled. Sources: https://docs.z.ai/guides/llm/glm-5.3 ; https://www.requesty.ai/models/zai/glm-5.3 ; https://venturebeat.com/technology/glm-5-3-hits-the-api-at-1-4-4-4-per-million-tokens",
+            "CacheReadPricePerUnit": 0.26,
+            "CacheWritePricePerUnit": null
+          }
+        }
+      ]
     },
     "primaryKey": {
       "ID": "D5DC6B04-AA19-459A-9ED3-D44B2C42D6A5"
@@ -22493,6 +22528,420 @@
     "sync": {
       "lastModified": "2026-09-01T16:57:31.725Z",
       "checksum": "6fa23c02660f37cdf3e55716882aef3cf82485d8d800d7bee5aa2e7ddd351520"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Fable 5.1",
+      "PowerRank": 27,
+      "Description": "Anthropic's Mythos-class Claude 5 flagship, released September 1, 2026 as the successor to Claude Fable 5. Generally available on the Claude API, Claude Platform on AWS, Amazon Bedrock, Google Cloud Vertex AI and Microsoft Foundry. 1M-token context, 128K max output, adaptive thinking always on with a five-level effort setting (defaults to high). Per-token price is unchanged from Fable 5 at $10/$50 per 1M; the change is prompt caching - cache hits and refreshes drop 75% from $1 to $0.25 per 1M (0.025x base input, versus the standard 0.1x multiplier used by every other Claude model). 5-minute cache writes $12.50/1M, 1-hour writes $20/1M. Anthropic estimates ~25% savings on typical workloads and up to ~45% on heavily agentic ones. Uses the Claude 4.7-and-later tokenizer (~30% more tokens for the same text than Sonnet 4.6 and earlier). Companion Claude Mythos 5.1 shares the same specs and rate card but is limited-availability through Anthropic's Cyber Verification and Life Sciences Verification programs (Project Glasswing) and is therefore NOT modelled here. Tentative retirement not sooner than September 1, 2027.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-fable-5-1",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-fable-5-1",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-fable-5.1",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-09-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Fable 5.1 pricing on Anthropic direct as of the September 1, 2026 launch: $10/$50 per 1M in/out, unchanged from Fable 5. Cache hits and refreshes $0.25/1M (0.025x base input - a 75% cut from Fable 5's $1/1M). CacheWritePricePerUnit records the 5-minute cache write at $12.50/1M; the 1-hour write is $20/1M and is not representable in this schema. Batch API is half rate ($5/$25). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://www.anthropic.com/claude-fable-and-mythos-5-1",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": 12.5
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-09-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Fable 5.1 pricing on Amazon Bedrock at vendor parity with Anthropic direct ($10/$50 per 1M). Bedrock model ID anthropic.claude-fable-5-1. Regional and multi-region endpoints carry a 10% premium over global endpoints; Bedrock sets its own retirement schedule independently of the Claude API. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5-1.html",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-09-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Fable 5.1 on OpenRouter (passthrough pricing), live September 1, 2026. $10/$50 per 1M with $0.25/1M cache reads. A separate half-price batch route exists at anthropic/claude-fable-5.1:batch ($5/$25) and is not modelled here. Source: https://openrouter.ai/anthropic/claude-fable-5.1",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT-6 Astra",
+      "PowerRank": 27,
+      "Description": "OpenAI's GPT-6 generation flagship, released September 3, 2026 as the successor to the GPT 5.6 family. 1,050,000-token (~1M) context window with a 128K output cap. Positioned for long-horizon agentic work; supports streaming, Structured Outputs, computer use, Programmatic Tool Calling, multi-agent orchestration, explicit prompt caching and persisted reasoning. reasoning.effort accepts low, medium, high, xhigh and max - unlike GPT 5.6 it does NOT accept none. LONG-CONTEXT SURCHARGE: a request whose input exceeds 272,000 tokens is rebilled in its entirety at 2x input/cache and 1.5x output ($20 input, $2 cached input, $25 cache write, $75 output per 1M). The cost record below carries the short-context (<=272K) rate only. Astra is the first OpenAI model to reach the Critical cyber-capability threshold under the Preparedness Framework, so advanced cyber capability is gated behind the separate Daybreak program and is not part of the ordinary API surface. Rollout began with a limited set of organizations on September 3 and widened across ChatGPT, Codex and the API over the following days.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.6"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-6-astra",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-6-astra",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-09-03T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-6 Astra pricing on OpenAI direct as of the September 3, 2026 launch, Standard tier, SHORT CONTEXT (<=272,000 input tokens): $10/1M input, $1/1M cached input, $12.50/1M cache write, $50/1M output. LONG CONTEXT (>272,000 input tokens) rebills the whole request at $20 input / $2 cached input / $25 cache write / $75 output per 1M - a reviewer should add a second cost row if long-context traffic is material. Fast mode is offered at 2x the Standard rate and is not modelled here. Note that unlike earlier GPT models, Astra bills cache writes. Sources: https://developers.openai.com/api/docs/models/gpt-6-astra ; https://aicybr.com/blog/gpt-6-astra-api-pricing-rollout",
+            "CacheReadPricePerUnit": 1,
+            "CacheWritePricePerUnit": 12.5
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-09-03T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-6 Astra pricing in Microsoft Foundry / Azure OpenAI, Global Standard deployment, listed September 3, 2026 at parity with OpenAI direct ($10/$50 per 1M). ACCESS IS GATED: Foundry serves Astra through the Limited Access Program in two deployment flavours (Global and US Data Zone); there is no EU Data Zone at launch. Sources: https://www.unite.ai/microsoft-brings-openais-gpt-6-astra-to-foundry-with-limited-access/ ; https://technspire.com/en/blog/gpt-6-astra-foundry-price-gate-eu-gap",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 3.8 Flash",
+      "PowerRank": 26,
+      "Description": "Google's Flash-tier model released September 2, 2026 as the successor to Gemini 3.7 Flash (August 13, 2026), targeting coding agents and enterprise agentic workloads. 1M-token input context / 64K output cap. Multimodal input (text, image, audio, video, PDF); text output. Supports function calling, code execution, search grounding, structured output and tunable thinking levels (low, medium, high). Knowledge cutoff March 2026. Introductory pricing $0.75/$3.75 per 1M input/output holds Gemini 3.7 Flash's headline rate and runs through December 31, 2026; standard pricing steps up to $1.50/$7.50 on January 1, 2027, when context caching also doubles from $0.075 to $0.15 per 1M and cache storage from $0.50 to $1.00 per 1M per hour.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 5,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3.7 Flash"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-3.8-flash",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemini-3.8-flash",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-3.8-flash",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-09-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.75,
+            "OutputPricePerUnit": 3.75,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Google direct as of the September 2, 2026 GA launch: $0.75/1M input, $3.75/1M output, $0.075/1M cached input. INTRO WINDOW: through December 31, 2026. STANDARD PRICING FROM JANUARY 1, 2027: $1.50/1M input, $7.50/1M output, with cached input doubling to $0.15/1M. A reviewer should expire this row and add a standard-rate row before the intro window closes. Google does not charge for cache writes, so CacheWritePricePerUnit is null. Sources: https://ai.google.dev/gemini-api/docs/latest-model ; https://deepmind.google/models/model-cards/gemini-3-8-flash/",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-09-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.75,
+            "OutputPricePerUnit": 3.75,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Vertex AI (Gemini Enterprise Agent Platform) as of September 2, 2026 GA. Matches Google direct: $0.75/$3.75 per 1M with $0.075/1M cache read and no cache-write charge. Intro window runs through 2026-12-31; standard $1.50/$7.50 applies from 2027-01-01. Cross-region inference may add a Vertex-side surcharge on top of these figures. Sources: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://ai.google.dev/gemini-api/docs/latest-model",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Spark 1.3",
+      "PowerRank": 21,
+      "Description": "Meta's most capable model, released September 2, 2026 - a multimodal reasoning system built for long-horizon agentic work, coding and computer use. Accepts text, image and video input; 1,048,576-token context window. Supports function calling and structured (JSON) output. Meta reports ~20% fewer tool calls and ~25% fewer tokens than Muse Spark 1.2 on comparable coding tasks. Meta has published neither a parameter count nor a maximum output length, and the model's max reasoning mode is held back pending further safety testing, so MaxOutputTokens is deliberately left unset here. Standard tier is $1.25/$4.25 per 1M with $0.15/1M cached input. A separate Contributor tier runs $0.10/$0.20 per 1M in exchange for allowing Meta to train on submitted prompts and outputs - that tier is NOT modelled here because it carries a data-use commitment that is a policy decision, not a pricing one. Reached here through OpenRouter (meta/muse-spark-1.3); Meta's own first-party API is not wired up because MJ has no Meta driver class yet.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-spark-1.3",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-09-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.25,
+            "OutputPricePerUnit": 4.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Muse Spark 1.3 Standard-tier pricing on OpenRouter (passthrough of Meta's own rate card) as of the September 2, 2026 launch: $1.25/1M input, $4.25/1M output, $0.15/1M cached input. The cheaper Contributor tier (meta/muse-spark-1.3-contributor, $0.10/$0.20 per 1M) is deliberately not recorded - it permits Meta to train on submitted data. Sources: https://openrouter.ai/meta/muse-spark-1.3 ; https://research.meta.ai/blog/introducing-muse-spark-1-3 ; https://www.mindstudio.ai/blog/muse-spark-1-3-pricing",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
+          }
+        }
+      ]
     }
   }
 ]
