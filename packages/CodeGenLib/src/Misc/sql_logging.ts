@@ -242,6 +242,16 @@ export class SQLLogging {
                 return;
             }
 
+            // A logged unit that declares a T-SQL local variable (`DECLARE @x ...`) must end its batch
+            // in the replayable file. Every unit is executed as its own query, so no later unit can
+            // depend on the variable — but without a separator, two such units concatenated into one
+            // migration batch fail replay with "The variable name '@x' has already been declared".
+            // Callers own the choice in the normal case; this guard closes the class of bug for any
+            // caller that forgets. PostgreSQL never declares `@` variables, so it is unaffected.
+            if (!includeBatchSeparator && batchSeparator && SQLLogging.declaresTSQLVariable(contents)) {
+                includeBatchSeparator = true;
+            }
+
             if(description){
                 const comment = `/* ${description} */\n`;
                 contents = `${comment}${contents}`;
@@ -268,7 +278,8 @@ export class SQLLogging {
                 contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
-            contents = includeBatchSeparator
+            // An empty separator (PostgreSQL) means "no batch separator"; don't emit a blank line for it.
+            contents = includeBatchSeparator && batchSeparator
                 ? `${contents}\n${batchSeparator}\n\n`
                 : `${contents}\n\n`;
 
@@ -299,6 +310,21 @@ export class SQLLogging {
         SQLLogging.appendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator);
         const result = await ds.query(query);
         return result.recordset;
+    }
+
+    /**
+     * True when the SQL text opens with a top-level T-SQL local-variable declaration (`DECLARE @name ...`),
+     * ignoring leading whitespace and comments. Declarations inside a CREATE PROCEDURE/FUNCTION body
+     * are not top-level and are not matched, because the routine header comes first.
+     */
+    public static declaresTSQLVariable(sql: string): boolean {
+        if (!sql) {
+            return false;
+        }
+        // Strip leading block comments, line comments, and whitespace so a description banner
+        // or an inline note ahead of the DECLARE doesn't hide it.
+        const stripped = sql.replace(/^(\s*(\/\*[\s\S]*?\*\/|--[^\n]*\n?))*\s*/, '');
+        return /^DECLARE\s+@/i.test(stripped);
     }
 
     protected static getFileLength(filePath: string): number {

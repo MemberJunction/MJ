@@ -6,6 +6,7 @@ import type { SQLDialect } from '@memberjunction/sql-dialect';
 import { SQLServerCodeGenProvider } from '../SQLServerCodeGenProvider';
 import { SQLCodeGenBase } from '../../../sql_codegen';
 import type { CodeGenConnection, CodeGenQueryResult, CodeGenTransaction } from '../../../codeGenDatabaseProvider';
+import { configInfo } from '../../../../Config/config';
 
 /**
  * Golden-master suite for BASE VIEW EMISSION through the full orchestrator path —
@@ -215,6 +216,12 @@ function installMetadata(entities: EntityInfo[]): void {
 
 beforeAll(() => {
     originalProvider = Metadata.Provider;
+    // SQLOutput.enabled defaults to true, and LogSQLAndExecute refuses to apply metadata SQL when
+    // logging is enabled but no CodeGen_Run file is open. These cases run the emitter against a
+    // recording connection with no log file, so turn the capture off for the process.
+    if (configInfo.SQLOutput) {
+        configInfo.SQLOutput.enabled = false;
+    }
 });
 
 afterAll(() => {
@@ -530,7 +537,8 @@ describe('base view emission — geo virtual columns', () => {
         // display fields present the block is appended after ',\n' and aligns
         // normally. A formatting fix here would change every geo entity's stored
         // view text and force a one-time regeneration wave — hence pinned, not fixed.
-        const entity = sitesEntity([pk('SITES-ENTITY-0006')]);
+        // ShouldJoinRecordGeoCodes needs SupportsGeoCoding AND a writable Geo* field (no native lat/lng).
+        const entity = sitesEntity([pk('SITES-ENTITY-0006'), nameField('SITES-ENTITY-0006', { Name: 'Address', ExtendedType: 'GeoAddress', IsNameField: false })]);
         const { viewSQL } = await generator.generateBaseViewPieces(pool, entity);
 
         expect(viewSQL).toContain(`SELECT
@@ -558,7 +566,7 @@ GO`);
             BaseViewGenerated: true,
             DeleteType: 'Hard',
             SupportsGeoCoding: true,
-            EntityFields: [pk('SITES-ENTITY-0006'), customerFK({ EntityID: 'SITES-ENTITY-0006' })],
+            EntityFields: [pk('SITES-ENTITY-0006'), nameField('SITES-ENTITY-0006', { Name: 'Address', ExtendedType: 'GeoAddress', IsNameField: false }), customerFK({ EntityID: 'SITES-ENTITY-0006' })],
             EntityPermissions: [],
         });
         installMetadata([entity, customersEntity()]);
