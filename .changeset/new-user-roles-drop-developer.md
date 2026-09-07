@@ -18,7 +18,7 @@ This mattered on more than a bare install. `loadConfig()` deep-merges via `merge
 userHandling: { newUserRoles: ['UI', 'Developer'] }
 ```
 
-Do that only where every identity your IdP will issue a token for is one you would make an Owner — because with the grant as seeded, that is what it permits.
+Do that only where you're comfortable granting every such identity broad data-plane write across ~439 entities — the guard described below stops it from making them a platform Owner, but the underlying `Developer`/`Integration` update grant is otherwise unfiltered.
 
 **What remains true, and what a later change in this same release supersedes.** `Developer` and `Integration` still hold unfiltered `CanUpdate` on 439 of the database's 446 entities — that grant is unchanged, is a behavioural change for existing hosts to narrow, needs a migration, and is tracked separately. It is the real reason not to hand either role to every auto-provisioned user.
 
