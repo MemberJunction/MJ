@@ -76,6 +76,28 @@ vi.mock('@memberjunction/core-entities', () => {
             return true;
         }
 
+        public SuperSaveCalled = false;
+        /**
+         * Mirrors the two behaviours of `BaseEntity.Save()` that matter here:
+         *   1. an ordinary save calls `Validate()` and fails the save when it fails
+         *      (baseEntity.ts:3730), and
+         *   2. under `ReplayOnly` validation is force-passed WITHOUT calling `Validate()` at all
+         *      (baseEntity.ts:3725), so the guard's Validate-based invariants are skipped.
+         * Reaching this method means the write would have gone through.
+         *
+         * Routing through `this.Validate()` is deliberate rather than returning a bare `true`: it is
+         * what makes the ordinary-save tests assert the real `Save()` -> `Validate()` COMPOSITION
+         * instead of merely asserting that the override delegated to `super`. With a bare `true`,
+         * those tests stayed green even with the `Validate()` override deleted.
+         */
+        public async Save(options?: { ReplayOnly?: boolean }): Promise<boolean> {
+            this.SuperSaveCalled = true;
+            if (options?.ReplayOnly) {
+                return true;
+            }
+            return this.Validate().Success;
+        }
+
         /** No-op stand-in: the guard's Delete() refusal path records a BaseEntityResult here. */
         public RegisterResultHistoryEntry(_result: unknown): void {
             // intentionally empty — these tests assert on the boolean return value, not LatestResult
@@ -105,6 +127,7 @@ const BOB = { ID: '33333333-3333-3333-3333-333333333333', Type: 'User' };
  */
 interface StubDeleteHooks {
     SuperDeleteCalled: boolean;
+    SuperSaveCalled: boolean;
 }
 
 /** Builds a guard instance representing an EXISTING row `rowId`, saved by `caller`. */
@@ -317,6 +340,46 @@ describe('MJUserEntityServer — privilege elevation guard (issue #4260)', () =>
             e.SetFieldState('Type', true, 'User');
 
             expect(e.Validate().Success).toBe(true);
+        });
+    });
+
+    describe('ReplayOnly: the Save-side invariants must not be switchable off (gauntlet D1)', () => {
+        // BaseEntity.Save() force-passes validation under ReplayOnly WITHOUT calling Validate()
+        // (baseEntity.ts:3725), and ReplayOnly does NOT suppress the write
+        // (databaseProviderBase.ts:1436-1443). Invariants 1-4 live in Validate(), so a ReplayOnly
+        // save skipped all of them while invariant 5 (Delete) stayed enforced by its override.
+        // The guard's own docstring claims the invariants hold on EVERY write path; these pin that.
+        it('REFUSES a ReplayOnly save by a non-Owner — the Validate() hook is not reached on that path', async () => {
+            const row = existingRow(ALICE.ID, ALICE);
+            const ok = await row.Save({ ReplayOnly: true });
+            expect(ok).toBe(false);
+            expect(row.SuperSaveCalled).toBe(false);
+        });
+
+        it('ALLOWS an Owner a ReplayOnly save — replication/admin paths run as an Owner and must keep working', async () => {
+            const row = existingRow(ALICE.ID, OWNER);
+            const ok = await row.Save({ ReplayOnly: true });
+            expect(ok).toBe(true);
+            expect(row.SuperSaveCalled).toBe(true);
+        });
+
+        it('leaves an ordinary (non-ReplayOnly) non-Owner save to the normal Validate() path', async () => {
+            const row = existingRow(ALICE.ID, ALICE);
+            const ok = await row.Save();
+            expect(ok).toBe(true);
+            expect(row.SuperSaveCalled).toBe(true);
+        });
+
+        // Composition, not delegation: every other test in this file calls Validate() directly, so
+        // without this one nothing pins that an ordinary Save() actually ROUTES to the guard. It
+        // fails if the Validate() override is removed, which the delegation-only assertions do not.
+        it('an ordinary Save() by a non-Owner with a dirty Type is refused THROUGH Validate()', async () => {
+            const row = existingRow(ALICE.ID, ALICE);
+            row.SetFieldState('Type', true, 'User');
+            row.Type = 'Owner';
+            const ok = await row.Save();
+            expect(ok).toBe(false);
+            expect(row.SuperSaveCalled).toBe(true); // reached Save(); refused inside it, not before
         });
     });
 

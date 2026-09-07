@@ -1,4 +1,4 @@
-import { BaseEntity, BaseEntityResult, EntityDeleteOptions, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntityDeleteOptions, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJUserEntity } from '@memberjunction/core-entities';
 
@@ -23,15 +23,22 @@ import { MJUserEntity } from '@memberjunction/core-entities';
  * the actual rule.
  *
  * WHY HERE RATHER THAN IN A RESOLVER. `Validate()` runs inside `BaseEntity.Save()` and this class
- * also overrides `Delete()`, so both hold on EVERY write path — GraphQL resolvers, Remote
- * Operations, the Create/Update/Delete Record actions, metadata sync, one-off scripts — and for any
- * role a deployment invents, not just the two seeded ones. A resolver-level check would cover one
- * door in a building with several.
+ * also overrides `Save()` and `Delete()`, so all five hold on every write path — GraphQL resolvers,
+ * Remote Operations, the Create/Update/Delete Record actions, metadata sync, one-off scripts — and
+ * for any role a deployment invents, not just the two seeded ones. A resolver-level check would
+ * cover one door in a building with several.
+ *
+ * The `Save()` override is what makes that sentence literally true rather than nearly true.
+ * `Validate()` alone does NOT cover every write path: `BaseEntity.Save()` force-passes validation
+ * without calling `Validate()` when `EntitySaveOptions.ReplayOnly` is set (`baseEntity.ts:3725`),
+ * and `ReplayOnly` does not suppress the write. Invariants 1-4 were therefore skippable by an
+ * option, while invariant 5 was not — `Delete()` being an override. See `Save()` below for the
+ * reachability analysis and why the fix refuses rather than re-validates.
  *
  * THE INVARIANTS, for a caller whose `Type` is not `'Owner'`:
  *
  *   1. **Creating a `MJ: Users` row at all is refused.** This is stricter than "may not create an
- *      Owner": there are THREE automated creators of this entity — `NewUserBase.createNewUser`
+ *      Owner": there are FOUR automated creators of this entity — `NewUserBase.createNewUser`
  *      (`MJServer/src/auth/newUsers.ts`), `MagicLinkService`'s provisioning path
  *      (`MJServer/src/auth/magicLink/MagicLinkService.ts`), and `CreateNewUserBase.createNewUser`
  *      (`CodeGenLib/src/Misc/createNewUser.ts:33`, a CLI provisioning tool that sets `Type='Owner'`
@@ -51,6 +58,16 @@ import { MJUserEntity } from '@memberjunction/core-entities';
  *      exists in `user-management.component.ts` or its module), so a Developer-role non-Owner
  *      reaches it in practice and will now receive this same create/delete refusal there — a real
  *      consequence for such deployments, not a hypothetical one.
+ *      A FOURTH creator exists and is not config-driven: `SyncRolesUsersResolver.AddNewUsers`
+ *      (`MJServer/src/resolvers/SyncRolesUsersResolver.ts:343`), whose sibling `UpdateExistingUsers`
+ *      also sets `Name` AND `Type` unconditionally on every synced row and whose `DeleteSingleUser`
+ *      deletes. All three carry `@RequireSystemUser()`, and `getSystemUser()` resolves the seeded
+ *      `Type='Owner'` system user, so the guard exempts them on a default install — but a deployment
+ *      whose system user is NOT an Owner will see that sync path fail closed too, for the same
+ *      reason as the config-driven pair above. Note also that `DeleteSingleUser` reads a `false`
+ *      from `Delete()` as an FK-constraint condition and downgrades to a soft delete; invariant 5
+ *      gives that same `false` a second meaning (non-Owner caller), which that call site does not
+ *      distinguish.
  *      Refusing only `Type='Owner'` on create is NOT enough on its own: `Name` has no unique index
  *      and both seeded non-Owner roles hold `CanCreate`, so a non-Owner could otherwise repeatedly
  *      `Create` rows named to match the configured principal string until one sorts below the real
@@ -130,6 +147,57 @@ export class MJUserEntityServer extends MJUserEntity {
         }
         result.Success = result.Success && result.Errors.length === 0;
         return result;
+    }
+
+    /**
+     * Refuses a `ReplayOnly` save by a non-Owner caller.
+     *
+     * WHY THIS OVERRIDE EXISTS. Invariants 1-4 are enforced in `Validate()`, and `Validate()` is the
+     * one enforcement point `BaseEntity.Save()` can be told to skip: under `EntitySaveOptions.ReplayOnly`
+     * it force-passes validation WITHOUT calling `Validate()` at all (`baseEntity.ts:3725`), and
+     * `ReplayOnly` does NOT suppress the write — the provider only uses it to bypass the
+     * `AllowUpdateAPI`/`AllowCreateAPI` gates before building and executing the SQL
+     * (`databaseProviderBase.ts:1436-1443`). So a `ReplayOnly` save skipped all four Save-side
+     * invariants while invariant 5 stayed enforced, because `Delete()` is an override and an
+     * override cannot be switched off. This restores the symmetry: now neither half depends on the
+     * caller's options.
+     *
+     * NOT CURRENTLY REACHABLE BY AN UNTRUSTED CALLER, and this is deliberately belt-and-braces
+     * rather than a live hole. Every wire path that accepts `ReplayOnly` was enumerated: the
+     * GraphQL `options___`/`DeleteOptionsInput` input exists only on the DELETE mutation (create and
+     * update carry no options input, and `ResolverBase.CreateRecord`/`UpdateRecord` call `Save()`
+     * with none); REST's `EntityCRUDHandler` does accept it, but calls `entity.Validate()`
+     * explicitly before `Save()`, so the guard still runs there; and `graphQLSystemUserClient`
+     * requires the system API key, i.e. a caller who is already superuser. The point is that the
+     * class docstring's "holds on EVERY write path" is a promise a future wire path forwarding save
+     * options would otherwise quietly break — a guard whose protection is one option away from off
+     * is not the guard this file claims to be.
+     *
+     * WHY REFUSE RATHER THAN RE-RUN THE INVARIANTS. Re-running invariants 1-4 here would duplicate
+     * `Validate()`'s logic in a second place that must then be kept in step with it — the exact
+     * duplicated-decision this repo's design rules call out. Refusing outright is smaller and
+     * strictly safer: `ReplayOnly` is a replication/replay facility for trusted sync paths, and a
+     * non-Owner has no legitimate reason to replay writes onto the user table. Owners are exempt,
+     * so replication and admin paths that run as an Owner are unaffected.
+     */
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        if (options?.ReplayOnly && !this.callerIsOwner()) {
+            return this.refuseSave();
+        }
+        return super.Save(options);
+    }
+
+    private refuseSave(): boolean {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = this.IsSaved ? 'update' : 'create';
+        result.Message =
+            'Only an Owner may perform a ReplayOnly save on a user record. ReplayOnly bypasses ' +
+            'validation, which is where this entity\'s privilege-elevation invariants are enforced.';
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
+        return false;
     }
 
     /**
