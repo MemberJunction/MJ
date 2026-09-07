@@ -1349,9 +1349,16 @@ The pull command supports smart update capabilities with extensive configuration
     },
     "ignoreNullFields": false,
     "ignoreVirtualFields": false
+  },
+  "push": {
+    "skipGeoCoding": true
   }
 }
 ```
+
+`push.skipGeoCoding` maps to `EntitySaveOptions.SkipGeoCoding` for this entity only. Use it on display-only geo entities (People/Organizations whose coords are virtual `PrimaryAddressLatitude`). Do **not** use a global CLI `--skip-geocode` as the only control. Addresses with native lat/lng already set do not call the provider even without this flag.
+
+Parallel `--parallel-batch-size` defaults to **10**. Each record is saved on `CreateIndependentInstance()` (shared pool, own transaction stack), the same pattern MJAPI uses per request. Durable AfterCreate actions without a queue submitter fire after that instance's transaction depth is 0 — they must not nest in the caller's `EntityTransactionScope`.
 
 ### Pull Configuration Options
 
@@ -1522,10 +1529,10 @@ Records are automatically grouped into dependency levels:
 - **Level 1**: Records that depend only on Level 0 records
 - **Level 2**: Records that depend on Level 0 or Level 1 records
 
-Records within the same dependency level can be safely processed in parallel.
+Records within the same dependency level are processed in parallel. Each record uses `CreateIndependentInstance()` so nested `EntityTransactionScope`s cannot interleave on one provider. Default batch size is **10** (do not default to 1 to paper over a shared provider).
 
 ```bash
-# Default processing
+# Default processing (batch size 10, isolated providers)
 mj sync push
 
 # Process 20 records in parallel

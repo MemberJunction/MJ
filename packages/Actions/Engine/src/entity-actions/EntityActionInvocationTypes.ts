@@ -1,6 +1,6 @@
 import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionFilterEntity, MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
-import { BaseEntity, LogError, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, DatabaseProviderBase, LogError, Metadata, RunView } from "@memberjunction/core";
 import {
     ActionInvocationProvenance,
     ActionParam,
@@ -195,11 +195,13 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
     /**
      * The deferral that hands this run to the durable substrate, or `undefined` to execute normally.
      *
-     * Returns undefined for every case that must stay inline: a binding that did not opt in, a
-     * lifecycle event that participates in the save, or a host with no submitter registered. The
-     * last is a fallback rather than a refusal — `RunMode='Durable'` asks for the work to be harder
-     * to lose, so declining to run it where the durable path is unavailable would make the opt-in
-     * less reliable than leaving it off.
+     * Returns undefined for every case that must stay inline: a binding that did not opt in, or a
+     * lifecycle event that participates in the save (Validate / Before*).
+     *
+     * After* + Durable with no queue submitter (CLI `mj sync push`): do **not** nest in the
+     * caller's EntityTransactionScope. Defer until TransactionDepth is 0, then fire-and-forget.
+     * Dropping the work would make Durable worse than leaving it off; nesting it is what blew
+     * up cheese (LogActivity inside Person.Save on a shared provider).
      */
     protected BuildDurableDeferral(
         params: EntityActionInvocationParams,
@@ -215,7 +217,14 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
         }
         const submitter = DurableEntityActionRegistry.Instance.Submitter;
         if (!submitter) {
-            return undefined;
+            return async (runParams: RunActionParams): Promise<ActionResultSimple | null> => {
+                this.scheduleDurableLocalRun(params, action, runParams);
+                return {
+                    Success: true,
+                    ResultCode: 'DEFERRED_LOCAL',
+                    Message: 'Durable action deferred until the ambient transaction settles (no queue submitter in this process).',
+                };
+            };
         }
 
         return async (runParams: RunActionParams): Promise<ActionResultSimple | null> => {
@@ -252,6 +261,33 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
             );
             return null;
         };
+    }
+
+    /**
+     * CLI / no-queue Durable fallback: wait until the save's transaction has settled, then run
+     * the action without DeferExecution. Errors are logged; the originating Save already succeeded.
+     */
+    private scheduleDurableLocalRun(
+        params: EntityActionInvocationParams,
+        action: MJActionEntityExtended,
+        runParams: RunActionParams,
+    ): void {
+        const provider = params.EntityObject?.ProviderToUse as unknown as DatabaseProviderBase | undefined;
+        const tick = () => {
+            const depth = provider?.TransactionDepth ?? 0;
+            if (depth > 0) {
+                setImmediate(tick);
+                return;
+            }
+            const { DeferExecution: _d, ...rest } = runParams;
+            ActionEngineServer.Instance.RunAction(rest).catch((e: unknown) => {
+                LogError(
+                    `Durable entity action ${params.EntityAction.ID} (${action.Name}) failed after deferral: ` +
+                    `${e instanceof Error ? e.message : String(e)}`,
+                );
+            });
+        };
+        setImmediate(tick);
     }
 
     /**
