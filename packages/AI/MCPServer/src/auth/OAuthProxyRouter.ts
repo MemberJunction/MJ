@@ -12,6 +12,7 @@
  */
 
 import { Router, Request, Response, urlencoded, json } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import * as crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import {
@@ -76,8 +77,24 @@ function generateCodeChallenge(verifier: string): string {
  * app.use(oauthRouter);
  * ```
  */
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+const DEFAULT_RATE_LIMIT_MAX = 60;
+
 export function createOAuthProxyRouter(config: OAuthProxyConfig): Router {
   const router = Router();
+
+  // Every route here is public and performs authorization, token exchange or registration,
+  // so bound each client IP against guessing and resource exhaustion (same pattern as the
+  // magic-link and provider-catalog routers in @memberjunction/server).
+  router.use(
+    rateLimit({
+      windowMs: config.rateLimit?.windowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS,
+      limit: config.rateLimit?.limit ?? DEFAULT_RATE_LIMIT_MAX,
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+      message: 'Too many requests. Try again later.',
+    })
+  );
   const clientRegistry = getClientRegistry();
   const stateManager = getAuthorizationStateManager({ stateTtlMs: config.stateTtlMs });
 

@@ -7,6 +7,7 @@
  *    open redirector.
  * 2. Query parameters that Express parses to arrays (`?client_id=a&client_id=b`) are treated as
  *    missing rather than reaching string operations.
+ * 3. The router is rate-limited per client IP.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import type { Request, Response, Router } from 'express';
@@ -42,7 +43,11 @@ interface Outcome {
   body?: string;
 }
 
-function dispatchAuthorize(router: Router, query: Record<string, string | string[]>): Promise<Outcome> {
+function dispatchAuthorize(
+  router: Router,
+  query: Record<string, string | string[]>,
+  clientIp = '203.0.113.10'
+): Promise<Outcome> {
   return new Promise((resolve, reject) => {
     const out: Outcome = { statusCode: 200 };
     const res: Partial<Response> = {};
@@ -53,6 +58,7 @@ function dispatchAuthorize(router: Router, query: Record<string, string | string
     res.type = () => res as Response;
     res.set = () => res as Response;
     res.setHeader = () => res as Response;
+    res.getHeader = () => undefined;
     res.send = (body: string) => {
       out.body = body;
       resolve(out);
@@ -75,6 +81,7 @@ function dispatchAuthorize(router: Router, query: Record<string, string | string
       originalUrl: '/oauth/authorize',
       headers: {},
       query,
+      ip: clientIp,
     };
     router(req as Request, res as Response, (err?: unknown) => {
       reject(err instanceof Error ? err : new Error('request fell through the router'));
@@ -184,6 +191,23 @@ describe('OAuth proxy /oauth/authorize', () => {
       expect(out.redirectedTo).toBeUndefined();
       expect(out.statusCode).toBe(400);
       expect(out.body).toContain('redirect_uri is required');
+    });
+  });
+
+  describe('rate limiting', () => {
+    it('answers 429 once a client IP exceeds the configured limit', async () => {
+      const limited = createOAuthProxyRouter({ ...config, rateLimit: { windowMs: 60_000, limit: 2 } });
+      const query = { client_id: 'no-such-client', redirect_uri: EVIL_REDIRECT, response_type: 'code' };
+      const ip = '198.51.100.7';
+
+      expect((await dispatchAuthorize(limited, query, ip)).statusCode).toBe(400);
+      expect((await dispatchAuthorize(limited, query, ip)).statusCode).toBe(400);
+      const third = await dispatchAuthorize(limited, query, ip);
+      expect(third.statusCode).toBe(429);
+      expect(third.redirectedTo).toBeUndefined();
+
+      // A different client IP is not affected.
+      expect((await dispatchAuthorize(limited, query, '198.51.100.8')).statusCode).toBe(400);
     });
   });
 });
