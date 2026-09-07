@@ -10,7 +10,7 @@
  * 3. The router is rate-limited per client IP.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import type { Request, Response, Router } from 'express';
+import type { Application, Request, Response, Router } from 'express';
 
 // ScopeService reaches @memberjunction/server, whose config loader validates database settings
 // at import time. The authorize endpoint under test never consults scopes on its error paths.
@@ -82,6 +82,8 @@ function dispatchAuthorize(
       headers: {},
       query,
       ip: clientIp,
+      // express-rate-limit's trust-proxy validation reads app settings; give it an app with none.
+      app: { get: () => undefined } as Application,
     };
     router(req as Request, res as Response, (err?: unknown) => {
       reject(err instanceof Error ? err : new Error('request fell through the router'));
