@@ -189,6 +189,21 @@ export class SQLLogging {
         SQLLogging.sqlOutputDirFlag = undefined;
     }
 
+    /**
+     * Test hook — turns SQL capture off for the process so {@link LogSQLAndExecute} does not refuse
+     * to run against a stub connection with no CodeGen_Run file open. Returns a function that
+     * restores the previous setting; call it from `afterAll`.
+     */
+    public static suppressOutputForTests(): () => void {
+        const output = configInfo.SQLOutput;
+        if (!output) {
+            return () => undefined;
+        }
+        const previous = output.enabled;
+        output.enabled = false;
+        return () => { output.enabled = previous; };
+    }
+
      public static finishSQLLogging() {
         if (SQLLogging.SQLLoggingFilePath) {
             if (SQLLogging.getFileLength(SQLLogging.SQLLoggingFilePath) === 0) {
@@ -218,14 +233,11 @@ export class SQLLogging {
     }
 
     /**
-     * Adds the provided SQL to the log file for the run
-     * @param contents - the executable SQL to log
-     * @param description - a description of what is being logged that will be emitted and wrapped in comments
-     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
-     * @returns
-     */
-    /**
-     * Adds the provided SQL to the log file for the run
+     * Adds the provided SQL to the log file for the run.
+     *
+     * Two rules keep the file replayable as a migration: a unit that declares a batch-scoped T-SQL
+     * variable always ends its batch (see {@link declaresTSQLVariable}), and a unit that already ends
+     * in `GO` never receives a second separator. An empty `batchSeparator` (PostgreSQL) means none.
      * @param contents - the executable SQL to log
      * @param description - a description of what is being logged that will be emitted and wrapped in comments
      * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.

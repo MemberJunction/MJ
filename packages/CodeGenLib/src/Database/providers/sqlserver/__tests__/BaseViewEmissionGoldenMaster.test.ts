@@ -6,7 +6,7 @@ import type { SQLDialect } from '@memberjunction/sql-dialect';
 import { SQLServerCodeGenProvider } from '../SQLServerCodeGenProvider';
 import { SQLCodeGenBase } from '../../../sql_codegen';
 import type { CodeGenConnection, CodeGenQueryResult, CodeGenTransaction } from '../../../codeGenDatabaseProvider';
-import { configInfo } from '../../../../Config/config';
+import { SQLLogging } from '../../../../Misc/sql_logging';
 
 /**
  * Golden-master suite for BASE VIEW EMISSION through the full orchestrator path —
@@ -214,24 +214,17 @@ function installMetadata(entities: EntityInfo[]): void {
     Metadata.Provider = buildProviderStub(entities) as IMetadataProvider;
 }
 
-let sqlOutputWasEnabled: boolean | undefined;
+// These cases run the emitter against a recording connection with no CodeGen_Run file open.
+let restoreSQLOutput: () => void;
 
 beforeAll(() => {
     originalProvider = Metadata.Provider;
-    // SQLOutput.enabled defaults to true, and LogSQLAndExecute refuses to apply metadata SQL when
-    // logging is enabled but no CodeGen_Run file is open. These cases run the emitter against a
-    // recording connection with no log file, so turn the capture off for this file.
-    if (configInfo.SQLOutput) {
-        sqlOutputWasEnabled = configInfo.SQLOutput.enabled;
-        configInfo.SQLOutput.enabled = false;
-    }
+    restoreSQLOutput = SQLLogging.suppressOutputForTests();
 });
 
 afterAll(() => {
     Metadata.Provider = originalProvider;
-    if (configInfo.SQLOutput && sqlOutputWasEnabled !== undefined) {
-        configInfo.SQLOutput.enabled = sqlOutputWasEnabled;
-    }
+    restoreSQLOutput();
 });
 
 beforeEach(() => {

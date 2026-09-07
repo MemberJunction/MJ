@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 
 // vi.mock factories are hoisted above every import, so anything they reference must be hoisted too.
@@ -49,12 +48,9 @@ describe('SQLLogging batch separators in the replayable log', () => {
     const logPath = path.join(tmpDir, logFile);
 
     beforeEach(() => {
+        // appendToFile is false in the mocked config, so init truncates the file for each test.
+        SQLLogging.resetForTests();
         SQLLogging.initSQLLogging();
-        fs.writeFileSync(logPath, '');
-    });
-
-    afterEach(() => {
-        fs.rmSync(logPath, { force: true });
     });
 
     afterAll(() => {

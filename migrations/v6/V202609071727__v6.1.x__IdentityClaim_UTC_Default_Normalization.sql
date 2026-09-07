@@ -21,13 +21,12 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 JOIN sys.columns c ON t.object_id = c.object_id
 JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaimType' AND c.name = '__mj_CreatedAt';
-IF @constraintName IS NOT NULL AND REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
+IF @constraintName IS NULL OR REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
 BEGIN
-    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
-    SET @constraintName = NULL;
-END
-IF @constraintName IS NULL
+    IF @constraintName IS NOT NULL
+        EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] ADD CONSTRAINT [DF___mj_IdentityClaimType___mj_CreatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_CreatedAt];
+END
 GO
 
 DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX);
@@ -37,13 +36,12 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 JOIN sys.columns c ON t.object_id = c.object_id
 JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaimType' AND c.name = '__mj_UpdatedAt';
-IF @constraintName IS NOT NULL AND REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
+IF @constraintName IS NULL OR REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
 BEGIN
-    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
-    SET @constraintName = NULL;
-END
-IF @constraintName IS NULL
+    IF @constraintName IS NOT NULL
+        EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] ADD CONSTRAINT [DF___mj_IdentityClaimType___mj_UpdatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_UpdatedAt];
+END
 GO
 
 DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX);
@@ -53,13 +51,12 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 JOIN sys.columns c ON t.object_id = c.object_id
 JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaim' AND c.name = '__mj_CreatedAt';
-IF @constraintName IS NOT NULL AND REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
+IF @constraintName IS NULL OR REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
 BEGIN
-    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
-    SET @constraintName = NULL;
-END
-IF @constraintName IS NULL
+    IF @constraintName IS NOT NULL
+        EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] ADD CONSTRAINT [DF___mj_IdentityClaim___mj_CreatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_CreatedAt];
+END
 GO
 
 DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX);
@@ -69,11 +66,10 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 JOIN sys.columns c ON t.object_id = c.object_id
 JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaim' AND c.name = '__mj_UpdatedAt';
-IF @constraintName IS NOT NULL AND REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
+IF @constraintName IS NULL OR REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
 BEGIN
-    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
-    SET @constraintName = NULL;
-END
-IF @constraintName IS NULL
+    IF @constraintName IS NOT NULL
+        EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] ADD CONSTRAINT [DF___mj_IdentityClaim___mj_UpdatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_UpdatedAt];
+END
 GO
