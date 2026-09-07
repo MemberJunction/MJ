@@ -246,6 +246,18 @@ export interface OAuthProxyConfig {
    * @default false
    */
   enableConsentScreen?: boolean;
+  /**
+   * Per-client-IP rate limit applied to every OAuth proxy route. The routes are public and
+   * perform authorization, token exchange and dynamic registration, so they must be bounded
+   * against guessing and resource exhaustion.
+   * @default 60 requests per 60 seconds
+   */
+  rateLimit?: {
+    /** Window length in milliseconds. @default 60000 */
+    windowMs?: number;
+    /** Maximum requests per client IP per window. @default 60 */
+    limit?: number;
+  };
 }
 
 /**
