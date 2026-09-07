@@ -15,12 +15,20 @@ name: Build and publish new package versions
 #                 detection, registry verification. Its dist-tag is decided per
 #                 run — `latest` when this line already owns it, else lts-<line>.
 #
-# EXACTLY THREE INVOCATIONS PUBLISH ANYTHING. Every other combination of event,
+#   Candidate cut — dispatch FROM next with cut_line=X.Y + confirm_branch=lts/X.Y.
+#                 Job: cut-candidate. Exits Edge pre-mode, versions to X.Y.0, builds,
+#                 publishes under lts-X.Y, creates lts/X.Y at the tag, re-enters
+#                 pre-mode so Edge resumes at X.(Y+1).0-edge.0. The logic lives in
+#                 ci/candidate-cut.mjs; the ledger entry for the line is a reviewed
+#                 PR that must merge BEFORE this is dispatched.
+#
+# EXACTLY FOUR INVOCATIONS PUBLISH ANYTHING. Every other combination of event,
 # ref and inputs runs nothing at all, and dispatch-guard turns the run red:
 #
 #   1. push to main                                        -> Edge
 #   2. dispatch, ref main, confirm_branch=main, no line    -> Edge
 #   3. dispatch, line_branch=lts/N, confirm_branch=lts/N   -> that line
+#   4. dispatch, ref next, cut_line=X.Y, confirm_branch=lts/X.Y -> cut candidate X.Y.0
 #
 # Invocation 2 exists because a bare dispatch with empty inputs used to run the
 # real Edge publish: `changeset version` consumes whatever changesets are sitting
@@ -54,6 +62,13 @@ on:
         default: ''
       confirm_branch:
         description: 'Double-entry confirmation, required for every dispatch: type the line branch again for a line release, or "main" for a manual Edge publish (which must be dispatched from main).'
+        required: false
+        default: ''
+      # Candidate cut (process doc 5.2 rule 1). Names the line the Edge stream on `next`
+      # produces; ci/candidate-cut.mjs refuses any other value. Confirmed by typing the
+      # line BRANCH (lts/X.Y) into confirm_branch, the same double entry as a line release.
+      cut_line:
+        description: 'Candidate cut: the line to cut from next (e.g. 6.1). Leave EMPTY for anything else. Requires confirm_branch=lts/<cut_line> and the ref left at next.'
         required: false
         default: ''
       # dbImpact recorded in release-lines.json for a LINE release (process doc §12).
@@ -95,12 +110,37 @@ jobs:
     runs-on: ubuntu-latest
     env:
       LINE: ${{ github.event.inputs.line_branch }}
+      CUT: ${{ github.event.inputs.cut_line }}
       CONFIRM: ${{ github.event.inputs.confirm_branch }}
       REF: ${{ github.ref_name }}
     steps:
-      - name: A dispatch must be a confirmed Edge publish or a confirmed line release
+      - name: A dispatch must be a confirmed Edge publish, line release or candidate cut
         run: |
           set -euo pipefail
+
+          # Invocation 4 — candidate cut. Only from next, only with the line branch
+          # typed as confirmation, never together with line_branch. Re-checked inside
+          # cut-candidate, where a mismatch fails loudly rather than skips.
+          if [ -n "$CUT" ]; then
+            if [ -n "$LINE" ]; then
+              echo "::error::cut_line='$CUT' and line_branch='$LINE' were both given; a dispatch is one invocation. Nothing was published."
+              exit 1
+            fi
+            if ! [[ "$CUT" =~ ^[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::cut_line='$CUT' is not a line. Expected X.Y (e.g. 6.1). Nothing was published."
+              exit 1
+            fi
+            if [ "$CONFIRM" != "lts/$CUT" ]; then
+              echo "::error::A candidate cut of $CUT needs confirm_branch='lts/$CUT' (got '$CONFIRM'). Nothing was published."
+              exit 1
+            fi
+            if [ "$REF" != 'next' ]; then
+              echo "::error::A candidate cut must be dispatched from next, but this run's ref is '$REF'. Nothing was published."
+              exit 1
+            fi
+            echo "::notice::Confirmed candidate cut of line $CUT from next — the Edge and line jobs are skipped."
+            exit 0
+          fi
 
           # Invocation 2 — manual Edge publish. Only from main: every step of
           # that path is main-gated, and the changesets it consumes are main's.
@@ -124,7 +164,7 @@ jobs:
             exit 0
           fi
 
-          echo "::error::This dispatch matches no valid invocation (line_branch='$LINE', confirm_branch='$CONFIRM', ref='$REF') and NOTHING was published. The three ways to publish are: (1) push to main -> Edge release; (2) dispatch from main with confirm_branch=main and line_branch empty -> manual Edge release; (3) dispatch with line_branch=lts/N and confirm_branch=lts/N -> that line's release. An empty dispatch is refused on purpose: it would publish whatever changesets happen to be sitting on the ref."
+          echo "::error::This dispatch matches no valid invocation (line_branch='$LINE', cut_line='$CUT', confirm_branch='$CONFIRM', ref='$REF') and NOTHING was published. The four ways to publish are: (1) push to main -> Edge release; (2) dispatch from main with confirm_branch=main and line_branch empty -> manual Edge release; (3) dispatch with line_branch=lts/N and confirm_branch=lts/N -> that line's release; (4) dispatch from next with cut_line=X.Y and confirm_branch=lts/X.Y -> cut the X.Y.0 candidate. An empty dispatch is refused on purpose: it would publish whatever changesets happen to be sitting on the ref."
           exit 1
 
   # Edge path. Unconditional on `push` — that trigger is the Edge release and its
@@ -534,7 +574,14 @@ jobs:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           set -euo pipefail
-          if ! PREV=$(git describe --tags --abbrev=0 "${VERSION}^"); then
+          # --match 'v*' is load-bearing: `changeset publish` leaves a per-package tag
+          # (@memberjunction/<pkg>@<version>) on the release commit, and a bare describe
+          # of ${VERSION}^ returns one of THOSE, i.e. this same release. The range then
+          # collapses to the post-release generated-files commit and every release
+          # classifies as dbImpact `none`. 6.1.0-edge.5 shipped four migrations and was
+          # recorded as `none` this way (2026-09-02); corrected by hand in the same PR
+          # that added this flag.
+          if ! PREV=$(git describe --tags --abbrev=0 --match 'v*' "${VERSION}^"); then
             echo "::error::cannot resolve the release tag preceding ${VERSION}; record ${VERSION#v} in release-lines.json by hand"
             exit 1
           fi
@@ -1152,7 +1199,14 @@ jobs:
           DB_IMPACT: ${{ github.event.inputs.db_impact }}
         run: |
           set -euo pipefail
-          if ! PREV=$(git describe --tags --abbrev=0 "${VERSION}^"); then
+          # --match 'v*' is load-bearing: `changeset publish` leaves a per-package tag
+          # (@memberjunction/<pkg>@<version>) on the release commit, and a bare describe
+          # of ${VERSION}^ returns one of THOSE, i.e. this same release. The range then
+          # collapses to the post-release generated-files commit and every release
+          # classifies as dbImpact `none`. 6.1.0-edge.5 shipped four migrations and was
+          # recorded as `none` this way (2026-09-02); corrected by hand in the same PR
+          # that added this flag.
+          if ! PREV=$(git describe --tags --abbrev=0 --match 'v*' "${VERSION}^"); then
             echo "::error::cannot resolve the release tag preceding ${VERSION}; record ${VERSION#v} in release-lines.json by hand"
             exit 1
           fi
@@ -1172,3 +1226,271 @@ jobs:
           git push origin HEAD:next
 
 
+  # ---------------------------------------------------------------------------
+  # LTS candidate cut (plans/lts-process.md 5.2 rule 1; runbook operation 2; LTS
+  # tracker E.3). Invocation 4: dispatch from `next` with cut_line=6.1 and
+  # confirm_branch=lts/6.1.
+  #
+  # Why a job and not the runbook's hand steps: rehearsed 2026-09-03 on a scratch clone,
+  # the hand version cannot run. publish-lts refuses a branch with zero changesets, and
+  # the candidate branch has zero by construction (the version step on next consumed
+  # them); the ledger append throws on a line with no entry; and the seed changeset that
+  # keeps Edge off the new line's patch tuple is load-bearing (without it the first
+  # patch-only merge versions Edge to 6.1.1-edge.0). This job does the whole dance in
+  # one run, ordered so that NOTHING IS PUSHED UNTIL THE PACKAGES ARE ON NPM:
+  #
+  #   preflight -> pre exit + version + lockfile (local commits) -> build -> publish
+  #   6.1.0 under lts-6.1 -> commit generated files -> tag v6.1.0 -> re-enter pre-mode
+  #   + seed (local) -> push next (merge-and-retry) -> push tag, create lts/6.1 at it
+  #   -> GitHub Release (never latest) -> ledger append -> docs + release notes.
+  #
+  # A failure before the publish step leaves next, npm and GitHub exactly as they were:
+  # re-dispatch. A failure after it is "released, not yet recorded", the same posture as
+  # every other release path here: finish the remaining steps by hand, do not re-run.
+  #
+  # Preconditions the job checks and will not create for you:
+  #   - release-lines.json already has lines["6.1"] as a candidate with a candidateDate.
+  #     Status fields are release-lines-guard + CODEOWNERS territory (process doc 8), so
+  #     that entry arrives by reviewed PR; this job appends only the mechanical fields.
+  #   - lts/6.1, tag v6.1.0 and @memberjunction/core@6.1.0 do not exist yet.
+  #   - next is in Edge pre-mode with pending changesets.
+  # The lts/** branch ruleset is a repo setting an admin creates once; the job cannot.
+  # ---------------------------------------------------------------------------
+  cut-candidate:
+    name: Cut LTS candidate ${{ github.event.inputs.cut_line }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.cut_line != '' }}
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      id-token: write
+      actions: write
+    runs-on: ubuntu-latest
+    env:
+      CUT: ${{ github.event.inputs.cut_line }}
+      CONFIRM: ${{ github.event.inputs.confirm_branch }}
+    steps:
+      - name: Guard - cut_line must be X.Y, confirmed as lts/X.Y, dispatched from next, alone
+        run: |
+          set -euo pipefail
+          if ! [[ "$CUT" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::cut_line='$CUT' must be X.Y (e.g. 6.1)."
+            exit 1
+          fi
+          if [ "$CONFIRM" != "lts/$CUT" ]; then
+            echo "::error::Confirmation mismatch: cut_line='$CUT' needs confirm_branch='lts/$CUT', got '$CONFIRM'. Re-dispatch."
+            exit 1
+          fi
+          if [ "${{ github.ref_name }}" != 'next' ]; then
+            echo "::error::A candidate cut is dispatched from next (this run's ref is '${{ github.ref_name }}')."
+            exit 1
+          fi
+          if [ -n "${{ github.event.inputs.line_branch }}" ]; then
+            echo "::error::cut_line and line_branch are mutually exclusive."
+            exit 1
+          fi
+          echo "::notice::Cutting candidate line $CUT from next (workflow file from ${{ github.ref_name }})"
+
+      - name: Checkout next
+        uses: actions/checkout@v4
+        with:
+          ref: next
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate all packages exist on npm
+        run: ./.github/scripts/validate-npm-packages.sh
+
+      - name: Validate package repository.url for npm provenance
+        run: ./.github/scripts/validate-package-repository.sh
+
+      - name: Validate migration filenames
+        run: ./.github/scripts/validate-migration-filenames.sh
+
+      - name: Set up git credentials
+        env:
+          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
+
+      # Refuses unless: HEAD is next in Edge pre-mode with pending changesets, the stream
+      # produces the requested line, the ledger already carries the candidate entry, and
+      # neither the branch, the tag nor the npm version exists. Emits LINE/VERSION/TAG/
+      # BRANCH/NPMTAG/NEXTLINE for the steps below.
+      - name: Preflight
+        id: cut
+        run: node ci/candidate-cut.mjs preflight --line "$CUT"
+
+      # Informational: how far the tip is from the last Edge build. The candidate is the
+      # tip by design (runbook operation 2), but a large unpublished batch is worth seeing
+      # in the log before the publish step makes it permanent.
+      - name: Report the distance from the last Edge build
+        run: |
+          set -euo pipefail
+          LAST_EDGE=$(git describe --tags --abbrev=0 --match 'v*-edge.*' HEAD)
+          COUNT=$(git rev-list --count "$LAST_EDGE..HEAD")
+          echo "::notice::$COUNT commits on next since $LAST_EDGE (npm edge is $(npm view @memberjunction/core dist-tags.edge))"
+
+      - name: Exit Edge pre-mode and version to ${{ steps.cut.outputs.VERSION }}
+        run: node ci/candidate-cut.mjs version --line "$CUT"
+
+      - name: Build packages
+        run: pnpm run build
+
+      - name: Stage per-package LICENSE files
+        run: node .github/scripts/stage-package-licenses.mjs
+
+      # `latest` is read BEFORE the publish so the verification below can prove it did not
+      # move. A candidate is never latest; certification promotes (ci/dist-tag-all.mjs).
+      - name: Publish ${{ steps.cut.outputs.VERSION }} to npm under ${{ steps.cut.outputs.NPMTAG }}
+        id: publish
+        env:
+          NPM_TOKEN: ''
+          NPM_TAG: ${{ steps.cut.outputs.NPMTAG }}
+        run: |
+          set -euo pipefail
+          PREV_LATEST=$(npm view @memberjunction/core dist-tags.latest)
+          echo "PREV_LATEST=$PREV_LATEST" >> "$GITHUB_OUTPUT"
+          echo "::notice::Before publish: latest=$PREV_LATEST"
+          pnpm exec changeset publish --tag "$NPM_TAG" 2>&1 | tee /tmp/publish.log
+          if ! grep -qE 'New tag:|Packages published|already published' /tmp/publish.log; then
+            echo "::error::changeset publish produced no evidence of a publish. Refusing to report success."
+            exit 1
+          fi
+
+      - name: Verify the publish reached npm and latest did not move
+        env:
+          VERSION: ${{ steps.cut.outputs.VERSION }}
+          NPM_TAG: ${{ steps.cut.outputs.NPMTAG }}
+          PREV_LATEST: ${{ steps.publish.outputs.PREV_LATEST }}
+        run: |
+          set -euo pipefail
+          AT_TAG=''
+          for i in 1 2 3 4 5; do
+            AT_TAG=$(npm view "@memberjunction/core@$NPM_TAG" version 2>/dev/null || true)
+            [ "$AT_TAG" = "$VERSION" ] && break
+            echo "dist-tag '$NPM_TAG' is at '${AT_TAG:-<unset>}', want $VERSION. Retry $i/5 in 15s"
+            sleep 15
+          done
+          if [ "$AT_TAG" != "$VERSION" ]; then
+            echo "::error::npm dist-tag '$NPM_TAG' never reached $VERSION. The publish did not happen (or failed before tagging). Do not trust this run's green steps."
+            exit 1
+          fi
+          NOW_LATEST=$(npm view @memberjunction/core dist-tags.latest)
+          if [ "$NOW_LATEST" != "$PREV_LATEST" ]; then
+            echo "::error::npm 'latest' moved during the candidate publish ($PREV_LATEST -> $NOW_LATEST). Investigate immediately; restore with ci/dist-tag-all.mjs from the certified tag."
+            exit 1
+          fi
+          echo "::notice::Verified: @memberjunction/core@$VERSION is live under '$NPM_TAG'; latest unmoved at $PREV_LATEST"
+
+      # From here on the packages are on npm. Everything below records that fact.
+      - name: Commit post-release generated files and tag ${{ steps.cut.outputs.TAG }}
+        env:
+          TAG: ${{ steps.cut.outputs.TAG }}
+        run: |
+          set -euo pipefail
+          git add ./*
+          if [ -n "$(git diff --cached --name-only)" ]; then
+            git commit -m "chore: post-release generated files [skip ci]"
+          fi
+          git tag "$TAG"
+          echo "::notice::Tagged $TAG at $(git rev-parse --short HEAD)"
+
+      - name: Re-enter Edge pre-mode and open the ${{ steps.cut.outputs.NEXTLINE }} stream
+        run: node ci/candidate-cut.mjs reenter --line "$CUT"
+
+      # next kept merging during the build. push-next merges origin/next in and retries
+      # (bounded); only pnpm-lock.yaml may auto-resolve. Never force.
+      - name: Push next
+        run: node ci/candidate-cut.mjs push-next
+
+      - name: Push the tag and create ${{ steps.cut.outputs.BRANCH }} at it
+        env:
+          TAG: ${{ steps.cut.outputs.TAG }}
+          BRANCH: ${{ steps.cut.outputs.BRANCH }}
+        run: |
+          set -euo pipefail
+          git push origin "refs/tags/$TAG"
+          git push origin "refs/tags/$TAG:refs/heads/$BRANCH"
+          echo "::notice::$BRANCH created at $TAG"
+
+      - name: Create GitHub Release (never latest; certification promotes)
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          TAG: ${{ steps.cut.outputs.TAG }}
+          BRANCH: ${{ steps.cut.outputs.BRANCH }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - skipping creation"
+            exit 0
+          fi
+          gh release create "$TAG" --title "$TAG (LTS candidate)" --generate-notes --latest=false \
+            --target "$BRANCH" --repo "${{ github.repository }}"
+
+      # Mechanical fields only: lines[X.Y].newest and lines[X.Y].releases[X.Y.0]. The
+      # candidate entry itself was the reviewed precondition. --match 'v*' keeps
+      # describe off the per-package tags changeset publish leaves on the release commit.
+      - name: Record the candidate in release-lines.json
+        env:
+          VERSION: ${{ steps.cut.outputs.VERSION }}
+          TAG: ${{ steps.cut.outputs.TAG }}
+        run: |
+          set -euo pipefail
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' "${TAG}^")
+          echo "::notice::classifying dbImpact over ${PREV}..${TAG}"
+          git fetch origin next
+          git checkout -f -B record-release-lines origin/next
+          node ci/append-release-line.mjs --version "$VERSION" --since "$PREV" --until "$TAG"
+          node ci/validate-release-lines.mjs --base origin/next --mode push
+          git add release-lines.json
+          git commit -m "chore: record $VERSION in release-lines.json [skip ci]"
+          git push origin HEAD:next
+
+      - name: Deploy docs for the new line
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref next
+
+      - name: Start the release notes for the candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.cut.outputs.VERSION }}
+          BRANCH: ${{ steps.cut.outputs.BRANCH }}
+        run: |
+          set -euo pipefail
+          gh workflow run generate-release-notes.yml --repo "$GITHUB_REPOSITORY" --ref next \
+            -f version="$VERSION" -f line_branch="$BRANCH"
+
+      - name: Summary
+        env:
+          VERSION: ${{ steps.cut.outputs.VERSION }}
+          TAG: ${{ steps.cut.outputs.TAG }}
+          BRANCH: ${{ steps.cut.outputs.BRANCH }}
+          NPM_TAG: ${{ steps.cut.outputs.NPMTAG }}
+          NEXT_LINE: ${{ steps.cut.outputs.NEXTLINE }}
+        run: |
+          {
+            echo "## Candidate $VERSION cut"
+            echo
+            echo "- npm: \`@memberjunction/*@$VERSION\` under dist-tag \`$NPM_TAG\` (latest unmoved)"
+            echo "- git: tag \`$TAG\`, branch \`$BRANCH\` created at it"
+            echo "- next: pre-mode re-entered, Edge resumes at \`$NEXT_LINE.0-edge.0\`"
+            echo "- ledger: \`lines[\"${VERSION%.0}\"].newest = $VERSION\` recorded on next"
+            echo
+            echo "Next: open the certification tracking issue; gates run against $VERSION on \`$BRANCH\`."
+          } >> "$GITHUB_STEP_SUMMARY"

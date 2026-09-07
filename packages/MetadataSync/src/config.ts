@@ -292,6 +292,19 @@ export interface EntityConfig {
     ignoreVirtualFields?: boolean;
   };
   /**
+   * Push-specific options for this entity directory. Applied only on `mj sync push`
+   * (not pull). Add new per-save / per-entity push knobs here rather than as global
+   * CLI flags so each entity can opt in independently.
+   */
+  push?: {
+    /**
+     * Maps to `EntitySaveOptions.SkipGeoCoding` so sample data with pre-filled
+     * lat/lng (or display-only geo entities) does not call the geocoding provider.
+     * Per-entity, not a global CLI kill switch.
+     */
+    skipGeoCoding?: boolean;
+  };
+  /**
    * Whether to emit __mj_sync_notes in record files during push operations.
    * When enabled, resolution information for @lookup and @parent references is written to files.
    * If not specified, inherits from root .mj-sync.json. Defaults to false if not set anywhere.

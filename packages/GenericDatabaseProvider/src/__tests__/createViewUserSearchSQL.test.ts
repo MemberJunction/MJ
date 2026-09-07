@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 import {
     SaveSQLResult,
     DeleteSQLResult,
@@ -57,7 +57,7 @@ vi.mock('@memberjunction/encryption', () => ({
 // Minimal concrete subclass that exposes the protected method we want to test.
 // Patterned after FieldSelectionTestProvider in runViewFieldSelection.test.ts.
 // ---------------------------------------------------------------------------
-class SearchSQLTestProvider extends GenericDatabaseProvider {
+class SearchSQLTestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 
