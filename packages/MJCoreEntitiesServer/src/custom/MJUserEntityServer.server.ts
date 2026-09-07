@@ -80,6 +80,19 @@ import { MJUserEntity } from '@memberjunction/core-entities';
  *      invariant is what makes that true. `Name` is the login identifier — auto-provisioning sets
  *      `Name = email` — while `FirstName` / `LastName` / `Title` are the display fields and stay
  *      freely editable.
+ *      `Email` is the ladder's OTHER rung (`principals.ts:141`) with the IDENTICAL lack of a `Type`
+ *      filter, and is deliberately left mutable here — not overlooked. Two things narrow it: (a)
+ *      `MJ: Users.Email` carries the database's `UQ_User_Email` unique constraint, so redirecting
+ *      the Email rung to your own row requires the configured candidate to match NO active user at
+ *      all — already the misconfiguration case this file's docs (and `resolvePrincipalFrom`'s own
+ *      per-redeem logging) already surface loudly, not a quiet success path; and (b) even granting
+ *      that misconfiguration, invariants 1 and 3 mean the payoff is no longer elevation: whatever
+ *      row a provisioning path resolves its principal to, THIS guard still checks that resolved
+ *      principal's actual `Type` before permitting the write it is attempting, so a non-Owner who
+ *      gets themselves matched by the Email rung still cannot create or promote anything through
+ *      it — the provisioning operation that would have run as them instead fails CLOSED. Freezing
+ *      `Email` too would add friction to an already-narrow, already-loud misconfiguration path
+ *      without closing any route that is still open.
  *   5. **Deleting a `MJ: Users` row at all is refused** (see the `Delete()` override below). MJ
  *      deactivates users via `IsActive`; it does not delete them. An unguarded delete would let a
  *      non-Owner remove ANY account — Owners included, which destroys the very accounts every
@@ -158,10 +171,15 @@ export class MJUserEntityServer extends MJUserEntity {
      * to the same principal-redirection invariant 4 blocks on UPDATE.
      */
     private validateCreateRefused(result: ValidationResult): void {
+        // Whole-record refusal, not a field-value problem — no field in this repo's convention
+        // exists for that (surveyed every ValidationErrorInfo call site under custom/*.server.ts;
+        // all attribute to the specific field the value is wrong for). Attributing to 'Type' would
+        // make a form highlight Type for a refusal that has nothing to do with its value; 'ID' is
+        // the closer fit — it is the field that identifies WHICH record is being refused.
         result.Errors.push(new ValidationErrorInfo(
-            'Type',
+            'ID',
             'Only an Owner may create a user record.',
-            this.Type,
+            this.ID,
             ValidationErrorType.Failure
         ));
     }
@@ -223,6 +241,9 @@ export class MJUserEntityServer extends MJUserEntity {
      * capability name, not a display name. Non-Owner creation (where auto-provisioning legitimately
      * sets `Name = email`) is already refused entirely by `validateCreateRefused`, so this method
      * only runs on updates.
+     *
+     * `Email` is deliberately NOT frozen alongside `Name` — see the class docstring's invariant 4
+     * paragraph for why the ladder's other rung doesn't need the same treatment.
      */
     private validateNameImmutable(result: ValidationResult): void {
         if (!(this.GetFieldByName('Name')?.Dirty ?? false)) {
