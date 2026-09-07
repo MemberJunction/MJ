@@ -67,10 +67,14 @@ content-free) and a **content** package (private, never published) — and there
   registry as a side effect.
 - **The loading seam**: the published `mj` CLI cannot depend on the private package, so
   `mj test run` / `mj test suite` side-effect-import it at startup via the repo root
-  `mj.config.cjs` — `testing: { checkModules: ['@memberjunction/integration-test-suite'] }` —
-  after the instrumented-cache install and before provider setup. Ad-hoc override:
-  `--checks-module <specifier>`. **External adopters point `checkModules` at their own check
-  packages** — that is the extension point.
+  `mj.config.cjs` — `testing: { checkModules: [<absolute path to the suite's dist/index.js>] }`,
+  built with `path.join(__dirname, …)` — after the instrumented-cache install and before
+  provider setup. In-repo this must be an **absolute path, not the bare package name**: nothing
+  creates a workspace-root `node_modules` link for it, and a failed load is *collected, not
+  thrown*, so a bare specifier degrades silently to `Unknown integration check bundle`.
+  Ad-hoc override: `--checks-module <specifier>`. **External adopters point `checkModules` at
+  their own check packages** (a bare name resolves fine from a normal install) — that is the
+  extension point.
 - **Execution is metadata-driven**: a `MJ: Test Types` row named **`Integration Test`** points
   at `DriverClass: "IntegrationTestDriver"`; `MJ: Tests` rows select bundles via their
   `Configuration` JSON; suites group tests; results persist as `MJ: Test Runs` rows browsable
@@ -358,8 +362,8 @@ lives in the normal `metadata/` tree (an inert type definition), so it lands wit
 users/roles/permissions live under the optional sibling root:
 
 ```bash
-npx mj sync push --dir=metadata                             # includes the Integration Test TestType
-npx mj sync push --dir=metadata-optional/integration-test   # IT tests + suite + RLS fixtures
+pnpm mj sync push --dir=metadata                             # includes the Integration Test TestType
+pnpm mj sync push --dir=metadata-optional/integration-test   # IT tests + suite + RLS fixtures
 ```
 
 Two more things are load-bearing on every run:
@@ -367,16 +371,19 @@ Two more things are load-bearing on every run:
 - **`MJ_INTEGRATION_TEST=1`** makes the CLI install the instrumented cache *first-caller*
   before its own provider setup (otherwise counters silently see nothing) and forces the suite
   serial.
-- **Use the workspace-local `mj`** (`./node_modules/.bin/mj`; `npm run` scripts and `npx mj`
-  from the repo root resolve it automatically). A globally-installed `mj` cannot load the
-  private suite package, so every bundle dispatch fails with
-  `Unknown integration check bundle`.
+- **Use the workspace CLI, not a global `mj`.** From the repo root that is `pnpm mj …` (the
+  root `mj` script) or `node packages/MJCLI/bin/run.js …` directly. There is deliberately no
+  workspace-root `node_modules/.bin/mj` — the root devDependency that created it fed turbo's
+  `hashOfInternalDependencies` and invalidated all ~310 packages on every edit (PR #3940) — so
+  `npx mj` no longer resolves in-repo and would fall through to an **unrelated** registry
+  package of the same name. A globally-installed `mj` resolves but cannot load the private
+  suite package, so every bundle dispatch fails with `Unknown integration check bundle`.
 
 The bundles themselves reach the CLI through the **`checkModules` seam** (§2.1): the repo root
-`mj.config.cjs` carries `testing: { checkModules: ['@memberjunction/integration-test-suite'] }`,
-and the suite package must be **built** (`npm run build` covers it). If `mj test` reports an
-unknown bundle, check — in order — metadata seeded, suite package built, `checkModules`
-configured.
+`mj.config.cjs` points it at the suite's built `dist/index.js` by absolute path, and the suite
+package must therefore be **built** (`pnpm run build` covers it) — the path is resolved at load
+time, so an unbuilt suite fails the same way a missing one does. If `mj test` reports an unknown
+bundle, check — in order — metadata seeded, suite package built, `checkModules` configured.
 
 ### 3.2 The whole tier
 
@@ -386,7 +393,7 @@ RUN_MUTATION_TESTS=1 npm run test:integration # + mutation-gated checks inside t
 ```
 
 `npm run test:integration` is exactly
-`MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"` — the suite runs
+`MJ_INTEGRATION_TEST=1 node packages/MJCLI/bin/run.js test suite "Integration Tests — Deterministic"` — the suite runs
 serially, one `MJ: Test Runs` row per test, one exit code for CI.
 
 ### 3.3 One test / one suite — `mj test`
@@ -395,20 +402,20 @@ The per-bundle iteration loop is `mj test run` with the bundle's IT record name:
 
 ```bash
 # One test (the old "run one suite's dispatcher" loop)
-MJ_INTEGRATION_TEST=1 npx mj test run --name "IT01 - Server RunView Cache Integrity"
+MJ_INTEGRATION_TEST=1 pnpm mj test run --name "IT01 - Server RunView Cache Integrity"
 
 # A whole suite (runs serially under MJ_INTEGRATION_TEST=1 regardless of --parallel)
-MJ_INTEGRATION_TEST=1 npx mj test suite --name "Integration Tests — Deterministic"
+MJ_INTEGRATION_TEST=1 pnpm mj test suite --name "Integration Tests — Deterministic"
 
 # The live-model suite (also needs the tier gate)
-RUN_AGENT_TESTS=1 MJ_INTEGRATION_TEST=1 npx mj test suite --name "Integration Tests — Live Model"
+RUN_AGENT_TESTS=1 MJ_INTEGRATION_TEST=1 pnpm mj test suite --name "Integration Tests — Live Model"
 
 # Client-transport tests — start MJAPI first: (cd packages/MJAPI && npm run start)
-MJ_INTEGRATION_TEST=1 npx mj test run --name "IT03 - Client GraphQL Cache Integrity"
+MJ_INTEGRATION_TEST=1 pnpm mj test run --name "IT03 - Client GraphQL Cache Integrity"
 
 # Validate definitions without executing (driver resolvable, Configuration parses)
-npx mj test validate --type "Integration Test"
-npx mj test run --name "IT01 - Server RunView Cache Integrity" --dry-run
+pnpm mj test validate --type "Integration Test"
+pnpm mj test run --name "IT01 - Server RunView Cache Integrity" --dry-run
 ```
 
 Useful extras: `mj test list`, `mj test history`, `mj test suite --flaky-check 3` (runs each
@@ -593,7 +600,7 @@ you flip). Update the bundle's row in the count table in
 
 ```bash
 cd packages/TestingFramework/integration-test-suite && npm run build && npm run test
-MJ_INTEGRATION_TEST=1 npx mj test run --name "IT07 - Dataset Cache (DatasetCache category)"
+MJ_INTEGRATION_TEST=1 pnpm mj test run --name "IT07 - Dataset Cache (DatasetCache category)"
 ```
 
 ### Method 2 — create a new bundle (new coverage area)
@@ -687,8 +694,8 @@ append to the right child suite's `MJ: Test Suite Tests`:
 **7. Push and run:**
 
 ```bash
-npx mj sync push --dir=metadata-optional/integration-test
-MJ_INTEGRATION_TEST=1 npx mj test run --name "IT31 - My Area"
+pnpm mj sync push --dir=metadata-optional/integration-test
+MJ_INTEGRATION_TEST=1 pnpm mj test run --name "IT31 - My Area"
 ```
 
 No dispatcher, no aggregator registration — the metadata record IS the entry point.
@@ -725,7 +732,7 @@ TypeScript:
 - **Gate specially** with `"requiresEnv": "MY_FLAG"` — the driver then skip-passes unless
   `MY_FLAG=1`, overriding the tier-derived gate.
 
-Push with `npx mj sync push --dir=metadata-optional/integration-test` and run via `mj test`.
+Push with `pnpm mj sync push --dir=metadata-optional/integration-test` and run via `mj test`.
 
 ### Method 4 — standalone rig
 

@@ -11,14 +11,14 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -1007,6 +1007,15 @@ export class BaseAgent {
         }
         return merged;
     }
+
+    /**
+     * Skill IDs that entered this run from the conversation's persisted set (`MJ: Conversation
+     * Skills`, Status Active) rather than from the caller's explicit request. Two uses: a gate refusing
+     * one of these gets no system note (the user did not mention it this turn), and re-activating one
+     * skips the persistence upsert — its row is known to be Active already, so the steady-state turn
+     * of a conversation in a mode costs one read, not one per skill. See {@link preActivateRequestedSkills}.
+     */
+    private _conversationSkillIDs: string[] = [];
 
     /**
      * Full observability records for every skill activated this run — one {@link AgentSkillInvocation}
@@ -11626,6 +11635,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.enableSkillCapabilities(skill, params);
             this._activatedSkillIDs.push(skill.ID);
             this._skillInvocations.push(invocation);
+            await this.persistConversationSkillActivation(skill, params);
         }
 
         const activationMessage = this.buildSkillActivationMessage(newlyActivated);
@@ -11722,8 +11732,14 @@ The context is now within limits. Please retry your request with the recovered c
         if (this._depth !== 0) {
             return; // skills are root-agent only; never pre-activate on sub-agents
         }
-        const requestedIds = params.requestedSkillIDs;
-        if (!requestedIds || requestedIds.length === 0) {
+        // CONVERSATION-SCOPED SKILLS. A skill with ActivationScope='Conversation' that activated in an
+        // earlier run of this conversation is still active: its MJ: Conversation Skills row (Status
+        // Active) joins the request, so a persona or a mode survives to the next turn without the
+        // client having to re-send it. Every gate below still applies on every run.
+        this._conversationSkillIDs = await this.loadConversationSkillIDs(params);
+        const explicitIds = params.requestedSkillIDs ?? [];
+        const requestedIds = this.mergeSkillIDs(explicitIds, this._conversationSkillIDs);
+        if (requestedIds.length === 0) {
             return;
         }
 
@@ -11733,8 +11749,15 @@ The context is now within limits. Please retry your request with the recovered c
             AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser),
             'requested', params.agent, params.contextUser);
         const droppedIds = requestedIds.filter(id => !allowed.some(s => UUIDsEqual(id, s.ID)));
-        if (droppedIds.length > 0) {
-            this.notifyDroppedSkillRequests(droppedIds, params);
+        // A refused skill the USER asked for gets the system note. A refused skill that came only from
+        // the conversation's persisted set gets nothing this turn — the user did not mention it — and
+        // its row is LEFT ACTIVE: a gate miss can be transient (the engine mid-load, a grant being
+        // re-added, a skill briefly Pending while edited), and ending the row here would turn that
+        // into silent, permanent loss of a persona. Retiring a mode is an explicit act:
+        // EndConversationSkill, from the app's exit gesture or the composer.
+        const droppedExplicit = droppedIds.filter(id => explicitIds.some(e => UUIDsEqual(e, id)));
+        if (droppedExplicit.length > 0) {
+            this.notifyDroppedSkillRequests(droppedExplicit, params);
         }
         const newlyActivated = allowed.filter(
             s => requestedIds.some(id => UUIDsEqual(id, s.ID)) &&
@@ -11743,7 +11766,14 @@ The context is now within limits. Please retry your request with the recovered c
         if (newlyActivated.length === 0) {
             return;
         }
+        await this.activateRequestedSkills(newlyActivated, params);
+    }
 
+    /**
+     * Activate the requested skills that passed every gate: record the activation step, enable each
+     * skill's capabilities, persist Conversation-scoped ones, and append the activation message.
+     */
+    protected async activateRequestedSkills(newlyActivated: MJAISkillEntity[], params: ExecuteAgentParams): Promise<void> {
         const currentPayload = params.payload;
         for (const skill of newlyActivated) {
             const invocation = this.buildSkillInvocation(skill, params.agent, 'requested');
@@ -11751,6 +11781,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.enableSkillCapabilities(skill, params);
             this._activatedSkillIDs.push(skill.ID);
             this._skillInvocations.push(invocation);
+            await this.persistConversationSkillActivation(skill, params);
         }
 
         const activationMessage = this.buildSkillActivationMessage(newlyActivated);
@@ -11765,6 +11796,115 @@ The context is now within limits. Please retry your request with the recovered c
                 messageType: 'skill-activation'
             }
         } as AgentChatMessage);
+    }
+
+    /** `explicit` first, then any `persisted` id not already present (case-insensitive UUIDs). */
+    protected mergeSkillIDs(explicit: readonly string[], persisted: readonly string[]): string[] {
+        const merged = [...explicit];
+        for (const id of persisted) {
+            if (!merged.some(m => UUIDsEqual(m, id))) merged.push(id);
+        }
+        return merged;
+    }
+
+    /**
+     * The skills persisted as Active for this run's conversation (`MJ: Conversation Skills`), or `[]`
+     * when the run has no conversation or the read fails. FAIL-SOFT: a persisted skill is a convenience
+     * layered on the request; losing it means the user re-invokes the skill, not that the turn fails.
+     * Override to source persisted activations from somewhere else.
+     *
+     * @protected
+     */
+    protected async loadConversationSkillIDs(params: ExecuteAgentParams): Promise<string[]> {
+        const conversationId = params.conversationId;
+        if (!conversationId || !params.contextUser) return [];
+        try {
+            const rv = new RunView(); // file precedent for reads (ProviderToUse is an IMetadataProvider, not an IRunViewProvider)
+            const result = await rv.RunView<{ SkillID: string }>({
+                EntityName: 'MJ: Conversation Skills',
+                ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND Status = 'Active'`,
+                Fields: ['SkillID'],
+                ResultType: 'simple',
+            }, params.contextUser);
+            if (!result.Success) {
+                LogErrorEx({ message: `Could not read conversation skills for ${conversationId}: ${result.ErrorMessage}`, severity: 'warning', category: 'AgentSkills' });
+                return [];
+            }
+            return (result.Results ?? []).map(r => r.SkillID).filter(id => typeof id === 'string' && id.length > 0);
+        } catch (e) {
+            LogErrorEx({ message: `Could not read conversation skills for ${conversationId}: ${e instanceof Error ? e.message : String(e)}`, severity: 'warning', category: 'AgentSkills' });
+            return [];
+        }
+    }
+
+    /**
+     * After a skill activates: if its `ActivationScope` is 'Conversation' and this run belongs to a
+     * conversation, record it as Active for that conversation (creating the `MJ: Conversation Skills`
+     * row, or re-activating an Ended one). Idempotent. FAIL-SOFT for the same reason as
+     * {@link loadConversationSkillIDs}. Override to persist elsewhere.
+     *
+     * @protected
+     */
+    protected async persistConversationSkillActivation(skill: MJAISkillEntity, params: ExecuteAgentParams): Promise<void> {
+        const conversationId = params.conversationId;
+        if (!conversationId || !params.contextUser) return;
+        if (skill.ActivationScope !== 'Conversation') return;
+        // Already persisted for this conversation (it is how the skill got into this run): nothing to write.
+        if (this._conversationSkillIDs.some(id => UUIDsEqual(id, skill.ID))) return;
+        try {
+            const provider = params.provider ?? this.ProviderToUse;
+            const rv = new RunView(); // reads: file precedent (ProviderToUse is an IMetadataProvider, not an IRunViewProvider); the WRITE below goes through the run's provider
+            const existing = await rv.RunView<MJConversationSkillEntity>({
+                EntityName: 'MJ: Conversation Skills',
+                ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND SkillID = '${EscapeSQLString(skill.ID)}'`,
+                ResultType: 'entity_object', MaxRows: 1,
+            }, params.contextUser);
+            if (!existing.Success) {
+                LogErrorEx({ message: `Could not read conversation skill '${skill.Name}': ${existing.ErrorMessage}`, severity: 'warning', category: 'AgentSkills' });
+                return;
+            }
+            const hit = existing.Results?.[0];
+            if (hit?.Status === 'Active') return;
+            const row = hit ?? await provider.GetEntityObject<MJConversationSkillEntity>('MJ: Conversation Skills', params.contextUser);
+            if (!hit) {
+                row.ConversationID = conversationId;
+                row.SkillID = skill.ID;
+            }
+            row.Status = 'Active';
+            row.EndedAt = null;
+            row.ActivatedByRunID = this._agentRun?.ID ?? null;
+            if (!(await row.Save())) {
+                LogErrorEx({ message: `Could not persist conversation skill '${skill.Name}': ${row.LatestResult?.CompleteMessage ?? 'save failed'}`, severity: 'warning', category: 'AgentSkills' });
+            }
+        } catch (e) {
+            LogErrorEx({ message: `Could not persist conversation skill '${skill.Name}': ${e instanceof Error ? e.message : String(e)}`, severity: 'warning', category: 'AgentSkills' });
+        }
+    }
+
+    /**
+     * Leave a conversation-scoped skill: its `MJ: Conversation Skills` row becomes Ended, so it is no
+     * longer re-requested on later runs. The app's "exit the mode" gesture (a menu option, a chip
+     * removed in the composer) calls this. Idempotent; a missing row is not an error. FAIL-SOFT.
+     */
+    public async EndConversationSkill(conversationId: string, skillId: string, contextUser?: UserInfo): Promise<void> {
+        if (!conversationId || !skillId || !contextUser) return;
+        try {
+            const rv = new RunView(); // file precedent for reads (ProviderToUse is an IMetadataProvider, not an IRunViewProvider)
+            const existing = await rv.RunView<MJConversationSkillEntity>({
+                EntityName: 'MJ: Conversation Skills',
+                ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND SkillID = '${EscapeSQLString(skillId)}' AND Status = 'Active'`,
+                ResultType: 'entity_object', MaxRows: 1,
+            }, contextUser);
+            const row = existing.Success ? existing.Results?.[0] : undefined;
+            if (!row) return;
+            row.Status = 'Ended';
+            row.EndedAt = new Date();
+            if (!(await row.Save())) {
+                LogErrorEx({ message: `Could not end conversation skill ${skillId}: ${row.LatestResult?.CompleteMessage ?? 'save failed'}`, severity: 'warning', category: 'AgentSkills' });
+            }
+        } catch (e) {
+            LogErrorEx({ message: `Could not end conversation skill ${skillId}: ${e instanceof Error ? e.message : String(e)}`, severity: 'warning', category: 'AgentSkills' });
+        }
     }
 
     /**

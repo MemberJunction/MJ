@@ -1,0 +1,22 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT87 - Nested Transactions (ambient savepoints)",
+    "Description": "Live-DB proof of GenericDatabaseProvider nested savepoints. NT1 join via BeginEntityTransaction; NT2 inner commit is not physical; NT3 three-deep LIFO; NT4 savepoint counter restarts; NT5 torn-write invariant (doomed ambient TX cannot commit inner work without the outer row); NT6 public-API recovery after doom; NT7 order-confirm shape; NT8 serialized concurrent units; NT9 transactionState$ false at depth 0. Server transport, mutation-gated via runMutationTests so the bundle fires on PR CI. Self-cleaning prefixed MJ: Action Categories. Teardown uses ResetTransactionState plus pool-scoped reads so a poisoned handle cannot block sweep.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Savepoints join, inner commit is not physical, LIFO rollback is correct, a doomed ambient TX cannot tear a write, and the provider is usable afterwards via public API only."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "nested-transactions",
+          "config": { "runMutationTests": true }
+        }
+      ]
+    },
+    "Status": "Active"
+  }
+}
