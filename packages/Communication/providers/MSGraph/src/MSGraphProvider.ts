@@ -810,10 +810,6 @@ export class MSGraphProvider extends BaseCommunicationProvider {
     // ========================================================================
 
     /**
-     * Returns the list of operations supported by MS Graph provider.
-     * MS Graph supports all mailbox operations.
-     */
-    /**
      * Reads calendar events for one mailbox.
      *
      * @requires MS Graph Scope: Calendars.Read (Application)
@@ -867,8 +863,23 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                       .orderby('start/dateTime')
                 : client.api(`${base}/events`).orderby('lastModifiedDateTime desc');
 
+            // Ask for UTC explicitly rather than relying on it. Graph returns start/end in UTC when no
+            // `Prefer: outlook.timezone` is sent, so this changes nothing today — but the default is
+            // Microsoft's to change, and every other value would need a tz database to resolve. Saying
+            // it makes the mapper's UTC assumption a request rather than a bet. `graphInstant` keeps
+            // its null fallback for the case where a non-UTC zone comes back anyway.
+            request = request.header('Prefer', 'outlook.timezone="UTC"');
+
             // Applied server-side so the $top cap counts only events the caller asked for. Filtering
             // after the fetch would return fewer than NumEvents and look like an empty calendar.
+            //
+            // $filter AND $orderby TOGETHER ARE ACCEPTED HERE. Outlook's backend requires every
+            // $orderby property to also appear in $filter for MESSAGES, returning 400
+            // `InefficientFilter` otherwise, and Microsoft's announcement of that rule is titled for
+            // Mail, Calendar and Contacts — so this combination looks like it should fail. It does
+            // not: both shapes below were sent against a live tenant and returned 200. Recorded here
+            // because the unit tests mock the Graph client and can never catch a 400, so the next
+            // reader has no way to re-derive it short of running the query again.
             if (!params.IncludeCancelled) {
                 request = request.filter('isCancelled eq false');
             }
@@ -940,7 +951,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
     private static graphInstant(slot: { dateTime?: string; timeZone?: string } | undefined): Date | null {
         const raw = slot?.dateTime?.trim();
         if (!raw) return null;
-        const hasOffset = /[Zz]|[+-]\d{2}:?\d{2}$/.test(raw);
+        // Both alternatives anchored. Unanchored, the `[Zz]` matched a "z" ANYWHERE in the string, so
+        // a value that merely contained one counted as carrying an offset and skipped the UTC check.
+        const hasOffset = /(?:[Zz]|[+-]\d{2}:?\d{2})$/.test(raw);
         const zone = (slot?.timeZone ?? 'UTC').trim().toUpperCase();
         // Only UTC is safe to assume. Any other named zone would need a tz database to resolve, and
         // guessing puts the meeting hours away from when it happened.
@@ -949,6 +962,10 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         return Number.isNaN(parsed.getTime()) ? null : parsed;
     }
 
+    /**
+     * Returns the list of operations supported by MS Graph provider.
+     * MS Graph supports all mailbox operations.
+     */
     public override getSupportedOperations(): ProviderOperation[] {
         return [
             'SendSingleMessage',

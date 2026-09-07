@@ -266,10 +266,28 @@ export type GetEventsParams<T = Record<string, any>> = {
      * are already scoped to one calendar, matching `GetMessagesParams.Identifier`.
      */
     Identifier?: string;
-    /** Hard cap on events returned. A window can be far larger than a caller wants to process. */
+    /**
+     * Hard cap on events returned. A window can be far larger than a caller wants to process.
+     *
+     * A CAP, NOT A GUARANTEE OF COMPLETENESS. Providers are expected to translate this to their own
+     * page-size parameter, so the result is bounded by ONE provider page and a value above the
+     * provider's own maximum may be ignored, silently capped, or rejected — the behaviour is the
+     * provider's, not this contract's. A caller that needs every event in a window must narrow the
+     * window rather than raise this number.
+     */
     NumEvents: number;
     /**
-     * Inclusive start of the window.
+     * Start of the window.
+     *
+     * THE WINDOW SELECTS OVERLAP, NOT START TIMES. An event that began before `StartDateTime` and is
+     * still running when the window opens is IN the result. Verified against Microsoft Graph
+     * `/calendarView`, which is the reference implementation: an event starting 45 minutes before a
+     * window boundary was returned by the window that opened mid-event.
+     *
+     * The consequence is for callers, so it is stated here rather than left to be discovered: an
+     * event that straddles a boundary appears in BOTH adjacent windows. Incremental sync must dedupe
+     * on the event id — advancing a watermark past the window end and assuming each event is seen
+     * once will double-file every meeting that crosses it.
      *
      * SUPPLYING BOTH BOUNDS CHANGES WHAT YOU GET, and providers must say which they did via
      * `RecurrenceExpanded`. With a window, a provider that can expand recurrence returns one entry
@@ -278,7 +296,7 @@ export type GetEventsParams<T = Record<string, any>> = {
      * want — so callers doing incremental sync should pass both.
      */
     StartDateTime?: Date;
-    /** Inclusive end of the window. See {@link GetEventsParams.StartDateTime}. */
+    /** End of the window. See {@link GetEventsParams.StartDateTime}. */
     EndDateTime?: Date;
     /**
      * Whether to include events the organizer cancelled. Default false: a cancellation is normally

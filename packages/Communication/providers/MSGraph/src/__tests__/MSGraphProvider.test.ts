@@ -4,27 +4,17 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Hoisted: `vi.mock` factories run before normal imports are evaluated, so the shared module has
+// to be pulled in during that same phase. The Graph client mock below stays local on purpose —
+// it is a flat post/get/patch/delete stub, a different shape from the chain recorder GetEvents
+// needs, and the tests here assert against its call args directly.
+const shared = await vi.hoisted(async () => await import('./graph-mocks'));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@memberjunction/communication-types', () => ({
-  BaseCommunicationProvider: class {
-    getSupportedOperations() { return []; }
-  },
-  resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
-    if (requestVal) return requestVal;
-    if (!disableFallback && envVal) return envVal;
-    return undefined;
-  },
-  validateRequiredCredentials: (creds: Record<string, unknown>, required: string[], provider: string) => {
-    for (const key of required) {
-      if (!creds[key]) {
-        throw new Error(`${provider}: Missing required credential: ${key}`);
-      }
-    }
-  },
-}));
+vi.mock('@memberjunction/communication-types', () => shared.communicationTypesMock());
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -39,26 +29,7 @@ vi.mock('@memberjunction/core', () => ({
   LogStatus: vi.fn(),
 }));
 
-vi.mock('env-var', () => {
-  const envMap: Record<string, string> = {
-    AZURE_CLIENT_ID: 'env-client-id',
-    AZURE_CLIENT_SECRET: 'env-client-secret',
-    AZURE_TENANT_ID: 'env-tenant-id',
-    AZURE_ACCOUNT_EMAIL: 'test@example.com',
-    AZURE_ACCOUNT_ID: 'env-user-id',
-    AZURE_AAD_ENDPOINT: 'https://login.microsoftonline.com',
-    AZURE_GRAPH_ENDPOINT: 'https://graph.microsoft.com',
-  };
-  return {
-    default: {
-      get: (key: string) => ({
-        default: (def: string) => ({
-          asString: () => envMap[key] ?? def,
-        }),
-      }),
-    },
-  };
-});
+vi.mock('env-var', () => shared.envVarMock());
 
 // Mock @azure/identity
 // NOTE: the implementation MUST be a regular function, not an arrow - MS Graph's auth

@@ -1,6 +1,6 @@
 ---
-'@memberjunction/communication-types': minor
-'@memberjunction/communication-ms-graph': minor
+'@memberjunction/communication-types': patch
+'@memberjunction/communication-ms-graph': patch
 ---
 
 Communication: calendar retrieval, so a provider can be asked what is on a calendar.

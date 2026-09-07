@@ -15,23 +15,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@memberjunction/communication-types', () => ({
-    BaseCommunicationProvider: class {
-        getSupportedOperations() {
-            return [];
-        }
-    },
-    resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
-        if (requestVal) return requestVal;
-        if (!disableFallback && envVal) return envVal;
-        return undefined;
-    },
-    validateRequiredCredentials: (creds: Record<string, unknown>, required: string[], provider: string) => {
-        for (const key of required) {
-            if (!creds[key]) throw new Error(`${provider}: Missing required credential: ${key}`);
-        }
-    },
-}));
+// Loaded in the hoisted phase: `vi.mock` factories run before normal imports are evaluated, so a
+// plain top-level import would still be undefined when they fire.
+const { shared, calls, setResponse, mockGraphApi } = await vi.hoisted(async () => {
+    const shared = await import('./graph-mocks');
+    return { shared, ...shared.createGraphApiMock() };
+});
+
+vi.mock('@memberjunction/communication-types', () => shared.communicationTypesMock());
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -40,66 +31,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 vi.mock('@memberjunction/core', () => ({ LogError: vi.fn(), LogStatus: vi.fn() }));
 
-vi.mock('env-var', () => {
-    const envMap: Record<string, string> = {
-        AZURE_CLIENT_ID: 'env-client-id',
-        AZURE_CLIENT_SECRET: 'env-client-secret',
-        AZURE_TENANT_ID: 'env-tenant-id',
-        AZURE_ACCOUNT_EMAIL: 'test@example.com',
-        AZURE_ACCOUNT_ID: 'env-user-id',
-        AZURE_AAD_ENDPOINT: 'https://login.microsoftonline.com',
-        AZURE_GRAPH_ENDPOINT: 'https://graph.microsoft.com',
-    };
-    return {
-        default: { get: (key: string) => ({ default: (def: string) => ({ asString: () => envMap[key] ?? def }) }) },
-    };
-});
-
-vi.mock('@azure/identity', () => ({
-    ClientSecretCredential: vi.fn().mockImplementation(function () {
-        return { getToken: vi.fn().mockResolvedValue({ token: 'test-token' }) };
-    }),
-    ConfidentialClientApplication: vi.fn(),
-}));
-
-/** Records path, query, filter, orderby and top so a test can assert what Graph was actually asked. */
-const { calls, setResponse, mockGraphApi } = vi.hoisted(() => {
-    const calls: { path: string; query?: Record<string, string>; filter?: string; orderby?: string; top?: number }[] = [];
-    const state: { response: unknown; throws: Error | null } = { response: { value: [] }, throws: null };
-    const setResponse = (response: unknown, throws: Error | null = null) => {
-        state.response = response;
-        state.throws = throws;
-    };
-    const mockGraphApi = vi.fn().mockImplementation((path: string) => {
-        const call: { path: string; query?: Record<string, string>; filter?: string; orderby?: string; top?: number } = { path };
-        calls.push(call);
-        const chain = {
-            query(q: Record<string, string>) {
-                call.query = q;
-                return chain;
-            },
-            filter(f: string) {
-                call.filter = f;
-                return chain;
-            },
-            orderby(o: string) {
-                call.orderby = o;
-                return chain;
-            },
-            top(n: number) {
-                call.top = n;
-                return chain;
-            },
-            get: async () => {
-                if (state.throws) throw state.throws;
-                return state.response;
-            },
-            post: async () => ({}),
-        };
-        return chain;
-    });
-    return { calls, setResponse, mockGraphApi };
-});
+vi.mock('env-var', () => shared.envVarMock());
 
 vi.mock('@microsoft/microsoft-graph-client', () => ({
     Client: { initWithMiddleware: vi.fn().mockReturnValue({ api: mockGraphApi }) },
@@ -203,6 +135,21 @@ describe('what is asked of Graph', () => {
     it('passes the cap through', async () => {
         await provider.GetEvents({ Identifier: 'rep@example.com', NumEvents: 17, ...WINDOW });
         expect(calls[0].top).toBe(17);
+    });
+
+    /**
+     * The mapper reads `start.dateTime` as UTC. Graph happens to return UTC when no `Prefer` header is
+     * sent, so this asks for what the mapper already assumes instead of relying on a default that
+     * belongs to Microsoft. On BOTH endpoints — a header sent on only one would leave the other
+     * depending on the default it was meant to stop depending on.
+     */
+    it('asks for UTC explicitly, on both endpoints', async () => {
+        await provider.GetEvents({ Identifier: 'rep@example.com', NumEvents: 50, ...WINDOW });
+        expect(calls[0].headers.Prefer).toBe('outlook.timezone="UTC"');
+
+        await provider.GetEvents({ Identifier: 'rep@example.com', NumEvents: 50 });
+        expect(calls[1].path).toContain('/events');
+        expect(calls[1].headers.Prefer).toBe('outlook.timezone="UTC"');
     });
 
     it('orders a windowed read by start time', async () => {
