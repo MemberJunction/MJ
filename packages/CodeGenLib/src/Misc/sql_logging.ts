@@ -273,13 +273,15 @@ export class SQLLogging {
             // ending in `GO`. Appending `;` produces `GO;`, which SSMS and sqlcmd reject
             // ("Incorrect syntax near ';'"). Detect and skip the `;` append in that case.
             const trimmed = contents.replace(/[\s;]+$/g, '');
+            let endsWithBatchSeparator = false;
             if (trimmed.length > 0) {
-                const endsWithBatchSeparator = /(^|\n)\s*GO\s*$/i.test(trimmed);
+                endsWithBatchSeparator = /(^|\n)\s*GO\s*$/i.test(trimmed);
                 contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
             // An empty separator (PostgreSQL) means "no batch separator"; don't emit a blank line for it.
-            contents = includeBatchSeparator && batchSeparator
+            // A unit that already closes its own batch (ends in GO) gets no second separator.
+            contents = includeBatchSeparator && batchSeparator && !endsWithBatchSeparator
                 ? `${contents}\n${batchSeparator}\n\n`
                 : `${contents}\n\n`;
 

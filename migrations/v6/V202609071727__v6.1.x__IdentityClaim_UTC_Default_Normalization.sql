@@ -23,7 +23,7 @@ JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaimType' AND c.name = '__mj_CreatedAt';
 IF @constraintName IS NOT NULL AND LOWER(@definition) <> '(getutcdate())'
 BEGIN
-    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT [' + @constraintName + ']');
+    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     SET @constraintName = NULL;
 END
 IF @constraintName IS NULL
@@ -39,7 +39,7 @@ JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaimType' AND c.name = '__mj_UpdatedAt';
 IF @constraintName IS NOT NULL AND LOWER(@definition) <> '(getutcdate())'
 BEGIN
-    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT [' + @constraintName + ']');
+    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     SET @constraintName = NULL;
 END
 IF @constraintName IS NULL
@@ -55,7 +55,7 @@ JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaim' AND c.name = '__mj_CreatedAt';
 IF @constraintName IS NOT NULL AND LOWER(@definition) <> '(getutcdate())'
 BEGIN
-    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT [' + @constraintName + ']');
+    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     SET @constraintName = NULL;
 END
 IF @constraintName IS NULL
@@ -71,7 +71,7 @@ JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaim' AND c.name = '__mj_UpdatedAt';
 IF @constraintName IS NOT NULL AND LOWER(@definition) <> '(getutcdate())'
 BEGIN
-    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT [' + @constraintName + ']');
+    EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     SET @constraintName = NULL;
 END
 IF @constraintName IS NULL

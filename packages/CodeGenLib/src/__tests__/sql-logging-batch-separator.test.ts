@@ -110,6 +110,12 @@ describe('SQLLogging batch separators in the replayable log', () => {
         expect(written).toBe('/* pg add column */\nALTER TABLE "__mj"."x" ADD COLUMN "y" integer;\n\n');
     });
 
+    it('does not double a separator on a DECLARE unit that already closes its batch', async () => {
+        await SQLLogging.appendToSQLLogFile('DECLARE @n INT;\nSELECT @n = 1;\nGO', 'self-terminated');
+        const written = fs.readFileSync(logPath, 'utf-8');
+        expect(written.match(/^\s*GO\s*$/gim)).toHaveLength(1);
+    });
+
     it('leaves statements without variables alone', async () => {
         await SQLLogging.appendToSQLLogFile('ALTER TABLE [__mj].[X] ADD CONSTRAINT [DF_X_Y] DEFAULT (GETUTCDATE()) FOR [Y]', 'add default');
         const written = fs.readFileSync(logPath, 'utf-8');
