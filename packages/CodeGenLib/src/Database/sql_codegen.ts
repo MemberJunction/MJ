@@ -803,6 +803,8 @@ export class SQLCodeGenBase {
         // BaseView while CodeGen keeps writing the inner view underneath it. Gating on
         // BaseViewGenerated alone would skip the inner view and leave the custom layer selecting
         // from an object that does not exist.
+        // One pass: overlay already applied → Pass 1 sees extra BaseView columns and logs
+        // EntityField INSERTs; Pass 2 DROPs/creates only GeneratedViewName, never the overlay.
         const generatesView = (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity;
 
         const tvfSQL = generatesView ? this.generateRecursiveFKTVFs(entity) : '';

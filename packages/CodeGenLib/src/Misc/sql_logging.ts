@@ -1,8 +1,79 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
-import { configInfo, mj_core_schema, SQLOutputConfig, dbPlatform } from "../Config/config";
+import { configInfo, mj_core_schema, SQLOutputConfig, dbPlatform, currentWorkingDirectory } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
 import path from 'path';
+
+const MJ_DEFAULT_SQL_OUTPUT_RE = /(^|\/|\\)migrations[/\\]v\d+[/\\]?$/i;
+
+/**
+ * True when `folderPath` is the CodeGenLib / MJ-host default (`./migrations/v5` etc.),
+ * not an Open App `migrations/codegen` tree.
+ */
+export function isMjDefaultSqlOutputPath(folderPath: string): boolean {
+    const n = folderPath.replace(/\\/g, '/').replace(/\/+$/, '');
+    return MJ_DEFAULT_SQL_OUTPUT_RE.test(n) || n === './migrations/v5' || n === '../../migrations/v5';
+}
+
+export type ResolveSQLOutputFolderArgs = {
+    cwd: string;
+    configuredFolderPath?: string;
+    includeSchemas?: string[];
+    coreSchema: string;
+    /** CLI `--sql-output-dir`. Wins over config when set. */
+    sqlOutputDirFlag?: string;
+    hasMjAppJson: boolean;
+    isMjMonorepo: boolean;
+};
+
+/**
+ * Where CodeGen writes `CodeGen_Run_*.sql` (EntityField INSERTs and other metadata SQL).
+ *
+ * Open App (`mj-app.json` in cwd): always `{cwd}/migrations/codegen` unless
+ * `--sql-output-dir` or an explicit non-MJ `SQLOutput.folderPath` is set.
+ * Never fall back to `MJ/migrations/v*` — that silently dropped Open App
+ * EntityField SQL into the host tree.
+ *
+ * MJ monorepo cwd + `includeSchemas` listing a non-core schema: throw. Run
+ * CodeGen from the app directory.
+ */
+export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string {
+    const cwd = path.resolve(args.cwd);
+    const core = (args.coreSchema || '__mj').toLowerCase();
+    const include = (args.includeSchemas ?? []).map(s => s.toLowerCase());
+    const generatingAppSchemas = include.some(s => s !== core);
+
+    if (args.sqlOutputDirFlag) {
+        const resolved = path.resolve(cwd, args.sqlOutputDirFlag);
+        if (args.hasMjAppJson && isMjDefaultSqlOutputPath(resolved)) {
+            throw new Error(
+                `CodeGen --sql-output-dir resolves to an MJ host migrations tree (${resolved}). ` +
+                `Open App metadata SQL must go to the app's migrations/codegen. ` +
+                `Run from the app cwd (mj-app.json) without this flag, or pass the app codegen folder.`
+            );
+        }
+        return resolved;
+    }
+
+    if (args.hasMjAppJson) {
+        const configured = args.configuredFolderPath;
+        if (configured && !isMjDefaultSqlOutputPath(configured)) {
+            return path.resolve(cwd, configured);
+        }
+        return path.join(cwd, 'migrations', 'codegen');
+    }
+
+    if (args.isMjMonorepo && generatingAppSchemas) {
+        throw new Error(
+            `CodeGen SQLOutput would write Open App metadata SQL into the MJ repo (${cwd}). ` +
+            `Run \`mj codegen\` from the Open App directory (a cwd that contains mj-app.json), not from MJ. ` +
+            `includeSchemas=${(args.includeSchemas ?? []).join(',') || '(empty)'}`
+        );
+    }
+
+    const folder = args.configuredFolderPath ?? './migrations/v5/';
+    return path.resolve(cwd, folder);
+}
 
 /**
  * Utility class for logging SQL to a run file that can be fresh for each run or appended to depending on the settings in the configuration
@@ -10,6 +81,8 @@ import path from 'path';
 export class SQLLogging {
     private static _SQLLoggingFilePath: string = '';
     private static _OmitRecurringScriptsFromLog: boolean = false;
+    /** CLI `--sql-output-dir`. Set before {@link initSQLLogging}. */
+    public static sqlOutputDirFlag: string | undefined;
 
     public static get SQLLoggingFilePath(): string {
         return SQLLogging._SQLLoggingFilePath;
@@ -69,45 +142,52 @@ export class SQLLogging {
     public static initSQLLogging() {
         SQLLogging._OmitRecurringScriptsFromLog = configInfo.SQLOutput.omitRecurringScriptsFromLog;
         if (!SQLLogging.SQLLoggingFilePath) {
-            // not already set up, so proceed, otherwise we do nothing as we're already good to go
             const config = configInfo.SQLOutput;
             if(!config){
-                logError("MetadataLoggingConfig is required to enable metadata logging");
-                return;
+                throw new Error("SQLOutput config is required to enable metadata logging");
             }
 
             if (!config.enabled)
-                return; // we are not doing anything here....
-
-            if (config.folderPath) {
-                // On PostgreSQL, redirect the migrations root so CodeGen audit SQL lands in
-                // migrations-pg/ alongside the rest of the PG tooling.
-                let folderPath = config.folderPath;
-                if (dbPlatform() === 'postgresql') {
-                    folderPath = SQLLogging.redirectToPGMigrations(folderPath);
-                }
-
-                const dirExists: boolean = fs.existsSync(folderPath);
-                if (!dirExists) {
-                    fs.mkdirSync(folderPath, {recursive: true });
-                }
-
-                const fileName: string = config.fileName || this.createFileName();
-                SQLLogging._SQLLoggingFilePath = path.join(folderPath, fileName);
-
-                if (!config.appendToFile || !fs.existsSync(SQLLogging.SQLLoggingFilePath)) {
-                    //create an empty file
-                    fs.writeFileSync(SQLLogging.SQLLoggingFilePath, '');
-                }
-
-                logStatus(`Metadata logging enabled. File path: ${SQLLogging.SQLLoggingFilePath}`);
-            }
-            else {
-                logError("folderPath is required to enable metadata logging");
                 return;
+
+            const cwd = currentWorkingDirectory || process.cwd();
+            const coreSchema = mj_core_schema();
+            let folderPath = resolveSQLOutputFolder({
+                cwd,
+                configuredFolderPath: config.folderPath,
+                includeSchemas: configInfo.includeSchemas,
+                coreSchema,
+                sqlOutputDirFlag: SQLLogging.sqlOutputDirFlag,
+                hasMjAppJson: fs.existsSync(path.join(cwd, 'mj-app.json')),
+                isMjMonorepo:
+                    fs.existsSync(path.join(cwd, 'packages', 'CodeGenLib')) ||
+                    fs.existsSync(path.join(cwd, 'packages', 'MJCLI')),
+            });
+
+            if (dbPlatform() === 'postgresql') {
+                folderPath = SQLLogging.redirectToPGMigrations(folderPath);
             }
+
+            if (!fs.existsSync(folderPath)) {
+                fs.mkdirSync(folderPath, {recursive: true });
+            }
+
+            const fileName: string = config.fileName || this.createFileName();
+            SQLLogging._SQLLoggingFilePath = path.join(folderPath, fileName);
+
+            if (!config.appendToFile || !fs.existsSync(SQLLogging.SQLLoggingFilePath)) {
+                fs.writeFileSync(SQLLogging.SQLLoggingFilePath, '');
+            }
+
+            logStatus(`Metadata logging enabled. File path: ${SQLLogging.SQLLoggingFilePath}`);
         }
      }
+
+    /** Test hook — SQLLogging is a process-wide singleton. */
+    public static resetForTests(): void {
+        SQLLogging._SQLLoggingFilePath = '';
+        SQLLogging.sqlOutputDirFlag = undefined;
+    }
 
      public static finishSQLLogging() {
         if (SQLLogging.SQLLoggingFilePath) {
@@ -210,6 +290,12 @@ export class SQLLogging {
     * @returns - The result of the query execution.
     */
     public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
+        if (configInfo.SQLOutput?.enabled && !SQLLogging.SQLLoggingFilePath) {
+            throw new Error(
+                'SQLOutput.enabled but no CodeGen_Run log file is open. Refusing to apply metadata SQL with no artifact. ' +
+                'Run `mj codegen` from the Open App directory (mj-app.json) or pass --sql-output-dir.'
+            );
+        }
         SQLLogging.appendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator);
         const result = await ds.query(query);
         return result.recordset;
