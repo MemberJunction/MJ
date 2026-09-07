@@ -666,10 +666,13 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     // 'UI' ONLY, deliberately (issue #4260). Auto-provisioning is on by default above, with no
     // domain restriction, so this list is the standing authority of anyone the configured IdP will
     // issue a token for. On the baseline seed 'Developer' and 'Integration' hold unfiltered
-    // CanUpdate on ~every entity — MJ: Users included, where Type is the column the platform's
-    // Owner checks read. Naming either here lets a freshly provisioned user write their own
-    // Type to 'Owner'. 'UI' carries the end-user surface (conversations, views, dashboards,
-    // settings) and no write on MJ: Users. Hosts that need more grant it per-deployment.
+    // CanUpdate on ~439 of the database's ~446 entities, so defaulting every such identity into
+    // either grants broad data-plane access no host should hand out by default. (The MJ: Users
+    // escalation this list also used to guard against — writing your own Type to 'Owner' — is now
+    // closed at the entity layer regardless of role: see MJUserEntityServer in
+    // @memberjunction/core-entities-server.) 'UI' carries the end-user surface (conversations,
+    // views, dashboards, settings) and no write on MJ: Users. Hosts that need more grant it
+    // per-deployment.
     newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,

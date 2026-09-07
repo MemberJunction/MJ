@@ -12,7 +12,7 @@ Security: a non-Owner can no longer create, delete, or change privileged fields 
 - **`Name` may not be changed** on an existing row — the same `resolvePrincipalFrom` matching described above runs on update too, so renaming yourself is an equally valid path to the same redirection.
 - **Delete is refused outright.** MJ deactivates users via `IsActive`; it does not delete them, and an unguarded delete let a non-Owner remove any account, Owners included.
 
-Owner-type callers — admins, and the seeded system user that auto-provisioning and magic-link provisioning run as under the shipped default — are exempt from all of the above, so user administration and JWT/magic-link provisioning are unaffected for a default install. `FirstName`, `LastName` and `Title` remain freely editable by their owner.
+Owner-type callers — admins, and the seeded system user that auto-provisioning and magic-link provisioning run as under the shipped default — are exempt from all of the above, so user administration and JWT/magic-link provisioning are unaffected for a default install. `FirstName`, `LastName`, `Title` and `Email` remain freely editable by their owner.
 
 **Upgrade note — read before upgrading if you have customized user provisioning or administer users through a non-Owner role:**
 
