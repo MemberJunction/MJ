@@ -14,7 +14,7 @@ import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
-import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
+import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
@@ -23,9 +23,8 @@ import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
-// Parallelism is safe when each record gets its own provider instance (shared pool,
-// own transaction stack) — the same pattern MJAPI uses per request. Default 10.
-// Do NOT default to 1 to paper over a shared provider.
+// Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
+// Nested relatedEntities share the root's provider so parent+child stay on one TX.
 const PARALLEL_BATCH_SIZE = 10;
 
 export interface PushOptions {
@@ -772,137 +771,131 @@ export class PushService {
         // the context AFTER successful save to maintain consistency.
         const batchContext = new BatchContextIndex();
 
-        // Process records using dependency levels for parallel processing
-        if (analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0) {
-          // Use parallel processing with dependency levels
-          for (let levelIndex = 0; levelIndex < analysisResult.dependencyLevels.length; levelIndex++) {
-            const level = analysisResult.dependencyLevels[levelIndex];
-            
-            if (options.verbose && level.length > 1) {
-              callbacks?.onLog?.(`   Processing dependency level ${levelIndex} with ${level.length} records in parallel...`);
-            }
-            
-            // Process records in this level in parallel batches
+        // One provider per JSON-root graph (Action + nested Action Params share a
+        // connection/TX). Parallelize sibling roots only — never fork a child onto
+        // a new pooled connection while the parent row is still uncommitted.
+        const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase;
+        const graphProviders = new Map<string, DatabaseProviderBase>();
+        let graphFailed = false;
+
+        const obtainGraphProvider = async (graphId: string): Promise<IMetadataProvider | undefined> => {
+          const existing = graphProviders.get(graphId);
+          if (existing) return existing;
+          try {
+            const created = await hostProvider.CreateIndependentInstance();
+            graphProviders.set(graphId, created);
+            return created;
+          } catch (e) {
+            callbacks?.onLog?.(
+              `⚠️  CreateIndependentInstance unavailable (${(e as Error).message}); graph ${graphId} uses the shared provider`
+            );
+            return undefined;
+          }
+        };
+
+        const applyProcessResult = (result: ProcessRecordResult): void => {
+          if (result.batchContextEntry) {
+            batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
+          }
+          if (result.deferredRecord) {
+            this.deferredRecords.push(result.deferredRecord);
+          }
+          if (result.warnings) {
+            this.warnings.push(...result.warnings);
+          }
+          if (result.isDeletedRecord) return;
+          if (result.isDuplicate) {
+            skipped++;
+            return;
+          }
+          if (result.status === 'created') created++;
+          else if (result.status === 'updated') updated++;
+          else if (result.status === 'unchanged') unchanged++;
+          else if (result.status === 'deleted') deleted++;
+          else if (result.status === 'skipped') skipped++;
+          else if (result.status === 'error') errors++;
+          else if (result.status === 'deferred') {
+            created++;
+            deferred++;
+          }
+        };
+
+        try {
+          const levels =
+            analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0
+              ? analysisResult.dependencyLevels
+              : [analysisResult.sortedRecords];
+
+          for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
+            const level = levels[levelIndex];
+            const byGraph = groupRecordsByGraphId(level);
+            const graphIds = Array.from(byGraph.keys());
             const batchSize = options.parallelBatchSize || PARALLEL_BATCH_SIZE;
-            for (let i = 0; i < level.length; i += batchSize) {
-              const batch = level.slice(i, Math.min(i + batchSize, level.length));
-              
-              // Process batch in parallel
+
+            if (options.verbose && graphIds.length > 1) {
+              callbacks?.onLog?.(
+                `   Level ${levelIndex}: ${level.length} records in ${graphIds.length} graphs (parallel batch ${batchSize})`
+              );
+            }
+
+            for (let i = 0; i < graphIds.length; i += batchSize) {
+              const batchIds = graphIds.slice(i, i + batchSize);
               const batchResults = await Promise.all(
-                batch.map(async (flattenedRecord) => {
-                  try {
-                    const result = await this.processFlattenedRecordOnIndependentProvider(
-                      flattenedRecord,
-                      entityDir,
-                      options,
-                      batchContext,
-                      callbacks,
-                      entityConfig
-                    );
-                    return { success: true, result };
-                  } catch (error) {
-                    // Return error instead of throwing to handle after Promise.all
-                    return { success: false, error, record: flattenedRecord };
+                batchIds.map(async (graphId) => {
+                  const recs = byGraph.get(graphId)!;
+                  const provider = await obtainGraphProvider(graphId);
+                  const results: Array<
+                    | { success: true; result: ProcessRecordResult; record: FlattenedRecord }
+                    | { success: false; error: unknown; record: FlattenedRecord }
+                  > = [];
+                  for (const flattenedRecord of recs) {
+                    try {
+                      const result = await this.processFlattenedRecord(
+                        flattenedRecord,
+                        entityDir,
+                        options,
+                        batchContext,
+                        callbacks,
+                        entityConfig,
+                        true,
+                        provider
+                      );
+                      results.push({ success: true, result, record: flattenedRecord });
+                    } catch (error) {
+                      results.push({ success: false, error, record: flattenedRecord });
+                      break;
+                    }
                   }
+                  return results;
                 })
               );
-              
-              // Apply side effects sequentially after Promise.all() resolves.
-              // This eliminates race conditions from concurrent writes to shared state.
-              for (const batchResult of batchResults) {
-                if (!batchResult.success) {
-                  // Fail fast on first error with detailed logging
-                  const err = batchResult.error as Error;
-                  const rec = batchResult.record as FlattenedRecord;
 
-                  // Log concise summary - detailed error was already logged by processFlattenedRecord
-                  callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
-                  callbacks?.onLog?.(`   ${err.message}\n`);
-
-                  // Throw concise error to trigger rollback
-                  throw err;
-                }
-
-                const result = batchResult.result!;
-
-                // Apply side effects from the result
-                if (result.batchContextEntry) {
-                  batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
-                }
-                if (result.deferredRecord) {
-                  this.deferredRecords.push(result.deferredRecord);
-                }
-                if (result.warnings) {
-                  this.warnings.push(...result.warnings);
-                }
-
-                // Update stats for successful results
-                // Don't count deletion records - they're counted in Phase 2
-                if (result.isDeletedRecord) {
-                  continue; // Skip entirely
-                } else if (result.isDuplicate) {
-                  skipped++; // Count duplicates as skipped
-                } else {
-                  if (result.status === 'created') created++;
-                  else if (result.status === 'updated') updated++;
-                  else if (result.status === 'unchanged') unchanged++;
-                  else if (result.status === 'deleted') deleted++;
-                  else if (result.status === 'skipped') skipped++;
-                  else if (result.status === 'error') errors++;
-                  else if (result.status === 'deferred') {
-                    created++; // Deferred records were saved (count as created)
-                    deferred++; // Also track separately for reporting
+              for (const graphResults of batchResults) {
+                for (const batchResult of graphResults) {
+                  if (batchResult.success === false) {
+                    const err = batchResult.error as Error;
+                    const rec = batchResult.record;
+                    callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
+                    callbacks?.onLog?.(`   ${err.message}\n`);
+                    throw err;
                   }
+                  applyProcessResult(batchResult.result);
                 }
               }
             }
           }
-        } else {
-          // Fallback to sequential processing if no dependency levels available
-          for (const flattenedRecord of analysisResult.sortedRecords) {
+        } catch (e) {
+          graphFailed = true;
+          throw e;
+        } finally {
+          for (const provider of graphProviders.values()) {
             try {
-              const result = await this.processFlattenedRecord(
-                flattenedRecord,
-                entityDir,
-                options,
-                batchContext,
-                callbacks,
-                entityConfig
-              );
-
-              // Apply side effects (already sequential, but consistent with parallel path)
-              if (result.batchContextEntry) {
-                batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
+              if (!graphFailed && provider.TransactionDepth > 0) {
+                await provider.CommitTransaction();
               }
-              if (result.deferredRecord) {
-                this.deferredRecords.push(result.deferredRecord);
-              }
-              if (result.warnings) {
-                this.warnings.push(...result.warnings);
-              }
-
-              // Update stats
-              // Don't count deletion records - they're counted in Phase 2
-              if (!result.isDeletedRecord) {
-                if (result.isDuplicate) {
-                  skipped++; // Count duplicates as skipped
-                } else {
-                  if (result.status === 'created') created++;
-                  else if (result.status === 'updated') updated++;
-                  else if (result.status === 'unchanged') unchanged++;
-                  else if (result.status === 'deleted') deleted++;
-                  else if (result.status === 'skipped') skipped++;
-                  else if (result.status === 'error') errors++;
-                  else if (result.status === 'deferred') {
-                    created++; // Deferred records were saved (count as created)
-                    deferred++; // Also track separately for reporting
-                  }
-                }
-              }
-            } catch (recordError) {
-              const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
-              callbacks?.onError?.(errorMsg);
-              errors++;
+              await provider.ReleaseIndependentInstance();
+            } catch {
+              // still release remaining graphs
             }
           }
         }
@@ -956,36 +949,6 @@ export class PushService {
     }
 
     return { created, updated, unchanged, deleted, skipped, deferred, errors };
-  }
-
-  /**
-   * Run one record on a forked provider (shared pool, own TX stack) so parallel
-   * Saves cannot interleave EntityTransactionScope on the CLI's singleton provider.
-   */
-  private async processFlattenedRecordOnIndependentProvider(
-    flattenedRecord: FlattenedRecord,
-    entityDir: string,
-    options: PushOptions,
-    batchContext: BatchContext,
-    callbacks?: PushCallbacks,
-    entityConfig?: EntityConfig,
-    allowDefer: boolean = true
-  ): Promise<ProcessRecordResult> {
-    const host = Metadata.Provider as unknown as DatabaseProviderBase;
-    let scoped: DatabaseProviderBase | undefined;
-    try {
-      scoped = await host.CreateIndependentInstance();
-    } catch (e) {
-      callbacks?.onLog?.(
-        `⚠️  CreateIndependentInstance unavailable (${(e as Error).message}); this record uses the shared provider`
-      );
-      return this.processFlattenedRecord(flattenedRecord, entityDir, options, batchContext, callbacks, entityConfig, allowDefer);
-    }
-    try {
-      return await this.processFlattenedRecord(flattenedRecord, entityDir, options, batchContext, callbacks, entityConfig, allowDefer, scoped);
-    } finally {
-      await scoped.ReleaseIndependentInstance();
-    }
   }
 
   private async processFlattenedRecord(

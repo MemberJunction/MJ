@@ -1529,7 +1529,7 @@ Records are automatically grouped into dependency levels:
 - **Level 1**: Records that depend only on Level 0 records
 - **Level 2**: Records that depend on Level 0 or Level 1 records
 
-Records within the same dependency level are processed in parallel. Each record uses `CreateIndependentInstance()` so nested `EntityTransactionScope`s cannot interleave on one provider. Default batch size is **10** (do not default to 1 to paper over a shared provider).
+Records are grouped into **JSON-root graphs** (an Action and its nested Action Params share one graph). Each graph gets one `CreateIndependentInstance()` for the whole tree so child FKs see the uncommitted parent on the same connection. **Sibling graphs** at the same dependency level run in parallel (default batch **10**). `--parallel-batch-size 1` does **not** mean one global provider — it only serializes graphs.
 
 ```bash
 # Default processing (batch size 10, isolated providers)
