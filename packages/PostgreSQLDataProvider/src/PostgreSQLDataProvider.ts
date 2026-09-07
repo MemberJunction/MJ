@@ -237,6 +237,28 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return this._schemaName;
     }
 
+    /**
+     * Share this instance's pool + metadata; own transaction stack.
+     * Used by mj sync push parallelism (MJAPI per-request pattern).
+     */
+    public override async CreateIndependentInstance(): Promise<PostgreSQLDataProvider> {
+        const child = new PostgreSQLDataProvider();
+        const parent = this._configData;
+        if (!parent) {
+            throw new Error('PostgreSQLDataProvider.CreateIndependentInstance: provider is not configured');
+        }
+        const cfg = new PostgreSQLProviderConfigData(
+            parent.ConnectionConfig,
+            this.MJCoreSchemaName,
+            0,
+            parent.IncludeSchemas,
+            parent.ExcludeSchemas,
+            false,
+        );
+        await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
+        return child;
+    }
+
     protected get Metadata(): IMetadataProvider {
         return this as unknown as IMetadataProvider;
     }
