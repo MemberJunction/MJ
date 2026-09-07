@@ -198,10 +198,11 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
      * Returns undefined for every case that must stay inline: a binding that did not opt in, or a
      * lifecycle event that participates in the save (Validate / Before*).
      *
-     * After* + Durable with no queue submitter (CLI `mj sync push`): do **not** nest in the
-     * caller's EntityTransactionScope. Defer until TransactionDepth is 0, then fire-and-forget.
-     * Dropping the work would make Durable worse than leaving it off; nesting it is what blew
-     * up cheese (LogActivity inside Person.Save on a shared provider).
+     * After* + Durable with no queue submitter (local / no-queue process — e.g. CLI
+     * `mj sync push`): do **not** nest in the caller's EntityTransactionScope. Defer until
+     * TransactionDepth is 0, then fire-and-forget. Dropping the work would make Durable worse
+     * than leaving it off; nesting it is what blew up cheese (LogActivity inside Person.Save
+     * on a shared provider).
      */
     protected BuildDurableDeferral(
         params: EntityActionInvocationParams,
@@ -264,10 +265,11 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
     }
 
     /**
-     * CLI / no-queue Durable fallback: wait until the save's transaction has settled, then run
-     * the action without DeferExecution. Errors are logged; the originating Save already succeeded.
+     * Local / no-queue Durable fallback (CLI `mj sync push` is one host): wait until the save's
+     * transaction has settled, then run the action without DeferExecution. Errors are logged; the
+     * originating Save already succeeded. Protected so subclasses can replace the wait/run policy.
      */
-    private scheduleDurableLocalRun(
+    protected scheduleDurableLocalRun(
         params: EntityActionInvocationParams,
         action: MJActionEntityExtended,
         runParams: RunActionParams,

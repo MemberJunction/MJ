@@ -13,14 +13,20 @@
  */
 import { EntityFieldInfo, EntityInfo } from './entityInfo';
 
+/**
+ * True when the entity has a native (table) latitude **and** longitude column.
+ * Virtual `__mj_Latitude` / PrimaryAddress* do not count.
+ */
 export function HasNativeLatLngFields(fields: EntityFieldInfo[]): boolean {
     return fields.some(f => f.IsNativeLatitudeField) && fields.some(f => f.IsNativeLongitudeField);
 }
 
+/** First native latitude column, or undefined. */
 export function NativeLatitudeField(fields: EntityFieldInfo[]): EntityFieldInfo | undefined {
     return fields.find(f => f.IsNativeLatitudeField);
 }
 
+/** First native longitude column, or undefined. */
 export function NativeLongitudeField(fields: EntityFieldInfo[]): EntityFieldInfo | undefined {
     return fields.find(f => f.IsNativeLongitudeField);
 }
@@ -45,6 +51,7 @@ export function EmbeddedGeoVirtualNames(foreignKeyField: string): { lat: string;
     };
 }
 
+/** One EmbeddedRecord FK that should bubble lat/lng onto the parent view. */
 export type EmbeddedGeoSpec = {
     foreignKeyField: string;
     relatedEntityID: string;
@@ -57,6 +64,10 @@ export type EmbeddedGeoSpec = {
     allowsNull: boolean;
 };
 
+/**
+ * EmbeddedRecord foreign keys on `fields` that CodeGen should JOIN for
+ * `__mj_Latitude_{FK}` / `__mj_Longitude_{FK}` display columns.
+ */
 export function ListEmbeddedGeoSpecs(fields: EntityFieldInfo[]): EmbeddedGeoSpec[] {
     const out: EmbeddedGeoSpec[] = [];
     for (const f of fields) {
@@ -86,10 +97,16 @@ export function ResolveMapLatitudeField(entity: EntityInfo, override?: string | 
     return resolveCoordField(entity, override, '__mj_Latitude', 'PrimaryAddressLatitude', f => f.IsNativeLatitudeField || f.ExtendedType === 'GeoLatitude' || (f.ExtendedType === 'Geo' && /^lat/i.test(f.Name)));
 }
 
+/** Same resolution order as {@link ResolveMapLatitudeField} for longitude. */
 export function ResolveMapLongitudeField(entity: EntityInfo, override?: string | null): string {
     return resolveCoordField(entity, override, '__mj_Longitude', 'PrimaryAddressLongitude', f => f.IsNativeLongitudeField || f.ExtendedType === 'GeoLongitude' || (f.ExtendedType === 'Geo' && /^(lng|lon|long)/i.test(f.Name)));
 }
 
+/**
+ * Shared lat/lng picker. `override` wins when it is not the MJ default name;
+ * otherwise prefers writable native, then PrimaryAddress*, then `__mj_*_{FK}`,
+ * then `__mj_*`, then any matching Geo* field.
+ */
 function resolveCoordField(
     entity: EntityInfo,
     override: string | null | undefined,
