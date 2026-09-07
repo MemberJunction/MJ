@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { ManageMetadataBase } from '../Database/manage-metadata';
 import { configInfo } from '../Config/config';
 import { SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
@@ -86,12 +86,19 @@ class TestableDriftHold extends ManageMetadataBase {
 
 describe('evaluateAndHoldDriftRow — fail-closed read-grant revoke on hold', () => {
     let mm: TestableDriftHold;
+    let sqlOutputWasEnabled: boolean | undefined;
     beforeAll(() => {
         // SQLOutput.enabled defaults to true, and LogSQLAndExecute refuses to apply metadata SQL
         // when logging is enabled but no CodeGen_Run file is open. This test drives the revoke path
-        // through a stub connection with no log file, so turn the capture off for the process.
+        // through a stub connection with no log file, so turn the capture off for this file.
         if (configInfo.SQLOutput) {
+            sqlOutputWasEnabled = configInfo.SQLOutput.enabled;
             configInfo.SQLOutput.enabled = false;
+        }
+    });
+    afterAll(() => {
+        if (configInfo.SQLOutput && sqlOutputWasEnabled !== undefined) {
+            configInfo.SQLOutput.enabled = sqlOutputWasEnabled;
         }
     });
     beforeEach(() => {

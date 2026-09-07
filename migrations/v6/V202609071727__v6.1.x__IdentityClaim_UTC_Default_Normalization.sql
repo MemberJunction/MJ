@@ -11,7 +11,7 @@
     reason they were emitted at all.
 
     Idempotent: a database where CodeGen already rewrote the constraints (any name, GETUTCDATE()
-    definition) is left alone. Each column is its own batch so each DECLARE is scoped to its batch.
+    definition, however parenthesized) is left alone. Each column is its own batch so each DECLARE is scoped to its batch.
 */
 
 DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX);
@@ -21,7 +21,7 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 JOIN sys.columns c ON t.object_id = c.object_id
 JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaimType' AND c.name = '__mj_CreatedAt';
-IF @constraintName IS NOT NULL AND LOWER(@definition) <> '(getutcdate())'
+IF @constraintName IS NOT NULL AND REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
 BEGIN
     EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     SET @constraintName = NULL;
@@ -37,7 +37,7 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 JOIN sys.columns c ON t.object_id = c.object_id
 JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaimType' AND c.name = '__mj_UpdatedAt';
-IF @constraintName IS NOT NULL AND LOWER(@definition) <> '(getutcdate())'
+IF @constraintName IS NOT NULL AND REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
 BEGIN
     EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     SET @constraintName = NULL;
@@ -53,7 +53,7 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 JOIN sys.columns c ON t.object_id = c.object_id
 JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaim' AND c.name = '__mj_CreatedAt';
-IF @constraintName IS NOT NULL AND LOWER(@definition) <> '(getutcdate())'
+IF @constraintName IS NOT NULL AND REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
 BEGIN
     EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     SET @constraintName = NULL;
@@ -69,7 +69,7 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 JOIN sys.columns c ON t.object_id = c.object_id
 JOIN sys.default_constraints d ON c.default_object_id = d.object_id
 WHERE s.name = '${flyway:defaultSchema}' AND t.name = 'IdentityClaim' AND c.name = '__mj_UpdatedAt';
-IF @constraintName IS NOT NULL AND LOWER(@definition) <> '(getutcdate())'
+IF @constraintName IS NOT NULL AND REPLACE(REPLACE(LOWER(@definition), '(', ''), ')', '') <> 'getutcdate'
 BEGIN
     EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName));
     SET @constraintName = NULL;

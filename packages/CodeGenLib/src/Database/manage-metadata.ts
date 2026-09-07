@@ -1473,9 +1473,10 @@ export class ManageMetadataBase {
          const tableSQL = this.dbProvider.generateMaterializedTableSQL(matSchema, tableName, columns);
          const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(matSchema, viewName, tableName);
          // includeBatchSeparator: each is a single GO-free batch (executed via ds.query), but the
-         // migration file needs a GO between statements for Flyway/sqlcmd.
-         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for base-view materialization of entity ${entity.Name}`, false, true);
-         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for base-view materialization of entity ${entity.Name}`, false, true);
+         // migration file needs a GO between statements for Flyway/sqlcmd. Pass the provider's
+         // separator, not the 'GO' default: on PostgreSQL it is '' and a literal GO breaks replay.
+         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for base-view materialization of entity ${entity.Name}`, false, true, this.dbProvider.BatchSeparator);
+         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for base-view materialization of entity ${entity.Name}`, false, true, this.dbProvider.BatchSeparator);
 
          // 4) Upsert the MJ: Materialized Results row, keyed on (SourceType, SourceEntityID).
          const existing = await this.runQueryWithParams(
@@ -1773,8 +1774,8 @@ export class ManageMetadataBase {
          }
          const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.columns);
          const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(coreSchema, viewName, tableName);
-         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true);
-         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true);
+         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true, this.dbProvider.BatchSeparator);
+         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true, this.dbProvider.BatchSeparator);
 
          // 3) Mint the read-only Virtual Entity over the wrapper view (idempotent by view).
          const existingVE = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(coreSchema, 'vwEntities')} WHERE BaseView = @V AND SchemaName = @S`, { V: viewName, S: coreSchema });

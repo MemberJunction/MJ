@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -57,6 +57,10 @@ describe('SQLLogging batch separators in the replayable log', () => {
         fs.rmSync(logPath, { force: true });
     });
 
+    afterAll(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
     describe('declaresTSQLVariable', () => {
         it('matches a top-level DECLARE @variable', () => {
             expect(SQLLogging.declaresTSQLVariable('DECLARE @constraintName NVARCHAR(255);\nSELECT 1')).toBe(true);
@@ -67,9 +71,16 @@ describe('SQLLogging batch separators in the replayable log', () => {
             expect(SQLLogging.declaresTSQLVariable('/* banner */\n-- note\nDECLARE @c NVARCHAR(10)')).toBe(true);
         });
 
+        it('matches a batch-scoped DECLARE that is not the first statement', () => {
+            expect(SQLLogging.declaresTSQLVariable('SET NOCOUNT ON;\nDECLARE @x INT;\nSELECT @x = 1')).toBe(true);
+            expect(SQLLogging.declaresTSQLVariable("IF OBJECT_ID('x') IS NULL\nBEGIN\n    DECLARE @c NVARCHAR(10);\nEND")).toBe(true);
+        });
+
         it('does not match a routine whose body declares variables', () => {
             const proc = 'CREATE PROCEDURE [__mj].[spX]\nAS\nBEGIN\n    DECLARE @id UNIQUEIDENTIFIER;\n    SELECT @id = NEWID();\nEND\nGO';
             expect(SQLLogging.declaresTSQLVariable(proc)).toBe(false);
+            const fn = 'CREATE OR ALTER FUNCTION [__mj].[fnX]() RETURNS INT\nAS\nBEGIN\n    DECLARE @n INT = 1;\n    RETURN @n;\nEND';
+            expect(SQLLogging.declaresTSQLVariable(fn)).toBe(false);
         });
 
         it('does not match ordinary statements or PostgreSQL DO blocks', () => {

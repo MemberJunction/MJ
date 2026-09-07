@@ -246,8 +246,10 @@ export class SQLLogging {
             // in the replayable file. Every unit is executed as its own query, so no later unit can
             // depend on the variable — but without a separator, two such units concatenated into one
             // migration batch fail replay with "The variable name '@x' has already been declared".
-            // Callers own the choice in the normal case; this guard closes the class of bug for any
-            // caller that forgets. PostgreSQL never declares `@` variables, so it is unaffected.
+            // Callers own the choice in the normal case; this guard covers any unit that declares a
+            // batch-scoped variable, whether or not the caller asked for a separator. It does not see
+            // a declaration hidden inside a string or a mid-line statement, so emitters should still
+            // pass includeBatchSeparator explicitly. PostgreSQL never declares `@` variables.
             if (!includeBatchSeparator && batchSeparator && SQLLogging.declaresTSQLVariable(contents)) {
                 includeBatchSeparator = true;
             }
@@ -315,18 +317,27 @@ export class SQLLogging {
     }
 
     /**
-     * True when the SQL text opens with a top-level T-SQL local-variable declaration (`DECLARE @name ...`),
-     * ignoring leading whitespace and comments. Declarations inside a CREATE PROCEDURE/FUNCTION body
-     * are not top-level and are not matched, because the routine header comes first.
+     * True when the SQL text declares a batch-scoped T-SQL local variable (`DECLARE @name ...`) at the
+     * start of any line, and no routine header (`CREATE [OR ALTER] PROCEDURE|FUNCTION|TRIGGER`) precedes
+     * it. T-SQL variables are scoped to the batch wherever they are declared — after `SET NOCOUNT ON`,
+     * inside `IF ... BEGIN ... END` — so the match is not limited to the first statement. A declaration
+     * inside a routine body is routine-scoped and cannot collide across units, so it is not matched.
      */
     public static declaresTSQLVariable(sql: string): boolean {
         if (!sql) {
             return false;
         }
-        // Strip leading block comments, line comments, and whitespace so a description banner
-        // or an inline note ahead of the DECLARE doesn't hide it.
-        const stripped = sql.replace(/^(\s*(\/\*[\s\S]*?\*\/|--[^\n]*\n?))*\s*/, '');
-        return /^DECLARE\s+@/i.test(stripped);
+        const routineHeader = /^\s*CREATE\s+(OR\s+ALTER\s+)?(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/i;
+        const declaration = /^\s*DECLARE\s+@/i;
+        for (const line of sql.split('\n')) {
+            if (routineHeader.test(line)) {
+                return false;
+            }
+            if (declaration.test(line)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     protected static getFileLength(filePath: string): number {

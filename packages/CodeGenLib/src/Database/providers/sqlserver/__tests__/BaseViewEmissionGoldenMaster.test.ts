@@ -214,18 +214,24 @@ function installMetadata(entities: EntityInfo[]): void {
     Metadata.Provider = buildProviderStub(entities) as IMetadataProvider;
 }
 
+let sqlOutputWasEnabled: boolean | undefined;
+
 beforeAll(() => {
     originalProvider = Metadata.Provider;
     // SQLOutput.enabled defaults to true, and LogSQLAndExecute refuses to apply metadata SQL when
     // logging is enabled but no CodeGen_Run file is open. These cases run the emitter against a
-    // recording connection with no log file, so turn the capture off for the process.
+    // recording connection with no log file, so turn the capture off for this file.
     if (configInfo.SQLOutput) {
+        sqlOutputWasEnabled = configInfo.SQLOutput.enabled;
         configInfo.SQLOutput.enabled = false;
     }
 });
 
 afterAll(() => {
     Metadata.Provider = originalProvider;
+    if (configInfo.SQLOutput && sqlOutputWasEnabled !== undefined) {
+        configInfo.SQLOutput.enabled = sqlOutputWasEnabled;
+    }
 });
 
 beforeEach(() => {
@@ -553,6 +559,14 @@ LEFT OUTER JOIN
     AND __mj_rgc.[RecordID] = CAST([s].[ID] AS NVARCHAR(450))
     AND __mj_rgc.[LocationType] = 'Primary'
 GO`);
+    });
+
+    it('GM-VIEW-10c: SupportsGeoCoding without a writable Geo field does NOT join vwRecordGeoCodes', async () => {
+        // ShouldJoinRecordGeoCodes requires a writable Geo* field, not just the entity flag.
+        const entity = sitesEntity([pk('SITES-ENTITY-0006')]);
+        const { viewSQL } = await generator.generateBaseViewPieces(pool, entity);
+        expect(viewSQL).not.toContain('vwRecordGeoCodes');
+        expect(viewSQL).not.toContain('__mj_Latitude');
     });
 
     it('GM-VIEW-10b: with FK display fields present, the geo block is appended after ",\\n" and aligns on its own lines', async () => {
