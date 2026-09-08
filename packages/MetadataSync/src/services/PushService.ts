@@ -26,6 +26,8 @@ import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction
 
 // Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
 // Nested relatedEntities share the root's provider so parent+child stay on one TX.
+// Default 10 — never 1. 1 was a wrong workaround for mixed-provider hangs;
+// callers can pass --parallel-batch-size 1 for debugging.
 const PARALLEL_BATCH_SIZE = 10;
 
 export interface PushOptions {

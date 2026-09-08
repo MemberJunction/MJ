@@ -1535,7 +1535,9 @@ Every DB read and write for a graph — `GetEntityObject`, `Save`, `Load`, `RunV
 
 The first thrown record error **fails the file** (fail-fast). A record that returns `status: 'error'` without throwing (e.g. missing primaryKey with `autoCreateMissingRecords=false`) also prevents that graph's leftover depth from being committed.
 
-**Sibling graphs** at the same dependency level run in parallel (default batch **10**). `--parallel-batch-size 1` does **not** mean one global provider — it only serializes graphs.
+**Sibling graphs** at the same dependency level run in parallel. The default `--parallel-batch-size` is **10**, not 1. Defaulting to 1 was a wrong workaround for mixed-provider hangs; pass `1` only when you want to serialize graphs for debugging. `--parallel-batch-size 1` does **not** mean one global provider — it only serializes graphs.
+
+Releasing settled graphs between levels bounds peak live instances at the batch size. The cost is more `CreateIndependentInstance` calls (one per graph per level when `Save()` settles, so L×N instead of N, each doing a `Config()` / metadata round trip). That is the chosen tradeoff for a CLI. If a large push is slow, this is the first place to look.
 
 ```bash
 # Default processing (batch size 10, isolated providers)
@@ -1547,7 +1549,7 @@ mj sync push --parallel-batch-size=20
 # Maximum parallelism (50 records)
 mj sync push --parallel-batch-size=50
 
-# Conservative approach for debugging
+# Serialize graphs for debugging — not the default
 mj sync push --parallel-batch-size=1
 ```
 
