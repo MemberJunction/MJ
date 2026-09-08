@@ -150,6 +150,13 @@ function computeMissingRows(
             if (existingRoleIDs.has(roleID)) {
                 continue;
             }
+            // A read-only field cannot be written through the API by anyone — it is excluded from
+            // the generated create input and from the update SET list — so an Update or Create
+            // verb on it can never decide anything. Writing `Allow` there would author a rule
+            // that reads as a granted permission and is in fact inert, on ~1,000 fields x every
+            // qualifying role. Read stays meaningful and is untouched: restricting a foreign-key
+            // display column ("who does this record belong to") is a legitimate and common use.
+            const writable = !field.ReadOnly;
             missing.push({
                 EntityFieldID: field.ID,
                 RoleID: roleID,
@@ -157,8 +164,8 @@ function computeMissingRows(
                 // it — which is what keeps these rows on the right side of the Read-required
                 // CHECK constraint no matter what Update and Create resolve to.
                 ReadAccess: FieldPermissionAccess.Allow,
-                UpdateAccess: access.CanUpdate ? FieldPermissionAccess.Allow : FieldPermissionAccess.NoAccess,
-                CreateAccess: access.CanCreate ? FieldPermissionAccess.Allow : FieldPermissionAccess.NoAccess,
+                UpdateAccess: writable && access.CanUpdate ? FieldPermissionAccess.Allow : FieldPermissionAccess.NoAccess,
+                CreateAccess: writable && access.CanCreate ? FieldPermissionAccess.Allow : FieldPermissionAccess.NoAccess,
             });
         }
     }
