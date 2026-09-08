@@ -959,8 +959,15 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         //
         // So the role-elevation guard is NOT what this check catches. `MJUserRoleEntityServer`
         // (issue #4282) lives in `@memberjunction/core-entities-server`, which no browser package
-        // depends on, so it never registers here — it refuses on the server, during Submit(), and
-        // surfaces through the Submit() failure below.
+        // depends on, so it never registers here — it refuses on the server, during Submit().
+        //
+        // And today that refusal reaches the user NOWHERE. `ExecuteTransactionGroup` discards the
+        // refused row's `Save()` return, so the row never enrols in the SERVER's group either; an
+        // all-refused batch submits an empty group, whose `Submit()` returns true for having
+        // nothing to do, and the screen closes with no message at all. Verified end to end against
+        // a live server: a non-Owner assigning a role they do not hold is correctly refused (no row
+        // is written) and is reported as success. Tracked as issue #4309 — fixing it belongs in the
+        // resolver, which is the only layer that still knows which row was refused and why.
         //
         // What this check DOES catch is a CLIENT-side refusal — a CheckPermissions denial or a
         // field-rule failure — which really does return false here, leaving that row unenrolled.
