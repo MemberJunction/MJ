@@ -197,7 +197,7 @@ CRITICAL: Your converted output MUST NOT contain any "-- TODO:" comments, nor an
 
 ### Step 1: Convert
 ```bash
-npx mj sql-convert migrations/v5/FILENAME.sql --from tsql --to postgres --output migrations-pg/v5/FILENAME.pg.sql --schema __mj --verbose
+pnpm mj sql-convert migrations/v5/FILENAME.sql --from tsql --to postgres --output migrations-pg/v5/FILENAME.pg.sql --schema __mj --verbose
 ```
 
 ### Step 2: Inspect
@@ -243,7 +243,7 @@ DB_ENCRYPT=false \
 DB_TRUST_SERVER_CERTIFICATE=true \
 CODEGEN_DB_USERNAME=mj_admin \
 CODEGEN_DB_PASSWORD=Claude2Pg99 \
-npx mj migrate --verbose
+pnpm mj migrate --verbose
 ```
 
 ### Step 4: Handle failures
@@ -325,7 +325,7 @@ T-SQL baseline's schema. Never hand-edit converted SQL — fix the rule and re-c
 ## Step 1: Convert each missing baseline (same command as V-files)
 For each missing baseline FILENAME:
 ```bash
-npx mj sql-convert migrations/v5/FILENAME.sql --from tsql --to postgres \
+pnpm mj sql-convert migrations/v5/FILENAME.sql --from tsql --to postgres \
   --output migrations-pg/v5/FILENAME.pg.sql --schema __mj --verbose
 ```
 Do NOT re-convert a baseline that already has a .pg.sql — those are immutable
@@ -443,7 +443,7 @@ DB_ENCRYPT=false \
 DB_TRUST_SERVER_CERTIFICATE=true \
 CODEGEN_DB_USERNAME=sa \
 CODEGEN_DB_PASSWORD=Claude2Sql99 \
-npx mj migrate --verbose
+pnpm mj migrate --verbose
 ```
 
 ## Step 2: Fresh PostgreSQL database with v5 PG migrations
@@ -478,7 +478,7 @@ DB_ENCRYPT=false \
 DB_TRUST_SERVER_CERTIFICATE=true \
 CODEGEN_DB_USERNAME=mj_admin \
 CODEGEN_DB_PASSWORD=Claude2Pg99 \
-npx mj migrate --verbose
+pnpm mj migrate --verbose
 ```
 
 NOTE: Some PG migrations may produce errors for columns/tables that already exist from the baseline. Skyway treats these as migration-level failures and stops; check Skyway's error output, classify the failure (idempotency-safe vs real bug), and decide whether to mark the file as deserving a fix or accept the baseline overlap.

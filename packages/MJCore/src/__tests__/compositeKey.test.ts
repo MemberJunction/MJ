@@ -3,13 +3,15 @@ import { CompositeKey, KeyValuePair, FieldValueCollection, EncodeNewRecordValues
 import type { EntityInfo } from '../generic/entityInfo';
 
 /**
- * Minimal EntityInfo stand-in for tests that only exercise the
- * `entity.FirstPrimaryKey.Name` lookup in `CompositeKey.LoadFromURLSegment`.
- * The cast keeps the test focused on the behavior under test without pulling
- * in the full EntityInfo construction surface.
+ * Minimal EntityInfo stand-in for tests that only exercise the primary-key
+ * metadata `CompositeKey` reads (`FirstPrimaryKey` for the bare-value URL
+ * shorthand, `PrimaryKeys` for building a key from a record). The cast keeps
+ * the test focused on the behavior under test without pulling in the full
+ * EntityInfo construction surface.
  */
-function mockEntity(pkName: string): EntityInfo {
-  return { FirstPrimaryKey: { Name: pkName } } as unknown as EntityInfo;
+function mockEntity(...pkNames: string[]): EntityInfo {
+  const keys = pkNames.map((Name) => ({ Name }));
+  return { FirstPrimaryKey: keys[0], PrimaryKeys: keys } as unknown as EntityInfo;
 }
 
 describe('KeyValuePair', () => {
@@ -629,5 +631,117 @@ describe('ResourceUrlsEquivalent', () => {
       '/app/orders/record/Orders/new',
       '/app/orders/record/Orders/new?NewRecordValues=BillToPersonID%7Cp1',
     )).toBe(false);
+  });
+});
+
+/**
+ * The "compact" record-id contract carried by search results, List Details and
+ * User Record Logs: a single-column key is just its value (whatever the column
+ * is called), a composite key is the full prefixed segment. `ToCompactURLSegment`
+ * writes it and `FromURLSegment(entity, s)` reads it — for ANY entity, which is
+ * what the hardcoded `{ FieldName: 'ID' }` at the search nav sites could not do.
+ */
+describe('ToCompactURLSegment', () => {
+  it('emits the bare value for a single-column key, whatever the column is called', () => {
+    expect(CompositeKey.FromKeyValuePair('individual_id', 'abc-123').ToCompactURLSegment()).toBe('abc-123');
+    expect(CompositeKey.FromKeyValuePair('ID', 11055).ToCompactURLSegment()).toBe('11055');
+  });
+
+  it('emits the full prefixed segment for a composite key', () => {
+    const key = CompositeKey.FromKeyValuePairs([
+      new KeyValuePair('OrderID', 'o1'),
+      new KeyValuePair('LineNo', 3),
+    ]);
+    expect(key.ToCompactURLSegment()).toBe('OrderID|o1||LineNo|3');
+  });
+
+  it('keeps the field prefix when a lone value itself contains the value delimiter', () => {
+    // Bare "a|b" would be mis-read by the parser as field "a" with value "b".
+    const key = CompositeKey.FromKeyValuePair('Code', 'a|b');
+    expect(key.ToCompactURLSegment()).toBe('Code|a|b');
+    // ...and the prefixed form must round-trip: a parser that kept only the second split piece would
+    // yield { Code: 'a' } — a VALID key with a truncated value, which Load() would silently satisfy
+    // with the wrong record. Both parsers rejoin the remainder, so the value comes back intact.
+    expect(CompositeKey.FromURLSegment(mockEntity('Code'), key.ToCompactURLSegment()).Equals(key)).toBe(true);
+    const viaConcatenated = new CompositeKey();
+    viaConcatenated.LoadFromConcatenatedString(key.ToConcatenatedString());
+    expect(viaConcatenated.Equals(key)).toBe(true);
+  });
+
+  it('preserves a multi-part value inside a composite segment too', () => {
+    const key = CompositeKey.FromKeyValuePairs([new KeyValuePair('Code', 'a|b'), new KeyValuePair('Seq', 2)]);
+    const parsed = CompositeKey.FromURLSegment(mockEntity('Code', 'Seq'), key.ToCompactURLSegment());
+    expect(parsed.KeyValuePairs).toEqual([{ FieldName: 'Code', Value: 'a|b' }, { FieldName: 'Seq', Value: '2' }]);
+  });
+
+  it('serializes a null single value as an empty string', () => {
+    expect(CompositeKey.FromKeyValuePair('ID', null).ToCompactURLSegment()).toBe('');
+  });
+});
+
+describe('CompositeKey.FromURLSegment', () => {
+  it('maps a bare value onto the entity\'s first primary key — not a hardcoded ID', () => {
+    const key = CompositeKey.FromURLSegment(mockEntity('individual_id'), '42');
+    expect(key.KeyValuePairs).toEqual([{ FieldName: 'individual_id', Value: '42' }]);
+  });
+
+  it('parses a composite segment with its own field names', () => {
+    const key = CompositeKey.FromURLSegment(mockEntity('OrderID', 'LineNo'), 'OrderID|o1||LineNo|3');
+    expect(key.KeyValuePairs).toEqual([
+      { FieldName: 'OrderID', Value: 'o1' },
+      { FieldName: 'LineNo', Value: '3' },
+    ]);
+  });
+
+  it('reads the always-prefixed single-key form too', () => {
+    const key = CompositeKey.FromURLSegment(mockEntity('individual_id'), 'individual_id|42');
+    expect(key.KeyValuePairs).toEqual([{ FieldName: 'individual_id', Value: '42' }]);
+  });
+
+  it('round-trips ToCompactURLSegment for single and composite keys', () => {
+    const single = CompositeKey.FromKeyValuePair('individual_id', 'abc');
+    expect(CompositeKey.FromURLSegment(mockEntity('individual_id'), single.ToCompactURLSegment()).Equals(single)).toBe(true);
+
+    const composite = CompositeKey.FromKeyValuePairs([new KeyValuePair('A', 'x'), new KeyValuePair('B', 'y')]);
+    expect(CompositeKey.FromURLSegment(mockEntity('A', 'B'), composite.ToCompactURLSegment()).Equals(composite)).toBe(true);
+  });
+
+  it('falls back to an ID key for a bare value when the entity is unknown', () => {
+    expect(CompositeKey.FromURLSegment(undefined, '42').KeyValuePairs).toEqual([{ FieldName: 'ID', Value: '42' }]);
+    expect(CompositeKey.FromURLSegment(null, '42').KeyValuePairs).toEqual([{ FieldName: 'ID', Value: '42' }]);
+  });
+
+  it('still parses a prefixed segment when the entity is unknown — it carries its own field names', () => {
+    const key = CompositeKey.FromURLSegment(undefined, 'individual_id|42');
+    expect(key.KeyValuePairs).toEqual([{ FieldName: 'individual_id', Value: '42' }]);
+  });
+});
+
+describe('CompositeKey.FromEntityRecord', () => {
+  it('reads the key off the entity\'s primary key column(s), not a hardcoded ID', () => {
+    const row = { individual_id: 'abc', Name: 'Ada', ID: 'should-be-ignored' };
+    const key = CompositeKey.FromEntityRecord(mockEntity('individual_id'), row);
+    expect(key.KeyValuePairs).toEqual([{ FieldName: 'individual_id', Value: 'abc' }]);
+  });
+
+  it('captures every column of a composite key in metadata order', () => {
+    const key = CompositeKey.FromEntityRecord(mockEntity('OrderID', 'LineNo'), { LineNo: 3, OrderID: 'o1' });
+    expect(key.KeyValuePairs).toEqual([
+      { FieldName: 'OrderID', Value: 'o1' },
+      { FieldName: 'LineNo', Value: 3 },
+    ]);
+    expect(key.ToCompactURLSegment()).toBe('OrderID|o1||LineNo|3');
+  });
+});
+
+describe('ToWhereClause quote escaping', () => {
+  it('doubles embedded single quotes so a value cannot break out of the literal', () => {
+    const key = CompositeKey.FromKeyValuePair('Name', "O'Brien");
+    expect(key.ToWhereClause()).toBe("Name='O''Brien'");
+  });
+
+  it('doubles embedded double quotes when that quote style is chosen', () => {
+    const key = CompositeKey.FromKeyValuePair('Name', 'say "hi"');
+    expect(key.ToWhereClause(true, 'double')).toBe('Name="say ""hi"""');
   });
 });

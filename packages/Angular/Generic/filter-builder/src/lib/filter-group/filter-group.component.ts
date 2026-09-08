@@ -4,8 +4,9 @@ import {
   FilterDescriptor,
   FilterFieldInfo,
   FilterLogic,
-  isCompositeFilter,
-  createFilterRule
+  FilterSource,
+  IsCompositeFilter,
+  CreateFilterRule
 } from '../types/filter.types';
 
 /**
@@ -30,6 +31,9 @@ export class FilterGroupComponent implements OnInit {
    * Available fields to filter on
    */
   @Input() fields: FilterFieldInfo[] = [];
+
+  /** Multi-entity sources. Empty = legacy single-entity field list. */
+  @Input() sources: FilterSource[] = [];
 
   /**
    * Whether this is the root group (affects delete button visibility)
@@ -96,7 +100,7 @@ export class FilterGroupComponent implements OnInit {
    */
   addRule(): void {
     const defaultField = this.fields[0]?.name || '';
-    const newRule = createFilterRule(defaultField);
+    const newRule = CreateFilterRule(defaultField);
 
     this.emitChange({
       ...this.filter,
@@ -113,7 +117,7 @@ export class FilterGroupComponent implements OnInit {
     const defaultField = this.fields[0]?.name || '';
     const newGroup: CompositeFilterDescriptor = {
       logic: 'and',
-      filters: [createFilterRule(defaultField)]
+      filters: [CreateFilterRule(defaultField)]
     };
 
     this.emitChange({
@@ -156,7 +160,7 @@ export class FilterGroupComponent implements OnInit {
     // Ensure at least one rule remains if this is the root
     if (this.isRoot && filters.length === 0) {
       const defaultField = this.fields[0]?.name || '';
-      filters.push(createFilterRule(defaultField));
+      filters.push(CreateFilterRule(defaultField));
     }
 
     this.emitChange({
@@ -176,7 +180,7 @@ export class FilterGroupComponent implements OnInit {
    * Check if a filter is a composite (group) filter
    */
   isGroup(filter: FilterDescriptor | CompositeFilterDescriptor): boolean {
-    return isCompositeFilter(filter);
+    return IsCompositeFilter(filter);
   }
 
   /**

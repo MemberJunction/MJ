@@ -74,6 +74,7 @@
           <mj-filter-group
             [filter]="asGroup(item)"
             [fields]="fields"
+            [sources]="sources"
             [isRoot]="false"
             [depth]="depth + 1"
             [maxDepth]="maxDepth"
@@ -86,6 +87,7 @@
           <mj-filter-rule
             [filter]="asRule(item)"
             [fields]="fields"
+            [sources]="sources"
             [disabled]="disabled"
             [showDelete]="filter.filters.length > 1 || !isRoot"
             (filterChange)="onRuleChange(i, $event)"

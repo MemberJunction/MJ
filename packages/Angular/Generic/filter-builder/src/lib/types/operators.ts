@@ -86,7 +86,7 @@ export const LOOKUP_OPERATORS: OperatorInfo[] = [
 /**
  * Get the available operators for a given field type
  */
-export function getOperatorsForType(type: FilterFieldType): OperatorInfo[] {
+export function GetOperatorsForType(type: FilterFieldType): OperatorInfo[] {
   switch (type) {
     case 'string':
       return STRING_OPERATORS;
@@ -106,15 +106,15 @@ export function getOperatorsForType(type: FilterFieldType): OperatorInfo[] {
 /**
  * Get operator info by value
  */
-export function getOperatorInfo(operator: FilterOperator, type: FilterFieldType): OperatorInfo | undefined {
-  const operators = getOperatorsForType(type);
+export function GetOperatorInfo(operator: FilterOperator, type: FilterFieldType): OperatorInfo | undefined {
+  const operators = GetOperatorsForType(type);
   return operators.find(op => op.value === operator);
 }
 
 /**
  * Check if an operator requires a value input
  */
-export function operatorRequiresValue(operator: FilterOperator): boolean {
+export function OperatorRequiresValue(operator: FilterOperator): boolean {
   const nullOperators: FilterOperator[] = ['isnull', 'isnotnull', 'isempty', 'isnotempty'];
   return !nullOperators.includes(operator);
 }

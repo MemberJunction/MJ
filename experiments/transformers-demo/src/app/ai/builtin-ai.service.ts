@@ -414,7 +414,7 @@ export class BuiltInAIService implements OnDestroy {
     let streamEv: ActivityEvent | null = null;
 
     try {
-      // ReadableStream async iteration: Chrome 124+, typed via the `dom.asynciterable` lib in tsconfig.
+      // ReadableStream async iteration: Chrome 124+; TypeScript 5.9's default DOM lib types it, so no extra lib entry or cast is needed.
       const stream = this.session.promptStreaming(promptText, { signal: this.abortController.signal });
       for await (const chunk of stream) {
         if (firstTokenAt === null) {

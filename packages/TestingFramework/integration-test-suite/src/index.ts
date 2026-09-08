@@ -65,6 +65,7 @@ export * from './checks/ai-embeddings.checks';
 export * from './checks/agent-loop-standin.checks';
 export * from './checks/transaction-groups.checks';
 export * from './checks/transaction-groups-batched.checks';
+export * from './checks/nested-transactions.checks';
 export * from './checks/class-resolution.checks';
 export * from './checks/metadata-sync.checks';
 export * from './checks/codegen-determinism.checks';

@@ -1,13 +1,14 @@
 import { Type } from '@angular/core';
-import { EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import { EntityHasMapCoordinates, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseViewTypeDescriptor } from '../view-type.contracts';
 import { MapViewRendererComponent } from '../renderers/map-view-renderer.component';
 
 /**
  * Map view type — renders geocoded records as markers on an interactive map. Available
- * only for entities that support geocoding (lifted from the host's `updateGeoCodingSupport`
- * logic, which checks `entity.SupportsGeoCoding`).
+ * when `SupportsGeoCoding` is on **or** the entity has GeoLatitude/GeoLongitude (including
+ * virtual display fields such as PrimaryAddressLatitude). GeoCodeSyncService is a separate
+ * write-side gate (writable Geo* only).
  *
  * Registration key (`DriverClass`) matches the `MJ: View Types` metadata seed:
  * `metadata/view-types/.view-types.json` → "MapViewType".
@@ -20,7 +21,7 @@ export class MapViewType extends BaseViewTypeDescriptor {
   readonly RendererComponent: Type<unknown> = MapViewRendererComponent;
 
   override IsAvailableFor(entity: EntityInfo, _provider?: IMetadataProvider): boolean {
-    return !!(entity && entity.SupportsGeoCoding);
+    return !!(entity && EntityHasMapCoordinates(entity));
   }
 }
 

@@ -270,7 +270,7 @@ Amith's call after reading the findings: **wait and see, re-evaluate every three
 ```bash
 brew install --cask google-chrome@canary            # 155.0.8038.2 at time of writing
 # Enable chrome://flags/#gemma4-for-built-in-ai, relaunch
-cd experiments/transformers-demo && nvm use 20 && npm install && npm start
+cd experiments/transformers-demo && nvm use 24 && npm install && npm start
 # In Canary: http://localhost:4200 → "Chrome Built-in AI" → Connect (first time downloads ~2.4 GB)
 ```
 
@@ -287,6 +287,6 @@ components, use-case availability and a manual prompt tool.
   `--user-data-dir`.
 - **`chrome://on-device-internals` is disabled by default** in 155 — enable "internal debugging pages" via a
   `<cr-button>` inside shadow DOM on `chrome://chrome-urls`.
-- Angular 18 CLI flags Node 24 as unsupported; build under Node 20. TS 5.5's DOM lib lacks
-  `ReadableStream[Symbol.asyncIterator]`; cast to `AsyncIterable<string>`.
+- (Historical) Angular 18's CLI flagged Node 24 as unsupported, and TS 5.5 needed the separate `dom.asynciterable` lib for
+  `ReadableStream` async iteration. The experiment now runs on Angular 21.2.19 / TypeScript 5.9 / Node 24 (#4188).
 - Model download progress arrives as a 0..1 fraction in `downloadprogress.loaded` (with `total` = 1).

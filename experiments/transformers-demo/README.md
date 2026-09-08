@@ -10,7 +10,7 @@ This standalone Angular app demonstrates running AI models entirely in the brows
 
 ```bash
 # From the experiments/transformers-demo directory
-nvm use 20    # Angular 18 CLI: Node 20 or 22 (Node 24 is reported as unsupported)
+nvm use 24    # Angular 21 CLI; Node 24 (the workspace's .nvmrc)
 npm install
 npm start     # Start dev server on http://localhost:4200
 ```

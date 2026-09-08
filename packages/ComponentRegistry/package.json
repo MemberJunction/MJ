@@ -24,6 +24,7 @@
   "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/dynamic-packages": "6.1.0-edge.5",
     "@memberjunction/global": "6.1.0-edge.5",
     "@memberjunction/core-entities": "6.1.0-edge.5",
     "@memberjunction/interactive-component-types": "6.1.0-edge.5",

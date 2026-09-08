@@ -254,7 +254,7 @@ If a column stores structured JSON (like a `Settings` or `Configuration` column)
 4. **Push the metadata and re-run CodeGen**:
 
    ```bash
-   npx mj sync push --dir=metadata --include="entities"
+   pnpm mj sync push --dir=metadata --include="entities"
    mj codegen
    ```
 
@@ -286,7 +286,7 @@ If your new table is a lookup table (e.g., `WidgetCategory`), **do not seed it w
 
 1. Create `metadata/widget-categories/.mj-sync.json` with the entity configuration
 2. Create `metadata/widget-categories/.widget-categories.json` with the seed data
-3. Push: `npx mj sync push --dir=metadata --include="widget-categories"`
+3. Push: `pnpm mj sync push --dir=metadata --include="widget-categories"`
 
 See [metadata/CLAUDE.md](../metadata/CLAUDE.md) for the full metadata file format.
 

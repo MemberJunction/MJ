@@ -205,13 +205,14 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (408 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -375,6 +376,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -1542,6 +1544,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -1678,11 +1681,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJComponentEntity,
     MJComponentEntityExtended,
     MJComponentLibraryEntity,
-    MJComponentLibraryLinkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
@@ -1709,6 +1712,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -1881,12 +1885,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
-    MJSearchScopePermissionEntity,
-    MJSearchScopeProviderEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopePermissionEntity,
+    MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
@@ -2085,12 +2089,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FacebookGetPostInsightsAction,
     FacebookRespondToCommentsAction,
     FacebookSchedulePostAction,
-    FacebookSearchPostsAction,
-    GetAccountAnalyticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FacebookSearchPostsAction,
+    GetAccountAnalyticsAction,
     GetCommentsAction,
     GetTrendingHashtagsAction,
     GetUserVideosAction,
@@ -2289,12 +2293,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TaskGraphRetryTaskServerOperation,
     TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
-    TaskGraphStepServerOperation,
-    TaskGraphSubmitServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphStepServerOperation,
+    TaskGraphSubmitServerOperation,
     TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
@@ -2493,12 +2497,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
-    UnshareListAction,
-    UpdateListItemStatusAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    UnshareListAction,
+    UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
     ValidateEmailUniqueAction,
@@ -2538,7 +2542,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1023;
+export const CLASS_REGISTRATIONS_COUNT = 1025;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

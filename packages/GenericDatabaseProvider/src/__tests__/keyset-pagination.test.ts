@@ -17,7 +17,7 @@ vi.mock('@memberjunction/encryption', () => ({
     }
 }));
 
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 import {
     AfterKeyNotSupportedError,
     CompositeKey,
@@ -34,7 +34,7 @@ import {
  * Concrete test subclass — only implements the bare minimum needed to call
  * BuildKeysetSeekClause + formatKeysetSeekValue. We aren't running real queries.
  */
-class TestProvider extends GenericDatabaseProvider {
+class TestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 
