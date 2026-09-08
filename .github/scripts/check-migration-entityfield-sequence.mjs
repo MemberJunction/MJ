@@ -365,6 +365,11 @@ function main(argv) {
         console.log(`${RED}✗ ${f}${NC}`);
         for (const h of hits) console.log(`    ${YELLOW}line ${h.line}${NC}: Sequence = ${h.value}`);
     }
+    if (violations > 0 && argv[0] === '--all') {
+        // Informational: committed migrations are left alone by policy (Flyway checksums).
+        console.log(`\n${YELLOW}${violations} committed migration(s) carry a literal Sequence — left alone by policy; see migrations/CLAUDE.md${NC}`);
+        return 0;
+    }
     if (violations > 0) {
         console.log(`
 ${RED}EntityField INSERT with a literal Sequence${NC}
