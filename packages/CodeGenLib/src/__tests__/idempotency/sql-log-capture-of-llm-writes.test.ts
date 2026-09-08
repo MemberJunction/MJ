@@ -5,7 +5,7 @@ import os from 'os';
 import '../../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { ManageMetadataBase } from '../../Database/manage-metadata';
 import { SQLLogging } from '../../Misc/sql_logging';
-import { configInfo } from '../../Config/config';
+import { SQLOutputConfig, configInfo } from '../../Config/config';
 import { EntityInfo } from '@memberjunction/core';
 import { CodeGenConnection, CodeGenQueryResult } from '../../Database/codeGenDatabaseProvider';
 import { DecisionMetadataWriter } from '../../Database/decision-metadata-writer';
@@ -13,24 +13,15 @@ import { SmartFieldIdentificationResult } from '../../Misc/advanced_generation';
 
 class TestableManageMetadataForLogging extends ManageMetadataBase {
    public async callApplyFieldCategories(
-      pool: CodeGenConnection,
-      entity: EntityInfo,
-      fields: any[],
-      fieldCategories: any[],
-      existingCategories: Set<string>,
-      ctx: { isNewEntity: boolean }
+      ...args: Parameters<ManageMetadataBase['applyFieldCategories']>
    ): Promise<void> {
-      return this.applyFieldCategories(pool, entity, fields, fieldCategories, existingCategories, ctx);
+      return this.applyFieldCategories(...args);
    }
 
    public async callApplySmartFieldIdentification(
-      pool: CodeGenConnection,
-      entity: any,
-      fields: any[],
-      result: SmartFieldIdentificationResult,
-      ctx?: { isNewEntity: boolean; newFieldNames: ReadonlySet<string>; typeReopenedNames: ReadonlySet<string> }
+      ...args: Parameters<ManageMetadataBase['applySmartFieldIdentification']>
    ): Promise<void> {
-      return this.applySmartFieldIdentification(pool, entity, fields, result, ctx);
+      return this.applySmartFieldIdentification(...args);
    }
 }
 
@@ -44,7 +35,7 @@ function createDummyConnection(): CodeGenConnection {
 
 describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
    let tmpDir: string;
-   let origSQLOutput: any;
+   let origSQLOutput: SQLOutputConfig | undefined;
    let mm: TestableManageMetadataForLogging;
    const pool = createDummyConnection();
 
@@ -59,7 +50,7 @@ describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
          appendToFile: false,
          convertCoreSchemaToFlywayMigrationFile: false,
          fileName: 'CodeGen_Run_Test.sql'
-      } as any;
+      };
 
       SQLLogging.resetForTests();
       SQLLogging.sqlOutputDirFlag = tmpDir;
@@ -223,7 +214,7 @@ describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
       const emptyFilePath = path.join(emptyDir, 'CodeGen_Run_Empty.sql');
       await fs.writeFile(emptyFilePath, '', 'utf8');
 
-      (SQLLogging as any)._SQLLoggingFilePath = emptyFilePath;
+      SQLLogging.setFilePathForTesting(emptyFilePath);
 
       expect(await fs.pathExists(emptyFilePath)).toBe(true);
       SQLLogging.finishSQLLogging();

@@ -13,12 +13,12 @@ import {
    DecisionRecord
 } from '../../Database/decision-metadata-format';
 import { configInfo } from '../../Config/config';
-import { JsonWriteHelper } from '../../../../MetadataSync/src/lib/json-write-helper';
+import { JsonWriteHelper, RecordData } from '@memberjunction/metadata-sync';
 
 describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
    let tmpDir: string;
    let origMetaDir: string | undefined;
-   let origDecisionConfig: any;
+   let origDecisionConfig: typeof configInfo.decisionMetadata;
 
    beforeEach(async () => {
       tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-decision-test-'));
@@ -93,7 +93,7 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
 
       // Write with JsonWriteHelper to compare
       const helperFilePath = path.join(tmpDir, 'helper-output.json');
-      await JsonWriteHelper.writeOrderedRecordData(helperFilePath, [record as any]);
+      await JsonWriteHelper.writeOrderedRecordData(helperFilePath, [record as RecordData]);
       const helperContent = await fs.readFile(helperFilePath, 'utf8');
 
       expect(ourFormatted).toBe(helperContent);

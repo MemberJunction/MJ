@@ -111,13 +111,15 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check changed paths
         id: filter
         env:
           PR_BASE_REF: ${{ github.base_ref }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --depth=1 origin "$PR_BASE_REF"
+            git fetch --no-tags origin "$PR_BASE_REF"
             CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
             if echo "$CHANGED" | grep -qE '^(packages/CodeGenLib/|packages/MJCore/src/generic/(providerBase|entityInfo)\.ts|packages/MJGlobal/src/util\.ts|migrations/|metadata/|.*generated/|\.github/workflows/integration\.yml)'; then
               echo "codegen=true" >> "$GITHUB_OUTPUT"
