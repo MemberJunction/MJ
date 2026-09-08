@@ -1,12 +1,13 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { WHITEBOARD_FONT_SIZES, WhiteboardFontFamily, WhiteboardShapeKind } from './whiteboard-state';
+import { WhiteboardToolRoster, VisibleToolbarEntries } from './whiteboard-tool-roster';
 
 /** A user-selectable board tool. */
 export type WhiteboardTool = 'select' | 'pan' | 'pen' | 'shape' | 'sticky' | 'text' | 'markdown' | 'html' | 'image' | 'connector' | 'eraser';
 
 /** One entry in the floating toolbar. */
-interface ToolbarEntry {
+export interface ToolbarEntry {
   Tool: WhiteboardTool;
   Icon: string;
   Title: string;
@@ -55,6 +56,12 @@ interface FontFamilyEntry {
 export class RealtimeWhiteboardToolbarComponent {
   /** The currently active tool. */
   @Input() ActiveTool: WhiteboardTool = 'select';
+  /**
+   * Which tools the palette offers. `null` (default) is all eleven, today's rendering. A host
+   * that narrows this also narrows the keyboard shortcuts and the canvas context menu, because
+   * the same roster is threaded to all three (see `whiteboard-tool-roster.ts`).
+   */
+  @Input() ToolRoster: WhiteboardToolRoster = null;
   /** Selected pen ink color (from {@link WHITEBOARD_PEN_COLORS}). */
   @Input() PenColor: string = WHITEBOARD_PEN_COLORS[0];
   /** Selected pen stroke width. */
@@ -101,6 +108,11 @@ export class RealtimeWhiteboardToolbarComponent {
     { Tool: 'connector', Icon: 'fa-solid fa-arrow-trend-up', Title: 'Connector', Kbd: 'C' },
     { Tool: 'eraser', Icon: 'fa-solid fa-eraser', Title: 'Eraser', Kbd: 'E' }
   ];
+
+  /** `Tools` narrowed by `ToolRoster`, in `Tools` order. The template loops over this. */
+  public get VisibleTools(): ToolbarEntry[] {
+    return VisibleToolbarEntries(this.Tools, this.ToolRoster);
+  }
 
   public readonly PenColors = WHITEBOARD_PEN_COLORS;
   public readonly PenWidths = WHITEBOARD_PEN_WIDTHS;

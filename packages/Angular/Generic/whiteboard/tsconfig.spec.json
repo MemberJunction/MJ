@@ -1,7 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["vitest/globals", "node"]
+    "types": [
+      "vitest/globals",
+      "node"
+    ]
   },
   "include": [
     "src/lib/whiteboard-state.ts",
@@ -12,7 +15,12 @@
     "src/lib/whiteboard-agent-sees-popover.component.ts",
     "src/lib/whiteboard-agent-sees-popover.component.dom.test.ts",
     "src/lib/whiteboard-pages.component.ts",
-    "src/lib/whiteboard-pages.component.dom.test.ts"
+    "src/lib/whiteboard-pages.component.dom.test.ts",
+    "src/lib/whiteboard-tool-roster.ts",
+    "src/lib/whiteboard-context-menu.ts",
+    "src/lib/whiteboard-host.component.ts",
+    "src/lib/whiteboard-host.component.dom.test.ts",
+    "src/lib/whiteboard-board.component.ts"
   ],
   "exclude": [
     "node_modules",
