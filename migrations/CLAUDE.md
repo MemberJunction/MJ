@@ -186,8 +186,9 @@ If an appended CodeGen block inserts `EntityField` rows, the `Sequence` must be 
 evaluated **at apply time**, never the number CodeGen wrote:
 
 ```sql
--- ✅ correct — what CodeGen now emits. The offset is the field's SCHEMA ORDINAL, so a batch of
---    new fields keeps its relative order regardless of the order the INSERTs execute.
+-- ✅ correct — what CodeGen emits. Unique on any database in any order. The batch is emitted in
+--    schema order and executes sequentially, so values rise in that order; the SCHEMA ORDINAL
+--    offset only widens the gaps. The values are disposable either way (see below).
 (SELECT COALESCE(MAX([Sequence]), 0)
    FROM [${flyway:defaultSchema}].[EntityField]
   WHERE [EntityID] = '<entity-id>') + <schema-ordinal>

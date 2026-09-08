@@ -67,6 +67,37 @@ class StubConnection implements CodeGenConnection {
   }
 }
 
+/** Split a parenthesised list on top-level commas, honoring quotes and nested parentheses. */
+function splitList(list: string): string[] {
+  const items: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let start = 0;
+  for (let i = 0; i < list.length; i++) {
+    const ch = list[i];
+    if (ch === "'") quoted = !quoted;
+    else if (!quoted && ch === '(') depth++;
+    else if (!quoted && ch === ')') depth--;
+    else if (!quoted && ch === ',' && depth === 0) {
+      items.push(list.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  items.push(list.slice(start).trim());
+  return items;
+}
+
+/** The emitted value for a named column of the INSERT. */
+function valueOf(sql: string, column: string): string {
+  const cleaned = sql.replace(/--[^\n]*/g, '');
+  const cols = cleaned.slice(cleaned.indexOf('(') + 1, cleaned.search(/\)\s*VALUES/i));
+  const vals = cleaned.slice(cleaned.search(/VALUES\s*\(/i));
+  const tuple = vals.slice(vals.indexOf('(') + 1, vals.lastIndexOf(')'));
+  const idx = splitList(cols).findIndex((c) => c.replace(/[\[\]]/g, '') === column);
+  if (idx === -1) throw new Error(`column ${column} not in INSERT`);
+  return splitList(tuple)[idx];
+}
+
 /** The value in the Sequence position of the emitted INSERT (third column). */
 function sequenceValue(sql: string): string {
   // The emitter annotates the EntityID value with a trailing `-- Entity: <name>` comment.
@@ -98,6 +129,14 @@ describe('EntityField Sequence on insert', () => {
       const seq = sequenceValue(mm.insertSQL('11111111-1111-1111-1111-111111111111', field({ SourceOrdinal: bad })));
       expect(seq.endsWith(') + 1')).toBe(true);
     }
+  });
+
+  it('DefaultInView honors IncludeFirstNFieldsAsDefaultInView by schema ordinal, not by the placeholder Sequence', () => {
+    // Default setting is 5. A non-name, non-key field at ordinal 3 is in; one at ordinal 8 is out.
+    const early = mm.insertSQL('11111111-1111-1111-1111-111111111111', field({ FieldName: 'Status', IsVirtual: false, SourceOrdinal: 3, Sequence: 100003 }));
+    const late = mm.insertSQL('11111111-1111-1111-1111-111111111111', field({ FieldName: 'Notes', IsVirtual: false, SourceOrdinal: 8, Sequence: 100008 }));
+    expect(valueOf(early, 'DefaultInView')).toBe('1');
+    expect(valueOf(late, 'DefaultInView')).toBe('0');
   });
 
   it('does not park existing rows: the batch is INSERTs only, one apply-time expression each', async () => {

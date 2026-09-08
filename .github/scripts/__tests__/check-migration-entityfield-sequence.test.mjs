@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanContent, parseParenList } from '../check-migration-entityfield-sequence.mjs';
+import { symlinkSync } from 'node:fs';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'check-migration-entityfield-sequence.mjs');
 
@@ -15,12 +16,18 @@ describe('parseParenList', () => {
         const r = parseParenList(text, 0);
         expect(r.items).toEqual([`'a, (b)'`, `[c, d]`, `(1, 2)`, `N'it''s'`, `3`]);
         expect(r.end).toBe(text.length);
+        expect(text.slice(r.offsets[4], r.offsets[4] + 1)).toBe('3');
     });
 });
 
 describe('scanContent', () => {
     it('flags a bare integer in the Sequence position and reports its line', () => {
         const sql = `INSERT INTO [__mj].[EntityField]\n([ID], [EntityID], [Sequence], [Name])\nVALUES\n(\n'a',\n'e',\n16,\n'Name'\n);`;
+        expect(scanContent(sql)).toEqual([{ line: 7, value: '16', columnIndex: 2 }]);
+    });
+
+    it('attributes the hit to the line of the Sequence value, not to an earlier value sharing its digits', () => {
+        const sql = `INSERT INTO [__mj].[EntityField]\n([ID], [EntityID], [Sequence])\nVALUES\n(\n'3c9ea97f-1616-0000-0000-000000000000',\n'e', -- Entity: X\n16\n);`;
         expect(scanContent(sql)).toEqual([{ line: 7, value: '16', columnIndex: 2 }]);
     });
 
@@ -78,6 +85,16 @@ describe('changed-files mode reports only lines the PR adds', () => {
 describe('--self-test', () => {
     it('passes', () => {
         const r = spawnSync(process.execPath, [SCRIPT, '--self-test'], { encoding: 'utf8' });
+        expect(r.status, r.stdout + r.stderr).toBe(0);
+        expect(r.stdout).toContain('all self-tests passed');
+    });
+
+    it('still runs when invoked through a symlinked path', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'mj-seq-link-'));
+        const link = join(dir, 'gate.mjs');
+        symlinkSync(SCRIPT, link);
+        const r = spawnSync(process.execPath, [link, '--self-test'], { encoding: 'utf8' });
+        rmSync(dir, { recursive: true, force: true });
         expect(r.status, r.stdout + r.stderr).toBe(0);
         expect(r.stdout).toContain('all self-tests passed');
     });

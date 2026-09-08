@@ -41,7 +41,7 @@
  *   node check-migration-entityfield-sequence.mjs --self-test     # the detector's own fixtures
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const RED = '\x1b[0;31m', YELLOW = '\x1b[0;33m', GREEN = '\x1b[0;32m', DIM = '\x1b[2m', NC = '\x1b[0m';
@@ -49,15 +49,35 @@ const RED = '\x1b[0;31m', YELLOW = '\x1b[0;33m', GREEN = '\x1b[0;32m', DIM = '\x
 /** Opening of an EntityField INSERT in either quoting dialect; `EntityFieldValue` etc. do not match. */
 const EF_INSERT_RE = /INSERT\s+INTO\s+(?:[^\s(]*?[.\]"`])?(?:\[EntityField\]|"EntityField"|`EntityField`|EntityField)\s*\(/gi;
 
+/** Index of the first character at or after `pos` that is not whitespace or inside a -- / block comment. */
+export function skipInsignificant(text, pos) {
+    let i = pos;
+    while (i < text.length) {
+        const ch = text[i];
+        if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') { i++; continue; }
+        if (ch === '-' && text[i + 1] === '-') { const nl = text.indexOf('\n', i); i = nl === -1 ? text.length : nl + 1; continue; }
+        if (ch === '/' && text[i + 1] === '*') { const end = text.indexOf('*/', i + 2); i = end === -1 ? text.length : end + 2; continue; }
+        break;
+    }
+    return i;
+}
+
 /**
  * Parse a parenthesised, comma-separated list starting at `text[open]` (which must be `(`).
  * Respects '...' and "..." literals (with doubled-quote escapes), [...] identifiers, nested
- * parentheses, and -- / block comments. Returns the items (trimmed, raw text) and the index
- * just past the closing parenthesis, or null if unbalanced.
+ * parentheses, and -- / block comments. Returns the items (comment-stripped, trimmed), the
+ * offset in `text` where each item's first significant character sits (so a hit can be
+ * attributed to the right line), and the index just past the closing parenthesis; null if
+ * unbalanced.
  */
 export function parseParenList(text, open) {
     if (text[open] !== '(') return null;
     const items = [];
+    const offsets = [];
+    const pushItem = (from, to) => {
+        items.push(stripComments(text.slice(from, to)).trim());
+        offsets.push(Math.min(skipInsignificant(text, from), to));
+    };
     let depth = 0, i = open, start = open + 1;
     while (i < text.length) {
         const ch = text[i];
@@ -75,10 +95,10 @@ export function parseParenList(text, open) {
         if (ch === '(') { depth++; i++; continue; }
         if (ch === ')') {
             depth--;
-            if (depth === 0) { items.push(stripComments(text.slice(start, i)).trim()); return { items, end: i + 1 }; }
+            if (depth === 0) { pushItem(start, i); return { items, offsets, end: i + 1 }; }
             i++; continue;
         }
-        if (ch === ',' && depth === 1) { items.push(stripComments(text.slice(start, i)).trim()); start = i + 1; i++; continue; }
+        if (ch === ',' && depth === 1) { pushItem(start, i); start = i + 1; i++; continue; }
         i++;
     }
     return null;
@@ -133,36 +153,35 @@ function lineAt(newlines, offset) {
 export function scanContent(text) {
     const hits = [];
     const newlines = newlineIndex(text);
-    const tupleSeparator = /\s*,/y;
     EF_INSERT_RE.lastIndex = 0;
     let m;
     while ((m = EF_INSERT_RE.exec(text)) !== null) {
         const open = m.index + m[0].length - 1;
         const cols = parseParenList(text, open);
         if (!cols) continue;
+        let cursor = cols.end;
         const seqIdx = cols.items.findIndex((c) => bareIdentifier(c) === 'sequence');
-        if (seqIdx === -1) { EF_INSERT_RE.lastIndex = cols.end; continue; }
-        const valuesRe = /\bVALUES\b/gi;
-        valuesRe.lastIndex = cols.end;
-        const v = valuesRe.exec(text);
-        if (!v) continue;
-        // One or more tuples: VALUES (...), (...)
-        let cursor = v.index + v[0].length;
-        for (;;) {
-            const openAt = text.indexOf('(', cursor);
-            if (openAt === -1 || text.slice(cursor, openAt).trim() !== '') break;
-            const tuple = parseParenList(text, openAt);
-            if (!tuple) break;
-            const value = tuple.items[seqIdx];
-            if (value !== undefined && /^\(?\s*[+-]?\d+\s*\)?$/.test(value)) {
-                const valueOffset = text.indexOf(value, openAt);
-                hits.push({ line: lineAt(newlines, valueOffset), value, columnIndex: seqIdx });
+        // The token right after the column list decides the shape. Only `VALUES` carries
+        // tuples to inspect; `INSERT ... SELECT` and anything else is skipped as a whole so a
+        // later, unrelated VALUES can never be read with this INSERT's column positions.
+        const afterCols = skipInsignificant(text, cols.end);
+        if (seqIdx !== -1 && /^VALUES\b/i.test(text.slice(afterCols, afterCols + 6))) {
+            cursor = afterCols + 'VALUES'.length;
+            // One or more tuples: VALUES (...), (...) — comments allowed anywhere between.
+            for (;;) {
+                const openAt = skipInsignificant(text, cursor);
+                if (text[openAt] !== '(') break;
+                const tuple = parseParenList(text, openAt);
+                if (!tuple) break;
+                const value = tuple.items[seqIdx];
+                if (value !== undefined && /^\(?\s*[+-]?\d+\s*\)?$/.test(value)) {
+                    hits.push({ line: lineAt(newlines, tuple.offsets[seqIdx]), value, columnIndex: seqIdx });
+                }
+                cursor = tuple.end;
+                const sep = skipInsignificant(text, cursor);
+                if (text[sep] !== ',') break;
+                cursor = sep + 1;
             }
-            cursor = tuple.end;
-            tupleSeparator.lastIndex = cursor;
-            const next = tupleSeparator.exec(text);
-            if (!next) break;
-            cursor = tupleSeparator.lastIndex;
         }
         EF_INSERT_RE.lastIndex = cursor;
     }
@@ -251,6 +270,24 @@ const SELF_TEST_FIXTURES = [
         `INSERT INTO [__mj].[EntityField] ([Description], [ID], [EntityID], [Sequence], [Name]) VALUES (N'x, (y), ''z''', 'id', 'eid', 7, 'Name');`],
     ['a parenthesised integer is still a literal', true,
         `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('id', 'eid', (16), 'Name');`],
+    ['a literal whose digits also appear in an earlier UUID value, on a later line', true, `
+         INSERT INTO [__mj].[EntityField]
+         (
+            [ID], [EntityID], [Sequence], [Name]
+         )
+         VALUES
+         (
+            '3c9ea97f-1616-4e4c-b121-3867182ae9ca',
+            '22E4F4DE-9A9B-4FE3-AB1A-ECAC7EF5EF9D',
+            16,
+            'HousingID'
+         )`],
+    ['a comment between VALUES and the tuple, and between tuples', true,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence]) VALUES -- rows\n('a', 'e', (SELECT 1)), -- next\n('b', 'e', 16);`],
+    ['INSERT ... SELECT followed by an unrelated VALUES is not misread', false,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) SELECT 'a', 'e', 1, 'A';\nINSERT INTO [__mj].[EntityFieldValue] ([ID], [EntityFieldID], [Sequence], [Value]) VALUES ('a', 'f', 3, 'Active');`],
+    ['INSERT ... SELECT does not hide the real INSERT that follows it', true,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Name], [Sequence]) SELECT 'a', 'e', 'A', 1;\nINSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('b', 'e', 16, 'B');`],
     ['PostgreSQL quoting', true,
         `INSERT INTO "__mj"."EntityField" ("ID", "EntityID", "Sequence", "Name") VALUES ('id', 'eid', 12, 'Name');`],
     ['multi-tuple VALUES with a literal in the second tuple', true,
@@ -339,9 +376,9 @@ same entity collides on UQ_EntityField_EntityID_Sequence. Without SET XACT_ABORT
 unique violation aborts one statement, execution continues, and the run dies later on an
 unrelated-looking FK error against EntityFieldValue.
 
-Replace the literal with an apply-time expression. CodeGen emits the first form (the
-offset is the field's schema ordinal, so a batch keeps its order); the second is fine for
-a hand-written correction of a single field:
+Replace the literal with an apply-time expression. CodeGen emits the first form (a batch
+executes in emission order, so the values rise in that order; the schema-ordinal offset
+only widens the gaps); the second is fine for a hand-written correction of a single field:
 
     (SELECT COALESCE(MAX([Sequence]), 0)
        FROM [\${flyway:defaultSchema}].[EntityField]
@@ -358,6 +395,16 @@ Background: migrations/CLAUDE.md, MJ#3670, MJ#4202.`);
     return 0;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+/** True when this module is the process entry point, comparing real paths so a symlinked checkout still runs. */
+function isEntryPoint() {
+    if (!process.argv[1]) return false;
+    try {
+        return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+    } catch {
+        return false;
+    }
+}
+
+if (isEntryPoint()) {
     process.exit(main(process.argv.slice(2)));
 }

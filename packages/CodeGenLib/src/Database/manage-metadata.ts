@@ -4844,7 +4844,11 @@ export class ManageMetadataBase {
       const isPrimaryKey = n.FieldName?.trim().toLowerCase() === 'id';
       const isForeignKey = n.RelatedEntityID && n.RelatedEntityID.length > 0; // Foreign keys have RelatedEntityID set
       const isNameField = n.FieldName?.trim().toLowerCase() === 'name' || n.IsNameField;
-      const isEarlySequence = n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView;
+      // The field's position in the schema (SourceOrdinal / column_id). `n.Sequence` is NOT that:
+      // the pending-fields SELECT computes it as MAX+100000+ordinal, so comparing it against
+      // IncludeFirstNFieldsAsDefaultInView could never be true and the setting was dead.
+      const sourceOrdinal = typeof n.SourceOrdinal === 'number' && n.SourceOrdinal > 0 ? n.SourceOrdinal : 1;
+      const isEarlySequence = sourceOrdinal <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView;
 
       const bDefaultInView: boolean = (isNameField || isEarlySequence) && !isPrimaryKey && !isForeignKey;
       const escapedDescription = n.Description ? `'${n.Description.replace(/'/g, "''")}'` : 'NULL';
@@ -4882,11 +4886,11 @@ export class ManageMetadataBase {
       // ANY order — including a from-scratch replay where this INSERT was appended
       // verbatim to a migration and Flyway runs every versioned migration before the
       // repeatable renumber. MAX(Sequence) at apply time sits above every row the entity
-      // has at that moment; adding the field's schema ordinal (SourceOrdinal / column_id)
-      // keeps a batch of new fields in relative order regardless of execution order.
-      // A literal — the catalog ordinal, or the MAX+100000+ordinal placeholder the pending
-      // SELECT computes — is only valid on the database CodeGen ran against (#3670, #4202).
-      const sourceOrdinal = typeof n.SourceOrdinal === 'number' && n.SourceOrdinal > 0 ? n.SourceOrdinal : 1;
+      // has at that moment, including the rows this batch inserted before it, so values rise
+      // in emission order (the batch is emitted in schema order and executes sequentially);
+      // the schema-ordinal offset only widens the gaps. A literal — the catalog ordinal, or
+      // the MAX+100000+ordinal placeholder the pending SELECT computes — is only valid on the
+      // database CodeGen ran against (#3670, #4202).
       const sequenceExpr =
          `(SELECT COALESCE(MAX(${this.qi('Sequence')}), 0) FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ${this.qi('EntityID')} = '${n.EntityID}') + ${sourceOrdinal}`;
 
