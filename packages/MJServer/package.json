@@ -109,6 +109,7 @@
     "@memberjunction/search-engine": "6.1.0-edge.5",
     "@memberjunction/server-extensions-core": "6.1.0-edge.5",
     "@memberjunction/sql-dialect": "6.1.0-edge.5",
+    "@memberjunction/sql-parser": "6.1.0-edge.5",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.5",
     "@memberjunction/storage": "6.1.0-edge.5",
     "@memberjunction/tag-engine": "6.1.0-edge.5",
