@@ -1207,6 +1207,9 @@ export function outputOptionValue(type: string, optionName: string, defaultValue
  * @returns Array of commands to execute
  */
 export function commands(when: string): CommandInfo[] {
+  if (process.env.MJ_CODEGEN_SKIP_COMMANDS === '1' || process.env.MJ_CODEGEN_SKIP_COMMANDS === 'true') {
+    return [];
+  }
   return configInfo.commands.filter((c) => c.when.trim().toUpperCase() === when.trim().toUpperCase());
 }
 /**

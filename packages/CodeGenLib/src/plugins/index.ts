@@ -56,6 +56,10 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
       description:
         'Directory for CodeGen_Run_*.sql (EntityField INSERTs and other metadata SQL). Open Apps default to ./migrations/codegen. Do not point this at MJ/migrations/v*.',
     }),
+    'skip-commands': Flags.boolean({
+      description:
+        'Skip running BEFORE and AFTER shell commands configured in mj.config. Can also be set with MJ_CODEGEN_SKIP_COMMANDS=1.',
+    }),
   };
 
   static Usage: PluginUsage = {
@@ -69,10 +73,11 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
       { name: '--skipfiles', type: 'boolean', description: 'Run DB-side operations only (no code files)' },
       { name: '--force-advanced-gen', type: 'boolean', description: 'Re-run advanced generation for all entities' },
       { name: '--no-ai', type: 'boolean', description: 'Disable AI-driven advanced generation (same as MJ_CODEGEN_NO_AI=1)' },
+      { name: '--skip-commands', type: 'boolean', description: 'Skip running BEFORE/AFTER commands (same as MJ_CODEGEN_SKIP_COMMANDS=1)' },
       { name: '--sql-output-dir', type: 'string', description: 'Directory for CodeGen_Run metadata SQL (Open Apps: ./migrations/codegen)' },
       { name: '--format', type: 'text|json|md', description: 'Output format (json for machine-readable result)' },
     ],
-    examples: ['mj codegen', 'mj codegen --skipdb', 'mj codegen --format=json'],
+    examples: ['mj codegen', 'mj codegen --skipdb', 'mj codegen --skip-commands', 'mj codegen --format=json'],
     runtime: { class: 'slow', typicalSeconds: 45, note: 'scales with entity count; full run far slower than a single-entity change' },
   };
 
@@ -116,6 +121,11 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
         configInfo.advancedGeneration.enableAdvancedGeneration = false;
       }
       this.Host.Log('--no-ai: advanced generation disabled.');
+    }
+
+    if (flags['skip-commands'] || process.env.MJ_CODEGEN_SKIP_COMMANDS === '1' || process.env.MJ_CODEGEN_SKIP_COMMANDS === 'true') {
+      process.env.MJ_CODEGEN_SKIP_COMMANDS = '1';
+      this.Host.Log('--skip-commands: before/after shell commands skipped.');
     }
 
     return runMemberJunctionCodeGenerationWithResult(flags.skipdb, flags.skipfiles);

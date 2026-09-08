@@ -624,6 +624,8 @@ jobs:
       DB_TRUST_SERVER_CERTIFICATE: 'true'
       # Explicitly disable AI in non-AI drift gate to prevent reliance on LLM keys or network.
       MJ_CODEGEN_NO_AI: '1'
+      # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
       # receive it, so they degrade to a cold local cache rather than failing. Rationale and
       # setup instructions live once, on the build job in test.yml.
@@ -683,7 +685,7 @@ jobs:
 
       - name: Run CodeGen against the migrated DB
         id: codegen
-        run: node packages/MJCLI/bin/run.js codegen --no-ai
+        run: node packages/MJCLI/bin/run.js codegen --no-ai --skip-commands
 
       - name: Verify CodeGen idempotency (warm-twice and single-column)
         id: idempotency
@@ -743,6 +745,8 @@ jobs:
       TURBO_API: ${{ vars.TURBO_API }}
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
       INTEGRATION_LIVE_MODEL_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
+      # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -795,7 +799,7 @@ jobs:
 
       - name: Run CodeGen (AI enabled)
         id: codegen
-        run: node packages/MJCLI/bin/run.js codegen
+        run: node packages/MJCLI/bin/run.js codegen --skip-commands
 
       - name: Verify CodeGen idempotency (warm-twice and single-column with AI)
         id: idempotency

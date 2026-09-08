@@ -202,6 +202,7 @@ export async function checkWarmTwice({ noAI = false, skipFirstRun = false }) {
 
   const codegenEnv = {
     MJ_CODEGEN_REPORT: '1',
+    MJ_CODEGEN_SKIP_COMMANDS: '1',
     ...(noAI ? { MJ_CODEGEN_NO_AI: '1' } : {}),
   };
 
@@ -329,6 +330,7 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
     const codegenStartTime = Date.now();
     const codegenEnv = {
       MJ_CODEGEN_REPORT: '1',
+      MJ_CODEGEN_SKIP_COMMANDS: '1',
       ...(noAI ? { MJ_CODEGEN_NO_AI: '1' } : {}),
     };
     runProcess('node', ['packages/MJCLI/bin/run.js', 'codegen', ...(noAI ? ['--no-ai'] : [])], codegenEnv);
@@ -475,6 +477,7 @@ export async function checkCleanRoom({ noAI = false }) {
   const codegenStartTime = Date.now();
   const codegenEnv = {
     MJ_CODEGEN_REPORT: '1',
+    MJ_CODEGEN_SKIP_COMMANDS: '1',
     ...(noAI ? { MJ_CODEGEN_NO_AI: '1' } : {}),
   };
   runProcess('node', ['packages/MJCLI/bin/run.js', 'codegen', ...(noAI ? ['--no-ai'] : [])], codegenEnv);
