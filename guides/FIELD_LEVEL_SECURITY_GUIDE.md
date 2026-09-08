@@ -159,15 +159,28 @@ verbs are refused at save time, and reconciliation does not author them. **Read 
 restricting read on a foreign-key display column ("hide which client this contract belongs to") is
 one of the main things field security is for.
 
-Permission changes take effect within about a second. Metadata is built from the `MJ_Metadata`
-dataset, and every provider records which entities compose it — so a save or delete of any of
-those member entities (`MJ: Entities`, `MJ: Entity Permissions`, `MJ: Entity Field Permissions`,
-`MJ: Roles`, …) schedules a debounced refresh of the server's own metadata, and connected
-clients run a staleness check on the same class of change. Membership is the dataset definition
+**How quickly a permission change takes effect.** Metadata is built from the `MJ_Metadata`
+dataset, and every provider records which entities compose it — so a save or delete of any member
+entity (`MJ: Entities`, `MJ: Entity Permissions`, `MJ: Entity Field Permissions`, `MJ: Roles`, …)
+schedules a refresh of the provider that owns that metadata. Membership is the dataset definition
 itself: adding a `DatasetItem` row extends coverage with no code change, and no entity names are
-hardcoded anywhere in the mechanism. A change made outside the entity layer — direct SQL, a
-migration — is picked up on the periodic metadata refresh cycle, whose staleness check always
-reads database timestamps (never its own cache), or an API restart.
+hardcoded anywhere in the mechanism.
+
+The timing differs by tier, and the distinction matters:
+
+- **The server that processed the change** re-reads within ~1–2 seconds (a short debounce so the
+  enclosing transaction commits first, then a full reload in the background — requests keep
+  serving the old graph until the atomic swap). **This is the one that governs enforcement.**
+- **Other server instances** converge on their periodic refresh tick.
+- **Connected browsers** converge over a longer randomized window, jittered so sessions do not
+  stampede. That is **display freshness only** — a browser on stale metadata may briefly still
+  render a column it no longer has, but every request it makes is answered by a server that
+  enforces the current rules, and the response carries `ReadableFields___` stating what the
+  caller may actually read (§3.1.1).
+
+A change made outside the entity layer — direct SQL, a migration — is picked up on the periodic
+refresh cycle, whose staleness check always reads database timestamps rather than its own cache,
+or on an API restart.
 
 ## 2. What is enforced (API tier)
 
