@@ -105,6 +105,14 @@ paths-ignore:
   - '**/docs/**'
   - '**/*.md'
 
+  # --- design documents and mockups -----------------------------------------------
+  # plans/ holds design documents and HTML mockups (plans/composer-adoption/mockups is
+  # the largest set). Nothing under it is built, imported or shipped: the same "code
+  # nobody ships" class as generated output. Excluded 8 September 2026 after the first
+  # full js-rest scan reported 4 high alerts in a mockup; recorded in BC-POL-012 Annex A
+  # and exception EX-2026-002 alongside the generated-code exclusion.
+  - 'plans/**'
+
 # Deliberately NOT excluded, because they are authored code that reaches customers.
 # File counts are all file types, verified 5 September 2026:
 #   packages/MJServer/**            291    — the API surface

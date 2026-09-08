@@ -77,6 +77,14 @@ paths-ignore:
   - '**/docs/**'
   - '**/*.md'
 
+  # --- design documents and mockups -----------------------------------------------
+  # plans/ holds design documents and HTML mockups (plans/composer-adoption/mockups is
+  # the largest set). Nothing under it is built, imported or shipped: the same "code
+  # nobody ships" class as generated output. Excluded 8 September 2026 after the first
+  # full js-rest scan reported 4 high alerts in a mockup; recorded in BC-POL-012 Annex A
+  # and exception EX-2026-002 alongside the generated-code exclusion.
+  - 'plans/**'
+
 # NOT COVERED BY ANY JOB IN THIS WORKFLOW, STATED SO IT IS NOT MISTAKEN FOR COVERAGE:
 #   migrations/  —  690 .sql files and 4 .md. CodeQL has no SQL analysis, so schema
 #   migrations are outside the reach of code scanning entirely. Review of migrations
