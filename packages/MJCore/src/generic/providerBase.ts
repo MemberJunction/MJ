@@ -284,6 +284,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     private _refresh = false;
 
+    /** Single-flight guard for the full metadata reload in {@link Config} — see the comment there. */
+    private _metadataReloadInFlight: Promise<void> | null = null;
+    /** Set when a refresh request arrives while a reload is in flight; the reload loop reruns once. */
+    private _metadataReloadQueued = false;
+
     // ── Metadata Refresh Check Debounce ────────────────────────────────
     /**
      * Minimum interval (ms) between metadata refresh checks to prevent
@@ -605,13 +610,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Debounced metadata refresh after a write to a metadata member entity. The refresh targets
-     * THIS instance — the provider that loaded the dataset owns the metadata built from it;
-     * short-lived per-request providers never load the dataset (they adopt the global's metadata
-     * as a shared shell), so on the server only the process-global provider ever gets here.
+     * How long a member-entity write waits before this provider's refresh runs. The base value
+     * is the short debounce window — right for the server, where the writer is the refresher and
+     * the delay only exists to coalesce a burst and let the enclosing transaction commit.
+     * Transport providers override this with a much longer, RANDOMIZED window: every browser
+     * receives every write broadcast, so the delay is what turns "N clients each re-pull the
+     * metadata graph within the same half-second of any member write" into "each client pays at
+     * most one staleness check per window, at a moment no other client shares".
+     */
+    protected get MetadataMemberRefreshDelayMs(): number {
+        return ProviderBase.MetadataDatasetRefreshDebounceMs;
+    }
+
+    /**
+     * Whether a member-entity write arriving while the refresh timer is already armed RESTARTS
+     * the timer (debounce) or joins the pending window (coalesce/throttle).
+     *
+     * The base is a true debounce (`true`): the server's refresh must run AFTER the last write
+     * of the unit of work, so every event pushes the timer out — a burst costs one refresh, run
+     * once the burst ends. Transport providers return `false`: with a long window, re-arming
+     * would let steady org-wide write activity postpone the refresh indefinitely (starvation);
+     * joining the armed window guarantees at most one refresh per window regardless of write
+     * rate, which is the whole point of the window.
+     */
+    protected get MetadataMemberRefreshRearmsOnNewEvents(): boolean {
+        return true;
+    }
+
+    /**
+     * Schedules this provider's metadata refresh after a write to a metadata member entity.
+     * Delay and re-arm semantics come from {@link MetadataMemberRefreshDelayMs} and
+     * {@link MetadataMemberRefreshRearmsOnNewEvents} — debounce on the server, long jittered
+     * coalescing window on clients. The refresh targets THIS instance — the provider that loaded
+     * the dataset owns the metadata built from it; short-lived per-request providers never load
+     * the dataset (they adopt the global's metadata as a shared shell), so on the server only
+     * the process-global provider ever gets here.
      */
     protected scheduleMetadataMemberRefresh(): void {
         if (this._metadataMemberRefreshTimer) {
+            if (!this.MetadataMemberRefreshRearmsOnNewEvents) {
+                return; // coalesce: this write joins the already-armed window
+            }
             clearTimeout(this._metadataMemberRefreshTimer);
         }
         this._metadataMemberRefreshTimer = setTimeout(() => {
@@ -619,7 +658,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             this.RefreshAfterMetadataMemberChange().catch((e: unknown) => {
                 LogError(`Metadata refresh after a member-entity change failed: ${e instanceof Error ? e.message : String(e)}`);
             });
-        }, ProviderBase.MetadataDatasetRefreshDebounceMs);
+        }, this.MetadataMemberRefreshDelayMs);
     }
 
     /**
@@ -4198,24 +4237,60 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // while we are waiting for the async call to finish, we dont do it again
             this._refresh = false;
 
-            // Fetch new metadata without clearing current metadata
-            // This ensures readers always see valid data (old until new is ready)
-            const start = new Date().getTime();
-            const res = await this.GetAllMetadata(providerToUse, hardRefresh);
-            const end = new Date().getTime();
-            LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
-            if (res) {
-                // Atomic swap via UpdateLocalMetadata: single property assignment is atomic in JavaScript
-                // Readers now see new metadata instead of old
-                // Uses UpdateLocalMetadata() to maintain consistency with LoadLocalMetadataFromStorage()
-                // and allow potential subclass overrides for extensibility
-                this.UpdateLocalMetadata(res);
-                this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
-                await this.SaveLocalMetadataToStorage();
+            // SINGLE-FLIGHT: at most one full metadata reload runs at a time. Without this, a
+            // second refresh request arriving while a reload is still awaiting its queries starts
+            // a CONCURRENT reload, and whichever finishes LAST wins the atomic swap — an older
+            // snapshot can overwrite a newer one. A joiner must not simply await and return,
+            // either: the in-flight reload's queries may predate the write that prompted the
+            // joiner, so it flags ONE follow-up; the loop below reruns after the current pass,
+            // guaranteeing the final swap comes from a read that started after the last request.
+            if (this._metadataReloadInFlight) {
+                this._metadataReloadQueued = true;
+                await this._metadataReloadInFlight;
+                return true;
             }
-            else {
-                // GetAllMetadata failed - log error but keep existing metadata
-                LogError('GetAllMetadata() returned undefined - metadata not updated');
+            this._metadataReloadInFlight = (async () => {
+                let effectiveHardRefresh = hardRefresh;
+                do {
+                    this._metadataReloadQueued = false;
+
+                    // Fetch new metadata without clearing current metadata
+                    // This ensures readers always see valid data (old until new is ready)
+                    const start = new Date().getTime();
+                    const res = await this.GetAllMetadata(providerToUse, effectiveHardRefresh);
+                    const end = new Date().getTime();
+                    LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
+                    if (res) {
+                        // Atomic swap via UpdateLocalMetadata: single property assignment is atomic in JavaScript
+                        // Readers now see new metadata instead of old
+                        // Uses UpdateLocalMetadata() to maintain consistency with LoadLocalMetadataFromStorage()
+                        // and allow potential subclass overrides for extensibility
+                        this.UpdateLocalMetadata(res);
+                        // The local timestamps must describe the snapshot just loaded. On the
+                        // hard-refresh path the staleness check was SKIPPED, so the cached
+                        // remote timestamps predate this load — copying them as-is makes the
+                        // next periodic check see a mismatch and reload once more for nothing.
+                        // Re-read them first (one cheap status query, now authoritative).
+                        if (effectiveHardRefresh) {
+                            await this.RefreshRemoteMetadataTimestamps(providerToUse);
+                        }
+                        this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
+                        await this.SaveLocalMetadataToStorage();
+                    }
+                    else {
+                        // GetAllMetadata failed - log error but keep existing metadata
+                        LogError('GetAllMetadata() returned undefined - metadata not updated');
+                    }
+                    // A queued follow-up exists only because another refresh request arrived
+                    // mid-reload; rerun hard so the re-read cannot be served by any cache layer.
+                    effectiveHardRefresh = true;
+                } while (this._metadataReloadQueued);
+            })();
+            try {
+                await this._metadataReloadInFlight;
+            }
+            finally {
+                this._metadataReloadInFlight = null;
             }
         }
 

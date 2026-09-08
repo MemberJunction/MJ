@@ -10,6 +10,7 @@ import {
     DatasetStatusResultType,
     ILocalStorageProvider,
     IMetadataProvider,
+    AllMetadata,
 } from '../generic/interfaces';
 import { RunQueryResult } from '../generic/runQuery';
 import { QueryExecutionSpec } from '../generic/queryExecutionSpec';
@@ -323,5 +324,124 @@ describe('ProviderBase - refresh-check throttle bypass', () => {
         // than the window apart is silently dropped.
         await provider.CheckToSeeIfRefreshNeeded(undefined, true);
         expect(remoteSpy).toHaveBeenCalledTimes(2);
+    });
+});
+
+// ===========================================================================
+// Scheduling-policy knobs (server debounce vs client coalescing window)
+// ===========================================================================
+describe('ProviderBase - member-refresh scheduling policy', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    it('base policy DEBOUNCES: every event re-arms the timer, so the refresh runs after the burst ends', async () => {
+        const provider = new MemberRefreshTestProvider();
+        provider.RegisterMembership(buildDataset(['MJ: Entities']));
+
+        provider.HandleMemberEvent('mj: entities', saveEvent('MJ: Entities'));
+        await vi.advanceTimersByTimeAsync(400); // inside the 500ms window
+        provider.HandleMemberEvent('mj: entities', saveEvent('MJ: Entities'));
+        await vi.advanceTimersByTimeAsync(400); // 800ms after first event — but only 400ms after re-arm
+        expect(provider.RefreshCalls).toBe(0);
+
+        await vi.advanceTimersByTimeAsync(200); // 600ms after the LAST event
+        expect(provider.RefreshCalls).toBe(1);
+    });
+
+    it('coalescing policy does NOT re-arm: events join the armed window, one refresh per window at any write rate', async () => {
+        class CoalescingProvider extends MemberRefreshTestProvider {
+            protected override get MetadataMemberRefreshDelayMs(): number { return 10_000; }
+            protected override get MetadataMemberRefreshRearmsOnNewEvents(): boolean { return false; }
+        }
+        const provider = new CoalescingProvider();
+        provider.RegisterMembership(buildDataset(['MJ: Dashboards']));
+
+        provider.HandleMemberEvent('mj: dashboards', saveEvent('MJ: Dashboards'));
+        // Steady write activity throughout the window — with re-arming this would starve forever
+        for (let i = 0; i < 9; i++) {
+            await vi.advanceTimersByTimeAsync(1_000);
+            provider.HandleMemberEvent('mj: dashboards', saveEvent('MJ: Dashboards'));
+        }
+        await vi.advanceTimersByTimeAsync(1_100); // past the ORIGINAL window's end
+        expect(provider.RefreshCalls).toBe(1);
+
+        // A write after the window fired arms a fresh window
+        provider.HandleMemberEvent('mj: dashboards', saveEvent('MJ: Dashboards'));
+        await vi.advanceTimersByTimeAsync(10_100);
+        expect(provider.RefreshCalls).toBe(2);
+    });
+});
+
+// ===========================================================================
+// Single-flight metadata reload
+// ===========================================================================
+describe('ProviderBase - single-flight metadata reload', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    /** Minimal in-memory storage so Config's LocalCacheManager.Initialize has a real provider. */
+    const memoryStorage: ILocalStorageProvider = {
+        SharesReferences: false,
+        async GetItem(): Promise<string | null> { return null; },
+        async GetItems(): Promise<Map<string, string | null>> { return new Map(); },
+        async SetItem(): Promise<void> { /* noop */ },
+        async Remove(): Promise<void> { /* noop */ },
+        async ClearCategory(): Promise<void> { /* noop */ },
+        async GetCategoryKeys(): Promise<string[]> { return []; },
+    } as unknown as ILocalStorageProvider;
+
+    class SingleFlightProvider extends MemberRefreshTestProvider {
+        public GetAllMetadataCalls = 0;
+        private _pendingResolvers: Array<(value: AllMetadata) => void> = [];
+
+        override get LocalStorageProvider(): ILocalStorageProvider { return memoryStorage; }
+
+        /** Real Refresh → Config path (the parent test class stubs Refresh to a counter). */
+        public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
+            return ProviderBase.prototype.Refresh.call(this, providerToUse);
+        }
+
+        protected override async GetAllMetadata(): Promise<AllMetadata> {
+            this.GetAllMetadataCalls++;
+            return new Promise<AllMetadata>((resolve) => {
+                this._pendingResolvers.push(resolve);
+            });
+        }
+
+        /** Completes the OLDEST in-flight GetAllMetadata. */
+        public ResolveOldestReload(): void {
+            const resolve = this._pendingResolvers.shift();
+            if (resolve) {
+                resolve(new AllMetadata());
+            }
+        }
+    }
+
+    it('a refresh request arriving mid-reload queues exactly ONE follow-up instead of racing a concurrent reload', async () => {
+        const provider = new SingleFlightProvider();
+
+        const first = provider.Refresh();
+        const second = provider.Refresh(); // lands while the first reload is still awaiting its queries
+        const third = provider.Refresh();  // still only ONE follow-up may be queued
+        await vi.waitFor(() => expect(provider.GetAllMetadataCalls).toBe(1));
+        // Give the other two Refresh() calls every chance to start a concurrent reload — they must not
+        for (let i = 0; i < 10; i++) {
+            await Promise.resolve();
+        }
+        expect(provider.GetAllMetadataCalls).toBe(1);
+
+        provider.ResolveOldestReload();
+        await vi.waitFor(() => expect(provider.GetAllMetadataCalls).toBe(2)); // the single queued follow-up
+
+        provider.ResolveOldestReload();
+        await expect(Promise.all([first, second, third])).resolves.toEqual([true, true, true]);
+        expect(provider.GetAllMetadataCalls).toBe(2); // never a third
     });
 });

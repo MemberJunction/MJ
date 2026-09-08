@@ -342,4 +342,27 @@ describe('GraphQLDataProvider - refresh policy after a metadata member change', 
     expect(refreshIfNeeded).toHaveBeenCalledWith(undefined, true);
     expect(hardRefresh).not.toHaveBeenCalled();
   });
+
+  it('uses a long randomized coalescing window, not the server debounce', () => {
+    // Every browser receives every write broadcast, and MJ_Metadata's members include
+    // routinely-written entities (dashboards, queries) — the long jittered window is what caps
+    // each browser at one staleness check per window and spreads the fleet's checks apart.
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    const min = GraphQLDataProvider.ClientMemberRefreshWindowMinMs;
+    const jitter = GraphQLDataProvider.ClientMemberRefreshWindowJitterMs;
+    expect(min).toBeGreaterThanOrEqual(10_000); // "tens of seconds", never the 500ms server debounce
+
+    const seen = new Set<number>();
+    for (let i = 0; i < 25; i++) {
+      const delay = (provider as unknown as { MetadataMemberRefreshDelayMs: number }).MetadataMemberRefreshDelayMs;
+      expect(delay).toBeGreaterThanOrEqual(min);
+      expect(delay).toBeLessThanOrEqual(min + jitter);
+      seen.add(delay);
+    }
+    expect(seen.size).toBeGreaterThan(1); // genuinely jittered, not a constant
+
+    // Coalesce, never re-arm: with a window this long, re-arming would let steady org-wide
+    // write activity postpone the refresh forever.
+    expect((provider as unknown as { MetadataMemberRefreshRearmsOnNewEvents: boolean }).MetadataMemberRefreshRearmsOnNewEvents).toBe(false);
+  });
 });
