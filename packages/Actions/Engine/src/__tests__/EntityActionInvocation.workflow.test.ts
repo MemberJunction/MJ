@@ -34,6 +34,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
 
 vi.mock('@memberjunction/core', () => ({
     BaseEntity: class {},
+    DatabaseProviderBase: class { TransactionDepth = 0; },
     Metadata: vi.fn(),
     RunView: vi.fn(),
     LogError: vi.fn(),
@@ -76,7 +77,9 @@ vi.mock('@memberjunction/actions-base', () => ({
     IsEntityActionInScope: mockIsEntityActionInScope,
     // The real resolver factory reads the global ClassFactory; the invocation layer only passes it
     // through to IsEntityActionInScope, which is stubbed here, so an identity stand-in is enough.
-    ResolveEntityActionScopeResolver: vi.fn(() => ({ IsInScope: vi.fn() }))
+    ResolveEntityActionScopeResolver: vi.fn(() => ({ IsInScope: vi.fn() })),
+    DurableEntityActionRegistry: { Instance: { Submitter: null, Register: vi.fn() } },
+    RedactParamsToJSON: vi.fn(() => '{}'),
 }));
 
 vi.mock('../generic/ActionEngine', () => ({
@@ -363,5 +366,26 @@ describe('InvokeAction — the change context reaches the filter layer', () => {
         await invocation.InvokeAction(invocationParams());
         const runArgs = mockRunAction.mock.calls[0][0] as { EntityChange?: unknown };
         expect(runArgs.EntityChange).toBeUndefined();
+    });
+});
+
+describe('Durable AfterCreate without a queue submitter', () => {
+    const invocation = new EntityActionInvocationSingleRecord();
+
+    it('defers locally instead of nesting in the caller transaction', async () => {
+        const entity = new RecordLikeEntity({ ID: 'rec-1', Amount: 42 }) as unknown as Record<string, unknown>;
+        (entity as { ProviderToUse: { TransactionDepth: number } }).ProviderToUse = { TransactionDepth: 0 };
+        (entity as { EntityInfo: { ID: string; Name: string } }).EntityInfo = { ID: TARGET_ENTITY_ID, Name: 'People' };
+        await invocation.InvokeAction(invocationParams({
+            InvocationType: { ID: INVOCATION_TYPE_ID, Name: 'AfterCreate' },
+            EntityAction: { ...invocationParams().EntityAction, RunMode: 'Durable' },
+            EntityObject: entity,
+        }));
+        const runArgs = mockRunAction.mock.calls[0][0] as {
+            DeferExecution?: (p: unknown) => Promise<{ ResultCode: string }>;
+        };
+        expect(typeof runArgs.DeferExecution).toBe('function');
+        const simple = await runArgs.DeferExecution!(runArgs);
+        expect(simple.ResultCode).toBe('DEFERRED_LOCAL');
     });
 });

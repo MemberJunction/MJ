@@ -1380,7 +1380,7 @@ export abstract class CodeGenDatabaseProvider {
      *   avoid re-scanning the entire schema for entities that haven't changed. `undefined`
      *   or empty preserves the prior unscoped behavior.
      */
-    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string;
+    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string;
 
     /**
      * Returns an additional WHERE clause fragment for the check-constraints query.

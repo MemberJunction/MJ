@@ -435,12 +435,15 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (this.UserCanEdit) {
-            // we want to preprocess the Save() call because we need to regenerate the WhereClause in some situations
-            const id = this.ID;
+            // we want to preprocess the Save() call because we need to regenerate the WhereClause in some situations.
+            // NOTE: use IsSaved (not the ID) to detect a brand-new record. NewRecord() pre-assigns a UUID primary key,
+            // and the first value written to a fresh field also seeds its OldValue, so on a new record the ID is
+            // populated AND SmartFilterEnabled / SmartFilterPrompt do not read as Dirty (FilterState does — NewRecord()
+            // seeds it, so the caller's write is a second write). Checking the ID skipped the Smart Filter pass on create.
             const filterStateField = this.Fields.find(c => c.Name.toLowerCase() == 'filterstate');
             const smartFilterEnabledField = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterenabled');
             const smartFilterPromptField = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt');
-            if (!this.ID ||
+            if (!this.IsSaved ||
                 options?.IgnoreDirtyState || 
                 filterStateField?.Dirty ||
                 smartFilterEnabledField?.Dirty ||
@@ -540,8 +543,11 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 // So, if we're here we handle the Smart Filter                
                 // we have a smart filter prompt (e.g. a prompt for the AI to create the where clause)
                 // if the SmartFilterPrompt has changed, then we need to update the SmartFilterWhereClause using AI
-                // otherwise, we don't need to do anything other than just use the SmartFilterWhereClause as it is
-                if (!this.ID || ignoreDirtyState || this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt')?.Dirty) {
+                // otherwise, we don't need to do anything other than just use the SmartFilterWhereClause as it is.
+                // A new record (IsSaved === false — see the note in Save() on why the ID can't be used for this) or a
+                // record that has never had its SmartFilterWhereClause generated also needs the AI pass.
+                const smartFilterPromptDirty = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt')?.Dirty === true;
+                if (!this.IsSaved || ignoreDirtyState || smartFilterPromptDirty || this.SmartFilterWhereClause == null) {
                     // the prompt has changed (or is newly populated, either way it is dirty) so use the AI to figure this out
                     const result = await this.GenerateSmartFilterWhereClause(this.SmartFilterPrompt, this.ViewEntityInfo);
                     this.SmartFilterWhereClause = result.whereClause;
@@ -557,7 +563,14 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             }
         }
         else {
-            this.WhereClause = this.GenerateWhereClause(this.FilterState, this.ViewEntityInfo);
+            const compiled = this.GenerateWhereClause(this.FilterState, this.ViewEntityInfo);
+            // On a brand-new record an empty FilterState is just the NewRecord() seed. Callers that build a view
+            // programmatically (view.NewRecord(); view.WhereClause = '...'; await view.Save()) rely on that clause
+            // surviving Save(), so never let the empty seed erase a WhereClause set directly. On an EXISTING
+            // record a blank FilterState is the user clearing their filters and must compile to '' to remove it.
+            if (this.IsSaved || compiled.length > 0 || !this.WhereClause) {
+                this.WhereClause = compiled;
+            }
         }
     }
 
