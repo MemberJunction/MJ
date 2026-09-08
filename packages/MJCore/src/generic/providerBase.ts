@@ -4254,6 +4254,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 do {
                     this._metadataReloadQueued = false;
 
+                    // The local timestamps must describe the snapshot about to be loaded. On the
+                    // hard-refresh path the staleness check was SKIPPED, so the cached remote
+                    // timestamps predate this pass — copying them as-is would make the next
+                    // periodic check see a mismatch and reload once more for nothing. Re-read
+                    // them (one cheap status query, authoritative) BEFORE the load, not after:
+                    // a write landing DURING the load then leaves the stamped timestamps looking
+                    // stale and the next tick reloads — the safe direction. Reading after could
+                    // stamp the snapshot as containing a write it does not.
+                    if (effectiveHardRefresh) {
+                        await this.RefreshRemoteMetadataTimestamps(providerToUse);
+                    }
+
                     // Fetch new metadata without clearing current metadata
                     // This ensures readers always see valid data (old until new is ready)
                     const start = new Date().getTime();
@@ -4266,14 +4278,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         // Uses UpdateLocalMetadata() to maintain consistency with LoadLocalMetadataFromStorage()
                         // and allow potential subclass overrides for extensibility
                         this.UpdateLocalMetadata(res);
-                        // The local timestamps must describe the snapshot just loaded. On the
-                        // hard-refresh path the staleness check was SKIPPED, so the cached
-                        // remote timestamps predate this load — copying them as-is makes the
-                        // next periodic check see a mismatch and reload once more for nothing.
-                        // Re-read them first (one cheap status query, now authoritative).
-                        if (effectiveHardRefresh) {
-                            await this.RefreshRemoteMetadataTimestamps(providerToUse);
-                        }
                         this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
                         await this.SaveLocalMetadataToStorage();
                     }
