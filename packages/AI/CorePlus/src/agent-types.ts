@@ -522,14 +522,34 @@ export type ArtifactDirective = {
      * - 'create-new': create a new artifact (version 1) even when the run carries a sourceArtifactId.
      * - 'version-source': add a version to `targetArtifactId`, else to the run's sourceArtifactId,
      *   else fall back to the legacy chain.
-     * - 'suppress': create or version nothing for this step.
+     * - 'suppress': create or version nothing for this step — not the payload artifact, and not the
+     *   artifacts that would wrap the step's generated files or media. (The run's media audit rows
+     *   are still written; suppression governs what the user is shown, not lineage.)
+     *
+     * An unrecognized value is treated as no directive at all, and logged.
      */
     behavior: 'create-new' | 'version-source' | 'suppress';
-    /** Artifact to version when behavior is 'version-source' and it differs from the run's sourceArtifactId. */
+    /**
+     * Artifact to version when behavior is 'version-source' and it differs from the run's sourceArtifactId.
+     *
+     * This is model output, so the framework does not take it on trust. It is honored only if it is
+     * a UUID-shaped string naming an artifact that exists AND that the run's user either owns or
+     * holds an explicit `CanEdit` grant on. Any of those failing logs and falls back to the run's
+     * `sourceArtifactId`, then to the legacy chain — a named target can never widen what the user
+     * is already allowed to write.
+     */
     targetArtifactId?: string;
-    /** Name for a newly created artifact (behavior 'create-new'). */
+    /**
+     * Name for an artifact this step CREATES. Applies whenever the step creates a new artifact
+     * header — 'create-new', and equally the legacy fallback when no previous artifact was found —
+     * and is ignored when an existing artifact is versioned, which keeps the name it already has.
+     *
+     * Trimmed, and clamped to the column's 255 characters rather than rejected, so an over-long
+     * model-written title costs a truncation instead of the whole artifact. When supplied, it also
+     * takes precedence over the name attribute extracted from the first version's content.
+     */
     name?: string;
-    /** Description for a newly created artifact (behavior 'create-new'). */
+    /** Description for an artifact this step creates. Same applicability as {@link name}. */
     description?: string;
 };
 

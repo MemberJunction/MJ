@@ -12,12 +12,12 @@
 
 import { createHash } from 'crypto';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import { planArtifactTarget } from './artifact-target-plan';
+import { planArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -85,6 +85,16 @@ export function selectPrimaryArtifact(
 export class AgentRunner {
     /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
     private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+
+    /**
+     * Max length of `MJ: Artifacts.Name` (`nvarchar(255)`).
+     *
+     * A directive's `name` is model output and routinely arrives as a full sentence. `BaseEntity.Validate`
+     * enforces MaxLength, so an over-long title makes `Save()` return false — which used to abort the whole
+     * artifact write and leave the deliverable reachable only through `AIAgentRun.FinalPayload`. Clamped
+     * instead: a truncated title still names the artifact the user is looking at.
+     */
+    private static readonly ARTIFACT_NAME_MAX_LENGTH = 255;
 
     private readonly _provider: IMetadataProvider;
 
@@ -522,6 +532,15 @@ export class AgentRunner {
                 }
             };
 
+            // A 'suppress' directive is a per-STEP instruction about everything the step would
+            // persist as an artifact — the payload artifact, the artifacts wrapping generated files,
+            // and the ones wrapping generated media. Honoring it for the payload alone left a
+            // suppressed step still producing artifact cards in chat, contradicting the documented
+            // contract ("create or version nothing for this step"). Audit rows are NOT suppressed:
+            // AIAgentRunMedia still records every byte the run produced, since suppression is about
+            // what the user is shown, not about lineage.
+            const suppressArtifacts = agentResult.artifactDirective?.behavior === 'suppress';
+
             // Step 6: Process artifacts if requested and agent succeeded.
             const processArtifacts = async () => {
                 const shouldCreateArtifacts = options.createArtifacts !== false; // Default true
@@ -546,6 +565,10 @@ export class AgentRunner {
             // internal state instead — MJ Explorer and the Slack/Teams bridge both surface
             // `artifactInfo` as "open the artifact".
             const processFileArtifacts = async (): Promise<CreatedArtifactInfo[]> => {
+                if (suppressArtifacts && agentResult.fileOutputs?.length) {
+                    LogStatus(`Skipping ${agentResult.fileOutputs.length} file artifact(s) - the agent suppressed artifacts for this step`);
+                    return [];
+                }
                 if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
                     return this.ProcessFileArtifacts(
                         agentResult.fileOutputs,
@@ -593,7 +616,9 @@ export class AgentRunner {
                         ? mediaToSave.filter(m => !this.isMediaEmbeddedInPayload(m, payloadStr))
                         : mediaToSave;
 
-                    if (agentResponseDetailId && mediaForArtifacts.length > 0) {
+                    if (suppressArtifacts && mediaForArtifacts.length > 0) {
+                        LogStatus(`Skipping ${mediaForArtifacts.length} media artifact(s) - the agent suppressed artifacts for this step (the media itself is still recorded on the run)`);
+                    } else if (agentResponseDetailId && mediaForArtifacts.length > 0) {
                         await this.CreateMediaArtifacts(
                             agentResponseDetailId,
                             mediaForArtifacts,
@@ -674,7 +699,7 @@ export class AgentRunner {
             const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `ArtifactID='${artifactId}'`,
+                ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'GetMaxVersionForArtifact artifactId')}'`,
                 OrderBy: 'VersionNumber DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -718,7 +743,7 @@ export class AgentRunner {
         const rv = RunView.FromMetadataProvider(provider || this._provider);
         const result = await rv.RunView<{ ID: string; ContentHash: string }>({
             EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ArtifactID='${artifactId}' AND VersionNumber=${latestVersionNumber}`,
+            ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${Number(latestVersionNumber)}`,
             Fields: ['ID', 'ContentHash'],
             MaxRows: 1,
             ResultType: 'simple'
@@ -797,7 +822,7 @@ export class AgentRunner {
             const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
-                ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Output'`,
+                ExtraFilter: `ConversationDetailID='${AgentRunner.FilterId(conversationDetailId, 'FindPreviousArtifactForMessage conversationDetailId')}' AND Direction='Output'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -835,7 +860,11 @@ export class AgentRunner {
      * This method implements intelligent artifact versioning:
      * 0. If the agent supplied an artifactDirective, it decides: 'suppress' → nothing;
      *    'create-new' → new artifact (sourceArtifactId ignored); 'version-source' → version
-     *    targetArtifactId, else sourceArtifactId.
+     *    targetArtifactId, else sourceArtifactId. A directive-named target is model output and is
+     *    vetted first (UUID shape, existence, and the caller's right to write to it — see
+     *    {@link VetArtifactVersionTarget}); anything failing falls back down the ladder to the
+     *    caller's sourceArtifactId and then to the historical chain, so a directive can never widen
+     *    what the caller was already allowed to do.
      * 1. Otherwise, if sourceArtifactId is provided (explicit continuity), creates new version of that artifact
      * 2. Otherwise, checks for previous artifacts on this conversation detail
      * 3. If previous artifact exists, creates new version of it
@@ -901,40 +930,37 @@ export class AgentRunner {
             // a deliverable, a draft, a plan), then the legacy chain
             // (sourceArtifactId → previous artifact on this message → new artifact).
             const directive = agentResult.artifactDirective;
+            if (directive && !IsKnownArtifactBehavior(directive.behavior)) {
+                // Not fatal — planArtifactTarget treats it as no directive — but it means a producer
+                // and this consumer disagree about the wire format, which is worth seeing in the log
+                // rather than inferring later from artifacts that landed in the wrong place.
+                LogError(
+                    `Ignoring artifact directive from agent "${agent?.Name}": unrecognized behavior ` +
+                    `("${AgentRunner.DescribeUntrustedValue(directive.behavior)}") — using the historical chain instead`
+                );
+            }
             let plan = planArtifactTarget(directive, sourceArtifactId);
             if (plan.kind === 'suppress') {
                 LogStatus(`Skipping artifact creation - agent "${agent?.Name}" suppressed artifacts for this step`);
                 return undefined;
             }
 
-            // A target the AGENT named is model output, and it lands unescaped in the `ExtraFilter`
-            // fragments built by GetMaxVersionForArtifact / CheckForDuplicateVersion. Reject anything
-            // that is not a UUID-shaped string and fall back to the historical chain, exactly as if
-            // the agent had named no target. `sourceArtifactId` is caller-supplied and already
-            // reached these filters before directives existed; hardening it is tracked separately
-            // (see the PR description). This guard covers only the new, model-authored source of ids
-            // — and because directives arrive as parsed JSON, the value need not even be a string.
-            if (
-                plan.kind === 'version' &&
-                plan.artifactId === directive?.targetArtifactId &&
-                (typeof plan.artifactId !== 'string' || !IsValidUUID(plan.artifactId))
-            ) {
-                const rejected = String(plan.artifactId).replace(/\s+/g, ' ').slice(0, 64);
-                LogError(`Ignoring artifact directive from agent "${agent?.Name}": targetArtifactId is not a valid artifact ID ("${rejected}")`);
-                plan = planArtifactTarget(undefined, sourceArtifactId);
-            }
-
-            // UUID-shaped is not the same as real: the agent can name any well-formed id, including
-            // one from another environment or one this user cannot read. Load it first and fall back
-            // to the historical chain when it does not resolve. Runs ONLY for a directive-named
-            // target — when the id came from `sourceArtifactId`, or no directive was supplied at all,
-            // this block is skipped and the default path is byte-for-byte unchanged.
-            if (plan.kind === 'version' && plan.artifactId === directive?.targetArtifactId) {
-                const target = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
-                if (!(await target.Load(plan.artifactId))) {
-                    LogError(`Ignoring artifact directive from agent "${agent?.Name}": target artifact ${plan.artifactId} not found or not readable`);
-                    plan = planArtifactTarget(undefined, sourceArtifactId);
+            // Vet whatever artifact we are about to version, then walk DOWN the fallback ladder on
+            // failure: a directive-named target degrades to the caller's sourceArtifactId, and a bad
+            // sourceArtifactId degrades to the historical chain. Each rung is re-vetted, so a value
+            // rejected on one rung can never re-enter on the next (an agent echoing the run's own
+            // source id back as its target used to do exactly that: rejected as model output, then
+            // versioned anyway as a caller id, logged as both "not readable" and "creating version N").
+            const rejectedIds = new Set<string>();
+            while (plan.kind === 'version') {
+                const vetted = await this.VetArtifactVersionTarget(plan, contextUser, md, agent?.Name, rejectedIds);
+                if (vetted) {
+                    plan = vetted;
+                    break;
                 }
+                plan = plan.source === 'directive'
+                    ? planArtifactTarget(undefined, sourceArtifactId) // drop the directive, keep the caller's id
+                    : { kind: 'legacy' };                             // the caller's own id failed; nothing left to try
             }
 
             let artifactId: string;
@@ -945,7 +971,7 @@ export class AgentRunner {
                 const maxVersion = await this.GetMaxVersionForArtifact(plan.artifactId, contextUser, provider);
                 artifactId = plan.artifactId;
                 newVersionNumber = maxVersion + 1;
-                LogStatus(`Creating version ${newVersionNumber} of artifact ${artifactId} (${plan.artifactId === directive?.targetArtifactId ? 'agent directive' : 'sourceArtifactId'})`);
+                LogStatus(`Creating version ${newVersionNumber} of artifact ${artifactId} (${plan.source === 'directive' ? 'agent directive' : 'sourceArtifactId'})`);
             } else {
                 // Legacy: look behind this message (only inside a conversation). 'create-new' skips the lookup.
                 const previousArtifact = (plan.kind === 'legacy' && conversationDetailId)
@@ -996,7 +1022,7 @@ export class AgentRunner {
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
             // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
-            if (isNewArtifact && newVersionNumber === 1 && !directive?.name?.trim()) {
+            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.SafeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
                 const nameAttr = (version as any).Attributes?.find((attr: any) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
@@ -1034,6 +1060,179 @@ export class AgentRunner {
     }
 
     /**
+     * Renders an untrusted value for a log line without trusting it to render itself.
+     *
+     * Directives arrive as parsed JSON, so a field declared `string` can hold any JSON value.
+     * `String(value)` is not safe on such a value — `{ toString: 'x' }` shadows `toString` with a
+     * non-callable, and `String()` throws — and a value that throws while being logged aborts the
+     * whole artifact write, which is the failure this helper exists to prevent.
+     *
+     * @param value - Any value, however malformed.
+     * @returns A short single-line description, never throwing.
+     */
+    private static DescribeUntrustedValue(value: unknown): string {
+        let text: string;
+        try {
+            text = typeof value === 'string' ? value : (JSON.stringify(value) ?? Object.prototype.toString.call(value));
+        } catch {
+            // Circular structure, a throwing getter, or a BigInt.
+            text = Object.prototype.toString.call(value);
+        }
+        return text.replace(/\s+/g, ' ').slice(0, 64);
+    }
+
+    /**
+     * Escapes an id for interpolation into a `RunView.ExtraFilter`, warning when the value cannot
+     * be an id at all.
+     *
+     * `RunViewParams.ExtraFilter` is a raw SQL fragment with no parameterized form, so every id
+     * this class puts into one is escaped HERE — at the query builder — rather than at whichever
+     * call site happened to be audited. `ValidateUserProvidedSQLClause` upstream blacklists
+     * statement keywords but permits `OR`, so an unescaped id remains a real predicate-injection
+     * surface; escaping at the builder covers every caller, present and future, including the
+     * caller-supplied `sourceArtifactId` that arrives straight from the GraphQL boundary.
+     *
+     * @param id - The id to interpolate.
+     * @param label - What the id is, for the warning.
+     * @returns The escaped id, ready to sit inside single quotes.
+     */
+    private static FilterId(id: string, label: string): string {
+        if (!IsValidUUID(id)) {
+            LogError(`${label} is not a UUID-shaped id ("${AgentRunner.DescribeUntrustedValue(id)}") — this query cannot match a row`);
+        }
+        return EscapeSQLString(id);
+    }
+
+    /**
+     * Coerces one of a directive's free-text fields into something safe to persist.
+     *
+     * The field is model output: it may be absent, may not be a string at all, may be whitespace,
+     * and may be far longer than its column. Anything unusable becomes `undefined` so the caller
+     * falls back to its own default, and anything over-long is clamped rather than allowed to fail
+     * `BaseEntity.Validate` — a rejected `Save()` would discard the entire artifact, so a truncated
+     * title is strictly better than no artifact.
+     *
+     * @param value - The directive field (`name` or `description`).
+     * @param maxLength - Column limit to clamp to; omit for `nvarchar(MAX)` columns.
+     * @returns The trimmed (and clamped) text, or `undefined` when there is nothing usable.
+     */
+    private static SafeDirectiveText(value: unknown, maxLength?: number): string | undefined {
+        if (typeof value !== 'string') {
+            return undefined;
+        }
+        const trimmed = value.trim();
+        if (trimmed.length === 0) {
+            return undefined;
+        }
+        return maxLength != null && trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+    }
+
+    /**
+     * Vets one rung of the version-target ladder, returning the plan with a normalized id when the
+     * target is usable and `null` when the caller should fall back.
+     *
+     * Three things are checked, in cost order:
+     *
+     * 1. **Shape.** The id must be a UUID-shaped string. This matters because it is interpolated
+     *    into the `ExtraFilter` fragments built by {@link GetMaxVersionForArtifact} and
+     *    {@link CheckForDuplicateVersion}; those escape what they are handed, but an id that is not
+     *    a UUID cannot name an artifact, so rejecting it here turns a doomed query into a clean
+     *    fallback. The id is then TRIMMED for downstream use — `IsValidUUID` tolerates surrounding
+     *    whitespace, so a value with a trailing newline passes validation and would otherwise reach
+     *    `ArtifactID='<uuid>\n'` and fail as a SQL conversion error.
+     * 2. **Existence** — directive-named targets only.
+     * 3. **Authorization** — directive-named targets only. `vwArtifacts` carries no per-user
+     *    predicate and no row-level-security filter, so a row loading successfully proves only that
+     *    it EXISTS. Without this check an agent could name any artifact id in the instance and have
+     *    the run's payload appended to it as a new version. The caller must own the artifact or hold
+     *    an explicit `CanEdit` grant on it.
+     *
+     * Existence and authorization resolve in ONE `RunViews` round trip, and via `RunView` rather
+     * than `BaseEntity.Load` deliberately: `Load` THROWS on a permission denial, a SQL conversion
+     * error or any transient DB fault, and a throw here would propagate to the method-wide catch and
+     * lose the whole artifact — the opposite of the graceful fallback this is meant to provide.
+     *
+     * A caller-supplied `sourceArtifactId` is shape-checked but NOT loaded or authorized: it is a
+     * server-side argument rather than model output, and adding a round trip plus a new denial mode
+     * to that path would change behavior for every existing agent. (The pre-existing exposure on
+     * that path — any authenticated caller may name any artifact id — is unchanged by this PR and
+     * wants its own fix.)
+     *
+     * @param plan - The `version` plan to vet.
+     * @param contextUser - User the run executes as.
+     * @param md - Provider for the lookups.
+     * @param agentName - Agent name, for log lines.
+     * @param rejectedIds - Ids already rejected on a higher rung; mutated with any new rejection so
+     *   the same id cannot be re-admitted further down the ladder.
+     * @returns The vetted plan with a trimmed id, or `null` to fall back.
+     */
+    protected async VetArtifactVersionTarget(
+        plan: Extract<ArtifactTargetPlan, { kind: 'version' }>,
+        contextUser: UserInfo,
+        md: IMetadataProvider,
+        agentName: string | undefined,
+        rejectedIds: Set<string>
+    ): Promise<Extract<ArtifactTargetPlan, { kind: 'version' }> | null> {
+        const origin = plan.source === 'directive' ? `artifact directive from agent "${agentName}"` : 'sourceArtifactId';
+
+        if (typeof plan.artifactId !== 'string' || !IsValidUUID(plan.artifactId)) {
+            LogError(`Ignoring ${origin}: "${AgentRunner.DescribeUntrustedValue(plan.artifactId)}" is not a valid artifact ID`);
+            return null;
+        }
+        const artifactId = plan.artifactId.trim();
+
+        if (rejectedIds.has(artifactId.toLowerCase())) {
+            LogError(`Ignoring ${origin}: artifact ${artifactId} was already rejected for this run`);
+            return null;
+        }
+        if (plan.source !== 'directive') {
+            return { ...plan, artifactId };
+        }
+
+        const reject = (reason: string): null => {
+            rejectedIds.add(artifactId.toLowerCase());
+            LogError(`Ignoring ${origin}: target artifact ${artifactId} ${reason}`);
+            return null;
+        };
+
+        try {
+            const rv = RunView.FromMetadataProvider(md);
+            // One round trip for both questions: does the artifact exist, and may this user add to it.
+            const [ownerResult, grantResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+                    Fields: ['ID', 'UserID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Artifact Permissions',
+                    ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}' AND UserID='${EscapeSQLString(contextUser.ID)}' AND CanEdit=1`,
+                    Fields: ['ID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+            ], contextUser);
+
+            const owner = ownerResult?.Success ? (ownerResult.Results?.[0] as { UserID?: string } | undefined) : undefined;
+            if (!owner) {
+                return reject('was not found or is not readable');
+            }
+            if (UUIDsEqual(owner.UserID, contextUser.ID)) {
+                return { ...plan, artifactId };
+            }
+            if (grantResult?.Success && (grantResult.Results?.length ?? 0) > 0) {
+                return { ...plan, artifactId };
+            }
+            return reject(`is owned by another user and this user holds no CanEdit grant on it`);
+        } catch (error) {
+            // Fail closed: an unavailable lookup must not become an unchecked write.
+            return reject(`could not be verified (${(error as Error)?.message ?? 'unknown error'})`);
+        }
+    }
+
+    /**
      * Creates the artifact header row. Name and description come from the agent's directive when
      * it supplied them (e.g. Skip's artifactRequest); otherwise the historical placeholder.
      */
@@ -1047,15 +1246,19 @@ export class AgentRunner {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
         const agentName = agent?.Name || 'Agent';
-        artifact.Name = directive?.name?.trim() || `${agentName} Payload - ${new Date().toLocaleString()}`;
-        artifact.Description = directive?.description?.trim() || `Payload returned by ${agentName}`;
+        // Both fields are model output: coerced, trimmed, and (for Name) clamped to its column so a
+        // long or non-string title cannot fail validation and take the whole artifact down with it.
+        artifact.Name = AgentRunner.SafeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)
+            || `${agentName} Payload - ${new Date().toLocaleString()}`;
+        // Description is nvarchar(MAX), so there is no length to clamp to — only the type to check.
+        artifact.Description = AgentRunner.SafeDirectiveText(directive?.description)
+            || `Payload returned by ${agentName}`;
 
         // Use agent's DefaultArtifactTypeID if available
-        const defaultArtifactTypeId = (agent as any)?.DefaultArtifactTypeID;
-        artifact.TypeID = defaultArtifactTypeId || AgentRunner.JSON_ARTIFACT_TYPE_ID;
+        artifact.TypeID = agent?.DefaultArtifactTypeID || AgentRunner.JSON_ARTIFACT_TYPE_ID;
 
         artifact.UserID = contextUser.ID;
-        artifact.EnvironmentID = (contextUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+        artifact.EnvironmentID = (contextUser as any).EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
         // Set visibility based on agent's ArtifactCreationMode
         if (creationMode === 'System Only') {
@@ -1066,7 +1269,10 @@ export class AgentRunner {
         }
 
         if (!(await artifact.Save())) {
-            throw new Error('Failed to save artifact');
+            // Surface WHY. A bare message here sent every cause — a validation failure on a
+            // model-supplied name, a permission denial, a transient DB fault — to the same
+            // indistinguishable log line.
+            throw new Error(`Failed to save artifact: ${artifact.LatestResult?.Message || 'no error message reported'}`);
         }
         return artifact;
     }
