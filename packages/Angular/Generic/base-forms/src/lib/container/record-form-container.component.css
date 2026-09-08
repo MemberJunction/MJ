@@ -627,6 +627,16 @@ mj-collapsible-panel.mj-form-role-more {
   .mj-forms-chrome-rail-item {
     width: auto;
   }
+
+  /* Phones: the rail is a wrapping row of chips, so the items wrapper must
+     wrap too — a column here stacks one chip per row and grows past the
+     rail (no scroll, body pushed out). */
+  .mj-forms-chrome-rail-items {
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow: visible;
+    min-height: auto;
+  }
 }
 
 /* ============================================

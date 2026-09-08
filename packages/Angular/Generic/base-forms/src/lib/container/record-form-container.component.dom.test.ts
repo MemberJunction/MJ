@@ -216,6 +216,24 @@ describe('MjRecordFormContainerComponent (DOM) — left-nav Details card classes
     expect(el.physical.classList.contains('mj-chrome-details-last')).toBe(true);
   });
 
+  it('never gives a card edge to a panel that hid itself (section filter / no renderable content)', () => {
+    const { f, el } = setUp({ identity: 0, history: 1, physical: 2 });
+    // The panel's own host class when IsVisible is false — display: none via the panel CSS.
+    el.identity.classList.add('mj-search-hidden');
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+    expect(el.identity.classList.contains('mj-chrome-details-first')).toBe(false);
+    expect(el.identity.classList.contains('mj-chrome-details-last')).toBe(false);
+    // The first VISIBLE segment closes the top of the card instead.
+    expect(classes(el.history)).toEqual(['mj-chrome-details', 'mj-chrome-details-first', 'mj-chrome-show']);
+    expect(classes(el.physical)).toEqual(['mj-chrome-details', 'mj-chrome-details-last', 'mj-chrome-show']);
+
+    // It comes back when the panel shows again.
+    el.identity.classList.remove('mj-search-hidden');
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+    expect(el.identity.classList.contains('mj-chrome-details-first')).toBe(true);
+    expect(el.history.classList.contains('mj-chrome-details-first')).toBe(false);
+  });
+
   it('moves the card edges when the display order changes, and clears them when Details is not active', () => {
     const order: Record<string, number> = { identity: 0, history: 1, physical: 2 };
     const { f, el } = setUp(order);

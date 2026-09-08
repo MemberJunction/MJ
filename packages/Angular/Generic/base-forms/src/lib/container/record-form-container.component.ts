@@ -127,6 +127,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Last values `ngDoCheck` resolved the rail for — see that method. */
   private lastRailEditMode = false;
   private lastRailShowEmptyFields = false;
+  private lastRailSearchFilter = '';
   private chromeRules: FormChromeRule[] = [];
   private chromeRulesForEntityId: string | null = null;
 
@@ -681,9 +682,19 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   ngDoCheck(): void {
     const editMode = this.EffectiveEditMode;
     const showEmptyFields = this.EffectiveShowEmptyFields;
-    if (editMode === this.lastRailEditMode && showEmptyFields === this.lastRailShowEmptyFields) return;
+    // The section filter hides panels through their own host class, which is
+    // applied during change detection — after OnFilterChange's synchronous
+    // re-apply. Watching it here re-runs the chrome pass (setTimeout 0) once
+    // those classes are current, so the Details card edges skip hidden panels.
+    const searchFilter = this.EffectiveSearchFilter;
+    if (
+      editMode === this.lastRailEditMode
+      && showEmptyFields === this.lastRailShowEmptyFields
+      && searchFilter === this.lastRailSearchFilter
+    ) return;
     this.lastRailEditMode = editMode;
     this.lastRailShowEmptyFields = showEmptyFields;
+    this.lastRailSearchFilter = searchFilter;
     this.scheduleChromeResolve();
   }
 
@@ -1048,7 +1059,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         && variant !== 'related-entity'
         && IsDetailsSectionKey(this.chrome.Spec, key);
       node.classList.toggle('mj-chrome-details', isDetails);
-      if (isDetails) detailsKeys.push(key);
+      // A panel that hid ITSELF (`mj-search-hidden`: the section filter
+      // excludes it, or it has no renderable content while empty fields are
+      // hidden) is display: none — it must not hold a card edge, or the
+      // visible card loses that border, radius and edge padding.
+      if (isDetails && !node.classList.contains('mj-search-hidden')) detailsKeys.push(key);
     });
     // The card's top and bottom edges follow the VISUAL order (CSS `order`
     // = the form's section display order), not DOM order.
