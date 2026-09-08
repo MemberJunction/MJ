@@ -119348,6 +119348,208 @@ export class MJTestTypeEntity extends BaseEntity<MJTestTypeEntityType> {
 
 
 /**
+ * Shape of the `Configuration` column on `MJ: Tests` — the per-test JSON bag every
+ * test driver already reads, now typed so CodeGen emits a `ConfigurationObject`
+ * accessor instead of a raw string.
+ *
+ * **Why the index signature.** `Configuration` is shared by every test type (Agent
+ * Eval, Workflow, Computer Use), and each driver parses its own shape out of it.
+ * The named properties here are the ones the *framework* understands; everything
+ * else is a driver's business and passes through untouched. Adding a framework-level
+ * option is an edit to this interface plus `mj sync push` — never a migration.
+ *
+ * **Why the script lives here.** A replay script is a generated artifact of a test,
+ * not source. Keeping it in this column means it travels with the test row, arrives
+ * already in the TestingEngine's local cache, and needs no second store to keep in
+ * step with the test it belongs to.
+ *
+ * @see plans/regression-testing/dom-selection-and-replay-design.md
+ */
+export interface MJTestEntity_ITestConfiguration {
+    /**
+     * The recorded, replayable trajectory for this test — written by a passing
+     * agent-driven run and replayed by later runs at browser speed with no model
+     * calls. Absent until the first run records one.
+     *
+     * Structurally identical to `ComputerUseTrace` in `@memberjunction/computer-use`;
+     * `@memberjunction/computer-use-engine` asserts that in both directions at
+     * compile time, so the two cannot drift apart silently.
+     */
+    TestJSONScript?: MJTestEntity_ITestJSONScript;
+
+    /**
+     * Whether a failed replay may fall back to the agent, re-derive the goal, and
+     * overwrite {@link TestJSONScript} with what it learned. Defaults to **true**.
+     *
+     * Set `false` to pin a test to deterministic execution: a drifted script then
+     * fails as a divergence instead of being quietly re-derived. That is the right
+     * setting wherever a re-derivation could paper over the very regression the
+     * test exists to catch.
+     */
+    AllowLLMFallback?: boolean;
+
+    /** Driver-specific configuration, passed through untouched. */
+    [key: string]: unknown;
+}
+
+/**
+ * A recorded, replayable trajectory for one test.
+ *
+ * Keyed by {@link MJTestEntity_ITestJSONScript.TestId}; validated on load against
+ * {@link MJTestEntity_ITestJSONScript.AppBuildHash}, {@link MJTestEntity_ITestJSONScript.AppVersion} and
+ * {@link MJTestEntity_ITestJSONScript.GoalHash}. An exact build match replays with no healing
+ * expected; any mismatch replays with healing; a changed goal falls back to the
+ * agent, because the script no longer describes what the test asks for.
+ */
+export interface MJTestEntity_ITestJSONScript {
+    /** Stable per-test identifier the script is keyed by. */
+    TestId: string;
+    /**
+     * Opaque build identity at record time. Compared, never parsed — a caller
+     * supplies whatever stable identity it has. Empty when it has none.
+     */
+    AppBuildHash: string;
+    /** Opaque app/package version at record time. Compared, never parsed. */
+    AppVersion: string;
+    /** Hash of the frozen goal text — a goal edit invalidates the script. */
+    GoalHash: string;
+    /** ISO-8601 timestamp when this script was recorded. */
+    RecordedAt: string;
+    /** Viewport at record time; replay must match it for coordinate-era guards. */
+    Viewport: MJTestEntity_ITestJSONScriptViewport;
+    /**
+     * Names of the variables the test declares. Values are never stored — only
+     * names. Replay substitutes fresh values into the `%placeholder%` tokens that
+     * recording left in step text and URLs.
+     */
+    Variables: string[];
+    /** The resolved, ordered replay steps. */
+    Steps: MJTestEntity_ITestJSONScriptStep[];
+    /** Final goal-level deterministic assertions. */
+    GoalPostconditions: MJTestEntity_ITestJSONScriptGoalPostcondition[];
+}
+
+/** Viewport at record time. */
+export interface MJTestEntity_ITestJSONScriptViewport {
+    Width: number;
+    Height: number;
+}
+
+/** One recorded, replayable step. */
+export interface MJTestEntity_ITestJSONScriptStep {
+    /** Human-readable intent, carried from the agent's own reasoning. */
+    Instruction: string;
+    /** Normalized URL at the start of this step. */
+    UrlBefore: string;
+    Action: MJTestEntity_ITestJSONScriptAction;
+    Precondition: MJTestEntity_ITestJSONScriptPrecondition;
+    Postcondition?: MJTestEntity_ITestJSONScriptPostcondition;
+}
+
+/**
+ * The deterministic subset of browser actions a recorded step can perform.
+ * Vision-only primitives are never recorded — replay targets elements, not pixels.
+ */
+export type MJTestEntity_ITestJSONScriptActionMethod =
+    | 'click'
+    | 'type'
+    | 'navigate'
+    | 'keypress'
+    | 'scroll'
+    | 'wait'
+    | 'goBack'
+    | 'goForward'
+    | 'refresh';
+
+/**
+ * The action a recorded step performs. Only the fields relevant to
+ * {@link MJTestEntity_ITestJSONScriptAction.Method} are populated. Text and URLs carry
+ * `%placeholder%` tokens for any declared variable.
+ */
+export interface MJTestEntity_ITestJSONScriptAction {
+    Method: MJTestEntity_ITestJSONScriptActionMethod;
+    /** Target for click / type / scroll actions. */
+    Target?: MJTestEntity_ITestJSONScriptTarget;
+    /** Text to type, possibly with `%placeholder%` variable tokens. */
+    Text?: string;
+    /** Key or chord to press. */
+    Key?: string;
+    /** Destination, normalized and variable-tokenized. */
+    Url?: string;
+    /** Press Enter after typing. */
+    PressEnter?: boolean;
+    /** 1 = single click, 2 = double. */
+    ClickCount?: number;
+    Button?: 'left' | 'right' | 'middle';
+    /** Wait duration in ms. */
+    DurationMs?: number;
+}
+
+/**
+ * A multi-signal locator for a step's target. `Selector` is the primary signal;
+ * `Role` and `Name` are the self-heal fallback, re-resolved from a fresh element
+ * list when the selector no longer matches; `BoundingBox` is the weakest guard,
+ * stored only for recordings made before element grounding was on.
+ */
+export interface MJTestEntity_ITestJSONScriptTarget {
+    Role?: string;
+    Name?: string;
+    Selector?: string;
+    BoundingBox?: MJTestEntity_ITestJSONScriptBoundingBox;
+}
+
+/** Rendered position of a target at record time. */
+export interface MJTestEntity_ITestJSONScriptBoundingBox {
+    XMin: number;
+    YMin: number;
+    XMax: number;
+    YMax: number;
+}
+
+/**
+ * Guard evaluated BEFORE a step runs. Fail-fast by contract: a target that never
+ * becomes attached and visible within the bound fails the step. Replay never
+ * proceeds anyway on a missed precondition.
+ */
+export interface MJTestEntity_ITestJSONScriptPrecondition {
+    /** Wait for the action's target to be attached and visible before acting. */
+    WaitForTarget: boolean;
+    /** Expected normalized URL pattern at the start of this step. */
+    UrlPattern?: string;
+    /** Require the app's readiness beacon before acting. */
+    ReadyBeacon: boolean;
+}
+
+/**
+ * Guard evaluated AFTER a step, confirming it advanced the page the way the
+ * recording did. A failure marks the step diverged and starts the heal ladder.
+ */
+export interface MJTestEntity_ITestJSONScriptPostcondition {
+    /** Expected normalized URL pattern after the step's action ran. */
+    UrlPattern?: string;
+    /** An element expected to be visible after the step. */
+    ExpectVisible?: MJTestEntity_ITestJSONScriptTarget;
+}
+
+/**
+ * A goal-level deterministic assertion distilled from a passing run. Replay scores
+ * by executing these, so the model-based judge runs only on the agent tier or when
+ * an assertion is ambiguous.
+ */
+export interface MJTestEntity_ITestJSONScriptGoalPostcondition {
+    /**
+     * - `'url'` — the final URL matches `UrlPattern`.
+     * - `'visible'` — `Target` is present in the end state.
+     * - `'absent'` — `Target` is not present (no error toast, say).
+     */
+    Kind: 'url' | 'visible' | 'absent';
+    UrlPattern?: string;
+    Target?: MJTestEntity_ITestJSONScriptTarget;
+    /** Provenance — the validation criterion this was distilled from. */
+    Description?: string;
+}
+
+/**
  * MJ: Tests - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Test
@@ -119512,6 +119714,7 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTestEntity_ITestConfiguration
     * * Description: JSON object for test-specific configuration (e.g., oracles to use, rubrics, retry policies, timeout settings)
     */
     get Configuration(): string | null {
@@ -119519,6 +119722,27 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJTestEntity_ITestConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJTestEntity_ITestConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJTestEntity_ITestConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJTestEntity_ITestConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**

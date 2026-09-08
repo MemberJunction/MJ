@@ -53,11 +53,33 @@ export interface ComputerUseOracleConfig {
 
     /** Weight for scoring (0.0 to 1.0) */
     weight?: number;
+
+    /**
+     * When true, this oracle is advisory — reported and scored for diagnostics
+     * but non-gating for Passed/Failed. Defaults per oracle type:
+     * `step-count` is advisory by default (it's an efficiency signal, and the
+     * engine already caps steps at the same limit, making a gating check a
+     * tautology); all other oracles gate by default. Set explicitly to override.
+     */
+    advisory?: boolean;
 }
 
 /**
  * Configuration for a Computer Use test.
  * Stored as JSON in TestEntity.Configuration.
+ */
+import type { ArtifactRetentionPolicy } from './artifact-retention.js';
+import type { ReplayTier } from '@memberjunction/computer-use';
+
+/**
+ * The Computer Use driver's slice of `Test.Configuration`.
+ *
+ * Two properties in that same JSON are **framework-level, not driver-level**, and
+ * are deliberately absent here: `TestJSONScript` (the recorded replay script) and
+ * `AllowLLMFallback`. Both are typed by the entity's own JSONType and read through
+ * the generated `MJTestEntity.ConfigurationObject` accessor in `script-store.ts`,
+ * so they stay strongly typed without this driver restating them. Do not add
+ * copies here — two declarations of one field is how they drift.
  */
 export interface ComputerUseTestConfig {
     /** Run browser in headless mode (default: true) */
@@ -158,6 +180,79 @@ export interface ComputerUseTestConfig {
      * so that auth state persists between tests in the same worker.
      */
     browserSession?: string;
+
+    /**
+     * App-specific readiness/busy signals for the adaptive settle loop
+     *. Optional — the driver applies MJ-Explorer-sensible defaults (a
+     * `[data-mj-ready="true"]` readiness beacon and MJ loading-spinner markers)
+     * when omitted. Provide to override when the target app under test isn't MJ
+     * Explorer, or to tune settle timing.
+     */
+    appProfile?: {
+        /** CSS selector for the app's readiness beacon (polled first; wins over heuristics). */
+        readinessBeacon?: string;
+        /** Additional busy-marker CSS selectors (merged with the engine's app-neutral defaults). */
+        busyMarkers?: string[];
+        /** Settle-loop timing overrides. */
+        settle?: {
+            maxWaitMs?: number;
+            pollMs?: number;
+            networkIdleCapMs?: number;
+            minWaitMs?: number;
+        };
+        /**
+         * Auth-detour watchdog. When the session is invalidated mid-run
+         * and the page bounces to an identity provider, the watchdog recovers it
+         * (re-auth + re-navigate) without charging the agent a step, and after
+         * `maxDetours` ends the run as an infrastructure `AuthDetour` instead of
+         * grading the agent on it. Defaults to MJ's providers (Auth0 + Entra);
+         * pass `identityProviderPatterns: []` to disable.
+         */
+        auth?: {
+            /** Case-insensitive URL substrings marking an identity-provider bounce. */
+            identityProviderPatterns?: string[];
+            /** Terminate as AuthDetour after this many detours (default 2). */
+            maxDetours?: number;
+        };
+    };
+
+    /**
+     * Per-test controller generation overrides — determinism knobs
+     * threaded into the controller prompt. `temperature` (e.g. 0 for pinned
+     * regression runs) and `effortLevel` (1–100). Judge generation is unaffected.
+     */
+    generation?: { temperature?: number; effortLevel?: number };
+
+    /**
+     * Element-grounded perception. When true, each step the engine
+     * extracts the page's interactive elements into an indexed list, renders it
+     * into the controller prompt, and lets the controller act by index
+     * (ClickElement/TypeIntoElement) with locator actionability auto-wait instead
+     * of estimating coordinates. Default false (coordinate/vision mode) until
+     * baked in across the suite.
+     */
+    elementGrounding?: boolean;
+
+    /**
+     * Failure-artifact trace policy. When enabled, the run records a
+     * Playwright trace (DOM snapshots + network + console) viewable at
+     * trace.playwright.dev, retained per this policy as a `File` TestRunOutput:
+     * - `off` (default) — no trace, zero overhead.
+     * - `retain-on-failure` — trace every run, keep it only when the test fails.
+     * - `on` — trace every run, always keep it.
+     * Tracing carries ~5–15% per-run overhead; measure on a smoke test before
+     * enabling suite-wide (hence the default is `off`).
+     */
+    trace?: ArtifactRetentionPolicy;
+
+    /**
+     * Force a replay tier for this test (canary override), bypassing
+     * `decideReplayTier`. `'llm'` runs the full agent (the `rerun-failures --llm`
+     * / canary escape hatch); `'replay'` / `'replay-with-heal'` force the
+     * deterministic tier when a script exists (no script ⇒ still falls to LLM).
+     * Unset (default) ⇒ the tier is decided per build/goal/heal-rate.
+     */
+    forceTier?: ReplayTier;
 }
 
 // ─── Input Definition (TestEntity.InputDefinition JSON) ───────────
@@ -169,6 +264,15 @@ export interface ComputerUseTestConfig {
 export interface ComputerUseTestInput {
     /** Natural-language goal for the agent to accomplish (required) */
     goal: string;
+
+    /**
+     * Optional per-test UI hints injected after the goal — e.g. "the
+     * filter panel opens via the funnel icon", "search commits on Enter".
+     * Documents the UI contract; harvested from failure triage. When a hint goes
+     * stale that is itself a finding — pair each with a linked issue where it
+     * compensates for a real defect.
+     */
+    hints?: string[];
 
     /** Starting URL to navigate to */
     startUrl?: string;
@@ -212,6 +316,39 @@ export interface ComputerUseExpectedOutcomes {
 
     /** Custom validation criteria for LLM judge oracles */
     judgeValidationCriteria?: string[];
+
+    /**
+     * Ordered tour checkpoints. When set, the test is verified
+     * section-by-section: it passes iff every checkpoint is reached (URL/element
+     * assertions latch for free every step; visual criteria via the judge), rather
+     * than on a single final-frame judge. Mapped to `RunComputerUseParams.Checkpoints`.
+     * See `plans/regression-testing/checkpoint-tours-design.md`.
+     */
+    checkpoints?: CheckpointDef[];
+}
+
+/** JSON shape of one checkpoint tour section (mapped to `RunCheckpoint`). */
+export interface CheckpointDef {
+    /** Stable label for the section, e.g. "agents-list". */
+    name: string;
+    /** Plan hint appended to the goal so the controller passes through here. */
+    instruction?: string;
+    /** Deterministic assertions — latch for free every step. Preferred. */
+    assertions?: CheckpointAssertionDef[];
+    /** Visual criteria requiring the LLM judge (e.g. "chart rendered with bars"). */
+    visualCriteria?: string[];
+}
+
+/** JSON shape of one deterministic checkpoint assertion (mapped to `GoalPostcondition`). */
+export interface CheckpointAssertionDef {
+    /** `url` matches urlPattern; `visible`/`absent` = target present/absent. */
+    kind: 'url' | 'visible' | 'absent';
+    /** Substring the normalized URL must contain (kind `url`) — a path fragment like `/app/agents`, NOT a glob. */
+    urlPattern?: string;
+    /** Element to check for presence/absence (kind `visible`/`absent`). */
+    target?: { role?: string; name?: string; selector?: string };
+    /** Optional provenance note. */
+    description?: string;
 }
 
 // ─── Actual Output (built by ComputerUseTestDriver, consumed by oracles) ──
