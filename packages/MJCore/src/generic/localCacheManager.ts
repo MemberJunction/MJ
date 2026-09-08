@@ -1580,18 +1580,31 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   common case — users with no RLS filter), the fingerprint is byte-for-byte identical to the
      *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
      * @param flsFieldsKey - Canonical key identifying this user's field-security access on the
-     *   entity: lowercased field names, sorted, comma-joined. The SERVER passes the DENIED set
-     *   (`ProviderBase.ComputeRunViewFLSDeniedKey`); the CLIENT passes the ALLOWED set
-     *   (`ComputeClientFLSAllowedKey`) because filtered client metadata cannot see denied
-     *   fields at all — both are opaque here, and the two caches are looked up independently. Must participate for the same reason as
-     *   `rlsWhereClause`, but for COLUMNS instead of rows: a field-restricted user's queries are
-     *   widened to their ALLOWED column set (not all columns), so their cached rows are narrower
-     *   than an unrestricted user's — the two must never share a slot in either direction. Keyed by
-     *   the DENIED set (not the allowed set) deliberately: it is precomputed per request, an empty
-     *   set appends no segment (unrestricted users and non-FLS entities keep byte-identical shared
-     *   fingerprints), and it is stable under additive schema change where an allowed-set key would
-     *   churn for every user whenever any column is added. A permission change produces a new hash →
-     *   fresh slot; slots keyed to the old hash strand until eviction (memory cost, not a leak).
+     *   entity: lowercased field names, sorted, comma-joined. Opaque here — the caller decides
+     *   what goes in it, and `ProviderBase.ComputeRunViewFLSFingerprintKey` is the single place
+     *   that decision lives so the two tiers cannot drift.
+     *
+     *   **CLIENT-ONLY in practice.** The client passes its ALLOWED set
+     *   (`ProviderBase.ComputeClientFLSAllowedKey`); the SERVER passes nothing. Server slots are
+     *   full-width and shared by every user, with narrowing applied at read time by
+     *   `ApplyFieldSecurityProjection` on both the hit and miss paths — a segment there would
+     *   fragment one shared slot into one per permission class and protect nothing. Client slots
+     *   are stored exactly as the server returned them (already narrowed on the wire) and are
+     *   never projected on read, so the field set has to be part of slot identity: without it a
+     *   user whose access is tightened keeps being served their persisted IndexedDB slot, because
+     *   the currency check compares only `maxUpdatedAt` and `rowCount` and neither notices a
+     *   column.
+     *
+     *   Keyed on the ALLOWED set rather than the denied one deliberately: once client metadata is
+     *   filtered for restricted users ([#3485](https://github.com/MemberJunction/MJ/issues/3485))
+     *   a denied field will not appear in the client's field list at all, so a denied-set key
+     *   would be empty and would silently stop segmenting. It also resolves the `f:*` ambiguity
+     *   in the projection segment, where "full width" means different columns for different users.
+     *
+     *   Empty for unrestricted users and non-FLS entities, which appends no segment at all — so
+     *   their fingerprints stay byte-identical and keep sharing slots (the `rls:` rule). A
+     *   permission change produces a new hash → fresh slot; slots keyed to the old hash strand
+     *   until eviction (memory cost, not a leak).
      * @param datasetSegment - Namespace for dataset-item slots (see the `ds:` append below): keeps
      *   `GetDatasetByName` item caching from colliding with a plain unfiltered read of the same
      *   entity. Appended only when supplied, so ordinary reads keep their pre-existing key.

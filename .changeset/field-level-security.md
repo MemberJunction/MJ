@@ -88,6 +88,20 @@ Also in this release:
 - **`entity_object` requests always fetch every column the user may see**, whether or not the
   query is cacheable. This was already true on the server but not for clients, so a client could
   build a partial entity and write defaults over real data on the next save.
+- **Server-side `BaseEngine` loads now run as the MJ system user**, regardless of which caller
+  reached `Config()` first. Engine data is infrastructure: the cache is process-wide and shared by
+  every user of the process, so its contents must not depend on the first caller's permissions — one
+  carrying entity denials, RLS row scoping, or field denials would otherwise seal a partial cache
+  that then serves everyone until restart. The identity is sticky once applied, so a later
+  `Config(forceRefresh, someUser)` cannot pull the shared cache back under that user's permissions.
+  Restricting what a given user may SEE stays where it belongs, at the point data is served to them.
+  Client-side (`ProviderType.Network`) behavior is unchanged. Resolution goes through a new
+  ClassFactory seam, `WellKnownUserSource` in `@memberjunction/core`, whose server-side
+  implementation answers from `UserCache`; when nothing is registered — a browser, a test, a
+  database with no such row — the engine degrades to acting as the caller exactly as before, with a
+  once-per-engine-class warning. This is a pre-existing `BaseEngine` defect fixed alongside field
+  security rather than because of it: neither depends on the other, though it is what lets the guide
+  say engine caches cannot be narrowed by a restricted caller.
 
 New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
 restricting anything — in particular, do not grant `MJ: Record Changes` read to roles that carry
