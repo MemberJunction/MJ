@@ -235,9 +235,13 @@ export class SQLLogging {
     /**
      * Adds the provided SQL to the log file for the run.
      *
-     * Two rules keep the file replayable as a migration: a unit that declares a batch-scoped T-SQL
-     * variable always ends its batch (see {@link declaresTSQLVariable}), and a unit that already ends
-     * in `GO` never receives a second separator. An empty `batchSeparator` (PostgreSQL) means none.
+     * Two rules keep the file replayable as a migration. A unit that declares a batch-scoped T-SQL
+     * variable always ends its batch: every unit is executed as its own query, so no later unit can
+     * depend on the variable, but two such units concatenated into one migration batch fail replay
+     * with "The variable name '@x' has already been declared" (see {@link declaresBatchScopedVariable}).
+     * And a unit that already ends in `GO` never receives a second separator. An empty
+     * `batchSeparator` (PostgreSQL) means none. Callers should still pass `includeBatchSeparator`
+     * explicitly: the scan does not see a declaration hidden inside a string or a mid-line statement.
      * @param contents - the executable SQL to log
      * @param description - a description of what is being logged that will be emitted and wrapped in comments
      * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
@@ -252,18 +256,6 @@ export class SQLLogging {
             }
             if(!contents || !SQLLogging.SQLLoggingFilePath){
                 return;
-            }
-
-            // A logged unit that declares a T-SQL local variable (`DECLARE @x ...`) must end its batch
-            // in the replayable file. Every unit is executed as its own query, so no later unit can
-            // depend on the variable — but without a separator, two such units concatenated into one
-            // migration batch fail replay with "The variable name '@x' has already been declared".
-            // Callers own the choice in the normal case; this guard covers any unit that declares a
-            // batch-scoped variable, whether or not the caller asked for a separator. It does not see
-            // a declaration hidden inside a string or a mid-line statement, so emitters should still
-            // pass includeBatchSeparator explicitly. PostgreSQL never declares `@` variables.
-            if (!includeBatchSeparator && batchSeparator && SQLLogging.declaresTSQLVariable(contents)) {
-                includeBatchSeparator = true;
             }
 
             if(description){
@@ -293,9 +285,14 @@ export class SQLLogging {
                 contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
-            // An empty separator (PostgreSQL) means "no batch separator"; don't emit a blank line for it.
-            // A unit that already closes its own batch (ends in GO) gets no second separator.
-            contents = includeBatchSeparator && batchSeparator && !endsWithBatchSeparator
+            // Emit a separator when the caller asked for one, or when the unit declares a batch-scoped
+            // variable (see the method JSDoc). Never for an empty separator (PostgreSQL), and never
+            // after a unit that already closes its own batch. The declaration scan runs only on
+            // units that could receive a separator, so GO-terminated view and routine bodies — the
+            // largest units logged — are not scanned.
+            const emitSeparator = !!batchSeparator && !endsWithBatchSeparator &&
+                (includeBatchSeparator || SQLLogging.declaresBatchScopedVariable(trimmed));
+            contents = emitSeparator
                 ? `${contents}\n${batchSeparator}\n\n`
                 : `${contents}\n\n`;
 
@@ -329,27 +326,23 @@ export class SQLLogging {
     }
 
     /**
-     * True when the SQL text declares a batch-scoped T-SQL local variable (`DECLARE @name ...`) at the
-     * start of any line, and no routine header (`CREATE [OR ALTER] PROCEDURE|FUNCTION|TRIGGER`) precedes
+     * True when the SQL text declares a batch-scoped T-SQL local variable: a `DECLARE @name ...` at the
+     * start of any line with no routine header (`CREATE [OR ALTER] PROCEDURE|FUNCTION|TRIGGER`) before
      * it. T-SQL variables are scoped to the batch wherever they are declared — after `SET NOCOUNT ON`,
      * inside `IF ... BEGIN ... END` — so the match is not limited to the first statement. A declaration
-     * inside a routine body is routine-scoped and cannot collide across units, so it is not matched.
+     * inside a routine body is routine-scoped and cannot collide across units, so it does not count.
      */
-    public static declaresTSQLVariable(sql: string): boolean {
+    public static declaresBatchScopedVariable(sql: string): boolean {
         if (!sql) {
             return false;
         }
-        const routineHeader = /^\s*CREATE\s+(OR\s+ALTER\s+)?(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/i;
-        const declaration = /^\s*DECLARE\s+@/i;
-        for (const line of sql.split('\n')) {
-            if (routineHeader.test(line)) {
-                return false;
-            }
-            if (declaration.test(line)) {
-                return true;
-            }
+        // `[ \t]*` rather than `\s*` so the multiline anchor cannot walk across blank lines.
+        const declaration = sql.search(/^[ \t]*DECLARE\s+@/im);
+        if (declaration === -1) {
+            return false;
         }
-        return false;
+        const routineHeader = sql.search(/^[ \t]*CREATE\s+(OR\s+ALTER\s+)?(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/im);
+        return routineHeader === -1 || declaration < routineHeader;
     }
 
     protected static getFileLength(filePath: string): number {

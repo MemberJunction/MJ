@@ -4698,11 +4698,7 @@ export class ManageMetadataBase {
    protected async dropExistingDefaultConstraint(pool: CodeGenConnection, entity: any, fieldName: string) {
       try {
          const sqlDropDefaultConstraint = this.dbProvider.dropDefaultConstraintSQL(entity.SchemaName, entity.BaseTable, fieldName);
-         // The SQL Server form of this block declares a local variable (@constraintName). Each call
-         // executes as its own query, so the variable never collides at run time — but the SQL log is
-         // concatenated verbatim into a migration, and two of these blocks in one batch fail replay
-         // with "The variable name '@constraintName' has already been declared". Emit the provider's
-         // batch separator after the block so every drop lands in its own batch in the migration file.
+         // DECLARE-bearing block: close its batch in the replayable log (see SQLLogging.appendToSQLLogFile).
          await this.LogSQLAndExecute(pool, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`, false, true, this.dbProvider.BatchSeparator);
       }
       catch (e) {

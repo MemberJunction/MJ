@@ -1,23 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
-
-// vi.mock factories are hoisted above every import, so anything they reference must be hoisted too.
-const { tmpDir, logFile } = await vi.hoisted(async () => {
-    const [nodeFs, nodeOs, nodePath] = await Promise.all([import('fs'), import('os'), import('path')]);
-    return {
-        tmpDir: nodeFs.mkdtempSync(nodePath.join(nodeOs.tmpdir(), 'mj-sql-log-')),
-        logFile: 'CodeGen_Run_test.sql',
-    };
-});
 
 vi.mock('mssql', () => ({}));
 vi.mock('../Config/config', () => ({
     configInfo: {
         SQLOutput: {
             enabled: true,
-            folderPath: tmpDir,
-            fileName: logFile,
+            // Overridden per run through SQLLogging.sqlOutputDirFlag, which resolveSQLOutputFolder prefers.
+            folderPath: '/tmp',
+            fileName: 'CodeGen_Run_test.sql',
             appendToFile: false,
             omitRecurringScriptsFromLog: false,
             convertCoreSchemaToFlywayMigrationFile: false,
@@ -45,11 +38,18 @@ import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLSer
  * migration fails on the next clean install.
  */
 describe('SQLLogging batch separators in the replayable log', () => {
-    const logPath = path.join(tmpDir, logFile);
+    let tmpDir: string;
+    let logPath: string;
+
+    beforeAll(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-sql-log-'));
+        logPath = path.join(tmpDir, 'CodeGen_Run_test.sql');
+    });
 
     beforeEach(() => {
         // appendToFile is false in the mocked config, so init truncates the file for each test.
         SQLLogging.resetForTests();
+        SQLLogging.sqlOutputDirFlag = tmpDir;
         SQLLogging.initSQLLogging();
     });
 
@@ -57,32 +57,32 @@ describe('SQLLogging batch separators in the replayable log', () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    describe('declaresTSQLVariable', () => {
+    describe('declaresBatchScopedVariable', () => {
         it('matches a top-level DECLARE @variable', () => {
-            expect(SQLLogging.declaresTSQLVariable('DECLARE @constraintName NVARCHAR(255);\nSELECT 1')).toBe(true);
-            expect(SQLLogging.declaresTSQLVariable('  declare @x int')).toBe(true);
+            expect(SQLLogging.declaresBatchScopedVariable('DECLARE @constraintName NVARCHAR(255);\nSELECT 1')).toBe(true);
+            expect(SQLLogging.declaresBatchScopedVariable('  declare @x int')).toBe(true);
         });
 
         it('sees through leading comments and whitespace', () => {
-            expect(SQLLogging.declaresTSQLVariable('/* banner */\n-- note\nDECLARE @c NVARCHAR(10)')).toBe(true);
+            expect(SQLLogging.declaresBatchScopedVariable('/* banner */\n-- note\nDECLARE @c NVARCHAR(10)')).toBe(true);
         });
 
         it('matches a batch-scoped DECLARE that is not the first statement', () => {
-            expect(SQLLogging.declaresTSQLVariable('SET NOCOUNT ON;\nDECLARE @x INT;\nSELECT @x = 1')).toBe(true);
-            expect(SQLLogging.declaresTSQLVariable("IF OBJECT_ID('x') IS NULL\nBEGIN\n    DECLARE @c NVARCHAR(10);\nEND")).toBe(true);
+            expect(SQLLogging.declaresBatchScopedVariable('SET NOCOUNT ON;\nDECLARE @x INT;\nSELECT @x = 1')).toBe(true);
+            expect(SQLLogging.declaresBatchScopedVariable("IF OBJECT_ID('x') IS NULL\nBEGIN\n    DECLARE @c NVARCHAR(10);\nEND")).toBe(true);
         });
 
         it('does not match a routine whose body declares variables', () => {
             const proc = 'CREATE PROCEDURE [__mj].[spX]\nAS\nBEGIN\n    DECLARE @id UNIQUEIDENTIFIER;\n    SELECT @id = NEWID();\nEND\nGO';
-            expect(SQLLogging.declaresTSQLVariable(proc)).toBe(false);
+            expect(SQLLogging.declaresBatchScopedVariable(proc)).toBe(false);
             const fn = 'CREATE OR ALTER FUNCTION [__mj].[fnX]() RETURNS INT\nAS\nBEGIN\n    DECLARE @n INT = 1;\n    RETURN @n;\nEND';
-            expect(SQLLogging.declaresTSQLVariable(fn)).toBe(false);
+            expect(SQLLogging.declaresBatchScopedVariable(fn)).toBe(false);
         });
 
         it('does not match ordinary statements or PostgreSQL DO blocks', () => {
-            expect(SQLLogging.declaresTSQLVariable('ALTER TABLE [__mj].[X] ADD CONSTRAINT [DF_X] DEFAULT (GETUTCDATE()) FOR [Y]')).toBe(false);
-            expect(SQLLogging.declaresTSQLVariable("DO $$ DECLARE c text; BEGIN SELECT 1; END $$;")).toBe(false);
-            expect(SQLLogging.declaresTSQLVariable('')).toBe(false);
+            expect(SQLLogging.declaresBatchScopedVariable('ALTER TABLE [__mj].[X] ADD CONSTRAINT [DF_X] DEFAULT (GETUTCDATE()) FOR [Y]')).toBe(false);
+            expect(SQLLogging.declaresBatchScopedVariable("DO $$ DECLARE c text; BEGIN SELECT 1; END $$;")).toBe(false);
+            expect(SQLLogging.declaresBatchScopedVariable('')).toBe(false);
         });
     });
 

@@ -14,7 +14,7 @@
     definition, however parenthesized) is left alone. Each column is its own batch so each DECLARE is scoped to its batch.
 */
 
-DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX), @dropSQL NVARCHAR(MAX);
+DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX);
 SELECT @constraintName = d.name, @definition = d.definition
 FROM sys.tables t
 JOIN sys.schemas s ON t.schema_id = s.schema_id
@@ -25,15 +25,14 @@ IF @constraintName IS NULL OR REPLACE(REPLACE(LOWER(@definition), '(', ''), ')',
 BEGIN
     IF @constraintName IS NOT NULL
     BEGIN
-        -- EXEC(<string>) accepts only literals and variables in its concatenation, so build the text first.
-        SET @dropSQL = N'ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName);
-        EXEC sp_executesql @dropSQL;
+        SET @constraintName = QUOTENAME(@constraintName);
+        EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + @constraintName);
     END
     ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] ADD CONSTRAINT [DF___mj_IdentityClaimType___mj_CreatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_CreatedAt];
 END
 GO
 
-DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX), @dropSQL NVARCHAR(MAX);
+DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX);
 SELECT @constraintName = d.name, @definition = d.definition
 FROM sys.tables t
 JOIN sys.schemas s ON t.schema_id = s.schema_id
@@ -44,15 +43,14 @@ IF @constraintName IS NULL OR REPLACE(REPLACE(LOWER(@definition), '(', ''), ')',
 BEGIN
     IF @constraintName IS NOT NULL
     BEGIN
-        -- EXEC(<string>) accepts only literals and variables in its concatenation, so build the text first.
-        SET @dropSQL = N'ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + QUOTENAME(@constraintName);
-        EXEC sp_executesql @dropSQL;
+        SET @constraintName = QUOTENAME(@constraintName);
+        EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + @constraintName);
     END
     ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] ADD CONSTRAINT [DF___mj_IdentityClaimType___mj_UpdatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_UpdatedAt];
 END
 GO
 
-DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX), @dropSQL NVARCHAR(MAX);
+DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX);
 SELECT @constraintName = d.name, @definition = d.definition
 FROM sys.tables t
 JOIN sys.schemas s ON t.schema_id = s.schema_id
@@ -63,15 +61,14 @@ IF @constraintName IS NULL OR REPLACE(REPLACE(LOWER(@definition), '(', ''), ')',
 BEGIN
     IF @constraintName IS NOT NULL
     BEGIN
-        -- EXEC(<string>) accepts only literals and variables in its concatenation, so build the text first.
-        SET @dropSQL = N'ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName);
-        EXEC sp_executesql @dropSQL;
+        SET @constraintName = QUOTENAME(@constraintName);
+        EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + @constraintName);
     END
     ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] ADD CONSTRAINT [DF___mj_IdentityClaim___mj_CreatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_CreatedAt];
 END
 GO
 
-DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX), @dropSQL NVARCHAR(MAX);
+DECLARE @constraintName NVARCHAR(255), @definition NVARCHAR(MAX);
 SELECT @constraintName = d.name, @definition = d.definition
 FROM sys.tables t
 JOIN sys.schemas s ON t.schema_id = s.schema_id
@@ -82,9 +79,8 @@ IF @constraintName IS NULL OR REPLACE(REPLACE(LOWER(@definition), '(', ''), ')',
 BEGIN
     IF @constraintName IS NOT NULL
     BEGIN
-        -- EXEC(<string>) accepts only literals and variables in its concatenation, so build the text first.
-        SET @dropSQL = N'ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + QUOTENAME(@constraintName);
-        EXEC sp_executesql @dropSQL;
+        SET @constraintName = QUOTENAME(@constraintName);
+        EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + @constraintName);
     END
     ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] ADD CONSTRAINT [DF___mj_IdentityClaim___mj_UpdatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_UpdatedAt];
 END
