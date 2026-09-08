@@ -1039,16 +1039,20 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       node.classList.toggle('mj-chrome-show', layout === 'left-nav' && visible);
       node.classList.toggle('mj-chrome-hidden', !visible);
       node.classList.toggle('mj-form-role-more', inMore);
-      // Details shows several panels under one rail item; they render as ONE
-      // card (see the left-nav rules in the component CSS).
-      const isDetails = layout === 'left-nav' && visible && IsDetailsSectionKey(this.chrome.Spec, key);
+      // Details shows several panels under one rail item; its FIELD panels
+      // render as ONE card (see the left-nav rules in the component CSS). A
+      // related grid pinned into Details (`ChromeGroup: 'details'`) keeps the
+      // chrome-less grid treatment and sits outside the card — the segment
+      // padding is sized for field rows, not for AG Grid.
+      const isDetails = layout === 'left-nav' && visible
+        && variant !== 'related-entity'
+        && IsDetailsSectionKey(this.chrome.Spec, key);
       node.classList.toggle('mj-chrome-details', isDetails);
       if (isDetails) detailsKeys.push(key);
     });
     // The card's top and bottom edges follow the VISUAL order (CSS `order`
     // = the form's section display order), not DOM order.
-    const form = this.FormComponent as { getSectionDisplayOrder?: (key: string) => number } | null;
-    const edges = DetailsCardEdges(detailsKeys, (k) => form?.getSectionDisplayOrder?.(k) ?? 0);
+    const edges = DetailsCardEdges(detailsKeys, (k) => this.FormComponent?.getSectionDisplayOrder(k) ?? 0);
     host.querySelectorAll('mj-collapsible-panel.mj-chrome-details').forEach((node: Element) => {
       const key = node.getAttribute('data-section-key') ?? '';
       node.classList.toggle('mj-chrome-details-first', key === edges.First);
