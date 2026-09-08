@@ -1,5 +1,5 @@
 import { BaseSingleton } from '@memberjunction/global';
-import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityInfo, IMetadataProvider, IRunViewProvider, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity, GeoDataEngine } from '@memberjunction/core-entities';
 import { GeoFieldMapping, GeocodeResult, GeocodeStatus, GeocodingSource, ExistingGeoCodeInfo, IsSettledGeoCode, PERMANENT_SKIP_RETRY_COUNT } from './types';
 import { ComputeGeoSourceHash } from './hash';
@@ -160,7 +160,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             recordId,
             mapping.LocationType,
             contextUser,
-            existingGeoCodesMap
+            existingGeoCodesMap,
+            entity.ProviderToUse as unknown as IMetadataProvider
         );
 
         // Settled means "no further attempt can change this while the address is the same" — which
@@ -183,7 +184,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             entity.EntityInfo.ID,
             recordId,
             mapping.LocationType,
-            contextUser
+            contextUser,
+            entity.ProviderToUse as unknown as IMetadataProvider
         );
 
         if (!row) {
@@ -234,8 +236,13 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         recordID: string,
         locationType: string,
         contextUser: UserInfo,
-        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>
+        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>,
+        entityProvider?: IMetadataProvider
     ): Promise<MJRecordGeoCodeEntity | null> {
+        // Prefer the owning entity's provider so RecordGeoCode writes join the
+        // same connection/TX as the save that triggered geocoding.
+        const md = entityProvider ?? (new Metadata() as unknown as IMetadataProvider);
+
         // Batch mode: O(1) map lookup + single PK load
         if (existingGeoCodesMap) {
             const key = `${recordID}|${locationType}`;
@@ -245,14 +252,15 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             // We have a match — check staleness inline to avoid loading the full entity
             // when the hash hasn't changed. The caller (ProcessMapping) does this check too,
             // but we can short-circuit the entity load here for the common "no change" case.
-            const md = new Metadata();  // global-provider-ok: sync service — single-provider context
             const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
             const loaded = await row.Load(info.ID);
             return loaded ? row : null;
         }
 
         // Single-record mode: per-record RunView query (used by AfterSave hook)
-        const rv = new RunView();
+        const rv = entityProvider
+            ? new RunView(entityProvider as unknown as IRunViewProvider)
+            : new RunView();
         const result = await rv.RunView<MJRecordGeoCodeEntity>({
             EntityName: 'MJ: Record Geo Codes',
             ExtraFilter: `EntityID='${entityID}' AND RecordID='${recordID}' AND LocationType='${locationType}'`,
@@ -274,9 +282,10 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         entityID: string,
         recordID: string,
         locationType: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        entityProvider?: IMetadataProvider
     ): Promise<MJRecordGeoCodeEntity | null> {
-        const md = new Metadata();  // global-provider-ok: sync service — single-provider context
+        const md = entityProvider ?? (new Metadata() as unknown as IMetadataProvider);
         const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
         row.NewRecord();
         row.EntityID = entityID;
@@ -289,7 +298,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             // Likely a UNIQUE KEY violation from a concurrent batch — another thread
             // created the row between our FindExistingGeoCode check and this INSERT.
             // Fall back to loading the existing row.
-            const existing = await this.FindExistingGeoCode(entityID, recordID, locationType, contextUser);
+            const existing = await this.FindExistingGeoCode(entityID, recordID, locationType, contextUser, undefined, entityProvider);
             if (existing) return existing;
 
             LogError(`GeoCodeSyncService: Failed to create RecordGeoCode row: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);

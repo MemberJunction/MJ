@@ -55,7 +55,7 @@ export interface DependencyAnalysisResult {
 export function groupRecordsByGraphId(records: FlattenedRecord[]): Map<string, FlattenedRecord[]> {
   const map = new Map<string, FlattenedRecord[]>();
   for (const rec of records) {
-    const gid = rec.graphId ?? rec.id;
+    const gid = rec.graphId;
     const list = map.get(gid);
     if (list) list.push(rec);
     else map.set(gid, [rec]);

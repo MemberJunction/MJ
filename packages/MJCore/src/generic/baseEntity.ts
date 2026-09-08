@@ -1202,6 +1202,29 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * The provider actually stored on this instance, or `null` if none was bound.
+     * Unlike {@link ProviderToUse}, this does **not** fall back to the process-wide
+     * {@link BaseEntity.Provider}. Use it to detect a dropped constructor argument:
+     * `GetEntityObject(graphProvider)` must yield `BoundProvider === graphProvider`.
+     */
+    public get BoundProvider(): IEntityDataProvider | null {
+        return this._provider;
+    }
+
+    /**
+     * Bind this instance to a provider after construction.
+     *
+     * {@link ProviderBase.GetEntityObject} always calls this so a subclass that
+     * declares `constructor(Entity: EntityInfo)` and drops the second ClassFactory
+     * argument cannot silently run Save/Load/RunView on the global host. Mixing the
+     * host connection with a graph-scoped instance in the same JSON tree is a
+     * deadlock (child FK waits on an uncommitted parent on another connection).
+     */
+    public BindProvider(provider: IEntityDataProvider | null): void {
+        this._provider = provider;
+    }
+
+    /**
      * Initializes the IS-A parent entity composition chain. For child type entities,
      * this creates the parent entity instance (and recursively its parent, etc.) and
      * caches the parent field name set for routing.
@@ -1753,6 +1776,8 @@ export abstract class BaseEntity<T = unknown> {
                 `Ensure the entity class is registered.`,
             );
         }
+        // Same rebind as GetEntityObject — 1-arg subclasses drop the ClassFactory provider.
+        instance.BindProvider(provider as unknown as IEntityDataProvider);
         await instance.Config(this.ContextCurrentUser);
         await instance.InitializeParentEntity();
         // Recurse so a *new* peer's own embeds are constructed (required nested
@@ -3217,7 +3242,7 @@ export abstract class BaseEntity<T = unknown> {
     public async GetRelatedEntityDataExt(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<{Data: any[], TotalRowCount: number}> {
         // we need to query the database to get related entity info
         const params = EntityInfo.BuildRelationshipViewParams(this, re, filter, maxRecords)
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView(params, this._contextCurrentUser)
         if (result && result.Success) {
             return {
@@ -4765,8 +4790,9 @@ export abstract class BaseEntity<T = unknown> {
             return { HasChildren: false, ChildEntityName: '' };
         }
 
-        // Use RunView to check each child entity for records with our PK
-        const rv = new RunView();
+        // Use RunView on this instance's provider — a host RunView cannot see
+        // uncommitted child rows on a graph-scoped connection.
+        const rv = new RunView(this.RunViewProviderToUse);
         const pkValue = this.PrimaryKey.Values();
 
         for (const childEntity of childEntities) {
@@ -4845,7 +4871,7 @@ export abstract class BaseEntity<T = unknown> {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
 
-        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser);
+        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser, md);
     }
 
     /**
@@ -4855,14 +4881,15 @@ export abstract class BaseEntity<T = unknown> {
     private static async ResolveLeafEntityRecursive(
         entityInfo: EntityInfo,
         primaryKey: CompositeKey,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
         const childEntities = entityInfo.ChildEntities;
         if (childEntities.length === 0) {
             return { LeafEntityName: entityInfo.Name, IsLeaf: true };
         }
 
-        const rv = new RunView();
+        const rv = new RunView((provider ?? BaseEntity.Provider) as unknown as IRunViewProvider);
         const pkValue = primaryKey.Values();
 
         for (const child of childEntities) {
@@ -4879,7 +4906,7 @@ export abstract class BaseEntity<T = unknown> {
 
             if (result?.Success && result.Results?.length > 0) {
                 // Found a child — recurse to see if there's an even more specific leaf
-                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser);
+                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser, provider);
             }
         }
 
@@ -4916,8 +4943,10 @@ export abstract class BaseEntity<T = unknown> {
         const pkValue = this.PrimaryKey.Values();
         if (!pkValue) return;
 
-        // Build all sibling queries and execute them in a single batch
-        const rv = new RunView();
+        // Build all sibling queries and execute them in a single batch on
+        // this instance's provider so an uncommitted sibling on the same
+        // graph connection is visible (host RunView would miss it).
+        const rv = new RunView(this.RunViewProviderToUse);
         const validSiblings = siblingChildEntities.filter(s => s.PrimaryKeys[0]);
         if (validSiblings.length === 0) return;
 
@@ -5269,7 +5298,7 @@ export abstract class BaseEntity<T = unknown> {
             ? `${rootFieldName} = '${rootId}' AND ${depthFieldName} <= ${maxDepth}`
             : `${rootFieldName} = '${rootId}'`;
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
             ExtraFilter: filter,
@@ -5300,7 +5329,7 @@ export abstract class BaseEntity<T = unknown> {
         const rawIds = path.split('/').filter(id => id.length > 0 && id !== currentId);
         if (rawIds.length === 0) return [];
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const idList = rawIds.map(id => `'${id}'`).join(',');
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
@@ -5326,7 +5355,7 @@ export abstract class BaseEntity<T = unknown> {
         const currentId = this.Get(pkName);
         if (!currentId) return [];
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
             ExtraFilter: `${fkField.Name} = '${currentId}'`,

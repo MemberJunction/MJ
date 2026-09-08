@@ -15,6 +15,7 @@ import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
+import { GraphProviderPool } from '../lib/graph-provider-pool';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
@@ -465,7 +466,9 @@ export class PushService {
         }
       }
 
-      // Begin transaction if not in dry-run mode
+      // Host TX wraps Phase 2 deletions and Phase 2.5 deferred records.
+      // Phase 1 graph writes go to independent instances (or, if those are
+      // unavailable, ALL graphs share this host TX — never a mix).
       if (!options.dryRun) {
         await transactionManager.beginTransaction();
       }
@@ -772,28 +775,13 @@ export class PushService {
         const batchContext = new BatchContextIndex();
 
         // One provider per JSON-root graph (Action + nested Action Params share a
-        // connection/TX). Parallelize sibling roots only — never fork a child onto
-        // a new pooled connection while the parent row is still uncommitted.
+        // connection). Parallelize sibling roots only. Drain each graph as soon as
+        // its last dependency level finishes so peak live instances stay bounded
+        // by --parallel-batch-size, not by the file's root count.
         const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase;
-        const graphProviders = new Map<string, DatabaseProviderBase>();
-        let graphFailed = false;
+        const graphPool = new GraphProviderPool(hostProvider, (msg) => callbacks?.onLog?.(msg));
 
-        const obtainGraphProvider = async (graphId: string): Promise<IMetadataProvider | undefined> => {
-          const existing = graphProviders.get(graphId);
-          if (existing) return existing;
-          try {
-            const created = await hostProvider.CreateIndependentInstance();
-            graphProviders.set(graphId, created);
-            return created;
-          } catch (e) {
-            callbacks?.onLog?.(
-              `⚠️  CreateIndependentInstance unavailable (${(e as Error).message}); graph ${graphId} uses the shared provider`
-            );
-            return undefined;
-          }
-        };
-
-        const applyProcessResult = (result: ProcessRecordResult): void => {
+        const applyProcessResult = (result: ProcessRecordResult, graphId: string): void => {
           if (result.batchContextEntry) {
             batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
           }
@@ -813,18 +801,29 @@ export class PushService {
           else if (result.status === 'unchanged') unchanged++;
           else if (result.status === 'deleted') deleted++;
           else if (result.status === 'skipped') skipped++;
-          else if (result.status === 'error') errors++;
+          else if (result.status === 'error') {
+            // A non-throwing record error must not commit leftover graph depth —
+            // the previous per-record release rolled that work back.
+            errors++;
+            graphPool.markFailed(graphId);
+          }
           else if (result.status === 'deferred') {
             created++;
             deferred++;
           }
         };
 
+        // Fail-fast: the first thrown record error aborts the file. That is
+        // intentional and matches the parallel path; it is a change from the
+        // old sequential fallback, which continued after onError.
+        let runError: unknown;
         try {
           const levels =
             analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0
               ? analysisResult.dependencyLevels
               : [analysisResult.sortedRecords];
+
+          graphPool.noteLevels(levels);
 
           for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
             const level = levels[levelIndex];
@@ -843,10 +842,10 @@ export class PushService {
               const batchResults = await Promise.all(
                 batchIds.map(async (graphId) => {
                   const recs = byGraph.get(graphId)!;
-                  const provider = await obtainGraphProvider(graphId);
+                  const provider = await graphPool.obtain(graphId);
                   const results: Array<
-                    | { success: true; result: ProcessRecordResult; record: FlattenedRecord }
-                    | { success: false; error: unknown; record: FlattenedRecord }
+                    | { success: true; result: ProcessRecordResult; record: FlattenedRecord; graphId: string }
+                    | { success: false; error: unknown; record: FlattenedRecord; graphId: string }
                   > = [];
                   for (const flattenedRecord of recs) {
                     try {
@@ -858,11 +857,12 @@ export class PushService {
                         callbacks,
                         entityConfig,
                         true,
-                        provider
+                        provider as unknown as IMetadataProvider
                       );
-                      results.push({ success: true, result, record: flattenedRecord });
+                      results.push({ success: true, result, record: flattenedRecord, graphId });
                     } catch (error) {
-                      results.push({ success: false, error, record: flattenedRecord });
+                      graphPool.markFailed(graphId);
+                      results.push({ success: false, error, record: flattenedRecord, graphId });
                       break;
                     }
                   }
@@ -879,26 +879,21 @@ export class PushService {
                     callbacks?.onLog?.(`   ${err.message}\n`);
                     throw err;
                   }
-                  applyProcessResult(batchResult.result);
+                  applyProcessResult(batchResult.result, batchResult.graphId);
                 }
               }
+
+              const drainError = await graphPool.drainBatch(batchIds, levelIndex);
+              if (drainError) throw drainError;
             }
           }
         } catch (e) {
-          graphFailed = true;
-          throw e;
-        } finally {
-          for (const provider of graphProviders.values()) {
-            try {
-              if (!graphFailed && provider.TransactionDepth > 0) {
-                await provider.CommitTransaction();
-              }
-              await provider.ReleaseIndependentInstance();
-            } catch {
-              // still release remaining graphs
-            }
-          }
+          graphPool.markFailed();
+          runError = e;
         }
+        const settleError = await graphPool.releaseAll();
+        if (runError) throw runError;
+        if (settleError) throw settleError;
         
         // Check if this file has any deletion records (including nested relatedEntities)
         const hasDeletions = this.hasAnyDeletions(records);
@@ -1058,7 +1053,8 @@ export class PushService {
             0,
             batchContext,
             resolutionCollector,
-            pkField
+            pkField,
+            recordProvider
           );
         } catch (pkError: unknown) {
           // Check if this is a deferrable lookup error
@@ -1076,7 +1072,7 @@ export class PushService {
     if (resolvedPrimaryKey && Object.keys(resolvedPrimaryKey).length > 0) {
       // First check if the record exists using the sync engine's loadEntity method
       // This avoids the "Error in BaseEntity.Load" message for missing records
-      const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedPrimaryKey);
+      const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedPrimaryKey, recordProvider);
       
       if (existingEntity) {
         // Record exists, use the loaded entity
@@ -1157,7 +1153,8 @@ export class PushService {
           0,
           batchContext, // Pass batch context for lookups
           resolutionCollector,
-          fieldName
+          fieldName,
+          recordProvider
         );
         const fieldInfo = entity.GetFieldByName(fieldName);
         const fieldType = (fieldInfo?.EntityFieldInfo?.Type || '').trim().toLowerCase();

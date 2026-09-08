@@ -1358,7 +1358,7 @@ The pull command supports smart update capabilities with extensive configuration
 
 `push.skipGeoCoding` maps to `EntitySaveOptions.SkipGeoCoding` for this entity only. Use it on display-only geo entities (People/Organizations whose coords are virtual `PrimaryAddressLatitude`). Do **not** use a global CLI `--skip-geocode` as the only control. Addresses with native lat/lng already set do not call the provider even without this flag.
 
-Parallel `--parallel-batch-size` defaults to **10**. Each record is saved on `CreateIndependentInstance()` (shared pool, own transaction stack), the same pattern MJAPI uses per request. Durable AfterCreate actions without a queue submitter fire after that instance's transaction depth is 0 — they must not nest in the caller's `EntityTransactionScope`.
+Parallel `--parallel-batch-size` defaults to **10**. Isolation is **per JSON-root graph**, not per flattened row: an Action and its nested Action Params share one `CreateIndependentInstance()` (shared pool, own transaction stack), the same pattern MJAPI uses per request. Durable AfterCreate actions without a queue submitter fire after that instance's transaction depth is 0 — they must not nest in the caller's `EntityTransactionScope`.
 
 ### Pull Configuration Options
 
@@ -1529,7 +1529,13 @@ Records are automatically grouped into dependency levels:
 - **Level 1**: Records that depend only on Level 0 records
 - **Level 2**: Records that depend on Level 0 or Level 1 records
 
-Records are grouped into **JSON-root graphs** (an Action and its nested Action Params share one graph). Each graph gets one `CreateIndependentInstance()` for the whole tree so child FKs see the uncommitted parent on the same connection. **Sibling graphs** at the same dependency level run in parallel (default batch **10**). `--parallel-batch-size 1` does **not** mean one global provider — it only serializes graphs.
+Records are grouped into **JSON-root graphs** (an Action and its nested Action Params share one graph). Each graph gets one `CreateIndependentInstance()` for the whole tree, reused across dependency levels, and **released as soon as that graph's last level finishes**. Peak live instances is therefore bounded by `--parallel-batch-size`, not by the file's root count.
+
+Every DB read and write for a graph — `GetEntityObject`, `Save`, `Load`, `RunView`, lookups, RecordGeoCode — must use that same provider. Mixing the host connection with a graph instance in one tree is a deadlock: the child FK waits on an uncommitted parent on another pooled connection. `BaseEntity.Save()` still opens and settles its own `EntityTransactionScope` per record; leftover depth (a subclass `BeginTransaction`, a nested entity action) is committed at drain on success and rolled back on failure. If `CreateIndependentInstance` is unimplemented, **all** graphs in the file use the host (inside the push transaction) — never a mix.
+
+The first thrown record error **fails the file** (fail-fast). A record that returns `status: 'error'` without throwing (e.g. missing primaryKey with `autoCreateMissingRecords=false`) also prevents that graph's leftover depth from being committed.
+
+**Sibling graphs** at the same dependency level run in parallel (default batch **10**). `--parallel-batch-size 1` does **not** mean one global provider — it only serializes graphs.
 
 ```bash
 # Default processing (batch size 10, isolated providers)
