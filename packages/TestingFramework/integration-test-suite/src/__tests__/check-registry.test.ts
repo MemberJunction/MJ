@@ -161,7 +161,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
         ['fls-enforcement', FlsEnforcementChecks, 21], // FLS1-FLS21 field-level security against a live DB (IT90); FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT88)
-        ['fls-enforcement-client', FlsClientChecks, 4], // FC1-FC4 FLS over the wire via per-user API keys (IT89)
+        ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT89)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -252,7 +252,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'entity-writes': 9,
         'field-rules-bulk-update': 3,
         'fls-enforcement': 21,
-        'fls-enforcement-client': 4,
+        'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
         'layered-base-views': 6,
         'lists': 3,

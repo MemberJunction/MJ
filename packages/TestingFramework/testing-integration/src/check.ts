@@ -164,6 +164,18 @@ export interface FlsClientFixture {
     ReaderProvider?: IMetadataProvider;
     /** Secondary GraphQL provider authenticated as the seeded unrestricted writer (user API key). */
     WriterProvider?: IMetadataProvider;
+    /**
+     * Secondary GraphQL provider for the seeded MULTI-role user — entity-level create/update via
+     * the Writer role, plus a field-level write denial via the Denier role. The only identity
+     * that can reach field-level create suppression and update refusal over the wire; a
+     * read-only one is stopped by the entity gate first. Absent when the multi user is not
+     * seeded, which skips the write-path checks rather than failing them.
+     */
+    MultiProvider?: IMetadataProvider;
+    /** Row ID of the denier role's write-denied field rule, restored in teardown. */
+    DenierEfpRowID?: string;
+    /** IDs of rows created over the wire by the write-path checks, deleted in teardown. */
+    CreatedEmployeeIDs: string[];
     /** IDs of the minted `MJ: API Keys` rows, deleted (after their usage logs) in teardown. */
     CreatedKeyIds: string[];
     /** IDs of the `MJ: API Key Scopes` rules granting the minted keys `full_access` (deleted before the keys). */

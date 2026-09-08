@@ -28,15 +28,15 @@
  * Allow rows anyway, and the server-transport FLS bundles' SQL teardown sweeps them on their
  * next run.
  */
-import { RunView, FieldSecurityDenialMessage } from '@memberjunction/core';
+import { RunView, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage } from '@memberjunction/core';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, GetGlobalObjectStore } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsClientFixture } from '@memberjunction/testing-integration';
 import {
     SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND,
-    SEEDED_FLS_READER_EMAIL, SEEDED_FLS_WRITER_EMAIL,
-    FLS_READER_ROLE, FLS_READER_DENIED_FIELD
+    SEEDED_FLS_READER_EMAIL, SEEDED_FLS_WRITER_EMAIL, SEEDED_FLS_MULTI_EMAIL,
+    FLS_READER_ROLE, FLS_READER_DENIED_FIELD, FLS_DENIER_ROLE, FLS_UPDATE_DENY_FIELD
 } from '@memberjunction/testing-integration';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -186,6 +186,43 @@ async function enableOverWire(ctx: IntegrationCheckContext, entityId: string): P
     }
 }
 
+/**
+ * Set a role's rule for one field through the wire, returning the row ID so teardown can restore
+ * it. Shared by the reader's Email tightening (read denial) and the denier's Phone tightening
+ * (write denial on a READABLE field — the combination FC5/FC6 need, and the one the seeded
+ * metadata deliberately leaves to the bundle rather than baking in).
+ */
+async function setFieldRuleOverWire(
+    ctx: IntegrationCheckContext,
+    fieldName: string,
+    roleName: string,
+    access: { Read: 'Allow' | 'Deny' | 'No Access'; Update: 'Allow' | 'Deny' | 'No Access'; Create: 'Allow' | 'Deny' | 'No Access' }
+): Promise<string> {
+    const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
+    const field = entity?.Fields.find(f => f.Name === fieldName);
+    const role = ctx.Provider.Roles.find(r => r.Name === roleName);
+    if (!field || !role) {
+        throw new Error(`'${fieldName}' field / '${roleName}' role not resolvable from client metadata`);
+    }
+    const rows = await new RunView().RunView<{ ID: string }>(
+        { EntityName: 'MJ: Entity Field Permissions', ExtraFilter: `EntityFieldID = '${field.ID}' AND RoleID = '${role.ID}'`, Fields: ['ID'], ResultType: 'simple' },
+        ctx.User);
+    if (!rows.Success || rows.Results.length !== 1) {
+        throw new Error(`expected one ${fieldName}/${roleName} permission row over the wire, got ${rows.Results?.length ?? 'error'} (${rows.ErrorMessage ?? ''})`);
+    }
+    const efp = await ctx.Provider.GetEntityObject<MJEntityFieldPermissionEntity>('MJ: Entity Field Permissions', ctx.User);
+    if (!(await efp.Load(rows.Results[0].ID))) {
+        throw new Error(`failed to load the ${fieldName}/${roleName} permission row over the wire`);
+    }
+    efp.ReadAccess = access.Read;
+    efp.UpdateAccess = access.Update;
+    efp.CreateAccess = access.Create;
+    if (!(await efp.Save())) {
+        throw new Error(`setting ${fieldName}/${roleName} over the wire failed: ${efp.LatestResult?.CompleteMessage ?? ''}`);
+    }
+    return rows.Results[0].ID;
+}
+
 /** Tighten the reader role's Email rule to Deny through the wire; returns the row ID for restore. */
 async function tightenReaderEmail(ctx: IntegrationCheckContext): Promise<string> {
     const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
@@ -284,7 +321,7 @@ async function waitForPropagation(reader: IMetadataProvider, condition: (rows: R
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
     Setup: async (ctx: IntegrationCheckContext): Promise<void> => {
-        const fx: FlsClientFixture = { Usable: false, EntityName: SEEDED_FLS_ENTITY, CreatedKeyIds: [], CreatedScopeRuleIds: [] };
+        const fx: FlsClientFixture = { Usable: false, EntityName: SEEDED_FLS_ENTITY, CreatedKeyIds: [], CreatedScopeRuleIds: [], CreatedEmployeeIDs: [] };
         ctx.FlsClientFixture = fx;
 
         const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
@@ -302,6 +339,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
             fx.Reason = `seeded FLS users (${SEEDED_FLS_READER_EMAIL} / ${SEEDED_FLS_WRITER_EMAIL}) not found over the wire`;
             return;
         }
+        // Optional: the write-path checks (FC5/FC6) need an identity that can create and update
+        // the entity AND carries a field-level write denial. Its absence degrades those two
+        // checks to a skip rather than failing the bundle, matching how the seed is treated.
+        const multiId = await findUserId(ctx, SEEDED_FLS_MULTI_EMAIL);
 
         try {
             await enableOverWire(ctx, entity.ID);
@@ -310,6 +351,13 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
             const writerKey = await mintKey(ctx, fx, writerId, 'IT89 FLS writer (mj-integration-test)');
             fx.ReaderProvider = await buildUserKeyProviderWithRetry(readerKey);
             fx.WriterProvider = await buildUserKeyProviderWithRetry(writerKey);
+            if (multiId) {
+                // Readable, but neither updatable nor creatable — the write-denial shape.
+                fx.DenierEfpRowID = await setFieldRuleOverWire(
+                    ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
+                const multiKey = await mintKey(ctx, fx, multiId, 'IT89 FLS multi (mj-integration-test)');
+                fx.MultiProvider = await buildUserKeyProviderWithRetry(multiKey);
+            }
 
             // Phase 1: the reader key's scope rule is honored — any successful read proves it
             // (and the writer key, granted in the same pass, follows the same envelope).
@@ -353,6 +401,12 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
         if (!fx || (!fx.Usable && !fx.ProvisionError && !fx.CreatedKeyIds.length)) {
             return; // nothing was provisioned
         }
+        // Rows the write-path checks created (FC5), deleted by the writer identity.
+        for (const empId of fx.CreatedEmployeeIDs) {
+            await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, ctx.User)
+                .then(async emp => { if (await emp.Load(empId)) { await emp.Delete(); } })
+                .catch(() => undefined);
+        }
         // Fixture employee — the writer identity owns delete permission on the entity.
         if (fx.FixtureEmployeeID && fx.WriterProvider) {
             await fx.WriterProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY)
@@ -362,6 +416,19 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
         if (fx.CreatedCompanyID) {
             await ctx.Provider.GetEntityObject<MJCompanyEntity>('MJ: Companies', ctx.User)
                 .then(async company => { if (await company.Load(fx.CreatedCompanyID!)) { await company.Delete(); } })
+                .catch(() => undefined);
+        }
+        // Restore the denier's write-denied field rule to the snapshot default.
+        if (fx.DenierEfpRowID) {
+            await ctx.Provider.GetEntityObject<MJEntityFieldPermissionEntity>('MJ: Entity Field Permissions', ctx.User)
+                .then(async efp => {
+                    if (await efp.Load(fx.DenierEfpRowID!)) {
+                        efp.ReadAccess = 'Allow';
+                        efp.UpdateAccess = 'No Access';
+                        efp.CreateAccess = 'No Access';
+                        await efp.Save();
+                    }
+                })
                 .catch(() => undefined);
         }
         // Restore the reader's Email rule to the snapshot default.
@@ -503,12 +570,109 @@ export async function CheckFc4_WirePredicateRejected(ctx: IntegrationCheckContex
         `the wire rejection must carry the ambiguous wording (got '${message}')`);
 }
 
+/**
+ * FC5 — CREATING a record over the wire while a field is create-denied SUCCEEDS, with the value
+ * silently dropped so the column takes its database default (test-plan 3.11).
+ *
+ * WHY THIS CHECK EXISTS. The client builds the mutation INPUT by calling `entity.Get()` on every
+ * writable field, and `Get()` throws for a read-denied one. On an UPDATE the field is already
+ * NotLoaded (the server stripped it from the load) so it never reaches that loop, but a NEW
+ * record carries no such marking — so creating a record on an entity with any denied field
+ * failed outright, over the wire only, while every server-transport check stayed green. Manual
+ * Explorer testing found it; this is the executable form.
+ *
+ * The write identity is the seeded MULTI user: it holds the Writer role (so entity-level create
+ * is allowed) plus the Denier role, whose Phone rule this bundle tightens to Allow/Deny/Deny.
+ * That is the only combination that can reach field-level create suppression at all — a
+ * read-only identity is refused by the entity gate long before FLS is consulted.
+ */
+export async function CheckFc5_WireCreateSuppressesDeniedField(ctx: IntegrationCheckContext): Promise<void> {
+    if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC5')) return;
+    const fx = ctx.FlsClientFixture!;
+    if (!fx.MultiProvider) {
+        console.warn('  ⚠ fls-enforcement-client.FC5 SKIPPED — multi-role wire identity not provisioned');
+        return;
+    }
+
+    const emp = await fx.MultiProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
+    emp.NewRecord();
+    emp.FirstName = 'WireCreate';
+    emp.LastName = 'Suppressed (mj-integration-test)';
+    emp.CompanyID = await firstCompanyId(ctx, fx);
+    emp.Email = `it-fls-create-${Date.now()}@integration.test`;
+    // The value this identity may not supply. Create denial is SILENT by design — rejecting
+    // would disclose that the field exists and is restricted (see the guide's denial split).
+    emp.Phone = '555-0100-DENIED';
+
+    const saved = await emp.Save();
+    Assert(saved, `create over the wire with a create-denied field must SUCCEED, not fail ` +
+        `(${emp.LatestResult?.CompleteMessage ?? 'Save() returned false'})`);
+    fx.CreatedEmployeeIDs.push(emp.ID);
+
+    // Read it back as the unrestricted writer — the restricted identity's own view is not
+    // evidence about what was STORED, only about what it is allowed to see.
+    const stored = await new RunView().RunView<Record<string, unknown>>(
+        { EntityName: SEEDED_FLS_ENTITY, ExtraFilter: `ID = '${emp.ID}'`, ResultType: 'simple', BypassCache: true },
+        ctx.User);
+    Assert(stored.Success && stored.Results.length === 1, `reading back the created row failed: ${stored.ErrorMessage ?? ''}`);
+    const phone = stored.Results[0][FLS_UPDATE_DENY_FIELD];
+    Assert(phone === null || phone === undefined || phone === '',
+        `the create-denied value must be suppressed, not written (stored '${String(phone)}')`);
+}
+
+/**
+ * FC6 — UPDATING a field the caller may read but not write is REJECTED over the wire, and the
+ * rejection carries the EXPLICIT write wording rather than the ambiguous read wording
+ * (test-plan 3.9, plus the read/write denial split).
+ *
+ * The split is the point: a caller who can SEE the field already knows it exists, so naming the
+ * missing permission discloses nothing they could not learn by attempting the save. Asserting
+ * the ambiguous wording here would pin the wrong contract.
+ */
+export async function CheckFc6_WireUpdateOfWriteDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC6')) return;
+    const fx = ctx.FlsClientFixture!;
+    if (!fx.MultiProvider || !fx.FixtureEmployeeID) {
+        console.warn('  ⚠ fls-enforcement-client.FC6 SKIPPED — multi-role wire identity or fixture row not provisioned');
+        return;
+    }
+
+    const emp = await fx.MultiProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
+    Assert(await emp.Load(fx.FixtureEmployeeID), 'the fixture employee must load for the multi-role wire identity');
+    // Readable — proving this is a WRITE denial on a field the caller can see, not a read denial.
+    Assert(!emp.Fields.find(f => f.Name === FLS_UPDATE_DENY_FIELD)?.NotLoaded,
+        `${FLS_UPDATE_DENY_FIELD} must be READABLE for this identity, or the check proves the wrong thing`);
+
+    emp.Phone = '555-0199-CHANGED';
+    let message = '';
+    let saved = false;
+    try {
+        saved = await emp.Save();
+        message = emp.LatestResult?.CompleteMessage ?? '';
+    } catch (e) {
+        message = e instanceof Error ? e.message : String(e);
+    }
+    Assert(!saved, 'updating a write-denied field must be rejected over the wire');
+    Assert(message.includes(FieldSecurityWriteDenialMessage(FLS_UPDATE_DENY_FIELD, SEEDED_FLS_ENTITY)),
+        `the rejection must carry the explicit write wording (got '${message}')`);
+
+    // The stored value must be untouched — a rejected save must not partially land.
+    const stored = await new RunView().RunView<Record<string, unknown>>(
+        { EntityName: SEEDED_FLS_ENTITY, ExtraFilter: `ID = '${fx.FixtureEmployeeID}'`, ResultType: 'simple', BypassCache: true },
+        ctx.User);
+    Assert(stored.Success && stored.Results.length === 1, `reading back the fixture row failed: ${stored.ErrorMessage ?? ''}`);
+    Assert(stored.Results[0][FLS_UPDATE_DENY_FIELD] !== '555-0199-CHANGED',
+        'a rejected save must leave the stored value unchanged');
+}
+
 /** The 'fls-enforcement-client' bundle (client transport, needs MJAPI + seeded fixtures). */
 export const FlsClientChecks: NamedCheck[] = [
     { Id: 'fls-enforcement-client.FC1', Name: 'FC1: list results to the restricted wire identity omit the denied column', Fn: CheckFc1_WireListStripsDeniedColumn },
     { Id: 'fls-enforcement-client.FC2', Name: 'FC2: the single-record GraphQL payload omits the denied field', Fn: CheckFc2_WireSingleRecordLoadStripped },
     { Id: 'fls-enforcement-client.FC3', Name: 'FC3: the unrestricted wire identity still receives the column with its real value', Fn: CheckFc3_WireUnrestrictedUserUnaffected },
-    { Id: 'fls-enforcement-client.FC4', Name: 'FC4: a predicate on a denied field is rejected over the wire with the ambiguous message', Fn: CheckFc4_WirePredicateRejected }
+    { Id: 'fls-enforcement-client.FC4', Name: 'FC4: a predicate on a denied field is rejected over the wire with the ambiguous message', Fn: CheckFc4_WirePredicateRejected },
+    { Id: 'fls-enforcement-client.FC5', Name: 'FC5: creating a record over the wire silently suppresses a create-denied field', Fn: CheckFc5_WireCreateSuppressesDeniedField },
+    { Id: 'fls-enforcement-client.FC6', Name: 'FC6: updating a write-denied field is rejected over the wire with the explicit wording', Fn: CheckFc6_WireUpdateOfWriteDeniedFieldRejected }
 ];
 
 for (const check of FlsClientChecks) {
