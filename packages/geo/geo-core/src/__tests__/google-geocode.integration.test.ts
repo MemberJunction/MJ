@@ -24,6 +24,8 @@ if (!apiKey) {
     console.warn('GOOGLE_GEOCODING_API_KEY not set — skipping live Google geocode integration test');
 }
 
+// KNOWN LIMITATION: this suite calls the live Google Geocoding API and needs a real key from
+// mj.env; without one it is skipped rather than failed so unit-test lanes stay hermetic.
 const describeLive = apiKey ? describe : describe.skip;
 
 describeLive('Google Geocoding API (live)', () => {
