@@ -1,5 +1,5 @@
 import { BaseEntity, EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueListType, EntityInfo, EntityRelationshipInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
@@ -218,7 +218,7 @@ export class EntitySubClassGeneratorBase {
       }
 
       const grouped = groupEntitiesBySchema(entities);
-      const schemas = [...grouped.keys()].sort((a, b) => a.localeCompare(b));
+      const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(directory, 'entities');
       makeDir(schemasDir);
 
@@ -1171,10 +1171,10 @@ ${fields}
     const packages = [...byPackage.keys()].sort((a, b) => {
       if (a === '@memberjunction/core-entities') return -1;
       if (b === '@memberjunction/core-entities') return 1;
-      return a.localeCompare(b);
+      return ordinalCompare(a, b);
     });
     return packages.map((pkg) => {
-      const names = [...byPackage.get(pkg)!].sort((a, b) => a.localeCompare(b));
+      const names = [...byPackage.get(pkg)!].sort((a, b) => ordinalCompare(a, b));
       return `import { ${names.join(', ')} } from '${pkg}';\n`;
     });
   }
@@ -1369,18 +1369,18 @@ ${fields}
     const sortedValidators = unsortedValidators.sort((a, b) => {
       // sort by field name, then by function name, then by generatedCodeId as last-resort tiebreaker
       if (a.fieldName && b.fieldName) {
-        const cmp = a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
+        const cmp = ordinalCompare(a.fieldName, b.fieldName) || ordinalCompare(a.functionName, b.functionName);
         if (cmp !== 0) return cmp;
       } else if (a.fieldName) {
         return -1; // a comes first
       } else if (b.fieldName) {
         return 1; // b comes first
       } else {
-        const cmp = a.functionName.localeCompare(b.functionName); // both are table-level, sort by function name
+        const cmp = ordinalCompare(a.functionName, b.functionName); // both are table-level, sort by function name
         if (cmp !== 0) return cmp;
       }
       // last-resort tiebreaker for absolute determinism
-      return a.generatedCodeId.localeCompare(b.generatedCodeId);
+      return ordinalCompare(a.generatedCodeId, b.generatedCodeId);
     });
 
     // Deduplicate by functionName — duplicate GeneratedCode records can exist if the view JOIN

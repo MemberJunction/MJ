@@ -1837,31 +1837,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Access Control Rules Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAccessControlRules"
-        SectionName="Access Control Rules"
-        Icon="fa fa-lock"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAccessControlRules')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Access Control Rules','GrantedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Access Control Rules','GrantedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJAccessControlRules')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAccessControlRules', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- AI Agent Requests Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRequestsResponseByUserID"
@@ -1906,6 +1881,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeysUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Access Control Rules Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAccessControlRules"
+        SectionName="Access Control Rules"
+        Icon="fa fa-lock"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAccessControlRules')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Access Control Rules','GrantedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Access Control Rules','GrantedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJAccessControlRules')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAccessControlRules', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

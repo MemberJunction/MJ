@@ -379,31 +379,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Result Codes Section -->
-    <mj-collapsible-panel
-        SectionKey="mJActionResultCodes"
-        SectionName="Result Codes"
-        Icon="fa fa-code"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJActionResultCodes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Result Codes','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Result Codes','ActionID')"
-                [AllowLoad]="IsSectionExpanded('mJActionResultCodes')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJActionResultCodes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- AIAgent Actions Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentActions"
@@ -423,6 +398,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Result Codes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJActionResultCodes"
+        SectionName="Result Codes"
+        Icon="fa fa-code"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJActionResultCodes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Result Codes','ActionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Result Codes','ActionID')"
+                [AllowLoad]="IsSectionExpanded('mJActionResultCodes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJActionResultCodes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -222,7 +222,9 @@ RETURNS TABLE(
   "RelatedEntityID" UUID,
   "RelatedEntityFieldName" TEXT,
   "IsPrimaryKey" BOOLEAN,
-  "IsUnique" BOOLEAN
+  "IsUnique" BOOLEAN,
+  "IsMaterialChange" BOOLEAN,
+  "ChangeReasons" TEXT
 )
 LANGUAGE plpgsql AS $func$
 DECLARE
@@ -344,6 +346,24 @@ BEGIN
       OR (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL))
       OR (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE)
     ) AS is_material_change,
+    concat_ws(',',
+      CASE WHEN COALESCE(TRIM(ef."Description"), '') <> COALESCE(TRIM(CASE WHEN ef."AutoUpdateDescription" THEN sq."Description" ELSE ef."Description" END), '') THEN 'Description' END,
+      CASE WHEN (sq."IsVirtual" = 0 AND (ef."Type" <> sq."Type" AND NOT (ef."Type" = 'numeric' AND sq."Type" = 'decimal'))) THEN 'Type' END,
+      CASE WHEN (sq."IsVirtual" = 0 AND ef."Length" <> sq."Length") THEN 'Length' END,
+      CASE WHEN (sq."IsVirtual" = 0 AND ef."Precision" <> sq."Precision") THEN 'Precision' END,
+      CASE WHEN (sq."IsVirtual" = 0 AND ef."Scale" <> sq."Scale") THEN 'Scale' END,
+      CASE WHEN (sq."IsVirtual" = 0 AND ef."AllowsNull" <> sq."AllowsNull") THEN 'AllowsNull' END,
+      CASE WHEN __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue") THEN 'DefaultValue' END,
+      CASE WHEN ef."AutoIncrement" <> (sq."AutoIncrement" <> 0) THEN 'AutoIncrement' END,
+      CASE WHEN ef."IsVirtual" <> (sq."IsVirtual" <> 0) THEN 'IsVirtual' END,
+      CASE WHEN ef."IsComputed" <> (sq."IsComputed" <> 0) THEN 'IsComputed' END,
+      CASE WHEN COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <> COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid) THEN 'RelatedEntityID' END,
+      CASE WHEN COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '') THEN 'RelatedEntityFieldName' END,
+      CASE WHEN (NOT ef."IsSoftPrimaryKey" AND ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL)) THEN 'IsPrimaryKey' END,
+      CASE WHEN (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)) THEN 'IsUnique' END,
+      CASE WHEN (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE) THEN 'AllowUpdateAPI' END,
+      CASE WHEN (ef."Sequence" <> sq."Sequence") THEN 'Sequence' END
+    ) AS change_reasons,
     -- A pure Sequence renumber: persisted by the UPDATE below (renumbering is real) but NOT
     -- material for regeneration. Tracked as its own flag so the row filter is "material OR
     -- sequence" while the modified-entity RETURN stays material-only.
@@ -415,7 +435,8 @@ BEGIN
     fr.new_allows_null, fr.new_default_value::text, fr.new_auto_increment,
     fr.new_is_virtual, fr.new_is_computed, fr.new_sequence::integer,
     fr.related_entity_id, fr.related_entity_field_name::text,
-    fr.new_is_primary_key, fr.new_is_unique
+    fr.new_is_primary_key, fr.new_is_unique,
+    fr.is_material_change, fr.change_reasons::text
   FROM _uef_filtered fr
   -- Only material changes flag the entity as modified (for regen). Sequence-only
   -- renumbers were still applied by the UPDATE above but must not trigger a full
