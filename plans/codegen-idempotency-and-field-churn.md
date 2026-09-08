@@ -1,11 +1,11 @@
 # CodeGen Idempotency, Field Change Tracking, and Drift Prevention
 
-**Status:** rev 3 — verified against source, finalized for build (rev 3 adds the metadata-record persistence model and modified-column re-opening)
+**Status:** rev 3.1 — verified against source, finalized for build (rev 3 added the metadata-record persistence model and modified-column re-opening; rev 3.1 folds in the V4 / V5 / V7 verification reports — §0.3)
 **Branch:** `an-dev-sync-composition-axes` (PR #4296)
 **Owner:** CodeGen (`@memberjunction/codegen-lib`, `@memberjunction/core` sort helpers, `@memberjunction/cli`)
 **Target:** warm developer databases, clean-room CI databases, and every Open App that runs `mj codegen`
 
-> **Rev 3 supersedes rev 1 and rev 2 in full.** Every file:line below was re-verified against
+> **Rev 3.1 supersedes rev 1, rev 2 and rev 3 in full.** Every file:line below was re-verified against
 > `an-dev-sync-composition-axes` at `b7912d12` by an adversarial read of the source. Where rev 1
 > was wrong (function names, line ranges, mechanisms, example values) this document says so
 > inline rather than silently correcting, so the builder does not go looking for code that does
@@ -65,15 +65,62 @@
   `DisplayName`; a `Type`/`Length`/`Precision`/`Scale`/`AllowsNull` change re-opens the
   type-derived columns (`ExtendedType`, `CodeType`, search flags, the `IsNameField` pass);
   nothing else re-opens anything; `Category` never re-opens. §3.4, C1.
-- **The proc reports *what* changed and stops calling a renumber a change.** The PostgreSQL port
-  already splits `is_material_change` from `is_sequence_change` and returns material rows only
-  (`metadataSupportObjects.ts:316-350`); the T-SQL proc does not, so on SQL Server a bare
-  Sequence renumber marks the entity modified and sends it through the LLM pass. Both dialects
-  gain a `ChangeReasons` column; SQL Server gains the material/sequence split. C1.
+- **CodeGen learns *what* changed on a field, and a renumber is not a change.** Rev 3 put this
+  in the proc (a `ChangeReasons` column); rev 3.1 moves it to a TypeScript before/after snapshot
+  diff around the proc call (§0.3, C1, D16). Either way a bare Sequence renumber no longer marks
+  an entity modified on SQL Server, as it already does not on PostgreSQL.
 - **The LLM is not asked about locked columns.** Locked fields go to the prompt as compact
   context only; output is requested only for new / blank / re-opened fields. C3, C4.
 - **New acceptance criterion:** a freshly migrated database must report **zero** material field
   changes on its first CodeGen run — the harness prints offenders by reason when it does not. §7.
+
+### 0.3 What changed from rev 3 (rev 3.1) — the V4 / V5 / V7 reports
+
+Three independent readers went after rev 3's remaining assumptions (Appendix A, R8–R14).
+Everything below is a verified fact about the source, not a preference.
+
+- **The SQL Server proc is regressed, and the tracking source moves to TypeScript.**
+  `V202608260829` (Aug 26) rebuilt `spUpdateExistingEntityFieldsFromSchema` from the v5.38 body
+  and dropped v5.49's soft-PK guard and `#uef_*` materialization; and *neither* dialect gates the
+  FK predicates on `AutoUpdateRelatedEntityInfo` / `IsSoftForeignKey`. A soft PK (SQL Server) or
+  soft FK (both) is therefore "modified" on every run and `applySoftPKFKConfig` rewrites it on
+  every run — a phantom that rev 3's proc-side `ChangeReasons` would have reported as a real
+  change on one platform and not the other. C1 now (a) diffs a before/after snapshot in
+  TypeScript — one implementation, and it sees what the UPDATE actually wrote — and (b) ships a
+  separate migration restoring the v5.49 body, keeping `@IncludedSchemaNames`, and adding the
+  missing soft-FK / `AutoUpdate` gating on both dialects. `ChangeReasons` is gone. D16.
+- **PostgreSQL heal calls pass parameters positionally.** `callRoutineSQL` ignores `paramNames`
+  (`PostgreSQLCodeGenProvider.ts:1775`) while `buildHealSchemaRoutineParams` omits `EntityIDs`
+  when unscoped, so on PostgreSQL an unscoped call with `includeSchemas` lands the include list
+  in `p_EntityIDs`. C1 change (5): named notation.
+- **`AutoUpdateDescription` is inverted in the entity subclasses.** `Set('Description')` on
+  `MJ: Entities` / `MJ: Entity Fields` flips the flag to **true** — which the proc reads as
+  "overwrite from the extended property". A human edit is re-armed against itself on the next
+  run, and the LLM's entity descriptions are wiped on run 2 when the table has no
+  `MS_Description`. C10 fixes the subclass and makes every LLM description write clear the flag.
+  The record still never carries `Description`. D18.
+- **Two writers run unconditionally on every run**, one of them captured
+  (`applySoftPKFKConfig`, `processEntityConfigs`). In any repository that configures
+  `additionalSchemaInfo` (core points at a file that does not exist today; Open Apps use it)
+  `warm-twice` cannot pass by construction. C9: compare-first, both captured; `EntitySetting`
+  upserts get a deterministic ID and an existence guard.
+- **`GeneratedCode` INSERTs carry no literal ID**, so the captured `UPDATE … WHERE ID = <dev id>`
+  after a CHECK change matches zero rows on every other database, which then regenerates the
+  validator itself (an LLM call and another orphan UPDATE). C11.
+- **The decision writer runs last, and never writes `null`.** Geo `ExtendedType` is written by
+  `applyLatePhaseFixups` *after* advanced generation (`sql_codegen.ts:414,492`), so a writer that
+  flushed inside `applyAdvancedGeneration` would record `null` on run 1 and `GeoLatitude` on run
+  2; and an explicit `null` alternates with every fill-only writer. C7, D17.
+- **A5 resolved (V7):** the writer's directory is an `output[]` entry
+  (`{ type: 'MetadataSync', directory: './metadata' }`; `outputDir('MetadataSync', false)` →
+  `null` = off) — no new config key; the formatter is replicated in CodeGenLib (no runtime
+  dependency on `@memberjunction/metadata-sync`; byte-equality pinned in T14 via a
+  devDependency). No server-side subclass exists for any of the four entities; value-list
+  validation rejects an out-of-list value before SQL — which is why D15's migrate-before-push
+  order is not optional.
+- **Smaller:** `RelatedEntityNameFieldMap` joins the Never list; the INSERT no longer starts a
+  primary key with `IncludeInUserSearchAPI = 1`; `warm-twice` also asserts a post-run
+  `mj sync push --dry-run` reports 0 updates; T1/T16 rewritten, T19–T22 added; C9–C11 added.
 
 Commands assume the repo root. `pnpm` is the package manager. The workbench SQL Server
 (`docker/workbench/docker-compose.yml`, service `sql-claude`, host port **1444**) is the
@@ -532,29 +579,51 @@ differs from surrounding style, match the surrounding style.
 
 ### C1 — Field-level change tracking: NEW fields, and MODIFIED fields with reasons
 
-**Files:** `packages/CodeGenLib/src/Database/manage-metadata.ts`; `runCodeGen.ts`; new
-migration `migrations/v6/V<yyyymmddhhmm>__v6.1.x__EntityField_Sync_ChangeReasons.sql`
-(T-SQL `CREATE OR ALTER` of `spUpdateExistingEntityFieldsFromSchema`);
-`packages/CodeGenLib/src/Database/providers/postgresql/metadataSupportObjects.ts` (the
-PostgreSQL port of the same routine — it lives in CodeGen's own provider, so the builder updates
-both dialects in code; the `migrations-pg/` twin of the T-SQL migration is the build engineer's
-toolchain, as usual).
+**Files:** `packages/CodeGenLib/src/Database/manage-metadata.ts`; new
+`packages/CodeGenLib/src/Database/entity-field-change-tracking.ts` (pure); `runCodeGen.ts`;
+`packages/CodeGenLib/src/Database/providers/postgresql/PostgreSQLCodeGenProvider.ts`
+(`callRoutineSQL`); `providers/postgresql/metadataSupportObjects.ts` (soft-FK gating in the PG
+port); new migration
+`migrations/v6/V<yyyymmddhhmm>__v6.1.x__Restore_spUpdateExistingEntityFieldsFromSchema_Guards.sql`
+(T-SQL only — the `migrations-pg/` twin is the build engineer's toolchain, and the PG routine is
+re-created from `metadataSupportObjects.ts` on every run anyway, `manage-metadata.ts:2200`).
 
-**Change (1) — the tracking surface:**
+**Why rev 3.1 moved the source of truth out of the proc (V5, V4 — Appendix A, R8, R9, R13):**
+
+1. **The SQL Server body is regressed.** `V202608260829__v6.1.x__Heal_SPs_IncludedSchemaNames.sql`
+   (its header, `:18`, names the ancestor it rebuilt from: `V202605281538` = v5.38) shipped without
+   `V202607202100__v5.49.x__SoftPK_Guard_Materialized_…`'s two changes — the
+   `#uef_cols/#uef_fk/#uef_pk/#uef_uk` materialization (`:58-66`) and the `IsSoftPrimaryKey` guard
+   (`:115-117`, `:166-167`). No later migration touches the proc. On SQL Server today every
+   soft-PK field (set from `additionalSchemaInfo`) has `IsPrimaryKey`/`IsUnique` reset to the
+   physical catalog by the proc and re-set by `applySoftPKFKConfig` (`:4366-4371`) on every run.
+   PostgreSQL kept the guard (`metadataSupportObjects.ts:339-344`).
+2. **Neither dialect guards soft FKs.** The `RelatedEntityID` / `RelatedEntityFieldName`
+   predicates (`V202608260829:253-254`; PG `:316-347`) fire whenever the catalog has no physical
+   FK, while the UPDATE writes `IIF(AutoUpdateRelatedEntityInfo = 1, <catalog>, <keep>)`
+   (`:280-281`; PG `:399-400`). `applySoftPKFKConfig` sets `RelatedEntityID` + `IsSoftForeignKey = 1`
+   but leaves `AutoUpdateRelatedEntityInfo` at its default `1` (`:4396-4401`), so a soft FK is
+   nulled by the proc and re-applied by config on **every** run, on **both** dialects. A pinned
+   FK (`AutoUpdateRelatedEntityInfo = 0`) is never rewritten but still enters the row set every run.
+3. **Reasons computed in-proc would differ by dialect** (PG has `fnNormalizeDefaultValue` and the
+   `numeric`/`decimal` synonym; SQL Server does not) and would compare the catalog to the row
+   *before* the UPDATE. A diff taken around the call sees what was actually written, on either
+   platform, with one implementation — and cannot be dropped by the next proc rewrite.
+
+**Decision (D16): the tracking source is a TypeScript before/after snapshot diff around the proc
+call; the proc's result set is no longer read; the proc regression is fixed by its own
+migration.** `modifiedEntityList` is derived from *material* diffs, so a renumber-only entity
+stays out of the LLM candidate set on SQL Server exactly as it already does on PostgreSQL.
+
+**Change (1) — the tracking surface** (`manage-metadata.ts`, next to `_newEntityList` `:507` /
+`_modifiedEntityList` `:514`):
 
 ```ts
-// manage-metadata.ts — next to _newEntityList (:507) / _modifiedEntityList (:514)
-export type FieldChangeReason =
-   | 'Description' | 'Type' | 'Length' | 'Precision' | 'Scale' | 'AllowsNull'
-   | 'DefaultValue' | 'AutoIncrement' | 'IsVirtual' | 'IsComputed' | 'RelatedEntityID'
-   | 'RelatedEntityFieldName' | 'IsPrimaryKey' | 'IsUnique' | 'AllowUpdateAPI' | 'Sequence';
-/** Reasons that re-open DisplayName (§3.4). */
-export const DISPLAYNAME_REOPEN_REASONS: ReadonlySet<FieldChangeReason> = new Set(['Description']);
-/** Reasons that re-open the type-derived columns (§3.4). */
-export const TYPE_REOPEN_REASONS: ReadonlySet<FieldChangeReason> = new Set(['Type', 'Length', 'Precision', 'Scale', 'AllowsNull']);
+import { FieldChangeReason, DISPLAYNAME_REOPEN_REASONS, TYPE_REOPEN_REASONS } from './entity-field-change-tracking';
 
 private static _newFieldSet = new Set<string>();                          // `${entityID}:${name}` normalized
 private static _changedFields = new Map<string, Set<FieldChangeReason>>(); // same key → reasons
+private static _changedFieldReport: { entityName: string; fieldName: string; reasons: FieldChangeReason[] }[] = [];
 private static fieldKey(entityID: string, name: string): string { … trim + lowercase both … }
 
 public static registerNewField(entityID: string, name: string): void
@@ -564,7 +633,8 @@ public static fieldChangeReasons(entityID: string, name: string): ReadonlySet<Fi
 public static isDisplayNameReopened(entityID, name): boolean  // any reason ∈ DISPLAYNAME_REOPEN_REASONS
 public static isTypeReopened(entityID, name): boolean         // any reason ∈ TYPE_REOPEN_REASONS
 public static get newFieldCount(): number; public static get changedFieldCount(): number
-public static clearFieldTracking(): void                       // both structures; called once per run
+public static get changedFieldReport(): ReadonlyArray<…>       // the clean-room diagnostic (change 6)
+public static clearFieldTracking(): void                       // all three structures; called once per run
 ```
 
 `registerNewField` at the **three** INSERT sites (FM3): `createNewEntityFieldsFromSchema` loop
@@ -573,67 +643,120 @@ public static clearFieldTracking(): void                       // both structure
 parent field name). Reset in `RunCodeGenBase.Run` before `reporter.startRun()`; report
 `fieldsNew` / `fieldsChanged` counters in the `finally` (`runCodeGen.ts:535`).
 
-**Change (2) — the routine reports *what* changed, and stops calling a renumber a change.**
-
-Today the T-SQL proc (`migrations/v6/V202608260829…:242-262`) folds every predicate — including
-`ef.Sequence <> fromSQL.Sequence` — into one WHERE, and `SELECT * FROM @FilteredRows` (`:288`)
-returns every row it updated. Two consequences: (a) a bare Sequence renumber (the park at
-`manage-metadata.ts:4979-4990`, or any view whose `column_id`s shifted) marks the **entity**
-modified, so it becomes an LLM candidate and its views/procs are re-emitted byte-identical;
-(b) nothing says which column changed. The PostgreSQL port already solved (a): it computes
-`is_material_change` separately from `is_sequence_change`
-(`metadataSupportObjects.ts:316-350`), applies the UPDATE for both, and RETURNs only material
-rows — "a pure Sequence renumber … must NOT flag its entity as modified, or every fresh PG CodeGen
-run re-emits byte-identical views + sprocs for dozens of entities". Bring SQL Server to parity
-and add the reasons on both dialects:
-
-- `@FilteredRows` gains `IsMaterialChange BIT` and `ChangeReasons NVARCHAR(400)`; the INSERT
-  computes `ChangeReasons = CONCAT_WS(',', IIF(<Description predicate>,'Description',NULL),
-  IIF(ef.Type <> fromSQL.Type,'Type',NULL), … , IIF(ef.Sequence <> fromSQL.Sequence,'Sequence',NULL))`
-  — one term per predicate at `:242-262`, same spelling as `FieldChangeReason` — and
-  `IsMaterialChange = IIF(<all predicates except Sequence> , 1, 0)`. The row filter stays
-  "material OR sequence" (the renumber must still be persisted); the final SELECT returns only
-  `IsMaterialChange = 1` rows, plus the two new columns.
-- PostgreSQL port: add the same `"ChangeReasons"` text column to `RETURNS TABLE`, built with
-  `concat_ws(',', CASE WHEN … THEN 'Description' END, …)` from the predicates it already has
-  (`:316-347`); it already returns material-only rows.
-- Migration: `CREATE OR ALTER PROCEDURE` in `migrations/v6/` following the
-  `V202608260829__…__Heal_SPs_IncludedSchemaNames.sql` header pattern; no `EntityField`
-  INSERTs, so the sequence gate does not apply; T-SQL only (PG twin is toolchain).
-- `R__RefreshMetadata.sql:17` EXECs the proc and ignores its result set — the extra columns are
-  harmless there. The captured `EXEC` in CodeGen tails is a recurring script (`:5136`, `true`)
-  and is omitted from captures by default.
-
-**Change (3) — the TS caller** (`updateExistingEntityFieldsFromSchema` `:5120-5145`):
+**Change (2) — the pure diff** (`Database/entity-field-change-tracking.ts`; no I/O; every rule
+unit-tested in T1):
 
 ```ts
-const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
-if (result && result.length > 0) {
-   ManageMetadataBase.addNewEntitiesToModifiedList(result.map(r => r.EntityName));   // now material-only
-   for (const r of result) {
-      const reasons = String(r.ChangeReasons ?? '').split(',').filter(Boolean) as FieldChangeReason[];
-      ManageMetadataBase.registerFieldChange(r.EntityID, r.EntityFieldName, reasons);
-   }
+/** Columns the schema sync may rewrite. `Sequence` is deliberately absent: a renumber is not a change (FM3). */
+export const TRACKED_FIELD_COLUMNS = [
+   'Description', 'Type', 'Length', 'Precision', 'Scale', 'AllowsNull', 'DefaultValue',
+   'AutoIncrement', 'IsVirtual', 'IsComputed', 'RelatedEntityID', 'RelatedEntityFieldName',
+   'IsPrimaryKey', 'IsUnique', 'AllowUpdateAPI',
+] as const;
+export type FieldChangeReason = typeof TRACKED_FIELD_COLUMNS[number];
+/** Reasons that re-open DisplayName (§3.4). */
+export const DISPLAYNAME_REOPEN_REASONS: ReadonlySet<FieldChangeReason> = new Set(['Description']);
+/** Reasons that re-open the type-derived columns (§3.4). */
+export const TYPE_REOPEN_REASONS: ReadonlySet<FieldChangeReason> = new Set(['Type', 'Length', 'Precision', 'Scale', 'AllowsNull']);
+
+export interface EntityFieldSnapshotRow {
+   ID: string; EntityID: string; EntityName: string; Name: string;
+   Description: string | null; Type: string; Length: number | null; Precision: number | null; Scale: number | null;
+   AllowsNull: boolean; DefaultValue: string | null; AutoIncrement: boolean; IsVirtual: boolean; IsComputed: boolean;
+   RelatedEntityID: string | null; RelatedEntityFieldName: string | null; IsPrimaryKey: boolean; IsUnique: boolean; AllowUpdateAPI: boolean;
 }
+export interface EntityFieldChange { entityID: string; entityName: string; fieldID: string; fieldName: string; reasons: FieldChangeReason[] }
+
+/** Rows keyed by ID. A row only in `after` is new this run and is not a change; `isNew` excludes the INSERT sites' rows too. */
+export function diffEntityFieldSnapshots(
+   before: ReadonlyMap<string, EntityFieldSnapshotRow>,
+   after: ReadonlyMap<string, EntityFieldSnapshotRow>,
+   isNew: (entityID: string, name: string) => boolean,
+): EntityFieldChange[]
 ```
 
-When a database has not yet applied the migration (result rows lack `ChangeReasons`), treat the
-row as `['Unknown']` — which re-opens nothing — and log once that the proc is stale. Locked by
-default, never open by default.
+Comparison rules live in one `normalize(column, value)` helper so T1 can enumerate them:
+strings trimmed and `null ≡ ''` for `Description`, `DefaultValue`, `RelatedEntityFieldName`;
+`RelatedEntityID` compared case-insensitively; SQL Server `bit` (`0`/`1`) and PostgreSQL
+`boolean` both coerced with `Boolean()`; numbers as numbers (`null` stays `null`). Output is
+sorted by `entityName`, then `fieldName`, with `ordinalCompare` (C5). A row present in `before`
+and absent in `after` was deleted by another step and is ignored (`deleteUnneededEntityFields`
+runs first, `:4148`).
 
-**Change (4) — the clean-room acceptance criterion this enables.** On a freshly migrated
-database, `mj sync push` + `mj codegen` must report **zero material field changes**
-(`fieldsChanged = 0`) — every EntityField row a migration created must already match the live
-schema. The harness's `clean-room` stage asserts it (§7.1) and prints the offenders with their
-reasons when it fails. This is the single most useful diagnostic for "why did the LLM run on a
-clean database".
+**Change (3) — the caller** (`updateExistingEntityFieldsFromSchema` `:5120-5145`):
 
-**Edge cases:** Pass 2 re-runs the proc scoped to `entityFilter`; reasons accumulate in the same
-map (do not clear between passes). A field that is both new (Pass 1) and changed (Pass 2 — the
-name column becomes virtual after its FK is discovered) is simply new. `deleteUnneededEntityFields`
-still reports entity names only (§9).
+```ts
+const before = await this.snapshotEntityFields(pool, entityIDs);       // entityIDs undefined = unscoped (pass 1)
+const result = await this.LogSQLAndExecute(pool, sSQL, label, true);   // recurring; result set no longer consulted
+const after  = await this.snapshotEntityFields(pool, entityIDs);
+const changes = diffEntityFieldSnapshots(before, after, (e, n) => ManageMetadataBase.isFieldNew(e, n));
+ManageMetadataBase.addNewEntitiesToModifiedList(changes.map(c => c.entityName));   // material only
+for (const c of changes) ManageMetadataBase.registerFieldChange(c.entityID, c.fieldName, c.reasons);
+```
 
-**Tests:** T1 (extended), T16.
+`snapshotEntityFields` is one
+`SELECT ID, EntityID, Entity AS EntityName, Name, <TRACKED_FIELD_COLUMNS> FROM vwEntityFields`
+through `this.runQuery` (a read — never captured), with `EntityID IN (…)` when scoped and no
+other filter: rows the proc does not touch diff to nothing, so mirroring its schema predicates
+buys nothing. Two reads of ~6–10k rows per pass on core — negligible next to the proc. The old
+`result.map(r => r.EntityName)` path is deleted; that was the entity-granular signal FM3
+describes.
+
+**Change (4) — restore the proc, once, in its own migration.** Body = `V202607202100`'s
+(materialization + `IsSoftPrimaryKey` guard on the two PK/unique predicates and the two SET
+lines) **plus** `V202608260829`'s `@IncludedSchemaNames` parameter, `@IncludedSchemas` table and
+`@HasInclude` predicate (`:152-160`, `:239`) **plus** the gating both files lack:
+
+- WHERE: wrap the `RelatedEntityID` and `RelatedEntityFieldName` predicates as
+  `(ef.AutoUpdateRelatedEntityInfo = 1 AND ef.IsSoftForeignKey = 0 AND (<RelatedEntityID predicate> OR <RelatedEntityFieldName predicate>))`;
+- SET: `RelatedEntityID = IIF(ef.AutoUpdateRelatedEntityInfo = 1 AND ef.IsSoftForeignKey = 0, fr.RelatedEntityID, ef.RelatedEntityID)`
+  (same for `RelatedEntityFieldName`);
+- signature unchanged (`@ExcludedSchemaNames`, `@EntityIDs = NULL`, `@IncludedSchemaNames = NULL`),
+  so `R__RefreshMetadata.sql:17` and the captured recurring `EXEC` (`:5136`) are unaffected;
+  `GRANT EXECUTE … TO [cdp_Developer], [cdp_Integration]` as in every predecessor;
+- the final `SELECT * FROM @FilteredRows` stays (nothing reads it now) — do **not** add
+  `ChangeReasons` / `IsMaterialChange`;
+- the header names both ancestors and says why ("restores V202607202100; keeps V202608260829's
+  include list; adds soft-FK gating") so the next "heal" rewrite starts from this file.
+  **T16 pins it**: the newest T-SQL definition of the proc must contain `IsSoftPrimaryKey`,
+  `IsSoftForeignKey` and `AutoUpdateRelatedEntityInfo` inside the WHERE, `@IncludedSchemaNames`,
+  and `#uef_cols`.
+
+PostgreSQL port (`metadataSupportObjects.ts:316-347`, `:399-400`): add the same
+`IsSoftForeignKey` / `AutoUpdateRelatedEntityInfo` gating to `is_material_change` and to the two
+`RelatedEntity*` SET lines; it already has the soft-PK guard. T16 pins both dialects.
+
+Belt and braces in C9: `applySoftPKFKConfig` also sets `AutoUpdateRelatedEntityInfo = 0` when it
+pins a soft FK, so a host whose proc predates this migration stops churning too.
+
+**Change (5) — PostgreSQL named parameters.** `callRoutineSQL`
+(`PostgreSQLCodeGenProvider.ts:1775-1790`) discards `_paramNames` and joins `params`
+positionally. `buildHealSchemaRoutineParams` (`heal-schema-params.ts:46-66`) emits
+`[ExcludedSchemaNames, IncludedSchemaNames]` when unscoped — so on PostgreSQL pass 1 with
+`includeSchemas` passes the include list as `p_EntityIDs` (silently emptied by the uuid `TRY`
+parse) and `p_IncludedSchemaNames` stays `NULL`: the include filter never applies to the unscoped
+heal of any Open App on PostgreSQL, for all five heal routines. Fix: when `paramNames` is
+supplied emit `p_<Name> => <value>` per parameter (named notation; the routines declare
+`p_ExcludedSchemaNames, p_EntityIDs, p_IncludedSchemaNames`, `metadataSupportObjects.ts:199-202`)
+in both the `SELECT * FROM …` and the `DO $$ … PERFORM …` shapes. T19.
+
+**Change (6) — the clean-room acceptance criterion.** On a freshly migrated database,
+`mj sync push` + `mj codegen` must report **zero material field changes** (`fieldsChanged = 0`)
+— every `EntityField` row a migration created must already match the live schema. The harness's
+`clean-room` stage asserts it (§7.1) and prints `changedFieldReport` as
+`<entity>.<field>: <reasons>` when it fails. This is the single most useful diagnostic for "why
+did the LLM run on a clean database".
+
+**Edge cases:** Pass 2 re-runs the proc scoped to `entityFilter`, and the late-regen pass
+(`sql_codegen.ts:411`) runs it scoped again; reasons accumulate in the same map (do not clear
+between passes). A field that is both new (Pass 1) and changed (Pass 2 — the name column becomes
+virtual after its FK is discovered) is simply new: `isNew` wins. V5 reports that the INSERT
+(`getPendingEntityFieldINSERTSQL` `:4841-4964`) writes a *parsed* `DefaultValue` while the proc
+writes the raw catalog text, so a brand-new field can differ on `DefaultValue` on its first
+pass — excluded by `isNew`; if the harness confirms it, align the INSERT with the proc (§9).
+`deleteUnneededEntityFields` still reports entity names only (§9).
+
+**Tests:** T1, T16, T19.
 
 ### C2 — Lock rules in `applyFieldCategories` (regular + virtual entities)
 
@@ -867,6 +990,12 @@ default semantics (Appendix A, C9).
 
 **Tests:** T5.
 
+**While there (V4, risk 12):** `getPendingEntityFieldINSERTSQL` `:4942` writes
+`IncludeInUserSearchAPI = (FieldName === 'ID' OR IsNameField)`, so every new entity's primary key
+starts with the flag `isFieldEligibleForUserSearch` (`:7550`) forbids and that `V202605041250`
+(search hygiene) zeroed system-wide. Change the INSERT to `IsNameField` alone — the deterministic
+writer must not contradict the guardrail it feeds. Asserted in T1's INSERT-site case.
+
 ### C5 — Deterministic ordering everywhere
 
 **Files:** `packages/MJGlobal/src/util.ts` (new `ordinalCompare`),
@@ -981,7 +1110,7 @@ all) is the right long-term shape and is recorded in §9 — it changes the publ
 `packages/CodeGenLib/src/Database/decision-metadata-writer.ts` (+ a shared
 `decision-metadata-format.ts` used by both); `metadata/entities/decisions/` (new folder under the
 existing `MJ: Entities` sync root — its `.mj-sync.json` pattern `**/.*.json` already includes
-subfolders); `packages/CodeGenLib/src/Config/config.ts` (`metadataDirectory`); the committed
+subfolders); `packages/CodeGenLib/src/Config/config.ts` (the `MetadataSync` `output[]` type); the committed
 generated artifacts.
 
 **Why:** P2 cannot hold while the decided columns exist only in databases (FM8). A migration
@@ -1043,13 +1172,16 @@ Rules for the record (all enforced by the shared formatter, T14):
   order). `ApplicationEntity`: `DefaultForNewUser`.
   **Never**: `Type`, `Length`, `Precision`, `Scale`, `Sequence`, `AllowsNull`, `DefaultValue`,
   `IsPrimaryKey`, `IsUnique`, `IsVirtual`, `IsComputed`, `AutoIncrement`, `ValueListType`,
-  `RelatedEntityID`, `RelatedEntityFieldName`, `Name` — `MJEntityFieldEntityExtended.Validate`
+  `RelatedEntityID`, `RelatedEntityFieldName`, `Name`, `RelatedEntityNameFieldMap` — `MJEntityFieldEntityExtended.Validate`
   (`packages/MJCoreEntities/src/custom/MJEntityFieldEntityExtended.ts:14-28,64-66`) **rejects** a
   save that dirties any of those ("reflected from the database schema … only updated by
   CodeGen"), which would abort the whole push. **Never `Description`** on either table:
   `MJEntityFieldEntityExtended` flips `AutoUpdateDescription=true` whenever `Set('Description')`
   sees a different value (`:40-43`), so a recorded description would silently re-arm the schema
-  sync against itself. Human-owned descriptions stay in extended properties / hand-authored files.
+  sync against itself (C10 fixes the inversion so a human edit survives CodeGen; the record still
+  never carries it — one source, the extended property). `RelatedEntityNameFieldMap` is filled
+  only when blank (`sql_codegen.ts:2205-2210`) while the view alias is recomputed every run
+  (`:2186-2201`): a recorded value that differs desyncs the UI from the view with no error (V4).
   `Configuration`/`JSONType*` are owned by the existing hand-authored files in this root — the two
   sets of files must never name the same column.
 - **Deterministic text, byte-identical to what `mj sync push` writes back.** Push rewrites every
@@ -1057,9 +1189,14 @@ Rules for the record (all enforced by the shared formatter, T14):
   (`packages/MetadataSync/src/lib/json-write-helper.ts:20-21`: `JSON.stringify(data, null, 2)`,
   key order preserved, **no trailing newline**). The writer must produce exactly that — fixed
   key order (as listed), records sorted by field `Sequence` then `Name`, 2-space indent, LF, no
-  trailing newline, `null` written explicitly for a decided-null (`CodeType: null`), omitted when
-  undecided — or every developer's push rewrites all ~380 files. Reuse `JsonWriteHelper` if the
-  package graph allows (Appendix A, A5); otherwise replicate it and pin the equivalence in T14.
+  trailing newline, key order exactly as `JsonWriteHelper` normalizes it (`json-write-helper.ts:42`,
+  `knownKeys`), **null-valued keys omitted, always** (D17) — or every developer's push rewrites all
+  ~380 files. A5 is resolved (V7): the package graph is cycle-free, but importing
+  `@memberjunction/metadata-sync` into `codegen-lib` drags `graphql-dataprovider`,
+  `@inquirer/prompts`, `chokidar` and `fast-glob` into `MJServer`/`ServerBootstrap`/`MJAPI` for a
+  20-line helper. **Replicate** it in `Misc/decision-metadata-format.ts` and pin byte-equality in
+  T14, with `@memberjunction/metadata-sync` as a **devDependency** of CodeGenLib only (the test
+  imports `JsonWriteHelper`; production code never does).
 - **No `sync` blocks are authored.** The release push writes them back (rule 1b step 3) and
   commits them; developers never hand-edit them. The writer **preserves** `sync` blocks,
   `_comments` and any key it does not own when it rewrites a file (read-modify-write).
@@ -1086,35 +1223,41 @@ summary (entities, fields, per-column counts) so the reviewer can sanity-check t
 (~380 entities / ~8,000 field records for core). It never runs against the shared database
 without `--reference` naming it explicitly.
 
-**The CodeGen writer (`decision-metadata-writer.ts`), invoked from every apply path that decides
-a column** (C2 `applyFieldCategories`, C4's six appliers, `applyEntityIcon`,
-`applyCategoryInfoSettings`, `applyEntityImportance`, `detectAndSetGeoCodingSupport`, VE
-decoration):
+**The CodeGen writer (`decision-metadata-writer.ts`) runs once, as the last step of the run** —
+after `applyLatePhaseFixups` (`sql_codegen.ts:414`), which is where geo `ExtendedType` is written
+(`:492-493`), *after* advanced generation has finished. It is a read-DB → format → compare →
+write step with no knowledge of which pass decided what (D17):
 
-- Collects decisions per entity during the run (`recordFieldDecision(entityName, fieldName, column, value)`,
-  `recordEntityDecision(...)`, `recordEntitySetting(...)`), and flushes **once per entity** at the
-  end of `applyAdvancedGeneration` — read the entity's file if it exists, merge (a decision
-  replaces the same key; other keys untouched), write through the shared formatter only if the
-  bytes changed.
+- Scope: `newEntityList ∪ modifiedEntityList ∪ { entities that already have a record file }`.
+  For each, read the final `Entity` / `EntityField` / `EntitySetting` / `ApplicationEntity` rows
+  (one bulk read for the whole scope, never per field), project the decision columns, read the
+  entity's file if it exists, merge (a column value replaces the same key; other keys untouched),
+  and write through the formatter only if the bytes changed. The apply paths (C2
+  `applyFieldCategories`, C4's six appliers, `applyEntityIcon`, `applyCategoryInfoSettings`,
+  `applyEntityImportance`, `detectAndSetGeoCodingSupport`, VE decoration) do **not** call the
+  writer — they write the database; the writer records the database. That is what makes the
+  exporter (step 1) and the steady-state writer the same code path, so backfill and daily runs
+  cannot drift. Columns that `additionalSchemaInfo` owns are skipped and counted (C9 rule 4).
 - **Reconciles dropped and renamed columns in the same run**: at flush, any `MJ: Entity Fields`
   record in the entity's file whose `Name` is no longer in `entity.Fields` is removed (and
   counted, `decisionRecordsRemoved`). This is not cosmetic — one `@lookup` that fails to resolve
   **aborts the entire `mj sync push`, every directory**, after earlier files' writes have already
   autocommitted (`sync-engine.ts:815-827`, `PushService.ts:883,937,595-602`; Appendix A, V1). The
   same reconciliation removes a whole entity file when the entity is gone.
-- Resolves the directory from `configInfo.metadataDirectory` (new key; `mj.config.cjs` sets
-  `./metadata` for core) or, for Open Apps, `mj-app.json` `metadata.directory`; when neither is
-  configured or `entities/.mj-sync.json` is absent there, it logs **one** warning naming the
-  missing config and skips JSON writes — the SQL capture still carries the values (D13), so
+- Resolves the directory from an `output[]` entry — `{ type: 'MetadataSync', directory: './metadata' }`
+  in `mj.config.cjs`, read through the existing `outputDir('MetadataSync', false)`
+  (`config.ts:1133-1145`; `null` when absent). No new config key, and no reading of `mj-app.json`
+  (its `metadata.directory` is documented as a dev-time pointer nobody reads,
+  `manifest-schema.ts:123-128`). When the entry is absent, or `<directory>/entities/.mj-sync.json`
+  does not exist, it logs **one** warning naming the missing entry and skips JSON writes — the SQL capture still carries the values (D13), so
   nothing is lost, but the run report shows `decisionRecordsSkipped > 0`.
 - Uses the `EntityInfo` already loaded for naming; never opens a second database connection.
 - Reporter: `decisionRecordsWritten`, `decisionRecordsUnchanged`, `decisionRecordsSkipped`.
-- **Enablement is per repository**: `decisionMetadata.enabled` in `mj.config.cjs` — `'auto'`
-  (default: on iff `<metadataDirectory>/entities/.mj-sync.json` exists), `true`, or `false`.
-  Core sets nothing (auto → on). Open Apps whose release generator admits only `spCreate*`
+- **Enablement is per repository, and it is the `output[]` entry itself**: present = on, absent
+  = off. Core adds the entry. Open Apps whose release generator admits only `spCreate*`
   (bizapps-caliber's `scripts/generate-metadata-sync.mjs` throws on `spUpdateEntityField`;
   `.caliber-ship.json` classifies `entities/` as never-shipping; bizapps-accounting's doctrine
-  is the same) keep the CodeGen tail as their channel (D13) and set `false` until they adopt the
+  is the same) keep the CodeGen tail as their channel (D13) and omit the entry until they adopt the
   record; bizapps-common/sales/orders/contracts already ship `spUpdateEntityField` from
   `@lookup`-keyed partial records and can turn it on.
 
@@ -1205,6 +1348,112 @@ Full specification in §7.
 
 ---
 
+### C9 — Every-run config writers become compare-first, and captured
+
+**Files:** `packages/CodeGenLib/src/Database/manage-metadata.ts` (`applySoftPKFKConfig`
+`:4318-4420`, `processEntityConfigs` `:1235-1296`, `applyCategoryInfoSettings` `:7990-8066`).
+
+**Problem (V4, risks 3 and 7 — Appendix A, R11).** Three writers write on every run whether or
+not anything differs:
+
+- `applySoftPKFKConfig` UPDATEs `IsPrimaryKey`/`IsSoftPrimaryKey` (`:4366-4371`) and
+  `RelatedEntityID`/`RelatedEntityFieldName`/`IsSoftForeignKey` (`:4396-4401`) unconditionally,
+  through `LogSQLAndExecute` — so the capture of a no-op run is **not empty** in any repository
+  with `additionalSchemaInfo`, and `warm-twice` fails by construction there. Core's
+  `mj.config.cjs:210` points at `metadata/integrations/additionalSchemaInfo.json`, which does not
+  exist in core today; Open Apps and CDP do configure it.
+- `processEntityConfigs` UPDATEs every `Entity` attribute named in `additionalSchemaInfo`
+  `Entities[]` unconditionally through `runQueryWithParams` (`:1283`) — **never captured**, so a
+  host never receives those values from the tail, and a record that names the same column
+  alternates with config on every push/CodeGen pair.
+- `applyCategoryInfoSettings` upserts `FieldCategoryInfo` / `FieldCategoryIcons` with no compare
+  (`:8004-8009`), minting `uuidv4()` IDs on INSERT; `EntitySetting` has no unique index on
+  `(EntityID, Name)` (baseline `:3702`), so two branches that each first-decide an entity's
+  categories produce two captured INSERTs and a duplicate on every host — which makes the
+  record's `@lookup` key ambiguous and aborts the whole push (R7).
+
+**Change:**
+
+1. `applySoftPKFKConfig`: SELECT the current values first; UPDATE only when any differs; the
+   soft-FK UPDATE also sets `AutoUpdateRelatedEntityInfo = 0` (the proc must never compete for a
+   pinned FK — C1 change (4) gates the proc too; this covers a host whose proc predates it).
+   Unchanged rows emit nothing, so the capture is empty on a no-op run.
+2. `processEntityConfigs`: SELECT the named attributes first; build the UPDATE only for
+   attributes that differ; execute through `LogSQLAndExecute` with literal values (mirror the
+   `ParentID` pattern at `:1094-1110`) so hosts receive it. Booleans through `boolLit`, strings
+   through the dialect's literal quoting.
+3. `applyCategoryInfoSettings`: compare the canonical JSON (D10) before writing; the INSERT mints
+   `uuidv5(<fixed namespace>, EntityID + '|' + Name)` and is wrapped in
+   `IF NOT EXISTS (SELECT 1 FROM EntitySetting WHERE EntityID = … AND Name = …)` (the
+   conditional-insert shape at `:3803`), so two databases that first-decide the same entity
+   capture the same, idempotent statement; the UPDATE keeps its `WHERE EntityID = … AND Name = …`.
+   A unique index is a §9 follow-up because adding one can fail on hosts that already carry
+   duplicates.
+4. **Config and record never own the same column.** The writer (C7) skips any `(entity, column)`
+   that `additionalSchemaInfo` `Entities[]` / `PrimaryKey` / `ForeignKeys` declares and logs it
+   once per run (`decisionRecordsSkipped` counts it) — two sources for one column is forbidden by
+   code, not by convention.
+
+**Tests:** T20.
+
+### C10 — `AutoUpdateDescription`: fix the inverted subclasses, and lock what the LLM writes
+
+**Files:** `packages/MJCoreEntities/src/custom/MJEntityFieldEntityExtended.ts` (`:30-48`),
+`packages/MJCoreEntities/src/custom/MJEntityEntityExtended.ts` (`:12-30`);
+`packages/CodeGenLib/src/Database/manage-metadata.ts` (`generateNewEntityDescriptions`
+`:4717-4759`, `applyLLMFieldDescriptions` `:3377-3423`).
+
+**Problem (V4 risk 1, V7 — Appendix A, R10).** Both `Set()` overrides react to a changed
+`Description` on an existing record by setting `AutoUpdateDescription = true`, and their
+`console.warn` says this "will prevent CodeGen from overwriting this description". The proc says
+the opposite: `Description = IIF(AutoUpdateDescription = 1, <MS_Description>, Description)`
+(`V202608260829:243,268` for fields, `:329,346` for entities), and the column's own
+`MS_Description` in the baseline (`:37492`) reads "turn this bit **off** and then set the
+Description field and future CodeGen runs will NOT override". Consequences today: a human edit in
+Explorer (or any `Save()`, or a pushed record) is re-armed for overwrite on the next run; the
+LLM's `generateNewEntityDescriptions` output (feature off by default, D12) is wiped on run 2
+whenever the table has no `MS_Description` (`NULL` wins the `IIF`).
+
+**Change:**
+
+1. Both subclasses: set `AutoUpdateDescription = false` when a differing `Description` is set on
+   an existing record; fix the warning text. `Validate()`'s reflected-property rejection is
+   unchanged.
+2. `generateNewEntityDescriptions` and `applyLLMFieldDescriptions`: include
+   `AutoUpdateDescription = 0` in the same UPDATE that writes an LLM description — the decision
+   is locked in the row that carries it (§3.1 principle 4).
+3. The record still never carries `Description` (C7 Never list): for table-backed entities the
+   extended property in the migration is the single source. This item protects humans and the
+   LLM's own output; it does not open a second channel. No file under `metadata/entities/`
+   carries `Description` today (verified by grep), so no existing push changes behaviour.
+4. Changeset note (Phase 5): "a manual `Description` edit on `MJ: Entities` / `MJ: Entity Fields`
+   now survives CodeGen runs" — a behaviour change worth a line, in a branch that is already
+   `minor`.
+
+**Tests:** T21.
+
+### C11 — `GeneratedCode` rows get a literal, host-stable ID
+
+**Files:** `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts`
+(`LogAndGenerateValidateFunction` `:1298-1362`).
+
+**Problem (V4 risk 4 — Appendix A, R12).** The INSERT at `:1344-1347` carries no `ID`
+(`DF newsequentialid()`, baseline `:9136`) and is captured non-recurring (`:1353`). Every other
+database mints its own ID when the tail replays, so the later captured
+`UPDATE … WHERE ID = '<dev id>'` (`:1330-1339`) after a CHECK-constraint change matches **zero
+rows** anywhere else; that database's next CodeGen sees `Source ≠ CHECK`
+(`manage-metadata.ts:5433`) and regenerates — an LLM call and another UPDATE only its own
+database can apply. P2 fails and the drift is perpetual across every developer database.
+
+**Change:** mint `createNewUUID()` in TypeScript; INSERT with the literal ID inside
+`IF NOT EXISTS (SELECT 1 FROM GeneratedCode WHERE CategoryID = … AND LinkedEntityID = … AND LinkedRecordPrimaryKey = …)`
+(the `:3803` shape); the in-memory validator record gets that ID so the UPDATE path targets it on
+this run and every later one. The reporter gains `ai.validatorCalls`; `warm-twice` with AI on
+asserts it is `0` on run 2. The platform-specific `Source` text (SQL Server vs PostgreSQL CHECK
+definitions) stays a §9 item.
+
+**Tests:** T22.
+
 ## 5. Build order and checkpoints
 
 Work in this order. Each checkpoint is a command; its stated result is the exit criterion.
@@ -1221,16 +1470,19 @@ generated-artifact diff of Phase 1 and Phase 3 separately).
   yet; write the harness first in that case — it is the measuring instrument for everything after.
 
 **Phase 1 — Determinism with no LLM in the loop.** C5 (ordering), C6 (submodules), C8 harness +
-`--no-ai`. Tests T7–T10. Regenerate committed artifacts once (the "everything moved" commit).
+`--no-ai`, C9 (compare-first config writers), C1 change (4) (the restored proc — apply it with
+`mj migrate` before the first harness run so `fieldsChanged` is trustworthy) and C1 change (5)
+(PostgreSQL named parameters). Tests T7–T10, T16, T19, T20. Regenerate committed artifacts once
+(the "everything moved" commit).
 - ✅ Checkpoint 1a: `pnpm test` green in `packages/MJGlobal`, `packages/MJCore`, `packages/CodeGenLib`.
 - ✅ Checkpoint 1b: `node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai` → **empty diff, no `CodeGen_Run_*.sql` left behind**.
 - ✅ Checkpoint 1c: `--stage single-column --no-ai` → diff limited to the allow-list (§7.2).
 
-**Phase 2 — LLM guardrails and the decision record.** C1 (tracking + the `ChangeReasons` proc
-migration and its PostgreSQL port), C2 (lock rules), C3 (gates/prompt/enum), C4 (SFI scope), C7's
-**writer** (`decision-metadata-writer.ts`, `metadataDirectory` config). Tests T1–T6, T11–T14, T16.
-Push the template metadata (`mj sync push --dir=metadata`); apply the proc migration
-(`mj migrate`).
+**Phase 2 — LLM guardrails and the decision record.** C1 (snapshot-diff tracking, changes 1–3
+and 6), C2 (lock rules), C3 (gates/prompt/enum), C4 (SFI scope), C10 (`AutoUpdateDescription`),
+C11 (`GeneratedCode` IDs), C7's **writer** (`decision-metadata-writer.ts` as the last step of the
+run; the `MetadataSync` `output[]` entry). Tests T1–T6, T11–T14, T21, T22. Push the template
+metadata (`mj sync push --dir=metadata`).
 - ✅ Checkpoint 2a: `pnpm test` green in `packages/CodeGenLib`.
 - ✅ Checkpoint 2b: `--stage warm-twice` (AI **on**, real key) → empty diff **and** the run-2
   CodeGen report shows `ai.smartFieldCalls = 0`, `ai.formLayoutCalls = 0`.
@@ -1283,7 +1535,7 @@ the resulting state back in, asserts the second application emits nothing).
 
 | ID | File | Pins | Cases (each is an `it(...)`) |
 |---|---|---|---|
-| **T1** | `field-change-tracking.test.ts` | C1 | register/isFieldNew round-trip; key normalization (GUID case, trailing spaces, name case); blank entityID/name ignored; `clearFieldTracking` empties both structures; **each of the three INSERT sites registers** — drive `createNewEntityFieldsFromSchema`, `manageSingleVirtualEntityField`, `manageSingleEntityParentFields` with the recording connection scripted to return one pending row each and assert `isFieldNew` afterwards; `registerFieldChange` accumulates reasons across calls; `isDisplayNameReopened` true only for `Description`; `isTypeReopened` true only for Type/Length/Precision/Scale/AllowsNull; `Sequence`-only → neither; `Unknown` → neither; `updateExistingEntityFieldsFromSchema` with a scripted result set (with and without the `ChangeReasons` column) populates the map and the modified-entity list; counters reported. |
+| **T1** | `entity-field-change-tracking.test.ts` | C1 | **The diff** (pure): identical snapshots → `[]`; one column differs → one change with that one reason; only `Sequence` differs → `[]` (`Sequence` is not a tracked column); a row only in `after` → ignored; a row only in `before` → ignored; `isNew(entityID, name)` true → ignored even when columns differ; the normalization table — trimmed strings, `null ≡ ''` for `Description`/`DefaultValue`/`RelatedEntityFieldName`, GUID case for `RelatedEntityID`, `0/1` vs `true/false` for every bit column, numeric `null` stays `null`; output ordinal-sorted by entity then field; `TRACKED_FIELD_COLUMNS` excludes `Sequence`, and `DISPLAYNAME_REOPEN_REASONS` / `TYPE_REOPEN_REASONS` are disjoint and cover exactly the §3.4 table. **The registry** (`ManageMetadataBase` statics): register/isFieldNew round-trip; key normalization (GUID case, trailing spaces, name case); blank entityID/name ignored; `clearFieldTracking` empties all three structures; **each of the three INSERT sites registers** — drive `createNewEntityFieldsFromSchema`, `manageSingleVirtualEntityField`, `manageSingleEntityParentFields` with the recording connection scripted to return one pending row each and assert `isFieldNew` afterwards (and, for the first, that the INSERT text sets `IncludeInUserSearchAPI` from `IsNameField` alone — C4); `registerFieldChange` accumulates reasons across calls; `isDisplayNameReopened` true only for `Description`; `isTypeReopened` true only for Type/Length/Precision/Scale/AllowsNull. **The caller**: `updateExistingEntityFieldsFromSchema` with the recording connection scripted to answer the before snapshot, the proc call, and the after snapshot — populates the map, adds only materially changed entities to `modifiedEntityList`, ignores the proc's result set entirely (script it to return a row for an entity whose snapshot did not change and assert that entity is *not* added), and `changedFieldReport` lists offenders; counters reported. |
 | **T2** | `apply-field-categories-lock.test.ts` | C2, FM1, FM5, §3.4 | table-driven over `computeFieldMetadataUpdate`: the full §3.2 matrix for Category/Section/DisplayName/ExtendedType/CodeType × {newEntity, newField, descriptionReopened, typeReopened, untouched} × {flag on/off} × {blank/non-blank current} × {same/different proposal} — in particular: `descriptionReopened` alone re-opens DisplayName and nothing else; `typeReopened` alone re-opens ExtendedType/CodeType and never DisplayName or Category; `__mj_` → System Metadata; existing non-blank category never moves **even between existing categories**; blank existing field may take a new category; `GeneratedFormSection` only with Category; CodeType requires `AutoUpdateExtendedType`; CodeType forced null when ExtendedType ≠ Code; **every `EntityFieldExtendedTypes` member accepted** (JSON/Markdown/HTML/Icon/Image/Color/Other included) and `'textarea'` rejected as `invalid`; `skipped[]` reasons populated. Then through `applyFieldCategories` with the recording connection: WHERE clause is `ID = '…'` with **no** `AutoUpdateCategory` term; case-insensitive name match; unknown field name logged not thrown; both callers (`applyFormLayout`, `applyVEFieldCategories`) forward `isNewEntity`. |
 | **T3** | `form-layout-prompt-lock.test.ts` | C3, FM2 | `generateFormLayout` with a stubbed runner: captured `params.data.fields[*]` has `HasExistingCategory` true only for (existing entity ∧ existing field ∧ non-blank) or `AutoUpdateCategory=0`; `IsNewField` true for new entity or new field; both `existingCategoryInfo` and `existingFieldCategoryInfo` present and equal; `categoryInfo` merge preserves existing entries verbatim and adds only new ones; a runner returning no `fieldCategories` yields `[]`. |
 | **T4** | `advanced-generation-gates.test.ts` | C3, FM4, §3.4 | subclass `processEntityAdvancedGeneration`'s collaborators (`ag.identifyFields`, `ag.generateFormLayout` stubbed; `applySmartFieldIdentification`/`applyFormLayout` overridden to record) — existing entity, no new/re-opened fields, all categorized → **neither** LLM path invoked; existing entity + one new field → SFI invoked with `newFieldNames = {that field}`, Form Layout invoked with `isNewEntity=false`; new entity → both with `isNewEntity=true`; existing entity with a blank old field and no new fields → Form Layout only; a `Description`-reopened field only → Form Layout only, and the prompt data marks it `ReviewDisplayName` with `HasExistingCategory=true`; a `Type`-reopened field only → **both** paths, prompt marks `ReviewExtendedType`; a `Sequence`-only change → neither; `AICircuitOpen` → nothing; reporter counters incremented exactly once per call. |
@@ -1296,11 +1548,15 @@ the resulting state back in, asserts the second application emits nothing).
 | **T11** | `sql-log-capture-of-llm-writes.test.ts` | §1.2, C2, D13 | with `sqlOutputDirFlag` pointed at a temp dir, an `applyFieldCategories` batch and an `applySmartFieldIdentification` batch land in the capture file with their `-- UPDATE …` headers and are **not** marked recurring; an empty batch writes nothing; `finishSQLLogging` deletes an empty file; the same batch hands identical values to the decision-metadata writer (spy) — capture and record never disagree. |
 | **T12** | `geo-support-from-persisted-state.test.ts` | C2(4) | `SupportsGeoCoding` derives from the DB COUNT only; an LLM result proposing `GeoCity` on a locked field does not flip it; no UPDATE when unchanged; `AddEntityRequiringViewRegen` called only on change. |
 | **T13** | `fixpoint.property.test.ts` | all of C2–C4 | property-style over the fixture entity with 200 randomized-but-seeded LLM results (seeded PRNG, no `Math.random` without a seed): apply → take the emitted SETs as the new state → apply the same result again → zero statements. Also: apply result A then result B (different LLM opinions) on an **existing** entity with no new/re-opened fields → the second application emits zero statements for every non-blank column. |
-| **T14** | `decision-metadata-writer.test.ts` | C7 | the shared formatter: fixed key order, records sorted by Sequence then Name, 2-space, no trailing newline — **byte-identical to `JsonWriteHelper.writeOrderedRecordData` on the same data** (round-trip test), explicit `null` for decided-null, omitted when undecided; dropped/renamed fields' records are removed at flush and counted; a `Description`/reflected-property value handed to the writer is dropped and counted; `@lookup` keys for entity, field, setting, application-entity records match the exact strings in the existing hand-authored files; **never** emits a CodeGen-owned column (feed one in, assert it is dropped and counted); merge into an existing file replaces only the recorded keys and preserves `_comments` and unknown keys; writing unchanged content is a byte-identical no-op (mtime untouched — use `writeIfChanged`); missing `metadataDirectory`/root → one warning, `decisionRecordsSkipped` incremented, no throw; canonical JSON for `EntitySetting.Value`; a run that decides nothing writes nothing. |
+| **T14** | `decision-metadata-writer.test.ts` | C7 | the shared formatter: fixed key order, records sorted by Sequence then Name, 2-space, no trailing newline — **byte-identical to `JsonWriteHelper.writeOrderedRecordData` on the same data** (round-trip test), null-valued keys are omitted, always (D17) — feed a `null` `CodeType` and a `null` geo `ExtendedType`, assert neither key appears; dropped/renamed fields' records are removed at flush and counted; a `Description`/reflected-property value handed to the writer is dropped and counted; `@lookup` keys for entity, field, setting, application-entity records match the exact strings in the existing hand-authored files; **never** emits a CodeGen-owned column (feed one in, assert it is dropped and counted); merge into an existing file replaces only the recorded keys and preserves `_comments` and unknown keys; writing unchanged content is a byte-identical no-op (mtime untouched — use `writeIfChanged`); missing `MetadataSync` output entry or `entities/.mj-sync.json` → one warning, `decisionRecordsSkipped` incremented, no throw; canonical JSON for `EntitySetting.Value`; a run that decides nothing writes nothing. |
 | **T15** | `decision-metadata-export.test.ts` (Node, `scripts/__tests__/`) | C7 | given a fake snapshot of `EntityField`/`Entity`/`EntitySetting`/`ApplicationEntity` rows: one file per entity, `Description` present only when `AutoUpdateDescription=0`, `AutoUpdate*` present only when `0`, boolean decision columns present only when set, schema filter honoured, deterministic file names (`.<schema>.<slug>.json`), output identical across two runs with shuffled input row order, summary counts correct. |
 | **T17** | `packages/MetadataSync/src/__tests__/push-sync-metadata-preservation.test.ts` | C7 | a record whose recomputed checksum equals `record.sync.checksum` keeps its `lastModified`; a changed record gets a new one; `push.writeSyncMetadata: false` yields no sync block for new or changed records. |
 | **T18** | `packages/MetadataSync/src/__tests__/lookup-index.test.ts` | C7 | the indexed `resolveLookup` returns the same record as the linear scan for single- and multi-key lookups, case-insensitively, on a preload of 10k synthetic `MJ: Entity Fields`; misses fall through unchanged; the index is rebuilt when the preload changes. |
-| **T16** | `field-change-reasons.test.ts` | C1 | parses `ChangeReasons` strings into `FieldChangeReason[]` (unknown tokens → `Unknown`, empty → `[]`); classification constants (`DISPLAYNAME_REOPEN_REASONS`, `TYPE_REOPEN_REASONS`) are disjoint and cover exactly the §3.4 table; **contract test**: read the T-SQL migration file and the PostgreSQL support object and assert every `FieldChangeReason` literal (except `Unknown`) appears in each `CONCAT_WS`/`concat_ws` list and that `Sequence` is excluded from the material predicate in both — so the SQL and the TypeScript cannot drift apart silently. |
+| **T16** | `sp-definition-guard.test.ts` | C1 | **Proc definition contract, both dialects**: find the newest `migrations/v*/V*.sql` containing `CREATE OR ALTER PROC … spUpdateExistingEntityFieldsFromSchema` (highest version prefix wins) and assert its body contains `IsSoftPrimaryKey`, `IsSoftForeignKey` and `AutoUpdateRelatedEntityInfo` inside the WHERE, `@IncludedSchemaNames`, and `#uef_cols`; assert `PostgreSQLCodeGenProvider.getMetadataSupportObjectsSQL('__mj')` contains the same guards. This is the test that stops the next \"heal\" rewrite from dropping v5.49 again (same shape as the EDS guard test, `scoped-entity-fields.test.ts:114-139`). |
+| **T19** | `scoped-entity-fields.test.ts` (extend) | C1 | `PostgreSQLCodeGenProvider.callRoutineSQL` with `paramNames` emits `p_ExcludedSchemaNames => '…', p_IncludedSchemaNames => '…'` (named notation, in both the `SELECT * FROM` and the `DO $$ … PERFORM` shapes); without `paramNames` it stays positional; `buildHealSchemaRoutineParams({ includeSchemas, entityIDs: undefined })` fed through it never lands the include list in `p_EntityIDs`. |
+| **T20** | `config-writers-compare-first.test.ts` | C9 | recording connection: `applySoftPKFKConfig` with a row already `IsPrimaryKey = 1, IsSoftPrimaryKey = 1` captures **no** UPDATE; with `IsPrimaryKey = 0` captures exactly one; the soft-FK UPDATE carries `AutoUpdateRelatedEntityInfo = 0`; `processEntityConfigs` with matching attributes captures nothing, with one differing attribute captures one `LogSQLAndExecute`'d UPDATE naming only that attribute; `applyCategoryInfoSettings` with canonical-equal JSON writes nothing, and its INSERT carries a `uuidv5` ID (identical across two calls) inside `IF NOT EXISTS`; the writer skips a column `additionalSchemaInfo` owns and counts it in `decisionRecordsSkipped`. |
+| **T21** | `packages/MJCoreEntities/src/__tests__/entity-description-lock.test.ts` | C10 | `MJEntityFieldEntityExtended` / `MJEntityEntityExtended`: `Set('Description', different)` on an existing record sets `AutoUpdateDescription` **false**; same value → flag untouched; `NewRecord` → flag untouched; `Validate()` rejects a dirty value for each of the 13 reflected properties by name; an unchanged reflected value passes. |
+| **T22** | `generated-code-sql.test.ts` | C11 | the SQL `LogAndGenerateValidateFunction` emits: the INSERT carries a literal uuid `ID` inside `IF NOT EXISTS (… CategoryID … LinkedEntityID … LinkedRecordPrimaryKey …)`; the UPDATE for a regenerated validator targets that same ID; nothing is emitted when `wasGenerated` is false for every validator. |
 
 Existing tests to **extend** rather than duplicate: `smart-field-identification-guardrails.test.ts`
 (add the `MaxLength` alias case if T5 does not cover it in place), `search-guardrails.test.ts`,
@@ -1339,7 +1595,7 @@ and fails the `warm-twice` stage's empty-capture assertion with that explanation
 **Stage `warm-twice`** (P1):
 1. `mj codegen` (run 1). Snapshot: `git add -N packages/ metadata/ && git diff --binary HEAD -- packages/ metadata/ > /tmp/run1.patch`; copy any `CodeGen_Run_*.sql` produced to `/tmp/run1.sql`.
 2. `mj codegen` (run 2). Compute `git diff` again → `/tmp/run2.patch`.
-3. **Assert** `run2.patch` is byte-identical to `run1.patch` (i.e. run 2 changed nothing further — this includes `metadata/entities/decisions/`), **and** no new `CodeGen_Run_*.sql` exists after run 2 (an empty capture is deleted by `finishSQLLogging`), **and** the run-2 CodeGen report (`codegen.report.enabled`, `MJ_CODEGEN_REPORT=1`) shows `fieldsNew = 0`, `fieldsChanged = 0`, `decisionRecordsWritten = 0` and — when AI is on — `ai.smartFieldCalls = 0`, `ai.formLayoutCalls = 0`.
+3. **Assert** `run2.patch` is byte-identical to `run1.patch` (i.e. run 2 changed nothing further — this includes `metadata/entities/decisions/`), **and** no new `CodeGen_Run_*.sql` exists after run 2 (an empty capture is deleted by `finishSQLLogging`), **and** the run-2 CodeGen report (`codegen.report.enabled`, `MJ_CODEGEN_REPORT=1`) shows `fieldsNew = 0`, `fieldsChanged = 0`, `decisionRecordsWritten = 0` and — when AI is on — `ai.smartFieldCalls = 0`, `ai.formLayoutCalls = 0`, `ai.validatorCalls = 0`. **Then** run `mj sync push --dir=metadata --include=entities --dry-run` and assert it reports **0** records to update — the direct push-vs-CodeGen flip-flop test (V4): what CodeGen wrote to the database and what it wrote to the record must agree.
 4. On failure print the run-2-only diff (files + first 40 lines each) and exit 1.
 
 **Stage `single-column`** (P3):
@@ -1362,7 +1618,7 @@ and fails the `warm-twice` stage's empty-capture assertion with that explanation
 `mj migrate` → `mj sync push --dir=metadata --ci` → `mj codegen` → `git status --porcelain -- packages/ metadata/ migrations/` empty,
 **and** the run report shows `fieldsChanged = 0` (every `EntityField` row a migration created
 already matches the live schema — when it does not, print each offender as
-`<entity>.<field>: <ChangeReasons>`; that list is the diagnosis) and `decisionRecordsWritten = 0`
+`<entity>.<field>: <reasons>` from `changedFieldReport`; that list is the diagnosis) and `decisionRecordsWritten = 0`
 (every decision the run would have made was already in `metadata/entities/`).
 The script wraps the same steps so the local and CI invocations are the same command.
 
@@ -1453,7 +1709,11 @@ E2E suite's first three fixtures. The `ai.*` counters feed its telemetry prerequ
 does not wait for that plan.
 
 **D5 — The lock is enforced in code.** The prompt's 🔒/🆕 legend is advisory context; the apply
-path decides. A model that ignores instructions cannot cause a write (§3.1 principle 4).
+path decides. A model that ignores instructions cannot cause a write (§3.1 principle 4). The same
+rule answers V7's question about `AutoUpdate*`: a recorded non-blank value with
+`AutoUpdate<X> = 1` is still locked, because the apply path only fills new / blank / re-opened
+fields — the flag is a veto on filling, never a licence to rewrite (§3.1 principle 1). The record
+does not need to pin flags to protect values.
 
 **D6 — No `AutoUpdateCodeType` column.** `CodeType` is meaningless without
 `ExtendedType='Code'`, so `AutoUpdateExtendedType` governs both. Adding a column is a
@@ -1518,6 +1778,24 @@ CodeGen sees blank decisions and re-asks the LLM, which shows up as an unexpecte
 decision file — visible in `git status`, and failed by the harness. Running push and CodeGen
 together lets a full-row push overwrite CodeGen's writes with a stale snapshot (V1). Written into `packages/CodeGenLib/CLAUDE.md` and `metadata/CLAUDE.md` (Phase 5).
 
+**D16 — Field change tracking is a TypeScript snapshot diff, not a proc result column** (rev 3.1).
+One implementation for both dialects; it sees what the UPDATE wrote rather than what a
+dialect-specific predicate predicted; it cannot be silently dropped by the next proc rewrite the
+way v5.49's guard was. The proc's result set is not consulted. The losing design (rev 3's
+`ChangeReasons` column) is recorded in C1 with the three facts that killed it.
+
+**D17 — The decision writer runs last and never writes `null`** (rev 3.1). Last, because fill-only
+writers run after advanced generation (geo `ExtendedType` in `applyLatePhaseFixups`), and a record
+must describe the run's *final* state or run 2 rewrites it. No nulls, because an explicit `null`
+pushed back alternates with every fill-only writer (`DisplayName`, `DefaultColumnWidth`, `Icon`,
+geo `ExtendedType`) and a decided-null needs no pin — the lock is in the apply path (D5), so an
+absent key is never re-asked for a locked field.
+
+**D18 — `AutoUpdateDescription = 1` means "CodeGen owns it", and the subclasses now say so**
+(rev 3.1). The proc, the baseline column description and the migration channel all agree; only
+the two `Set()` overrides disagreed. C10 aligns them and makes every LLM-written description
+clear the flag in the same statement.
+
 ---
 
 ## 9. Out of scope — recorded so nobody re-derives them
@@ -1534,10 +1812,10 @@ together lets a full-row push overwrite CodeGen's writes with a stale snapshot (
   `clean-room` stage's `fieldsChanged = 0` assertion will say whether they matter in practice;
   fix at the proc if they do.
 - **Stable IDs for CodeGen-minted rows** (UUIDv5 from `EntityID + FieldName`, `EntityID + SettingName`,
-  etc.) so two databases mint identical `EntityField`/`EntitySetting`/`EntityRelationship` IDs
-  without needing the capture. Replaces `createNewUUID()` (`:5946`) and the two bare `uuidv4()`
-  sites in `applyCategoryInfoSettings` (`:8015`, `:8051`). Interacts with the INSERT conflict
-  guard; design it with the Open-App per-install case in mind (D11).
+  etc.) so two databases mint identical `EntityField`/`EntityRelationship` IDs without needing
+  the capture (C9 already does this for `EntitySetting`; C11 gives `GeneratedCode` a literal ID).
+  Replaces `createNewUUID()` (`:5946`). Interacts with the INSERT conflict guard; design it with
+  the Open-App per-install case in mind (D11).
 - **Dropped-column tracking.** `deleteUnneededEntityFields` reports entity names only.
 - **`JSON` rendering.** `angular-codegen.ts:772` only recognizes `Code`; a `JSON` field renders as
   a textarea. With enum parity the LLM may now correctly say `JSON` for a JSON column; rendering
@@ -1548,10 +1826,34 @@ together lets a full-row push overwrite CodeGen's writes with a stale snapshot (
 - **`forceRegeneration` / `--force-advanced-gen`.** With the new locks it re-asks the LLM for
   every entity but can only fill blanks and polish nothing — safe. Document that in the flag's
   help text.
-- **`processEntityConfigs` parameterized UPDATEs** (`:1228-1290`) execute live and are never
-  captured — a DB-vs-migration drift source unrelated to the LLM.
 - **Sequence park/renumber** bumps `__mj_UpdatedAt` on every field of an entity that gained a
   column. Harmless for output; noted because anything keyed on `__mj_UpdatedAt` will see it.
+- **`UQ_EntitySetting_EntityID_Name`.** C9 makes the upsert idempotent in code; a unique index
+  would make any surviving duplicate fail loudly, but the migration must first dedupe rows hosts
+  may already carry (keep the newest `__mj_UpdatedAt`) — a data-destroying step for the build
+  engineer to decide, not a feature PR.
+- **`GeneratedCode.Source` is the platform's CHECK text**, compared by string equality
+  (`manage-metadata.ts:5433`); one row cannot satisfy SQL Server and PostgreSQL, so a mixed-platform
+  team regenerates validators on the other platform. Normalize `Source` per dialect or store one
+  per platform (V4).
+- **`DefaultValue` at INSERT vs proc.** V5 reports the INSERT writes a parsed value and the proc
+  the raw catalog text; C1's `isNew` exclusion hides it and the host's `R__RefreshMetadata` EXEC
+  converges it. Align `getPendingEntityFieldINSERTSQL` with the proc if the harness ever shows a
+  first-run `DefaultValue` reason on a new field.
+- **Four feature names are never consulted** by `featureEnabled` (`DefaultInViewFields`,
+  `EntityFieldDescriptions`, `FormLayout`, `FormTabs` — `advanced_generation.ts:288,364,487,613,649,685,776`);
+  they belong in the same consolidation as the three competing default lists above.
+- **Partial-row release EXECs.** The release `Metadata_Sync` renders `spUpdateEntityField` with
+  all ~60 parameters from the generating database (`sql-logger.ts`, `formatAsMigration`); the
+  proc's `ISNULL(@p, [col])` / `_Clear` body would accept a partial EXEC built from the record's
+  listed fields only, which would stop a shipped decision from overwriting a host-local
+  `AutoUpdate*` or `Status` on the same row (V7). A MetadataSync change with its own gate test;
+  until then D13's "unchanged rows emit nothing" bounds the volume.
+- **`push.skipRecordChanges` for metadata hydrates.** All four entities have
+  `TrackRecordChanges = 1`; a first hydrate of a database whose values differ writes up to ~8,000
+  `RecordChange` rows (25–40 MB, attributed to the pushing user). Acceptable; a sync option wired
+  to `EntitySaveOptions.SkipRecordChanges` (`GenericDatabaseProvider.ts:1297`) would make it
+  free (V7).
 
 ---
 
@@ -1610,10 +1912,29 @@ writing; none changes the design, each can change a detail):**
   `MJEntityFieldEntityExtended` (`packages/MJCoreEntities/src/custom/`) rejects dirty
   reflected properties and flips `AutoUpdateDescription` on a differing `Description` — hence the
   Never list in C7. `MJCoreEntitiesServer/src/custom/` has no `Entity`/`EntityField` override.
-  Still to confirm (V7): `MJ: Entities`, `MJ: Entity Settings`, `MJ: Application Entities`.
-- **A5 — the config seam for the writer's directory** (`configInfo.metadataDirectory` /
-  `mj-app.json` `metadata.directory`) and the dependency direction between
-  `@memberjunction/codegen-lib` and `@memberjunction/metadata-sync` (the shared formatter must
-  live where both can import it without a cycle — CodeGenLib's own `Misc/` is the safe default).
+  **Confirmed for the other three (V7):** no `MJCoreEntitiesServer` subclass exists for any of the
+  four entities (`MJApplicationEntityServer` is for `MJ: Applications`); `MJEntityEntityExtended`
+  carries the same `Description` inversion (C10); value-list validation (`baseEntity.ts:361`)
+  rejects an out-of-list `ExtendedType` / `CodeType` / `GeneratedFormSection` /
+  `UserSearchPredicateAPI` before SQL, so a record pushed into a database behind `V202609051200`
+  fails on the whole record (D15: migrate first); `ApplicationEntity` has
+  `UQ_ApplicationEntity_ApplicationID_EntityID`; `EntitySetting` has no unique key (C9).
+- ~~A5~~ **Resolved (V7):** CodeGen has no metadata-directory concept; its only directory source
+  is `configInfo.output[]` (`outputDir(type, false)` → `null` for an absent type,
+  `config.ts:1133-1145`), so the writer uses `{ type: 'MetadataSync', directory: './metadata' }`
+  and no new key. The package graph is cycle-free (neither library depends on the other; none of
+  metadata-sync's 13 MJ dependencies depend on codegen-lib), but a runtime import would pull
+  `graphql-dataprovider` / `@inquirer/prompts` / `chokidar` / `fast-glob` into
+  `MJServer`/`ServerBootstrap`/`MJAPI`; the formatter is replicated in CodeGenLib and pinned by T14
+  through a devDependency. `JsonWriteHelper.writeOrderedRecordData` = `JSON.stringify(…, null, 2)`,
+  utf8, no trailing newline, `knownKeys` order (`json-write-helper.ts:20-21,42`); its sibling
+  `writeJson` adds a newline — never mix them.
 | R6 | Release `Metadata_Sync` mechanics (full-row `spUpdateEntityField`; dirty-compare "unchanged"; sync-block write-back only for changed records; whitespace/JSON-formatting sensitivity; silent no-op on ID mismatch; Caliber/accounting generators refuse `spUpdate*`; every Open App hand-rewrites `${flyway:defaultSchema}`→`${mjSchema}` on core SP calls) | **Verified** (`PushService.ts:339-347,1074-1080,1149,1281-1296,1555-1559`; `GenericDatabaseProvider.ts:1255-1257`; `SQLServerDataProvider.ts:1152-1167`; `migrations/v6/V202608202231…:9602-9746`; `sync-engine.ts:270-273`; bizapps-caliber `scripts/generate-metadata-sync.mjs:64-80,229-234`; bizapps-common `migrations/V202608262255…:5-24`) | C7 (value fidelity, opt-in), D13, §7.3 item 9 |
 | R7 | Push semantics: partial `Set` per listed field; `@lookup` PK failure aborts the entire push (all directories) with earlier Phase-1 writes autocommitted; nested `MJ: Entity Fields` are flattened parent-first and saved as separate autocommitted statements; `--ci` changes no push semantics; files are rewritten unconditionally via `JsonWriteHelper` (2-space, key order preserved, no trailing newline); `sync.lastModified` re-stamped whenever the record was dirty relative to the pushing DB; `@lookup` resolution linear-scans the preload (O(F×E)); root `defaults` leak into nested records; `MJEntityFieldEntityExtended` rejects reflected properties and re-arms `AutoUpdateDescription` | **Verified** (`PushService.ts:1149-1207,1086-1122,1290-1298,1555-1559,907-925,1126-1135,706,819-883,595-602`; `sync-engine.ts:815-827,643-663,1123-1128`; `json-write-helper.ts:20-21`; `record-dependency-analyzer.ts:229-276`; `MJEntityFieldEntityExtended.ts:14-28,40-43,64-66`) | C7 (Never list, formatting, reconciliation, invocation rules, the two MetadataSync changes), D15, T14/T17/T18 |
+| R8 | The SQL Server body of `spUpdateExistingEntityFieldsFromSchema` regressed in `V202608260829` (rebuilt from v5.38; v5.49's `#uef_*` materialization and `IsSoftPrimaryKey` guard gone; no later migration touches it); PostgreSQL kept the guard | **Verified** (V5, V4; re-read: `V202608260829:18` names `V202605281538`, 0 hits for `IsSoftPrimaryKey`; `V202607202100:58-66,115-117,166`; `metadataSupportObjects.ts:339-344`) | C1 change (4); T16 |
+| R9 | Neither dialect guards soft FKs: the `RelatedEntity*` predicates fire for every column without a physical FK while `applySoftPKFKConfig` leaves `AutoUpdateRelatedEntityInfo = 1` — soft FKs churn every run on both platforms | **Verified** (`V202608260829:253-254,280-281`; `metadataSupportObjects.ts:399-400`, no `IsSoftForeignKey` term anywhere in the PG port; `manage-metadata.ts:4396-4401`) | C1 change (4), C9 |
+| R10 | `MJEntityFieldEntityExtended.Set` / `MJEntityEntityExtended.Set` set `AutoUpdateDescription = true` on a manual `Description` change; the proc treats `1` as "overwrite from `MS_Description`" | **Verified** (V4, V7; re-read `MJEntityFieldEntityExtended.ts:34-48`, `MJEntityEntityExtended.ts:15-30`; `V202608260829:243,268,329,346`; baseline `:37492`) | C10, D18 |
+| R11 | `applySoftPKFKConfig` (captured) and `processEntityConfigs` (uncaptured) write unconditionally on every run; `applyCategoryInfoSettings` upserts without compare and mints `uuidv4` IDs; `EntitySetting` has no `(EntityID, Name)` unique key | **Verified** (`manage-metadata.ts:4366-4371,4396-4401,1283,8004-8009`; baseline `:3702`); `metadata/integrations/additionalSchemaInfo.json` is absent in core, so core's `warm-twice` is unaffected today | C9 |
+| R12 | `GeneratedCode` INSERT carries no literal ID; the later captured UPDATE targets the dev database's ID | **Verified** (`entity_subclasses_codegen.ts:1330-1347,1353`; baseline `:9136`) | C11 |
+| R13 | PostgreSQL `callRoutineSQL` ignores `paramNames`; `buildHealSchemaRoutineParams` omits `EntityIDs` when unscoped, so the include list lands in `p_EntityIDs` on PostgreSQL | **Verified** (`PostgreSQLCodeGenProvider.ts:1775-1790`; `heal-schema-params.ts:46-66`; PG signature `metadataSupportObjects.ts:199-202`) | C1 change (5); T19 |
+| R14 | Geo `ExtendedType` is written after advanced generation, by `applyLatePhaseFixups` | **Verified** (`sql_codegen.ts:411-414,492-493`; `manageEntityFields` order `:4148 → :4158 → :4180 → :4188 → :4206 → :4214 → :4221 → :4230 → :4250`) | C7 writer runs last; D17 |
