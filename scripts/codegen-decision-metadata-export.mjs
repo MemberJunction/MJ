@@ -22,6 +22,7 @@ import {
   writeIfChanged
 } from '../packages/CodeGenLib/dist/index.js';
 import { ordinalCompare } from '@memberjunction/global';
+import sql from 'mssql';
 
 function isTrue(val) {
   return val === true || val === 1 || val === '1';
@@ -57,14 +58,6 @@ export async function exportDecisionMetadata({
     entitySettings = [...(snapshot.entitySettings || [])];
     applicationEntities = [...(snapshot.applicationEntities || [])];
   } else if (referenceConn) {
-    let sql;
-    try {
-      sql = (await import('mssql')).default;
-    } catch {
-      const { createRequire } = await import('node:module');
-      const codegenRequire = createRequire(path.resolve('packages/CodeGenLib/package.json'));
-      sql = codegenRequire('mssql');
-    }
     const pool = await sql.connect(referenceConn);
 
     try {

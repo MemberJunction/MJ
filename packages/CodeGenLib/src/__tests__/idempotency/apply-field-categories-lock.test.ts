@@ -317,12 +317,33 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          expect(res.CodeType).toBeUndefined();
       });
 
-      it('accepts ExtendedType=Code on a field whose ValueListType is None or undefined', () => {
+      it('accepts ExtendedType=Code on a field whose ValueListType is None', () => {
          const field: FieldMetadataState = {
             ...defaultBaseField,
             Name: 'SourceCode',
             ExtendedType: null,
             ValueListType: 'None',
+         };
+         const proposal: FieldMetadataProposal = {
+            extendedType: 'Code',
+            codeType: 'TypeScript',
+         };
+         const ctx: FieldLockContext = {
+            ...defaultBaseContext,
+            isNewField: true,
+         };
+         const res = computeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
+         expect(res.ExtendedType).toBe('Code');
+         expect(res.CodeType).toBe('TypeScript');
+         expect(res.skipped.filter(s => s.column === 'ExtendedType')).toHaveLength(0);
+      });
+
+      it('accepts ExtendedType=Code on a field whose ValueListType is undefined', () => {
+         const field: FieldMetadataState = {
+            ...defaultBaseField,
+            Name: 'SourceCode',
+            ExtendedType: null,
+            // ValueListType omitted / undefined
          };
          const proposal: FieldMetadataProposal = {
             extendedType: 'Code',

@@ -19,8 +19,7 @@
     "karma-chrome-launcher",
     "karma-coverage",
     "karma-jasmine",
-    "karma-jasmine-html-reporter",
-    "mssql"
+    "karma-jasmine-html-reporter"
   ],
   "vitest": false
 }

@@ -98,6 +98,21 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
       expect(ourFormatted).toContain('    "relatedEntities": {');
       expect(ourFormatted).toContain('    "primaryKey": {');
       expect(ourFormatted.endsWith('\n')).toBe(false); // No trailing newline
+
+      // Verify that formatDecisionRecordData canonicalizes key order (both top-level and nested field-level)
+      const scrambled: DecisionRecord = {
+         primaryKey: { ID: '123' },
+         relatedEntities: {},
+         fields: { IsNameField: false, Name: 'X', DisplayName: 'X' },
+         _comments: ['Test comment 1', 'Test comment 2']
+      };
+      const canonical: DecisionRecord = {
+         _comments: ['Test comment 1', 'Test comment 2'],
+         fields: { Name: 'X', DisplayName: 'X', IsNameField: false },
+         relatedEntities: {},
+         primaryKey: { ID: '123' }
+      };
+      expect(formatDecisionRecordData([scrambled])).toBe(formatDecisionRecordData([canonical]));
    });
 
    it('lookup keys match exact required formats', () => {

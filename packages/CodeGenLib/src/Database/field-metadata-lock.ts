@@ -139,7 +139,8 @@ export function computeFieldMetadataUpdate(
             }
          } else {
             const valid = validateExtendedType(proposal.extendedType.trim());
-            const isValueList = Boolean(field.ValueListType && field.ValueListType !== 'None');
+            const normalizedValueListType = (field.ValueListType || '').trim().toLowerCase();
+            const isValueList = normalizedValueListType !== '' && normalizedValueListType !== 'none';
             if (!valid || (valid === 'Code' && isValueList)) {
                update.skipped.push({ column: 'ExtendedType', reason: 'invalid' });
             } else {

@@ -300,26 +300,6 @@ export interface ViewRegenEntry {
    Reason: ViewRegenReason;
 }
 
-export const ALL_FIELD_CHANGE_REASONS: ReadonlySet<FieldChangeReason> = new Set([
-   ...TRACKED_FIELD_COLUMNS,
-]);
-
-/**
- * Parses a comma-delimited ChangeReasons string into an array of FieldChangeReason.
- * Unknown tokens are ignored. Empty/null/undefined input returns [].
- */
-export function parseChangeReasons(changeReasons: string | null | undefined): FieldChangeReason[] {
-   if (!changeReasons) return [];
-   const rawTokens = String(changeReasons).split(',').map(s => s.trim()).filter(Boolean);
-   const result: FieldChangeReason[] = [];
-   for (const tok of rawTokens) {
-      if (ALL_FIELD_CHANGE_REASONS.has(tok as FieldChangeReason)) {
-         result.push(tok as FieldChangeReason);
-      }
-   }
-   return result;
-}
-
 export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────

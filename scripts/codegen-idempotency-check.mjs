@@ -16,6 +16,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { config as dotenvConfig } from 'dotenv';
+import sql from 'mssql';
 
 dotenvConfig();
 
@@ -64,14 +65,6 @@ export function runProcessCapture(command, args, extraEnv = {}) {
 // ---------------------------------------------------------------------------
 
 async function getDbPool() {
-  let sql;
-  try {
-    sql = (await import('mssql')).default;
-  } catch {
-    const { createRequire } = await import('node:module');
-    const codegenRequire = createRequire(path.resolve('packages/CodeGenLib/package.json'));
-    sql = codegenRequire('mssql');
-  }
   const config = {
     server: process.env.CODEGEN_DB_HOST || process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.CODEGEN_DB_PORT || process.env.DB_PORT || '1433', 10),
